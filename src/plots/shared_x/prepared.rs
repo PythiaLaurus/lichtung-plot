@@ -50,6 +50,26 @@ impl PreparedAxes {
             return Ok(None);
         };
         let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
+        let log = self.logarithmic && side == 0;
+        if let Some(parameters) = self.specs[side].generation.interval_parameters() {
+            let raw = request.source.raw_limits(if side == 0 {
+                crate::layout::AxisSide::Bottom
+            } else {
+                crate::layout::AxisSide::Left
+            });
+            if crate::layout::fixed_interval_is_empty(
+                range,
+                raw,
+                log,
+                parameters,
+                self.specs[side]
+                    .generation
+                    .get_maximum_count()
+                    .unwrap_or(usize::MAX),
+            )? {
+                return Ok(None);
+            }
+        }
         request.materialize(
             &[range.0, f64::midpoint(range.0, range.1), range.1],
             self.logarithmic && side == 0,

@@ -12,6 +12,7 @@ Each call replaces the axis's complete choice independently of format/limits:
 | target(count) | Approximately count positions, allowing nice-step deviation and coarsening |
 | maximum(count) | At most count complete generated in-domain positions, including endpoints |
 | exact_count(count, TickSpace) | Exactly count endpoint-including affine positions; zero is empty |
+| interval(step, origin, TickSpace, TickRequirement) | One origin-aligned fixed or preferred lattice |
 
 Counts/caps are usize, with no 10000 application ceiling. Target/Maximum are
 positive; ExactCount(0) is explicitly empty. `maximum_count(Some(n))` edits the one
@@ -41,6 +42,32 @@ retained. Physical mathematical endpoints without retained raw bounds are evalua
 through certified rational enclosures, not powf or an invented raw-domain inverse.
 Arithmetic/storage failures and unrepresentably collapsed positions reject. Private
 Automatic seed bounds remain finite; they do not cap explicit counts or lists.
+
+## Fixed Data Intervals
+
+```rust
+use lichtung_plot::{TickGeneration, TickRequirement, TickSpace};
+let ticks = TickGeneration::interval(20.0, 5.0, TickSpace::Data, TickRequirement::Fixed)?;
+// On [5,95]: [5,25,45,65,85]. Attach with x_tick_generation or y_tick_generation.
+# let _ = ticks;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Origin 0 gives [0,20,...,100] on [0,100], eleven positions on [0,200],
+[40,60,80,100] on [40,100] and [20,40,60,80] on [5,95]. Neither width, fonts nor
+cache settings rescale the data interval. Fixed retains the entire list, including
+valid empty lists; cap violations or strict text nonfit refuse instead of dropping
+positions. Preferred tries complete coarser steps and then the original scale-space
+midpoint. Existing additive/log10_decades constructors remain preferred and retain
+their original scale binding. `interval_parameters()` exposes the configured tuple.
+
+Each origin+k*step uses exact signed integer arithmetic and one binary64 rounding.
+Membership uses exact endpoint rounding cells, including tie parity; 0.1 steps on
+[0,1] include the represented endpoint 1 without an epsilon. Large integer indices
+are never cast to f64. Data intervals on Log10 still use physical units; Scale
+intervals use exponents. Mathematical domain endpoints without retained raw bounds
+are certified into the source's binary representation, not computed with powf or
+advertised as invented raw domain data.
 
 Exact x_ticks/y_ticks remain indivisible and authoritative in either setter
 order, including intentionally empty labels. A generated maximum cannot truncate

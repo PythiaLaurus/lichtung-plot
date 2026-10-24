@@ -1,7 +1,8 @@
 //! Independent approximate targets and complete-source maxima, with frozen output.
 
 use lichtung_plot::{
-    Canvas, NumericFormat, NumericValues, Plot, TickGeneration, TickSingleton, TickSpace,
+    Canvas, NumericFormat, NumericValues, Plot, TickGeneration, TickRequirement, TickSingleton,
+    TickSpace,
 };
 
 fn main() -> lichtung_plot::Result<()> {
@@ -34,11 +35,26 @@ fn main() -> lichtung_plot::Result<()> {
     )
     .x_tick_format(NumericFormat::from_specifier(".2~f")?)
     .title("Exactly four positions; one upper-endpoint y tick");
-    let output = Canvas::grid(1, 3)?
+    let interval = Plot::scatter(
+        NumericValues::new("x", [5.0, 95.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(5.0, 95.0)
+    .y_limits(0.0, 1.0)
+    .x_tick_generation(TickGeneration::interval(
+        20.0,
+        5.0,
+        TickSpace::Data,
+        TickRequirement::Fixed,
+    )?)
+    .x_tick_format(NumericFormat::from_specifier(".0f")?)
+    .title("Fixed data interval: 5, 25, 45, 65, 85");
+    let output = Canvas::grid(2, 2)?
         .panel(0, 0, target)?
         .panel(0, 1, maximum)?
-        .panel(0, 2, exact)?
-        .size(1800, 600)
+        .panel(1, 0, exact)?
+        .panel(1, 1, interval)?
+        .size(1400, 1000)
         .svg_preserve_text(std::env::temp_dir().join("tick_generation"))?;
     println!(
         "tick_generation.svg: {}×{} CSS pixels",

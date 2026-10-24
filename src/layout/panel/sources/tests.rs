@@ -34,6 +34,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         false,
         None,
         &scope,
+        None,
     )
     .unwrap();
     assert_eq!(first.ticks, second.ticks);

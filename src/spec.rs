@@ -24,7 +24,7 @@ pub use estimate::{
 pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
-pub use ticks::{TickGeneration, TickSingleton, TickSpace};
+pub use ticks::{TickGeneration, TickRequirement, TickSingleton, TickSpace};
 
 /// Spacing preset for multiple series within one bar category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

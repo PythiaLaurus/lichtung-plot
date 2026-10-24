@@ -1493,6 +1493,120 @@ fn exact_counts_follow_parent_domains_but_keep_independent_canvas_owners() {
     assert_eq!(observed[&(0, 0)], observed[&(0, 1)]);
 }
 
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one interval contract follows parent resolution across changed assignment, typography and optional reuse, including the empty-owner boundary"
+)]
+fn fixed_intervals_consume_final_parent_domains_and_empty_sources_have_no_callbacks() {
+    use crate::{
+        NumericFormat, NumericOperand, NumericPurpose, TickGeneration, TickRequirement, TickSpace,
+    };
+    use std::sync::{Arc, Mutex};
+    let observed = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+    let contexts = observed.clone();
+    let format = NumericFormat::from_specifier(".0f")
+        .unwrap()
+        .set_function(move |context| {
+            if context.purpose() == NumericPurpose::ActualSet {
+                assert_eq!(
+                    context.domain().unwrap().origin(),
+                    crate::NumericRangeOrigin::ParentResolved
+                );
+                let values: Vec<_> = context
+                    .values()
+                    .iter()
+                    .map(|value| match value.operand() {
+                        NumericOperand::Binary64(value) => value,
+                        NumericOperand::PowerOfTen { .. } => {
+                            panic!("data interval changed operand space")
+                        }
+                    })
+                    .collect();
+                assert!(values.len() > 5);
+                assert!(values
+                    .windows(2)
+                    .all(|pair| (pair[1] - pair[0]).to_bits() == 20.0_f64.to_bits()));
+                contexts.lock().unwrap().insert(
+                    context.owner().canvas_cell().unwrap(),
+                    values
+                        .iter()
+                        .map(|value| value.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+            }
+            context.format_builtin()
+        });
+    let plot = |values| {
+        Plot::scatter(
+            crate::NumericValues::new("x", values),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .x_tick_generation(
+            TickGeneration::interval(20.0, 5.0, TickSpace::Data, TickRequirement::Fixed).unwrap(),
+        )
+        .x_tick_format(format.clone())
+    };
+    let mut previous = None;
+    for (width, size, disabled) in [(1800, 14, false), (2400, 18, true)] {
+        let base = Theme::publication();
+        let role = base
+            .typography()
+            .get_axes()
+            .get_tick_label()
+            .clone()
+            .font_size(size)
+            .unwrap();
+        let typography = base
+            .typography()
+            .clone()
+            .axes(
+                base.typography()
+                    .get_axes()
+                    .clone()
+                    .tick_label(role)
+                    .unwrap(),
+            )
+            .unwrap();
+        let theme = base.customize().typography(typography).build().unwrap();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
+        let result = Canvas::grid(1, 2)
+            .unwrap()
+            .theme(theme)
+            .panel(0, 0, plot([0.0, 100.0]))
+            .unwrap()
+            .panel(0, 1, plot([0.0, 200.0]))
+            .unwrap()
+            .x_range_group(vec![(0, 0), (0, 1)])
+            .unwrap()
+            .size(width, 600)
+            .preflight();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+        result.unwrap();
+        let current = observed.lock().unwrap().clone();
+        assert_eq!(current.len(), 2);
+        assert_eq!(current[&(0, 0)], current[&(0, 1)]);
+        if let Some(previous) = previous {
+            assert_eq!(current, previous);
+        }
+        previous = Some(current);
+    }
+    Plot::scatter(
+        crate::NumericValues::new("x", [1.1, 1.2]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(1.1, 1.2)
+    .x_tick_generation(
+        TickGeneration::interval(1.0, 0.0, TickSpace::Data, TickRequirement::Fixed).unwrap(),
+    )
+    .x_tick_format(
+        NumericFormat::default()
+            .set_function(|_| panic!("empty interval invokes no numeric function")),
+    )
+    .preflight()
+    .unwrap();
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one Shared declaration contract checks actual union members, Hidden, aliases and complete custom recipes before fonts"

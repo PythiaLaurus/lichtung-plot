@@ -45,6 +45,9 @@ enum Primary {
     Automatic,
     Interval {
         step: f64,
+        origin: f64,
+        space: TickSpace,
+        requirement: TickRequirement,
         binding: IntervalBinding,
     },
     Target(usize),
@@ -62,6 +65,15 @@ pub enum TickSpace {
     Data,
     /// Linear coordinates or logarithmic exponents.
     Scale,
+}
+
+/// Whether a lattice is fixed or may try complete coarser candidates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickRequirement {
+    /// Retain the complete requested lattice, including a valid empty result.
+    Fixed,
+    /// Try the requested lattice before the documented coarser source program.
+    Preferred,
 }
 
 /// Position of an exact singleton, in the selected coordinate space.
@@ -93,6 +105,7 @@ impl Eq for TickSingleton {}
 enum IntervalBinding {
     Linear,
     Log10,
+    Context,
 }
 
 impl TickGeneration {
@@ -119,6 +132,9 @@ impl TickGeneration {
         Ok(Self {
             primary: Primary::Interval {
                 step,
+                origin: 0.0,
+                space: TickSpace::Data,
+                requirement: TickRequirement::Preferred,
                 binding: IntervalBinding::Linear,
             },
             maximum: None,
@@ -135,10 +151,66 @@ impl TickGeneration {
         Ok(Self {
             primary: Primary::Interval {
                 step: f64::from(decades),
+                origin: 0.0,
+                space: TickSpace::Scale,
+                requirement: TickRequirement::Preferred,
                 binding: IntervalBinding::Log10,
             },
             maximum: None,
         })
+    }
+
+    /// Select a finite positive interval and finite origin in the declared space.
+    pub fn interval(
+        step: f64,
+        origin: f64,
+        space: TickSpace,
+        requirement: TickRequirement,
+    ) -> Result<Self> {
+        if !step.is_finite() || step <= 0.0 || !origin.is_finite() {
+            return Err(Error::Data(
+                "tick interval needs a finite positive step and finite origin".into(),
+            ));
+        }
+        Ok(Self {
+            primary: Primary::Interval {
+                step,
+                origin: if origin == 0.0 { 0.0 } else { origin },
+                space,
+                requirement,
+                binding: IntervalBinding::Context,
+            },
+            maximum: None,
+        })
+    }
+
+    /// Inspect the retained step, origin, coordinate space and source requirement.
+    pub const fn interval_parameters(&self) -> Option<(f64, f64, TickSpace, TickRequirement)> {
+        if let Primary::Interval {
+            step,
+            origin,
+            space,
+            requirement,
+            ..
+        } = self.primary
+        {
+            Some((step, origin, space, requirement))
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn validate_scale(&self, log: bool) -> Result<()> {
+        if let Primary::Interval { binding, .. } = self.primary {
+            if (binding == IntervalBinding::Linear && log)
+                || (binding == IntervalBinding::Log10 && !log)
+            {
+                return Err(Error::Data(
+                    "tick interval does not match the axis scale".into(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Request approximately `count` numeric positions, allowing nice-step deviation.
@@ -254,9 +326,18 @@ impl TickGeneration {
         round.observe_count(self.maximum.unwrap_or(0))?;
         match self.primary {
             Primary::Automatic => round.observe_count(0),
-            Primary::Interval { step, binding } => {
+            Primary::Interval {
+                step,
+                origin,
+                space,
+                requirement,
+                binding,
+            } => {
                 round.observe_count(1)?;
                 round.observe_count(binding as usize)?;
+                round.observe_number(origin)?;
+                round.observe_count(space as usize)?;
+                round.observe_count(requirement as usize)?;
                 round.observe_number(step)
             }
             Primary::Target(count) => {
@@ -291,6 +372,7 @@ impl TickGeneration {
             Primary::Interval {
                 step,
                 binding: IntervalBinding::Linear,
+                ..
             } => Some(step),
             _ => None,
         }
@@ -307,6 +389,7 @@ impl TickGeneration {
             Primary::Interval {
                 step,
                 binding: IntervalBinding::Log10,
+                ..
             } => Some(step as u32),
             _ => None,
         }

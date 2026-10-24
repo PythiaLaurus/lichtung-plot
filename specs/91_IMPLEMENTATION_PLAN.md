@@ -1728,7 +1728,12 @@ data/scale choice and singleton placement use exact affine binary rounding and
 one noncoarsening source. Public counts/caps migrate to usize and remove the
 shared 10000 ceiling, retaining private Automatic bounds and real storage limits.
 Forest data operands remain independent of mathematical scale-space powers.
-Steps 10–22 remain pending; undelivered target signatures are
+Step 10 is complete: normalized fixed/preferred intervals retain explicit numeric
+origins and Data/Scale choice, sharing exact arbitrary-index rounding-cell arithmetic
+with existing interval materialization. Caller caps precede complete-list allocation;
+empty fixed owners suppress numeric work. Final parent domains determine the lists,
+which remain independent of assigned width, typography and optional child reuse.
+Steps 11–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

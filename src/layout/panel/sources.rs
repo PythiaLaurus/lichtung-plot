@@ -8,6 +8,7 @@ use crate::{Error, TickGeneration};
 // Only the automatic candidate program is bounded by this private seed grammar.
 pub(super) const MAX_TICKS: usize = 10_000;
 pub(crate) mod count;
+pub(super) mod interval;
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
 const FACTORS: [f64; 4] = [1.0, 2.0, 3.0, 5.0];
 
@@ -101,28 +102,19 @@ fn linear_positions(
     step: f64,
     maximum: usize,
 ) -> Result<Option<Vec<f64>>, Error> {
-    let Some((first, count)) = indices(range, step) else {
-        return Ok(None);
-    };
-    if count > maximum {
-        return Ok(None);
-    }
-    let mut positions = Vec::new();
-    reserve(&mut positions, count)?;
-    for offset in 0..count {
-        let position = ((first + i64::try_from(offset).expect("bounded tick count")) as f64) * step;
-        if !position.is_finite()
-            || position < range.0
-            || position > range.1
-            || positions
-                .last()
-                .is_some_and(|previous| *previous >= position)
-        {
-            return Ok(None);
-        }
-        positions.push(position);
-    }
-    Ok(Some(positions))
+    Ok(interval::positions(
+        range,
+        None,
+        false,
+        (
+            step,
+            0.0,
+            crate::TickSpace::Data,
+            crate::TickRequirement::Preferred,
+        ),
+        maximum,
+    )?
+    .and_then(|positions| (!positions.coordinates.is_empty()).then_some(positions.coordinates)))
 }
 
 fn endpoints(range: (f64, f64), maximum: usize) -> Result<Option<Vec<f64>>, Error> {
@@ -197,6 +189,37 @@ fn upper_seed_count(span: f64, ch_quanta: i64) -> Result<usize, Error> {
         .map_err(|error| Error::Render(error.to_string()))?)
 }
 
+fn measured_seed(
+    projection: &Projection,
+    side: AxisSide,
+    theme: &ResolvedTheme,
+    legacy: bool,
+) -> Result<usize, Error> {
+    let probe = if legacy {
+        theme.measure_legacy_appearance_text(
+            "0",
+            &theme.typography.axes.tick_label,
+            PhysicalTextAlignment::Center,
+            "numeric tick pitch",
+            false,
+        )
+    } else {
+        theme.measure_text(
+            "0",
+            &theme.typography.axes.tick_label,
+            PhysicalTextAlignment::Center,
+            "numeric tick pitch",
+            false,
+        )
+    }?;
+    let (x0, x1, y0, y1) = projection.pixel_box();
+    let (_, span) = match side {
+        AxisSide::Bottom => super::projection::axis_quanta(x0, x1)?,
+        AxisSide::Left => super::projection::axis_quanta(y0, y1)?,
+    };
+    upper_seed_count(span as f64 / 1024.0, probe.lines[0].logical_advance_quanta)
+}
+
 pub(super) fn span_quanta(span: f64) -> Result<i64, Error> {
     if !span.is_finite() || span < 0.0 {
         return Err(Error::Render(
@@ -222,6 +245,8 @@ struct Sources {
     previous_step: Option<f64>,
     intervals_done: bool,
     terminal_emitted: bool,
+    raw: Option<(f64, f64)>,
+    operands: Option<Vec<f64>>,
 }
 
 impl Sources {
@@ -241,21 +266,25 @@ impl Sources {
                 "numeric tick domain must be finite and strictly ascending".into(),
             ));
         }
-        if generation.is_interval() && log != generation.decade_step().is_some() {
-            return Err(Error::Data(
-                "tick interval does not match the axis scale".into(),
-            ));
-        }
+        generation.validate_scale(log)?;
         // Binary64's full decimal span has at most 633 decade bases. Integer
         // intervals have at most 20. Include the one terminal midpoint source.
         let integral_count =
             (range.1.min(308.0).floor() - range.0.max(-323.0).ceil() + 1.0).max(0.0) as usize;
         let target = generation.target_count();
         let upper = target.unwrap_or(upper);
-        let singleton = target == Some(1) || generation.get_maximum_count() == Some(1);
+        let singleton = target == Some(1)
+            || (!generation.is_interval() && generation.get_maximum_count() == Some(1));
         let cap = match &generation {
+            value
+                if value
+                    .interval_parameters()
+                    .is_some_and(|parameters| parameters.3 == crate::TickRequirement::Fixed) =>
+            {
+                1
+            }
             _ if singleton => 1,
-            value if value.is_interval() && log => 4 * 20 + 1,
+            value if value.decade_step().is_some() => 4 * 20 + 1,
             value if value.is_interval() => 4 * 633 + 1,
             _ if log && integral_count >= 2 => {
                 upper.min(integral_count) + usize::from(target.is_none())
@@ -264,7 +293,9 @@ impl Sources {
                 .checked_add(1)
                 .ok_or_else(|| Error::Render("tick source program length overflow".into()))?,
         };
-        let base = generation.additive_step().unwrap_or(0.0);
+        let base = generation
+            .interval_parameters()
+            .map_or(0.0, |parameters| parameters.0);
         let log_base = generation.decade_step().map_or(0, u64::from);
         Ok(Self {
             range,
@@ -279,29 +310,49 @@ impl Sources {
             previous_step: None,
             intervals_done: false,
             terminal_emitted: false,
+            raw: None,
+            operands: None,
         })
     }
 
     fn next_kind(&mut self) -> SourceKind {
         let interval = self.generation.is_interval();
         let target = self.generation.target_count();
-        if target == Some(1) || self.generation.get_maximum_count() == Some(1) {
+        if self.fixed() {
+            return SourceKind::Additive(self.base);
+        }
+        if target == Some(1) || (!interval && self.generation.get_maximum_count() == Some(1)) {
             return SourceKind::Midpoint;
         }
         if interval && !self.intervals_done {
             loop {
-                let maximum = if self.log {
+                let decades = self.generation.decade_step().is_some();
+                let maximum = if decades {
                     self.range
                         .0
                         .max(-323.0)
                         .abs()
                         .max(self.range.1.min(308.0).abs())
                 } else {
-                    self.range.0.abs().max(self.range.1.abs())
+                    let view = if self.log
+                        && self
+                            .generation
+                            .interval_parameters()
+                            .is_some_and(|parameters| parameters.2 == crate::TickSpace::Data)
+                    {
+                        self.raw.unwrap_or(self.range)
+                    } else {
+                        self.range
+                    };
+                    let origin = self
+                        .generation
+                        .interval_parameters()
+                        .map_or(0.0, |parameters| parameters.1);
+                    (view.0 - origin).abs().max((view.1 - origin).abs())
                 };
                 let factor = self.factor;
                 self.factor += 1;
-                let kind = if self.log {
+                let kind = if decades {
                     self.log_base
                         .checked_mul([1, 2, 3, 5][factor])
                         .map(SourceKind::LogInterval)
@@ -316,7 +367,7 @@ impl Sources {
                 };
                 if self.factor == 4 {
                     self.factor = 0;
-                    if self.log {
+                    if decades {
                         let next = self.log_base.checked_mul(10);
                         self.intervals_done = self.log_base as f64 > maximum || next.is_none();
                         if let Some(next) = next {
@@ -374,8 +425,17 @@ impl Sources {
             ));
         }
 
+        if self.log
+            && self
+                .generation
+                .interval_parameters()
+                .is_some_and(|parameters| parameters.2 == crate::TickSpace::Data)
+        {
+            self.raw = Some(interval::data_range(self.range, self.raw)?);
+        }
+        self.operands = None;
         let kind = self.next_kind();
-        self.terminal_emitted = kind == SourceKind::Midpoint;
+        self.terminal_emitted = kind == SourceKind::Midpoint || self.fixed();
         let source = TickSource {
             kind,
             ordinal: self.ordinal,
@@ -387,23 +447,26 @@ impl Sources {
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::TickSource,
         );
-        let maximum = self.generation.get_maximum_count().unwrap_or(
+        let mut maximum = self.generation.get_maximum_count().unwrap_or(
             if self.generation.target_count().is_some() || self.generation.is_interval() {
                 usize::MAX
             } else {
                 MAX_TICKS
             },
         );
+        if !self.generation.is_interval() && self.generation.target_count().is_none() {
+            maximum = maximum.min(MAX_TICKS);
+        }
         let positions = match kind {
             SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed, maximum)?,
-            SourceKind::Additive(step) => linear_positions(self.range, step, maximum)?,
+            SourceKind::Additive(step) => self.interval_positions(self.range, step, maximum)?,
             SourceKind::LogInterval(step) => {
                 let clamped = (self.range.0.max(-323.0), self.range.1.min(308.0));
                 if clamped.0 > clamped.1 {
                     self.intervals_done = true;
                     None
                 } else {
-                    linear_positions(clamped, step as f64, maximum)?
+                    self.interval_positions(clamped, step as f64, maximum)?
                 }
             }
             SourceKind::LogIntegral | SourceKind::LogSubset(_) => {
@@ -439,6 +502,46 @@ impl Sources {
         };
         Ok((source, positions))
     }
+
+    fn fixed(&self) -> bool {
+        self.generation
+            .interval_parameters()
+            .is_some_and(|parameters| parameters.3 == crate::TickRequirement::Fixed)
+    }
+
+    fn interval_positions(
+        &mut self,
+        range: (f64, f64),
+        step: f64,
+        maximum: usize,
+    ) -> Result<Option<Vec<f64>>, Error> {
+        let (_, origin, space, requirement) = self
+            .generation
+            .interval_parameters()
+            .ok_or_else(|| Error::Render("interval source lacks its normalized policy".into()))?;
+        let positions = interval::positions(
+            range,
+            self.raw,
+            self.log,
+            (step, origin, space, requirement),
+            maximum,
+        )?;
+        let Some(positions) = positions else {
+            return if self.fixed() {
+                Err(Error::Render(
+                    "fixed interval count exceeds its configured maximum or storage representation"
+                        .into(),
+                ))
+            } else {
+                Ok(None)
+            };
+        };
+        if positions.coordinates.is_empty() && !self.fixed() {
+            return Ok(None);
+        }
+        self.operands = positions.data;
+        Ok(Some(positions.coordinates))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -454,7 +557,7 @@ pub(crate) fn numeric_tick_plan(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
     NumericTickPlan::measure_selected_source(
-        range, generation, log, projection, side, theme, legacy, format, scope,
+        range, generation, log, projection, side, theme, legacy, format, scope, None,
     )
 }
 
@@ -559,49 +662,42 @@ impl NumericTickPlan {
         legacy: bool,
         format: Option<&crate::numeric::source::AxisRequest<'_>>,
         scope: &crate::layout::fit::FitScope,
+        raw: Option<(f64, f64)>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         if let Some(parameters) = generation.exact_parameters() {
             return count::plan(
-                range, parameters, log, None, projection, side, theme, format, scope,
+                range, parameters, log, raw, projection, side, theme, format, scope,
             );
         }
         // Validate semantic inputs before asking for the metric probe or environment.
         Sources::new(range, log, generation.clone(), 1)?;
-        let probe = if legacy {
-            theme.measure_legacy_appearance_text(
-                "0",
-                &theme.typography.axes.tick_label,
-                PhysicalTextAlignment::Center,
-                "numeric tick pitch",
-                false,
-            )
+        let upper = if generation.is_interval() || generation.target_count().is_some() {
+            1
         } else {
-            theme.measure_text(
-                "0",
-                &theme.typography.axes.tick_label,
-                PhysicalTextAlignment::Center,
-                "numeric tick pitch",
-                false,
-            )
-        }?;
-        let (x0, x1, y0, y1) = projection.pixel_box();
-        let (_, span) = match side {
-            AxisSide::Bottom => super::projection::axis_quanta(x0, x1)?,
-            AxisSide::Left => super::projection::axis_quanta(y0, y1)?,
+            measured_seed(projection, side, theme, legacy)?
         };
-        let upper = upper_seed_count(span as f64 / 1024.0, probe.lines[0].logical_advance_quanta)?;
 
         let mut sources = Sources::new(range, log, generation, upper)?;
+        sources.raw = raw;
         loop {
             let (mut source, positions) = sources.next()?;
             if let Some(positions) = positions {
+                if positions.is_empty() {
+                    return Ok(Self {
+                        ticks: Vec::new(),
+                        source,
+                        numeric: None,
+                    });
+                }
+                let operands = sources.operands.as_deref().unwrap_or(&positions);
+                let power = log && sources.operands.is_none();
                 // Each formatting attempt is admitted before strings or record storage.
                 let mut ticks = Vec::new();
                 let mut unique = false;
                 let mut numeric = None;
                 if let Some(format) = format {
                     if let Some(plan) = Self::formatted(
-                        &positions, &positions, log, log, format, theme, source, projection, side,
+                        &positions, operands, power, log, format, theme, source, projection, side,
                     )? {
                         source = plan.source;
                         ticks = plan.ticks;
@@ -617,7 +713,7 @@ impl NumericTickPlan {
                                 | SourceKind::LogInterval(_)
                         );
                     if let Some(plan) =
-                        Self::omitted(&positions, &positions, log, integral, source)?
+                        Self::omitted(&positions, operands, power, integral, source)?
                     {
                         source = plan.source;
                         ticks = plan.ticks;
@@ -637,7 +733,7 @@ impl NumericTickPlan {
                     });
                 }
             }
-            if source.kind == SourceKind::Midpoint {
+            if source.kind == SourceKind::Midpoint || sources.fixed() {
                 #[cfg(test)]
                 crate::orchestrator::measurements::count(
                     crate::orchestrator::measurements::Counter::TickFitMiss,
@@ -652,7 +748,11 @@ impl NumericTickPlan {
                     )?
                     .failure(
                         crate::layout::fit::FitKind::Tick,
-                        "numeric axis terminal midpoint label does not fit assigned span",
+                        if sources.fixed() {
+                            "complete fixed interval source does not fit assigned span"
+                        } else {
+                            "numeric axis terminal midpoint label does not fit assigned span"
+                        },
                     )
                     .into());
             }

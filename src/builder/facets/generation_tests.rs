@@ -116,7 +116,21 @@ fn invalid_generation_rejects_before_font_discovery() {
             TickGeneration::additive(step),
             Err(crate::Error::Data(_))
         ));
+        assert!(crate::TickGeneration::interval(
+            step,
+            0.0,
+            crate::TickSpace::Data,
+            crate::TickRequirement::Fixed
+        )
+        .is_err());
     }
+    assert!(crate::TickGeneration::interval(
+        1.0,
+        f64::NAN,
+        crate::TickSpace::Data,
+        crate::TickRequirement::Fixed
+    )
+    .is_err());
     assert!(TickGeneration::log10_decades(0).is_err());
     let plot = plot().x_tick_generation(TickGeneration::log10_decades(2).unwrap());
     assert!(matches!(plot.preflight(), Err(crate::Error::Data(_))));

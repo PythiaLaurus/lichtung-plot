@@ -12,8 +12,15 @@ impl PowerFormatter {
         index: usize,
         denominator: usize,
     ) -> Result<f64> {
-        let lower = Log10Operand::new(range.0, 0)?;
-        let upper = Log10Operand::new(range.1, 0)?;
+        let lower = Log10Operand::new(
+            if index == denominator {
+                range.1
+            } else {
+                range.0
+            },
+            0,
+        )?;
+        let upper = Log10Operand::new(if index == 0 { range.0 } else { range.1 }, 0)?;
         let mut precision = 128_usize;
         loop {
             let (lower_min, lower_max, lower_unit) = self.binary_bounds(&lower, precision)?;

@@ -897,6 +897,7 @@ fn matrix_ticks<'a>(
             false,
             None,
             scope,
+            None,
         )?;
 
         *cached = Some(MatrixTickCache {

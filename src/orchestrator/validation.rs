@@ -22,13 +22,7 @@ impl Plot {
             ),
             (self.y_axis_spec(), false),
         ] {
-            if spec.generation.is_interval()
-                && logarithmic != spec.generation.decade_step().is_some()
-            {
-                return Err(Error::Data(
-                    "tick interval does not match the axis scale".into(),
-                ));
-            }
+            spec.generation.validate_scale(logarithmic)?;
         }
         if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
         {

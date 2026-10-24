@@ -22,8 +22,9 @@ Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
 `src/numeric/prefixes.rs`, `src/numeric/prefixes/selection.rs`, `src/numeric/specifier.rs`,
 `src/numeric/context.rs`, `src/numeric/function.rs`, `src/numeric/table.rs`,
 `src/numeric/source.rs`, `src/numeric/unit.rs`,
-`src/spec/ticks.rs` and `src/layout/panel/sources.rs`. Mathematical power display
-is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
+`src/spec/ticks.rs`, `src/layout/panel/sources.rs` and the shared
+`src/layout/panel/sources/{count,interval}.rs` position owners. Mathematical power
+display is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
 
 ## Formatting Functions And Semantic Materialization
@@ -429,7 +430,7 @@ TickGeneration is opaque Clone/Debug/Default/PartialEq/Eq, not Copy. One private
 primary locator is Automatic, Target or Interval; an independent optional positive
 maximum caps generated positions. Maximum is Automatic plus that cap, never a
 parallel locator implementation. Interval retains its admitted Linear/Log10 scale
-binding and exact represented step; the additive/decade readers project those
+binding and exact represented step/origin/space/requirement; the additive/decade readers project those
 constructor semantics. Default and automatic() reset the entire request.
 is_automatic tests the complete default, including absence of a cap. Additive is
 finite positive f64; Log10Decades positive u32; target/maximum counts and all caps
@@ -470,9 +471,10 @@ nonpositive raw step locally misses.
 Choose greatest table decade<=raw_step and test positive finite factors
 10,5,2.5,2,1 times it (or raw_step alone if no table exponent). Minimize abs(count-k),
 ties keeping earlier larger step. Adjacent endpoints or fewer than2 resulting
-positions use validated[lo,hi]. Common zero-aligned generation uses ceil(lo/step),
-floor(hi/step), exact integral indices in[-2^53,2^53], checked positive usize count before
-allocation, prescribed binary64 index*step, finite in-domain strictly ascending.
+positions use validated[lo,hi]. Automatic candidate-count estimates use binary64
+ceil(lo/step)/floor(hi/step) within[-2^53,2^53]. Actual lattice materialization uses
+the shared exact rounding-cell owner below, with checked complete count before
+allocation and no lossy float conversion of a lattice index.
 
 Additive first tries requested step, then step times1,2,3,5 by decades, omitting
 exact duplicates. Stop after first finite decade base beyond max absolute domain
@@ -532,6 +534,43 @@ with positive rational coefficients through certified enclosures before one bina
 rounding. This does not expose an invented inverse as domain data_limits.
 The selected complete set uses ordinary NumericFormat functions/precision/factors,
 actual-text admission and frozen output contracts, after final parent-domain resolution.
+
+### Fixed And Preferred Origin-Aligned Intervals
+
+Interval retains finite positive step, finite numeric origin, Data/Scale space,
+Fixed/Preferred requirement and admitted scale binding. The generic interval
+factory is context-relative; additive is preferred zero-origin Linear Data,
+log10_decades is preferred zero-origin integral Log10 Scale. Their original readers
+project those bound choices, while interval_parameters reads every interval tuple.
+Zero origins normalize to positive zero. Complete equality/feedback retains all
+fields, including binding and requirement; equal current positions are insufficient.
+
+Positions are the independently rounded original `origin+k*step`. Express each
+finite binary operand in integer 2^-1074 units. The inclusive represented domain's
+preimage is bounded by midpoint(previous(lo),lo) and midpoint(hi,next(hi)); midpoint
+ties include an endpoint exactly when its significand is even. Use virtual finite
+binade neighbors at +/-MAX. Exact signed floor/ceiling division of these boundaries
+minus the origin determines first/last arbitrary-size integer indices. Check the
+complete usize count and caller cap before positions/text allocation. There is no
+2^53 index ceiling, decimal tolerance, accumulated rounded addition or source
+truncation. This admits ordinary 0.1-step endpoint 1 consistently with representation.
+
+Fixed emits one full source, allows a valid empty list and never substitutes a
+midpoint on cap/representation/text refusal. Empty fixed owners suppress numeric
+probes/functions/explanations. Preferred shares the same arithmetic and tries step
+times 1/2/3/5 by decades before the original-domain scale midpoint. Oversized
+complete candidates can miss its caller cap; actual allocation/font errors remain
+fatal. The source program is finitely bounded by binary64 decimal bases. Neither
+mode depends on assigned pixels, typography or optional layout reuse.
+
+Data on Log10 resolves genuinely retained raw endpoints, or certified mathematical
+power endpoints in the finite data representation, and rounds each original lattice
+member before scientific projection. Underflowing lower mathematical endpoints
+admit only positive representable members; unrepresentable nonempty upper ranges
+refuse instead of becoming empty. A represented endpoint keeps its canonical scale
+coordinate. Callback domain raw bounds are never invented. Scale on Log10 retains
+mathematical exponent operands. Only the old integral-decade binding retains the
+[-323,308] integral-source intersection; generic Scale intervals do not inherit it.
 
 ## Pre-Font Requirements And Retained Dependencies
 
