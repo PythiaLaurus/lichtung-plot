@@ -59,6 +59,7 @@ enum Observation {
     Text(String),
     AuthoredText(crate::Text),
     NumericEmitter(crate::numeric::function::Emitter),
+    PositionFunction(crate::spec::ticks::function::Function),
     NumericContext(std::sync::Arc<crate::numeric::context::ContextInfo>),
     TextPlan(ResolvedTextPlan),
     Guide(std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>),
@@ -612,6 +613,12 @@ impl FeedbackRound {
         value: &crate::numeric::function::Emitter,
     ) -> Result<(), Error> {
         self.observe(Observation::NumericEmitter(value.clone()))
+    }
+    pub(crate) fn observe_position_function(
+        &mut self,
+        value: &crate::spec::ticks::function::Function,
+    ) -> Result<(), Error> {
+        self.observe(Observation::PositionFunction(value.clone()))
     }
     pub(crate) fn observe_numeric_context(
         &mut self,

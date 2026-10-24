@@ -144,8 +144,6 @@ pub(super) fn assign(
     let (origin, span) = axis_quanta(origin, end)?;
     let mut cells = Vec::new();
     crate::layout::fit::reserve(&mut cells, ticks.len(), "axis label cells")?;
-    let mut previous_key = None;
-
     for tick in ticks {
         let key = projection_key(tick.position, range).ok_or_else(|| {
             scope.failure(
@@ -153,12 +151,6 @@ pub(super) fn assign(
                 "axis position is outside its finite display domain",
             )
         })?;
-        if !categorical && previous_key.is_some_and(|previous| key <= previous) {
-            return Err(scope
-                .failure(FitKind::Tick, "axis projection keys must strictly ascend")
-                .into());
-        }
-        previous_key = Some(key);
         let (center, start, end) = if let Some(bounds) = assigned {
             assigned_bounds(bounds, cells.len(), categorical)?
         } else if categorical {
@@ -204,7 +196,14 @@ pub(super) fn assign(
                 cell.end = (i128::from(origin) + i128::from(span)) as f64 / 1024.0;
             }
         }
-        neighbor_boundaries(&mut cells, ticks, categorical, selection)?;
+        neighbor_boundaries(
+            &mut cells,
+            ticks,
+            categorical,
+            selection,
+            labels_visible,
+            scope,
+        )?;
     }
     if labels_visible {
         apply_clearance(&mut cells, ticks, categorical, selection, scope)?;
@@ -217,8 +216,9 @@ fn neighbor_boundaries(
     ticks: &[AxisTick],
     categorical: bool,
     selection: &crate::CategoryLabelSelection,
-) -> Result<(), Error> {
-    let mut previous: Option<usize> = None;
+    labels_visible: bool,
+    scope: &FitScope,
+) -> Result<(), PlanError> {
     let mut order = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
     order.retain(|&index| {
         if categorical {
@@ -228,24 +228,50 @@ fn neighbor_boundaries(
         }
     });
     crate::data::source::sort_source_by(&mut order, |a, b| {
-        cells[*a].center.total_cmp(&cells[*b].center)
+        cells[*a]
+            .center
+            .total_cmp(&cells[*b].center)
+            .then_with(|| a.cmp(b))
     });
-    for index in order {
-        if let Some(previous_index) = previous {
-            let (start, span) = axis_quanta(cells[previous_index].center, cells[index].center)?;
-            let boundary = ratio_position(start, span, 1, 2)
-                .ok_or_else(|| Error::Render("axis cell midpoint overflow".into()))?
-                as f64
-                / 1024.0;
-            cells[previous_index].end = boundary;
-            cells[index].start = boundary;
-        } else if !categorical {
-            cells[index].inward = true;
+    let midpoint = |a, b| -> Result<f64, Error> {
+        let (start, span) = axis_quanta(a, b)?;
+        Ok(ratio_position(start, span, 1, 2)
+            .ok_or_else(|| Error::Render("axis cell midpoint overflow".into()))? as f64
+            / 1024.0)
+    };
+    let mut ordinal = 0;
+    let mut previous = None;
+    while ordinal < order.len() {
+        let first = order[ordinal];
+        let center = cells[first].center;
+        let end = ordinal
+            + order[ordinal..]
+                .partition_point(|&index| cells[index].center.to_bits() == center.to_bits());
+        let start_bound = if let Some(previous) = previous {
+            midpoint(previous, center)?
+        } else {
+            cells[first].start
+        };
+        let end_bound = if end < order.len() {
+            midpoint(center, cells[order[end]].center)?
+        } else {
+            cells[first].end
+        };
+        for &index in &order[ordinal..end] {
+            if labels_visible && ticks[index].label != ticks[first].label {
+                return Err(scope
+                    .failure(
+                        FitKind::Tick,
+                        "coincident painted axis labels overlap incompatibly",
+                    )
+                    .into());
+            }
+            cells[index].start = start_bound;
+            cells[index].end = end_bound;
+            cells[index].inward = !categorical && (ordinal == 0 || end == order.len());
         }
-        previous = Some(index);
-    }
-    if let Some(last) = previous.filter(|_| !categorical) {
-        cells[last].inward = true;
+        previous = Some(center);
+        ordinal = end;
     }
     Ok(())
 }
@@ -330,15 +356,15 @@ mod tests {
     }
 
     #[test]
-    fn unordered_positions_return_a_tick_fit_failure() {
+    fn geometric_order_preserves_source_order_and_coincident_drawable_cells() {
         let ticks = [
             AxisTick::new(1.5, "a"),
             AxisTick::new(0.5, "b"),
-            AxisTick::new(2.5, "c"),
+            AxisTick::new(0.5, "b"),
         ];
         let projection = Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
         {
-            let error = assign(
+            let cells = assign(
                 &ticks,
                 false,
                 true,
@@ -348,10 +374,10 @@ mod tests {
                 AxisSide::Bottom,
                 &FitScope::root(),
             )
-            .unwrap_err();
-            assert!(
-                matches!(error, PlanError::Fit(failure) if failure.reason.kind == FitKind::Tick)
-            );
+            .unwrap();
+            assert!(cells[0].center > cells[1].center);
+            assert_eq!(cells[1].center.to_bits(), cells[2].center.to_bits());
+            assert_eq!(cells[1].capacity().to_bits(), cells[2].capacity().to_bits());
         }
     }
 

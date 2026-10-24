@@ -1,5 +1,8 @@
 use crate::{Error, Result};
 
+pub(crate) mod function;
+pub use function::{TickContext, TickPositions};
+
 /// One validated selection for generated numeric tick positions.
 ///
 /// Targets allow nice-step deviation; maxima bound the complete in-domain list,
@@ -61,6 +64,7 @@ enum Primary {
         ratio: f64,
         requirement: TickRequirement,
     },
+    Function(function::Function),
 }
 
 /// Coordinate space for generated positions.
@@ -114,6 +118,25 @@ enum IntervalBinding {
 }
 
 impl TickGeneration {
+    /// Generate positions from the final domain and actual assigned span.
+    /// Clones share the immutable callback; exact ticks suppress it entirely.
+    pub fn function<F>(function: F) -> Self
+    where
+        F: for<'a> Fn(&TickContext<'a>) -> Result<TickPositions> + Send + Sync + 'static,
+    {
+        Self {
+            primary: Primary::Function(function::Function::new(function)),
+            maximum: None,
+        }
+    }
+
+    pub(crate) fn position_function(&self) -> Option<&function::Function> {
+        if let Primary::Function(function) = &self.primary {
+            Some(function)
+        } else {
+            None
+        }
+    }
     /// Use renderer-owned automatic density and nice-step selection.
     pub const fn automatic() -> Self {
         Self {
@@ -363,8 +386,12 @@ impl TickGeneration {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
         round.observe_count(self.maximum.unwrap_or(0))?;
-        match self.primary {
+        match &self.primary {
             Primary::Automatic => round.observe_count(0),
+            Primary::Function(function) => {
+                round.observe_count(6)?;
+                round.observe_position_function(function)
+            }
             Primary::Interval {
                 step,
                 origin,
@@ -373,15 +400,15 @@ impl TickGeneration {
                 binding,
             } => {
                 round.observe_count(1)?;
-                round.observe_count(binding as usize)?;
-                round.observe_number(origin)?;
-                round.observe_count(space as usize)?;
-                round.observe_count(requirement as usize)?;
-                round.observe_number(step)
+                round.observe_count(*binding as usize)?;
+                round.observe_number(*origin)?;
+                round.observe_count(*space as usize)?;
+                round.observe_count(*requirement as usize)?;
+                round.observe_number(*step)
             }
             Primary::Target(count) => {
                 round.observe_count(3)?;
-                round.observe_count(count)
+                round.observe_count(*count)
             }
             Primary::Multiplicative {
                 anchor,
@@ -389,9 +416,9 @@ impl TickGeneration {
                 requirement,
             } => {
                 round.observe_count(5)?;
-                round.observe_number(anchor)?;
-                round.observe_number(ratio)?;
-                round.observe_count(requirement as usize)
+                round.observe_number(*anchor)?;
+                round.observe_number(*ratio)?;
+                round.observe_count(*requirement as usize)
             }
             Primary::ExactCount {
                 count,
@@ -399,8 +426,8 @@ impl TickGeneration {
                 singleton,
             } => {
                 round.observe_count(4)?;
-                round.observe_count(count)?;
-                round.observe_count(space as usize)?;
+                round.observe_count(*count)?;
+                round.observe_count(*space as usize)?;
                 match singleton {
                     TickSingleton::Lower => round.observe_count(0),
                     TickSingleton::Midpoint => round.observe_count(1),
@@ -408,7 +435,7 @@ impl TickGeneration {
                     TickSingleton::Position(value) => {
                         round.observe_count(3)?;
                         round.observe_count(usize::from(value.is_sign_negative()))?;
-                        round.observe_number(value)
+                        round.observe_number(*value)
                     }
                 }
             }

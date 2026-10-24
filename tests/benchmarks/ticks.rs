@@ -214,7 +214,7 @@ fn case(
     disabled: bool,
 ) -> CaseMeasurement {
     let previous = DISABLE_CHILD_REUSE.with(|flag| flag.replace(disabled));
-    let result = std::panic::catch_unwind(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         measure_case(
             &format!("ticks_{fixture:?}_{request:?}_{generation:?}_{disabled}"),
             || Root::new(fixture, request, generation.clone()),
@@ -222,7 +222,7 @@ fn case(
             true,
             true,
         )
-    });
+    }));
     DISABLE_CHILD_REUSE.with(|flag| flag.set(previous));
     let sample = result.unwrap();
     assert_eq!(

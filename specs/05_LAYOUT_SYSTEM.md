@@ -498,8 +498,11 @@ Measure eligible text with correct orientation and complete outward interval/cle
 Only an explicit existing Heatmap label-fit
 policy can transform that family's category text.
 
-Numeric labels receive nonoverlapping cells bounded by adjacent projected-center
-midpoints and panel endpoints minus clearance. Endpoints place inward, interior
+Numeric labels use a stable geometric view without changing source order or original
+occurrence IDs. Distinct projected centers receive nonoverlapping cells bounded by
+neighbor midpoints and panel endpoints minus clearance. Coincident equal labels
+share drawable cells and retain all tick geometry; incompatible painted labels
+are actual text-layout misses, not source-order/uniqueness errors. Endpoints place inward, interior
 center. Exact labels need not be unique; nonempty strings must fit whole. Empty
 exact labels retain tick/grid positions without text baseline/ink/gutter/collision.
 Candidate/final placement share canonical anchor and actual-ink predicate.

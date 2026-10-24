@@ -8,6 +8,7 @@ use crate::{Error, TickGeneration};
 // Only the automatic candidate program is bounded by this private seed grammar.
 pub(super) const MAX_TICKS: usize = 10_000;
 pub(crate) mod count;
+mod function;
 mod geometric;
 pub(super) mod interval;
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
@@ -25,6 +26,7 @@ pub(crate) enum SourceKind {
     Midpoint,
     ExactCount,
     Multiplicative,
+    Function,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -501,7 +503,8 @@ impl Sources {
             SourceKind::Supplied
             | SourceKind::Exact
             | SourceKind::ExactCount
-            | SourceKind::Multiplicative => {
+            | SourceKind::Multiplicative
+            | SourceKind::Function => {
                 unreachable!("not adaptive sources")
             }
         };
@@ -597,7 +600,14 @@ impl NumericTickPlan {
                         ))
                     },
                 ))?;
-            if ticks.windows(2).all(|pair| pair[0].label != pair[1].label) {
+            let mut order = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
+            crate::data::source::sort_source_by(&mut order, |a, b| {
+                ticks[*a].label.cmp(&ticks[*b].label)
+            });
+            if order.windows(2).all(|pair| {
+                ticks[pair[0]].label != ticks[pair[1]].label
+                    || operands[pair[0]].scientifically_equal(&operands[pair[1]])
+            }) {
                 source.precision = Some(u8::try_from(precision).expect("bounded precision"));
                 let set = crate::numeric::set::FormattedSet {
                     members: crate::data::source::collect_source(operands.iter().cloned().map(Ok))?,
@@ -685,6 +695,10 @@ impl NumericTickPlan {
         scope: &crate::layout::fit::FitScope,
         raw: Option<(f64, f64)>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
+        if generation.position_function().is_some() {
+            return function::plan(range, log, projection, side, theme, format, scope);
+        }
+        let format = format.filter(|request| request.format.is_some());
         if let Some(parameters) = generation.exact_parameters() {
             return count::plan(
                 range, parameters, log, raw, projection, side, theme, format, scope,

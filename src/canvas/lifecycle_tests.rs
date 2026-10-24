@@ -1416,6 +1416,9 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
     .x_tick_format(suppressed)
+    .x_tick_generation(crate::TickGeneration::function(|_| {
+        panic!("exact ticks suppress the locator")
+    }))
     .x_ticks(vec![
         crate::AxisTick::new(0.0, "origin"),
         crate::AxisTick::new(1.0, "end"),
@@ -1425,10 +1428,116 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
 }
 
 #[test]
+fn position_functions_consume_shared_views_once_and_freeze_without_optional_reuse() {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    };
+    let observed = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+    let calls = observed.clone();
+    let frozen = Arc::new(AtomicBool::new(false));
+    let guard = frozen.clone();
+    let generation = crate::TickGeneration::function(move |context| {
+        assert!(!guard.load(Ordering::SeqCst));
+        assert_eq!(
+            context.domain().origin(),
+            crate::NumericRangeOrigin::ParentResolved
+        );
+        let range = context.domain().data_limits().unwrap();
+        assert!(range.0 <= 0.0 && range.1 >= 120.0);
+        assert!(calls.lock().unwrap().insert((
+            context.owner().canvas_cell().unwrap(),
+            range.0.to_bits(),
+            range.1.to_bits(),
+            context.span().to_bits()
+        )));
+        Ok(vec![80.0, 20.0, 20.0, -1e6, 1e6].into())
+    });
+    let guard = frozen.clone();
+    let format = crate::NumericFormat::default().set_function(move |context| {
+        assert!(!guard.load(Ordering::SeqCst));
+        context.format_builtin()
+    });
+    let plot = |range| {
+        Plot::scatter(
+            crate::NumericValues::new("x", range),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .x_tick_generation(generation.clone())
+        .x_tick_format(format.clone())
+    };
+    let canvas = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1600, 600)
+        .panel(0, 0, plot([0.0, 100.0]))
+        .unwrap()
+        .panel(0, 1, plot([20.0, 120.0]))
+        .unwrap()
+        .x_range_group(vec![(0, 0), (0, 1)])
+        .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let mut previous = None;
+    for disabled in [false, true] {
+        frozen.store(false, Ordering::SeqCst);
+        observed.lock().unwrap().clear();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
+        let result = canvas.preflight_plan();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+        let root = result.unwrap();
+        assert!(observed
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.0 == (0, 0)));
+        assert!(observed
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.0 == (0, 1)));
+        frozen.store(true, Ordering::SeqCst);
+        let counters = capture_counters();
+        let mut backend = root.plan().take_svg_backend().unwrap();
+        Canvas::render_preflighted(&root, &mut backend).unwrap();
+        let output =
+            crate::Output::new(RenderedScene::new(1600, 600, backend.into_output()).unwrap())
+                .svg_preserve_text(directory.path().join("text"))
+                .unwrap();
+        let svg = std::fs::read(directory.path().join("text.svg")).unwrap();
+        if let Some(previous) = previous {
+            assert_eq!(previous, svg);
+        }
+        previous = Some(svg);
+        if !disabled {
+            output
+                .svg(directory.path().join("outline"))
+                .unwrap()
+                .png_preview(directory.path().join("preview"))
+                .unwrap();
+        }
+        assert_eq!(capture_counters(), counters);
+    }
+    Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_ticks(vec![
+        crate::AxisTick::new(0.0, "start"),
+        crate::AxisTick::new(1.0, "end"),
+    ])
+    .x_tick_generation(crate::TickGeneration::function(|_| {
+        panic!("replaced locator")
+    }))
+    .preflight()
+    .unwrap();
+}
+
+#[test]
 fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
     use std::sync::{Arc, Mutex};
     let observed = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
     let contexts = observed.clone();
+    let locator_seen = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+    let locator_calls = locator_seen.clone();
     let format = crate::NumericFormat::default().set_function(move |context| {
         let owner = context.owner();
         let facet = owner.facet_cell().unwrap();
@@ -1458,6 +1567,17 @@ fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
         crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
     )
+    .x_tick_generation(crate::TickGeneration::function(move |context| {
+        let facet = context.owner().facet_cell().unwrap();
+        let (row, column) = facet.grid_levels().unwrap();
+        assert_eq!(row, "raw_row");
+        assert!(locator_calls
+            .lock()
+            .unwrap()
+            .insert((column.to_owned(), context.span().to_bits())));
+        let (lower, upper) = context.domain().scale_limits();
+        Ok(vec![lower, upper].into())
+    }))
     .facet(
         crate::FacetSpec::grid(
             crate::CategoryValues::new("r", ["raw_row"; 4]).unwrap(),
@@ -1471,6 +1591,16 @@ fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
     let result = source.preflight();
     crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
     result.unwrap();
+    assert!(locator_seen
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|key| key.0 == "raw_a"));
+    assert!(locator_seen
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|key| key.0 == "raw_b"));
     let contexts = observed.lock().unwrap();
     for column in ["raw_a", "raw_b"] {
         assert!(contexts

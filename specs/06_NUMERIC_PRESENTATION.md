@@ -574,6 +574,28 @@ coordinate. Callback domain raw bounds are never invented. Scale on Log10 retain
 mathematical exponent operands. Only the old integral-decade binding retains the
 [-323,308] integral-source intersection; generic Scale intervals do not inherit it.
 
+### Actual-View Position Functions
+
+TickGeneration::function owns one immutable higher-ranked Send+Sync callback with
+shared-handle equality. TickContext borrows axis/domain/raw owner and actual assigned
+parallel span; it has no backend or preferred-density input. Data results retain
+raw Binary64 operands and use the scientific log10 transform when required.
+Log10Exponents is admitted only on actual Log10 axes and retains PowerOfTen operands.
+Normal window filtering keeps original source indices and order; no independent
+ordering/uniqueness/domain validator or source-repair mode exists. A configured
+maximum checks the in-domain count before first-party copies/text. Empty output
+contributes no generated text/grid/explanation. Function/coordinate/storage errors
+end the operation; a complete nonfitting source cannot coarsen or substitute a midpoint.
+
+The separate operation-local position table in src/spec/ticks/function.rs keys the
+complete policy/handle, semantic owner, axis, resolved domain/raw bounds/provenance
+and consumed span bits. Repeated queries reuse the owned result independently of
+optional layout caches and unrelated orthogonal geometry. Intrinsic numeric probes
+never invoke this locator. Both tables seal before capture. Formatting receives the
+retained in-domain operand occurrences and original indices, including duplicates.
+Exact ticks suppress both function roles regardless of setter order. Marginal strip
+copies reuse central axes rather than invoking independent strip locators.
+
 ### Anchored Multiplicative Lattices
 
 Multiplicative owns the supplied finite positive anchor and ratio other than one,

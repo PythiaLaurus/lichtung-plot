@@ -121,7 +121,8 @@ pub use spec::{
     LegendComposition, LegendPolicy, LegendPosition, LinePathStyle, LinePattern, PanelCorner,
     PanelTextAnnotation, PercentileInterval, PlotKind, PointShape, QqLine, RawOverlay,
     RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight,
-    TickGeneration, TickRequirement, TickSingleton, TickSpace, ValueSort, WaterfallLabels,
+    TickContext, TickGeneration, TickPositions, TickRequirement, TickSingleton, TickSpace,
+    ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use text::{Text, TextAlignment, TextLayout};

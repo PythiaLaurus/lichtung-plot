@@ -14,6 +14,7 @@ Each call replaces the axis's complete choice independently of format/limits:
 | exact_count(count, TickSpace) | Exactly count endpoint-including affine positions; zero is empty |
 | interval(step, origin, TickSpace, TickRequirement) | One origin-aligned fixed or preferred lattice |
 | multiplicative(anchor, ratio, TickRequirement) | Positive anchored geometric lattice in either ratio direction |
+| function(callback) | Owned fallible positions from the final actual view |
 
 Counts/caps are usize, with no 10000 application ceiling. Target/Maximum are
 positive; ExactCount(0) is explicitly empty. `maximum_count(Some(n))` edits the one
@@ -111,6 +112,41 @@ generated number spelling.
 Facets/Canvas retain complete per-axis instructions alongside independent range
 and numeric format policies. Shared ranges alone do not make panel tick choices
 identical. Frozen Output reuses selected ticks/text without generation or layout.
+
+## Actual-View Position Functions
+
+```rust
+use lichtung_plot::{TickGeneration, TickPositions};
+let warning = TickGeneration::function(|context| {
+    let (lower, upper) = context.domain().scale_limits(); // Linear in this example
+    let mut values = vec![lower];
+    if lower <= 50.0 && 50.0 <= upper { values.push(50.0); }
+    values.push(upper);
+    Ok(TickPositions::Data(values))
+});
+```
+
+The same rule gives [0,50,120], [20,50,80] and [60,120] on those views. TickContext
+exposes axis, final domain/provenance, raw owner identity and the actual CSS-pixel
+span. Intrinsic low/mid/high preferences do not invoke the locator. Data positions
+remain original numeric operands even on Log10; deliberately typed Log10Exponents
+instead retain mathematical PowerOfTen operands. Raw logarithmic limits are exposed
+only when genuinely retained, without inventing an inverse from rounded exponents.
+
+Normal view handling retains unsorted/repeated in-domain occurrences in source
+order. Returning [80,20,20,-10,120] on [0,100] retains [80,20,20] at original indices
+[0,1,2]. Coincident equal labels share drawable cells; incompatible painted labels
+are an actual layout nonfit, not a source-uniqueness rule. NumericFormat separately
+controls their complete-set labels and explanation. Empty output has no generated
+ticks, grids or explanation, but keeps marks/frame/title. A configured maximum
+applies before first-party position copies or formatting; there is no implicit
+10000 limit, repair, fallback locator or lower-count retry.
+
+Clones share one immutable Send+Sync callback identity. The operation materializes
+each reached owner/axis/policy/domain/provenance/span once regardless of optional
+layout caches. Orthogonal geometry is not part of this callback's key. Final
+sealing closes both locator and formatter tables before callback-free publication.
+See `examples/10_tick_functions.rs`.
 
 ## Category Labels Without Deleting Categories
 

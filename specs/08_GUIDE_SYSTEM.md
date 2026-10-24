@@ -1,5 +1,12 @@
 # Guide System
 
+Position functions are axis-only scientific locators, separate from guide numeric
+formatting. Their operation-local results and complete formatted presentations are
+resolved before final font sealing/capture. Guide candidate probes preserve actual
+fit misses rather than retrying application locators or changing fixed sources;
+repeated identical actual-view contexts reuse required materialization independently
+of optional child layout reuse.
+
 Continuous numeric presentation retains its selected factors, unit, precision and
 optional common explanation alongside labels. Shared guides resolve these once
 from the merged final domain under equal complete NumericFormat policies. The

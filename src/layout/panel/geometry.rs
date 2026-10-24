@@ -186,19 +186,21 @@ impl AxisSpec {
     pub(crate) fn numeric_request(
         &self,
     ) -> Result<Option<crate::numeric::source::AxisRequest<'_>>, Error> {
-        self.format
-            .as_deref()
-            .map(|format| {
-                Ok(crate::numeric::source::AxisRequest {
-                    format,
-                    source: self.numeric_source.clone().ok_or_else(|| {
-                        Error::Render("numeric axis format lacks its operation-bound owner".into())
-                    })?,
-                    provenance: self.provenance,
-                    generation: self.generation.clone(),
-                })
-            })
-            .transpose()
+        let Some(source) = self.numeric_source.clone() else {
+            if self.format.is_some() || self.generation.position_function().is_some() {
+                return Err(Error::Render(
+                    "numeric axis lacks its operation-bound owner".into(),
+                ));
+            }
+            return Ok(None);
+        };
+        Ok(Some(crate::numeric::source::AxisRequest {
+            format: self.format.as_deref(),
+            source,
+            provenance: self.provenance,
+            generation: self.generation.clone(),
+            source_indices: None,
+        }))
     }
     pub(crate) fn layout_ticks(
         &self,

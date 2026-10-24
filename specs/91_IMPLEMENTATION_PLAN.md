@@ -1744,7 +1744,13 @@ the full scientific category/tick/track domain plus selected original indices.
 Final local orders drive font admission and neighbor capacity; native sizing,
 Canvas sharing, complete feedback/height/reuse identity and frozen text consume
 the same eligibility without suppressing independent annotations or collision checks.
-Steps 13–22 remain pending; undelivered target signatures are
+Step 13 is complete: actual-view position functions own shared immutable handles,
+retain raw/exponent operands and original filtered occurrence IDs, and materialize
+once per operation-bound owner/domain/provenance/parallel-span context. Stable
+geometric cells preserve drawable unsorted/duplicate results. Caps precede copies
+and formatting; exact ticks suppress both functions; final sealing precedes frozen
+callback-free publication independently of optional layout reuse.
+Steps 14–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

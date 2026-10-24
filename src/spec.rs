@@ -9,7 +9,7 @@ mod categorical;
 mod estimate;
 mod facet;
 mod output;
-mod ticks;
+pub(crate) mod ticks;
 
 pub use bar::{
     BarInput, BarSamples, Bootstrap, ConfidenceInterval, ErrorBar, PercentileInterval,
@@ -24,7 +24,9 @@ pub use estimate::{
 pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
-pub use ticks::{TickGeneration, TickRequirement, TickSingleton, TickSpace};
+pub use ticks::{
+    TickContext, TickGeneration, TickPositions, TickRequirement, TickSingleton, TickSpace,
+};
 mod category_labels;
 pub use category_labels::{CategoryLabelSelection, LabelEndpoints};
 

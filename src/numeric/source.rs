@@ -22,7 +22,7 @@ impl PartialEq for NumericSource {
 impl Eq for NumericSource {}
 
 impl OwnerInfo {
-    fn try_copy(&self) -> Result<Self> {
+    pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
             kind: self.kind,
             canvas: self.canvas,
@@ -134,17 +134,18 @@ impl NumericSource {
 
 #[derive(Debug, Clone)]
 pub(crate) struct AxisRequest<'a> {
-    pub(crate) format: &'a crate::NumericFormat,
+    pub(crate) format: Option<&'a crate::NumericFormat>,
     pub(crate) source: std::sync::Arc<NumericSource>,
     pub(crate) provenance: crate::layout::RangeProvenance,
     pub(crate) generation: crate::TickGeneration,
+    pub(crate) source_indices: Option<&'a [usize]>,
 }
 
 impl AxisRequest<'_> {
     #[cfg(test)]
     pub(crate) fn for_test(format: &crate::NumericFormat) -> AxisRequest<'_> {
         AxisRequest {
-            format,
+            format: Some(format),
             source: std::sync::Arc::new(NumericSource {
                 operation: crate::font::canonical::OperationContext::new(),
                 owner: OwnerInfo {
@@ -158,6 +159,7 @@ impl AxisRequest<'_> {
             }),
             provenance: crate::layout::RangeProvenance::Automatic,
             generation: crate::TickGeneration::automatic(),
+            source_indices: None,
         }
     }
     pub(crate) fn materialize(
@@ -168,6 +170,24 @@ impl AxisRequest<'_> {
         range: (f64, f64),
         purpose: NumericPurpose,
     ) -> Result<Option<super::set::FormattedSet>> {
+        let Some(format) = self.format else {
+            return Ok(None);
+        };
+        format.materialize(
+            &self.source.operation,
+            self.context(positions, log, side, range, purpose)?,
+            purpose == NumericPurpose::ActualSet,
+        )
+    }
+
+    pub(crate) fn context(
+        &self,
+        positions: &[super::operand::Operand],
+        log: bool,
+        side: crate::layout::AxisSide,
+        range: (f64, f64),
+        purpose: NumericPurpose,
+    ) -> Result<ContextInfo> {
         let index = usize::from(side == crate::layout::AxisSide::Left);
         let role = if index == 0 {
             NumericRole::XAxis
@@ -188,12 +208,21 @@ impl AxisRequest<'_> {
         let mut info = self
             .source
             .indexed(positions, role, purpose, Some(domain))?;
+        if let Some(indices) = self.source_indices {
+            if indices.len() != info.values.len() {
+                return Err(Error::Render(
+                    "numeric source occurrence count mismatch".into(),
+                ));
+            }
+            for (value, &index) in info.values.iter_mut().zip(indices) {
+                let Identity::Tick(axis, _) = value.identity else {
+                    return Err(Error::Render("indexed axis identity missing".into()));
+                };
+                value.identity = Identity::Tick(axis, index);
+            }
+        }
         info.generation = Some(self.generation.clone());
-        self.format.materialize(
-            &self.source.operation,
-            info,
-            purpose == NumericPurpose::ActualSet,
-        )
+        Ok(info)
     }
 }
 

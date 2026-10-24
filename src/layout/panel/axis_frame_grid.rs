@@ -266,6 +266,7 @@ impl PanelAxisPlan {
                 SourceKind::Midpoint => (7, 0.0),
                 SourceKind::ExactCount => (8, 0.0),
                 SourceKind::Multiplicative => (9, 0.0),
+                SourceKind::Function => (10, 0.0),
             };
             round.observe_count(kind)?;
             round.observe_number(parameter)?;
