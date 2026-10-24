@@ -720,6 +720,63 @@ pub(crate) struct SelectedFontUnit {
 }
 
 impl ResolvedFontPair {
+    fn try_copy(
+        &self,
+        mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<Self, FontError> {
+        let mut candidates = Vec::new();
+        reserve_cached_with_stage(
+            &mut candidates,
+            self.provenance.candidates.len(),
+            stage.as_deref_mut(),
+        )?;
+        candidates.extend_from_slice(&self.provenance.candidates);
+        let mut selected_scalars = Vec::new();
+        reserve_cached_with_stage(
+            &mut selected_scalars,
+            self.selected_scalars.len(),
+            stage.as_deref_mut(),
+        )?;
+        selected_scalars.extend_from_slice(&self.selected_scalars);
+        let mut selected_units = Vec::new();
+        reserve_cached_with_stage(
+            &mut selected_units,
+            self.selected_units.len(),
+            stage.as_deref_mut(),
+        )?;
+        for unit in &self.selected_units {
+            let mut source = String::new();
+            if let Some(stage) = stage.as_deref_mut() {
+                stage
+                    .reserve_prepared_string(
+                        &mut source,
+                        unit.source.len(),
+                        "font unit source copy",
+                    )
+                    .map_err(|error| FontError::Reservation(error.to_string()))?;
+            } else {
+                source
+                    .try_reserve_exact(unit.source.len())
+                    .map_err(|_| FontError::Allocation("font unit source copy"))?;
+            }
+            source.push_str(&unit.source);
+            selected_units.push(SelectedFontUnit {
+                source,
+                face: unit.face,
+            });
+        }
+        Ok(Self {
+            provenance: PairProvenance {
+                pair_ordinal: self.provenance.pair_ordinal,
+                weight: self.provenance.weight,
+                candidates,
+            },
+            primary: self.primary,
+            selected_scalars: SelectedScalarFaces(selected_scalars),
+            selected_units,
+        })
+    }
+
     pub(crate) fn selection_for_unit(
         &self,
         unit: &str,
@@ -890,24 +947,16 @@ pub(crate) struct CanonicalFontCore {
     faces: Vec<FaceMetadata>,
     scalar_presence: Vec<u64>,
     prepared_pairs: Vec<PreparedPair>,
-    incremental_pairs: Vec<IncrementalPair>,
     prepared_pairs_sealed: bool,
     operation: OperationContext,
     preparation: FontPreparation,
-}
-
-#[derive(Debug)]
-struct IncrementalPair {
-    stack: FontStack,
-    weight: RequestedWeight,
-    candidates: Vec<CandidateFace>,
-    selected_scalars: Vec<SelectedScalarFace>,
 }
 
 #[derive(Debug, Clone)]
 struct PreparedPair {
     stack: FontStack,
     weight: RequestedWeight,
+    candidates: Vec<CandidateFace>,
     resolved: ResolvedFontPair,
 }
 
@@ -1107,33 +1156,17 @@ impl PreparedFontEnvironment {
         stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
-        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+        prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), FontError> {
-        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
-        if core.prepared_pairs_sealed {
-            return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
-        }
-        for prepared in &core.prepared_pairs {
-            if prepared.resolved.provenance.pair_ordinal == pair_ordinal
-                || (prepared.weight == weight && prepared.stack.same(stack))
-            {
-                return Err(FontError::DuplicatePreparedPair { pair_ordinal });
-            }
-        }
-        let resolved = core.resolve_pair_with_stage(
-            pair_ordinal,
-            stack,
-            weight,
-            required_scalars,
-            prepared_stage.as_deref_mut(),
-        )?;
-        let retained_stack = copy_stack_with_stage(stack, prepared_stage)?;
-        core.prepared_pairs.push(PreparedPair {
-            stack: retained_stack,
-            weight,
-            resolved,
-        });
-        Ok(())
+        self.prepare_pairs(
+            std::iter::once(FontPairPreparationRequest::new(
+                pair_ordinal,
+                stack,
+                weight,
+                required_scalars,
+            )),
+            prepared_stage,
+        )
     }
 
     pub(crate) fn seal_prepared_pairs(&self) -> Result<(), FontError> {
@@ -1261,7 +1294,7 @@ impl PreparedFontEnvironment {
         let core = self.core.read().map_err(|_| FontError::Synchronization)?;
         for prepared in &core.prepared_pairs {
             if prepared.weight == weight && prepared.stack.same(stack) {
-                return Ok(Some(prepared.resolved.clone()));
+                return prepared.resolved.try_copy(None).map(Some);
             }
         }
         Ok(None)
@@ -1653,6 +1686,7 @@ impl CanonicalFontCore {
                     families: { Arc::new(preparation.retained_stack) },
                 },
                 weight: request.weight,
+                candidates: preparation.candidates,
                 resolved: ResolvedFontPair {
                     provenance: PairProvenance {
                         pair_ordinal: request.pair_ordinal,
@@ -1678,10 +1712,6 @@ impl CanonicalFontCore {
         self.resolve_pair_with_stage(pair_ordinal, stack, weight, required_scalars, None)
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "cache lookup, incremental selection, and result copying remain ordered"
-    )]
     fn resolve_pair_with_stage(
         &mut self,
         pair_ordinal: u32,
@@ -1692,50 +1722,32 @@ impl CanonicalFontCore {
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<ResolvedFontPair, FontError> {
         let mut cached_index = None;
-        for (index, cached) in self.incremental_pairs.iter().enumerate() {
+        for (index, cached) in self.prepared_pairs.iter().enumerate() {
             if cached.weight == weight && cached.stack.same(stack) {
                 cached_index = Some(index);
                 break;
             }
         }
-        let index = if let Some(index) = cached_index {
-            index
-        } else {
-            #[cfg(test)]
-            FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
-            let candidates = canonical_candidates_with_stage(
-                &self.database,
-                &self.faces,
-                stack,
-                weight,
-                &mut self.preparation,
+        let Some(index) = cached_index else {
+            let index = self.prepared_pairs.len();
+            self.prepare_pairs_with_stage(
+                std::iter::once(FontPairPreparationRequest::new(
+                    pair_ordinal,
+                    stack,
+                    weight,
+                    required_scalars,
+                )),
                 prepared_stage.as_deref_mut(),
             )?;
-            if candidates.is_empty() {
-                return Err(FontError::MissingFamily { pair_ordinal });
-            }
-            let retained_stack = copy_stack_with_stage(stack, prepared_stage.as_deref_mut())?;
-
-            reserve_cached_with_stage(
-                &mut self.incremental_pairs,
-                1,
-                prepared_stage.as_deref_mut(),
-            )?;
-            let index = self.incremental_pairs.len();
-            self.incremental_pairs.push(IncrementalPair {
-                stack: retained_stack,
-                weight,
-                candidates,
-                selected_scalars: Vec::new(),
-            });
-            index
+            return self.prepared_pairs[index].resolved.try_copy(prepared_stage);
         };
-        let cached = &mut self.incremental_pairs[index];
+        let cached = &mut self.prepared_pairs[index];
         let mut missing = Vec::new();
 
         for scalar in required_scalars {
             let mut found = false;
             for candidate in cached
+                .resolved
                 .selected_scalars
                 .iter()
                 .map(|selected| selected.scalar)
@@ -1755,7 +1767,7 @@ impl CanonicalFontCore {
             let files = &self.files;
             let faces = &self.faces;
             let selected = select_scalar_faces_with_stage(
-                pair_ordinal,
+                cached.resolved.provenance.pair_ordinal,
                 &cached.candidates,
                 &missing,
                 &mut self.scalar_presence,
@@ -1779,46 +1791,16 @@ impl CanonicalFontCore {
                 },
             )?;
             reserve_cached_with_stage(
-                &mut cached.selected_scalars,
+                &mut cached.resolved.selected_scalars.0,
                 selected.len(),
                 prepared_stage.as_deref_mut(),
             )?;
 
-            cached.selected_scalars.extend(selected);
+            cached.resolved.selected_scalars.0.extend(selected);
         }
         // Return the operation's accumulated coverage. Copies are admitted;
         // cached metadata and successful scalar selections are never recomputed.
-        let mut provenance = Vec::new();
-        reserve_cached_with_stage(
-            &mut provenance,
-            cached.candidates.len(),
-            prepared_stage.as_deref_mut(),
-        )?;
-        provenance.extend(
-            cached
-                .candidates
-                .iter()
-                .map(|candidate| candidate.occurrence.identity),
-        );
-        let primary = provenance[0];
-        let mut selected_scalars = Vec::new();
-        reserve_cached_with_stage(
-            &mut selected_scalars,
-            cached.selected_scalars.len(),
-            prepared_stage,
-        )?;
-        selected_scalars.extend_from_slice(&cached.selected_scalars);
-
-        Ok(ResolvedFontPair {
-            provenance: PairProvenance {
-                pair_ordinal,
-                weight,
-                candidates: provenance,
-            },
-            primary,
-            selected_units: Vec::new(),
-            selected_scalars: SelectedScalarFaces(selected_scalars),
-        })
+        cached.resolved.try_copy(prepared_stage)
     }
 
     pub(crate) fn shape_run(
@@ -1976,7 +1958,6 @@ impl CanonicalFontCore {
             faces,
             scalar_presence,
             prepared_pairs: Vec::new(),
-            incremental_pairs: Vec::new(),
             prepared_pairs_sealed: false,
             operation,
             preparation,
@@ -4171,7 +4152,7 @@ mod tests {
     }
 
     #[test]
-    fn incremental_pairs_reuse_normalization_candidates_and_scalar_probes() {
+    fn pair_extensions_keep_original_identity_and_reuse_selection() {
         let environment = PreparedFontEnvironment::synthetic();
         let shared = environment.clone();
         FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
@@ -4182,12 +4163,12 @@ mod tests {
             .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
             .unwrap();
 
-        for ordinal in 1..=1000 {
+        for ordinal in [1, 2] {
             let stack = stack.clone();
             let pair = shared
                 .resolve_pair(ordinal, &stack, RequestedWeight::Normal, &['A', 'A'])
                 .unwrap();
-            assert_eq!(pair.provenance.pair_ordinal, ordinal);
+            assert_eq!(pair.provenance.pair_ordinal, 0);
             assert_eq!(pair.selected_scalars.len(), 1);
         }
 

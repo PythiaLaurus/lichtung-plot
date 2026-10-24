@@ -1687,7 +1687,11 @@ PointLayer legend Text now preserves source-only identity and categorical/litera
 display context, with complete appearance/layout compatibility, selected guide
 metrics, font census and frozen entry alignment. The complete receiving-slot
 inventory is migrated, preserving existing source readers and complete Eq contracts.
-Steps 4–22 remain pending; undelivered target signatures are not current APIs.
+Step 4 is in progress: initial font preparation and unsealed scalar extension now
+share one pair store with stable ordinals/candidate/unit choices and fallible result
+copies. Actual-source admission and moving the seal to accepted-root finalization
+remain pending in this step. Steps 5–22 remain pending; undelivered target signatures
+are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

@@ -375,6 +375,10 @@ Assign first-use ordinal to each structurally equal `(FontStack,weight)` pair,
 preserving stack entries. Census pair ordinal, source record/scalars/unit spans,
 then generated alphabet in scalar order. Retain complete base-plus-mark spans
 and face selections; shared character sets do not prove equal unit requirements.
+Initial preparation and unsealed scalar extension use one retained pair store.
+Each pair keeps its original ordinal, canonical candidates and successful scalar/
+unit selections; later extension adds coverage without replacing earlier choices.
+Pair result copies retain fallible storage for candidate, scalar and unit payloads.
 
 ### Canonical Candidate Selection
 
