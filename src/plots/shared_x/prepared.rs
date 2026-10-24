@@ -33,16 +33,51 @@ pub(crate) struct PreparedAxes {
 }
 
 impl PreparedAxes {
+    pub(crate) fn empty_numeric_source(&self, side: usize) -> Result<bool, Error> {
+        let generation = &self.specs[side].generation;
+        if generation
+            .exact_parameters()
+            .is_some_and(|(count, _, _)| count == 0)
+        {
+            return Ok(true);
+        }
+        let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
+        let log = self.logarithmic && side == 0;
+        let maximum = generation.get_maximum_count().unwrap_or(usize::MAX);
+        if let Some((anchor, ratio, requirement)) = generation.multiplicative_parameters() {
+            let count =
+                crate::numeric::lattice::generation::LatticeRange::new(range, log, anchor, ratio)?
+                    .count();
+            if requirement == crate::TickRequirement::Fixed
+                && count > num_bigint::BigInt::from(maximum)
+            {
+                return Err(Error::Render("fixed multiplicative count exceeds its configured maximum or platform representation".into()));
+            }
+            return Ok(count == num_bigint::BigInt::ZERO);
+        }
+        if let Some(parameters) = generation.interval_parameters() {
+            let raw = self.specs[side]
+                .numeric_source
+                .as_deref()
+                .and_then(|source| {
+                    source.raw_limits(if side == 0 {
+                        crate::layout::AxisSide::Bottom
+                    } else {
+                        crate::layout::AxisSide::Left
+                    })
+                });
+            return crate::layout::fixed_interval_is_empty(range, raw, log, parameters, maximum);
+        }
+        Ok(false)
+    }
+
     pub(crate) fn numeric_probe(
         &self,
         side: usize,
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
         if self.specs[side].exact_ticks.is_some()
             || self.categories[side].is_some()
-            || self.specs[side]
-                .generation
-                .exact_parameters()
-                .is_some_and(|(count, _, _)| count == 0)
+            || self.empty_numeric_source(side)?
         {
             return Ok(None);
         }
@@ -50,29 +85,10 @@ impl PreparedAxes {
             return Ok(None);
         };
         let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
-        let log = self.logarithmic && side == 0;
-        if let Some(parameters) = self.specs[side].generation.interval_parameters() {
-            let raw = request.source.raw_limits(if side == 0 {
-                crate::layout::AxisSide::Bottom
-            } else {
-                crate::layout::AxisSide::Left
-            });
-            if crate::layout::fixed_interval_is_empty(
-                range,
-                raw,
-                log,
-                parameters,
-                self.specs[side]
-                    .generation
-                    .get_maximum_count()
-                    .unwrap_or(usize::MAX),
-            )? {
-                return Ok(None);
-            }
-        }
         request.materialize(
-            &[range.0, f64::midpoint(range.0, range.1), range.1],
-            self.logarithmic && side == 0,
+            &[range.0, f64::midpoint(range.0, range.1), range.1].map(|value| {
+                crate::numeric::operand::Operand::number(value, self.logarithmic && side == 0)
+            }),
             self.logarithmic && side == 0,
             if side == 0 {
                 crate::layout::AxisSide::Bottom

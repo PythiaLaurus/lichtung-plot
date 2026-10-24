@@ -53,13 +53,22 @@ pub enum NumericRangeOrigin {
 
 /// Exact operand representation, retaining binary64 source bits and power exponents.
 #[derive(Debug, Clone, Copy)]
-pub enum NumericOperand {
+pub enum NumericOperand<'a> {
     /// The represented finite ordinary operand.
     Binary64(f64),
     /// A mathematical power, not a rounded physical `powf` result.
     PowerOfTen {
         /// The exact represented exponent.
         exponent: f64,
+    },
+    /// Exact anchored geometric operand, retaining its original ratio direction.
+    Multiplicative {
+        /// Supplied positive binary64 anchor.
+        anchor: f64,
+        /// Supplied positive binary64 ratio, other than one.
+        ratio: f64,
+        /// Exact signed integral index in canonical ASCII decimal.
+        index: &'a str,
     },
 }
 
@@ -163,18 +172,23 @@ impl Identity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ContextValue {
-    pub(crate) bits: u64,
-    pub(crate) power: bool,
+    pub(crate) operand: super::operand::Operand,
     pub(crate) identity: Identity,
 }
 impl ContextValue {
-    fn operand(&self) -> NumericOperand {
-        if self.power {
-            NumericOperand::PowerOfTen {
-                exponent: f64::from_bits(self.bits),
+    fn operand(&self) -> NumericOperand<'_> {
+        match &self.operand {
+            super::operand::Operand::Binary64(bits) => {
+                NumericOperand::Binary64(f64::from_bits(*bits))
             }
-        } else {
-            NumericOperand::Binary64(f64::from_bits(self.bits))
+            super::operand::Operand::PowerOfTen(bits) => NumericOperand::PowerOfTen {
+                exponent: f64::from_bits(*bits),
+            },
+            super::operand::Operand::Multiplicative(value) => NumericOperand::Multiplicative {
+                anchor: f64::from_bits(value.anchor_bits),
+                ratio: f64::from_bits(value.ratio_bits),
+                index: &value.index_text,
+            },
         }
     }
 }
@@ -184,7 +198,7 @@ impl ContextValue {
 pub struct NumericValue<'a>(pub(crate) &'a ContextValue);
 impl<'a> NumericValue<'a> {
     /// Original ordinary or mathematical operand.
-    pub fn operand(&self) -> NumericOperand {
+    pub fn operand(&self) -> NumericOperand<'a> {
         self.0.operand()
     }
     /// Original semantic identity.
@@ -204,13 +218,13 @@ pub(crate) struct DomainInfo {
 /// Final scientific domain, without CSS geometry or invented logarithmic inverses.
 #[derive(Debug, Clone)]
 pub struct NumericDomain<'a>(pub(crate) &'a DomainInfo);
-impl NumericDomain<'_> {
+impl<'a> NumericDomain<'a> {
     /// Lower mathematical endpoint.
-    pub fn lower(&self) -> NumericOperand {
+    pub fn lower(&self) -> NumericOperand<'a> {
         endpoint(self.0.limits.0, self.0.scale)
     }
     /// Upper mathematical endpoint.
-    pub fn upper(&self) -> NumericOperand {
+    pub fn upper(&self) -> NumericOperand<'a> {
         endpoint(self.0.limits.1, self.0.scale)
     }
     /// Raw bounds only when genuinely retained as finite endpoints.
@@ -235,7 +249,7 @@ impl NumericDomain<'_> {
         self.0.origin
     }
 }
-fn endpoint(bits: u64, scale: AxisScale) -> NumericOperand {
+fn endpoint<'a>(bits: u64, scale: AxisScale) -> NumericOperand<'a> {
     if scale == AxisScale::Log10 {
         NumericOperand::PowerOfTen {
             exponent: f64::from_bits(bits),
@@ -303,8 +317,7 @@ pub struct NumericSetContext<'a> {
     pub(crate) values: &'a [NumericValue<'a>],
     pub(crate) format: &'a NumericFormat,
     pub(crate) metadata: &'a FormattedSet,
-    pub(crate) operands: &'a [f64],
-    pub(crate) power: bool,
+    pub(crate) operands: &'a [super::operand::Operand],
     pub(crate) required: bool,
     pub(crate) helper: &'a std::cell::OnceCell<FormattedSet>,
 }
@@ -363,7 +376,6 @@ impl<'a> NumericSetContext<'a> {
         if self.helper.get().is_none() {
             let result = self.format.function_helper(
                 self.operands,
-                self.power,
                 &self.metadata.scales,
                 self.required,
                 self.info.purpose == NumericPurpose::IntrinsicProbe,

@@ -23,8 +23,11 @@ pub(crate) mod emission;
 pub(crate) mod format;
 pub(crate) mod function;
 pub(crate) mod inputs;
+pub(crate) mod lattice;
 pub(crate) mod locale;
+pub(crate) mod logarithm;
 pub(crate) mod mapping;
+pub(crate) mod operand;
 pub(crate) mod prefixes;
 pub(crate) mod profiles;
 pub(crate) mod set;
@@ -73,8 +76,8 @@ pub(crate) fn log10(value: f64) -> Result<f64, Error> {
     };
     let mut precision = 128_usize;
     loop {
-        let (two_lower, two_upper) = ln_bounds(1, 3, precision)?;
-        let (five_fourths_lower, five_fourths_upper) = ln_bounds(1, 9, precision)?;
+        let (two_lower, two_upper) = ln_bounds(1_u8, 3_u8, precision)?;
+        let (five_fourths_lower, five_fourths_upper) = ln_bounds(1_u8, 9_u8, precision)?;
         let ten_lower = &two_lower * 3_u32 + five_fourths_lower;
         let ten_upper = &two_upper * 3_u32 + five_fourths_upper;
         let (mantissa_lower, mantissa_upper) = ln_bounds(
@@ -104,18 +107,20 @@ pub(crate) fn log10(value: f64) -> Result<f64, Error> {
 
 /// Bounds in units of 2^-precision, for 2*atanh(numerator/denominator), z <= 1/3.
 fn ln_bounds(
-    numerator: u64,
-    denominator: u64,
+    numerator: impl Into<BigUint>,
+    denominator: impl Into<BigUint>,
     precision: usize,
 ) -> Result<(BigUint, BigUint), Error> {
-    if numerator == 0 {
+    let numerator = numerator.into();
+    let denominator = denominator.into();
+    if numerator.bits() == 0 {
         return Ok((BigUint::ZERO, BigUint::ZERO));
     }
     let unit = BigUint::from(1_u32) << precision;
     let ceiling = &unit - 1_u32;
-    let scaled = BigUint::from(numerator) << precision;
-    let mut lower_power = &scaled / denominator;
-    let mut upper_power = (&scaled + (denominator - 1)) / denominator;
+    let scaled = numerator << precision;
+    let mut lower_power = &scaled / &denominator;
+    let mut upper_power = (&scaled + (&denominator - 1_u8)) / denominator;
     let lower_square = (&lower_power * &lower_power) >> precision;
     let upper_square = (&upper_power * &upper_power + &ceiling) >> precision;
     let mut lower = BigUint::ZERO;

@@ -8,6 +8,7 @@ use super::{
     NumericFactor, NumericPrefixes, NumericPromotion, NumericSelection, PrefixMode, SiPrefix,
 };
 use crate::numeric::decimal::{decimal_quantum, ExactDecimal, NumericRounding, ResolvedFormat};
+use crate::numeric::operand::Operand;
 use crate::numeric::power::certified::PowerFormatter;
 use crate::{Error, Result};
 
@@ -51,8 +52,7 @@ impl SelectedScale {
 impl NumericPrefixes {
     pub(crate) fn resolve(
         &self,
-        values: &[f64],
-        power: bool,
+        values: &[Operand],
         format: &ResolvedFormat<'_>,
         formatter: &mut PowerFormatter,
     ) -> Result<Vec<SelectedScale>> {
@@ -64,7 +64,7 @@ impl NumericPrefixes {
                 let divisor = if matches!(factor, NumericFactor::AutomaticDecimal) {
                     let mut decade = None;
                     for value in values {
-                        if let Some(next) = formatter.operand_decade(*value, power, format)? {
+                        if let Some(next) = formatter.operand_decade(value, format)? {
                             decade = Some(decade.map_or(next.clone(), |old: BigInt| old.max(next)));
                         }
                     }
@@ -87,7 +87,6 @@ impl NumericPrefixes {
             }
             PrefixMode::Si(selection, promotion) => self.resolve_automatic(
                 values,
-                power,
                 format,
                 formatter,
                 matches!(selection, NumericSelection::WholeSet),
@@ -95,7 +94,6 @@ impl NumericPrefixes {
             ),
             PrefixMode::Compact(_, selection, promotion) => self.resolve_automatic(
                 values,
-                power,
                 format,
                 formatter,
                 matches!(selection, NumericSelection::WholeSet),
@@ -106,8 +104,7 @@ impl NumericPrefixes {
 
     fn resolve_automatic(
         &self,
-        values: &[f64],
-        power: bool,
+        values: &[Operand],
         format: &ResolvedFormat<'_>,
         formatter: &mut PowerFormatter,
         whole_set: bool,
@@ -116,14 +113,14 @@ impl NumericPrefixes {
         let indices = crate::data::source::collect_source(
             values
                 .iter()
-                .map(|value| self.initial(*value, power, format, formatter)),
+                .map(|value| self.initial(value, format, formatter)),
         )?;
         if whole_set {
             let mut index = indices.iter().copied().max().unwrap_or(0);
             if matches!(self.0.as_ref(), PrefixMode::Si(..)) {
                 let mut nonzero = None;
                 for (value, index) in values.iter().zip(&indices) {
-                    if formatter.operand_decade(*value, power, format)?.is_some() {
+                    if formatter.operand_decade(value, format)?.is_some() {
                         nonzero = Some(nonzero.map_or(*index, |old: usize| old.max(*index)));
                     }
                 }
@@ -134,7 +131,7 @@ impl NumericPrefixes {
                     let scale = self.scale(index)?;
                     let mut promote = false;
                     for value in values {
-                        promote |= carries(*value, power, format, formatter, &scale, &threshold)?;
+                        promote |= carries(value, format, formatter, &scale, &threshold)?;
                     }
                     if !promote {
                         break;
@@ -149,14 +146,8 @@ impl NumericPrefixes {
                 |(value, mut index)| {
                     if promotion == NumericPromotion::PromoteOnRounding {
                         while let Some(threshold) = self.next_threshold(index)? {
-                            if !carries(
-                                *value,
-                                power,
-                                format,
-                                formatter,
-                                &self.scale(index)?,
-                                &threshold,
-                            )? {
+                            if !carries(value, format, formatter, &self.scale(index)?, &threshold)?
+                            {
                                 break;
                             }
                             index += 1;
@@ -170,14 +161,13 @@ impl NumericPrefixes {
 
     fn initial(
         &self,
-        value: f64,
-        power: bool,
+        value: &Operand,
         format: &ResolvedFormat<'_>,
         formatter: &mut PowerFormatter,
     ) -> Result<usize> {
         match self.0.as_ref() {
             PrefixMode::Si(..) => {
-                let Some(decade) = formatter.operand_decade(value, power, format)? else {
+                let Some(decade) = formatter.operand_decade(value, format)? else {
                     return Ok(10);
                 };
                 let decade = decade.clamp(BigInt::from(-30), BigInt::from(30));
@@ -190,7 +180,6 @@ impl NumericPrefixes {
                     if rule.threshold() > 0.0
                         && formatter.compare_magnitude(
                             value,
-                            power,
                             format,
                             &ExactDecimal::decode(rule.threshold(), 0)?,
                         )? == Ordering::Less
@@ -254,8 +243,7 @@ fn si_scale(prefix: SiPrefix) -> Result<SelectedScale> {
 }
 
 fn carries(
-    value: f64,
-    power: bool,
+    value: &Operand,
     format: &ResolvedFormat<'_>,
     formatter: &mut PowerFormatter,
     scale: &SelectedScale,
@@ -263,7 +251,7 @@ fn carries(
 ) -> Result<bool> {
     let mut resolved = *format;
     resolved.divisor = Some(&scale.divisor);
-    let Some(decade) = formatter.operand_decade(value, power, &resolved)? else {
+    let Some(decade) = formatter.operand_decade(value, &resolved)? else {
         return Ok(false);
     };
     let quantum = decimal_quantum(&decade, &resolved);
@@ -278,7 +266,7 @@ fn carries(
         return Ok(false);
     }
     let coefficient = target.ceiling_at(&quantum)?;
-    let negative = (!power && value.is_sign_negative()) ^ format.multiplier.is_sign_negative();
+    let negative = value.negative() ^ format.multiplier.is_sign_negative();
     let (numerator, denominator, inclusive) = match format.rounding {
         NumericRounding::NearestEven
         | NumericRounding::NearestAway
@@ -299,6 +287,6 @@ fn carries(
         _ => (coefficient, 1_u8, true),
     };
     let boundary = ExactDecimal::ratio(false, numerator, BigUint::from(denominator), quantum)?;
-    let comparison = formatter.compare_magnitude(value, power, &resolved, &boundary)?;
+    let comparison = formatter.compare_magnitude(value, &resolved, &boundary)?;
     Ok(comparison == Ordering::Greater || (inclusive && comparison == Ordering::Equal))
 }

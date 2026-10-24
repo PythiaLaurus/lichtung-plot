@@ -14,6 +14,7 @@ use crate::{Error, Result};
 mod binary;
 pub(crate) mod certified;
 mod comparison;
+mod lattice;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Log10Operand {
@@ -35,6 +36,20 @@ pub(crate) struct PowerPlan {
 }
 
 impl Log10Operand {
+    pub(super) fn from_fixed(value: BigInt, bits: usize) -> Result<Self> {
+        let denominator = BigInt::from(1_u8) << bits;
+        let decade = super::logarithm::floor(&value, &denominator);
+        let fraction = BigUint::try_from(value - &decade * &denominator)
+            .map_err(|_| Error::Render("power enclosure remainder is negative".into()))?;
+        Ok(Self {
+            exponent_bits: 0,
+            decimal_scale: 0,
+            decade,
+            fraction,
+            denominator_bits: u32::try_from(bits)
+                .map_err(|_| Error::Render("power enclosure denominator length overflow".into()))?,
+        })
+    }
     pub(crate) fn new(exponent: f64, decimal_scale: i16) -> Result<Self> {
         if !exponent.is_finite() || !(-324..=324).contains(&decimal_scale) {
             return Err(Error::Data(
@@ -141,13 +156,14 @@ impl PowerPlan {
                 }
             }
         } else {
-            // Spec07: <=3 integral, point, selected fractional digits, e, optional minus,
-            // <=ceil(1025/3) exponent digits. A capacity bound, not a length cap.
+            // Three integral digits, point, selected fractional digits, e/sign and
+            // a symbolic exponent-digit bound including carry; not a length cap.
             let fractional = match format.precision {
                 ResolvedPrecision::Fractional(digits) => digits,
                 ResolvedPrecision::Significant(digits) => digits - 1,
             };
-            BigInt::from(348_u16 + u16::from(fractional))
+            BigInt::from(8_u8 + fractional)
+                + BigInt::from(decade.bits().saturating_add(2).div_ceil(3))
         };
         let body = if matches!(format.notation, NumericNotation::Integer(_)) {
             body * 4_u8

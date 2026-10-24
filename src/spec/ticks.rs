@@ -56,6 +56,11 @@ enum Primary {
         space: TickSpace,
         singleton: TickSingleton,
     },
+    Multiplicative {
+        anchor: f64,
+        ratio: f64,
+        requirement: TickRequirement,
+    },
 }
 
 /// Coordinate space for generated positions.
@@ -195,6 +200,40 @@ impl TickGeneration {
         } = self.primary
         {
             Some((step, origin, space, requirement))
+        } else {
+            None
+        }
+    }
+
+    /// Select the positive anchored geometric lattice, retaining either ratio direction.
+    pub fn multiplicative(anchor: f64, ratio: f64, requirement: TickRequirement) -> Result<Self> {
+        if !anchor.is_finite()
+            || anchor <= 0.0
+            || !ratio.is_finite()
+            || ratio <= 0.0
+            || ratio.to_bits() == 1.0_f64.to_bits()
+        {
+            return Err(Error::Data("multiplicative ticks require a finite positive anchor and positive ratio other than one".into()));
+        }
+        Ok(Self {
+            primary: Primary::Multiplicative {
+                anchor,
+                ratio,
+                requirement,
+            },
+            maximum: None,
+        })
+    }
+
+    /// Inspect the supplied anchor, ratio direction and complete-source requirement.
+    pub const fn multiplicative_parameters(&self) -> Option<(f64, f64, TickRequirement)> {
+        if let Primary::Multiplicative {
+            anchor,
+            ratio,
+            requirement,
+        } = self.primary
+        {
+            Some((anchor, ratio, requirement))
         } else {
             None
         }
@@ -343,6 +382,16 @@ impl TickGeneration {
             Primary::Target(count) => {
                 round.observe_count(3)?;
                 round.observe_count(count)
+            }
+            Primary::Multiplicative {
+                anchor,
+                ratio,
+                requirement,
+            } => {
+                round.observe_count(5)?;
+                round.observe_number(anchor)?;
+                round.observe_number(ratio)?;
+                round.observe_count(requirement as usize)
             }
             Primary::ExactCount {
                 count,

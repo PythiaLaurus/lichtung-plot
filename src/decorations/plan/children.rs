@@ -179,20 +179,19 @@ impl<'a> ChildPlans<'a> {
         index: usize,
         phase: MeasurementPhase,
         round: &FeedbackRound,
-    ) -> Result<Arc<PlotRenderResult>, Error> {
+    ) -> Result<crate::layout::fit::FitOutcome<Arc<PlotRenderResult>>, Error> {
         let owner = ComponentAddress::root().child(
             AddressRole::CanvasCell,
             u32::try_from(index).map_err(|_| Error::Render("canvas address overflowed".into()))?,
         )?;
-        crate::layout::fit::measured(self.measure(plot, context, &owner, phase, round, || {
+        self.measure(plot, context, &owner, phase, round, || {
             plot.preflight_measurement(
                 plot.kind(),
                 context.panel,
                 context.theme,
                 context.fit_scope(),
             )
-        }))
-        .map_err(crate::layout::fit::PlanError::into_error)
+        })
     }
 
     /// Called after all siblings and parent requests have been measured. A

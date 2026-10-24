@@ -147,7 +147,7 @@ impl Intrinsics {
                 } else {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
-            } else if axes.specs[side].exact_ticks.is_none() {
+            } else if axes.specs[side].exact_ticks.is_none() && !axes.empty_numeric_source(side)? {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.
                 let value = f64::midpoint(axes.ranges[side].0, axes.ranges[side].1);

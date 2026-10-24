@@ -72,7 +72,7 @@ fn mpfr_rounding_vectors_cover_subnormals_cancellation_and_platform_misses() {
 
 #[test]
 fn outward_series_bounds_nest_and_ambiguous_rounding_requires_more_precision() {
-    for (numerator, denominator) in [(1, 3), (1, 9), (17, 91)] {
+    for (numerator, denominator) in [(1_u8, 3_u8), (1, 9), (17, 91)] {
         let (low, high) = ln_bounds(numerator, denominator, 32).unwrap();
         let (fine_low, fine_high) = ln_bounds(numerator, denominator, 128).unwrap();
         assert!((&low << 96) <= fine_low);

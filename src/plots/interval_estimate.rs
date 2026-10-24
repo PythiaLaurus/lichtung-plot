@@ -858,8 +858,10 @@ fn prepare_model<'a>(
                     })
                     .map(|(estimate, label)| {
                         Ok(crate::numeric::context::ContextValue {
-                            bits: estimate.estimate.to_bits(),
-                            power: false,
+                            operand: crate::numeric::operand::Operand::number(
+                                estimate.estimate,
+                                false,
+                            ),
                             identity: crate::numeric::context::Identity::Estimate(
                                 crate::data::source::copy_source_string(label)?,
                             ),

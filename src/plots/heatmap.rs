@@ -1441,8 +1441,7 @@ pub(crate) fn prepare<'a>(
                 .filter_map(|(index, value)| value.map(|value| (index, value)))
                 .map(|(index, value)| {
                     Ok(crate::numeric::context::ContextValue {
-                        bits: value.to_bits(),
-                        power: false,
+                        operand: crate::numeric::operand::Operand::number(value, false),
                         identity: crate::numeric::context::Identity::Heatmap(
                             crate::data::source::copy_source_string(
                                 &y_levels[index / x_levels.len()],

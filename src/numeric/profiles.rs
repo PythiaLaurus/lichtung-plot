@@ -6,6 +6,37 @@ use super::decimal::{
 };
 use crate::Result;
 
+pub(crate) fn format_operand(
+    value: &super::operand::Operand,
+    integral: bool,
+    precision: usize,
+    formatter: &mut super::power::certified::PowerFormatter,
+) -> Result<String> {
+    let digits =
+        (precision != 0).then(|| u8::try_from(precision).expect("bounded source precision"));
+    match value {
+        super::operand::Operand::Binary64(bits) => {
+            BuiltinProfile::Automatic(digits).format(f64::from_bits(*bits))
+        }
+        super::operand::Operand::PowerOfTen(bits) => if integral {
+            BuiltinProfile::ForestIntegral
+        } else {
+            BuiltinProfile::ForestExpression(digits)
+        }
+        .format(f64::from_bits(*bits)),
+        super::operand::Operand::Multiplicative(_) => value.format(
+            &ResolvedFormat {
+                notation: NumericNotation::General,
+                precision: ResolvedPrecision::Significant(digits.map_or(3, |digits| digits + 1)),
+                trailing_zeros: TrailingZeros::Trim,
+                negative_zero: NegativeZero::Normalize,
+                ..ResolvedFormat::default()
+            },
+            formatter,
+        ),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuiltinProfile {
     Automatic(Option<u8>),

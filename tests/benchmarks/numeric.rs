@@ -43,7 +43,7 @@ pub(super) fn measure() {
                 .members
                 .iter()
                 .zip(&values)
-                .all(|(bits, value)| *bits == value.to_bits()));
+                .all(|(operand, value)| operand.binary64().unwrap().to_bits() == value.to_bits()));
             let bytes: usize = set.labels.iter().map(String::len).sum();
             println!(
                 "numeric_set_sample,{notation:?},{run},{count},{distinct},{},{bytes},{:.6}",

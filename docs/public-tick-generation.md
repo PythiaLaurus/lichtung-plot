@@ -13,6 +13,7 @@ Each call replaces the axis's complete choice independently of format/limits:
 | maximum(count) | At most count complete generated in-domain positions, including endpoints |
 | exact_count(count, TickSpace) | Exactly count endpoint-including affine positions; zero is empty |
 | interval(step, origin, TickSpace, TickRequirement) | One origin-aligned fixed or preferred lattice |
+| multiplicative(anchor, ratio, TickRequirement) | Positive anchored geometric lattice in either ratio direction |
 
 Counts/caps are usize, with no 10000 application ceiling. Target/Maximum are
 positive; ExactCount(0) is explicitly empty. `maximum_count(Some(n))` edits the one
@@ -68,6 +69,38 @@ are never cast to f64. Data intervals on Log10 still use physical units; Scale
 intervals use exponents. Mathematical domain endpoints without retained raw bounds
 are certified into the source's binary representation, not computed with powf or
 advertised as invented raw domain data.
+
+## Multiplicative Intervals
+
+```rust
+use lichtung_plot::{TickGeneration, TickRequirement};
+let ticks = TickGeneration::multiplicative(1.0, 2.0, TickRequirement::Fixed)?;
+// On [1,64]: [1,2,4,8,16,32,64]. Ratio 1.5 starts [1,1.5,2.25,3.375,...].
+# let _ = ticks;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+The anchor and ratio are finite and positive, with ratio other than one. A ratio
+below one retains the supplied direction and negative indices rather than rounding
+its reciprocal. Each member comes from the original anchor and exact integer
+index, never the previous rounded value. Linear coordinates are finite binary64;
+Log10 coordinates and labels are certified directly from the mathematical lattice,
+including physical powers outside binary64 range. Numeric callbacks receive
+`NumericOperand::Multiplicative { anchor, ratio, index }`; `index` is borrowed
+canonical signed decimal text, with no machine-integer interchange ceiling.
+
+Fixed keeps the complete represented in-domain lattice or refuses a caller cap,
+collapsed representation or text nonfit. A wholly negative linear view or a gap
+between powers is valid empty output, without numeric callbacks or explanation.
+A linear view containing zero and positive values has an infinite near-zero tail
+and refuses rather than applying an invented exponent cutoff.
+
+Preferred first tries the same full lattice. Its bounded recovery then tries
+zero-index-aligned sublattices at integer strides, seeded by the assigned span's
+measured 6ch count and descending desired counts. Duplicate strides are skipped.
+Finally it tries the original member at the floor of the middle index. It never
+invents an off-lattice domain midpoint. Every candidate still obeys the caller cap;
+actual arithmetic/font/storage errors remain fatal.
 
 Exact x_ticks/y_ticks remain indivisible and authoritative in either setter
 order, including intentionally empty labels. A generated maximum cannot truncate

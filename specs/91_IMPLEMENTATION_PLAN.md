@@ -1733,7 +1733,13 @@ origins and Data/Scale choice, sharing exact arbitrary-index rounding-cell arith
 with existing interval materialization. Caller caps precede complete-list allocation;
 empty fixed owners suppress numeric work. Final parent domains determine the lists,
 which remain independent of assigned width, typography and optional child reuse.
-Steps 11–22 remain pending; undelivered target signatures are
+Step 11 is complete: anchored geometric sources retain exact original anchor,
+ratio direction and signed arbitrary-size index. Certified rational logarithms,
+factorized equality and the common power quantizer resolve coordinates, boundaries,
+factors and labels without accumulated products or physical powers. Fixed lists
+and bounded preferred sublattices check caps before materialization, preserve valid
+empty owners and participate in complete semantic feedback and frozen publication.
+Steps 12–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

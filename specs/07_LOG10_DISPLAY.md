@@ -1,4 +1,4 @@
-# Certified Forest Power Conversion
+# Certified Mathematical Numeric Conversion
 
 Numeric formatting functions receive retained mathematical exponent operands as
 NumericOperand::PowerOfTen, not rounded physical powers. Their built-in helpers
@@ -269,12 +269,12 @@ converts to usize and passes isize::MAX allocation layout, including affix bytes
 | Significant a, n<a-1 | max(1,n+2)+1+(a-1-n) |
 
 Trim can shorten, not justify constructing an unrepresentable upper bound first.
-For exponent notation r<=22; exponent magnitude needs<=1025 bits and at most
-ceil(1025/3)=342 decimal digits since2^3<10. Three integral digits, point, selected
-fractional digits (d, or a-1 for significant precision), e and exponent sign give
-a checked capacity bound of 348 plus those fractional digits, at most368 bytes.
-Affixes/storage
-are additional. Decimal fractional output bounds n/r before narrowing/building
+For exponent notation r<=22. The ordinary power exponent magnitude needs<=1025
+bits; a geometric index can produce a larger symbolic exponent. Reserve
+`8+fractional+ceil((bits(n)+2)/3)` bytes for the numeric body, including exponent
+carry and engineering adjustment, since 2^3<10. Fractional is d, or a-1 for
+significant precision. This is a capacity bound, not a public exponent limit.
+Affixes/storage are additional. Decimal fractional output bounds n/r before narrowing/building
 10^r. Tiny integral rounded0 requires no giant negative power.
 
 Finite exponent magnitude<2^1024 remains below it after scale addition; fractional
@@ -307,6 +307,64 @@ global/font cache. Borrowed hits preserve identical bounds; every operand still
 runs its own dyadic/Taylor/square/quantization. Vector growth and final digit/
 zero-run/string buffers use checked lengths and fallible first-party reservations.
 No cache hit changes mathematical acceptance or bypasses real failure.
+
+## Retained Geometric Operands
+
+`src/numeric/lattice.rs` retains positive represented anchor a, positive represented
+ratio r!=1 and signed arbitrary-size integer k. Its exact operand V=a*r^k is rational;
+the callback borrows the canonical signed decimal index rather than an approximate
+logarithm or physical pow. `src/numeric/logarithm.rs` encloses
+`log10(a)+k*log10(r)+log10(abs(effective_factor))`, keeping decimal factor exponents
+symbolic. A negative index reverses ratio-bound endpoints before multiplication.
+
+For positive rational x=N/D, exact binary range reduction gives x=m*2^e with
+1<=m<2. Enclose ln(m) using z=(m-1)/(m+1), hence 0<=z<1/3, and the same outward
+atanh series and tail bound as above. Add e*ln2 with signed interval arithmetic,
+then divide by the positive ln10 bounds with exact floor/ceiling in 2^-p units.
+The constant error multiplied by fixed e/k still tends to zero under doubling.
+An arbitrary dyadic log enclosure endpoint becomes one reduced Log10Operand and
+uses the same mantissa Taylor/square engine, not a second formatter.
+
+### Rational Equality And Termination
+
+Unlike nonintegral powers, rational geometric values can equal decimal/binary
+rounding boundaries. Strip powers of 2 and 5 from each represented factor and
+threshold, retaining signed valuations symbolically. Cancel cross-products of the
+remaining kernels. Equality requires matching valuations and one equation
+`kernel^abs(k)=target`. A kernel of one is immediate; otherwise abs(k)>bits(target)
+disproves equality. Remaining exact repeated squaring is bounded by the stored
+target, stopping before any product would exceed it. No machine-sized index cast
+or enormous irrelevant power is needed. The same test recognizes V=10^n exactly
+and dispatches its symbolic exponent through the existing power engine.
+
+Non-power values refine until logarithm endpoints have one common floor decade.
+Quantize both mantissa bounds at that one decade/quantum. If adjacent coefficients
+straddle an exact boundary, factorized equality resolves the shared signed
+quantizer's tie. Otherwise separation and convergent enclosures prove eventual
+agreement. Linear binary64 coordinates similarly compare adjacent rounding cells,
+using exact rational midpoint equality and even parity. Log10 coordinates refine
+their signed bounds directly; a rational V can have rational log10(V) only at an
+integral decimal power, already handled symbolically. Thus no unresolved exact
+binary midpoint remains.
+
+### Geometric Index Bounds
+
+`src/numeric/lattice/generation.rs` uses exact preimages of the represented domain
+endpoints: rational binary midpoint cells on Linear, dyadic scale midpoint cells on
+Log10, inclusive only for even endpoint significands. Let d be +1 for r>1, -1
+otherwise; internal j increases with value and original k=d*j. Enclose
+`(boundary-log10(a))/(d*log10(r))` with signed outward rational division. Refine
+until its floor is unique, or neighboring floors identify an exact boundary via
+factorized equality. Convert open/closed edges to inclusive integer first/last
+indices. Their count remains symbolic until cap/platform checks. No log quotient
+is rounded to a float index, and no epsilon or old integral exponent clamp applies.
+
+For ordinary power mantissas d<=1074, the scratch envelope above is unchanged.
+Geometric enclosure endpoints have d=p, so their full F*constant/ceiling products
+fit the existing 2p+9 bound. Input kernels and index products also retain checked
+stored lengths; internal num-bigint allocator behavior is not promised fallible.
+Constant caching fills any skipped doubling levels, preserving the same contiguous
+prefix and exact cached bounds for both operand kinds.
 
 ## Independent Numerical Verification
 

@@ -121,8 +121,7 @@ impl PreparedWaterfall {
                     .filter(|(index, _)| mask & (1 << index) != 0)
                     .map(|(index, (value, _))| {
                         Ok(crate::numeric::context::ContextValue {
-                            bits: value.to_bits(),
-                            power: false,
+                            operand: crate::numeric::operand::Operand::number(*value, false),
                             identity: if index == 0 {
                                 crate::numeric::context::Identity::Base
                             } else {
@@ -155,7 +154,9 @@ impl PreparedWaterfall {
         } else {
             FormattedSet {
                 members: crate::data::source::collect_source(
-                    members.iter().map(|value| Ok(value.to_bits())),
+                    members
+                        .iter()
+                        .map(|value| Ok(crate::numeric::operand::Operand::number(*value, false))),
                 )?,
                 labels: crate::data::source::collect_source(members.iter().map(|value| {
                     crate::numeric::profiles::BuiltinProfile::WaterfallTotal.format(*value)

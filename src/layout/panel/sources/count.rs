@@ -157,12 +157,23 @@ pub(crate) fn plan(
             numeric: None,
         });
     }
-    let operands = positions.data.as_deref().unwrap_or(&positions.coordinates);
+    let operands = crate::data::source::collect_source(
+        positions
+            .data
+            .as_deref()
+            .unwrap_or(&positions.coordinates)
+            .iter()
+            .map(|value| {
+                Ok(crate::numeric::operand::Operand::number(
+                    *value,
+                    positions.power,
+                ))
+            }),
+    )?;
     let selected = if let Some(format) = format {
         NumericTickPlan::formatted(
             &positions.coordinates,
-            operands,
-            positions.power,
+            &operands,
             log,
             format,
             theme,
@@ -171,13 +182,7 @@ pub(crate) fn plan(
             side,
         )?
     } else {
-        NumericTickPlan::omitted(
-            &positions.coordinates,
-            operands,
-            positions.power,
-            false,
-            source,
-        )?
+        NumericTickPlan::omitted(&positions.coordinates, &operands, false, source)?
     };
     if let Some(selected) = selected {
         if super::labels_fit(&selected.ticks, projection, side, theme)? {

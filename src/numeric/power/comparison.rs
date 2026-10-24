@@ -6,37 +6,48 @@ use num_bigint::{BigInt, BigUint, Sign};
 
 use super::{certified::PowerFormatter, Log10Operand};
 use crate::numeric::decimal::{finite_operand, ExactDecimal, ResolvedFormat};
+use crate::numeric::operand::Operand;
 use crate::{Error, Result};
 
 impl PowerFormatter {
     pub(crate) fn operand_decade(
         &mut self,
-        value: f64,
-        power: bool,
+        value: &Operand,
         format: &ResolvedFormat<'_>,
     ) -> Result<Option<BigInt>> {
         let factor = ExactDecimal::effective_factor(format)?;
-        if factor.coefficient.bits() == 0 || (!power && value == 0.0) {
+        if factor.coefficient.bits() == 0
+            || matches!(value,Operand::Binary64(bits) if bits&!(1_u64<<63)==0)
+        {
             return Ok(None);
         }
-        if power {
-            let operand = Log10Operand::new(value, format.decimal_scale)?;
-            self.factored_decade(&operand, &factor).map(Some)
-        } else {
-            Ok(Some(finite_operand(value, format)?.decade))
+        match value {
+            Operand::PowerOfTen(bits) => {
+                let operand = Log10Operand::new(f64::from_bits(*bits), format.decimal_scale)?;
+                self.factored_decade(&operand, &factor).map(Some)
+            }
+            Operand::Binary64(bits) => {
+                Ok(Some(finite_operand(f64::from_bits(*bits), format)?.decade))
+            }
+            Operand::Multiplicative(value) => Self::lattice_decade(value, format),
         }
     }
 
     pub(in crate::numeric) fn compare_magnitude(
         &mut self,
-        value: f64,
-        power: bool,
+        value: &Operand,
         format: &ResolvedFormat<'_>,
         threshold: &ExactDecimal,
     ) -> Result<Ordering> {
-        if !power {
-            return finite_operand(value, format)?.compare_abs(threshold);
+        if let Operand::Binary64(bits) = value {
+            return finite_operand(f64::from_bits(*bits), format)?.compare_abs(threshold);
         }
+        if let Operand::Multiplicative(value) = value {
+            return Self::compare_lattice(value, format, threshold);
+        }
+        let Operand::PowerOfTen(bits) = value else {
+            return Err(arithmetic_error());
+        };
         let factor = ExactDecimal::effective_factor(format)?;
         if factor.coefficient.bits() == 0 {
             return Ok(if threshold.coefficient.bits() == 0 {
@@ -45,7 +56,7 @@ impl PowerFormatter {
                 Ordering::Less
             });
         }
-        let operand = Log10Operand::new(value, format.decimal_scale)?;
+        let operand = Log10Operand::new(f64::from_bits(*bits), format.decimal_scale)?;
         if operand.fraction.bits() == 0 {
             return ExactDecimal::ratio(
                 false,

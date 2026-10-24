@@ -57,24 +57,19 @@ impl NumericFormat {
             );
         }
         let values = crate::data::source::collect_source(
-            info.values
-                .iter()
-                .map(|value| Ok(f64::from_bits(value.bits))),
+            info.values.iter().map(|value| Ok(value.operand.clone())),
         )?;
-        let power = info.values.first().is_some_and(|value| value.power);
-        if info.values.iter().any(|value| value.power != power) {
-            return Err(Error::Render(
-                "numeric owner mixed incompatible operand representations".into(),
-            ));
+        for value in &values {
+            value.validate()?;
         }
         let mut result = if self.emitter.is_builtin() {
-            self.function_builtin(&values, power)?
+            self.function_builtin(&values)?
         } else {
-            self.function_metadata(&values, power)?
+            self.function_metadata(&values)?
         };
         if !values.is_empty() && !self.emitter.is_builtin() {
             let (labels, explanation, precision) =
-                self.call_function(&info, &values, power, &result, require_distinct)?;
+                self.call_function(&info, &values, &result, require_distinct)?;
             if labels.len() != values.len() {
                 return Err(Error::Data(format!(
                     "{:?} numeric function returned {} labels for {} occurrences",
@@ -119,8 +114,7 @@ impl NumericFormat {
     fn call_function(
         &self,
         info: &ContextInfo,
-        operands: &[f64],
-        power: bool,
+        operands: &[super::operand::Operand],
         metadata: &FormattedSet,
         required: bool,
     ) -> Result<(Vec<String>, Option<crate::Text>, u8)> {
@@ -134,7 +128,6 @@ impl NumericFormat {
             format: self,
             metadata,
             operands,
-            power,
             required,
             helper: &helper,
         };
@@ -176,9 +169,7 @@ fn distinct(set: &FormattedSet) -> Result<bool> {
     crate::data::source::sort_source_by(&mut order, |a, b| set.labels[*a].cmp(&set.labels[*b]));
     Ok(order.windows(2).all(|pair| {
         let (a, b) = (pair[0], pair[1]);
-        set.labels[a] != set.labels[b]
-            || set.members[a] == set.members[b]
-            || (f64::from_bits(set.members[a]) == 0.0 && f64::from_bits(set.members[b]) == 0.0)
+        set.labels[a] != set.labels[b] || set.members[a].scientifically_equal(&set.members[b])
     }))
 }
 

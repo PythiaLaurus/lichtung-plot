@@ -30,8 +30,10 @@ fn info(
 ) -> crate::numeric::context::ContextInfo {
     source
         .indexed(
-            values,
-            false,
+            &values
+                .iter()
+                .map(|value| crate::numeric::operand::Operand::number(*value, false))
+                .collect::<Vec<_>>(),
             NumericRole::XAxis,
             purpose,
             Some(crate::numeric::context::DomainInfo::axis(
@@ -85,7 +87,10 @@ fn value_functions_keep_ordered_occurrences_whole_set_helpers_and_operation_iden
         .unwrap();
     assert_eq!(set.labels, ["0:ID012 ١٫٠١", "1:ID012 ١٫٠٢", "2:ID012 ١٫٠١"]);
     assert_eq!(set.precision, 2);
-    assert_eq!(set.members, [1.01, 1.02, 1.01].map(f64::to_bits));
+    assert_eq!(
+        set.members,
+        [1.01, 1.02, 1.01].map(|value| crate::numeric::operand::Operand::number(value, false))
+    );
     assert_eq!(
         set,
         format

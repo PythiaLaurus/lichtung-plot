@@ -100,8 +100,7 @@ impl NumericSource {
     }
     pub(crate) fn indexed(
         &self,
-        values: &[f64],
-        power: bool,
+        values: &[super::operand::Operand],
         role: NumericRole,
         purpose: NumericPurpose,
         domain: Option<DomainInfo>,
@@ -124,8 +123,7 @@ impl NumericSource {
                     }
                 };
                 Ok(ContextValue {
-                    bits: value.to_bits(),
-                    power,
+                    operand: value.clone(),
                     identity,
                 })
             },
@@ -164,8 +162,7 @@ impl AxisRequest<'_> {
     }
     pub(crate) fn materialize(
         &self,
-        positions: &[f64],
-        power: bool,
+        positions: &[super::operand::Operand],
         log: bool,
         side: crate::layout::AxisSide,
         range: (f64, f64),
@@ -190,7 +187,7 @@ impl AxisRequest<'_> {
         let domain = DomainInfo::axis(range, scale, self.provenance, raw);
         let mut info = self
             .source
-            .indexed(positions, power, role, purpose, Some(domain))?;
+            .indexed(positions, role, purpose, Some(domain))?;
         info.generation = Some(self.generation.clone());
         self.format.materialize(
             &self.source.operation,

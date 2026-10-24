@@ -163,25 +163,25 @@ impl PowerFormatter {
             }
             return Ok(&self.constants[index]);
         }
-        if index != self.constants.len() {
-            return Err(Error::Render(
-                "Log10 precision cache cannot skip an enclosure".into(),
-            ));
-        }
-        if self.constants.len() == self.constants.capacity() {
-            let additional = self.constants.capacity().max(1);
-            crate::data::source::reserve_source(&mut self.constants, additional)?;
-        }
-        let (two_lower, two_upper) = super::super::ln_bounds(1, 3, precision)?;
-        let (quarter_lower, quarter_upper) = super::super::ln_bounds(1, 9, precision)?;
-        self.constants.push(ConstantBounds {
-            precision,
-            lower: two_lower * 3_u8 + quarter_lower,
-            upper: two_upper * 3_u8 + quarter_upper,
-        });
-        #[cfg(test)]
-        {
-            self.constant_misses += 1;
+        while self.constants.len() <= index {
+            let precision = 128_usize
+                .checked_shl(u32::try_from(self.constants.len()).map_err(|_| arithmetic_error())?)
+                .ok_or_else(arithmetic_error)?;
+            if self.constants.len() == self.constants.capacity() {
+                let additional = self.constants.capacity().max(1);
+                crate::data::source::reserve_source(&mut self.constants, additional)?;
+            }
+            let (two_lower, two_upper) = super::super::ln_bounds(1_u8, 3_u8, precision)?;
+            let (quarter_lower, quarter_upper) = super::super::ln_bounds(1_u8, 9_u8, precision)?;
+            self.constants.push(ConstantBounds {
+                precision,
+                lower: two_lower * 3_u8 + quarter_lower,
+                upper: two_upper * 3_u8 + quarter_upper,
+            });
+            #[cfg(test)]
+            {
+                self.constant_misses += 1;
+            }
         }
         Ok(&self.constants[index])
     }
@@ -196,7 +196,10 @@ impl PowerFormatter {
         self.stages.clear();
         let unit = BigUint::from(1_u8) << precision;
         let bounds = self.constants(precision)?;
-        let shift = operand.denominator_bits as usize + 4;
+        let shift = usize::try_from(operand.denominator_bits)
+            .ok()
+            .and_then(|bits| bits.checked_add(4))
+            .ok_or_else(arithmetic_error)?;
         let ceiling = (BigUint::from(1_u8) << shift) - 1_u8;
         let lower_x = (&operand.fraction * &bounds.lower) >> shift;
         let upper_x = (&operand.fraction * &bounds.upper + ceiling) >> shift;

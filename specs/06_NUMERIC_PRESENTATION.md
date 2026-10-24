@@ -23,7 +23,7 @@ Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
 `src/numeric/context.rs`, `src/numeric/function.rs`, `src/numeric/table.rs`,
 `src/numeric/source.rs`, `src/numeric/unit.rs`,
 `src/spec/ticks.rs`, `src/layout/panel/sources.rs` and the shared
-`src/layout/panel/sources/{count,interval}.rs` position owners. Mathematical power
+`src/layout/panel/sources/{count,interval,geometric}.rs` position owners. Mathematical power
 display is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
 
@@ -42,7 +42,9 @@ ordered values/identities including duplicates, optional resolved domain, locale
 and common factors. Value contexts add original occurrence index and member factors.
 Raw Canvas cells, FacetCell single/grid levels, category keys and signed operand
 bits precede any aliases. Ordinary operands are Binary64; Forest positions and
-logarithmic domain endpoints are mathematical PowerOfTen exponents. Raw bounds are
+logarithmic domain endpoints are mathematical PowerOfTen exponents. Geometric
+members retain the original anchor/ratio and canonical arbitrary-size signed index
+in NumericOperand::Multiplicative, borrowing its decimal index text. Raw bounds are
 present only when retained, never reconstructed by inverting a rounded logarithm.
 
 Factors/unit/explanation metadata resolve before callback invocation. Built-in
@@ -571,6 +573,44 @@ refuse instead of becoming empty. A represented endpoint keeps its canonical sca
 coordinate. Callback domain raw bounds are never invented. Scale on Log10 retains
 mathematical exponent operands. Only the old integral-decade binding retains the
 [-323,308] integral-source intersection; generic Scale intervals do not inherit it.
+
+### Anchored Multiplicative Lattices
+
+Multiplicative owns the supplied finite positive anchor and ratio other than one,
+plus Fixed/Preferred requirement and the same optional maximum. Normalize internal
+ordering with increasing j and k=direction*j, retaining the supplied ratio bits;
+never form a rounded reciprocal. Members are the exact rationals anchor*ratio^k.
+Linear coordinates round those rationals once; Log10 coordinates certify their
+logarithms directly. Both retain the original mathematical operands for labels and
+function contexts, not accumulated products, physical powers or rounded exponents.
+Exact decimal powers normalize through the common symbolic power formatter.
+
+The common rational-log owner encloses boundary quotients and refines until exact
+integer first/last indices are established, including represented endpoint midpoint
+cells and tie parity. Rational factorized equality resolves exact boundaries. The
+complete arbitrary-size count meets its cap/platform bounds before positions or
+large powers can allocate. Fixed emits precisely that full list; empty views
+including wholly negative linear views produce no numeric probe/text/explanation.
+A linear view containing positive values and zero has an unbounded tail and fails,
+without an arbitrary positive cutoff. Nonempty unrepresentable/collapsed sources
+are failures, never empty or silently thinned sources.
+
+Preferred first tries the full lattice subject to its cap. Let B be the existing
+bounded measured 6ch seed. For desired counts B down to 2, use stride
+max(1,ceil((last-first)/(desired-1))) and keep precisely indices divisible by that
+stride in the original anchor-index frame. Skip consecutive duplicate strides.
+The final source is the original lattice member at floor((first+last)/2), not an
+invented domain midpoint. There are at most B+1 candidates; each is a complete
+sublattice with the same formatting/admission/fit boundary. Actual arithmetic,
+coordinate, font and storage failures remain fatal rather than becoming recovery.
+
+FormattedSet stores one canonical Binary64/PowerOfTen/Multiplicative member enum
+and the whole resolved text/precision/factors/unit/explanation/context. All numeric
+axis feedback observes that complete set, including omitted-format mathematical
+members, rather than factors alone. Optional layout reuse cannot replace source
+identity with equal projected positions or current strings. Canvas provisional
+gutter probes retain recoverable fit misses so other declared guide candidates can
+run; no numeric source is repaired or coarsened to rescue a fixed source.
 
 ## Pre-Font Requirements And Retained Dependencies
 

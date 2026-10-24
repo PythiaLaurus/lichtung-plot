@@ -2,13 +2,14 @@
 //! heapsort checks the whole grammar without assuming monotonic text ordering.
 
 use super::format::{NumericFormat, NumericPrecision};
-use super::power::{certified::PowerFormatter, Log10Operand};
+use super::operand::Operand;
+use super::power::certified::PowerFormatter;
 use super::prefixes::selection::SelectedScale;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FormattedSet {
-    pub(crate) members: Vec<u64>,
+    pub(crate) members: Vec<Operand>,
     pub(crate) labels: Vec<String>,
     pub(crate) precision: u8,
     pub(crate) scales: Vec<SelectedScale>,
@@ -34,26 +35,24 @@ impl NumericPresentation {
         if let Some(format) = &self.format {
             format.observe_feedback(round)?;
         }
-        round.observe_count(usize::from(self.set.precision))?;
-        round.observe_count(self.set.members.len())?;
-        for &value in &self.set.members {
-            // Spatial feedback normalizes zero; scientific occurrences retain its sign.
-            round.observe_count(usize::from(value >> 63 != 0))?;
-            round.observe_number(f64::from_bits(value))?;
-        }
-        for label in &self.set.labels {
-            round.observe_string(label)?;
-        }
-        self.set.observe_factors(round)?;
-        Ok(())
+        self.set.observe_feedback(round)
     }
 }
 
 impl FormattedSet {
-    pub(crate) fn observe_factors(
+    pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
+        round.observe_count(usize::from(self.precision))?;
+        round.observe_count(self.members.len())?;
+        for member in &self.members {
+            member.observe(round)?;
+        }
+        round.observe_count(self.labels.len())?;
+        for label in &self.labels {
+            round.observe_string(label)?;
+        }
         round.observe_count(self.scales.len())?;
         for scale in &self.scales {
             scale.observe(round)?;
@@ -68,6 +67,7 @@ impl FormattedSet {
         if let Some(text) = &self.explanation {
             round.observe_authored_text(text)?;
         }
+        round.observe_count(usize::from(self.context.is_some()))?;
         if let Some(context) = &self.context {
             round.observe_numeric_context(context)?;
         }
@@ -75,7 +75,7 @@ impl FormattedSet {
     }
     pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
-            members: crate::data::source::collect_source(self.members.iter().copied().map(Ok))?,
+            members: crate::data::source::collect_source(self.members.iter().cloned().map(Ok))?,
             labels: crate::data::source::collect_source(
                 self.labels
                     .iter()
@@ -125,8 +125,11 @@ pub(crate) fn guide_presentation(
                     origin,
                 });
         let info = source.indexed(
-            values,
-            false,
+            &crate::data::source::collect_source(
+                values
+                    .iter()
+                    .map(|value| Ok(Operand::number(*value, false))),
+            )?,
             crate::NumericRole::ContinuousColor,
             crate::NumericPurpose::ActualSet,
             domain,
@@ -150,7 +153,9 @@ pub(crate) fn guide_presentation(
         }) {
             return Ok(FormattedSet {
                 members: crate::data::source::collect_source(
-                    values.iter().map(|value| Ok(value.to_bits())),
+                    values
+                        .iter()
+                        .map(|value| Ok(Operand::number(*value, false))),
                 )?,
                 labels,
                 precision,
@@ -166,15 +171,14 @@ pub(crate) fn guide_presentation(
 impl NumericFormat {
     #[cfg(test)]
     pub(crate) fn format_singleton(&self, value: f64, power: bool) -> Result<String> {
-        let mut set = self.function_builtin(&[value], power)?;
+        let mut set = self.function_builtin(&[Operand::number(value, power)])?;
         Ok(set.labels.remove(0))
     }
 
     fn format_scaled(
         &self,
-        value: f64,
+        value: &Operand,
         digits: u8,
-        power: bool,
         formatter: &mut PowerFormatter,
         scale: &SelectedScale,
     ) -> Result<String> {
@@ -182,12 +186,7 @@ impl NumericFormat {
         resolved.prefix = None;
         resolved.suffix = None;
         resolved.divisor = Some(&scale.divisor);
-        let ascii = if power {
-            let operand = Log10Operand::new(value, self.get_decimal_scale())?;
-            formatter.format(&operand, &resolved)?.text
-        } else {
-            super::decimal::format_finite(value, &resolved)?
-        };
+        let ascii = value.format(&resolved, formatter)?;
         self.present(&ascii, scale)
     }
 
@@ -198,15 +197,20 @@ impl NumericFormat {
         power: bool,
         require_distinct: bool,
     ) -> Result<Option<FormattedSet>> {
-        self.resolve_builtin(values, power, require_distinct, false, None)
+        let values = crate::data::source::collect_source(
+            values
+                .iter()
+                .map(|value| Ok(Operand::number(*value, power))),
+        )?;
+        self.resolve_builtin(&values, require_distinct, false, None)
     }
 
-    pub(super) fn function_builtin(&self, values: &[f64], power: bool) -> Result<FormattedSet> {
-        self.resolve_builtin(values, power, false, true, None)?
+    pub(super) fn function_builtin(&self, values: &[Operand]) -> Result<FormattedSet> {
+        self.resolve_builtin(values, false, true, None)?
             .ok_or_else(|| Error::Render("complete built-in helper result was not retained".into()))
     }
 
-    pub(super) fn function_metadata(&self, values: &[f64], power: bool) -> Result<FormattedSet> {
+    pub(super) fn function_metadata(&self, values: &[Operand]) -> Result<FormattedSet> {
         let precision = self.get_precision().bounds()?.0;
         if values.is_empty() {
             return Ok(FormattedSet {
@@ -216,15 +220,12 @@ impl NumericFormat {
         }
         let scales = self.prefix_policy().resolve(
             values,
-            power,
             &self.resolve_at(precision)?,
             &mut PowerFormatter::default(),
         )?;
         let explanation = self.numeric_explanation(&scales)?;
         Ok(FormattedSet {
-            members: crate::data::source::collect_source(
-                values.iter().map(|value| Ok(value.to_bits())),
-            )?,
+            members: crate::data::source::collect_source(values.iter().cloned().map(Ok))?,
             precision,
             scales,
             unit: self
@@ -240,13 +241,12 @@ impl NumericFormat {
 
     pub(super) fn function_helper(
         &self,
-        values: &[f64],
-        power: bool,
+        values: &[Operand],
         scales: &[SelectedScale],
         required: bool,
         probe: bool,
     ) -> Result<FormattedSet> {
-        self.resolve_builtin(values, power, required && !probe, probe, Some(scales))?
+        self.resolve_builtin(values, required && !probe, probe, Some(scales))?
             .ok_or_else(|| {
                 Error::Data(
                     "built-in numeric precision does not distinguish this complete set".into(),
@@ -256,16 +256,13 @@ impl NumericFormat {
 
     fn resolve_builtin(
         &self,
-        values: &[f64],
-        power: bool,
+        values: &[Operand],
         require_distinct: bool,
         retain_collision: bool,
         frozen: Option<&[SelectedScale]>,
     ) -> Result<Option<FormattedSet>> {
-        if values.iter().any(|value| !value.is_finite()) {
-            return Err(Error::Data(
-                "numeric presentation members must be finite".into(),
-            ));
+        for value in values {
+            value.validate()?;
         }
         let (min, max) = self.get_precision().bounds()?;
         if values.is_empty() {
@@ -296,17 +293,15 @@ impl NumericFormat {
             } else {
                 self.prefix_policy().resolve(
                     &distinct,
-                    power,
                     &self.resolve_at(digits)?,
                     &mut formatter,
                 )?
             };
             let (emission_scales, explanation) = self.decorate_scales(&scales)?;
-            let mut unique_labels = crate::data::source::collect_source(
-                distinct.iter().zip(&emission_scales).map(|(value, scale)| {
-                    self.format_scaled(*value, digits, power, &mut formatter, scale)
-                }),
-            )?;
+            let mut unique_labels =
+                crate::data::source::collect_source(distinct.iter().zip(&emission_scales).map(
+                    |(value, scale)| self.format_scaled(value, digits, &mut formatter, scale),
+                ))?;
             if adaptive || require_distinct {
                 crate::data::source::sort_source_by(&mut order, |a, b| {
                     unique_labels[*a].cmp(&unique_labels[*b])
@@ -314,7 +309,7 @@ impl NumericFormat {
                 if order.windows(2).any(|pair| {
                     let [a, b] = [pair[0], pair[1]];
                     unique_labels[a] == unique_labels[b]
-                        && !scientifically_equal(distinct[a], distinct[b])
+                        && !distinct[a].scientifically_equal(&distinct[b])
                 }) && (!retain_collision || digits < max)
                 {
                     continue;
@@ -336,9 +331,7 @@ impl NumericFormat {
                 occurrences.iter().map(|&index| scales[index].try_copy()),
             )?;
             return Ok(Some(FormattedSet {
-                members: crate::data::source::collect_source(
-                    values.iter().map(|v| Ok(v.to_bits())),
-                )?,
+                members: crate::data::source::collect_source(values.iter().cloned().map(Ok))?,
                 labels,
                 precision: digits,
                 scales,
@@ -357,29 +350,26 @@ impl NumericFormat {
 }
 
 struct MemberOrder {
-    distinct: Vec<f64>,
+    distinct: Vec<Operand>,
     occurrences: Vec<usize>,
     representatives: Vec<usize>,
 }
 
-fn distinct_members(values: &[f64], order: &mut Vec<usize>) -> Result<MemberOrder> {
-    crate::data::source::sort_source_by(order, |a, b| values[*a].total_cmp(&values[*b]));
+fn distinct_members(values: &[Operand], order: &mut Vec<usize>) -> Result<MemberOrder> {
+    crate::data::source::sort_source_by(order, |a, b| values[*a].cmp(&values[*b]));
     let mut occurrences = crate::data::source::collect_source(values.iter().map(|_| Ok(0_usize)))?;
-    let mut distinct: Vec<f64> = Vec::new();
+    let mut distinct: Vec<Operand> = Vec::new();
     let count = order
         .windows(2)
-        .filter(|pair| values[pair[0]].to_bits() != values[pair[1]].to_bits())
+        .filter(|pair| values[pair[0]] != values[pair[1]])
         .count()
         + usize::from(!values.is_empty());
     crate::data::source::reserve_source(&mut distinct, count)?;
     let mut representatives = Vec::new();
     crate::data::source::reserve_source(&mut representatives, count)?;
     for &index in order.iter() {
-        if distinct
-            .last()
-            .is_none_or(|value| value.to_bits() != values[index].to_bits())
-        {
-            distinct.push(values[index]);
+        if distinct.last().is_none_or(|value| *value != values[index]) {
+            distinct.push(values[index].clone());
             representatives.push(index);
         }
         occurrences[index] = distinct.len() - 1;
@@ -426,7 +416,10 @@ mod tests {
                 "0.000000000000000002"
             ]
         );
-        assert_eq!(set.members, [second, first, second].map(f64::to_bits));
+        assert_eq!(
+            set.members,
+            [second, first, second].map(|value| Operand::number(value, false))
+        );
     }
 
     #[test]
@@ -449,7 +442,10 @@ mod tests {
         let selected = adaptive.format_set(&values, false, true).unwrap().unwrap();
         assert_eq!(selected.precision, 2);
         assert_eq!(selected.labels, ["1.01", "1.02", "1.01"]);
-        assert_eq!(selected.members, values.map(f64::to_bits));
+        assert_eq!(
+            selected.members,
+            values.map(|value| Operand::number(value, false))
+        );
         let zeros = adaptive
             .format_set(&[0.0, -0.0], false, true)
             .unwrap()

@@ -141,8 +141,12 @@ pub(super) fn builtin(
     };
     let members = numeric_members(source, logarithmic)?;
     let examples = guide_presentation(&representatives(domain)?, None)?;
-    let example_values =
-        collect_source(examples.members.iter().map(|&key| Ok(f64::from_bits(key))))?;
+    let example_values = collect_source(
+        examples
+            .members
+            .iter()
+            .map(crate::numeric::operand::Operand::binary64),
+    )?;
     let table = evaluations(&members, &example_values, domain, |value| {
         let fraction = if value <= domain.0 {
             0.0
@@ -207,7 +211,7 @@ fn finish_continuous(
         examples
             .members
             .iter()
-            .map(|&key| Ok(evaluated(&table, key))),
+            .map(|value| Ok(evaluated(&table, value.binary64()?.to_bits()))),
     )?;
     AlphaValues::from_parts(
         name,

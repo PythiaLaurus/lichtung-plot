@@ -49,12 +49,14 @@ fn main() -> lichtung_plot::Result<()> {
     )?)
     .x_tick_format(NumericFormat::from_specifier(".0f")?)
     .title("Fixed data interval: 5, 25, 45, 65, 85");
-    let output = Canvas::grid(2, 2)?
+    let output = Canvas::grid(3, 2)?
         .panel(0, 0, target)?
         .panel(0, 1, maximum)?
         .panel(1, 0, exact)?
         .panel(1, 1, interval)?
-        .size(1400, 1000)
+        .panel(2, 0, geometric(2.0)?)?
+        .panel(2, 1, geometric(1.5)?)?
+        .size(1400, 1500)
         .svg_preserve_text(std::env::temp_dir().join("tick_generation"))?;
     println!(
         "tick_generation.svg: {}×{} CSS pixels",
@@ -62,4 +64,25 @@ fn main() -> lichtung_plot::Result<()> {
         output.height()
     );
     Ok(())
+}
+
+fn geometric(ratio: f64) -> lichtung_plot::Result<Plot<lichtung_plot::kind::Forest>> {
+    Ok(Plot::forest(
+        lichtung_plot::CategoryValues::new("term", ["ratio"])?,
+        NumericValues::new("estimate", [8.0]),
+        lichtung_plot::Bounds::new(
+            NumericValues::new("lower", [4.0]),
+            NumericValues::new("upper", [16.0]),
+        ),
+        1.0,
+    )
+    .scale(lichtung_plot::AxisScale::Log10)
+    .x_limits(1.0, 64.0)
+    .x_tick_generation(TickGeneration::multiplicative(
+        1.0,
+        ratio,
+        TickRequirement::Fixed,
+    )?)
+    .x_tick_format(NumericFormat::from_specifier(".3~g")?)
+    .title(format!("Anchored geometric lattice; ratio {ratio}")))
 }

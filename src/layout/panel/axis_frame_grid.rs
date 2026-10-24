@@ -237,7 +237,7 @@ impl PanelAxisPlan {
         }
         for axis in [&self.x_axis, &self.y_axis] {
             if let Some(numeric) = &axis.numeric {
-                numeric.observe_factors(round)?;
+                numeric.observe_feedback(round)?;
             }
             round.observe_count(axis.source.ordinal)?;
             round.observe_count(axis.source.cap)?;
@@ -260,6 +260,7 @@ impl PanelAxisPlan {
                 }
                 SourceKind::Midpoint => (7, 0.0),
                 SourceKind::ExactCount => (8, 0.0),
+                SourceKind::Multiplicative => (9, 0.0),
             };
             round.observe_count(kind)?;
             round.observe_number(parameter)?;

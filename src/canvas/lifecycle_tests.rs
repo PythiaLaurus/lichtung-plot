@@ -1201,21 +1201,35 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
             let domain = context.domain().unwrap();
             assert_eq!(domain.data_limits(), Some((0.1, 10.0)));
             assert_eq!(domain.scale(), crate::AxisScale::Log10);
-            let bits: Vec<_> = context
+            let operands: Vec<_> = context
                 .values()
                 .iter()
-                .map(|value| {
-                    let NumericOperand::PowerOfTen { exponent } = value.operand() else {
-                        panic!("exact mathematical power")
-                    };
-                    exponent.to_bits()
+                .map(|value| match (context.purpose(), value.operand()) {
+                    (NumericPurpose::IntrinsicProbe, NumericOperand::PowerOfTen { exponent }) => {
+                        format!("probe:{:x}", exponent.to_bits())
+                    }
+                    (
+                        NumericPurpose::ActualSet,
+                        NumericOperand::Multiplicative {
+                            anchor,
+                            ratio,
+                            index,
+                        },
+                    ) => {
+                        assert_eq!(
+                            (anchor.to_bits(), ratio.to_bits()),
+                            (1.0_f64.to_bits(), 2.0_f64.to_bits())
+                        );
+                        index.to_owned()
+                    }
+                    _ => panic!("retained mathematical operand"),
                 })
                 .collect();
             let (lower, upper) = domain.scale_limits();
             assert!(contexts.lock().unwrap().insert((
                 context.purpose() as u8,
                 (lower.to_bits(), upper.to_bits()),
-                bits
+                operands
             )));
             context.format_builtin()
         })
@@ -1231,6 +1245,9 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
     )
     .scale(crate::AxisScale::Log10)
     .x_limits(0.1, 10.0)
+    .x_tick_generation(
+        crate::TickGeneration::multiplicative(1.0, 2.0, crate::TickRequirement::Fixed).unwrap(),
+    )
     .x_tick_format(powers);
     let root = Canvas::grid(1, 3)
         .unwrap()
@@ -1315,7 +1332,8 @@ fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
             .iter()
             .map(|value| match value.operand() {
                 crate::NumericOperand::Binary64(value) => value.to_bits(),
-                crate::NumericOperand::PowerOfTen { .. } => panic!("ordinary facet"),
+                crate::NumericOperand::PowerOfTen { .. }
+                | crate::NumericOperand::Multiplicative { .. } => panic!("ordinary facet"),
             })
             .collect();
         let domain = context.domain().unwrap().scale_limits();
@@ -1450,7 +1468,10 @@ fn exact_counts_follow_parent_domains_but_keep_independent_canvas_owners() {
                     .iter()
                     .map(|value| match value.operand() {
                         crate::NumericOperand::Binary64(value) => value.to_bits(),
-                        crate::NumericOperand::PowerOfTen { .. } => panic!("linear shared domain"),
+                        crate::NumericOperand::PowerOfTen { .. }
+                        | crate::NumericOperand::Multiplicative { .. } => {
+                            panic!("linear shared domain")
+                        }
                     })
                     .collect();
                 assert_eq!(operands.len(), 4);
@@ -1518,7 +1539,8 @@ fn fixed_intervals_consume_final_parent_domains_and_empty_sources_have_no_callba
                     .iter()
                     .map(|value| match value.operand() {
                         NumericOperand::Binary64(value) => value,
-                        NumericOperand::PowerOfTen { .. } => {
+                        NumericOperand::PowerOfTen { .. }
+                        | NumericOperand::Multiplicative { .. } => {
                             panic!("data interval changed operand space")
                         }
                     })

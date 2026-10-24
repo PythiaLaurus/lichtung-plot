@@ -283,7 +283,7 @@ pub(crate) fn horizontal_gutter_preference(
             for label in &probe.labels {
                 include_label(label)?;
             }
-        } else {
+        } else if !axes.empty_numeric_source(1)? {
             for value in [
                 axes.ranges[1].0,
                 f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
@@ -546,8 +546,8 @@ mod tests {
             )),
             numeric: crate::numeric::set::FormattedSet {
                 members: vec![
-                    0.000_000_000_012_345_f64.to_bits(),
-                    0.000_000_000_098_765_f64.to_bits(),
+                    crate::numeric::operand::Operand::number(0.000_000_000_012_345, false),
+                    crate::numeric::operand::Operand::number(0.000_000_000_098_765, false),
                 ],
                 labels: vec!["0.000000000012345".into(), "0.000000000098765".into()],
                 precision: 15,

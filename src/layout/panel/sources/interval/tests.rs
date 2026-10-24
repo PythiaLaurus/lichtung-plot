@@ -153,7 +153,8 @@ fn logarithmic_data_intervals_retain_physical_operands_independently_of_scale_in
                         .iter()
                         .map(|value| match value.operand() {
                             crate::NumericOperand::Binary64(value) => value,
-                            crate::NumericOperand::PowerOfTen { .. } => {
+                            crate::NumericOperand::PowerOfTen { .. }
+                            | crate::NumericOperand::Multiplicative { .. } => {
                                 panic!("physical data interval became exponent spacing")
                             }
                         })

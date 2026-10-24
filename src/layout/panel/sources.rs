@@ -8,6 +8,7 @@ use crate::{Error, TickGeneration};
 // Only the automatic candidate program is bounded by this private seed grammar.
 pub(super) const MAX_TICKS: usize = 10_000;
 pub(crate) mod count;
+mod geometric;
 pub(super) mod interval;
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
 const FACTORS: [f64; 4] = [1.0, 2.0, 3.0, 5.0];
@@ -23,6 +24,7 @@ pub(crate) enum SourceKind {
     LogInterval(u64),
     Midpoint,
     ExactCount,
+    Multiplicative,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -246,7 +248,7 @@ struct Sources {
     intervals_done: bool,
     terminal_emitted: bool,
     raw: Option<(f64, f64)>,
-    operands: Option<Vec<f64>>,
+    operands: Option<Vec<crate::numeric::operand::Operand>>,
 }
 
 impl Sources {
@@ -496,7 +498,10 @@ impl Sources {
                 positions.push(f64::midpoint(self.range.0, self.range.1));
                 Some(positions)
             }
-            SourceKind::Supplied | SourceKind::Exact | SourceKind::ExactCount => {
+            SourceKind::Supplied
+            | SourceKind::Exact
+            | SourceKind::ExactCount
+            | SourceKind::Multiplicative => {
                 unreachable!("not adaptive sources")
             }
         };
@@ -539,7 +544,15 @@ impl Sources {
         if positions.coordinates.is_empty() && !self.fixed() {
             return Ok(None);
         }
-        self.operands = positions.data;
+        self.operands = positions
+            .data
+            .map(|data| {
+                crate::data::source::collect_source(
+                    data.into_iter()
+                        .map(|value| Ok(crate::numeric::operand::Operand::number(value, false))),
+                )
+            })
+            .transpose()?;
         Ok(Some(positions.coordinates))
     }
 }
@@ -564,27 +577,42 @@ pub(crate) fn numeric_tick_plan(
 impl NumericTickPlan {
     fn omitted(
         positions: &[f64],
-        operands: &[f64],
-        power: bool,
+        operands: &[crate::numeric::operand::Operand],
         integral: bool,
         mut source: TickSource,
     ) -> Result<Option<Self>, Error> {
+        let mut formatter = crate::numeric::power::certified::PowerFormatter::default();
         for precision in std::iter::once(0).chain(2..=17) {
             let ticks =
                 crate::data::source::collect_source(positions.iter().copied().zip(operands).map(
                     |(position, value)| {
                         Ok(AxisTick::new(
                             position,
-                            format_label(*value, power, integral, precision)?,
+                            crate::numeric::profiles::format_operand(
+                                value,
+                                integral,
+                                precision,
+                                &mut formatter,
+                            )?,
                         ))
                     },
                 ))?;
             if ticks.windows(2).all(|pair| pair[0].label != pair[1].label) {
                 source.precision = Some(u8::try_from(precision).expect("bounded precision"));
+                let set = crate::numeric::set::FormattedSet {
+                    members: crate::data::source::collect_source(operands.iter().cloned().map(Ok))?,
+                    labels: crate::data::source::collect_source(
+                        ticks
+                            .iter()
+                            .map(|tick| crate::data::source::copy_source_string(&tick.label)),
+                    )?,
+                    precision: source.precision.expect("selected precision"),
+                    ..crate::numeric::set::FormattedSet::default()
+                };
                 return Ok(Some(Self {
                     ticks,
                     source,
-                    numeric: None,
+                    numeric: Some(crate::data::source::source_arc(set)?),
                 }));
             }
         }
@@ -596,8 +624,7 @@ impl NumericTickPlan {
     )]
     fn formatted(
         positions: &[f64],
-        operands: &[f64],
-        power: bool,
+        operands: &[crate::numeric::operand::Operand],
         log: bool,
         format: &crate::numeric::source::AxisRequest<'_>,
         theme: &ResolvedTheme,
@@ -609,14 +636,8 @@ impl NumericTickPlan {
             AxisSide::Bottom => projection.x_range(),
             AxisSide::Left => projection.y_range(),
         };
-        let Some(set) = format.materialize(
-            operands,
-            power,
-            log,
-            side,
-            range,
-            crate::NumericPurpose::ActualSet,
-        )?
+        let Some(set) =
+            format.materialize(operands, log, side, range, crate::NumericPurpose::ActualSet)?
         else {
             return Ok(None);
         };
@@ -669,6 +690,19 @@ impl NumericTickPlan {
                 range, parameters, log, raw, projection, side, theme, format, scope,
             );
         }
+        if let Some(parameters) = generation.multiplicative_parameters() {
+            return geometric::plan(
+                range,
+                log,
+                parameters,
+                generation.get_maximum_count(),
+                projection,
+                side,
+                theme,
+                format,
+                scope,
+            );
+        }
         // Validate semantic inputs before asking for the metric probe or environment.
         Sources::new(range, log, generation.clone(), 1)?;
         let upper = if generation.is_interval() || generation.target_count().is_some() {
@@ -680,7 +714,7 @@ impl NumericTickPlan {
         let mut sources = Sources::new(range, log, generation, upper)?;
         sources.raw = raw;
         loop {
-            let (mut source, positions) = sources.next()?;
+            let (source, positions) = sources.next()?;
             if let Some(positions) = positions {
                 if positions.is_empty() {
                     return Ok(Self {
@@ -689,21 +723,18 @@ impl NumericTickPlan {
                         numeric: None,
                     });
                 }
-                let operands = sources.operands.as_deref().unwrap_or(&positions);
-                let power = log && sources.operands.is_none();
-                // Each formatting attempt is admitted before strings or record storage.
-                let mut ticks = Vec::new();
-                let mut unique = false;
-                let mut numeric = None;
-                if let Some(format) = format {
-                    if let Some(plan) = Self::formatted(
-                        &positions, operands, power, log, format, theme, source, projection, side,
-                    )? {
-                        source = plan.source;
-                        ticks = plan.ticks;
-                        numeric = plan.numeric;
-                        unique = true;
-                    }
+                let operands =
+                    if let Some(operands) = sources.operands.take() {
+                        operands
+                    } else {
+                        crate::data::source::collect_source(positions.iter().map(|value| {
+                            Ok(crate::numeric::operand::Operand::number(*value, log))
+                        }))?
+                    };
+                let plan = if let Some(format) = format {
+                    Self::formatted(
+                        &positions, &operands, log, format, theme, source, projection, side,
+                    )?
                 } else {
                     let integral = log
                         && matches!(
@@ -712,25 +743,17 @@ impl NumericTickPlan {
                                 | SourceKind::LogSubset(_)
                                 | SourceKind::LogInterval(_)
                         );
-                    if let Some(plan) =
-                        Self::omitted(&positions, operands, power, integral, source)?
-                    {
-                        source = plan.source;
-                        ticks = plan.ticks;
-                        unique = true;
-                    }
-                }
+                    Self::omitted(&positions, &operands, integral, source)?
+                };
                 #[cfg(test)]
                 crate::orchestrator::measurements::count(
                     crate::orchestrator::measurements::Counter::TickDistinctList,
                 );
 
-                if unique && labels_fit(&ticks, projection, side, theme)? {
-                    return Ok(NumericTickPlan {
-                        ticks,
-                        source,
-                        numeric,
-                    });
+                if let Some(plan) = plan {
+                    if labels_fit(&plan.ticks, projection, side, theme)? {
+                        return Ok(plan);
+                    }
                 }
             }
             if source.kind == SourceKind::Midpoint || sources.fixed() {

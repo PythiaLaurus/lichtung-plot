@@ -140,7 +140,8 @@ fn log_alpha_maps_positive_coordinates_without_broadening_or_losing_clipped_memb
     // Explanation coordinates are original-domain midpoints, not exponent quarters.
     assert_eq!(
         examples.members,
-        [1.0_f64, 2500.75, 5000.5, 7500.25, 10000.0].map(f64::to_bits)
+        [1.0_f64, 2500.75, 5000.5, 7500.25, 10000.0]
+            .map(|value| crate::numeric::operand::Operand::number(value, false))
     );
     let extreme = AlphaValues::log10(
         NumericValues::new("extreme", [f64::from_bits(1), f64::MAX]),
@@ -340,7 +341,10 @@ fn thresholds_assign_equality_to_the_right_and_store_distinct_whole_set_boundary
     else {
         panic!("threshold declaration")
     };
-    assert_eq!(boundaries.members, [0, 1.0_f64.to_bits()]);
+    assert_eq!(
+        boundaries.members,
+        [0.0, 1.0].map(|value| crate::numeric::operand::Operand::number(value, false))
+    );
     assert_eq!(labels, &["< 0", "[0, 1)", ">= 1"]);
     let selected = alpha.select([4, 0, 4]).unwrap();
     assert_eq!(selected.data.values, [255, 0, 255]);

@@ -12,7 +12,7 @@ use crate::decorations::legend::discrete::scoped::{
 use crate::decorations::legend::Legend;
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::PanelRequirements;
-use crate::layout::fit::{FitFailure, FitScope};
+use crate::layout::fit::{FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
 use crate::layout::{PanelBox, RootFramePlan};
 use crate::render::backend::{with_layer, Backend, SurfaceRole};
@@ -2082,7 +2082,7 @@ impl Canvas {
         round: &crate::layout::kernel::FeedbackRound,
         requirements: &mut [(usize, usize, PanelRequirements)],
         shared_allocation: Option<GuideAllocation>,
-    ) -> Result<(), Error> {
+    ) -> Result<FitOutcome<()>, Error> {
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else {
                 continue;
@@ -2098,14 +2098,17 @@ impl Canvas {
                 dependencies: &dependencies,
                 ..SUPPRESSED_GUIDES
             };
-            let probe = children.canvas_probe(
+            let probe = match children.canvas_probe(
                 plot,
                 crate::spec::PlotRenderContext::new(plot.data(), cells[index], theme)
                     .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
                 round,
-            )?;
+            )? {
+                FitOutcome::Measured(probe) => probe,
+                FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
+            };
             let measured = PanelRequirements::measure_header(
                 probe
                     .axes
@@ -2120,7 +2123,7 @@ impl Canvas {
             target.bottom = target.bottom.max(measured.bottom);
             target.top = target.top.max(measured.top);
         }
-        Ok(())
+        Ok(FitOutcome::Measured(()))
     }
 
     #[expect(
@@ -2137,7 +2140,7 @@ impl Canvas {
         compact_changes: &mut bool,
         children: &mut crate::decorations::plan::children::ChildPlans,
     ) -> Result<crate::layout::fit::FitOutcome<CanvasPlan>, Error> {
-        use crate::layout::fit::{self, FitOutcome};
+        use crate::layout::fit;
         let root_address = crate::layout::ComponentAddress::root();
         let guide_owner = root_address.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
         let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner));
@@ -2451,7 +2454,7 @@ impl Canvas {
             }
         }
         if !prepared.content_sizing {
-            self.complete_cell_gutters(
+            if let FitOutcome::Miss(failure) = self.complete_cell_gutters(
                 &plots,
                 &provisional,
                 &themes,
@@ -2459,7 +2462,9 @@ impl Canvas {
                 round,
                 &mut requirements,
                 shared_allocation,
-            )?;
+            )? {
+                return Ok(FitOutcome::Miss(failure));
+            }
         }
         let grid = match tracks::allocate(
             outer,
@@ -2986,13 +2991,14 @@ impl Canvas {
                 ResolvedPlotTheme::InheritedRoot => themes.root(),
                 ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
             };
-            let result = children.canvas_probe(
+            let result = crate::layout::fit::measured(children.canvas_probe(
                 plot,
                 crate::spec::PlotRenderContext::new(plot.data(), panel, theme),
                 index,
                 MeasurementPhase::Legend,
                 round,
-            )?;
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
             probes[index] = Some(result);
         }
         Ok((prepared_discrete_guide.cloned(), probes))
@@ -3015,7 +3021,14 @@ fn plot_category_domain(
             "shared category labels are supported only by horizontal bar families".into(),
         ));
     }
-    let result = children.canvas_probe(plot, context, index, MeasurementPhase::Category, round)?;
+    let result = crate::layout::fit::measured(children.canvas_probe(
+        plot,
+        context,
+        index,
+        MeasurementPhase::Category,
+        round,
+    ))
+    .map_err(crate::layout::fit::PlanError::into_error)?;
     if result.y_domain != AxisDomain::Categorical {
         return Err(Error::Data(
             "shared category labels require a categorical y-axis".into(),
