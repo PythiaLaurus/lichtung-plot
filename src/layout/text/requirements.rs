@@ -1708,14 +1708,21 @@ mod tests {
         prepare: impl FnOnce(&mut crate::layout::kernel::PreparedStage<'_>) -> Result<T, Error>,
     ) -> Result<T, Error> {
         let mut result = None;
-        crate::layout::plan_exact_root(
-            1,
-            1,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 1,
+                height: 1,
+            },
             |stage| {
                 result = Some(prepare(stage)?);
                 Ok(())
             },
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
+            },
             |(), _, (), _| Ok(()),
         )?;
         Ok(result.expect("root preparation completed"))
@@ -1823,9 +1830,11 @@ mod tests {
         for formatted in [false, true] {
             for alphabet in [&[][..], &['-'][..]] {
                 {
-                    crate::layout::plan_exact_root(
-                        320,
-                        240,
+                    crate::layout::plan_root(
+                        crate::layout::RootRequest::ExactSize {
+                            width: 320,
+                            height: 240,
+                        },
                         |stage| {
                             // One copy (entry + nine name bytes), source scalars/units,
                             // one derived literal, and the generated alphabet occurrences.
@@ -1862,7 +1871,12 @@ mod tests {
                             }
                             Ok(())
                         },
-                        |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                        |(), assigned, _| {
+                            Ok(crate::layout::MeasuredLayout::new(
+                                assigned.assigned_size()?,
+                                (),
+                            ))
+                        },
                         |(), _, (), _| Ok(()),
                     )
                     .unwrap();
@@ -1874,9 +1888,11 @@ mod tests {
     #[test]
     fn formatted_source_census_preserves_the_complete_source() {
         for formatted in [false, true] {
-            crate::layout::plan_exact_root(
-                320,
-                240,
+            crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 320,
+                    height: 240,
+                },
                 |stage| {
                     let appearance = appearance("Test Sans", TextWeight::Normal);
                     let format = crate::NumericFormat::new(
@@ -1917,7 +1933,12 @@ mod tests {
                     assert_eq!(census.counts.scalar_occurrences, 2);
                     Ok(())
                 },
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
                 |(), _, (), _| Ok(()),
             )
             .unwrap();
@@ -1926,9 +1947,11 @@ mod tests {
 
     #[test]
     fn staged_requirements_preserve_shared_and_distinct_addresses() {
-        crate::layout::plan_exact_root(
-            320,
-            240,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 320,
+                height: 240,
+            },
             |stage| {
                 let appearance = appearance("Test Sans", TextWeight::Normal);
                 let address = ComponentAddress::root();
@@ -1965,7 +1988,12 @@ mod tests {
                 );
                 Ok(())
             },
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
+            },
             |(), _, (), _| Ok(()),
         )
         .unwrap();
@@ -2000,9 +2028,11 @@ mod tests {
 
     #[test]
     fn staged_materialization_moves_semantic_sources_without_a_second_census_copy() {
-        crate::layout::plan_exact_root(
-            320,
-            240,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 320,
+                height: 240,
+            },
             |stage| {
                 let appearance = appearance("Test Sans", TextWeight::Normal);
                 let source = String::from("A\u{0301}");
@@ -2032,7 +2062,12 @@ mod tests {
                 assert_eq!(census.counts.scalar_occurrences, 2);
                 Ok(())
             },
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
+            },
             |(), _, (), _| Ok(()),
         )
         .unwrap();
@@ -2786,9 +2821,11 @@ mod tests {
                 if light_selected { 64.0 } else { 7.0 };
             theme.typography.annotations.contrast.dark.font_size =
                 if light_selected { 7.0 } else { 64.0 };
-            crate::layout::plan_exact_root(
-                800,
-                600,
+            crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 800,
+                    height: 600,
+                },
                 |stage| {
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &plot,
@@ -2836,7 +2873,12 @@ mod tests {
                     );
                     Ok(())
                 },
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
                 |(), _, (), _| Ok(()),
             )
             .unwrap();

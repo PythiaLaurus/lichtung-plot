@@ -2178,9 +2178,8 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
 ) -> Result<PanelPlan, Error> {
     let mut output = None;
     let source = crate::kind::into_erased(plot.clone());
-    crate::layout::plan_exact_root(
-        plot.canvas_dimensions()?.0,
-        plot.canvas_dimensions()?.1,
+    crate::layout::plan_root(
+        plot.sizing_request(),
         |stage| {
             let inputs =
                 crate::plots::shared_x::prepare_plot(&source, &stage.operation(), Some(theme))?;
@@ -2196,7 +2195,7 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
         |inputs, assigned, round| {
             let plot = inputs.attach(source.clone())?;
             Ok(crate::layout::MeasuredLayout::new(
-                assigned,
+                assigned.assigned_size()?,
                 crate::layout::fit::measured(plan_panel(
                     &plot,
                     kind,

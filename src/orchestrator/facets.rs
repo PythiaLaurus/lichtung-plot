@@ -893,9 +893,8 @@ mod feedback_tests {
                 let mut children = ChildPlans::facets(&source);
                 let mut calls = 0;
                 let mut retained_neighbor = None;
-                let root = crate::layout::plan_exact_root(
-                    source.sizing_request().requested_dimensions().0,
-                    source.sizing_request().requested_dimensions().1,
+                let root = crate::layout::plan_root(
+                    source.sizing_request(),
                     |stage| {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
@@ -962,7 +961,10 @@ mod feedback_tests {
                             );
                         }
                         children.finish_round(round);
-                        Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+                        Ok(crate::layout::MeasuredLayout::new(
+                            assigned.assigned_size()?,
+                            plan,
+                        ))
                     },
                     |_, assigned, plan, stage| {
                         let (width, height) = assigned.dimensions()?;
@@ -1090,9 +1092,8 @@ mod feedback_tests {
         .size(900, 900)
         .erase();
         let theme = source.resolve_theme().unwrap();
-        crate::layout::plan_exact_root(
-            source.sizing_request().requested_dimensions().0,
-            source.sizing_request().requested_dimensions().1,
+        crate::layout::plan_root(
+            source.sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1130,7 +1131,7 @@ mod feedback_tests {
             |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned,
+                    assigned.assigned_size()?,
                     FacetPlan::new(
                         &source,
                         PlotKind::Scatter,
@@ -1227,9 +1228,8 @@ mod feedback_tests {
         .size(960, 640)
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
-        let root = crate::layout::plan_exact_root(
-            source.sizing_request().requested_dimensions().0,
-            source.sizing_request().requested_dimensions().1,
+        let root = crate::layout::plan_root(
+            source.sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1267,7 +1267,7 @@ mod feedback_tests {
             |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned,
+                    assigned.assigned_size()?,
                     FacetPlan::new(
                         &source,
                         PlotKind::Scatter,
@@ -1309,9 +1309,8 @@ mod feedback_tests {
         .size(960, 640)
         .erase();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let result = crate::layout::plan_exact_root(
-            source.sizing_request().requested_dimensions().0,
-            source.sizing_request().requested_dimensions().1,
+        let result = crate::layout::plan_root(
+            source.sizing_request(),
             |stage| {
                 crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1350,9 +1349,8 @@ mod feedback_tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut arranged = None;
-        crate::layout::plan_exact_root(
-            source.sizing_request().requested_dimensions().0,
-            source.sizing_request().requested_dimensions().1,
+        crate::layout::plan_root(
+            source.sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1371,7 +1369,7 @@ mod feedback_tests {
             |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned,
+                    assigned.assigned_size()?,
                     FacetPlan::new(
                         &source,
                         PlotKind::Scatter,
@@ -1395,9 +1393,8 @@ mod feedback_tests {
         assert!(plan.outside_legend.is_some());
         for change_legend in [true, false] {
             let mut calls = 0;
-            crate::layout::plan_exact_root(
-                source.sizing_request().requested_dimensions().0,
-                source.sizing_request().requested_dimensions().1,
+            crate::layout::plan_root(
+                source.sizing_request(),
                 |_| Ok(()),
                 |(), assigned, round| {
                     calls += 1;
@@ -1417,7 +1414,10 @@ mod feedback_tests {
                         }
                     }
                     plan.observe_arranged(round)?;
-                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
                 },
                 |(), _, (), _| Ok(()),
             )

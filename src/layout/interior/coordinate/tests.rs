@@ -138,9 +138,11 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
             let owner = parent.child(AddressRole::PlotBody, 0).unwrap();
             let mut assignments = Vec::new();
             let mut captures = 0;
-            let root = crate::layout::plan_exact_root(
-                640,
-                480,
+            let root = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 640,
+                    height: 480,
+                },
                 |stage| {
                     let inputs =
                         crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
@@ -220,7 +222,10 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                             "deferred containing frame requires its next assigned reserve",
                         )?;
                     }
-                    Ok(crate::layout::MeasuredLayout::new(assigned, (plan, canvas)))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (plan, canvas),
+                    ))
                 },
                 |_, assigned, (plan, canvas), stage| {
                     captures += 1;
@@ -456,9 +461,8 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
         for seeded in [false, true] {
             let mut first = true;
             let mut contracted = false;
-            let root = crate::layout::plan_exact_root(
-                source.sizing_request().requested_dimensions().0,
-                source.sizing_request().requested_dimensions().1,
+            let root = crate::layout::plan_root(
+                source.sizing_request(),
                 |stage| {
                     let inputs =
                         crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
@@ -491,7 +495,10 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
                     let prior = round.insets(&owner, FeedbackKind::AxisGutter);
                     let next = round.next_insets(&owner, FeedbackKind::AxisGutter);
                     contracted |= next[0] < prior[0] && next[2] < prior[2];
-                    Ok(crate::layout::MeasuredLayout::new(assigned, (plan, canvas)))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (plan, canvas),
+                    ))
                 },
                 |_, _, plan, _| Ok(plan),
             )
@@ -1172,9 +1179,11 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
             let mut children = ChildPlans::facets(&source);
             let mut previous_selected = None;
             measurements::start();
-            let root = crate::layout::plan_exact_root(
-                640,
-                480,
+            let root = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 640,
+                    height: 480,
+                },
                 |stage| {
                     let inputs =
                         crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
@@ -1367,7 +1376,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
                     children.finish_round(round);
                     previous_selected = reusable.then(|| std::sync::Arc::clone(&selected));
                     Ok(crate::layout::MeasuredLayout::new(
-                        assigned,
+                        assigned.assigned_size()?,
                         (selected, canvas),
                     ))
                 },

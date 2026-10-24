@@ -11,7 +11,7 @@ mod unicode16;
 pub(crate) use canvas::{PanelBox, RootFramePlan};
 #[cfg(test)]
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
-pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};
+pub(crate) use kernel::{plan_root, FrozenRoot, MeasuredLayout, RootRequest, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
 pub(crate) use panel::category_label_span;
 pub(crate) use panel::fixed_interval_is_empty;

@@ -359,9 +359,11 @@ mod tests {
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
-        let root = crate::layout::plan_exact_root(
-            800,
-            600,
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
@@ -380,7 +382,10 @@ mod tests {
                     changed.fill_content_height = fill_content_height;
                     assert!(!key.matches(&source, changed, &owner, round)?);
                 }
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
             },
             |(), _, (), _| Ok(()),
         )
@@ -401,9 +406,11 @@ mod tests {
             .unwrap();
         let mut children = ChildPlans::facets(&source);
         let mut produced = 0;
-        crate::layout::plan_exact_root(
-            800,
-            600,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
@@ -475,7 +482,10 @@ mod tests {
                     .map_err(crate::layout::fit::PlanError::into_error)?;
                     assert!(Arc::ptr_eq(&changed, &hit));
                 }
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
             },
             |(), _, (), _| Ok(()),
         )
@@ -567,9 +577,11 @@ mod tests {
                 .unwrap();
             let mut children = ChildPlans::facets(&source);
             let mut produced = 0;
-            crate::layout::plan_exact_root(
-                800,
-                600,
+            crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 800,
+                    height: 600,
+                },
                 |_| Ok(()),
                 |(), assigned, round| {
                     let context = PlotRenderContext::new(
@@ -643,7 +655,10 @@ mod tests {
                         let inputs = &children.measurements[0].inputs.plot;
                         assert!(!source.same_composed_inputs(inputs, &inputs.guides));
                     }
-                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
                 },
                 |(), _, (), _| Ok(()),
             )
@@ -669,9 +684,11 @@ mod tests {
         let mut children = ChildPlans::facets(&source);
         let mut rounds = 0;
         let mut finalized = false;
-        let result = crate::layout::plan_exact_root(
-            800,
-            600,
+        let result = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 rounds += 1;
@@ -722,7 +739,10 @@ mod tests {
                     crate::layout::kernel::FeedbackKind::AxisGutter,
                     [1.0; 4],
                 )?;
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
             },
             |(), _, (), _| {
                 finalized = true;
@@ -752,9 +772,11 @@ mod tests {
         let neighbor = ComponentAddress::root()
             .child(AddressRole::CanvasCell, 1)
             .unwrap();
-        crate::layout::plan_exact_root(
-            800,
-            600,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
@@ -850,7 +872,10 @@ mod tests {
                         crate::layout::kernel::TrialOutcome::Miss(_)
                     ));
                 }
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
             },
             |(), _, (), _| Ok(()),
         )

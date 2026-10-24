@@ -867,13 +867,12 @@ impl PlotPlan {
         kind: PlotKind,
         resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
     ) -> Result<Self, Error> {
-        let sizing = source.sizing_request().requested_dimensions();
+        let sizing = source.sizing_request();
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
-        let root = crate::layout::plan_exact_root(
-            sizing.0,
-            sizing.1,
+        let root = crate::layout::plan_root(
+            sizing,
             |prepared_stage| {
                 let theme = resolve_theme()?;
                 source.validate_configuration(kind)?;
@@ -962,29 +961,30 @@ impl PlotPlan {
                 })
             },
             |prepared, assigned, round| {
-                let assigned = if assigned.requested_dimensions().1.is_some() {
-                    assigned
-                } else {
-                    let attached = prepared.axes.attach(source.clone())?;
-                    if source.has_facets() {
-                        super::facets::natural_size(
-                            &attached,
-                            &prepared.theme,
-                            assigned,
-                            round,
-                            prepared.facet_guide.as_ref().expect("prepared facet guide"),
-                            &prepared.axes,
-                        )?
+                let assigned =
+                    if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
+                        crate::layout::RootSize::new(width, height)
                     } else {
-                        crate::layout::interior::sizing::plot_size(
-                            &attached,
-                            &prepared.axes,
-                            &prepared.theme,
-                            assigned,
-                            round,
-                        )?
-                    }
-                };
+                        let attached = prepared.axes.attach(source.clone())?;
+                        if source.has_facets() {
+                            super::facets::natural_size(
+                                &attached,
+                                &prepared.theme,
+                                assigned,
+                                round,
+                                prepared.facet_guide.as_ref().expect("prepared facet guide"),
+                                &prepared.axes,
+                            )?
+                        } else {
+                            crate::layout::interior::sizing::plot_size(
+                                &attached,
+                                &prepared.axes,
+                                &prepared.theme,
+                                assigned,
+                                round,
+                            )?
+                        }
+                    };
                 let (width, height) = assigned.dimensions()?;
                 prepared
                     .root_text
@@ -1010,7 +1010,7 @@ impl PlotPlan {
                                 .facet_guide
                                 .as_ref()
                                 .expect("faceted root guide was prepared"),
-                            sizing.1.is_none(),
+                            sizing.automatic_height(),
                             Some(&prepared.axes),
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?,
@@ -1022,7 +1022,7 @@ impl PlotPlan {
                         &prepared.theme,
                         prepared.root_frame(&source)?,
                         round,
-                        sizing.1.is_none(),
+                        sizing.automatic_height(),
                     )?))
                 };
                 children.finish_round(round);
@@ -1350,9 +1350,11 @@ mod root_title_tests {
         for caption in ["", "Independent caption\nSecond caption line"] {
             let source = source.clone().caption(caption);
             let theme = crate::Theme::publication().resolve().unwrap();
-            let root = crate::layout::plan_exact_root(
-                800,
-                600,
+            let root = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 800,
+                    height: 600,
+                },
                 |stage| {
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &source,
@@ -1378,7 +1380,10 @@ mod root_title_tests {
                         round,
                         false,
                     )?;
-                    Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        plan,
+                    ))
                 },
                 |_, _, plan, _| Ok(plan),
             )
@@ -1591,9 +1596,11 @@ mod retained_legend_tests {
         .with_legend_position(crate::LegendPosition::OutsideRight);
         let theme = crate::Theme::publication().resolve().unwrap();
         measurements::start();
-        let root = crate::layout::plan_exact_root(
-            800,
-            600,
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
             |stage| {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
@@ -1629,7 +1636,7 @@ mod retained_legend_tests {
             |inputs, assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned,
+                    assigned.assigned_size()?,
                     UnfacetedPlotPlan::new(
                         &plot,
                         plot.kind(),

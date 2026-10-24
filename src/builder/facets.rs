@@ -325,7 +325,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {
-        self.root_size = crate::layout::RootSize::new(width, height);
+        self.root_size = crate::layout::RootRequest::ExactSize { width, height };
         self
     }
 

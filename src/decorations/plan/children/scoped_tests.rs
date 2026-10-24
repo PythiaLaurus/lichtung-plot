@@ -74,9 +74,11 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
     let owner = ComponentAddress::root()
         .child(AddressRole::FacetCell, 0)
         .unwrap();
-    crate::layout::plan_exact_root(
-        800,
-        600,
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 800,
+            height: 600,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             let mut children = ChildPlans::facets(&source);
@@ -309,7 +311,10 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             )?;
             assert!(!Arc::ptr_eq(&unstable, &changed));
             assert_eq!(produced.get(), 9);
-            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
         },
         |(), _, (), _| Ok(()),
     )

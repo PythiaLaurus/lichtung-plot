@@ -25,9 +25,11 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
         .collect::<Vec<_>>();
     let source = inputs.attach(source).unwrap();
     let measurements = HeightMeasurements::default();
-    crate::layout::plan_exact_root(
-        800,
-        600,
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 800,
+            height: 600,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
@@ -67,7 +69,10 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
                 );
                 assert_eq!(measurements.measured(&same, &owner, round)?, None);
             }
-            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
         },
         |(), _, (), _| Ok(()),
     )

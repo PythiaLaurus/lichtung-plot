@@ -183,9 +183,8 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
-        crate::layout::plan_exact_root(
-            source.sizing_request().requested_dimensions().0,
-            source.sizing_request().requested_dimensions().1,
+        crate::layout::plan_root(
+            source.sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -228,7 +227,10 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     .all(|strip| strip.placement.anchor == TextAnchor::Middle));
                 assert_eq!(plan.panel_plans.len(), 2);
                 children.finish_round(round);
-                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    plan,
+                ))
             },
             |_, assigned, plan, stage| {
                 let (width, height) = assigned.dimensions()?;
@@ -378,9 +380,11 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let mut children = ChildPlans::facets(&source);
         let mut exercised = false;
-        let root = crate::layout::plan_exact_root(
-            1200,
-            800,
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 1200,
+                height: 800,
+            },
             |stage| {
                 let operation = stage.operation();
                 let inputs =
@@ -441,7 +445,10 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 .map_err(fit::PlanError::into_error)?;
                 if !round.child_stable(&[ComponentAddress::root()]) {
                     children.finish_round(round);
-                    return Ok(crate::layout::MeasuredLayout::new(assigned, original));
+                    return Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        original,
+                    ));
                 }
                 exercised = true;
                 let same = FacetPlan::new(
@@ -521,7 +528,10 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     TrialOutcome::Miss(_)
                 ));
                 children.finish_round(round);
-                Ok(crate::layout::MeasuredLayout::new(assigned, changed))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    changed,
+                ))
             },
             |_, _, plan, stage| {
                 let replay = crate::orchestrator::capture_text_replay_plan(
@@ -567,9 +577,8 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     .erase();
     let theme = crate::Theme::publication().resolve().unwrap();
     theme.prepare_font_environment().unwrap();
-    crate::layout::plan_exact_root(
-        source.sizing_request().requested_dimensions().0,
-        source.sizing_request().requested_dimensions().1,
+    crate::layout::plan_root(
+        source.sizing_request(),
         |stage| {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &source,
@@ -608,7 +617,10 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
             );
             crate::decorations::plan::children::CHILD_MEASUREMENTS
                 .with(|calls| assert!(calls.borrow().is_empty()));
-            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
         },
         |_, _, (), _| Ok(()),
     )

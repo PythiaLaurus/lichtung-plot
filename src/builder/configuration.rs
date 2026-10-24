@@ -624,7 +624,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     #[must_use]
     pub const fn width(mut self, width: u32) -> Self {
-        self.root_size = crate::layout::RootSize::width(width);
+        self.root_size = crate::layout::RootRequest::ExactWidth(width);
         self
     }
 
@@ -635,7 +635,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Final canonical dimensions are available on [`crate::Output`].
     #[must_use]
     pub const fn size(mut self, width: u32, height: u32) -> Self {
-        self.root_size = crate::layout::RootSize::new(width, height);
+        self.root_size = crate::layout::RootRequest::ExactSize { width, height };
         self
     }
 

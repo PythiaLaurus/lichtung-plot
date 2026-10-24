@@ -427,12 +427,12 @@ pub(super) fn content_frame(
 pub(super) fn measure(
     source: &Canvas,
     prepared: &PreparedCanvasInputs,
-    requested: RootSize,
+    requested: crate::layout::RootRequest,
     round: &FeedbackRound,
     measurements: &HeightMeasurements,
 ) -> Result<RootSize, Error> {
-    let (requested_width, requested_height) = requested.requested_dimensions();
-    if let (Some(width), Some(height)) = (requested_width, requested_height) {
+    let requested_width = requested.exact_width();
+    if let crate::layout::RootRequest::ExactSize { width, height } = requested {
         return Ok(RootSize::new(width, height));
     }
     let theme = prepared.themes.root();

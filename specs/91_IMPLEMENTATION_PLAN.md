@@ -2120,6 +2120,12 @@ replay. Update current contracts and source examples after focused checks/Clippy
 
 ### 20. Make Existing Root Modes Explicit
 
+Delivered: RootRequest's three current modes are separate from concrete RootSize.
+plan_root replaces the pair-based entry point throughout production, tests and
+benchmarks. Existing focused coordinator and public Plot/facet/Canvas sizing
+contracts validate width locking, exact enforcement, setter replacement and one
+prepare/capture lifecycle without adding the future cap mode early.
+
 Replace the optional-pair request representation and coordinator signature for the
 three existing modes first. Migrate all production and test callers, embedded
 assignment helpers and equality consumers in the same logical change. Do not add

@@ -702,6 +702,14 @@ sections are stable descendants of their original guide slot.
 
 ### Root Coordination
 
+One closed RootRequest represents Natural, ExactWidth and ExactSize. RootSize
+contains concrete measured dimensions only. plan_root accepts the whole request;
+there is no optional-pair decoder or second coordinator. Exact assigned-box
+helpers refuse unresolved requests, and parent assignment replaces an embedded
+Plot's standalone request. The coordinator validates zeros before preparation,
+locks the first selected width and retains exact-height enforcement independently
+of automatic-height feedback.
+
 At most **eight rounds cover the entire root**, with no nested convergence loop.
 Round1 uses prepared base domains, intrinsic gutters and empty reserve/alignment.
 Only these named consequences transfer:

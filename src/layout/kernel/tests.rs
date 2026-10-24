@@ -92,9 +92,11 @@ fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
     let finalizes = Cell::new(0);
     let payload = Box::new(17_u8);
     let measured_address = Cell::new(std::ptr::null::<u8>());
-    let root = plan_exact_root(
-        317,
-        211,
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: 317,
+            height: 211,
+        },
         |_| {
             prepares.set(prepares.get() + 1);
             Ok(23)
@@ -106,7 +108,7 @@ fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
             round.observe_number(f64::from(*payload))?;
             let plan = payload.clone();
             measured_address.set(std::ptr::from_ref(plan.as_ref()));
-            Ok(MeasuredLayout::new(assigned, plan))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, plan))
         },
         |prepared, assigned, plan, _| {
             finalizes.set(finalizes.get() + 1);
@@ -136,9 +138,11 @@ fn exact_root_rejects_mismatched_measurement_and_nonpositive_size_before_finaliz
         ((0, 240), (0, 240), "finite and positive"),
         ((320, 0), (320, 0), "finite and positive"),
     ] {
-        let result = plan_exact_root(
-            assigned.0,
-            assigned.1,
+        let result = plan_root(
+            RootRequest::ExactSize {
+                width: assigned.0,
+                height: assigned.1,
+            },
             |_| Ok(()),
             |(), _, _| {
                 Ok(MeasuredLayout::new(
@@ -150,11 +154,13 @@ fn exact_root_rejects_mismatched_measurement_and_nonpositive_size_before_finaliz
         );
         assert!(matches!(result, Err(Error::Render(ref error)) if error.contains(message)));
     }
-    let root = plan_exact_root(
-        u32::MAX,
-        u32::MAX,
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: u32::MAX,
+            height: u32::MAX,
+        },
         |_| Ok(()),
-        |(), assigned, _| Ok(MeasuredLayout::new(assigned, ())),
+        |(), assigned, _| Ok(MeasuredLayout::new(assigned.assigned_size()?, ())),
         |(), _, (), _| Ok(()),
     )
     .unwrap();
@@ -163,17 +169,21 @@ fn exact_root_rejects_mismatched_measurement_and_nonpositive_size_before_finaliz
 
 #[test]
 fn preparation_and_measurement_errors_are_preserved_without_finalization() {
-    let result = plan_exact_root(
-        320,
-        240,
+    let result = plan_root(
+        RootRequest::ExactSize {
+            width: 320,
+            height: 240,
+        },
         |_| -> Result<(), Error> { Err(Error::Data("preparation refused".into())) },
         |(), _, _| -> Result<MeasuredLayout<()>, Error> { panic!("preparation failed") },
         |(), _, (), _| -> Result<(), Error> { panic!("preparation failed") },
     );
     assert!(matches!(result, Err(Error::Data(ref message)) if message == "preparation refused"));
-    let result = plan_exact_root(
-        320,
-        240,
+    let result = plan_root(
+        RootRequest::ExactSize {
+            width: 320,
+            height: 240,
+        },
         |_| Ok(()),
         |(), _, _| -> Result<MeasuredLayout<()>, Error> {
             Err(Error::Render("measurement refused".into()))
@@ -197,13 +207,15 @@ fn actual_reservation_stages_refuse_before_the_next_callback() {
         force_reservation_failure(stage);
         let measures = Cell::new(0);
         let finalizes = Cell::new(0);
-        let result = plan_exact_root(
-            320,
-            240,
+        let result = plan_root(
+            RootRequest::ExactSize {
+                width: 320,
+                height: 240,
+            },
             |stage| stage.reserve_scalar_presence_map(),
             |_, assigned, _| {
                 measures.set(measures.get() + 1);
-                Ok(MeasuredLayout::new(assigned, ()))
+                Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
             },
             |_, _, (), _| {
                 finalizes.set(finalizes.get() + 1);
@@ -269,9 +281,11 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
         natural_insets: [2.0; 4],
     };
     let mut assignments = Vec::new();
-    let root = plan_exact_root(
-        100,
-        100,
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             let consumed = round.insets(&address, FeedbackKind::AxisGutter);
@@ -295,7 +309,7 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
                     "assigned axis needs its measured gutter",
                 )?;
             }
-            Ok(MeasuredLayout::new(assigned, panel))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, panel))
         },
         |(), _, plan, _| Ok(plan),
     )
@@ -311,9 +325,11 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
     for policy in 0..3 {
         let address = ComponentAddress::root();
         let mut calls = 0;
-        let result = plan_exact_root(
-            100,
-            100,
+        let result = plan_root(
+            RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
@@ -336,7 +352,7 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
                     &[request],
                     "unchanged gutter cannot resolve this fit",
                 )?;
-                Ok(MeasuredLayout::new(assigned, ()))
+                Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
             },
             |(), _, (), _| -> Result<(), Error> { panic!("miss finalized") },
         );
@@ -360,14 +376,13 @@ fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
     for width in [None, Some(300)] {
         let mut calls = 0;
         let address = ComponentAddress::root();
-        let root = plan_exact_root(
-            width,
-            None,
+        let root = plan_root(
+            width.map_or(RootRequest::Natural, RootRequest::ExactWidth),
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
-                let (chosen, height) = assigned.requested_dimensions();
-                assert_eq!(height, None);
+                let chosen = assigned.exact_width();
+                assert!(assigned.automatic_height());
                 assert_eq!(
                     chosen,
                     if calls == 1 {
@@ -406,9 +421,8 @@ fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
 fn automatic_width_reselection_and_invalid_requests_refuse_before_capture() {
     let mut calls = 0;
     let owner = ComponentAddress::root();
-    let result = plan_exact_root(
-        None,
-        None,
+    let result = plan_root(
+        RootRequest::Natural,
         |_| Ok(()),
         |(), _, round| {
             calls += 1;
@@ -419,19 +433,23 @@ fn automatic_width_reselection_and_invalid_requests_refuse_before_capture() {
     );
     assert!(result.err().unwrap().to_string().contains("sizing request"));
     assert_eq!(calls, 2);
-    for (width, height) in [(None, Some(10)), (Some(0), None), (Some(10), Some(0))] {
-        let result = plan_exact_root(
-            width,
-            height,
+    for request in [
+        RootRequest::ExactWidth(0),
+        RootRequest::ExactSize {
+            width: 10,
+            height: 0,
+        },
+    ] {
+        let result = plan_root(
+            request,
             |_| -> Result<(), Error> { panic!("invalid request reached preparation") },
             |(), _, _| -> Result<MeasuredLayout<()>, Error> { panic!("invalid request measured") },
             |(), _, (), _| -> Result<(), Error> { panic!("invalid request captured") },
         );
         assert!(result.is_err());
     }
-    let root = plan_exact_root(
-        None,
-        None,
+    let root = plan_root(
+        RootRequest::Natural,
         |_| Ok(()),
         |(), _, _| Ok(MeasuredLayout::new(RootSize::new(u32::MAX, u32::MAX), ())),
         |(), _, (), _| Ok(()),
@@ -445,9 +463,8 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
     for width in [None, Some(300)] {
         let owner = ComponentAddress::root();
         let mut calls = 0;
-        let result = plan_exact_root(
-            width,
-            None,
+        let result = plan_root(
+            width.map_or(RootRequest::Natural, RootRequest::ExactWidth),
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
@@ -459,7 +476,7 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
                     [1.0 - previous, 0.0, 0.0, 0.0],
                 )?;
                 Ok(MeasuredLayout::new(
-                    RootSize::new(assigned.requested_dimensions().0.unwrap_or(317), 211),
+                    RootSize::new(assigned.exact_width().unwrap_or(317), 211),
                     (),
                 ))
             },
@@ -472,9 +489,11 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
 
 #[test]
 fn later_fatal_measurement_wins_over_an_earlier_typed_fit_miss() {
-    let result = plan_exact_root(
-        100,
-        100,
+    let result = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), _, round| -> Result<MeasuredLayout<()>, Error> {
             round.miss(
@@ -494,9 +513,11 @@ fn later_fatal_measurement_wins_over_an_earlier_typed_fit_miss() {
         .contains("later font failure"));
 
     let address = ComponentAddress::root();
-    let result = plan_exact_root(
-        100,
-        100,
+    let result = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             let request = round.request_insets(
@@ -517,7 +538,7 @@ fn later_fatal_measurement_wins_over_an_earlier_typed_fit_miss() {
                 &[],
                 "terminal collision",
             )?;
-            Ok(MeasuredLayout::new(assigned, ()))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
         },
         |(), _, (), _| -> Result<(), Error> { panic!("terminal miss finalized") },
     );
@@ -531,9 +552,11 @@ fn later_fatal_measurement_wins_over_an_earlier_typed_fit_miss() {
 #[test]
 fn feedback_reserves_and_domains_aggregate_without_reapplying_owned_ink() {
     let address = ComponentAddress::root();
-    let root = plan_exact_root(
-        100,
-        100,
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             round.request_insets(
@@ -562,7 +585,10 @@ fn feedback_reserves_and_domains_aggregate_without_reapplying_owned_ink() {
             )?;
             let insets = round.insets(&address, FeedbackKind::OwnedInk);
             let domain = round.feedback_domain(&address, FeedbackKind::AutomaticDomainX);
-            Ok(MeasuredLayout::new(assigned, (insets, domain)))
+            Ok(MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (insets, domain),
+            ))
         },
         |(), _, plan, _| Ok(plan),
     )
@@ -587,9 +613,11 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
         let address = ComponentAddress::root();
         let mut consumed_inputs = Vec::new();
         let measured_address = Cell::new(std::ptr::null::<bool>());
-        let root = plan_exact_root(
-            100,
-            100,
+        let root = plan_root(
+            RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 let consumed = match kind {
@@ -608,7 +636,7 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
                 // Even with no fit miss, changed inputs require a fresh plan.
                 let plan = Box::new(consumed);
                 measured_address.set(std::ptr::from_ref(plan.as_ref()));
-                Ok(MeasuredLayout::new(assigned, plan))
+                Ok(MeasuredLayout::new(assigned.assigned_size()?, plan))
             },
             |(), _, plan, _| {
                 assert_eq!(std::ptr::from_ref(plan.as_ref()), measured_address.get());
@@ -628,9 +656,11 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
 #[test]
 fn empty_requests_do_not_accept_an_actual_ink_miss() {
     let mut calls = 0;
-    let result = plan_exact_root(
-        100,
-        100,
+    let result = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             calls += 1;
@@ -640,7 +670,7 @@ fn empty_requests_do_not_accept_an_actual_ink_miss() {
                 &[],
                 "actual ink exceeds assigned frame",
             )?;
-            Ok(MeasuredLayout::new(assigned, ()))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
         },
         |(), _, (), _| -> Result<(), Error> { panic!("unvalidated ink finalized") },
     );
@@ -651,16 +681,18 @@ fn empty_requests_do_not_accept_an_actual_ink_miss() {
 #[test]
 fn current_complete_plan_is_accepted_without_probing_callback_purity() {
     let mut calls = 0;
-    let root = plan_exact_root(
-        100,
-        100,
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
         |_| Ok(()),
         |(), assigned, round| {
             calls += 1;
             let panel =
                 crate::layout::PanelBox::new(if calls == 1 { 1.0 } else { 2.0 }, 90.0, 2.0, 90.0);
             round.observe_box(panel)?;
-            Ok(MeasuredLayout::new(assigned, panel))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, panel))
         },
         |(), _, panel, _| Ok(panel),
     )

@@ -432,9 +432,11 @@ mod tests {
                 .clone()
                 .font_size(f64::from(em))
                 .unwrap();
-            crate::layout::plan_exact_root(
-                1,
-                1,
+            crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 1,
+                    height: 1,
+                },
                 |_| Ok(()),
                 |(), assigned, round| {
                     let FitOutcome::Measured(grid) = allocate(
@@ -477,7 +479,10 @@ mod tests {
                         .cells
                         .iter()
                         .all(|cell| cell.width().to_bits() == (1.0_f64 / 1024.0).to_bits()));
-                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
                 },
                 |(), _, (), _| Ok(()),
             )

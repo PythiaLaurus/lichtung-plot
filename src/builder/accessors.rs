@@ -1094,7 +1094,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.significance
     }
 
-    pub(crate) const fn sizing_request(&self) -> crate::layout::RootSize {
+    pub(crate) const fn sizing_request(&self) -> crate::layout::RootRequest {
         self.root_size
     }
 

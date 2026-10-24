@@ -342,11 +342,11 @@ pub(crate) fn plot_size(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
     theme: &ResolvedTheme,
-    requested: RootSize,
+    requested: crate::layout::RootRequest,
     round: &FeedbackRound,
 ) -> Result<RootSize, Error> {
-    let (requested_width, requested_height) = requested.requested_dimensions();
-    if let (Some(width), Some(height)) = (requested_width, requested_height) {
+    let requested_width = requested.exact_width();
+    if let crate::layout::RootRequest::ExactSize { width, height } = requested {
         return Ok(RootSize::new(width, height));
     }
 

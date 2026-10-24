@@ -500,9 +500,11 @@ fn shared_legend_child_cache_replay_contract() {
             .unwrap();
         let theme = crate::Theme::publication().resolve().unwrap();
         measurements::start();
-        crate::layout::plan_exact_root(
-            1200,
-            720,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 1200,
+                height: 720,
+            },
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
                 inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &owner, false)?;
@@ -583,7 +585,7 @@ fn shared_legend_child_cache_replay_contract() {
                     assert!(Arc::ptr_eq(&first, &second));
                 }
                 children.finish_round(round);
-                Ok(MeasuredLayout::new(assigned, ()))
+                Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
             },
             |_, _, (), _| Ok(()),
         )
@@ -993,9 +995,11 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
     measurements::start();
     // The root reserves only its own padding; axes submit absolute measured
     // gutters through feedback rather than borrowing the root's 16px inset.
-    crate::layout::plan_exact_root(
-        640,
-        400,
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 640,
+            height: 400,
+        },
         |stage| {
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
             inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &address, false)?;
@@ -1031,7 +1035,7 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
                 "native_gutter_round,consumed={consumed:?},requested={requested:?},panel={:?}",
                 plan.panel_box
             );
-            Ok(MeasuredLayout::new(assigned, ()))
+            Ok(MeasuredLayout::new(assigned.assigned_size()?, ()))
         },
         |_, _, (), _| Ok(()),
     )

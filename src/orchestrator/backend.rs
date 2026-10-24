@@ -1501,11 +1501,18 @@ mod tests {
             .operation()
             .seal_fonts()
             .unwrap();
-        crate::layout::plan_exact_root(
-            100,
-            100,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
             |_| Ok(()),
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
+            },
             |(), assigned, (), final_stage| {
                 let (width, height) = assigned.dimensions()?;
                 capture_text_replay_plan(width, height, "test capture", theme, final_stage, capture)
@@ -2048,11 +2055,18 @@ mod tests {
         for bracket in [false, true] {
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
-            let result = crate::layout::plan_exact_root(
-                100,
-                100,
+            let result = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 100,
+                    height: 100,
+                },
                 |_| Ok(()),
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
                 |(), _, (), stage| {
                     capture_text_replay_plan(
                         100,
@@ -2129,11 +2143,18 @@ mod tests {
         ] {
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
-            let result = crate::layout::plan_exact_root(
-                100,
-                100,
+            let result = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 100,
+                    height: 100,
+                },
                 |_| Ok(()),
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
                 |(), _, (), stage| {
                     capture_text_replay_plan(
                         100,
@@ -2344,11 +2365,18 @@ mod tests {
         let mut pass = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let result = crate::layout::plan_exact_root(
-            100,
-            100,
+        let result = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
             |_| Ok(()),
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
+            },
             |(), _, (), final_stage| {
                 capture_text_replay_plan(
                     100,
@@ -2398,11 +2426,18 @@ mod tests {
         ] {
             let mut pass = 0;
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
-            let result = crate::layout::plan_exact_root(
-                100,
-                100,
+            let result = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 100,
+                    height: 100,
+                },
                 |_| Ok(()),
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
                 |(), _, (), final_stage| {
                     capture_text_replay_plan(
                         100,

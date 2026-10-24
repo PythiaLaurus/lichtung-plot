@@ -78,7 +78,7 @@ pub(super) fn grid_height(
 pub(in crate::orchestrator) fn natural_size(
     source: &Plot,
     theme: &ResolvedTheme,
-    request: RootSize,
+    request: crate::layout::RootRequest,
     round: &FeedbackRound,
     guide: &PreparedFacetGuide,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
@@ -157,7 +157,7 @@ pub(in crate::orchestrator) fn natural_size(
         ))
         .map_err(fit::PlanError::into_error)
     };
-    let (requested_width, _) = request.requested_dimensions();
+    let requested_width = request.exact_width();
     let mut preferred = if requested_width.is_none() {
         let natural = allocate(None, &[])?;
         let axes = super::planning::shared_axis_requirements(

@@ -2053,9 +2053,11 @@ mod tests {
         producer.end().unwrap();
         let mut calls = 0;
         let mut observations = None;
-        crate::layout::plan_exact_root(
-            100,
-            100,
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
@@ -2086,7 +2088,10 @@ mod tests {
                     assert_ne!(&current, previous);
                 }
                 observations = Some(current);
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (),
+                ))
             },
             |(), _, (), _| Ok(()),
         )
@@ -2113,9 +2118,11 @@ mod tests {
             (true, FeedbackKind::AutomaticDomainY),
         ] {
             let mut calls = 0;
-            let root = crate::layout::plan_exact_root(
-                100,
-                100,
+            let root = crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 100,
+                    height: 100,
+                },
                 |_| Ok(()),
                 |(), assigned, round| {
                     calls += 1;
@@ -2166,7 +2173,10 @@ mod tests {
                             "root annotation overflow",
                         )?;
                     }
-                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
                 },
                 |(), _, (), _| Ok(()),
             );

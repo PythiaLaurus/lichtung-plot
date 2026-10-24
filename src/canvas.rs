@@ -253,7 +253,7 @@ pub struct Canvas {
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
     legend_composition: LegendComposition,
-    root_size: crate::layout::RootSize,
+    root_size: crate::layout::RootRequest,
     title: crate::text::TextSlot,
     subtitle: crate::text::TextSlot,
     // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
@@ -316,7 +316,7 @@ impl Canvas {
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
             legend_composition: LegendComposition::Combined,
-            root_size: crate::layout::RootSize::natural(),
+            root_size: crate::layout::RootRequest::Natural,
             title: crate::text::TextSlot::EMPTY,
             subtitle: crate::text::TextSlot::EMPTY,
             panel_title_alignment: None,
@@ -610,7 +610,7 @@ impl Canvas {
     /// Zero is rejected during preflight, without a setter panic.
     #[must_use]
     pub const fn width(mut self, width: u32) -> Self {
-        self.root_size = crate::layout::RootSize::width(width);
+        self.root_size = crate::layout::RootRequest::ExactWidth(width);
         self
     }
 
@@ -621,7 +621,7 @@ impl Canvas {
     /// Embedded Plots do not contribute standalone sizing requests.
     #[must_use]
     pub const fn size(mut self, width: u32, height: u32) -> Self {
-        self.root_size = crate::layout::RootSize::new(width, height);
+        self.root_size = crate::layout::RootRequest::ExactSize { width, height };
         self
     }
 
@@ -1355,12 +1355,11 @@ impl Canvas {
         crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
         Error,
     > {
-        let sizing_request = self.root_size.requested_dimensions();
+        let sizing_request = self.root_size;
         let mut children = crate::decorations::plan::children::ChildPlans::canvas(self);
         let measurements = sizing::HeightMeasurements::default();
-        let root = crate::layout::plan_exact_root(
-            sizing_request.0,
-            sizing_request.1,
+        let root = crate::layout::plan_root(
+            sizing_request,
             |prepared_stage| {
                 let themes = Arc::new(ResolvedCanvasThemes::new(
                     &self.theme,
@@ -1446,7 +1445,7 @@ impl Canvas {
                     &prepared.text_panel_intrinsics,
                     &prepared.plot_intrinsics,
                     &prepared.interiors,
-                    sizing_request.1.is_none(),
+                    sizing_request.automatic_height(),
                     Some(&measurements),
                 )?;
                 #[cfg(test)]
