@@ -995,6 +995,10 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         format.clone().multiplier(1.01).unwrap(),
         format
             .clone()
+            .prefixes(crate::NumericPrefixes::factor(crate::NumericFactor::Value(1.01)).unwrap())
+            .unwrap(),
+        format
+            .clone()
             .locale(crate::NumericLocale::named("en-US").unwrap())
             .unwrap(),
         format.trailing_zeros(TrailingZeros::Trim).unwrap(),

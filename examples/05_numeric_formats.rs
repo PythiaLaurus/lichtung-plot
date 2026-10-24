@@ -62,6 +62,13 @@ fn main() -> lichtung_plot::Result<()> {
     .scale(AxisScale::Log10)
     .x_tick_format(scientific)
     .title("Certified mathematical powers");
+    let prefixes = Plot::scatter(
+        NumericValues::new("distance", [1000.0, 2500.0]),
+        NumericValues::new("mass", [1_000_000.0, 2_000_000.0]),
+    )
+    .x_tick_format(NumericFormat::from_specifier(".3s")?)
+    .y_tick_format(NumericFormat::from_specifier(",.0f")?)
+    .title("SI selection and specifier policies");
     let output = Canvas::grid(3, 2)?
         .width(1200)
         .panel(0, 0, axes)?
@@ -69,6 +76,7 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(1, 0, estimates)?
         .panel(1, 1, totals)?
         .panel(2, 0, forest)?
+        .panel(2, 1, prefixes)?
         .svg_preserve_text(std::env::temp_dir().join("numeric_formats"))?;
     println!(
         "numeric_formats.svg: {}×{} CSS pixels",

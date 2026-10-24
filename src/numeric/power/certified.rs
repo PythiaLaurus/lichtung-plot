@@ -58,7 +58,7 @@ impl PowerFormatter {
                 "Log10 operand decimal scale changed after reduction".into(),
             ));
         }
-        let factor = ExactDecimal::decode(format.multiplier, format.rate.shift())?;
+        let factor = ExactDecimal::effective_factor(format)?;
         let negative = factor.negative;
         let zero = factor.coefficient.bits() == 0;
         let exponent = &operand.decade + &factor.exponent;
@@ -76,7 +76,8 @@ impl PowerFormatter {
             format,
         )?;
         let rounded = if zero || operand.fraction.bits() == 0 {
-            ExactDecimal::new(negative, factor.coefficient, exponent)?.round(format)?
+            ExactDecimal::ratio(negative, factor.coefficient, factor.denominator, exponent)?
+                .round(format)?
         } else if plan.tiny {
             RoundedDecimal {
                 negative,
@@ -96,7 +97,7 @@ impl PowerFormatter {
                     self.attempts.push(precision);
                 }
                 let (lower, upper) = self.mantissa(operand, precision)?;
-                let unit = BigUint::from(1_u8) << precision;
+                let unit = &factor.denominator << precision;
                 let multiplier = power_of_ten(power);
                 let lower = lower * &factor.coefficient;
                 let upper = upper * &factor.coefficient;
@@ -125,29 +126,27 @@ impl PowerFormatter {
         })
     }
 
-    fn factored_decade(&mut self, operand: &Log10Operand, factor: &ExactDecimal) -> Result<BigInt> {
+    pub(super) fn factored_decade(
+        &mut self,
+        operand: &Log10Operand,
+        factor: &ExactDecimal,
+    ) -> Result<BigInt> {
         let decade = &operand.decade + &factor.decade;
         if operand.fraction.bits() == 0 {
             return Ok(decade);
         }
-        let digits =
-            usize::try_from(&factor.decade - &factor.exponent).map_err(|_| arithmetic_error())?;
-        let threshold = power_of_ten(digits);
-        if factor.coefficient == threshold {
+        let neutral = ExactDecimal::new(false, BigUint::from(1_u8), factor.decade.clone())?;
+        if factor.compare_abs(&neutral)? == std::cmp::Ordering::Equal {
             return Ok(decade);
         }
-        let mut precision = 128_usize;
-        loop {
-            let (lower, upper) = self.mantissa(operand, precision)?;
-            let boundary = (&threshold * 10_u8) << precision;
-            if &upper * &factor.coefficient < boundary {
-                return Ok(decade);
-            }
-            if lower * &factor.coefficient >= boundary {
-                return Ok(decade + 1_u8);
-            }
-            precision = precision.checked_mul(2).ok_or_else(arithmetic_error)?;
-        }
+        let threshold = ExactDecimal::new(false, BigUint::from(1_u8), &decade + 1_u8)?;
+        Ok(
+            if self.compare_power_factor(operand, factor, &threshold)? == std::cmp::Ordering::Less {
+                decade
+            } else {
+                decade + 1_u8
+            },
+        )
     }
 
     fn constants(&mut self, precision: usize) -> Result<&ConstantBounds> {

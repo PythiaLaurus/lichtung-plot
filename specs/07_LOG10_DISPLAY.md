@@ -21,6 +21,12 @@ rational factor cannot put a fractional power exactly on that rational threshold
 Multiply certified endpoint numerators by C and include b in the fixed quantum's
 decimal shift before the same signed rounding. Negative factors therefore use
 negative floor/ceiling cells, not positive rounding followed by sign attachment.
+Exact finite divisors retain C/D*10^b rather than rounding a quotient. Integral
+powers use that same rational quantizer; fractional enclosures multiply endpoint
+numerators by C and denominator by D. Decade and prefix-boundary comparisons cross
+multiply these rationals only after symbolic decade screening, so arbitrary-size
+physical exponents never require materializing an irrelevant power of ten. The
+irrationality proof still excludes equality to nonzero rational thresholds.
 Percent/per-mille multiply by exact decimal powers 2/3 in b. General uses the
 significant quantum and selects decimal/scientific only from the rounded result;
 Integer uses quantum 1 followed by exact arbitrary-size radix conversion. Reserve

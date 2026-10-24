@@ -12,6 +12,7 @@ use super::decimal::{
 use crate::{Error, Result};
 
 pub(crate) mod certified;
+mod comparison;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Log10Operand {

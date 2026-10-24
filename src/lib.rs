@@ -97,6 +97,10 @@ pub use numeric::format::{NumericFormat, NumericPrecision};
 pub use numeric::locale::{
     NumericCurrency, NumericGroupRepeat, NumericGrouping, NumericLocale, NumericSymbols,
 };
+pub use numeric::prefixes::{
+    NumericCompactRule, NumericFactor, NumericPrefixes, NumericPromotion, NumericSelection,
+    SiPrefix,
+};
 pub use output::Output;
 pub use render::backend::StrokePattern;
 pub use significance::{

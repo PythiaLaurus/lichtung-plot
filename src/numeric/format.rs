@@ -7,6 +7,7 @@ use super::decimal::{
 };
 use super::emission::{NumericField, NumericRate, NumericSign, NumericSymbol, Presentation};
 use super::locale::NumericLocale;
+use super::prefixes::{selection::SelectedScale, NumericPrefixes};
 use crate::{Error, Result};
 
 /// Exact precision or one uniformly selected precision for a complete numeric set.
@@ -119,6 +120,7 @@ pub struct NumericFormat {
     multiplier_bits: u64,
     rate: NumericRate,
     presentation: Presentation,
+    prefixes: NumericPrefixes,
 }
 
 impl Default for NumericFormat {
@@ -135,6 +137,7 @@ impl Default for NumericFormat {
             multiplier_bits: 1.0_f64.to_bits(),
             rate: NumericRate::Value,
             presentation: Presentation::default(),
+            prefixes: NumericPrefixes::none(),
         }
     }
 }
@@ -161,6 +164,7 @@ impl NumericFormat {
             multiplier_bits: self.multiplier_bits,
             rate: self.rate,
             presentation: self.presentation.clone(),
+            prefixes: self.prefixes.clone(),
         })
     }
 
@@ -311,13 +315,28 @@ impl NumericFormat {
         Ok(self)
     }
 
-    pub(super) fn present(&self, ascii: &str) -> Result<String> {
+    /// Replace the sole SI, compact or common exact-divisor policy.
+    pub fn prefixes(mut self, value: NumericPrefixes) -> Result<Self> {
+        self.prefixes = value;
+        self.validate()?;
+        Ok(self)
+    }
+
+    pub(crate) fn prefix_policy(&self) -> &NumericPrefixes {
+        &self.prefixes
+    }
+
+    pub(super) fn present(&self, ascii: &str, scale: &SelectedScale) -> Result<String> {
         self.presentation.emit(
             ascii,
             self.notation,
             self.rate,
-            self.prefix.as_deref(),
-            self.suffix.as_deref(),
+            super::emission::Affixes {
+                outer_prefix: self.prefix.as_deref().unwrap_or_default(),
+                outer_suffix: self.suffix.as_deref().unwrap_or_default(),
+                prefix: &scale.prefix,
+                suffix: &scale.suffix,
+            },
         )
     }
 
@@ -345,6 +364,7 @@ impl NumericFormat {
             rounding: self.rounding,
             multiplier: f64::from_bits(self.multiplier_bits),
             rate: self.rate,
+            divisor: None,
         })
     }
 
@@ -374,6 +394,7 @@ impl NumericFormat {
         round.observe_number(f64::from_bits(self.multiplier_bits))?;
         round.observe_count(self.rate as usize)?;
         self.presentation.observe(round)?;
+        self.prefixes.observe(round)?;
         for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {

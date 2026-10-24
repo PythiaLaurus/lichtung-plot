@@ -92,6 +92,14 @@ pub(super) struct Presentation {
     pub(super) field: Option<NumericField>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Affixes<'a> {
+    pub(super) outer_prefix: &'a str,
+    pub(super) outer_suffix: &'a str,
+    pub(super) prefix: &'a str,
+    pub(super) suffix: &'a str,
+}
+
 impl Default for Presentation {
     fn default() -> Self {
         Self {
@@ -281,8 +289,7 @@ impl Presentation {
         ascii: &str,
         notation: NumericNotation,
         rate: NumericRate,
-        prefix: Option<&str>,
-        suffix: Option<&str>,
+        affixes: Affixes<'_>,
     ) -> Result<String> {
         let negative = ascii.starts_with('-');
         let magnitude = ascii.strip_prefix('-').unwrap_or(ascii);
@@ -297,7 +304,8 @@ impl Presentation {
             .split_once('.')
             .map_or((mantissa, None), |(i, f)| (i, Some(f)));
         let mut leading = String::new();
-        append(&mut leading, prefix.unwrap_or_default())?;
+        append(&mut leading, affixes.outer_prefix)?;
+        append(&mut leading, affixes.prefix)?;
         append(
             &mut leading,
             match (negative, self.sign) {
@@ -357,7 +365,8 @@ impl Presentation {
         if negative && self.sign == NumericSign::Accounting {
             append(&mut trailing, ")")?;
         }
-        append(&mut trailing, suffix.unwrap_or_default())?;
+        append(&mut trailing, affixes.suffix)?;
+        append(&mut trailing, affixes.outer_suffix)?;
         let grouping = self.grouping.then(|| self.locale.grouping()).flatten();
         let fixed = leading
             .chars()

@@ -45,6 +45,23 @@ alignment)` supplies minimum Unicode-scalar width, not CSS geometry; multiscalar
 digits stay intact. Zero AfterSign fill participates in numeric grouping. Literal
 prefix/suffix contents are never localized as if they were numeric digits.
 
+`NumericFormat::from_specifier(".3s")?` selects significant-3 SI with carry promotion;
+`,.2f`, `+.2f`, `.1%`, `#08X` and Unicode fill/alignment are also supported. The
+grammar is `[[fill]align][sign][symbol][0][width][,][.precision][~][type]`; types are
+f/e/g/r/s/%/p/d/b/o/x/X/n or omitted. Omitted type is trimmed General with 12
+significant digits; explicit types default to 6, except integer precision is zero.
+Malformed/unknown/text-coercing types and out-of-range relevant precision reject.
+Typed equivalents have the same policy identity and exact arithmetic.
+
+Use `prefixes(NumericPrefixes::si(selection, promotion)?)` for PerValue/WholeSet/
+Fixed SI. Automatic SI saturates at quecto/quetta; fixed selection includes all
+standard prefixes. `decimal_compact` supplies K/M/B/T, while `compact` accepts
+custom exact thresholds/divisors and literal affixes. KeepThreshold uses unrounded
+magnitude; PromoteOnRounding uses original signed rounding cells and freezes one
+order-independent WholeSet result. Fixed requires KeepThreshold. `factor` selects
+an exact finite divisor, arbitrary-size PowerOfTen exponent or AutomaticDecimal
+common factor. These display policies never change scientific positions.
+
 Configure a property with its bare name, such as `precision(policy)` or
 `decimal_scale(2)`. Validated consuming edits replace exactly one field; paired
 readers are `get_notation()`, `get_precision()`, `get_decimal_scale()`,
@@ -52,7 +69,7 @@ readers are `get_notation()`, `get_precision()`, `get_decimal_scale()`,
 `new` supplies scale 0, no affixes, Preserve/Keep; Default adds
 Decimal/Fractional(2).
 Affixes are nonempty control-free literal text including spaces/combining marks.
-Reconstruct without an affix to omit it; no empty-string reset or format string.
+Reconstruct without an affix to omit it; there is no empty-string affix reset.
 
 Rounding defaults to nearest/ties-to-even after exact decimal scaling. Use
 `rounding(NumericRounding::Floor)` for rounding toward negative infinity, or select

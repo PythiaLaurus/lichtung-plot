@@ -7,6 +7,7 @@
 //! carry normalization never rounds again. No floating arithmetic is used here.
 
 use super::emission::NumericRate;
+use super::prefixes::NumericFactor;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{Error, Result};
@@ -102,6 +103,7 @@ pub(crate) struct ResolvedFormat<'a> {
     pub(crate) rounding: NumericRounding,
     pub(crate) multiplier: f64,
     pub(crate) rate: NumericRate,
+    pub(crate) divisor: Option<&'a NumericFactor>,
 }
 
 impl Default for ResolvedFormat<'_> {
@@ -117,6 +119,7 @@ impl Default for ResolvedFormat<'_> {
             rounding: NumericRounding::NearestEven,
             multiplier: 1.0,
             rate: NumericRate::Value,
+            divisor: None,
         }
     }
 }
@@ -237,22 +240,44 @@ impl DecimalBuffer {
 pub(super) struct ExactDecimal {
     pub(super) negative: bool,
     pub(super) coefficient: BigUint,
+    pub(super) denominator: BigUint,
     pub(super) exponent: BigInt,
     pub(super) decade: BigInt,
 }
 
 impl ExactDecimal {
     pub(super) fn new(negative: bool, coefficient: BigUint, exponent: BigInt) -> Result<Self> {
+        Self::ratio(negative, coefficient, BigUint::from(1_u8), exponent)
+    }
+
+    pub(super) fn ratio(
+        negative: bool,
+        coefficient: BigUint,
+        denominator: BigUint,
+        exponent: BigInt,
+    ) -> Result<Self> {
         let decade = if coefficient.bits() == 0 {
             BigInt::ZERO
         } else {
             let mut digits = DecimalBuffer::default();
             digits.convert(&coefficient)?;
-            &exponent + BigInt::from(digits.digit_count()? - 1)
+            let top = digits.digit_count()?;
+            digits.convert(&denominator)?;
+            let bottom = digits.digit_count()?;
+            let mut power = i64::try_from(top).map_err(|_| arithmetic_error())?
+                - i64::try_from(bottom).map_err(|_| arithmetic_error())?;
+            let lower = if power >= 0 {
+                coefficient < &denominator * decimal_power(power.unsigned_abs())?
+            } else {
+                &coefficient * decimal_power(power.unsigned_abs())? < denominator
+            };
+            power -= i64::from(lower);
+            &exponent + power
         };
         Ok(Self {
             negative,
             coefficient,
+            denominator,
             exponent,
             decade,
         })
@@ -277,6 +302,7 @@ impl ExactDecimal {
             return Ok(Self {
                 negative: value.is_sign_negative(),
                 coefficient: BigUint::ZERO,
+                denominator: BigUint::from(1_u8),
                 exponent: BigInt::ZERO,
                 decade: BigInt::ZERO,
             });
@@ -311,10 +337,67 @@ impl ExactDecimal {
         )
     }
 
+    pub(super) fn effective_factor(format: &ResolvedFormat<'_>) -> Result<Self> {
+        Self::decode(format.multiplier, format.rate.shift())?.divide(format.divisor)
+    }
+
+    pub(super) fn divide(self, factor: Option<&NumericFactor>) -> Result<Self> {
+        match factor {
+            None => Ok(self),
+            Some(NumericFactor::Value(value)) => {
+                let divisor = Self::decode(*value, 0)?;
+                Self::ratio(
+                    self.negative ^ divisor.negative,
+                    self.coefficient,
+                    self.denominator * divisor.coefficient,
+                    self.exponent - divisor.exponent,
+                )
+            }
+            Some(NumericFactor::PowerOfTen(exponent)) => {
+                let exponent =
+                    BigInt::parse_bytes(exponent.as_bytes(), 10).ok_or_else(arithmetic_error)?;
+                Self::ratio(
+                    self.negative,
+                    self.coefficient,
+                    self.denominator,
+                    self.exponent - exponent,
+                )
+            }
+            Some(NumericFactor::AutomaticDecimal) => Err(Error::Render(
+                "automatic numeric factor was not resolved by its set owner".into(),
+            )),
+        }
+    }
+
+    pub(super) fn compare_abs(&self, other: &Self) -> Result<std::cmp::Ordering> {
+        match (self.coefficient.bits() == 0, other.coefficient.bits() == 0) {
+            (true, true) => return Ok(std::cmp::Ordering::Equal),
+            (true, false) => return Ok(std::cmp::Ordering::Less),
+            (false, true) => return Ok(std::cmp::Ordering::Greater),
+            _ => (),
+        }
+        if self.decade != other.decade {
+            return Ok(self.decade.cmp(&other.decade));
+        }
+        let shift = &self.exponent - &other.exponent;
+        let mut top = &self.coefficient * &other.denominator;
+        let mut bottom = &other.coefficient * &self.denominator;
+        let power =
+            decimal_power(u64::try_from(shift.magnitude()).map_err(|_| arithmetic_error())?)?;
+        if shift.sign() == Sign::Minus {
+            bottom *= power;
+        } else {
+            top *= power;
+        }
+        Ok(top.cmp(&bottom))
+    }
+
     pub(super) fn round(self, format: &ResolvedFormat<'_>) -> Result<RoundedDecimal> {
         let quantum = decimal_quantum(&self.decade, format);
         let shift = &quantum - &self.exponent;
-        if shift.sign() != Sign::Plus || self.coefficient.bits() == 0 {
+        if (shift.sign() != Sign::Plus && self.denominator == BigUint::from(1_u8))
+            || self.coefficient.bits() == 0
+        {
             return Ok(RoundedDecimal {
                 negative: self.negative,
                 coefficient: self.coefficient,
@@ -324,14 +407,14 @@ impl ExactDecimal {
         let coefficient = if &self.decade - &quantum < BigInt::from(-1) {
             tiny_coefficient(self.negative, format.rounding)
         } else {
-            let shift = u32::try_from(shift).map_err(|_| arithmetic_error())?;
-            let denominator = BigUint::from(10_u8).pow(shift);
-            round_integer(
-                &self.coefficient,
-                &denominator,
-                self.negative,
-                format.rounding,
-            )
+            let power =
+                decimal_power(u64::try_from(shift.magnitude()).map_err(|_| arithmetic_error())?)?;
+            let (numerator, denominator) = if shift.sign() == Sign::Minus {
+                (self.coefficient * power, self.denominator)
+            } else {
+                (self.coefficient, self.denominator * power)
+            };
+            round_integer(&numerator, &denominator, self.negative, format.rounding)
         };
         Ok(RoundedDecimal {
             negative: self.negative,
@@ -339,6 +422,27 @@ impl ExactDecimal {
             exponent: quantum,
         })
     }
+
+    pub(super) fn ceiling_at(&self, quantum: &BigInt) -> Result<BigUint> {
+        let shift = &self.exponent - quantum;
+        let power =
+            decimal_power(u64::try_from(shift.magnitude()).map_err(|_| arithmetic_error())?)?;
+        let (numerator, denominator) = if shift.sign() == Sign::Minus {
+            (self.coefficient.clone(), &self.denominator * power)
+        } else {
+            (&self.coefficient * power, self.denominator.clone())
+        };
+        Ok(round_integer(
+            &numerator,
+            &denominator,
+            false,
+            NumericRounding::Ceiling,
+        ))
+    }
+}
+
+fn decimal_power(power: u64) -> Result<BigUint> {
+    Ok(BigUint::from(10_u8).pow(u32::try_from(power).map_err(|_| arithmetic_error())?))
 }
 
 pub(super) fn tiny_coefficient(negative: bool, rounding: NumericRounding) -> BigUint {
@@ -407,15 +511,28 @@ pub(super) fn round_integer(
 
 pub(crate) fn format_finite(value: f64, format: &ResolvedFormat<'_>) -> Result<String> {
     format.validate()?;
+    let operand = finite_operand(value, format)?;
+    let plan = super::power::PowerPlan::new(
+        &operand.decade,
+        &operand.exponent,
+        operand.coefficient.bits(),
+        true,
+        operand.negative,
+        format,
+    )?;
+    operand.round(format)?.emit_reserved(format, plan.output)
+}
+
+pub(super) fn finite_operand(value: f64, format: &ResolvedFormat<'_>) -> Result<ExactDecimal> {
     ExactDecimal::decode(value, format.decimal_scale)?
         .multiply(format.multiplier, format.rate.shift())?
-        .round(format)?
-        .emit(format)
+        .divide(format.divisor)
 }
 
 impl RoundedDecimal {
     /// Serialize an already rounded number. Scale has already been consumed by
     /// its mathematical operand, and must not be applied again at this boundary.
+    #[cfg(test)]
     pub(crate) fn emit(&self, format: &ResolvedFormat<'_>) -> Result<String> {
         self.emit_reserved(format, DecimalBuffer::default())
     }

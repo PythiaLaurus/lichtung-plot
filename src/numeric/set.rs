@@ -3,6 +3,7 @@
 
 use super::format::{NumericFormat, NumericPrecision};
 use super::power::{certified::PowerFormatter, Log10Operand};
+use super::prefixes::selection::SelectedScale;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,16 +114,32 @@ impl NumericFormat {
         power: bool,
         formatter: &mut PowerFormatter,
     ) -> Result<String> {
+        let resolved = self.resolve_at(digits)?;
+        let scales = self
+            .prefix_policy()
+            .resolve(&[value], power, &resolved, formatter)?;
+        self.format_scaled(value, digits, power, formatter, &scales[0])
+    }
+
+    fn format_scaled(
+        &self,
+        value: f64,
+        digits: u8,
+        power: bool,
+        formatter: &mut PowerFormatter,
+        scale: &SelectedScale,
+    ) -> Result<String> {
         let mut resolved = self.resolve_at(digits)?;
         resolved.prefix = None;
         resolved.suffix = None;
+        resolved.divisor = Some(&scale.divisor);
         let ascii = if power {
             let operand = Log10Operand::new(value, self.get_decimal_scale())?;
             formatter.format(&operand, &resolved)?.text
         } else {
             super::decimal::format_finite(value, &resolved)?
         };
-        self.present(&ascii)
+        self.present(&ascii, scale)
     }
 
     pub(crate) fn format_set(
@@ -168,10 +185,16 @@ impl NumericFormat {
             *slot = index;
         }
         for digits in min..=max {
+            let scales = self.prefix_policy().resolve(
+                &distinct,
+                power,
+                &self.resolve_at(digits)?,
+                &mut formatter,
+            )?;
             let mut unique_labels = crate::data::source::collect_source(
-                distinct
-                    .iter()
-                    .map(|value| self.format_selected(*value, digits, power, &mut formatter)),
+                distinct.iter().zip(&scales).map(|(value, scale)| {
+                    self.format_scaled(*value, digits, power, &mut formatter, scale)
+                }),
             )?;
             if adaptive || require_distinct {
                 crate::data::source::sort_source_by(&mut order, |a, b| {

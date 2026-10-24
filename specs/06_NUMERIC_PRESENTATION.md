@@ -10,8 +10,8 @@ provenance, clipping, source identities or color mapping.
 
 There is one normalized rounding/emission engine with private consumer-default
 profiles and explicit mathematical operand kinds. No compatibility formatter,
-runtime version selector, host/environment locale inference, callback, format
-specifier parser or Canvas format override is provided. Exact ticks,
+runtime version selector, host/environment locale inference, callback or Canvas
+format override is provided. Exact ticks,
 categories, guide identities, significance, PointLayer/panel/null-row strings and
 Waterfall names are never parsed as numeric data. Data-alpha mapping remains a
 separate [paint contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
@@ -19,6 +19,7 @@ separate [paint contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
 Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
 `src/numeric/profiles.rs`, `src/numeric/set.rs`, `src/numeric/inputs.rs`,
 `src/numeric/locale.rs`, `src/numeric/locale/data.rs`, `src/numeric/emission.rs`,
+`src/numeric/prefixes.rs`, `src/numeric/prefixes/selection.rs`, `src/numeric/specifier.rs`,
 `src/spec/ticks.rs` and `src/layout/panel/sources.rs`. Mathematical power display
 is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
@@ -46,6 +47,7 @@ the existing borrowed/copy result and const-call capability where applicable.
 | symbol | None (default), Currency, RadixPrefix; radix prefix requires nondecimal Integer |
 | field | Optional NumericField(width: usize, fill: char, NumericAlignment); no width quota |
 | rate | Value (default), Percent, PerMille; exact factors 1,100,1000 |
+| prefixes | NumericPrefixes::none (default), si, compact/decimal_compact, or factor; one replacing mode |
 
 Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve, Keep
@@ -97,6 +99,56 @@ General requires significant precision and chooses fixed decimal after rounding
 when -4<=rounded decade<precision, scientific otherwise. Integer requires
 Fractional(0), uses the selected rounding, then emits arbitrary-size integer digits
 in Decimal/Binary/Octal/HexLower/HexUpper; no fixed-size cast or second rounding.
+
+### Exact Prefix And Factor Selection
+
+NumericPrefixes::si accepts PerValue, WholeSet or Fixed(SiPrefix), with explicit
+KeepThreshold/PromoteOnRounding. Fixed covers the complete BIPM table, including
+deci/centi/deca/hecto and 2022 additions; automatic engineering steps are multiples
+of three saturated at -30/30. Micro is U+00B5. WholeSet ignores zero members when
+choosing the greatest nonzero scaled magnitude; all-zero SI uses neutral 0.
+
+Compact rules have strictly increasing finite thresholds, positive finite divisors
+and literal single-line prefix/suffix. Below the first threshold the factor is one
+with empty affixes. Empty automatic tables normalize to none; Fixed must index an
+existing rule. decimal_compact normalizes to the custom 1000/K, 1000000/M,
+1000000000/B, 1000000000000/T table from scales 1.4.0. Literal compact affixes enclose
+the numeric presentation inside outer literal affixes and are not localized digits.
+
+KeepThreshold uses unrounded absolute magnitudes. PromoteOnRounding compares the
+original signed mathematical operand with exact rounding-cell boundaries, including
+nonintegral threshold/divisor ratios and tie parity. It never rerounds emitted
+mantissas. WholeSet evaluates every member at each candidate common factor and
+freezes the furthest required promotion before formatting; opposite signs and
+source order cannot select different common factors. Fixed requires KeepThreshold.
+
+Factor(Value) divides by the exact nonzero finite represented value, including its
+sign. PowerOfTen accepts arbitrary-size signed ASCII integral exponents and
+normalizes plus/leading zeros/negative zero. AutomaticDecimal selects the decade
+of the greatest nonzero scaled magnitude, or zero for all-zero sets. Multiplier,
+rate and decimal shift compose before this divisor and the one quantization. The
+shared engine retains numerator/denominator and symbolic exponent, never an f64
+division or physical power. Output reservation precedes giant materializations.
+
+### Specifier Compilation
+
+NumericFormat::from_specifier compiles
+`[[fill]align][sign][symbol][0][width][,][.precision][~][type]` into this same policy.
+Defaults retain invariant locale, NearestEven and Preserve. Types f/e use fractional
+6; g/r/s/n and p use significant 6; % uses fractional 6; omitted type uses General,
+significant 12 and Trim. r is fixed-decimal significant; s is PerValue SI with
+promotion; n enables grouping; %/p select Percent. d/b/o/x/X use Integer with
+Fractional(0); their syntactically numeric precision is discarded before bounds
+checking, with no u8 limit on that irrelevant syntax.
+
+Alignment </>/^/=, sign -/+/space/(, currency $, alternate #, zero padding, comma,
+explicit precision and ~ map to typed fields. # is removed for inapplicable types.
+Zero padding selects AfterSign; unused fill/alignment without width normalize away.
+Width is checked usize Unicode scalars. Explicit relevant precision outside 0–20
+fractional/1–21 significant rejects instead of clamping. Unknown types, text c,
+malformed/trailing syntax and allocation failures reject. Typed/parsed equivalent
+policies have equal identity, including `.3s` and `.1%`. Syntax compatibility does
+not substitute JavaScript arithmetic for the exact renderer rounding contract.
 
 ### Attachments And Actual Consumers
 

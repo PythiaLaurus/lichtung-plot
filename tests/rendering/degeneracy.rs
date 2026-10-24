@@ -239,7 +239,7 @@ fn rectangle_clipping_and_failed_canvas_roots_preserve_publication_contracts() {
     assert_eq!(directory.path().read_dir().unwrap().count(), 0);
 }
 
-fn intervals(extent: f64) -> [Plot; 7] {
+fn intervals(extent: f64) -> Vec<Plot> {
     let category = || CategoryValues::new("category", ["a"]).unwrap();
     let estimate = || NumericValues::new("estimate", [0.0]);
     let bounds = || {
@@ -248,7 +248,7 @@ fn intervals(extent: f64) -> [Plot; 7] {
             NumericValues::new("upper", [extent]),
         )
     };
-    [
+    vec![
         Plot::bar(
             category(),
             BarInput::estimates_with_error_bars(estimate(), bounds()),

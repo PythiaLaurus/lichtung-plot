@@ -1694,7 +1694,7 @@ The coordinator seals fonts once after accepting the root and before capture, wh
 verifies frozen source coverage/provenance and rejects unplanned text. Numeric
 alphabet/boundary expansion and early-seal query policies are removed. Focused
 ordinary/native axes, Shared guides, local styles and frozen output witnesses retain
-the eight-round root bound. Step 5 is in progress: explicit fractional/significant
+the eight-round root bound. Step 5 is complete: explicit fractional/significant
 precision now admits 0..=20/1..=21 through exact binary64 conversion, certified powers,
 complete sets and precision-derived output reservations. All seven NumericRounding
 choices now share one signed quantizer for finite values and certified power endpoints,
@@ -1704,9 +1704,11 @@ binary64 products for finite values and certified powers, retaining symbolic ext
 exponents and signed rounding cells. Exact percent/per-mille rates, General and
 integer-radix notation, explicit signs/symbols/fields, complete custom locales and
 the pinned 59-name catalog now use the same emission engine, with checked scalar
-padding, digit-only substitution and complete policy dependencies. SI/compact
-prefix factors and specifier parsing remain
-pending in this step. Steps 6–22 remain pending; undelivered target signatures are
+padding, digit-only substitution and complete policy dependencies. SI/compact and
+exact rational divisor selection now freeze complete-set factors, using original
+signed rounding cells for order-independent promotion. The pinned specifier grammar
+compiles to the same policy, including irrelevant integer precision and checked
+scalar widths. Steps 6–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
