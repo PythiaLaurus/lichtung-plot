@@ -244,7 +244,8 @@ fn validate_header_overlap(
 ///
 /// Canvas owns one root theme, which defaults to [`Theme::publication`]. Plots
 /// without an explicit theme inherit that root. Dimensions are derived from
-/// content unless [`Self::width`] or [`Self::size`] replaces the sizing request.
+/// content unless [`Self::width`], [`Self::max_width`] or [`Self::size`] replaces
+/// the sizing request.
 pub struct Canvas {
     guide_text_layouts: [Option<crate::TextLayout>; 3],
     rows: usize,

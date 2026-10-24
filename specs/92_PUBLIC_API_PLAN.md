@@ -1,14 +1,13 @@
-# Planned Public API
+# Public API Signature Appendix
 
 ## Status And Reading Rules
 
-This is the signature appendix to [the implementation plan](91_IMPLEMENTATION_PLAN.md).
-It specifies the complete target API. The implementation plan's Implementation
-Status identifies the delivered subset; remaining signatures are not current APIs.
-The implementation plan owns behavior, sequencing, scientific relationships and
-verification; this appendix owns the concrete public names, types and defaults.
-Implement both together. An unresolved implementation algorithm is not permission
-to replace a signature, narrow a capability or introduce another public route.
+This is the signature appendix to [the completed implementation plan](91_IMPLEMENTATION_PLAN.md).
+All 22 delivery steps are implemented. This appendix records their current public
+names, signatures and defaults; the implementation plan records behavioral
+relationships, delivery rationale and closure verification. Current subsystem
+contracts remain in specifications 01–08. The migration summary below describes
+replaced APIs, not additional compatibility routes or undelivered alternatives.
 
 All listed names are crate-root exports except sealed capability traits in `kind`.
 Implementation modules remain private. `Result<T>` means `crate::Result<T>` with
@@ -24,12 +23,12 @@ contexts are library-created read-only views, not a second configuration hierarc
 Owned policies remain cloneable; floating policy values retain normalized finite
 inputs and use complete equality, not equality of one rendered result. Function
 handles compare by shared identity as specified in the implementation plan.
-These signatures complete the already planned capabilities; they do not authorize
+These signatures describe the delivered capabilities; they do not authorize
 additional text producers, scientific transformations or deferred features.
 
 ## Migration Summary
 
-| Current surface | Target change |
+| Replaced surface | Current surface |
 | --- | --- |
 | Public configuration `with_property(value)` | `property(value)`; a paired reader becomes `get_property()` |
 | Read-only or write-only properties | Keep the bare name |
@@ -43,10 +42,10 @@ additional text producers, scientific transformations or deferred features.
 | `PanelTextAnnotation::corner()` | Replace with `position() -> &TextPosition`; inspect `as_corner()` on that value |
 | `Labels::resolve` | Promote the current implementation to public |
 
-The naming-only delivery step preserves current parameter types. Fractional-size,
-count and position migrations land with their corresponding working capability,
-including all repository callers. No aliases, deprecated names or old execution
-paths remain. Existing `TextPanel::title/body`, annotation text and display-name
+The naming migration preserved parameter types until the fractional-size, count
+and position changes migrated their working consumers and repository callers.
+No aliases, deprecated names or old execution paths remain. Existing
+`TextPanel::title/body`, annotation text and display-name
 readers continue returning `&str`; they borrow the retained `Text` source.
 
 ## Text Inputs And Appearance
@@ -77,12 +76,12 @@ request's fields. These rules also govern callback-supplied explanatory Text.
 
 ### Fractional Appearance
 
-The target constructor is
+The constructor is
 `TextTheme::new(stack: FontStack, color: Color, font_size: f64, weight: TextWeight, line_height: f64) -> Result<Self>`.
 Its `font_size(self, value: f64) -> Result<Self>` and
 `get_font_size(&self) -> f64` retain positive finite CSS sizes without integer
 rounding. Other current edits/readers follow the naming rule with their present
-types. The complete target surface is:
+types. The complete surface is:
 
 | Edit on `TextTheme` | Paired reader |
 | --- | --- |
@@ -92,8 +91,8 @@ types. The complete target surface is:
 | `weight(self, value: TextWeight) -> Result<Self>` | `get_weight(&self) -> TextWeight` |
 | `line_height(self, value: f64) -> Result<Self>` | `get_line_height(&self) -> f64` |
 
-Keep complete appearance validation and add `Eq` over valid normalized values to
-TextTheme, which currently has PartialEq only. Its private positive finite size/
+TextTheme retains complete appearance validation and implements `PartialEq + Eq`
+over valid normalized values. Its private positive finite size/
 leading fields admit reflexive equality; compare the complete stack, RGBA, weight
 and those fields. Text/annotation equality must not discard appearance or replace
 it with the current rendered result. Layout float fields likewise have validated
@@ -113,7 +112,7 @@ Its other paired methods are `weight(self, value: TextWeight) -> Result<Self>` /
 Each signature retains its current receiver, return type, capability and timing,
 except for the displayed text parameter/type changes listed here:
 
-| Receiver | Target text signature |
+| Receiver | Text signature |
 | --- | --- |
 | `Plot<K: kind::Marker>`, `Canvas` | `title(self, text: impl Into<Text>) -> Self`; `subtitle(self, text: impl Into<Text>) -> Self`; `caption(self, text: impl Into<Text>) -> Self` |
 | `Plot<K: kind::Marker>` | `x_label(self, text: impl Into<Text>) -> Self`; `y_label(self, text: impl Into<Text>) -> Self` |
@@ -135,12 +134,12 @@ particular, Dumbbell endpoint identity strings do not become arbitrary Text keys
 text receives the significance-role layout below.
 
 `TextAlignment` is `Start`, `Center`, `End`, retaining the physical left/center/right
-meaning of TitleAlignment. Plot's `title_alignment(self, value: TextAlignment) -> Self`
+meaning of the replaced TitleAlignment. Plot's `title_alignment(self, value: TextAlignment) -> Self`
 and `subtitle_alignment(self, value: TextAlignment) -> Self`, and Canvas's
 `panel_title_alignment(self, value: TextAlignment) -> Self` and
 `panel_subtitle_alignment(self, value: TextAlignment) -> Self`, keep their current
-owner/precedence. Theme heading constructors/edits/readers replace TitleAlignment
-with TextAlignment without changing their other types. A heading edit writes the
+owner/precedence. Theme heading constructors/edits/readers use TextAlignment
+without changing their other types. A heading edit writes the
 same retained slot request as `Text::alignment`.
 
 ## TextLayout And Layout Values
@@ -336,8 +335,8 @@ Exact tick strings receive their axis layout while preserving verbatim source.
 
 ### Core Policy
 
-Retain `NumericFormat::new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self>`.
-Retain its current seven edits after removing `with_`:
+`NumericFormat::new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self>`
+and its seven original paired edits retain complete validation:
 
 | Edit on `NumericFormat` | Paired reader |
 | --- | --- |
@@ -350,7 +349,7 @@ Retain its current seven edits after removing `with_`:
 | `trailing_zeros(self, value: TrailingZeros) -> Result<Self>` | `get_trailing_zeros(&self) -> TrailingZeros` |
 
 The decimal shift remains -324..=324. Literal prefix/suffix keep their existing
-nonempty control-free grammar; they do not imply units or scaling. Add these edits:
+nonempty control-free grammar; they do not imply units or scaling. Additional edits:
 
 | Method on `NumericFormat` | Return |
 | --- | --- |
@@ -428,8 +427,8 @@ es-ES es-MX fi-FI fr-CA fr-FR he-IL hu-HU it-IT ja-JP ko-KR mk-MK nl-NL pl-PL
 pt-BR pt-PT ru-RU sl-SI sv-SE uk-UA zh-CN
 ```
 
-Transcribe this fixed catalog to first-party Rust constants during implementation,
-including source/license attribution and source-to-constant checks. No runtime
+This fixed catalog is transcribed to first-party Rust constants, including
+source/license attribution and source-to-constant checks. No runtime
 JSON loading, locale dependency, host/environment lookup or provisioning is added.
 Missing upstream numeral/sign fields use that pinned formatter's documented
 defaults; plus and per-mille defaults are `+` and U+2030. D3's grouping arrays use
@@ -676,7 +675,7 @@ rules apply independently of optional layout caching.
 
 ### Factories And Count Migration
 
-`TickGeneration` has these target constructors/edits:
+`TickGeneration` has these constructors/edits:
 
 | Method | Complete meaning |
 | --- | --- |
@@ -766,14 +765,14 @@ Offset must be less than the retained positive stride. All is normalized stride
 normalize back to All. For other strides retain the configured endpoint intent
 even when the current domain happens to include those endpoints already.
 
-Add the consuming Plot methods
+Plot exposes the consuming methods
 `x_category_labels(self, value: CategoryLabelSelection) -> Self where K: kind::CategoricalX`
 and
 `y_category_labels(self, value: CategoryLabelSelection) -> Self where K: kind::CategoricalY`.
 Keep current `Canvas::category_labels(CanvasCategoryLabels)` as the separate
 whole-axis sharing instruction. Neither selection edits ticks, grid or marks.
 
-New sealed `CategoricalX` is implemented by Trajectory, Interaction, Heatmap, Bar,
+Sealed `CategoricalX` is implemented by Trajectory, Interaction, Heatmap, Bar,
 StackedBar, Boxplot, Violin and Raincloud. `CategoricalY` is implemented by
 PointInterval, Coefficient, Forest, Dumbbell, Heatmap, HorizontalBar,
 StackedHorizontalBar, Beeswarm and Waterfall. Conditional Trajectory still checks
@@ -782,7 +781,7 @@ Existing NumericX/NumericY generation/formatting gates remain independent.
 
 ## Canvas Placement And Root Requests
 
-Retain the exact planned consuming signature:
+The consuming placement signature is:
 
 ```rust
 pub fn panel_span<K: kind::ExactFamily>(
@@ -795,7 +794,7 @@ pub fn panel_span<K: kind::ExactFamily>(
 ) -> Result<Self>;
 ```
 
-`panel` stays the 1x1 convenience on the same owner/occupancy path. New
+`panel` stays the 1x1 convenience on the same owner/occupancy path.
 `Plot::max_width(self, width: u32) -> Self` and
 `Canvas::max_width(self, width: u32) -> Self` follow
 the current `pub const fn`/`#[must_use]` builder style. Public root dimensions
@@ -806,12 +805,22 @@ the complete request; embedded requests do not override Canvas assignment.
 No public layout kernel, root constraints type or coordinator entry is exported.
 `plan_root` is the private replacement specified by the implementation plan.
 
-## Planned Call Examples
+## Call Examples
 
-These examples use the target signatures. Move them into compiled public examples
-as their corresponding capabilities land; they are not executable examples of
-today's checkout. The behavior sections in the implementation plan supply the
-independent numerical and geometric expectations.
+These examples use the implemented signatures. The compiled public examples show
+their working consumers:
+
+| Subject | Compiled example |
+| --- | --- |
+| Built-in policies, SI/common factors and formatting functions | `examples/05_numeric_formats.rs` |
+| Exact counts and fixed data/scale intervals | `examples/07_tick_generation.rs` |
+| Independent categorical-label selection | `examples/09_category_labels.rs` |
+| Final-view position functions | `examples/10_tick_functions.rs` |
+| Rectangular placement and capped root sizing | `examples/11_canvas_spans.rs` |
+| Data anchoring, rotation, fractional fitting and ellipsis | `examples/12_text_layout.rs` |
+
+Independent numerical/geometric expectations belong to the implementation plan's
+verification relationships, not to renderer-revision scene snapshots.
 
 ### Equivalent SI Policies And A Common Decimal Factor
 
@@ -936,18 +945,13 @@ fn authored_text() -> Result<(PanelTextAnnotation, TextPanel)> {
 
 ## Delivery And API Acceptance
 
-The implementation plan's 22 steps implement these signatures with their real
-consumers. Before each public exposure, update the owning current contracts,
-repository callers, examples and relevant compile-fail documentation together.
-All listed context/choice names must be exported and usable without importing a
-private module; every method must have a live owner and complete identity.
+All 22 steps are delivered with their real consumers. The closure audit checked
+crate-root exports, sealed family gates, retained read/const capabilities, defaults,
+complete policy identity and the deliberate Copy/type removals against the source.
+No listed capability depends on importing a private implementation module.
 
-Verification includes independent public construction for every policy family,
-parsed/typed policy equality, both callback result forms, lifetime/thread/clone
-contracts, read capability preservation and the deliberate Copy/type removals.
-Choose focused semantic witnesses and compile-fail capability checks within the
-three-layer test limits in `90_DEVELOPMENT.md`, not an accessor echo suite. Literal
-examples use real planned names; every method, callback context and scalar type
-has a specified signature rather than a placeholder. Algorithm proofs and focused
-strict-Clippy gates remain the implementation plan's obligations, not claims that
-this appendix has implemented or compiled the future API.
+Public construction examples, typed/parsed equality, both callback result forms,
+borrowed lifetime/thread/clone contracts and compile-fail boundaries provide
+focused evidence without an accessor echo suite. The implementation plan's
+completion audit records actual verification and the semantic three-layer census,
+including ignored scenarios and the external Unicode checks that were not run.

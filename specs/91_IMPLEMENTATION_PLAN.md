@@ -28,8 +28,9 @@ lifecycle:
   maximum outer CSS-pixel width with content-derived height. The owning Plot request
   also controls its facets.
 
-This document is a plan, not evidence that these APIs exist. Current contracts
-remain in [rendering](02_RENDERING_CONTRACT.md), [Theme](03_THEME_SYSTEM.md),
+All 22 delivery steps and the closure audit below are complete. This document
+retains their design rationale and delivery record; current contracts remain in
+[rendering](02_RENDERING_CONTRACT.md), [Theme](03_THEME_SYSTEM.md),
 [layout](05_LAYOUT_SYSTEM.md) and [numeric presentation](06_NUMERIC_PRESENTATION.md).
 
 The [public API appendix](92_PUBLIC_API_PLAN.md) completes this plan's concrete
@@ -1766,7 +1767,123 @@ role attachments, general rotation, grapheme-safe ellipsis and certified local
 font fitting retain original sources, preferred appearances and selected geometry.
 Steps 20–22 are complete: closed root requests, width-before-height composition
 and both maximum-width setters share one coordinator and selected-width lifecycle.
-The final API/consumer/dependency and semantic test-layer audits follow delivery.
+The final API/consumer/dependency and semantic test-layer audits are complete.
+
+### Completion Audit
+
+The closure review checked the signature appendix against the exported source,
+not just rendered output or the presence of a public setter:
+
+| Area | Accepted implementation and consumers |
+| --- | --- |
+| Public naming and visibility | Root exports in `src/lib.rs`, declaration macros and retained readers use the current names. Replaced public spellings/types are removed; private backend helpers are not public extension points. Only deliberate `kind`/`stats` modules remain public. |
+| Text values and local appearance | `Text`, fractional `TextTheme`/`SignificanceMarkStyle`, typed positions and every listed role attachment retain complete request presence, source and equality. Prose, TextPanel, axes, headers, guides and native annotation consumers share preparation and frozen drawing. |
+| Text defaults and adaptation | Omission remains distinct from explicit layout reset. Complete/fixed defaults, Heatmap's existing dense elision, content-first fitting, explicit alternative priorities and actual-role grouping match the appendix. Rotation/ellipsis/fit retain scientific geometry and original-source metadata. |
+| Numeric policies and functions | The normalized format, exact engine, 59-locale catalog, specifier parser, units/explanations and both callback modes have live axis/guide/value/estimate/total consumers. Omitted consumer profiles remain independent of explicit defaults. Borrowed context signatures and handle/operation identity match the appendix. |
+| Tick/category controls | Exact counts, singleton/data/scale choices, fixed/preferred intervals, original multiplicative operands, final-view functions, usize maxima and categorical selection use one source representation. Sealed capability matrices and actual-axis refusals remain independent. |
+| Canvas and root sizing | Whole-footprint occupancy has one anchor owner. Closed root requests compose natural columns before height, apply the cap before public-dimension conversion and keep selected width fixed. Embedded requests cannot override parent assignment. |
+| Publication and dependency boundary | Selected preparation seals before callback-free capture. Existing output contracts, independent errors/font policy and direct locked dependencies remain standalone; neither manifest nor lockfile contains another lichtung crate. No network/asset provisioning, public kernel, compatibility route, Python support or `mod.rs` was added. |
+| Callers and examples | Current specifications/guides, ordinary/compile-fail doctests and examples use the delivered surface. Examples 05/07/09/10/11/12 cover numeric policy/functions, source controls, category selection, spans/caps and combined authored text adaptation. |
+
+The review removed duplicate family/style/root-mode replays, weak automatic-size
+and spelling checks, and obsolete test-only adapters/counters. It retained the
+facet first-capture witness using anchors, 30.05-degree rotation and soft hyphens,
+and the public Shared signed-horizontal-bar sign-guide witness. Their contracts
+are not replaced by a generic smoke test.
+
+### Semantic Test Census
+
+The final source-level review counts ignored tests and classifies the exercised
+contract rather than Cargo's target boundary. There are 976 non-documentation
+test functions plus 138 doctests: 795 unit tests, 299 module-integration tests and
+20 core-E2E drivers exercising 60 independent scenarios. All three layers satisfy
+`90_DEVELOPMENT.md`; documentation tests are not excluded from the unit ceiling.
+
+| Compiled owner | Unit tests | Module integration | E2E drivers | E2E scenarios |
+| --- | ---: | ---: | ---: | ---: |
+| Library | 601 | 119 | 7 | 38 |
+| Public doctests, including compile-fail boundaries | 138 | 0 | 0 | 0 |
+| annotations | 1 | 15 | 0 | 0 |
+| categorical | 6 | 10 | 0 | 0 |
+| composition | 5 | 27 | 3 | 3 |
+| distributions | 14 | 17 | 0 | 0 |
+| estimates | 6 | 16 | 0 | 0 |
+| heatmap | 4 | 15 | 0 | 0 |
+| interactions | 8 | 9 | 0 | 0 |
+| layout | 0 | 6 | 4 | 10 |
+| lines | 7 | 19 | 0 | 0 |
+| marginal-matrix | 0 | 5 | 0 | 0 |
+| output | 0 | 15 | 5 | 8 |
+| rendering | 3 | 26 | 1 | 1 |
+| statistics | 2 | 0 | 0 | 0 |
+| **Total** | **795** | **299** | **20** | **60** |
+
+Isolated arithmetic, Unicode/font engines, normalized input validation, composed
+key equality and synthetic panel/guide/primitive policies are units. Actual
+prepared-source/axis/mark cooperation, native preference relationships, parent
+guides, root/font/callback boundaries and targeted file-publication contracts are
+module integration. The doctests exercise isolated public construction, type and
+capability policies; their repeated per-family alpha refusal examples were trimmed
+to representative unsupported marks and erased-owner boundaries. Thus external
+numerical/validation cases and doctests remain units, while 119 library-target
+tests are integration; no responsibility was moved or test loop merged to meet a
+ceiling.
+
+Independent E2E workloads are enumerated below. Same-source cache comparisons,
+repetitions for timing and chained formats of one retained scene do not create
+extra scenarios. Distinct root owners, configurations and publication workloads do.
+
+| E2E driver or group | Independent scenarios |
+| --- | ---: |
+| `publication_efficiency_measurements`: scatter, long-label bar, one/three-paragraph captions, 2x2 facets, mixed Canvas, Matrix, separate/reused publication workloads | 9 |
+| `specialized_text_search_contract`: six Heatmap wrap/elide/source cases and four Matrix label/size cases | 10 |
+| `specialized_text_search_measurements`: the same ten cases in the ignored release driver, counted independently | 10 |
+| `inside_legend_measurements`: sparse and dense publication | 2 |
+| `outside_recovery_controls_replay_identical_without_cache`: three distinct guide fixtures | 3 |
+| `measured_gutter_reflow_preserves_complete_frames_without_cache`: standalone and faceted owners | 2 |
+| `chained_terminals_reuse_one_canonical_scene_and_plan_each_png`: separate Plot and Canvas workflows | 2 |
+| Composition: transparent contrast SVG/PNG, spanning owners, linked horizontal bars/headers | 3 |
+| Root sizing: three owning-facet modes, native Matrix, mixed Canvas, five all-text sizing/replacement cases | 10 |
+| Output: combined fitted/rotated/ellipsized Canvas, derived guide replay, Plot/Canvas text/outline workflows, three direct Canvas PNG entries, call-local retained PNG options | 8 |
+| Exact/erased public Plot publication equivalence | 1 |
+| **Total** | **60** |
+
+The census includes 15 ignored functions: 12 units and three E2E drivers containing
+21 scenarios. Discovery is inventory, not behavioral execution. External Unicode
+conformance/regeneration requires caller-supplied hash-verified Unicode 16 data;
+it was not run or represented as successful fresh-checkout conformance. Ignored
+release measurements were not part of this closure execution either.
+
+### Closure Verification
+
+Verification followed the focused-repair rule rather than repeating successful
+whole suites after local fixes:
+
+- The broad implementation-closure `just verify` attempt reached the library
+  suite and exposed seven failures. Each was repaired and passed its focused
+  rerun; that original command is not recorded as a successful one-shot run.
+- The remaining external targets were then exercised. The first eleven targets
+  passed; rendering exposed two stale assertions about occupancy error wording
+  and rotation number spelling. Both now assert semantics and passed focused
+  reruns. The statistics target, not reached by that interrupted command, passed
+  its two independent public numerical checks separately.
+- Reworked grouping/layout/native-source/statistics contracts passed their focused
+  checks. Retained native projection, typed refusal, facet capture, complete parent
+  guide dependencies, natural roots and frozen replay passed a 23-test selection.
+  Canonical-family dispatch, aggregate/interval/overlay alpha and Shared child-cache
+  replay passed a further five-test selection after obsolete instrumentation removal.
+- `just fmt-check` and strict `just lint` passed on the completed code. Public
+  doctests/compile-fail boundaries and warnings-denied API documentation passed.
+  After removing 15 redundant alpha doctests, the retained 15 alpha documentation
+  cases passed their focused rerun; the other 123 cases were unchanged. The new
+  text-layout example executed successfully with preserved and outlined SVG.
+- `just package` verified Cargo's independently unpacked distributable, including
+  the new example and reconciled documentation. Full Unicode conformance corpora
+  are not packaged.
+
+No refs were pushed. Publication ancestry checks in `90_DEVELOPMENT.md` remain a
+mandatory prerequisite for any separately authorized push; package verification
+does not prove publishable Git ancestry.
 
 ### 1. Apply The Public Property Naming Rule
 
@@ -2550,22 +2667,21 @@ cargo test --locked --offline --lib common_step_uses_index_products_not_accumula
 cargo test --locked --offline --lib logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequences
 cargo test --locked --offline --lib midpoint_is_conditional_and_must_itself_fit
 cargo test --locked --offline --lib source_semantics_reject_before_fonts
-cargo test --locked --offline --lib generation_copy_and_composed_identity_include_both_axes
+cargo test --locked --offline --lib generation_cloning_and_composed_identity_include_both_axes
 cargo test --locked --offline --lib generation_rendering_and_exact_precedence_are_cache_independent
 cargo test --locked --offline --lib categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canvas
-cargo test --locked --offline --lib forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it
+cargo test --locked --offline --test estimates model_displays::forest_log_scale_projects_exact_ticks_from_raw_data_space
 cargo test --locked --offline --lib assigned_cells_keep_positions_including_empty_labels
 cargo test --locked --offline --lib prepared_fonts_keep_their_operation_across_clones
-cargo test --locked --offline --lib sealed_census_reuses_one_normalization_per_stack_and_one_selection_per_pair
-cargo test --locked --offline --test lines numeric_layers::point_layer_edits_validate_radius_and_preserve_exact_alpha_endpoints
+cargo test --locked --offline --lib registered_pairs_reuse_normalization_and_selection_after_final_sealing
+cargo test --locked --offline --lib exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order
 cargo test --locked --offline --test lines numeric_layers::point_labels_and_whole_layer_legend_identity_remain_distinct
 cargo test --locked --offline --test lines numeric_layers::clipped_point_labels_do_not_require_unpainted_glyphs
-cargo test --locked --offline --test lines numeric_layers::public_tick_generation_yields_to_exact_labels_in_both_setter_orders
-cargo test --locked --offline --test lines numeric_layers::public_tick_generation_counts_replace_complete_choices_and_automatic_resets
+cargo test --locked --offline --lib exact_source_overrides_generation_and_provenance_survives_layout_cloning
 cargo test --locked --offline --test heatmap local_and_shared_guides_publish_the_same_distinct_close_numeric_labels
-cargo test --locked --offline --test heatmap heatmap_annotations_use_default_and_chained_formats_with_contrasting_text
+cargo test --locked --offline --test heatmap heatmap_annotations_append_suffix_and_border_only_selected_cells
 cargo test --locked --offline --test heatmap heatmap_wrap_policy_preserves_complete_crowded_axis_labels
-cargo test --locked --offline --test heatmap heatmap_reserves_long_y_labels_and_elides_crowded_x_labels
+cargo test --locked --offline --lib specialized_text_search_contract
 cargo test --locked --offline --test estimates model_displays::coefficient_fixed_value_labels_are_point_only_and_default_is_inert
 cargo test --locked --offline --test estimates model_displays::forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values
 cargo test --locked --offline --lib mandatory_breaks_preserve_crlf_and_all_blank_paragraphs
@@ -2576,26 +2692,26 @@ cargo test --locked --offline --lib selected_soft_hyphen_preserves_same_face_gpo
 cargo test --locked --offline --lib script_extensions_brackets_and_leading_marks_use_paragraph_context
 cargo test --locked --offline --lib origins_round_exact_cumulative_positions_once_and_ink_uses_those_origins
 cargo test --locked --offline --lib text_anchors_and_rotation_follow_exact_planned_ink
-cargo test --locked --offline --lib selected_role_padding_is_retained_for_fit_and_reassignment
+cargo test --locked --offline --lib selected_local_style_padding_is_retained_for_fit_and_reassignment
 cargo test --locked --offline --lib heading_instructions_are_role_local_order_independent_and_frozen
 cargo test --locked --offline --lib unbreakable_category_fails_intact_and_cannot_rotate_or_drop
 cargo test --locked --offline --lib parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries
 cargo test --locked --offline --lib canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond
 cargo test --locked --offline --lib frozen_text_and_brackets_never_relayout_or_convert_during_count_replay_and_outline
 cargo test --locked --offline --test rendering labels::direct_plot_humanizes_axes_categories_legend_title_and_entries
-cargo test --locked --offline --test rendering labels::raw_mode_preserves_automatic_identity_text
+cargo test --locked --offline --test rendering labels::composed_canvas_label_policy_is_inherited_by_every_panel
 cargo test --locked --offline --test rendering labels::ambiguous_display_labels_fail_during_preflight
 cargo test --locked --offline --test annotations panel_text::panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
 cargo test --locked --offline --test annotations panel_text::panel_text_rejects_colliding_inside_legend
 cargo test --locked --offline --test annotations panel_text::separately_valid_panel_annotations_reject_pairwise_overlap_before_begin
-cargo test --locked --offline --test composition canvases::text_panel_content_stays_top_left_when_its_fill_cell_grows
+cargo test --locked --offline --lib body_anchor_uses_the_enlarged_post_inset_sequence_cell_not_the_whole_panel
 cargo test --locked --offline --test composition foundations::active_custom_font_roles_are_required_while_unused_preferences_are_not
 cargo test --locked --offline --lib overlapping_spans_are_canonical_and_infeasible_total_misses
 cargo test --locked --offline --lib declared_sparse_tracks_remain_noncollapsing_while_empty_slots_stay_zero
 cargo test --locked --offline --lib canvas_gutter_remeasurement_uses_the_assigned_projection
 cargo test --locked --offline --lib shared_composition_uses_parent_policy_in_both_source_orders
 cargo test --locked --offline --test rendering contract::canvas_text_cells_enforce_occupancy_and_fitting
-cargo test --locked --offline --test composition canvases::continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars
+cargo test --locked --offline --test composition foundations::public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_child_chrome
 cargo test --locked --offline --test composition canvases::composed_row_title_spans_all_columns_and_rejects_panel_titles
 cargo test --locked --offline --test composition canvases::composed_horizontal_bars_support_shared_headers_labels_and_range_groups
 cargo test --locked --offline --test composition canvases::shared_category_labels_compare_rendered_explicit_orders
@@ -2609,13 +2725,12 @@ cargo test --locked --offline --lib zero_sizing_requests_refuse_before_font_disc
 cargo test --locked --offline --lib standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle
 cargo test --locked --offline --lib chained_terminals_reuse_one_canonical_scene_and_plan_each_png
 cargo test --locked --offline --test layout root_sizing::standalone_sizing_calls_replace_the_complete_request_before_publication
-cargo test --locked --offline --test layout root_sizing::automatic_roots_expand_for_complete_unbreakable_text_and_exact_width_refuses_it
-cargo test --locked --offline --test layout root_sizing::owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes
+cargo test --locked --offline --test layout root_sizing::automatic_roots_expand_for_complete_unbreakable_text_and_capped_width_refuses_it
+cargo test --locked --offline --test layout root_sizing::owning_facets_keep_sparse_wrap_complete_prose_and_multiline_shared_titles
 cargo test --locked --offline --test layout root_sizing::matrix_root_keeps_native_cells_hue_guide_and_complete_prose
 cargo test --locked --offline --test layout root_sizing::mixed_canvas_keeps_complete_content_and_ignores_standalone_child_requests
 cargo test --locked --offline --test layout root_sizing::all_text_canvas_reflows_complete_content_and_replaces_root_requests
-cargo test --locked --offline --test composition facets::faceted_shared_axis_titles_preserve_explicit_multiline_text
-cargo test --locked --offline --test composition facets::shared_facet_axis_titles_clear_outside_legends
+cargo test --locked --offline --lib shared_multiline_titles_use_measured_clearance_and_keep_centered_strips
 just fmt-check
 just lint
 ```
