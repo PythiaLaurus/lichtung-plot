@@ -8,6 +8,9 @@ use crate::theme::spacing::ExactLength;
 use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootAlignments {
     pub(crate) title: TextAlignment,
@@ -136,13 +139,28 @@ impl RootTitleBlockPlan {
         body: f64,
     ) -> Result<f64, Error> {
         let appearances = Self::appearances(theme, sources);
-        let spacing =
-            theme.root_title_lengths(appearances.map(|style| style.theme.get_font_size()))?;
+        let mut minimum_sizes = appearances.map(|style| style.theme.get_font_size());
+        for (size, appearance) in minimum_sizes.iter_mut().zip(appearances) {
+            if let Some(fit) = appearance
+                .layout
+                .and_then(|request| request.instructions().fit)
+            {
+                *size = fit.bounds(*size)?.0;
+            }
+        }
+        let spacing = theme.root_title_lengths(minimum_sizes)?;
         let present = sources.map(|source| source.is_some());
         let mut required = ExactLength::pixels(body)?;
-        for (active, appearance) in present.into_iter().zip(appearances) {
+        for ((active, appearance), size) in present.into_iter().zip(appearances).zip(minimum_sizes)
+        {
             if active {
-                required = required.add_length(&appearance.theme.line_pitch_exact()?);
+                required = required.add_length(
+                    &appearance
+                        .theme
+                        .clone()
+                        .font_size(size)?
+                        .line_pitch_exact()?,
+                );
             }
         }
         if present[0] && present[1] {
@@ -263,9 +281,7 @@ impl RootTitleBlockPlan {
             alignments,
             scope,
         )?;
-        let spacing = theme.root_title_lengths(
-            Self::appearances(theme, sources).map(|style| style.theme.get_font_size()),
-        )?;
+        let spacing = Self::measured_spacing(theme, sources, &plans)?;
         let adjacent = plans[0].as_ref().is_some_and(|plan| !plan.lines.is_empty())
             && plans[1].as_ref().is_some_and(|plan| !plan.lines.is_empty());
         if crate::theme::composition::hard(
@@ -440,8 +456,7 @@ impl RootTitleBlockPlan {
             }),
         )?;
 
-        let spacing =
-            theme.root_title_lengths(appearances.map(|style| style.theme.get_font_size()))?;
+        let spacing = Self::measured_spacing(theme, sources, &plans)?;
         let mut top_reserve = crate::theme::spacing::ExactLength::quanta(
             crate::layout::kernel::LayoutScalar::from_quanta(
                 plans[0]
@@ -506,6 +521,21 @@ impl RootTitleBlockPlan {
             }
         }
         Ok(())
+    }
+
+    fn measured_spacing(
+        theme: &ResolvedTheme,
+        sources: [Option<&crate::Text>; 3],
+        plans: &[Option<ResolvedTextPlan>],
+    ) -> Result<crate::theme::composition::RootTitleLengths, Error> {
+        let appearances = Self::appearances(theme, sources);
+        theme.root_title_lengths(std::array::from_fn(|index| {
+            plans[index]
+                .as_ref()
+                .map_or(appearances[index].theme.get_font_size(), |plan| {
+                    plan.style.font_size
+                })
+        }))
     }
 
     pub(crate) fn observe(

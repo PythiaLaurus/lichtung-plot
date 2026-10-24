@@ -96,13 +96,23 @@ fn assigned_canvas_freezes_combined_anchor_rotation_ellipsis_and_fractional_fit(
         .unwrap()
         .text_panel(0, 0, TextPanel::new("Independent heading", body).unwrap())
         .unwrap()
-        .size(400, 300)
+        .max_width(400)
         .svg_preserve_text(&first)
         .unwrap();
+    let dimensions = (output.width(), output.height());
+    assert!(dimensions.0 <= 400);
     output
         .svg(directory.join("outlines.svg"))
         .unwrap()
         .png_preview(directory.join("preview.png"))
+        .unwrap()
+        .png_with_options(
+            directory.join("scaled.png"),
+            PngOptions {
+                sizing: PngSizing::Scale(2.0),
+                compression: PngCompression::Fast,
+            },
+        )
         .unwrap()
         .svg_preserve_text(&second)
         .unwrap();
@@ -124,7 +134,11 @@ fn assigned_canvas_freezes_combined_anchor_rotation_ellipsis_and_fractional_fit(
     assert!(svg.contains("rotate(30.05"));
     assert_eq!(
         png_dimensions(&std::fs::read(directory.join("preview.png")).unwrap()),
-        (400, 300)
+        dimensions
+    );
+    assert_eq!(
+        png_dimensions(&std::fs::read(directory.join("scaled.png")).unwrap()),
+        (dimensions.0 * 2, dimensions.1 * 2)
     );
     std::fs::remove_dir_all(directory).unwrap();
 }

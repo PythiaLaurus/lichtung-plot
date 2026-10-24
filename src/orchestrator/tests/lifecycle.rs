@@ -252,7 +252,7 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .theme(crate::Theme::nature())
-    .size(640, 480);
+    .max_width(640);
     let mut backend = RecordingBackend::default();
 
     plot.render_with_backend(&mut backend).unwrap();
@@ -282,10 +282,8 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
             .collect::<Vec<_>>(),
         [SurfaceRole::CanvasRoot, SurfaceRole::PlotPanel]
     );
-    assert_eq!(
-        backend.surfaces[0].bounds,
-        crate::layout::PanelBox::new(0.0, 640.0, 0.0, 480.0)
-    );
+    let root = backend.surfaces[0].bounds;
+    assert!(root.width() > 0.0 && root.width() <= 640.0 && root.height() > 0.0);
     assert_eq!(backend.surfaces[1].bounds, backend.clips[0]);
     assert!(backend
         .surfaces
@@ -590,6 +588,7 @@ fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
     );
     for plot in [
         source.clone().width(0),
+        source.clone().max_width(0),
         source.clone().size(0, 240),
         source.clone().size(320, 0),
     ] {
@@ -605,15 +604,18 @@ fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
             0
         );
     }
-    for (width, height) in [(0, None), (0, Some(240)), (320, Some(0))] {
-        let canvas = crate::Canvas::grid(1, 1)
+    let canvas = || {
+        crate::Canvas::grid(1, 1)
             .unwrap()
             .panel(0, 0, source.clone())
-            .unwrap();
-        let canvas = match height {
-            Some(height) => canvas.size(width, height),
-            None => canvas.width(width),
-        };
+            .unwrap()
+    };
+    for canvas in [
+        canvas().width(0),
+        canvas().max_width(0),
+        canvas().size(0, 240),
+        canvas().size(320, 0),
+    ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let mut backend = RecordingBackend::default();
         let error = canvas.render_with_backend(&mut backend).unwrap_err();

@@ -1761,11 +1761,12 @@ measurement preserves one producer and continuous geometry, outer gutter/ink
 ownership and complete footprint/height/reuse identity. Anchor-only ranges,
 compatible distinct category bands, row-title conflicts and declared header edges
 are enforced through the same placement model; TextPanels remain single-cell.
-Fractional appearance in Step 16 is delivered: TextTheme/SignificanceMarkStyle and
-all metric/rendering consumers retain positive finite f64 sizes, exact dyadic
-design scaling and font-relative spacing. The remaining text anchor/coordinate/
-role-attachment contracts and Steps 17–22 remain pending; undelivered target signatures are
-not current APIs.
+Steps 16–19 are complete: fractional appearance, common anchor/coordinate and
+role attachments, general rotation, grapheme-safe ellipsis and certified local
+font fitting retain original sources, preferred appearances and selected geometry.
+Steps 20–22 are complete: closed root requests, width-before-height composition
+and both maximum-width setters share one coordinator and selected-width lifecycle.
+The final API/consumer/dependency and semantic test-layer audits follow delivery.
 
 ### 1. Apply The Public Property Naming Rule
 
@@ -2156,6 +2157,16 @@ unbreakable text requirements, native Matrix sizing and mixed/all-text Canvas
 height measurement. Commit this refactoring after focused tests and strict Clippy.
 
 ### 22. Add And Document Maximum Width End To End
+
+Delivered: Plot/Canvas maximum-width requests cap the complete natural outer
+preference before public-dimension conversion, preserve the original request and
+lock selected width through feedback/freeze. Focused checks cover fractional and
+above-u32 soft preferences, early zero/cap refusal, replacement, complete fixed-size
+refusal, owning facets, native Matrix/color guides, spanning/PerPlot/Shared and
+all-text Canvas, ignored embedded requests and SVG/PNG replay/scaling. Root prose
+minimum/clearance metrics now follow permitted/selected font sizes independently
+of root padding. Current specifications, sizing guidance and the span example
+describe the working behavior.
 
 Add MaxWidth to the single request representation and expose both consuming
 `#[must_use]` setters, following the existing `pub const fn` builder style. Apply

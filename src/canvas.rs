@@ -614,6 +614,17 @@ impl Canvas {
         self
     }
 
+    /// Cap the natural complete Canvas width; height remains content-driven.
+    ///
+    /// This replaces any prior sizing request, retains declared topology and
+    /// never fills a cap wider than natural content. Embedded Plot sizing requests
+    /// remain ignored. Zero rejects during owning-root preflight.
+    #[must_use]
+    pub const fn max_width(mut self, maximum: u32) -> Self {
+        self.root_size = crate::layout::RootRequest::MaxWidth(maximum);
+        self
+    }
+
     /// Allocate exactly this width and height in CSS pixels.
     ///
     /// This replaces the complete sizing request. All content must fit without

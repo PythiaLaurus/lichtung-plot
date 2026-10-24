@@ -203,9 +203,11 @@ Root title/subtitle/caption use resolved physical alignment across post-inset
 content. Headers/row titles/strips center in their spanned cells. Other nonfill
 children start unless a named role specifies otherwise.
 
-Root prose selects each Text's complete local appearance before census and uses
-it consistently for natural 66ch preference, hard widths, height, adjacent spacing
-and capture. Its actual source and zero preference glyph use the selected font
+Root prose selects each Text's complete local appearance before census. Natural
+66ch preference uses its preferred size, permitted minima inform hard requirements,
+and measured height/adjacent spacing/capture use the selected fitted size. Root
+padding remains owned by the composition body metric. Its actual source and zero
+preference glyph use the selected font
 pair. Root frame and composed child/height keys retain full Text slot identity,
 including layout presence; equal strings or dimensions alone do not authorize reuse.
 
@@ -702,13 +704,23 @@ sections are stable descendants of their original guide slot.
 
 ### Root Coordination
 
-One closed RootRequest represents Natural, ExactWidth and ExactSize. RootSize
+One closed RootRequest represents Natural, ExactWidth, MaxWidth and ExactSize. RootSize
 contains concrete measured dimensions only. plan_root accepts the whole request;
 there is no optional-pair decoder or second coordinator. Exact assigned-box
 helpers refuse unresolved requests, and parent assignment replaces an embedded
 Plot's standalone request. The coordinator validates zeros before preparation,
 locks the first selected width and retains exact-height enforcement independently
 of automatic-height feedback.
+
+Natural and MaxWidth compose the same complete outer preference. MaxWidth applies
+its integral cap before outward public-dimension conversion; a finite checked soft
+preference above u32 can therefore select a representable result. The cap is not
+an exact fill width. All three owners (standalone Plot, owning facets and Canvas)
+use RootRequest::select_width, then measure height at that width. Every returned
+round must satisfy the original cap and the selected exact width before feedback
+can be accepted. Original request identity remains in feedback and the frozen
+allocation even when later rounds consume ExactWidth. No height cache or child
+standalone request restarts selection or changes the parent assignment.
 
 Natural width composition stops after the shared canonical column allocation,
 before measuring TextPanel/Plot child heights or assigning rows. Canvas column

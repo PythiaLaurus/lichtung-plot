@@ -1,4 +1,4 @@
-//! One tall scientific owner beside two independent left-hand owners.
+//! A capped root with one tall scientific owner beside two independent owners.
 
 use lichtung_plot::{Canvas, NumericValues, Plot};
 
@@ -16,8 +16,9 @@ fn main() -> lichtung_plot::Result<()> {
         .column_header(0, 2, "Three independent scientific sources")?
         .row_header(0, 1, "Upper row")?
         .row_header(1, 1, "Lower row")?
-        .size(1400, 1000)
+        .max_width(1200)
         .svg_preserve_text(std::env::temp_dir().join("canvas_spans"))?;
+    assert!(output.width() <= 1200);
     println!(
         "canvas_spans.svg: {}×{} CSS pixels",
         output.width(),

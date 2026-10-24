@@ -239,11 +239,13 @@ viewer.
 ## Figure Size
 
 Plot and Canvas derive dimensions from content by default. Use `.width(600)` for
-an exact CSS-pixel width with content-derived height, or `.size(600, 400)` for an
-exact pair. Each call replaces the complete request: `.size(600, 1).width(600)`
-clears the explicit height. Zero dimensions reject during preflight; exact roots
-must fit the complete content. Canvas assigns embedded Plot dimensions, ignoring
-their standalone sizing requests.
+an exact CSS-pixel width, `.max_width(600)` to cap the natural complete outer width,
+or `.size(600, 400)` for an exact pair. Width and maximum width derive height from
+content. A cap wider than natural content does not stretch it. Each call replaces
+the complete request: `.size(600, 1).max_width(600)` clears the explicit height.
+Zero dimensions reject during preflight. A cap does not enable text shrinking or
+truncation; content must fit its declared policies. Canvas assigns embedded Plot
+dimensions, ignoring their standalone sizing requests.
 
 The returned `Output::width()` and `height()` report the frozen canonical scene,
 including after chained PNG publications with different raster dimensions.

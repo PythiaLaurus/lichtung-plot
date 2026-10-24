@@ -628,6 +628,24 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    /// Cap the natural complete outer width and measure height at the selected width.
+    ///
+    /// This replaces any earlier sizing request. It does not fill a cap wider
+    /// than natural content, enable text reduction, or change embedded Canvas
+    /// assignments. Zero rejects during owning-root preflight, not in this setter.
+    /// ```
+    /// use lichtung_plot::{NumericValues, Plot};
+    /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
+    ///                          NumericValues::new("y", [1.0, 0.0]))
+    ///     .title("A width-capped scientific figure").max_width(640);
+    /// # let _ = plot;
+    /// ```
+    #[must_use]
+    pub const fn max_width(mut self, maximum: u32) -> Self {
+        self.root_size = crate::layout::RootRequest::MaxWidth(maximum);
+        self
+    }
+
     /// Allocate exactly this width and height in CSS pixels.
     ///
     /// This replaces the complete sizing request. Content must fit without

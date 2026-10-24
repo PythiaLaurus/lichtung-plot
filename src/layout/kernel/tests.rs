@@ -373,24 +373,23 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
 
 #[test]
 fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
-    for width in [None, Some(300)] {
+    for request in [
+        RootRequest::Natural,
+        RootRequest::ExactWidth(300),
+        RootRequest::MaxWidth(301),
+    ] {
+        let width = request.exact_width();
+        let selected = request.select_width(317.25).unwrap();
         let mut calls = 0;
         let address = ComponentAddress::root();
         let root = plan_root(
-            width.map_or(RootRequest::Natural, RootRequest::ExactWidth),
+            request,
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
                 let chosen = assigned.exact_width();
                 assert!(assigned.automatic_height());
-                assert_eq!(
-                    chosen,
-                    if calls == 1 {
-                        width
-                    } else {
-                        Some(width.unwrap_or(317))
-                    }
-                );
+                assert_eq!(chosen, if calls == 1 { width } else { Some(selected) });
                 let consumed = round.insets(&address, FeedbackKind::AxisGutter)[2];
                 let next = (consumed + 1.0).min(7.0);
                 round.request_insets(
@@ -400,20 +399,20 @@ fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
                     [0.0, 0.0, next, 0.0],
                 )?;
                 let size = RootSize::new(
-                    chosen.unwrap_or(317),
+                    assigned.select_width(317.25 + consumed)?,
                     100 + u32::try_from(nearest_spatial_quanta(consumed)? / 1024).unwrap(),
                 );
                 Ok(MeasuredLayout::new(size, calls))
             },
             |(), assigned, plan, _| {
-                assert_eq!(assigned.dimensions()?, (width.unwrap_or(317), 107));
+                assert_eq!(assigned.dimensions()?, (selected, 107));
                 Ok(plan)
             },
         )
         .unwrap();
         assert_eq!(calls, 8);
         assert_eq!(*root.plan(), 8);
-        assert_eq!(root.dimensions(), (width.unwrap_or(317), 107));
+        assert_eq!(root.dimensions(), (selected, 107));
     }
 }
 
@@ -435,6 +434,7 @@ fn automatic_width_reselection_and_invalid_requests_refuse_before_capture() {
     assert_eq!(calls, 2);
     for request in [
         RootRequest::ExactWidth(0),
+        RootRequest::MaxWidth(0),
         RootRequest::ExactSize {
             width: 10,
             height: 0,
@@ -459,12 +459,16 @@ fn automatic_width_reselection_and_invalid_requests_refuse_before_capture() {
 }
 
 #[test]
-fn both_content_modes_reject_feedback_cycles_before_finalization() {
-    for width in [None, Some(300)] {
+fn content_modes_reject_feedback_cycles_before_finalization() {
+    for request in [
+        RootRequest::Natural,
+        RootRequest::ExactWidth(300),
+        RootRequest::MaxWidth(301),
+    ] {
         let owner = ComponentAddress::root();
         let mut calls = 0;
         let result = plan_root(
-            width.map_or(RootRequest::Natural, RootRequest::ExactWidth),
+            request,
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
@@ -476,7 +480,7 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
                     [1.0 - previous, 0.0, 0.0, 0.0],
                 )?;
                 Ok(MeasuredLayout::new(
-                    RootSize::new(assigned.exact_width().unwrap_or(317), 211),
+                    RootSize::new(assigned.select_width(317.0)?, 211),
                     (),
                 ))
             },
@@ -485,6 +489,68 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
         assert!(result.err().unwrap().to_string().contains("cycle"));
         assert!(calls <= 8);
     }
+}
+
+#[test]
+fn capped_selection_precedes_integral_conversion_and_keeps_real_failures() {
+    for (request, preference, expected) in [
+        (RootRequest::MaxWidth(300), 300.0 + 1.0 / 1024.0, 300),
+        (RootRequest::MaxWidth(301), 300.0 + 1.0 / 1024.0, 301),
+        (RootRequest::MaxWidth(500), 299.0 + 1.0 / 1024.0, 300),
+        (RootRequest::MaxWidth(500), f64::from(u32::MAX) + 0.25, 500),
+        (RootRequest::ExactWidth(500), f64::NAN, 500),
+    ] {
+        let root = plan_root(
+            request,
+            |_| Ok(()),
+            |(), assigned, _| {
+                Ok(MeasuredLayout::new(
+                    RootSize::new(assigned.select_width(preference)?, 100),
+                    (),
+                ))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(root.dimensions(), (expected, 100));
+    }
+    for (request, preference) in [
+        (RootRequest::Natural, f64::from(u32::MAX) + 0.25),
+        (RootRequest::MaxWidth(500), f64::INFINITY),
+        (RootRequest::MaxWidth(500), f64::NAN),
+        (RootRequest::MaxWidth(500), 0.0),
+    ] {
+        let result = plan_root(
+            request,
+            |_| Ok(()),
+            |(), assigned, _| {
+                Ok(MeasuredLayout::new(
+                    RootSize::new(assigned.select_width(preference)?, 100),
+                    (),
+                ))
+            },
+            |(), _, (), _| -> Result<(), Error> { panic!("invalid width captured") },
+        );
+        assert!(result.is_err());
+    }
+}
+
+#[test]
+fn a_first_result_above_the_cap_refuses_before_feedback_or_capture() {
+    let calls = Cell::new(0);
+    let owner = ComponentAddress::root();
+    let result = plan_root(
+        RootRequest::MaxWidth(300),
+        |_| Ok(()),
+        |(), _, round| {
+            calls.set(calls.get() + 1);
+            round.request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])?;
+            Ok(MeasuredLayout::new(RootSize::new(301, 100), ()))
+        },
+        |(), _, (), _| -> Result<(), Error> { panic!("over-cap result captured") },
+    );
+    assert!(result.err().unwrap().to_string().contains("maximum-width"));
+    assert_eq!(calls.get(), 1);
 }
 
 #[test]

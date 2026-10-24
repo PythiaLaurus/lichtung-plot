@@ -1,4 +1,4 @@
-//! Operation-local parent inputs and observations for the exact-root driver.
+//! Operation-local parent inputs and observations for the mode-aware root driver.
 
 use super::{ComponentAddress, LayoutScalar, SpatialRounding};
 use crate::layout::fit::{FitFailure, FitScope};
@@ -52,6 +52,7 @@ struct FitMiss {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Observation {
+    RootRequest(super::RootRequest),
     Address(ComponentAddress),
     Box([i64; 4]),
     Number(u64),
@@ -174,6 +175,12 @@ fn find_index<T>(entries: &[T], mut matches: impl FnMut(&T) -> bool) -> Option<u
 }
 
 impl FeedbackRound {
+    pub(crate) fn observe_root_request(
+        &mut self,
+        request: super::RootRequest,
+    ) -> Result<(), Error> {
+        self.observe(Observation::RootRequest(request))
+    }
     pub(crate) fn observe_text_layout(
         &mut self,
         layout: Option<&crate::TextLayout>,

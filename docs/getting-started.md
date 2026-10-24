@@ -82,9 +82,14 @@ SVG and PNG generation use installed system fonts.
 
 Omitting sizing calls derives both root dimensions from content. On Plot and
 Canvas, `.width(600)` allocates exactly 600 CSS pixels and derives height after
-reflow; `.size(600, 400)` allocates the exact pair and refuses content that cannot
-fit. Every call replaces the full request, so `.size(600, 1).width(600)` clears the
-earlier height. Zero dimensions reject during preflight, without setter panics.
+reflow; `.max_width(600)` selects the smaller of natural complete outer width and
+600, then derives height at that width. A wider cap does not stretch the figure.
+`.size(600, 400)` allocates the exact pair and refuses content that cannot fit.
+Every call replaces the full request, so `.size(600, 1).max_width(600)` clears the
+earlier exact height and width. Zero dimensions reject during owning-root preflight,
+without setter panics. The cap includes padding, prose, axes, headers and guides;
+it does not change scientific content or enable shrinking/truncation. Configure
+TextLayout separately when you want those local text policies.
 
 The returned `Output` exposes `.width()` and `.height()` for the frozen canonical
 scene. PNG options can choose different raster dimensions without changing those
@@ -101,6 +106,8 @@ let plot = || Plot::scatter(
 let output = plot().size(600, 400).width(300).svg("width-controlled")?;
 assert_eq!(output.width(), 300);
 assert!(output.height() > 0);
+let output = plot().max_width(600).svg("capped-figure")?;
+assert!(output.width() <= 600);
 let output = Canvas::grid(1, 1)?
     .panel(0, 0, plot())?
     .width(300)

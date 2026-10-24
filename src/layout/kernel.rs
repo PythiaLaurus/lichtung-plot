@@ -578,18 +578,29 @@ fn reservation_error(
 pub(crate) enum RootRequest {
     Natural,
     ExactWidth(u32),
+    MaxWidth(u32),
     ExactSize { width: u32, height: u32 },
 }
 
 impl RootRequest {
     pub(crate) fn select_width(self, preference: f64) -> Result<u32, Error> {
         self.validate()?;
-        self.exact_width()
-            .map_or_else(|| root_dimension(preference), Ok)
+        if let Some(width) = self.exact_width() {
+            return Ok(width);
+        }
+        if !preference.is_finite() || preference <= 0.0 {
+            return Err(Error::Render(
+                "natural root width preference must be finite and positive".into(),
+            ));
+        }
+        root_dimension(match self {
+            Self::MaxWidth(maximum) => preference.min(f64::from(maximum)),
+            _ => preference,
+        })
     }
     pub(crate) const fn exact_width(self) -> Option<u32> {
         match self {
-            Self::Natural => None,
+            Self::Natural | Self::MaxWidth(_) => None,
             Self::ExactWidth(width) | Self::ExactSize { width, .. } => Some(width),
         }
     }
@@ -618,9 +629,28 @@ impl RootRequest {
         self.assigned_size()?.dimensions()
     }
     fn validate(self) -> Result<(), Error> {
-        if self.exact_width() == Some(0) || self.exact_height() == Some(0) {
+        if self.exact_width() == Some(0)
+            || self.exact_height() == Some(0)
+            || matches!(self, Self::MaxWidth(0))
+        {
             return Err(Error::Render(
                 "layout root dimensions must be finite and positive".into(),
+            ));
+        }
+        Ok(())
+    }
+    fn validate_size(self, size: RootSize) -> Result<(), Error> {
+        let (width, height) = size.dimensions()?;
+        if matches!(self,Self::MaxWidth(maximum) if width>maximum) {
+            return Err(Error::Render(
+                "measured root width exceeds its maximum-width sizing request".into(),
+            ));
+        }
+        if self.exact_width().is_some_and(|exact| exact != width)
+            || self.exact_height().is_some_and(|exact| exact != height)
+        {
+            return Err(Error::Render(
+                "measured root dimensions do not match the sizing request".into(),
             ));
         }
         Ok(())
@@ -668,6 +698,7 @@ impl<Plan> MeasuredLayout<Plan> {
 }
 
 struct RootAllocation<Plan, Prepared> {
+    request: RootRequest,
     size: RootSize,
     prepared: Prepared,
     plan: Plan,
@@ -680,6 +711,10 @@ pub(crate) struct FrozenRoot<Plan, Prepared = ()> {
 
 impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
     pub(crate) fn dimensions(&self) -> (u32, u32) {
+        self.allocation[0]
+            .request
+            .validate_size(self.allocation[0].size)
+            .expect("frozen root satisfies its original sizing request");
         self.allocation[0]
             .size
             .dimensions()
@@ -754,7 +789,14 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
     let constraints = match (width, height) {
         (Some(width), Some(height)) => LayoutConstraints::exact_css_pixels(width, height)?,
         _ => LayoutConstraints {
-            width: dimension(width)?,
+            width: if let RootRequest::MaxWidth(maximum) = request {
+                LengthConstraint::new(
+                    LayoutScalar(0),
+                    Some(LayoutScalar::exact_css_pixels(maximum)?),
+                )?
+            } else {
+                dimension(width)?
+            },
             height: dimension(height)?,
         },
     };
@@ -787,6 +829,7 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
         #[cfg(test)]
         ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(rounds.get() + 1));
         let mut round = FeedbackRound::new(history.last(), history.len())?;
+        round.observe_root_request(request)?;
         if let Some(width) = assigned.exact_width() {
             round.observe_number(f64::from(width))?;
         }
@@ -809,6 +852,7 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
                 .into(),
             ));
         }
+        request.validate_size(result.size)?;
         if measured_width == 0 || measured_height == 0 {
             return Err(Error::Render(
                 "layout root dimensions must be finite and positive".into(),
@@ -877,6 +921,7 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
     final_stage.reserve_final(&mut allocation, 1, "frozen root plan")?;
     let plan = finalize(&prepared, assigned, measured.plan, &mut final_stage)?;
     allocation.push(RootAllocation {
+        request,
         size: assigned,
         prepared,
         plan,
@@ -884,7 +929,7 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
     let allocation = allocation
         .into_boxed_slice()
         .try_into()
-        .unwrap_or_else(|_| unreachable!("one frozen exact-root allocation"));
+        .unwrap_or_else(|_| unreachable!("one frozen root allocation"));
     #[cfg(test)]
     crate::orchestrator::measurements::root_success();
     Ok(FrozenRoot { allocation })

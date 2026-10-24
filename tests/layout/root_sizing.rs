@@ -10,7 +10,7 @@ use super::support::unique_dir;
 #[derive(Clone, Copy, Debug)]
 enum Sizing {
     Automatic,
-    Width(u32),
+    Maximum(u32),
     Exact(u32, u32),
 }
 
@@ -18,7 +18,7 @@ impl Sizing {
     fn plot<K: kind::Marker>(self, plot: Plot<K>) -> Plot<K> {
         match self {
             Self::Automatic => plot,
-            Self::Width(width) => plot.width(width),
+            Self::Maximum(width) => plot.size(0, 0).max_width(width),
             Self::Exact(width, height) => plot.size(width, height),
         }
     }
@@ -26,7 +26,7 @@ impl Sizing {
     fn canvas(self, canvas: Canvas) -> Canvas {
         match self {
             Self::Automatic => canvas,
-            Self::Width(width) => canvas.width(width),
+            Self::Maximum(width) => canvas.size(0, 0).max_width(width),
             Self::Exact(width, height) => canvas.size(width, height),
         }
     }
@@ -35,7 +35,7 @@ impl Sizing {
         assert!(dimensions.0 > 0 && dimensions.1 > 0);
         match self {
             Self::Automatic => {}
-            Self::Width(width) => assert_eq!(dimensions.0, width),
+            Self::Maximum(width) => assert!(dimensions.0 <= width),
             Self::Exact(width, height) => assert_eq!(dimensions, (width, height)),
         }
     }
@@ -122,7 +122,7 @@ fn standalone_sizing_calls_replace_the_complete_request_before_publication() {
         source
             .clone()
             .size(0, 0)
-            .width(481)
+            .max_width(0)
             .width(601)
             .svg_preserve_text(path)
     });
@@ -139,6 +139,7 @@ fn standalone_sizing_calls_replace_the_complete_request_before_publication() {
     let exact = publish("standalone-exact-replacement", |path| {
         source
             .width(0)
+            .max_width(0)
             .size(700, 1)
             .size(801, 901)
             .svg_preserve_text(path)
@@ -148,7 +149,77 @@ fn standalone_sizing_calls_replace_the_complete_request_before_publication() {
 }
 
 #[test]
-fn automatic_roots_expand_for_complete_unbreakable_text_and_exact_width_refuses_it() {
+fn maximum_width_selects_natural_or_capped_content_before_measuring_height() {
+    let caption = caption();
+    let source = scatter()
+        .title("Capped scientific observations")
+        .caption(&caption);
+    let natural = publish("uncapped-preference", |path| {
+        source.clone().svg_preserve_text(path)
+    });
+    let nonbinding = publish("nonbinding-cap", |path| {
+        source
+            .clone()
+            .width(0)
+            .size(1, 1)
+            .max_width(natural.dimensions.0 + 100)
+            .svg_preserve_text(path)
+    });
+    assert_eq!(nonbinding.svg, natural.svg);
+    assert!(natural.dimensions.0 > 300);
+    let capped = publish("binding-cap", |path| {
+        source
+            .clone()
+            .size(1, 1)
+            .max_width(300)
+            .svg_preserve_text(path)
+    });
+    let exact_width = publish("cap-equivalent-width", |path| {
+        source.width(300).svg_preserve_text(path)
+    });
+    assert_eq!(capped.dimensions.0, 300);
+    assert_eq!(capped.svg, exact_width.svg);
+    assert_complete_source(&capped.svg, &caption);
+    assert!(capped.dimensions.1 > natural.dimensions.1);
+}
+
+#[test]
+fn a_large_soft_prose_preference_can_be_capped_when_its_fit_program_permits_small_text() {
+    use lichtung_plot::{Text, TextFit, TextLayout, TextWrapping, Theme};
+    let heading = "W".repeat(24);
+    let title = Text::new(&heading)
+        .style(
+            Theme::publication()
+                .typography()
+                .get_root()
+                .get_title()
+                .clone()
+                .font_size(1_000_000_000.0)
+                .unwrap(),
+        )
+        .layout(
+            TextLayout::default()
+                .wrapping(TextWrapping::NoSoftWrap)
+                .fit(TextFit::range(14.0, 14.0).unwrap()),
+        );
+    let scene = publish("capped-large-soft-preference", |path| {
+        scatter()
+            .title(title)
+            .max_width(401)
+            .svg_preserve_text(path)
+    });
+    assert_eq!(scene.dimensions.0, 401);
+    assert_complete_source(&scene.svg, &heading);
+    let document = roxmltree::Document::parse(&scene.svg).unwrap();
+    let title = document
+        .descendants()
+        .find(|node| node.has_tag_name("text") && node.text() == Some(&heading))
+        .unwrap();
+    assert_eq!(title.attribute("font-size"), Some("14"));
+}
+
+#[test]
+fn automatic_roots_expand_for_complete_unbreakable_text_and_capped_width_refuses_it() {
     let heading = "W".repeat(96);
     let ordinary = publish("automatic-short-heading", |path| {
         scatter().title("Short heading").svg_preserve_text(path)
@@ -161,22 +232,34 @@ fn automatic_roots_expand_for_complete_unbreakable_text_and_exact_width_refuses_
     let directory = unique_dir("exact-width-unbreakable-refusal");
     let destination = directory.join("must-not-exist.svg");
     let error = scatter()
-        .title(heading)
+        .title(&heading)
         .width(300)
         .svg_preserve_text(&destination)
         .err()
         .unwrap();
     assert!(error.to_string().contains("layout fit"), "{error}");
     assert!(!destination.exists());
+    std::fs::write(&destination, "existing destination").unwrap();
+    let error = scatter()
+        .title(heading)
+        .max_width(300)
+        .svg_preserve_text(&destination)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("layout fit"), "{error}");
+    assert_eq!(
+        std::fs::read_to_string(destination).unwrap(),
+        "existing destination"
+    );
     std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
-fn owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes() {
+fn owning_facets_keep_sparse_wrap_complete_prose_and_multiline_shared_titles() {
     let caption = caption();
     for sizing in [
         Sizing::Automatic,
-        Sizing::Width(1001),
+        Sizing::Maximum(1001),
         Sizing::Exact(1201, 1401),
     ] {
         let plot = Plot::scatter(
@@ -196,6 +279,8 @@ fn owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes() 
         )
         .title("Owning facet title")
         .subtitle("Independent facet subtitle")
+        .x_label("Shared dose\nwith units")
+        .y_label("Shared response\nwith units")
         .caption(&caption);
         let scene = publish("public-facet-sizing", |path| {
             sizing.plot(plot).svg_preserve_text(path)
@@ -207,6 +292,8 @@ fn owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes() 
             "Panel = First",
             "Panel = Second",
             "Panel = Third",
+            "Shared dose with units",
+            "Shared response with units",
             &caption,
         ] {
             assert_complete_source(&scene.svg, source);
@@ -232,8 +319,10 @@ fn matrix_root_keeps_native_cells_hue_guide_and_complete_prose() {
         .unwrap(),
     )
     .title("Native matrix sizing")
+    .max_width(701)
     .caption(&caption);
     let scene = publish("public-matrix-sizing", |path| plot.svg_preserve_text(path));
+    assert!(scene.dimensions.0 <= 701);
     for source in [
         "Native matrix sizing",
         "Treatment",
@@ -245,6 +334,31 @@ fn matrix_root_keeps_native_cells_hue_guide_and_complete_prose() {
     }
     assert!(scene.svg.contains(">Alpha value</text>") && scene.svg.contains(">Beta value</text>"));
     assert_eq!(scene.svg.matches("<clipPath ").count(), 4);
+}
+
+#[test]
+fn a_capped_heatmap_measures_its_native_color_guide_at_the_selected_width() {
+    use lichtung_plot::HeatmapAnnotations;
+    let caption = caption();
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["First", "Second", "First", "Second"]).unwrap(),
+        CategoryValues::new("row", ["Upper", "Upper", "Lower", "Lower"]).unwrap(),
+        NumericValues::new("response", [1.0, 2.0, 3.0, 4.0]),
+    )
+    .color_label("Measured response\nin declared units")
+    .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
+    .caption(&caption);
+    let capped = publish("capped-native-color-guide", |path| {
+        source.clone().max_width(501).svg_preserve_text(path)
+    });
+    let exact = publish("native-color-guide-at-selected-width", |path| {
+        source.width(capped.dimensions.0).svg_preserve_text(path)
+    });
+    assert!(capped.dimensions.0 <= 501);
+    assert_eq!(capped.svg, exact.svg);
+    assert_complete_source(&capped.svg, "Measured response in declared units");
+    assert_complete_source(&capped.svg, &caption);
+    assert_eq!(capped.svg.matches("<clipPath ").count(), 1);
 }
 
 fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
@@ -259,7 +373,7 @@ fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
             .subtitle(format!("{name} panel subtitle"))
             .caption(format!("{name} local caption"));
         if replace_children {
-            plot.size(0, 0).width(0)
+            plot.size(0, 0).width(0).max_width(0)
         } else {
             plot
         }
@@ -295,15 +409,15 @@ fn mixed_canvas_keeps_complete_content_and_ignores_standalone_child_requests() {
     let caption = caption();
     let scene = publish("public-mixed-canvas", |path| {
         mixed_canvas(&caption, false)
-            .width(1101)
+            .max_width(1101)
             .svg_preserve_text(path)
     });
     let replaced = publish("public-mixed-canvas-child-requests", |path| {
         mixed_canvas(&caption, true)
-            .width(1101)
+            .max_width(1101)
             .svg_preserve_text(path)
     });
-    assert_eq!(scene.dimensions.0, 1101);
+    assert!(scene.dimensions.0 <= 1101);
     assert_eq!(replaced.svg, scene.svg);
     for source in [
         "Canvas root title",
@@ -342,7 +456,7 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
     };
     for sizing in [
         Sizing::Automatic,
-        Sizing::Width(601),
+        Sizing::Maximum(601),
         Sizing::Exact(801, 1101),
     ] {
         let scene = publish("public-text-canvas", |path| {
@@ -358,7 +472,7 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
     let replaced = publish("public-text-canvas-replaced-width", |path| {
         canvas()
             .size(0, 0)
-            .width(481)
+            .max_width(0)
             .width(601)
             .svg_preserve_text(path)
     });
@@ -366,6 +480,7 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
     let exact = publish("public-text-canvas-replaced-size", |path| {
         canvas()
             .width(0)
+            .max_width(0)
             .size(700, 1)
             .size(801, 1101)
             .svg_preserve_text(path)

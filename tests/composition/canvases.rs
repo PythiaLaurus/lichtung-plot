@@ -734,10 +734,21 @@ fn per_plot_legends_keep_locally_observed_hue_levels() {
             .unwrap()
             .panel(0, 1, hued_line(&second_x, &second_y, &second_trace))
             .unwrap()
+            .max_width(901)
             .legend_policy(CanvasLegendPolicy::PerPlot),
         "per-plot-local-legends",
     )
     .unwrap();
+    let document = roxmltree::Document::parse(&svg).unwrap();
+    assert!(
+        document
+            .root_element()
+            .attribute("width")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap()
+            <= 901
+    );
     assert_eq!(svg.matches(">Control</text>").count(), 1);
     assert_eq!(svg.matches(">Active</text>").count(), 1);
     assert!(svg.contains("id=\"panel-0-legend\"") && svg.contains("id=\"panel-1-legend\""));

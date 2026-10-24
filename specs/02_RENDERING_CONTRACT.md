@@ -346,11 +346,24 @@ Complete selected style, label, bracket and shelf fit remain mandatory.
 
 Plot/Canvas each retain one complete sizing request: omitted is natural width
 chosen once followed by measured height; `width(u32)` is exact width/automatic
-height; `size(u32,u32)` is an exact pair. Each call replaces the complete request,
-so width clears earlier height. Zero rejects at preflight without setter panic.
-Canvas controls embedded dimensions and ignores child standalone requests.
-Output alone exposes frozen canonical dimensions; no pre-render Plot dimensions,
-public maximum width or generic constraints are provided.
+height; `max_width(u32)` caps natural outer width with automatic height;
+`size(u32,u32)` is an exact pair. Each call replaces the complete request, so width
+or maximum width clears earlier height. Zero rejects at owning-root preflight
+before preparation, without setter panic; a superseded zero has no effect.
+Canvas controls embedded dimensions and ignores child standalone requests,
+including `max_width(0)`. The owning Plot request also controls all its facets.
+Output alone exposes frozen canonical dimensions; no pre-render Plot dimensions
+or public generic constraints are provided.
+
+Maximum width selects `min(natural_preference, cap)` before checked outward
+conversion to integral CSS pixels. A nonbinding cap keeps natural dimensions;
+a binding cap is never exceeded by rounding. A soft preference above u32 does
+not reject an otherwise representable capped result. Real arithmetic failures
+remain fatal. Width is locked once; height/guide/gutter feedback cannot widen it.
+The cap includes root padding, prose, headers, tracks, axes and guides. It does
+not repack topology, change scientific geometry or enable text reduction. Complete
+fixed-size content that cannot fit fails before publication; text adaptation
+requires its own explicit TextLayout policy.
 
 [Layout](05_LAYOUT_SYSTEM.md) defines constraints-down, one immutable result-up,
 parent positioning, bounded local choices and at most eight root feedback rounds.

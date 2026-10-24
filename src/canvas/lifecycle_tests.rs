@@ -338,7 +338,7 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
     };
     let canvas = Canvas::grid(2, 2)
         .unwrap()
-        .size(1400, 1000)
+        .max_width(1001)
         .panel_span(0, 0, 2, 1, plot())
         .unwrap()
         .panel(0, 1, plot())
@@ -350,6 +350,7 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
         .row_header(1, 1, "Lower")
         .unwrap();
     let root = canvas.preflight_plan().unwrap();
+    assert!(root.dimensions().0 <= 1001);
     assert!(root.prepared().interiors[2].is_none());
     assert_eq!(root.prepared().interiors.iter().flatten().count(), 3);
     let evidence = CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| evidence.borrow().clone());
@@ -357,6 +358,10 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
     let tall = assignments[0].0;
     let top = assignments[1].0;
     let bottom = assignments[2].0;
+    for assignment in [tall, top, bottom] {
+        assert!(assignment.x0 >= 0.0 && assignment.x1 <= f64::from(root.dimensions().0));
+        assert!(assignment.y0 >= 0.0 && assignment.y1 <= f64::from(root.dimensions().1));
+    }
     assert_eq!(tall.y1.to_bits(), top.y1.to_bits());
     assert_eq!(tall.y0.to_bits(), bottom.y0.to_bits());
     assert!(tall.height() > top.height() + bottom.height());
