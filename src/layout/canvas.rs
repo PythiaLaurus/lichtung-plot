@@ -4,9 +4,9 @@
 //! owns the canvas geometry around that panel: title, subtitle, caption,
 //! axis labels, tick labels, and future legend reservations.
 
+use crate::layout::PanelAxisPlan;
 #[cfg(test)]
-use crate::layout::Layout;
-use crate::layout::{PanelAxisPlan, PhysicalTextAlignment};
+use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextTheme;
@@ -66,37 +66,6 @@ pub(crate) struct PanelRequirements {
 }
 
 impl PanelRequirements {
-    /// Measure decorations emitted by [`crate::layout::Axis`] around a panel.
-    pub(crate) fn measure(
-        axes: &PanelAxisPlan,
-        theme: &ResolvedTheme,
-        top_text: Option<&str>,
-        available_panel: PanelBox,
-        scope: &crate::layout::fit::FitScope,
-    ) -> Result<Self, crate::layout::fit::PlanError> {
-        let mut requirements = Self::measure_header(axes, theme)?;
-        if let Some(text) = top_text {
-            let strip = theme.facet_strip_lengths()?;
-            let plan = crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                text,
-                &theme.typography.composition.facet_header,
-                crate::theme::composition::capacity(
-                    available_panel.width(),
-                    &strip.horizontal_inset,
-                )?,
-                PhysicalTextAlignment::Center,
-                "facet strip",
-                &scope.child(crate::layout::AddressRole::FacetHeader, 0)?,
-            ))?;
-            let facet_top = crate::theme::composition::hard(
-                &strip.content_clearance.add_pixels(plan.height())?,
-            )?;
-            requirements.top = requirements.top.max(facet_top);
-        }
-        Ok(requirements)
-    }
-
     pub(crate) fn measure_header(
         axes: &PanelAxisPlan,
         theme: &ResolvedTheme,
@@ -406,75 +375,6 @@ mod tests {
 
         assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);
         assert_ne!(base_layout.root_text, spaced_layout.root_text);
-    }
-
-    #[test]
-    fn facet_measurement_uses_the_complete_selected_role_occupancy() {
-        let mut theme = Theme::publication().resolve().unwrap();
-        theme.typography.root.subtitle.font_size = 7.0;
-        theme.typography.composition.facet_header = theme
-            .typography
-            .composition
-            .facet_header
-            .clone()
-            .font_size(32.0)
-            .unwrap();
-        let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
-        let layout = Layout {
-            projection: crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
-            x_axis: crate::layout::Axis {
-                label: None,
-                ticks: Vec::new(),
-                tick_labels_visible: true,
-                category_labels: crate::CategoryLabelSelection::all(),
-                explicit_ticks: false,
-                assigned_tick_width: None,
-                assigned_cells: None,
-                source: crate::layout::TickSource::SUPPLIED,
-                numeric: None,
-            },
-            y_axis: crate::layout::Axis {
-                label: None,
-                ticks: Vec::new(),
-                tick_labels_visible: true,
-                category_labels: crate::CategoryLabelSelection::all(),
-                explicit_ticks: false,
-                assigned_tick_width: None,
-                assigned_cells: None,
-                source: crate::layout::TickSource::SUPPLIED,
-                numeric: None,
-            },
-        };
-
-        let requirements = PanelRequirements::measure(
-            &layout.plan_axes(&theme).unwrap(),
-            &theme,
-            Some("facet"),
-            panel,
-            &crate::layout::fit::FitScope::root(),
-        )
-        .unwrap();
-
-        let strip = theme.facet_strip_lengths().unwrap();
-        let plan = theme
-            .plan_text(
-                "facet",
-                &theme.typography.composition.facet_header,
-                crate::theme::composition::capacity(panel.width(), &strip.horizontal_inset)
-                    .unwrap(),
-                PhysicalTextAlignment::Center,
-                "facet strip",
-                false,
-            )
-            .unwrap();
-        assert_eq!(
-            requirements.top.to_bits(),
-            crate::theme::composition::hard(
-                &strip.content_clearance.add_pixels(plan.height()).unwrap()
-            )
-            .unwrap()
-            .to_bits()
-        );
     }
 
     #[test]

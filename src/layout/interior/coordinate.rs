@@ -125,6 +125,23 @@ impl Intrinsics {
                     without_y_categories = minimum_body.1;
                 }
             }
+            let appearance = theme.tick_text_appearance(if side == 0 {
+                AxisSide::Bottom
+            } else {
+                AxisSide::Left
+            });
+            if appearance.hidden()
+                || appearance.layout.is_some_and(|request| {
+                    request.instructions().overlap == Some(crate::TextOverlap::Allow)
+                        || request
+                            .instructions()
+                            .visibility
+                            .as_ref()
+                            .is_some_and(crate::TextVisibility::reduces)
+                })
+            {
+                continue;
+            }
             if let Some(labels) = &axes.display_categories[side] {
                 if side == 1 && !y_labels_visible {
                     continue;
@@ -138,7 +155,7 @@ impl Intrinsics {
                             fit::intrinsic_widths(
                                 theme,
                                 label,
-                                &standard.tick_label,
+                                appearance,
                                 "coordinate panel tick label intrinsic",
                             )?
                             .0
@@ -146,14 +163,14 @@ impl Intrinsics {
                             // Mandatory lines and actual font metrics, not a
                             // nominal single-line height, constrain row slots.
                             theme
-                                .measure_text(
+                                .measure_appearance_text(
                                     label,
-                                    &standard.tick_label,
+                                    appearance,
                                     crate::layout::PhysicalTextAlignment::Center,
                                     "coordinate panel tick label intrinsic",
-                                    false,
                                 )?
-                                .height()
+                                .occupied_size()
+                                .1
                         };
                         Ok(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE)
                     },
@@ -173,12 +190,11 @@ impl Intrinsics {
                 } else {
                     crate::layout::panel::format_label(value, power, false, 0)?
                 };
-                let plan = theme.measure_text(
+                let plan = theme.measure_appearance_text(
                     &label,
-                    &standard.tick_label,
+                    appearance,
                     crate::layout::PhysicalTextAlignment::Center,
                     "numeric terminal source intrinsic",
-                    false,
                 )?;
                 let parallel = terminal_parallel_minimum(
                     &plan,
@@ -574,7 +590,6 @@ mod intrinsic_tests {
                     &projection,
                     side,
                     &theme,
-                    false,
                     None,
                     &fit::ROOT_SCOPE,
                 )

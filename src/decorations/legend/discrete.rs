@@ -182,12 +182,21 @@ impl PreparedGuide {
                 section_owner.child(AddressRole::LegendTitle, 0)?,
                 PreparedTextRole::LegendTitle,
                 Some(&section.display_title),
-                &theme.typography.guides.legend_title,
+                theme.guide_text_appearance(crate::GuideTextRole::Title),
                 false,
                 stage.as_deref_mut(),
             )
             .map_err(|error| Error::Render(error.to_string()))?;
+            let eligible =
+                crate::data::source::collect_source((0..section.entries().len()).map(Ok))?;
             for (index, entry) in section.entries().iter().enumerate() {
+                if !entry
+                    .display_label
+                    .appearance(theme.guide_text_appearance(crate::GuideTextRole::Entry))
+                    .includes(index, &eligible)
+                {
+                    continue;
+                }
                 PreparedTextRequirement::push_authored(
                     requirements,
                     section_owner
@@ -195,14 +204,22 @@ impl PreparedGuide {
                         .child(AddressRole::LegendLabel, 0)?,
                     PreparedTextRole::LegendLabel,
                     Some(&entry.display_label),
-                    &theme.typography.guides.legend_label,
+                    theme.guide_text_appearance(crate::GuideTextRole::Entry),
                     false,
                     stage.as_deref_mut(),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
             }
             if let GuideSectionBody::ContinuousColor(color) = &section.body {
+                let eligible =
+                    crate::data::source::collect_source((0..color.numeric.labels.len()).map(Ok))?;
                 for (index, label) in color.numeric.labels.iter().enumerate() {
+                    if !theme
+                        .guide_text_appearance(crate::GuideTextRole::Number)
+                        .includes(index, &eligible)
+                    {
+                        continue;
+                    }
                     PreparedTextRequirement::push_into(
                         requirements,
                         section_owner.child(AddressRole::GuideLabel, count(index)?)?,
@@ -210,7 +227,7 @@ impl PreparedGuide {
                         count(index)?,
                         label,
                         &[],
-                        &theme.typography.guides.legend_label,
+                        theme.guide_text_appearance(crate::GuideTextRole::Number),
                         stage.as_deref_mut(),
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
@@ -221,7 +238,7 @@ impl PreparedGuide {
                         .child(AddressRole::GuideLabel, count(color.numeric.labels.len())?)?,
                     PreparedTextRole::LegendLabel,
                     color.numeric.explanation.as_ref(),
-                    &theme.typography.guides.legend_label,
+                    theme.guide_text_appearance(crate::GuideTextRole::Number),
                     false,
                     stage.as_deref_mut(),
                 )
@@ -234,7 +251,7 @@ impl PreparedGuide {
                         0,
                         &missing.label,
                         &[],
-                        &theme.typography.guides.legend_label,
+                        theme.guide_text_appearance(crate::GuideTextRole::Entry),
                         stage.as_deref_mut(),
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;

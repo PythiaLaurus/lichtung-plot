@@ -316,6 +316,7 @@ pub(crate) struct PreparedBar {
 /// One attached significance label resolved to a rendered bar or category cluster.
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedBarSignificance {
+    pub(crate) source_index: usize,
     pub(crate) category_index: usize,
     pub(crate) series_index: Option<usize>,
     pub(crate) edge: f64,
@@ -824,15 +825,63 @@ pub(crate) fn attached_significance_text_plans(
     #[cfg(test)]
     ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(calls.get() + 1));
 
+    let eligible =
+        crate::data::source::collect_source(marks.iter().map(|mark| Ok(mark.source_index)))?;
     crate::data::source::collect_source(marks.iter().map(|mark| {
-        context.theme.measure_text(
+        crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
+            context.theme,
             &mark.label,
-            appearance,
+            crate::text::TextAppearance {
+                theme: appearance,
+                exact_override,
+                layout: context.theme.text_layouts.significance.as_ref(),
+            },
+            i64::MAX,
             alignment(mark),
             owner,
-            exact_override,
-        )
+            context.fit_scope(),
+            (mark.source_index, &eligible),
+        ))
+        .map_err(crate::layout::fit::PlanError::into_error)
     }))
+}
+
+pub(crate) fn validate_attached_text(
+    marks: &[PreparedBarSignificance],
+    plans: &mut [crate::layout::ResolvedTextPlan],
+    panel: crate::layout::PanelBox,
+    scope: &crate::layout::fit::FitScope,
+    vertical: bool,
+    pending_domain: bool,
+    place: impl Fn(
+        &PreparedBarSignificance,
+        &crate::layout::ResolvedTextPlan,
+    ) -> Result<crate::render::backend::PlacedText, Error>,
+) -> Result<(), crate::layout::fit::PlanError> {
+    let mut text = crate::data::source::collect_source(
+        marks
+            .iter()
+            .zip(plans.iter())
+            .map(|(mark, plan)| place(mark, plan)),
+    )?;
+    let indices =
+        crate::data::source::collect_source(marks.iter().map(|mark| Ok(mark.source_index)))?;
+    crate::layout::text::visibility::apply(&mut text, &indices, panel, vertical, scope)?;
+    for (index, label) in text.iter_mut().enumerate() {
+        if !pending_domain {
+            label.plan = crate::layout::text::placement::contain(
+                label.plan.clone(),
+                label.placement,
+                panel,
+                &scope.child(crate::layout::AddressRole::Annotation, indices[index])?,
+            )?;
+        }
+    }
+    crate::layout::text::visibility::require_nonoverlap(&mut text, scope)?;
+    for (plan, text) in plans.iter_mut().zip(text) {
+        *plan = text.plan;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -1063,7 +1112,7 @@ fn apply_attached_significance<'a>(
     prepared: &mut PreparedBars,
     mode: BarMode,
 ) -> Result<(), Error> {
-    for annotation in annotations {
+    for (source_index, annotation) in annotations.into_iter().enumerate() {
         let Some(target) = annotation.at_target() else {
             continue;
         };
@@ -1134,6 +1183,7 @@ fn apply_attached_significance<'a>(
             .ok_or_else(|| Error::Data("bar significance target has no rendered bar".into()))?;
         crate::data::source::reserve_source(&mut prepared.significance, 1)?;
         prepared.significance.push(PreparedBarSignificance {
+            source_index,
             category_index,
             series_index,
             edge,

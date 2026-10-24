@@ -105,7 +105,7 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
 }
 
 #[test]
-fn panel_text_rejects_duplicate_corner() {
+fn same_corner_annotations_use_actual_overlap_policy_instead_of_a_corner_quota() {
     let data = scatter_data();
     let chart = scatter(&data)
         .panel_text_annotation(PanelTextAnnotation::new(PanelCorner::TopLeft, "First").unwrap())
@@ -115,7 +115,20 @@ fn panel_text_rejects_duplicate_corner() {
         .preflight()
         .unwrap_err()
         .to_string()
-        .contains("duplicate panel text annotation corner"));
+        .contains("required panel annotations overlap"));
+    let chart = scatter(&data)
+        .panel_text_annotation(PanelTextAnnotation::new(PanelCorner::TopLeft, "First").unwrap())
+        .panel_text_annotation(
+            PanelTextAnnotation::new(
+                PanelCorner::TopLeft,
+                lichtung_plot::Text::new("Second").layout(
+                    lichtung_plot::TextLayout::default().overlap(lichtung_plot::TextOverlap::Allow),
+                ),
+            )
+            .unwrap(),
+        );
+    let output = svg(&chart);
+    assert!(output.contains(">First</text>") && output.contains(">Second</text>"));
 }
 
 #[test]
@@ -147,6 +160,19 @@ fn panel_text_rejects_colliding_inside_legend() {
         .unwrap_err()
         .to_string()
         .contains("incompatible with the resolved inside legend"));
+    let permitted = scatter(&data)
+        .hue(data.group.clone())
+        .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight))
+        .panel_text_annotation(
+            PanelTextAnnotation::new(
+                PanelCorner::TopRight,
+                lichtung_plot::Text::new("Caller note").layout(
+                    lichtung_plot::TextLayout::default().overlap(lichtung_plot::TextOverlap::Allow),
+                ),
+            )
+            .unwrap(),
+        );
+    assert!(svg(&permitted).contains(">Caller note</text>"));
 }
 
 #[test]
@@ -186,7 +212,7 @@ fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
 
     let error = chart.preflight().unwrap_err().to_string();
     assert!(
-        error.contains("panel text annotations at TopLeft and TopRight overlap"),
+        error.contains("required panel annotations overlap"),
         "unexpected preflight error: {error}"
     );
     let directory = super::tempdir("panel-text-overlap");

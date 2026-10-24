@@ -469,6 +469,28 @@ outside explicit XML/entity/length restrictions.
 
 ## Axes And Required Tick Geometry
 
+### Common Text Placement
+
+Immutable measured text content is shared separately from request/clip metadata.
+One reference/anchor transform resolves box or measured-baseline justification,
+physical line alignment and one Screen/TextLocal offset. Occupancy intersects the
+logical/paint footprint with explicit local clipping; hidden text occupies nothing.
+The raw block remains authoritative for anchors. Translated frozen text also
+translates its assigned paint clip. Explicit role/default presence participates in
+feedback, guide/intrinsic reuse and Canvas child-height dependency equality.
+
+Typed annotation data references consume actual scientific projection, raw domain
+identity and native assigned category cells. Figure coordinates consume retained
+owning-output dimensions, including an embedded Canvas root. TextPanel/header
+anchors use their actual assigned content region, not a stale intrinsic box.
+
+Group visibility retains source occurrence indices. Every filters before metrics;
+Greedy/Parity inspect actual transformed footprints, with protected endpoints and
+optional physical separation. Boundary filtering precedes reduction. These policies
+select only text: categories, marks, tick positions, grids and track topology remain
+complete. Required nonoverlap, explicit Allow and terminal spatial-fit actions use
+that same footprint rather than independent width/height approximations.
+
 Each axis measures at one assigned panel-parallel span and returns a frozen tick
 plan plus complete perpendicular gutter. Initial gutters are intrinsic; changed
 actual gutters return to root feedback. Parallel-fitting source with larger gutter

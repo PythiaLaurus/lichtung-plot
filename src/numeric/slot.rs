@@ -2,7 +2,7 @@
 
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::render::backend::{PlacedText, PlannedTextPlacement, Point2D, TextAnchor};
-use crate::{Error, Text, TextAlignment, TextTheme};
+use crate::{Error, Text, TextAlignment};
 
 #[derive(Debug)]
 pub(crate) struct ExplanationPlan {
@@ -12,16 +12,16 @@ pub(crate) struct ExplanationPlan {
 
 impl ExplanationPlan {
     /// Relative to the top-left of the allocated slot, with downward-negative y.
-    pub(crate) fn measure(
-        text: &Text,
-        role: &TextTheme,
+    pub(crate) fn measure<'a>(
+        text: &'a Text,
+        role: impl Into<crate::text::TextAppearance<'a>>,
         width: f64,
         default: TextAlignment,
         theme: &crate::theme::ResolvedTheme,
         scope: &FitScope,
     ) -> Result<Self, PlanError> {
         let alignment = text.resolved_alignment(default);
-        let plan = fit::measured(fit::text(
+        let plan = fit::measured(fit::single_text(
             theme,
             text.as_str(),
             text.appearance(role),
@@ -61,14 +61,22 @@ impl ExplanationPlan {
             TextAlignment::End => width - occupied,
         };
         let height = crate::layout::kernel::required_length(top - bottom)?;
-        Ok(Self {
-            text: PlacedText {
-                plan,
-                placement: PlannedTextPlacement {
-                    position: Point2D::new(offset - left, -top),
-                    ..placement
-                },
+        let placement = crate::layout::text::placement::resolve(
+            PlannedTextPlacement {
+                position: Point2D::new(offset - left, -top),
+                ..placement
             },
+            &plan,
+            Some(crate::layout::PanelBox::new(0.0, width, -height, 0.0)),
+        )?;
+        let plan = crate::layout::text::placement::contain(
+            plan,
+            placement,
+            crate::layout::PanelBox::new(0.0, width, -height, 0.0),
+            scope,
+        )?;
+        Ok(Self {
+            text: PlacedText { plan, placement },
             height,
         })
     }
@@ -76,13 +84,14 @@ impl ExplanationPlan {
     pub(crate) fn at(mut self, x: f64, top: f64) -> PlacedText {
         self.text.placement.position.x += x;
         self.text.placement.position.y += top;
+        self.text.plan = self.text.plan.translate_paint_region(x, top);
         self.text
     }
 }
 
-pub(crate) fn preferred_width(
-    text: &Text,
-    role: &TextTheme,
+pub(crate) fn preferred_width<'a>(
+    text: &'a Text,
+    role: impl Into<crate::text::TextAppearance<'a>>,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<f64, Error> {
     crate::layout::interior::sizing::text_width(theme, text.as_str(), text.appearance(role))

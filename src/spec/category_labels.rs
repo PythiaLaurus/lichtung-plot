@@ -92,7 +92,10 @@ impl CategoryLabelSelection {
                     && matches!(self.endpoints, LabelEndpoints::Last | LabelEndpoints::Both)))
     }
 
-    pub(crate) fn indices(&self, count: usize) -> impl ExactSizeIterator<Item = usize> + '_ {
+    pub(crate) fn indices(
+        &self,
+        count: usize,
+    ) -> impl ExactSizeIterator<Item = usize> + Clone + '_ {
         let base = if self.offset < count {
             (count - 1 - self.offset) / self.stride + 1
         } else {

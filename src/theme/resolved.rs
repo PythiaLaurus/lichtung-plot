@@ -38,6 +38,7 @@ thread_local! {
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
+    pub(crate) text_layouts: crate::text::roles::TextRoles,
     appearance: Theme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
@@ -384,14 +385,53 @@ impl PartialEq for ResolvedTheme {
             && self.legend == other.legend
             && self.composition == other.composition
             && self.typography == other.typography
+            && self.text_layouts == other.text_layouts
     }
 }
 
 impl ResolvedTheme {
+    pub(crate) fn measure_appearance_text<'a>(
+        &self,
+        source: &str,
+        appearance: impl Into<crate::text::TextAppearance<'a>>,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<ResolvedTextPlan, Error> {
+        crate::layout::fit::measured(crate::layout::text::request::measure_quanta(
+            self,
+            source,
+            appearance.into(),
+            i64::MAX,
+            alignment,
+            owner,
+            &crate::layout::fit::ROOT_SCOPE,
+        ))
+        .map_err(crate::layout::fit::PlanError::into_error)
+    }
+    pub(crate) fn tick_text_appearance(
+        &self,
+        side: crate::layout::AxisSide,
+    ) -> crate::text::TextAppearance<'_> {
+        crate::text::TextAppearance::from(&self.typography.axes.tick_label).layout(
+            self.text_layouts.ticks[usize::from(side == crate::layout::AxisSide::Left)].as_ref(),
+        )
+    }
+    pub(crate) fn guide_text_appearance(
+        &self,
+        role: crate::GuideTextRole,
+    ) -> crate::text::TextAppearance<'_> {
+        crate::text::TextAppearance::from(if role == crate::GuideTextRole::Title {
+            &self.typography.guides.legend_title
+        } else {
+            &self.typography.guides.legend_label
+        })
+        .layout(self.text_layouts.guide[role.index()].as_ref())
+    }
     pub(crate) fn new(appearance: Theme) -> Result<Self, Error> {
         appearance.validate()?;
         Ok(Self {
             appearance,
+            text_layouts: crate::text::roles::TextRoles::default(),
             canvas_surface_override: None,
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),
@@ -427,7 +467,7 @@ impl ResolvedTheme {
         if !self.composition.same(&other.composition) {
             return Ok(false);
         }
-        if !self.non_text_eq(other) {
+        if !self.non_text_eq(other) || self.text_layouts != other.text_layouts {
             return Ok(false);
         }
         for (left, right) in self
@@ -509,7 +549,7 @@ impl ResolvedTheme {
     )]
     pub(crate) fn intrinsic_tick_label_width<'a>(
         &self,
-        labels: impl ExactSizeIterator<Item = &'a str>,
+        labels: impl Iterator<Item = &'a str> + Clone,
         available_height: f64,
     ) -> Result<f64, crate::Error> {
         self.prepare_font_environment()?;
@@ -518,7 +558,7 @@ impl ResolvedTheme {
         let appearance = self.typography.get_axes().get_tick_label();
         let height = crate::layout::maximum_width_quanta(available_height)
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
-        let count = i64::try_from(labels.len().max(1))
+        let count = i64::try_from(labels.clone().count().max(1))
             .map_err(|_| crate::Error::Render("axis row count overflowed".into()))?;
         let pitch = crate::layout::maximum_width_quanta(appearance.line_pitch_pixels())
             .map_err(|error| crate::Error::Render(format!("axis row pitch: {error}")))?;
@@ -634,26 +674,6 @@ impl ResolvedTheme {
             self.typography.get_annotations().get_contrast().get_light(),
             self.typography.get_annotations().get_contrast().get_dark(),
         )
-    }
-
-    pub(crate) fn measure_legacy_appearance_text(
-        &self,
-        source: &str,
-        appearance: &TextTheme,
-        alignment: PhysicalTextAlignment,
-        owner: &str,
-        exact_override: bool,
-    ) -> Result<ResolvedTextPlan, Error> {
-        self.plan_text_quanta_scoped(
-            source,
-            appearance,
-            i64::MAX,
-            alignment,
-            owner,
-            exact_override,
-            &crate::layout::fit::ROOT_SCOPE,
-        )
-        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     fn plan_text_quanta(

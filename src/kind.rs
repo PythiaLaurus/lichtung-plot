@@ -120,6 +120,9 @@ capability!(NumericY, "Plots that can expose a numeric vertical axis." => [
 capability!(CategoricalX, "Plots that can select horizontal categorical labels; Trajectory checks its actual axis." => [
     Trajectory, Interaction, Heatmap, Bar, StackedBar, Boxplot, Violin, Raincloud,
 ]);
+capability!(XAxisText,"Exact families with actual horizontal coordinate-axis text." => [Scatter,Histogram,Density,Qq,PointInterval,Line,Trajectory,LinePath,Interaction,Coefficient,Forest,Dumbbell,Heatmap,Bar,HorizontalBar,StackedBar,StackedHorizontalBar,Boxplot,Violin,Raincloud,Regression,Marginal,Matrix,Beeswarm,Waterfall]);
+capability!(YAxisText,"Exact families with actual vertical coordinate-axis text." => [Scatter,Histogram,Density,Qq,PointInterval,Line,Trajectory,LinePath,Interaction,Coefficient,Forest,Dumbbell,Heatmap,Bar,HorizontalBar,StackedBar,StackedHorizontalBar,Boxplot,Violin,Raincloud,Regression,Marginal,Matrix,Beeswarm,Waterfall]);
+capability!(EstimateDetailText,"Estimate families with unavailable-row or adjacent-detail text." => [PointInterval,Coefficient,Forest]);
 capability!(CategoricalY, "Plots that can select vertical categorical labels." => [
     PointInterval, Coefficient, Forest, Dumbbell, Heatmap, HorizontalBar, StackedHorizontalBar, Beeswarm, Waterfall,
 ]);

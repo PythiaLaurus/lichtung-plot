@@ -229,6 +229,13 @@ fn plan_comparisons_at_with_label(
 
     let mut resolved = Vec::new();
     let mut comparison_pairs = Vec::new();
+    let eligible = crate::data::source::collect_source(
+        annotations
+            .iter()
+            .enumerate()
+            .filter(|(_, annotation)| annotation.endpoints().is_some())
+            .map(|(index, _)| Ok(index)),
+    )?;
     for (source_index, annotation) in annotations.iter().enumerate() {
         let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
             continue;
@@ -280,17 +287,25 @@ fn plan_comparisons_at_with_label(
         }
         comparison_pairs.push(pair);
         let source = annotation.mark().glyph()?.to_owned();
-        let text_plan = theme.measure_text(
-            &source,
-            &effective.label,
-            if horizontal {
-                PhysicalTextAlignment::Start
-            } else {
-                PhysicalTextAlignment::Center
-            },
-            "significance bracket label",
-            effective.exact_override,
-        )?;
+        let text_plan =
+            crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
+                theme,
+                &source,
+                crate::text::TextAppearance {
+                    theme: &effective.label,
+                    exact_override: effective.exact_override,
+                    layout: theme.text_layouts.significance.as_ref(),
+                },
+                i64::MAX,
+                if horizontal {
+                    PhysicalTextAlignment::Start
+                } else {
+                    PhysicalTextAlignment::Center
+                },
+                "significance bracket label",
+                scope,
+                (source_index, &eligible),
+            ))?;
         resolved.push(ResolvedComparison {
             source_index,
             left: pair.0,
@@ -358,10 +373,11 @@ fn plan_comparisons_at_with_label(
         let start = anchor(comparison.left).min(anchor(comparison.right));
         let end = anchor(comparison.left).max(anchor(comparison.right));
         let center = f64::midpoint(start, end);
-        let label_span = if horizontal {
-            comparison.label.plan.height()
+        let footprint = label_footprint(&comparison.label.plan, horizontal)?;
+        let (lower, upper) = if horizontal {
+            (footprint.y0, footprint.y1)
         } else {
-            comparison.label.plan.width()
+            (footprint.x0, footprint.x1)
         };
         let clearance = f64::from(
             theme
@@ -372,8 +388,8 @@ fn plan_comparisons_at_with_label(
         ) / 2.0
             + 1.0 / 1024.0;
         let interval = (
-            start.min(center - label_span / 2.0) - clearance,
-            end.max(center + label_span / 2.0) + clearance,
+            start.min(center + lower) - clearance,
+            end.max(center + upper) + clearance,
         );
         let mut first_free = None;
         for (level, occupied) in occupied_levels.iter().enumerate() {
@@ -405,10 +421,11 @@ fn plan_comparisons_at_with_label(
             .copied()
             .fold(f64::NEG_INFINITY, f64::max);
         level_maxima[comparison.level] = level_maxima[comparison.level].max(span_maximum);
+        let footprint = label_footprint(&comparison.label.plan, horizontal)?;
         let label_extent = if horizontal {
-            comparison.label.plan.width()
+            footprint.x1.max(comparison.label.plan.occupied_size().0)
         } else {
-            comparison.label.plan.height()
+            footprint.y1.max(comparison.label.plan.occupied_size().1)
         };
         level_label_extents[comparison.level] =
             level_label_extents[comparison.level].max(label_extent);
@@ -499,9 +516,9 @@ fn plan_comparisons_at_with_label(
             .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
     let category_width = panel.width() / categories.len() as f64;
-    let brackets = crate::layout::fit::collect( "significance brackets", resolved
-        .into_iter()
-        .map(|comparison| {
+    let mut brackets = crate::layout::fit::collect(
+        "significance brackets",
+        resolved.into_iter().map(|comparison| {
             let anchor = |index: usize| {
                 anchor_positions.map_or_else(
                     || panel.x0 + (index as f64 + 0.5) * category_width,
@@ -510,19 +527,6 @@ fn plan_comparisons_at_with_label(
             };
             let x_left = anchor(comparison.left);
             let x_right = anchor(comparison.right);
-            let label_center = f64::midpoint(x_left, x_right);
-            let label_half_extent = if horizontal {
-                comparison.label.plan.height() / 2.0
-            } else {
-                comparison.label.plan.width() / 2.0
-            };
-            if label_center - label_half_extent < panel.x0
-                || label_center + label_half_extent > panel.x1
-            {
-                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index)?.failure(crate::layout::fit::FitKind::Text,
-                    "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
-                ).into());
-            }
             Ok(PlannedSignificanceBracket {
                 source_index: comparison.source_index,
                 geometry: SignificanceBracket {
@@ -535,22 +539,41 @@ fn plan_comparisons_at_with_label(
                 style: effective.bracket_style(&comparison.label.plan)?,
                 label: comparison.label,
             })
-        })
-        )?;
+        }),
+    )?;
 
-    for bracket in &brackets {
+    let mut labels = Vec::new();
+    crate::data::source::reserve_source(&mut labels, brackets.len())?;
+    let containing = if horizontal {
+        PanelBox::new(panel.y0, panel.y1, panel.x0, panel.x1)
+    } else {
+        panel
+    };
+    for bracket in &mut brackets {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let mut painted = bracket.geometry.clone();
-        let containing = if horizontal {
+        if horizontal {
             painted.orientation = BracketOrientation::Horizontal;
-            PanelBox::new(panel.y0, panel.y1, panel.x0, panel.x1)
-        } else {
-            panel
-        };
+        }
+        let canonical = crate::render::backend::validate_bracket(&painted, &bracket.style)?;
+        let placement =
+            crate::render::backend::planned_bracket_placement(canonical, &bracket.label.plan)?;
+        let label = crate::layout::text::placement::contain(
+            bracket.label.plan.clone(),
+            placement,
+            containing,
+            &scope.child(crate::layout::AddressRole::Annotation, bracket.source_index)?,
+        )?;
+        labels.push(crate::render::backend::PlacedText {
+            plan: label,
+            placement,
+        });
+        let path_only =
+            DeferredAnnotationTextPlan::from_resolved(bracket.label.plan.clone().hide()?);
         geometry.bracket(PlannedSignificanceCall {
             bracket: &painted,
             style: &bracket.style,
-            label: &bracket.label,
+            label: &path_only,
         })?;
         if geometry.bounds().iter().any(|ink| {
             ink.left < containing.x0
@@ -562,16 +585,38 @@ fn plan_comparisons_at_with_label(
                 .child(crate::layout::AddressRole::Annotation, bracket.source_index)?
                 .failure(
                     crate::layout::fit::FitKind::OverlayCollision,
-                    "complete significance bracket and label ink exceeds its assigned panel",
+                    "significance bracket path exceeds its assigned panel",
                 )
                 .into());
         }
+    }
+    let indices = crate::data::source::collect_source(
+        brackets.iter().map(|bracket| Ok(bracket.source_index)),
+    )?;
+    crate::layout::text::visibility::apply(&mut labels, &indices, containing, horizontal, scope)?;
+    crate::layout::text::visibility::require_nonoverlap(&mut labels, scope)?;
+    for (bracket, label) in brackets.iter_mut().zip(labels) {
+        bracket.label = DeferredAnnotationTextPlan::from_resolved(label.plan);
     }
 
     Ok(SignificancePlan {
         y_range: planned_range,
         brackets,
     })
+}
+
+fn label_footprint(
+    plan: &crate::layout::ResolvedTextPlan,
+    horizontal: bool,
+) -> Result<PanelBox, Error> {
+    use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
+    let default = if horizontal {
+        PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), TextAnchor::Start, 0.0)
+    } else {
+        PlannedTextPlacement::baseline(Point2D::new(0.0, 0.0), TextAnchor::Middle, 0.0)
+    };
+    let placement = crate::layout::text::placement::resolve(default, plan, None)?;
+    crate::layout::text::placement::footprint(placement, plan)
 }
 
 /// Plan exact grouped dodge anchors for a vertical categorical plot.

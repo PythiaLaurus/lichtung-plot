@@ -193,6 +193,29 @@ size used by that header's padding.
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.
 
+To attach a block to an actual data point, keep its reference separate from its anchor:
+
+```rust
+use lichtung_plot::{DataCoordinate, PanelTextAnnotation, Text, TextAnchor,
+    TextCoordinate, TextLayout, TextPosition};
+let note = PanelTextAnnotation::at(
+    TextPosition::new(
+        TextCoordinate::data(DataCoordinate::numeric(2.0)?),
+        TextCoordinate::panel_fraction(0.5)?,
+    ),
+    Text::new("Fixed reference\nTwo lines")
+        .layout(TextLayout::default().anchor(TextAnchor::bottom_left())),
+)?;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+`position()` reads the typed reference. `TextOffset` adds fractional CSS offsets in
+Screen or TextLocal space. Bounds and wrapping constrain text only; explicit
+`TextOverflow::clip()`, `hide()` or `visible()` choose terminal spatial-fit handling.
+Tick/guide/value roles accept a common `TextLayout`; `TextVisibility::every` or
+`greedy` selects labels without removing marks, ticks or grid lines. Local Text
+layout replaces the entire role request, including an explicit default reset.
+
 `HeatmapNullRowAnnotation::new(row_key, text)` accepts Text for the explanation
 inside a fully-null Cartesian row. The row key keeps its semantic validation;
 local Text style replaces the missing-fill contrast role and determines padding.

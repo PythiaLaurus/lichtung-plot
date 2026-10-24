@@ -14,6 +14,7 @@ mod alpha;
 mod configuration;
 mod facets;
 mod layout;
+mod text_layout;
 
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
@@ -464,6 +465,8 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     y_label: crate::text::TextSlot,
     labels: Labels,
     x_axis_spec: AxisSpec,
+    pub(crate) text_layouts: crate::text::roles::TextRoles,
+    pub(crate) output_dimensions: Option<(u32, u32)>,
     x_limits_user_explicit: bool,
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
@@ -577,6 +580,8 @@ enum AxisGutterOwner {
 
 /// Coordinated replacements and complete numeric policies for a fixed child owner.
 pub(crate) struct ComposedInputs {
+    output_dimensions: Option<(u32, u32)>,
+    text_layouts: crate::text::roles::TextRoles,
     prose: [crate::text::TextSlot; 3],
     axis_titles: [crate::text::TextSlot; 2],
     x_axis_spec: AxisSpec,
@@ -613,6 +618,8 @@ impl Plot<crate::kind::Any> {
             y_label: crate::text::TextSlot::EMPTY,
             labels: Labels::default(),
             x_axis_spec: AxisSpec::default(),
+            text_layouts: crate::text::roles::TextRoles::default(),
+            output_dimensions: None,
             x_limits_user_explicit: false,
             y_axis_spec: AxisSpec::default(),
             y_limits_user_explicit: false,
@@ -1032,6 +1039,8 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_label,
             labels,
             x_axis_spec,
+            text_layouts,
+            output_dimensions,
             x_limits_user_explicit,
             y_axis_spec,
             y_limits_user_explicit,
@@ -1143,6 +1152,8 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_label,
             labels,
             x_axis_spec,
+            text_layouts,
+            output_dimensions,
             x_limits_user_explicit,
             y_axis_spec,
             y_limits_user_explicit,

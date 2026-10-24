@@ -18,7 +18,9 @@ pub(super) fn observe_arranged_chrome(
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     for (facet, text) in plan.panels.iter().zip(&plan.strip_text) {
         round.observe_box(facet.panel)?;
-        geometry.text(text.placement, &text.plan, None)?;
+        for text in text {
+            geometry.text(text.placement, &text.plan, None)?;
+        }
     }
     for text in &plan.shared_axis_text {
         geometry.text(text.placement, &text.plan, None)?;
@@ -42,7 +44,7 @@ pub(super) fn render_scene(
     legends: &[Option<crate::decorations::legend::LegendDrawPlan>],
     strip_layers: &[String],
     panel_layers: &[[String; 3]],
-    strip_text: &[PlacedText],
+    strip_text: &[Vec<PlacedText>],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::RootFramePlan,
     theme: &ResolvedTheme,
@@ -111,47 +113,73 @@ pub(super) fn plan_facet_strip(
     plot: &Plot,
     facet: &FacetPanel,
     theme: &ResolvedTheme,
-) -> Result<PlacedText, crate::layout::fit::PlanError> {
+) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let resources = theme.prepared_font_environment()?.operation();
     let spacing = theme.facet_strip_lengths()?;
-    let label = facet_label(plot, &facet.cell, plot.data().with_operation(&resources))?;
-    let plan = crate::layout::fit::measured(crate::layout::fit::text(
+    let plans = strip_plans(
+        plot,
+        &facet.cell,
+        plot.data().with_operation(&resources),
         theme,
-        &label,
-        &theme.typography.composition.facet_header,
-        crate::theme::composition::capacity(facet.panel.width(), &spacing.horizontal_inset)?,
-        PhysicalTextAlignment::Center,
-        "facet strip",
+        facet.panel.width(),
         &crate::layout::fit::FitScope::root()
             .child(crate::layout::AddressRole::FacetCell, facet.panel_index)?
             .child(crate::layout::AddressRole::FacetHeader, 0)?,
-    ))?;
-    let top = spacing.content_clearance.add_pixels(plan.height())?;
-    let first = plan
-        .first_baseline_quanta
-        .ok_or_else(|| Error::Render("facet strip has no retained baseline".into()))?;
-    let first_y = top
-        .subtract(&crate::theme::spacing::ExactLength::pixels(
-            first as f64 / 1024.0,
-        )?)
-        .ok_or_else(|| Error::Render("facet strip baseline exceeds its complete extent".into()))?
-        .after_pixels(facet.panel.y1)?;
-    Ok(PlacedText {
-        plan,
-        placement: crate::render::backend::PlannedTextPlacement::baseline(
+    )?;
+    let mut top = spacing
+        .content_clearance
+        .add_pixels(plans.iter().map(|plan| plan.occupied_size().1).sum())?;
+    let mut placed = Vec::new();
+    crate::data::source::reserve_source(&mut placed, plans.len())?;
+    for plan in plans {
+        let first = plan.first_baseline_quanta.unwrap_or(0);
+        let first_y = top
+            .subtract(&crate::theme::spacing::ExactLength::pixels(
+                first as f64 / 1024.0,
+            )?)
+            .ok_or_else(|| {
+                Error::Render("facet strip baseline exceeds its complete extent".into())
+            })?
+            .after_pixels(facet.panel.y1)?;
+        let placement = crate::render::backend::PlannedTextPlacement::baseline(
             Point2D::new(f64::midpoint(facet.panel.x0, facet.panel.x1), first_y),
             TextAnchor::Middle,
             0.0,
-        ),
-    })
+        );
+        let region = PanelBox::new(
+            facet.panel.x0,
+            facet.panel.x1,
+            top.after_pixels(facet.panel.y1)? - plan.occupied_size().1,
+            top.after_pixels(facet.panel.y1)?,
+        );
+        let placement = crate::layout::text::placement::resolve(placement, &plan, Some(region))?;
+        top = top
+            .subtract(&crate::theme::spacing::ExactLength::pixels(
+                plan.occupied_size().1,
+            )?)
+            .ok_or_else(|| Error::Render("facet strip sequence underflow".into()))?;
+        let plan = crate::layout::text::placement::contain(
+            plan,
+            placement,
+            region,
+            &crate::layout::fit::ROOT_SCOPE,
+        )?;
+        placed.push(PlacedText { plan, placement });
+    }
+    Ok(placed)
 }
 
 fn draw_facet_strip(
     layer: &str,
-    text: &PlacedText,
+    text: &[PlacedText],
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    crate::render::backend::with_layer(backend, layer, |backend| text.draw(backend))
+    crate::render::backend::with_layer(backend, layer, |backend| {
+        for text in text {
+            text.draw(backend)?;
+        }
+        Ok(())
+    })
 }
 
 pub(super) fn plan_shared_facet_axis_labels(
@@ -173,7 +201,7 @@ pub(super) fn plan_shared_facet_axis_labels(
             theme.typography.axes.tick_label.get_font_size(),
             appearance.theme.get_font_size(),
         )?;
-        let plan = crate::layout::fit::measured(crate::layout::fit::text(
+        let plan = crate::layout::fit::measured(crate::layout::fit::single_text(
             theme,
             label.as_str(),
             appearance,
@@ -204,7 +232,7 @@ pub(super) fn plan_shared_facet_axis_labels(
             theme.typography.axes.tick_label.get_font_size(),
             appearance.theme.get_font_size(),
         )?;
-        let plan = crate::layout::fit::measured(crate::layout::fit::text(
+        let plan = crate::layout::fit::measured(crate::layout::fit::single_text(
             theme,
             label.as_str(),
             appearance,
@@ -272,6 +300,108 @@ pub(super) fn facet_label(
     Ok(label)
 }
 
+pub(super) fn strip_sources(
+    plot: &Plot,
+    cell: &FacetCell,
+    data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
+) -> Result<Vec<crate::Text>, Error> {
+    if theme.text_layouts.facet.iter().all(Option::is_none) {
+        return Ok(vec![facet_label(plot, cell, data)?.into()]);
+    }
+    data.source_resources()?;
+    crate::data::source::collect_source(cell.iter().enumerate().map(|(index, selector)| {
+        let role = if cell.as_slice().len() == 1 { 1 } else { index };
+        let variable = plot.resolve_label(&selector.variable)?;
+        let level = plot.resolve_label(&selector.level)?;
+        let length = variable
+            .len()
+            .checked_add(level.len())
+            .and_then(|length| length.checked_add(3))
+            .ok_or_else(|| Error::Render("facet text source length overflow".into()))?;
+        let mut source = String::new();
+        crate::data::source::reserve_source_string(&mut source, length)?;
+        source.push_str(&variable);
+        source.push_str(" = ");
+        source.push_str(&level);
+        let source = crate::Text::from(source);
+        Ok(if let Some(layout) = &theme.text_layouts.facet[role] {
+            source.layout(layout.clone())
+        } else {
+            source
+        })
+    }))
+}
+
+pub(super) fn strip_plans(
+    plot: &Plot,
+    cell: &FacetCell,
+    data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
+    width: f64,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<Vec<crate::layout::ResolvedTextPlan>, crate::layout::fit::PlanError> {
+    let width =
+        crate::theme::composition::capacity(width, &theme.facet_strip_lengths()?.horizontal_inset)?;
+    crate::layout::fit::collect(
+        "facet strip roles",
+        strip_sources(plot, cell, data, theme)?
+            .iter()
+            .map(|source| {
+                crate::layout::fit::measured(crate::layout::fit::single_text(
+                    theme,
+                    source.as_str(),
+                    source.appearance(&theme.typography.composition.facet_header),
+                    width,
+                    PhysicalTextAlignment::Center,
+                    "facet strip",
+                    scope,
+                ))
+            }),
+    )
+}
+
+pub(super) fn strip_widths(
+    plot: &Plot,
+    cell: &FacetCell,
+    data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    strip_sources(plot, cell, data, theme)?.iter().try_fold(
+        (0.0_f64, 0.0_f64),
+        |(hard, preferred), text| {
+            let widths = crate::layout::fit::intrinsic_widths(
+                theme,
+                text.as_str(),
+                text.appearance(&theme.typography.composition.facet_header),
+                "facet strip",
+            )?;
+            Ok((hard.max(widths.0), preferred.max(widths.1)))
+        },
+    )
+}
+
+pub(super) fn strip_requirement(
+    axes: &crate::layout::PanelAxisPlan,
+    plot: &Plot,
+    cell: &FacetCell,
+    data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
+    panel: PanelBox,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<crate::layout::canvas::PanelRequirements, crate::layout::fit::PlanError> {
+    let mut requirement = crate::layout::canvas::PanelRequirements::measure_header(axes, theme)?;
+    let plans = strip_plans(plot, cell, data, theme, panel.width(), scope)?;
+    let height = plans.iter().map(|plan| plan.occupied_size().1).sum();
+    requirement.top = requirement.top.max(crate::theme::composition::hard(
+        &theme
+            .facet_strip_lengths()?
+            .content_clearance
+            .add_pixels(height)?,
+    )?);
+    Ok(requirement)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,7 +465,8 @@ mod tests {
             source_rows: vec![0, 1],
             panel: grid,
         };
-        let strip = plan_facet_strip(&plot, &facet, &theme).unwrap();
+        let strips = plan_facet_strip(&plot, &facet, &theme).unwrap();
+        let strip = &strips[0];
         let origin = (57.25, 67.75);
         let axes = plan_shared_facet_axis_labels(
             Some(&"Horizontal\nSecond".into()),
@@ -345,7 +476,7 @@ mod tests {
             &theme,
         )
         .unwrap();
-        for role in [&strip, &axes[0], &axes[1]] {
+        for role in [strip, &axes[0], &axes[1]] {
             assert_eq!(role.plan.lines.len(), 2);
         }
         assert_eq!(

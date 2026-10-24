@@ -182,15 +182,24 @@ pub(crate) fn intrinsic_body_minimum(
     let mut width = 0.0;
     let mut height = 0.0;
     for label in &prepared.labels {
-        let hard = crate::layout::fit::intrinsic_widths(
+        let column = crate::layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axes.axis_title,
+            crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                .layout(theme.text_layouts.matrix[1].as_ref()),
             "matrix variable label",
         )?
         .0;
-        width += cell.0.max(hard);
-        height += cell.1.max(hard);
+        let row = crate::layout::fit::intrinsic_widths(
+            theme,
+            label,
+            crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                .layout(theme.text_layouts.matrix[0].as_ref()),
+            "matrix row variable label",
+        )?
+        .0;
+        width += cell.0.max(column);
+        height += cell.1.max(row);
     }
     let gaps = theme.composition_grid_gap()? * n.saturating_sub(1) as f64;
     Ok((width + gaps, height + gaps))
@@ -213,7 +222,8 @@ pub(crate) fn natural_body_preference(
         let width = layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axes.axis_title,
+            crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                .layout(theme.text_layouts.matrix[1].as_ref()),
             "Matrix natural variable",
         )?
         .0;
@@ -494,7 +504,8 @@ pub(crate) fn measure(
         let hard = layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axes.axis_title,
+            crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                .layout(theme.text_layouts.matrix[1].as_ref()),
             "matrix variable label",
         )?
         .0;
@@ -502,7 +513,17 @@ pub(crate) fn measure(
             hard.max(point.0).max(2.0 * ink.0).max(1.0 / 1024.0),
         )?;
         let y = layout::kernel::ceil_spatial_quanta(
-            hard.max(point.1).max(2.0 * ink.1).max(1.0 / 1024.0),
+            layout::fit::intrinsic_widths(
+                theme,
+                label,
+                crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                    .layout(theme.text_layouts.matrix[0].as_ref()),
+                "matrix row variable label",
+            )?
+            .0
+            .max(point.1)
+            .max(2.0 * ink.1)
+            .max(1.0 / 1024.0),
         )?;
         let preferred =
             layout::kernel::ceil_spatial_quanta(12.0 * theme.typography.axes.tick_label.font_size)?
@@ -626,7 +647,7 @@ pub(crate) fn measure(
                 variable_ranges[row],
                 mark_panel.as_tuple(),
             );
-            let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>| {
+            let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>, role: usize| {
                 Ok::<_, Error>(layout::Axis {
                     source: ticks.source,
                     numeric: ticks.numeric.clone(),
@@ -639,7 +660,14 @@ pub(crate) fn measure(
                     label: label
                         .map(crate::data::source::copy_source_string)
                         .transpose()?
-                        .map(crate::Text::from),
+                        .map(|source| {
+                            let text = crate::Text::from(source);
+                            if let Some(layout) = &theme.text_layouts.matrix[role] {
+                                text.layout(layout.clone())
+                            } else {
+                                text
+                            }
+                        }),
                     tick_labels_visible: label.is_some(),
                     category_labels: crate::CategoryLabelSelection::all(),
                     explicit_ticks: false,
@@ -657,6 +685,7 @@ pub(crate) fn measure(
                     &scope,
                 )?,
                 (row == n - 1).then_some(display_cols[col].as_str()),
+                1,
             )?;
             let y_axis = axis(
                 matrix_ticks(
@@ -668,6 +697,7 @@ pub(crate) fn measure(
                     &scope,
                 )?,
                 (col == 0).then_some(display_cols[row].as_str()),
+                0,
             )?;
             let cell_layout = Layout {
                 projection,
@@ -894,7 +924,6 @@ fn matrix_ticks<'a>(
             projection,
             side,
             theme,
-            false,
             None,
             scope,
             None,

@@ -118,18 +118,20 @@ impl PreparedEstimate {
                 .filter_map(|(row, &alpha)| row.map(|tuple| (tuple.estimate, 0.0, alpha))),
         )
     }
-    pub(crate) fn detail_sources(&self) -> impl Iterator<Item = &str> {
+    pub(crate) fn text_occurrences(&self) -> impl Iterator<Item = (usize, &str, bool)> {
         self.estimates
             .iter()
-            .any(Option::is_none)
-            .then_some(NOT_ESTIMABLE_TEXT)
-            .into_iter()
-            .chain(self.adjacent.iter().filter_map(|label| {
-                label
-                    .as_ref()
-                    .filter(|(_, significance)| !significance)
-                    .map(|(source, _)| source.as_str())
-            }))
+            .enumerate()
+            .filter_map(|(index, estimate)| {
+                if estimate.is_none() {
+                    Some((index, NOT_ESTIMABLE_TEXT, false))
+                } else {
+                    self.adjacent
+                        .get(index)
+                        .and_then(Option::as_ref)
+                        .map(|(source, significance)| (index, source.as_str(), *significance))
+                }
+            })
     }
 
     pub(crate) fn primary_mark_count(&self) -> u128 {
@@ -141,6 +143,10 @@ impl PreparedEstimate {
 
     /// The category axis retains unavailable rows but does not fabricate a
     /// numeric estimate or painted interval for any such slot.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "scientific ink and eligible adjacent/status roles jointly determine the native row minimum"
+    )]
     pub(crate) fn mark_intrinsic(
         &self,
         chart: &Plot,
@@ -183,15 +189,29 @@ impl PreparedEstimate {
                 ) + stroke,
             );
         }
-        if unavailable {
-            let text = theme.measure_text(
+        let detail_indices = crate::data::source::collect_source(
+            self.text_occurrences()
+                .filter(|(_, _, significance)| !*significance)
+                .map(|(index, _, _)| Ok(index)),
+        )?;
+        if unavailable
+            && self.estimates.iter().enumerate().any(|(index, row)| {
+                row.is_none()
+                    && crate::text::TextAppearance::from(
+                        &theme.typography.annotations.estimate_detail,
+                    )
+                    .layout(theme.text_layouts.estimate.as_ref())
+                    .includes(index, &detail_indices)
+            })
+        {
+            let text = theme.measure_appearance_text(
                 NOT_ESTIMABLE_TEXT,
-                &theme.typography.annotations.estimate_detail,
+                crate::text::TextAppearance::from(&theme.typography.annotations.estimate_detail)
+                    .layout(theme.text_layouts.estimate.as_ref()),
                 PhysicalTextAlignment::Center,
                 "estimate unavailable category intrinsic",
-                false,
             )?;
-            pitch = pitch.max(text.height());
+            pitch = pitch.max(text.occupied_size().1);
         }
         if !self.adjacent.is_empty() && self.adjacent.len() != self.estimates.len() {
             return Err(Error::Render(
@@ -201,22 +221,51 @@ impl PreparedEstimate {
 
         let significance =
             theme.effective_significance(chart.significance_mark_style_override())?;
-        for adjacent in self.adjacent.iter().flatten() {
+        let significance_indices = crate::data::source::collect_source(
+            self.text_occurrences()
+                .filter(|(_, _, significance)| *significance)
+                .map(|(index, _, _)| Ok(index)),
+        )?;
+        for (index, adjacent) in self
+            .adjacent
+            .iter()
+            .enumerate()
+            .filter_map(|(index, adjacent)| Some((index, adjacent.as_ref()?)))
+        {
             let appearance = if adjacent.1 {
                 &significance.label
             } else {
                 &theme.typography.annotations.estimate_detail
             };
+            let selected = crate::text::TextAppearance {
+                theme: appearance,
+                exact_override: adjacent.1 && chart.significance_mark_style_override().is_some(),
+                layout: if adjacent.1 {
+                    theme.text_layouts.significance.as_ref()
+                } else {
+                    theme.text_layouts.estimate.as_ref()
+                },
+            };
+            if !selected.includes(
+                index,
+                if adjacent.1 {
+                    &significance_indices
+                } else {
+                    &detail_indices
+                },
+            ) {
+                continue;
+            }
             pitch = pitch.max(
                 theme
-                    .measure_text(
+                    .measure_appearance_text(
                         &adjacent.0,
-                        appearance,
+                        selected,
                         PhysicalTextAlignment::Start,
                         "estimate adjacent category height",
-                        adjacent.1 && chart.significance_mark_style_override().is_some(),
                     )?
-                    .height(),
+                    .occupied_size()
+                    .1,
             );
         }
         let count = u32::try_from(self.labels.len()).map_err(|_| {
@@ -548,17 +597,41 @@ fn plan_not_estimable(
     vertical_guide_x: Option<f64>,
     reference_style: &LineStyle,
     scope: &crate::layout::fit::FitScope,
+    occurrence: (usize, &[usize]),
 ) -> Result<(ResolvedTextPlan, f64), crate::layout::fit::PlanError> {
-    let text_plan = theme.measure_legacy_appearance_text(
-        NOT_ESTIMABLE_TEXT,
-        appearance,
-        PhysicalTextAlignment::Center,
-        "not estimable status",
-        false,
-    )?;
+    let text_plan =
+        crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
+            theme,
+            NOT_ESTIMABLE_TEXT,
+            crate::text::TextAppearance::from(appearance)
+                .layout(theme.text_layouts.estimate.as_ref()),
+            i64::MAX,
+            PhysicalTextAlignment::Center,
+            "not estimable status",
+            scope,
+            occurrence,
+        ))?;
+    if text_plan.lines.is_empty()
+        || text_plan.request.as_ref().is_some_and(|request| {
+            request.instructions().overlap == Some(crate::TextOverlap::Allow)
+                || request
+                    .instructions()
+                    .overflow
+                    .as_ref()
+                    .is_some_and(|overflow| overflow.failure != crate::TextFailure::Error)
+        })
+    {
+        return Ok((
+            text_plan,
+            f64::midpoint(
+                layout.projection.panel_box().x0,
+                layout.projection.panel_box().x1,
+            ),
+        ));
+    }
     let x = not_estimable_text_x(
         layout.projection.panel_box(),
-        text_plan.width(),
+        text_plan.occupied_size().0,
         vertical_guide_x,
         &theme
             .annotations
@@ -991,22 +1064,18 @@ fn project(
         detail_role.get_line_height(),
     )?;
 
-    let not_estimable_plan = estimates
-        .iter()
-        .position(Option::is_none)
-        .map(|index| {
-            plan_not_estimable(
-                theme,
-                &detail_label,
-                &layout,
-                reference_line_x,
-                &reference_style,
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
-            )
-        })
-        .transpose()?;
+    let detail_indices = crate::data::source::collect_source(
+        prepared
+            .text_occurrences()
+            .filter(|(_, _, significance)| !*significance)
+            .map(|(index, _, _)| Ok(index)),
+    )?;
+    let significance_indices = crate::data::source::collect_source(
+        prepared
+            .text_occurrences()
+            .filter(|(_, _, significance)| *significance)
+            .map(|(index, _, _)| Ok(index)),
+    )?;
     let adjacent_label_plans = crate::layout::fit::collect( "estimate adjacent labels", (0..labels.len())
         .map(|index| {
             let Some(tuple) = estimates[index] else {
@@ -1036,20 +1105,10 @@ fn project(
             let panel = layout.projection.panel_box();
             let (position, anchor, plan) = {
                 let measure = |alignment| {
-                    if is_significance {
-                        theme.measure_text(source, appearance, alignment, owner, exact_override)
-                    } else {
-                        theme.measure_legacy_appearance_text(
-                            source,
-                            appearance,
-                            alignment,
-                            owner,
-                            exact_override,
-                        )
-                    }
+                    crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(theme,source,crate::text::TextAppearance {theme:appearance,exact_override,layout:if is_significance {theme.text_layouts.significance.as_ref()} else {theme.text_layouts.estimate.as_ref()}},i64::MAX,alignment,owner,&scope,(index,if is_significance {&significance_indices} else {&detail_indices})))
                 };
                 let start_plan = measure(PhysicalTextAlignment::Start)?;
-                let width = start_plan.width();
+                let width = start_plan.occupied_size().0;
                 if x + gap + width <= panel.x1 {
                     (
                         Point2D::new((x + gap).round(), y.round()),
@@ -1063,7 +1122,7 @@ fn project(
                         TextAnchor::End,
                         end_plan,
                     )
-                } else if chart.user_x_limits().is_none() {
+                } else if chart.user_x_limits().is_none() || start_plan.request.as_ref().and_then(|request|request.instructions().overflow.as_ref()).is_some_and(|overflow|overflow.failure!=crate::TextFailure::Error) {
                     // Keep the first legal anchor order. The selected required
                     // glyph requests numeric headroom from the root instead of
                     // failing a feasible automatic domain at this initial fit.
@@ -1196,54 +1255,87 @@ fn project(
                     adjacent.position,
                     adjacent.anchor,
                     0.0,
-                ));
+                )?);
             }
         } else {
-            let (plan, x) = not_estimable_plan
-                .as_ref()
-                .ok_or_else(|| Error::Render("not estimable text plan is missing".into()))?;
+            let (plan, x) = plan_not_estimable(
+                theme,
+                &detail_label,
+                &layout,
+                reference_line_x,
+                &payload.reference_style,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
+                (index, &detail_indices),
+            )?;
             let (_, py) = layout.projection.project(x_range.0, y);
             row.text = Some(crate::render::backend::PlacedText::middle(
-                plan.clone(),
+                plan,
                 Point2D::new(x.round(), py.round()),
                 TextAnchor::Middle,
                 0.0,
-            ));
+            )?);
         }
         payload.rows.push(row);
     }
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for is_significance in [false, true] {
+        let indices = crate::data::source::collect_source(
+            prepared
+                .text_occurrences()
+                .filter(|(_, _, significance)| *significance == is_significance)
+                .map(|(index, _, _)| Ok(index)),
+        )?;
+        let mut labels = crate::data::source::collect_source(indices.iter().map(|&index| {
+            Ok(payload.rows[index]
+                .text
+                .as_ref()
+                .expect("prepared text occurrence")
+                .clone())
+        }))?;
+        crate::layout::text::visibility::apply(
+            &mut labels,
+            &indices,
+            clip,
+            true,
+            context.fit_scope(),
+        )?;
+        crate::layout::text::visibility::require_nonoverlap(&mut labels, context.fit_scope())?;
+        for (&index, text) in indices.iter().zip(labels) {
+            payload.rows[index].text = Some(text);
+        }
+    }
     let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
     let mut label_source: Option<(f64, f64)> = None;
 
-    for (index, row) in payload.rows.iter().enumerate() {
-        let Some(text) = &row.text else { continue };
+    for (index, row) in payload.rows.iter_mut().enumerate() {
+        let Some(text) = &mut row.text else { continue };
+        let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
+        let region = crate::layout::PanelBox::new(
+            if chart.user_x_limits().is_some() || estimates[index].is_none() {
+                clip.x0
+            } else {
+                clip.x0.min(bounds.x0)
+            },
+            if chart.user_x_limits().is_some() || estimates[index].is_none() {
+                clip.x1
+            } else {
+                clip.x1.max(bounds.x1)
+            },
+            clip.y0,
+            clip.y1,
+        );
+        text.plan = crate::layout::text::placement::contain(
+            text.plan.clone(),
+            text.placement,
+            region,
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
+        )?;
         let mut ink = crate::render::geometry::GeometrySnapshot::new();
         ink.text(text.placement, &text.plan, None)?;
-        for bounds in ink.bounds() {
-            if bounds.bottom < clip.y0 || bounds.top > clip.y1 {
-                return Err(context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
-                    .failure(
-                        crate::layout::fit::FitKind::Text,
-                        "required Estimate text exceeds its categorical row",
-                    )
-                    .into());
-            }
-            if (bounds.left < clip.x0 || bounds.right > clip.x1)
-                && (chart.user_x_limits().is_some() || estimates[index].is_none())
-            {
-                return Err(context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
-                    .failure(
-                        crate::layout::fit::FitKind::OverlayCollision,
-                        "required Estimate text exceeds its numeric panel",
-                    )
-                    .into());
-            }
-        }
         if let Some(tuple) = estimates[index] {
             let source = label_source.get_or_insert((tuple.estimate, tuple.estimate));
             source.0 = source.0.min(tuple.estimate);
@@ -1339,7 +1431,6 @@ pub(crate) fn log_tick_plan(
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
-        false,
         format.as_ref(),
         scope,
         raw,

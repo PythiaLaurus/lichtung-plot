@@ -151,24 +151,30 @@ pub(crate) fn text<'a>(
     scope: &FitScope,
 ) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
     let appearance = appearance.into();
-    theme.prepare_font_environment()?;
+    if !appearance.hidden() {
+        theme.prepare_font_environment()?;
+    }
     if width.is_finite() && width < 0.0 {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::Constraint,
             format!("{owner}: negative assigned text width"),
         )));
     }
-    let width = crate::layout::maximum_width_quanta(width)
-        .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
-    outcome(theme.plan_text_quanta_scoped(
-        source,
-        appearance.theme,
-        width,
-        alignment,
-        owner,
-        appearance.exact_override,
-        scope,
-    ))
+    super::text::request::measure(theme, source, appearance, width, alignment, owner, scope)
+}
+
+/// Independent authored slots accept All/Hidden; reduction programs require a real label group.
+pub(crate) fn single_text<'a>(
+    theme: &ResolvedTheme,
+    source: &str,
+    appearance: impl Into<crate::text::TextAppearance<'a>>,
+    width: f64,
+    alignment: PhysicalTextAlignment,
+    owner: &str,
+    scope: &FitScope,
+) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    let appearance = appearance.into().require_single()?;
+    text(theme, source, appearance, width, alignment, owner, scope)
 }
 
 pub(crate) fn reserve<T>(values: &mut Vec<T>, count: usize, owner: &str) -> Result<(), Error> {
@@ -214,6 +220,9 @@ pub(crate) fn intrinsic_widths<'a>(
     owner: &str,
 ) -> Result<(f64, f64), Error> {
     let appearance = appearance.into();
+    if appearance.hidden() {
+        return Ok((0.0, 0.0));
+    }
     let requirements = theme
         .measure_text(
             source,
@@ -224,8 +233,33 @@ pub(crate) fn intrinsic_widths<'a>(
         )?
         .intrinsic_from_analysis(1)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
+    let hard = if appearance.layout.is_some_and(|request| {
+        request
+            .instructions()
+            .visibility
+            .as_ref()
+            .is_some_and(crate::TextVisibility::reduces)
+            || request
+                .instructions()
+                .overflow
+                .as_ref()
+                .is_some_and(|overflow| overflow.failure != crate::TextFailure::Error)
+    }) {
+        0.0
+    } else if appearance.layout.is_some_and(|request| {
+        request.instructions().wrapping == Some(crate::TextWrapping::NoSoftWrap)
+    }) {
+        requirements.natural_width_quanta as f64 / 1024.0
+    } else {
+        requirements.hard_width_quanta as f64 / 1024.0
+    };
+    let hard = appearance
+        .layout
+        .and_then(|request| request.instructions().bounds)
+        .and_then(|bounds| bounds.width)
+        .map_or(hard, |maximum| hard.min(maximum.get()));
     Ok((
-        requirements.hard_width_quanta as f64 / 1024.0,
+        hard,
         requirements
             .natural_width_quanta
             .max(requirements.preferred_width_quanta) as f64

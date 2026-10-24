@@ -32,10 +32,12 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn resolve_theme(&self) -> Result<crate::theme::ResolvedTheme, Error> {
-        match self.theme_spec() {
+        let mut theme = match self.theme_spec() {
             Some(theme) => theme.resolve(),
             None => crate::theme::Theme::publication().resolve(),
-        }
+        }?;
+        theme.text_layouts = self.text_layouts.clone();
+        Ok(theme)
     }
 
     pub(crate) fn source_row_map(&self) -> Option<&[usize]> {
@@ -1103,6 +1105,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Assigned geometry is available only after the root or parent allocates it.
     pub(crate) fn canvas_dimensions(&self) -> Result<(u32, u32), Error> {
         self.root_size.dimensions()
+    }
+
+    pub(crate) fn figure_dimensions(&self) -> Result<(u32, u32), Error> {
+        self.output_dimensions
+            .map_or_else(|| self.canvas_dimensions(), Ok)
     }
 
     /// Borrow the ordered variable names for `PlotKind::Matrix`.

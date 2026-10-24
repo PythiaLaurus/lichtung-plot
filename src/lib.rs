@@ -125,7 +125,11 @@ pub use spec::{
     ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
-pub use text::{Text, TextAlignment, TextLayout};
+pub use text::{
+    DataCoordinate, GuideTextRole, Text, TextAlignment, TextAnchor, TextBounds, TextCoordinate,
+    TextFailure, TextLayout, TextOffset, TextOffsetFrame, TextOverflow, TextOverlap, TextPosition,
+    TextVisibility, TextWrapping,
+};
 pub use theme::{
     AccentPalette, AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
     BandFillRoles, BodyFillRoles, CategoricalColorScale, CategoryMarkGeometry,

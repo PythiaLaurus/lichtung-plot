@@ -42,6 +42,8 @@ pub(crate) struct CanonicalTextPayload {
     pub(crate) rotation: coordinates::CanonicalAngle,
     pub(crate) rotation_sin_cos: (f64, f64),
     pub(crate) lines: Vec<CanonicalTextLine>,
+    pub(crate) clip: Option<CanonicalBox>,
+    pub(crate) suppressed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -185,12 +187,25 @@ impl CanonicalPlannedText {
             });
         }
 
+        let clip = crate::layout::text::placement::paint_clip(placement, plan)?;
+        let suppressed = clip.is_some_and(|region| region.width() <= 0.0 || region.height() <= 0.0);
+        let clip = clip
+            .filter(|_| !suppressed)
+            .map(|region| {
+                coordinates::CanonicalBox::from_bottom_up(
+                    backend::validate_clip_region(region)?,
+                    height,
+                )
+            })
+            .transpose()?;
         Ok(Self(Arc::new(CanonicalTextPayload {
             plan: plan.clone(),
             center: canonical.position.inverted(height)?,
             rotation: canonical.rotation,
             rotation_sin_cos: canonical.rotation.value().to_radians().sin_cos(),
             lines,
+            clip,
+            suppressed,
         })))
     }
 }
@@ -236,7 +251,7 @@ impl CanonicalPlannedBracket {
                 position: canonical.label_position,
                 rotation: coordinates::CanonicalAngle::ZERO,
             },
-            backend::planned_bracket_placement(canonical),
+            backend::planned_bracket_placement(canonical, &call.label.plan)?,
             &call.label.plan,
             height,
             stage,

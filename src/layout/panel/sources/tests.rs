@@ -18,7 +18,6 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &scope,
     )
@@ -31,7 +30,6 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &scope,
         None,
@@ -47,7 +45,6 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &scope,
     );
@@ -187,7 +184,6 @@ fn count_targets_allow_nice_deviation_and_maxima_filter_before_formatting() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &crate::layout::fit::ROOT_SCOPE,
     )
@@ -401,7 +397,6 @@ fn source_semantics_reject_before_fonts() {
             &projection,
             AxisSide::Bottom,
             &theme,
-            false,
             None,
             &crate::layout::fit::ROOT_SCOPE,
         )
@@ -474,7 +469,6 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &crate::layout::fit::ROOT_SCOPE,
     )
@@ -492,7 +486,6 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         None,
         &crate::layout::fit::ROOT_SCOPE,
     )
@@ -528,7 +521,6 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
             &projection,
             AxisSide::Bottom,
             &theme,
-            false,
             Some(&crate::numeric::source::AxisRequest::for_test(&format)),
             &crate::layout::fit::ROOT_SCOPE,
         )
@@ -568,7 +560,6 @@ fn midpoint_is_conditional_and_must_itself_fit() {
                 &projection,
                 AxisSide::Bottom,
                 &theme,
-                false,
                 None,
                 &scope,
             );
@@ -605,7 +596,6 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
             &projection,
             AxisSide::Bottom,
             &theme,
-            false,
             None,
             &ROOT_SCOPE
         ),
@@ -619,7 +609,6 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
             &projection,
             AxisSide::Bottom,
             &theme,
-            false,
             None,
             &ROOT_SCOPE
         ),
@@ -644,7 +633,6 @@ fn generated_labels_are_unique_across_decimal_and_power_ranges() {
             &projection,
             AxisSide::Bottom,
             &theme,
-            false,
             None,
             &crate::layout::fit::ROOT_SCOPE,
         )
@@ -694,7 +682,6 @@ fn generated_labels_are_unique_across_decimal_and_power_ranges() {
         &projection,
         AxisSide::Bottom,
         &theme,
-        false,
         Some(&crate::numeric::source::AxisRequest::for_test(&configured)),
         &crate::layout::fit::ROOT_SCOPE,
     )

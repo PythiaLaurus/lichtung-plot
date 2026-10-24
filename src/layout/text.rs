@@ -19,8 +19,11 @@ use crate::font::canonical::{
 use crate::theme::Color;
 use crate::TextWeight;
 
+pub(crate) mod placement;
 mod rational;
+pub(crate) mod request;
 mod requirements;
+pub(crate) mod visibility;
 use rational::ExactRational;
 #[cfg(test)]
 mod shaping_tests;
@@ -258,9 +261,17 @@ impl From<ParagraphBidiInfo<'_>> for ParagraphBidiData {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedTextPayload {
+    content: std::sync::Arc<ResolvedTextContent>,
+    pub(crate) request: Option<crate::TextLayout>,
+    pub(crate) clip_size: Option<(i64, i64)>,
+    pub(crate) paint_region: Option<[u64; 4]>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(Clone))]
-pub(crate) struct ResolvedTextPayload {
+pub(crate) struct ResolvedTextContent {
     pub(crate) source: String,
     pub(crate) style: ResolvedTextStyle,
     pub(crate) pair_provenance: PairProvenance,
@@ -272,6 +283,20 @@ pub(crate) struct ResolvedTextPayload {
     pub(crate) height_quanta: i64,
 }
 
+impl std::ops::Deref for ResolvedTextPayload {
+    type Target = ResolvedTextContent;
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+#[cfg(test)]
+impl std::ops::DerefMut for ResolvedTextPayload {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        std::sync::Arc::make_mut(&mut self.content)
+    }
+}
+
 impl std::ops::Deref for ResolvedTextPlan {
     type Target = ResolvedTextPayload;
 
@@ -281,6 +306,142 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    pub(crate) fn translate_paint_region(mut self, dx: f64, dy: f64) -> Self {
+        if let Some(region) = self.paint_region {
+            let [x0, x1, y0, y1] = region.map(f64::from_bits);
+            self.payload_mut().paint_region =
+                Some([x0 + dx, x1 + dx, y0 + dy, y1 + dy].map(f64::to_bits));
+        }
+        self
+    }
+    pub(crate) fn clear_paint_region(&mut self) {
+        if self.paint_region.is_some() {
+            self.payload_mut().paint_region = None;
+        }
+    }
+    pub(crate) fn occupied_width_quanta(&self) -> i64 {
+        self.clip_size
+            .map_or(self.width_quanta, |(width, _)| width.min(self.width_quanta))
+    }
+
+    pub(crate) fn occupied_height_quanta(&self) -> i64 {
+        self.clip_size.map_or(self.height_quanta, |(_, height)| {
+            height.min(self.height_quanta)
+        })
+    }
+
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "text extents are bounded canonical quanta"
+    )]
+    pub(crate) fn occupied_size(&self) -> (f64, f64) {
+        (
+            self.occupied_width_quanta() as f64 / 1024.0,
+            self.occupied_height_quanta() as f64 / 1024.0,
+        )
+    }
+    pub(crate) fn hidden_source(
+        source: &str,
+        appearance: crate::text::TextAppearance<'_>,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<Self, crate::Error> {
+        let theme = appearance.theme;
+        Ok(Self(
+            std::sync::Arc::new(ResolvedTextPayload {
+                content: std::sync::Arc::new(ResolvedTextContent {
+                    source: crate::data::source::copy_source_string(source)?,
+                    style: ResolvedTextStyle {
+                        stack_source: theme
+                            .get_stack()
+                            .css()
+                            .map_err(|error| crate::Error::Render(error.to_string()))?,
+                        stack: theme.get_stack().clone(),
+                        weight: theme.get_weight(),
+                        font_size: theme.get_font_size(),
+                        line_height_quanta: 1,
+                        alignment,
+                        paint: theme.get_color(),
+                        provenance: TextPlanProvenance {
+                            pair_ordinal: 0,
+                            owner: owner.into(),
+                        },
+                        exact_override: appearance.exact_override,
+                    },
+                    pair_provenance: PairProvenance {
+                        pair_ordinal: 0,
+                        weight: theme.get_weight().into(),
+                        candidates: Vec::new(),
+                    },
+                    lines: Vec::new(),
+                    line_pitch_quanta: 1,
+                    first_baseline_quanta: None,
+                    last_baseline_quanta: None,
+                    width_quanta: 0,
+                    height_quanta: 0,
+                }),
+                request: appearance.layout.cloned(),
+                clip_size: None,
+                paint_region: None,
+            }),
+            None,
+        ))
+    }
+    pub(crate) fn clip_region(mut self, region: crate::layout::PanelBox) -> Self {
+        self.payload_mut().paint_region =
+            Some([region.x0, region.x1, region.y0, region.y1].map(f64::to_bits));
+        self
+    }
+    fn payload_mut(&mut self) -> &mut ResolvedTextPayload {
+        std::sync::Arc::make_mut(&mut self.0)
+    }
+    pub(crate) fn with_request(mut self, request: Option<&crate::TextLayout>) -> Self {
+        self.payload_mut().request = request.cloned();
+        self
+    }
+    pub(crate) fn hide(mut self) -> Result<Self, crate::Error> {
+        if self.lines.is_empty() {
+            return Ok(self);
+        }
+        let original = &self.style;
+        let style = ResolvedTextStyle {
+            stack_source: crate::data::source::copy_source_string(&original.stack_source)?,
+            stack: crate::data::source::copy_font_stack(&original.stack)?,
+            provenance: TextPlanProvenance {
+                pair_ordinal: original.provenance.pair_ordinal,
+                owner: crate::data::source::copy_source_string(&original.provenance.owner)?,
+            },
+            weight: original.weight,
+            font_size: original.font_size,
+            line_height_quanta: original.line_height_quanta,
+            alignment: original.alignment,
+            paint: original.paint,
+            exact_override: original.exact_override,
+        };
+        let content = ResolvedTextContent {
+            source: crate::data::source::copy_source_string(&self.source)?,
+            style,
+            pair_provenance: PairProvenance {
+                pair_ordinal: self.pair_provenance.pair_ordinal,
+                weight: self.pair_provenance.weight,
+                candidates: crate::data::source::collect_source(
+                    self.pair_provenance.candidates.iter().copied().map(Ok),
+                )?,
+            },
+            lines: Vec::new(),
+            width_quanta: 0,
+            height_quanta: 0,
+            first_baseline_quanta: None,
+            last_baseline_quanta: None,
+            line_pitch_quanta: self.line_pitch_quanta,
+        };
+        self.payload_mut().content = std::sync::Arc::new(content);
+        Ok(self)
+    }
+    pub(crate) fn clip_to(mut self, width: i64, height: i64) -> Self {
+        self.payload_mut().clip_size = Some((width, height));
+        self
+    }
     pub(crate) fn retained_handle_count(&self) -> usize {
         1 + usize::from(self.1.is_some())
     }
@@ -546,7 +707,9 @@ impl ResolvedTextPlan {
             .max()
             .unwrap_or(0);
         let conservative_ceil = rounded_advance.saturating_add(i64::from(rounded_advance > 0));
-        conservative_ceil as f64 / CSS_PIXEL_QUANTA as f64
+        self.clip_size
+            .map_or(conservative_ceil, |(width, _)| width.min(conservative_ceil)) as f64
+            / CSS_PIXEL_QUANTA as f64
     }
 
     #[expect(
@@ -2081,25 +2244,30 @@ fn finalize_plan(
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(
         std::sync::Arc::new(ResolvedTextPayload {
-            source,
-            style: ResolvedTextStyle {
-                stack_source,
-                stack,
-                weight: input.weight,
-                font_size: input.font_size,
-                line_height_quanta,
-                alignment: input.alignment,
-                paint: input.paint,
-                provenance: input.provenance,
-                exact_override: input.exact_override,
-            },
-            pair_provenance,
-            lines,
-            line_pitch_quanta,
-            first_baseline_quanta,
-            last_baseline_quanta,
-            width_quanta,
-            height_quanta,
+            content: std::sync::Arc::new(ResolvedTextContent {
+                source,
+                style: ResolvedTextStyle {
+                    stack_source,
+                    stack,
+                    weight: input.weight,
+                    font_size: input.font_size,
+                    line_height_quanta,
+                    alignment: input.alignment,
+                    paint: input.paint,
+                    provenance: input.provenance,
+                    exact_override: input.exact_override,
+                },
+                pair_provenance,
+                lines,
+                line_pitch_quanta,
+                first_baseline_quanta,
+                last_baseline_quanta,
+                width_quanta,
+                height_quanta,
+            }),
+            request: None,
+            clip_size: None,
+            paint_region: None,
         }),
         None,
     ))
@@ -2193,11 +2361,11 @@ impl TextBlock {
     }
 
     pub(crate) fn width(&self) -> f64 {
-        self.plan.width()
+        self.plan.occupied_size().0
     }
 
     pub(crate) fn height(&self) -> f64 {
-        self.plan.height()
+        self.plan.occupied_size().1
     }
 
     pub(crate) fn line_height(&self) -> f64 {

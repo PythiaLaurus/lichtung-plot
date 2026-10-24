@@ -81,7 +81,7 @@ fn guide_intrinsics(
             section.display_title.as_str(),
             section
                 .display_title
-                .appearance(&theme.typography.guides.legend_title),
+                .appearance(theme.guide_text_appearance(crate::GuideTextRole::Title)),
             "legend title intrinsic",
         )?;
         let mut entries = Vec::new();
@@ -91,15 +91,21 @@ fn guide_intrinsics(
             "guide entry intrinsics",
         )?;
         let mut preferred_column = 0;
-        for entry in section.entries() {
-            let (minimum, preferred) = fit::intrinsic_widths(
-                theme,
-                entry.display_label.as_str(),
-                entry
-                    .display_label
-                    .appearance(&theme.typography.guides.legend_label),
-                "legend entry intrinsic",
-            )?;
+        let eligible = crate::data::source::collect_source((0..section.entries().len()).map(Ok))?;
+        for (index, entry) in section.entries().iter().enumerate() {
+            let appearance = entry
+                .display_label
+                .appearance(theme.guide_text_appearance(crate::GuideTextRole::Entry));
+            let (minimum, preferred) = if appearance.includes(index, &eligible) {
+                fit::intrinsic_widths(
+                    theme,
+                    entry.display_label.as_str(),
+                    appearance,
+                    "legend entry intrinsic",
+                )?
+            } else {
+                (0.0, 0.0)
+            };
             let ink = entry.key.glyph_ink(metrics)?;
             let left = LayoutScalar::from_css_pixels(ink.left, SpatialRounding::Floor)?.quanta();
             let right = LayoutScalar::from_css_pixels(ink.right, SpatialRounding::Ceil)?.quanta();
@@ -146,26 +152,20 @@ fn guide_intrinsics(
 /// Advance/leading and actual glyph ink share the first baseline. Ink outside
 /// design metrics contributes to occupancy before any row/capacity calculation.
 fn text_extents(plan: &ResolvedTextPlan) -> Result<(i64, i64), Error> {
-    let baseline = plan.first_baseline_quanta.unwrap_or(0);
-    let mut ascent = baseline;
-    let mut descent = plan
-        .height_quanta
-        .checked_sub(baseline)
-        .ok_or_else(|| Error::Render("guide text baseline overflow".into()))?;
-    for line in &plan.lines {
-        if let Some(ink) = line.ink_quanta {
-            let offset = baseline
-                .checked_sub(line.translation_y_quanta)
-                .ok_or_else(|| Error::Render("guide text line offset overflow".into()))?;
-            ascent = ascent.max(add(offset, ink.top)?);
-            descent = descent.max(
-                add(offset, ink.bottom)?
-                    .checked_neg()
-                    .ok_or_else(|| Error::Render("guide text descent overflow".into()))?,
-            );
-        }
-    }
-    Ok((ascent, descent))
+    let placement = crate::layout::text::placement::resolve(
+        crate::render::backend::PlannedTextPlacement::baseline(
+            crate::render::backend::Point2D::new(0.0, 0.0),
+            crate::render::backend::TextAnchor::Start,
+            0.0,
+        ),
+        plan,
+        None,
+    )?;
+    let bounds = crate::layout::text::placement::footprint(placement, plan)?;
+    Ok((
+        crate::layout::kernel::ceil_spatial_quanta(bounds.y1.max(0.0))?,
+        crate::layout::kernel::ceil_spatial_quanta((-bounds.y0).max(0.0))?,
+    ))
 }
 
 struct MeasuredEntry {
@@ -381,8 +381,8 @@ fn measure_title(
     theme: &ResolvedTheme,
     scope: &FitScope,
 ) -> Result<(ResolvedTextPlan, ExactLength), PlanError> {
-    let appearance = text.appearance(&theme.typography.guides.legend_title);
-    let plan = fit::measured(fit::text(
+    let appearance = text.appearance(theme.guide_text_appearance(crate::GuideTextRole::Title));
+    let plan = fit::measured(fit::single_text(
         theme,
         text.as_str(),
         appearance,
@@ -445,6 +445,7 @@ fn measure_section(
     let (title_ascent, title_descent) = text_extents(&title)?;
     let title_height = add(title_ascent, title_descent)?;
     let title_occupancy = length(title_height)?.add_length(&title_gap);
+    let eligible = crate::data::source::collect_source((0..section.entries().len()).map(Ok))?;
     let entries = fit::collect(
         "measured guide entries",
         section
@@ -463,19 +464,22 @@ fn measure_section(
                         "guide entry has no text capacity after exact chrome",
                     )
                 })?;
-                let plan = fit::measured(fit::text(
+                let appearance = entry
+                    .display_label
+                    .appearance(theme.guide_text_appearance(crate::GuideTextRole::Entry));
+                let alignment = entry
+                    .display_label
+                    .resolved_alignment(crate::TextAlignment::Start)
+                    .into();
+                let plan = fit::measured(crate::layout::text::request::measure_occurrence(
                     theme,
                     entry.display_label.as_str(),
-                    entry
-                        .display_label
-                        .appearance(&theme.typography.guides.legend_label),
-                    text_capacity.pixels_rounded(SpatialRounding::Floor)?,
-                    entry
-                        .display_label
-                        .resolved_alignment(crate::TextAlignment::Start)
-                        .into(),
+                    appearance,
+                    text_capacity.round(SpatialRounding::Floor)?.quanta(),
+                    alignment,
                     "legend section entry",
                     &label_scope,
+                    (index, &eligible),
                 ))?;
                 let (ascent, descent) = text_extents(&plan)?;
                 Ok(MeasuredEntry {
@@ -490,7 +494,7 @@ fn measure_section(
     )?;
     Ok(MeasuredSection {
         title_gap,
-        title_width: ExactLength::pixels(title.width().max(title.fit_width()))?,
+        title_width: ExactLength::pixels(title.occupied_size().0.max(title.fit_width()))?,
         title: TextBlock::from_resolved(title),
         title_ascent,
         title_occupancy,
@@ -587,7 +591,7 @@ fn stack_sections(
         }
         let section_scope = scope.child(AddressRole::LegendSection, ordinal)?;
         let capacity = capacities.as_ref().map(|values| values[ordinal]);
-        let (flow, color) = if let Some(body) = section.assigned_color(
+        let (mut flow, color) = if let Some(body) = section.assigned_color(
             assignment,
             capacity,
             metrics,
@@ -621,6 +625,13 @@ fn stack_sections(
         } else {
             flow.width
         };
+        let region = crate::layout::PanelBox::new(
+            0.0,
+            pixels(hard(&section_width)?),
+            -pixels(hard(&top.add_length(&occupied))?),
+            -pixels(hard(&top)?),
+        );
+        select_entry_visibility(&mut flow.slots, region, horizontal, &section_scope)?;
         if width.compare(&section_width) == Ordering::Less {
             width = section_width.clone();
         }
@@ -651,6 +662,40 @@ fn stack_sections(
         sections,
         compact_changes,
     })
+}
+
+fn select_entry_visibility(
+    slots: &mut [super::LegendSlot],
+    region: crate::layout::PanelBox,
+    horizontal: bool,
+    scope: &FitScope,
+) -> Result<(), PlanError> {
+    let mut labels = crate::data::source::collect_source(slots.iter().map(|slot| {
+        let plan = slot.block.plan();
+        let (offset, anchor) = super::label_anchor(plan)?;
+        let x = slot.label[0]
+            .checked_add(offset)
+            .ok_or_else(|| Error::Render("guide label anchor overflow".into()))?;
+        let placement = crate::layout::text::placement::resolve(
+            crate::render::backend::PlannedTextPlacement::baseline(
+                crate::render::backend::Point2D::new(pixels(x), pixels(slot.label[1])),
+                anchor,
+                0.0,
+            ),
+            plan,
+            None,
+        )?;
+        Ok(crate::render::backend::PlacedText {
+            placement,
+            plan: plan.clone(),
+        })
+    }))?;
+    let indices = crate::data::source::collect_source((0..labels.len()).map(Ok))?;
+    crate::layout::text::visibility::apply(&mut labels, &indices, region, !horizontal, scope)?;
+    for (slot, label) in slots.iter_mut().zip(labels) {
+        slot.block = TextBlock::from_resolved(label.plan);
+    }
+    Ok(())
 }
 
 #[expect(

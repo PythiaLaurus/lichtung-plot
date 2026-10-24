@@ -155,11 +155,9 @@ pub(super) fn allocate(
             } else {
                 preference.0
             };
-            let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
-            let appearance = &theme.typography.composition.facet_header;
             preferred.max(crate::theme::composition::hard(
                 &strip_lengths.horizontal_inset.add_pixels(
-                    crate::layout::interior::sizing::text_width(theme, &label, appearance)?,
+                    super::rendering::strip_widths(&plot, &panel.cell, data, theme)?.1,
                 )?,
             )?)
         } else {
@@ -297,22 +295,18 @@ pub(super) fn allocate(
                 plot.natural_body_height(theme, width, preference.1)?
             };
             if row_insets[panel.row][1] == 0 {
-                let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
-                let appearance = &theme.typography.composition.facet_header;
-                let strip = crate::layout::fit::measured(crate::layout::fit::text(
-                    theme,
-                    &label,
-                    appearance,
-                    crate::theme::composition::capacity(width, &strip_lengths.horizontal_inset)?,
-                    crate::layout::PhysicalTextAlignment::Center,
-                    "natural facet strip",
-                    scope,
-                ))
-                .map_err(crate::layout::fit::PlanError::into_error)?;
+                let strips =
+                    super::rendering::strip_plans(&plot, &panel.cell, data, theme, width, scope)
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
                 height = crate::theme::composition::hard(
                     &strip_lengths
                         .content_clearance
-                        .add_pixels(strip.height())?
+                        .add_pixels(
+                            strips
+                                .iter()
+                                .map(crate::layout::ResolvedTextPlan::height)
+                                .sum(),
+                        )?
                         .add_pixels(height)?,
                 )?;
             }

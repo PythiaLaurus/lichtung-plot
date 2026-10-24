@@ -876,12 +876,17 @@ impl Legend {
         for (section, layout) in self.descriptor.sections.iter().zip(&self.layout.sections) {
             let title = layout.title.plan();
             let (title_offset, title_anchor) = label_anchor(title)?;
-            emit(LegendCall::Text(crate::render::backend::PlacedText {
-                placement: PlannedTextPlacement::baseline(
+            let title_placement = crate::layout::text::placement::resolve(
+                PlannedTextPlacement::baseline(
                     translate([title_offset, layout.title_baseline]),
                     title_anchor,
                     0.0,
                 ),
+                title,
+                None,
+            )?;
+            emit(LegendCall::Text(crate::render::backend::PlacedText {
+                placement: title_placement,
                 plan: title.clone(),
             }))?;
             for (entry, slot) in section.entries().iter().zip(&layout.entries) {
@@ -891,12 +896,13 @@ impl Legend {
                 let x = slot.label[0]
                     .checked_add(offset)
                     .ok_or_else(|| Error::Render("legend label anchor overflow".into()))?;
+                let placement = crate::layout::text::placement::resolve(
+                    PlannedTextPlacement::baseline(translate([x, slot.label[1]]), anchor, 0.0),
+                    label,
+                    None,
+                )?;
                 emit(LegendCall::Text(crate::render::backend::PlacedText {
-                    placement: PlannedTextPlacement::baseline(
-                        translate([x, slot.label[1]]),
-                        anchor,
-                        0.0,
-                    ),
+                    placement,
                     plan: label.clone(),
                 }))?;
             }

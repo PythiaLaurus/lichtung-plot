@@ -529,6 +529,14 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         frozen_svg(&original, &theme),
         frozen_svg(&new_paint, &painted)
     );
+    let mut reset = theme.clone();
+    reset.text_layouts.guide[1] = Some(crate::TextLayout::default());
+    let reset_plan = measure_fixture(&descriptor, (420.0, None), (false, false), &reset, &scope);
+    assert!(!Arc::ptr_eq(&original.layout, &reset_plan.layout));
+    assert_eq!(
+        frozen_svg(&original, &theme),
+        frozen_svg(&reset_plan, &reset)
+    );
     let mut unrelated = theme.clone();
     unrelated.surfaces.plot_panel = crate::Color::rgb(1, 2, 3);
     let unrelated = measure_fixture(

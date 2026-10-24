@@ -189,8 +189,12 @@ single-line restriction on these display slots.
 Present empty prose, titles and annotations retain one empty line's font metrics;
 structural absence is `None` or an explicit owner visibility policy. Exact tick
 empty labels deliberately suppress text/gap while keeping their positions.
-PanelTextAnnotation fits its complete block at its selected corner and retains
-the existing duplicate-corner, collision and facet rules.
+PanelTextAnnotation stores one typed TextPosition, exposed by position(); new
+retains a corner's semantic inset and at accepts independently typed x/y data,
+panel-fraction or owning-output-fraction references. Raw category/series keys
+resolve against actual axes and native track centers. Multiple notes may share
+a corner if their actual footprints do not conflict or overlap is explicitly allowed.
+The existing single-panel/facet applicability restrictions remain.
 
 Automatically sourced names still default to `Labels::humanized()`. Public
 `Labels::resolve(&self, raw: &str) -> Result<String>` uses the same alias-first,
@@ -225,6 +229,26 @@ PanelTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq
 its existing text reader returns `&str`. Local style replaces the Plot's panel-text
 role before the census. Local line alignment is independent of corner ownership,
 and the selected size determines the annotation's font-relative padding and fit.
+
+TextLayout also owns block anchors (nine box presets, arbitrary finite fractions,
+first/center measured baselines), finite Screen/TextLocal offsets, nonnegative
+width/height/line maxima, Legal/NoSoftWrap and explicit overflow, overlap and
+visibility. Anchors refer to the complete measured block, independently of physical
+line alignment. Screen y offsets are positive down; panel/figure y fractions are
+positive up. TextPanel anchors consume the assigned post-inset title/body regions.
+Clip/Hide affect occupied/painted extent, not original source or scientific geometry.
+Zero bounds are real constraints. Only spatial fit misses consume Error/Hide/Clip/
+Visible; font, projection, allocation and arithmetic failures remain fatal.
+
+Typed tick, facet, Matrix variable-title, guide Title/Entry/Number, point-label,
+Heatmap value/null-row, estimate-detail, Waterfall-total and significance attachments
+retain one whole role request. A present local Text request replaces that default.
+Hidden/Every eligibility is resolved before font use; group reductions preserve
+original occurrence indices and all marks/ticks/grids. Greedy/Parity use stable
+geometric order and protected endpoints; optional signed boundary tolerance filters
+first. Independent authored slots accept All/Hidden, not group reduction programs.
+Explicit Allow removes collision weight, not physical containment or final-root checks.
+Selected sources, requests, clips and placements are frozen before publication.
 
 HeatmapNullRowAnnotation takes a semantic row-label string and displayed Text.
 Local exact style replaces the selected missing-fill contrast role before fonts;

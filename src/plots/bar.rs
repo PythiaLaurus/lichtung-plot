@@ -60,7 +60,7 @@ pub(crate) fn measure_marks(
     }
     let panel = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, false)?;
-    let attached_label_plans = bar_data::attached_significance_text_plans(
+    let mut attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,
         &attached.appearance.label,
@@ -135,13 +135,14 @@ pub(crate) fn measure_marks(
         significance.y_range,
         crate::layout::interior::ClearanceAxis::Y,
     )?;
-    validate_bar_significance_collisions(
-        &attached,
-        prepared,
-        &layout,
-        &attached_label_plans,
+    bar_data::validate_attached_text(
+        &prepared.significance,
+        &mut attached_label_plans,
+        layout.projection.panel_box(),
         context.fit_scope(),
+        false,
         domain_expansion.is_some(),
+        |mark, plan| place_bar_significance(&attached, mark, plan, prepared, &layout),
     )?;
 
     let mut payload = bar_data::BarPayload {
@@ -215,12 +216,7 @@ pub(crate) fn measure_marks(
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
         payload.text.push(place_bar_significance(
-            &attached,
-            mark,
-            text_plan,
-            prepared,
-            &layout,
-            domain_expansion.is_some(),
+            &attached, mark, text_plan, prepared, &layout,
         )?);
     }
     for point in &prepared.points {
@@ -289,7 +285,6 @@ fn place_bar_significance(
     text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
     layout: &Layout,
-    pending_domain: bool,
 ) -> Result<PlacedText, Error> {
     let gap = attached.appearance.gap_pixels()?;
     let x = attached.center(mark, prepared);
@@ -299,71 +294,12 @@ fn place_bar_significance(
     } else {
         edge_y - gap - text_plan.style.font_size
     };
-    let panel = layout.projection.panel_box();
-    if !pending_domain && (y < panel.y0 || y + text_plan.height() > panel.y1) {
-        return Err(Error::Render(format!(
-            "bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the y-axis range",
-            mark.label
-        )));
-    }
-    Ok(PlacedText::middle(
+    PlacedText::middle(
         text_plan.clone(),
         Point2D::new(x.round(), y.round()),
         TextAnchor::Middle,
         0.0,
-    ))
-}
-
-fn validate_bar_significance_collisions(
-    attached: &bar_data::BarSignificance,
-    prepared: &PreparedBars,
-    layout: &Layout,
-    text_plans: &[ResolvedTextPlan],
-    scope: &crate::layout::fit::FitScope,
-
-    pending_domain: bool,
-) -> Result<(), crate::layout::fit::PlanError> {
-    if prepared.significance.is_empty() {
-        return Ok(());
-    }
-    let gap = attached.appearance.gap_pixels()?;
-    let mut bounds = Vec::new();
-    crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
-    for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
-        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-        let center = attached.center(mark, prepared);
-        let (x, edge_y) = layout.projection.project(center, mark.edge);
-        let width = text_plan.width();
-        let height = text_plan.height();
-        let y0 = if mark.positive {
-            edge_y + gap
-        } else {
-            edge_y - gap - height
-        };
-        let candidate = (x - width / 2.0, x + width / 2.0, y0, y0 + height);
-        let draw_y = if mark.positive {
-            edge_y + gap
-        } else {
-            edge_y - gap - text_plan.style.font_size
-        };
-        let panel = layout.projection.panel_box();
-        if !pending_domain && (draw_y < panel.y0 || draw_y + height > panel.y1) {
-            return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the y-axis range", mark.label)).into());
-        }
-
-        if bounds.iter().any(|&(x0, x1, y0, y1)| {
-            candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
-        }) {
-            return Err(scope
-                .failure(
-                    crate::layout::fit::FitKind::OverlayCollision,
-                    "bar significance marks overlap; enlarge the chart or reduce mark typography",
-                )
-                .into());
-        }
-        bounds.push(candidate);
-    }
-    Ok(())
+    )
 }
 
 fn project_bar(

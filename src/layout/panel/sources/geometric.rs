@@ -119,7 +119,7 @@ pub(super) fn plan(
     let seed = if fixed || count == BigInt::ZERO {
         1
     } else {
-        super::measured_seed(projection, side, theme, false)?
+        super::measured_seed(projection, side, theme)?
     };
     let cap = if fixed { 1 } else { seed + 1 };
     let mut source = TickSource {

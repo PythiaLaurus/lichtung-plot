@@ -156,8 +156,8 @@ mod geometry_tests {
             shelf.items[1].text_plan.style.font_size.to_bits(),
             17.0_f64.to_bits()
         );
-        assert_eq!(shelf.items[0].anchor, TextAnchor::Start);
-        assert_eq!(shelf.items[1].anchor, TextAnchor::End);
+        assert_eq!(shelf.items[0].placement.anchor, TextAnchor::Start);
+        assert_eq!(shelf.items[1].placement.anchor, TextAnchor::End);
         assert!(shelf
             .items
             .iter()
@@ -453,16 +453,32 @@ pub(crate) fn intrinsic_body_minimum(
         (0.0, 1.0, 0.0, 1.0),
     );
     let totals = &prepared.selected_totals(&projection)?.totals;
-    for text in totals.iter().filter_map(|(_, text)| text.as_ref()) {
-        let appearance = text.appearance(&theme.typography.annotations.waterfall_total);
-        let plan = theme.measure_text(
+    let eligible = crate::data::source::collect_source(
+        totals
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, text))| text.is_some())
+            .map(|(index, _)| Ok(index)),
+    )?;
+    for (index, text) in totals
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (_, text))| Some((index, text.as_ref()?)))
+    {
+        let appearance = text.appearance(
+            crate::text::TextAppearance::from(&theme.typography.annotations.waterfall_total)
+                .layout(theme.text_layouts.total.as_ref()),
+        );
+        if !appearance.includes(index, &eligible) {
+            continue;
+        }
+        let plan = theme.measure_appearance_text(
             text.as_str(),
-            appearance.theme,
+            appearance,
             text.resolved_alignment(crate::TextAlignment::Center).into(),
             "Waterfall total shelf intrinsic",
-            appearance.exact_override,
         )?;
-        height = height.max(plan.height());
+        height = height.max(plan.occupied_size().1);
     }
     let shelf = if height > 0.0 {
         theme
@@ -663,13 +679,23 @@ pub(crate) fn measure(
         .ok_or_else(|| Error::Render("Waterfall category display missing".into()))?;
     let mut pitch = mark_minimum.1 / labels.len() as f64;
     let width = context.axis_label_width.max(1.0 / 1024.0);
-    if chart.y_tick_labels_visible() {
+    let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
+    if chart.y_tick_labels_visible()
+        && !tick_appearance.hidden()
+        && !tick_appearance.layout.is_some_and(|request| {
+            request
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(crate::TextVisibility::reduces)
+        })
+    {
         let mut heights = crate::data::source::collect_source(display.iter().map(|_| Ok(0.0)))?;
         for index in axes.specs[1].category_labels.indices(display.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 &display[index],
-                &theme.typography.axes.tick_label,
+                theme.tick_text_appearance(crate::layout::AxisSide::Left),
                 width,
                 PhysicalTextAlignment::End,
                 "y-axis tick label",
@@ -839,16 +865,16 @@ pub(crate) fn measure(
     for annotation in items {
         text_targets.push(annotation.target);
         let text_plan = annotation.text_plan;
+        let mut placement = annotation.placement;
+        placement.position.x += annotation.x;
+        placement.position.y +=
+            layout.projection.panel_box().y1 + annotation.row.map_or(0.0, |row| baselines[row]);
         text.push(PlacedText {
-            placement: PlannedTextPlacement::baseline(
-                Point2D::new(
-                    annotation.x,
-                    layout.projection.panel_box().y1 + baselines[annotation.row],
-                ),
-                annotation.anchor,
-                0.0,
+            placement,
+            plan: text_plan.translate_paint_region(
+                annotation.x,
+                layout.projection.panel_box().y1 + annotation.row.map_or(0.0, |row| baselines[row]),
             ),
-            plan: text_plan,
         });
     }
     let mut payload = WaterfallPayload {
@@ -872,31 +898,36 @@ pub(crate) fn measure(
     for (points, style) in &payload.references {
         geometry.line(points, style, Some(clip))?;
     }
-    for text in &payload.text {
-        geometry.text(text.placement, &text.plan, None)?;
-    }
     let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
 
-    for (index, text) in payload.text.iter().enumerate() {
+    for (index, text) in payload.text.iter_mut().enumerate() {
+        let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
+        let region = PanelBox::new(
+            if chart.user_x_limits().is_some() {
+                panel.x0
+            } else {
+                bounds.x0.min(panel.x0)
+            },
+            if chart.user_x_limits().is_some() {
+                panel.x1
+            } else {
+                bounds.x1.max(panel.x1)
+            },
+            mark_panel.y1,
+            panel.y1,
+        );
+        text.plan = crate::layout::text::placement::contain(
+            text.plan.clone(),
+            text.placement,
+            region,
+            &context.fit_scope().child(payload.text_targets[index], 0)?,
+        )?;
         let mut one = crate::render::geometry::GeometrySnapshot::new();
         one.text(text.placement, &text.plan, None)?;
-        for ink in one.bounds() {
-            if ink.bottom < mark_panel.y1
-                || ink.top > panel.y1
-                || (chart.user_x_limits().is_some()
-                    && (ink.left < panel.x0 || ink.right > panel.x1))
-            {
-                return Err(context
-                    .fit_scope()
-                    .child(payload.text_targets[index], 0)?
-                    .failure(
-                        crate::layout::fit::FitKind::Text,
-                        "required Waterfall total ink exceeds its assigned annotation shelf",
-                    )
-                    .into());
-            }
-        }
         label_ink.append(&one)?;
+    }
+    for text in &payload.text {
+        geometry.text(text.placement, &text.plan, None)?;
     }
     let mut full = crate::render::geometry::GeometrySnapshot::new();
 
@@ -1048,8 +1079,8 @@ struct Annotation {
     target: crate::layout::AddressRole,
     text_plan: ResolvedTextPlan,
     x: f64,
-    anchor: TextAnchor,
-    row: usize,
+    placement: PlannedTextPlacement,
+    row: Option<usize>,
 }
 
 struct AnnotationPlan {
@@ -1103,6 +1134,15 @@ fn plan_annotations(
         .round(crate::layout::kernel::SpatialRounding::Ceil)?
         .quanta();
     let producer = context.producer_text()?;
+    let eligible = crate::data::source::collect_source(
+        candidates
+            .iter()
+            .enumerate()
+            .filter(|(_, (value, text))| {
+                text.is_some() && projection.contains_data(*value, source_y)
+            })
+            .map(|(index, _)| Ok(index)),
+    )?;
     for (index, (value, text)) in candidates.iter().enumerate() {
         let Some(text) = text else { continue };
         let target = if index == 0 {
@@ -1114,23 +1154,40 @@ fn plan_annotations(
         if !projection.contains_data(*value, source_y) {
             continue;
         }
-        let appearance = text.appearance(&theme.typography.annotations.waterfall_total);
-        let text_plan = producer.plan(text.as_str(), "waterfall total annotation", || {
-            Ok(theme.measure_text(
+        let appearance = text.appearance(
+            crate::text::TextAppearance::from(&theme.typography.annotations.waterfall_total)
+                .layout(theme.text_layouts.total.as_ref()),
+        );
+        let owner = if index == 0 {
+            "waterfall base annotation"
+        } else {
+            "waterfall terminal annotation"
+        };
+        let text_plan = producer.plan(text.as_str(), owner, || {
+            crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
+                theme,
                 text.as_str(),
-                appearance.theme,
+                appearance,
+                i64::MAX,
                 text.resolved_alignment(crate::TextAlignment::Center).into(),
-                "waterfall total annotation",
-                appearance.exact_override,
-            )?)
+                owner,
+                scope,
+                (index, &eligible),
+            ))
         })?;
-        let width = text_plan.width();
+        let width = text_plan.occupied_size().0;
         let required_width = metrics
             .padding
             .times(2)
             .add_pixels(width)?
             .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?;
-        if required_width > panel.width() {
+        if required_width > panel.width()
+            && text_plan
+                .request
+                .as_ref()
+                .and_then(|request| request.instructions().overflow.as_ref())
+                .is_none_or(|overflow| overflow.failure == crate::TextFailure::Error)
+        {
             // Debug escaping can expand each source byte; admit both the text
             // diagnostic before allocation; child paths have their own admission.
 
@@ -1151,37 +1208,42 @@ fn plan_annotations(
             PhysicalTextAlignment::Center => (TextAnchor::Middle, 0),
             PhysicalTextAlignment::End => (TextAnchor::End, text_plan.width_quanta - half),
         };
-        let x = x_quanta
-            .checked_add(offset)
-            .ok_or_else(|| Error::Render("Waterfall text anchor overflow".into()))?
-            as f64
-            / 1024.0;
-        let placement =
-            PlannedTextPlacement::baseline(Point2D::new(offset as f64 / 1024.0, 0.0), anchor, 0.0);
-        let ink = crate::render::geometry::planned_text_ink_bounds(
+        let x = x_quanta as f64 / 1024.0;
+        let explicit = text_plan
+            .request
+            .as_ref()
+            .is_some_and(|request| request.instructions().anchor.is_some());
+        let placement = crate::layout::text::placement::resolve(
+            PlannedTextPlacement::baseline(
+                Point2D::new(
+                    if explicit {
+                        0.0
+                    } else {
+                        offset as f64 / 1024.0
+                    },
+                    0.0,
+                ),
+                if explicit { TextAnchor::Middle } else { anchor },
+                0.0,
+            ),
             &text_plan,
-            placement.position,
-            placement.anchor,
-            placement.rotation,
-            placement.origin,
-            placement.reverse_lines,
-        );
-        let above = text_plan.first_baseline_quanta.unwrap_or(0).max(
-            crate::layout::kernel::ceil_spatial_quanta(ink.map_or(0.0, |ink| ink.top.max(0.0)))?,
-        );
-        let below = text_plan
-            .height_quanta
-            .checked_sub(text_plan.first_baseline_quanta.unwrap_or(0))
-            .ok_or_else(|| Error::Render("Waterfall baseline extent overflow".into()))?
-            .max(crate::layout::kernel::ceil_spatial_quanta(
-                ink.map_or(0.0, |ink| (-ink.bottom).max(0.0)),
-            )?);
-        let lower = (-half).min(-crate::layout::kernel::ceil_spatial_quanta(
-            ink.map_or(0.0, |ink| (-ink.left).max(0.0)),
-        )?);
-        let upper = (text_plan.width_quanta - half).max(
-            crate::layout::kernel::ceil_spatial_quanta(ink.map_or(0.0, |ink| ink.right.max(0.0)))?,
-        );
+            None,
+        )?;
+        if text_plan.lines.is_empty() {
+            items.push(Annotation {
+                target,
+                text_plan,
+                x,
+                placement,
+                row: None,
+            });
+            continue;
+        }
+        let footprint = crate::layout::text::placement::footprint(placement, &text_plan)?;
+        let above = crate::layout::kernel::ceil_spatial_quanta(footprint.y1.max(0.0))?;
+        let below = crate::layout::kernel::ceil_spatial_quanta((-footprint.y0).max(0.0))?;
+        let lower = crate::layout::kernel::nearest_spatial_quanta(footprint.x0)?;
+        let upper = crate::layout::kernel::ceil_spatial_quanta(footprint.x1)?;
         let bounds = (
             x_quanta
                 .checked_add(lower)
@@ -1221,8 +1283,8 @@ fn plan_annotations(
             target,
             text_plan,
             x,
-            anchor,
-            row,
+            placement,
+            row: Some(row),
         });
     }
     if let Some(failure) = miss {
@@ -1245,6 +1307,32 @@ fn plan_annotations(
             });
     }
     let height = height.pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?;
+    let mut text = crate::data::source::collect_source(items.iter().map(|item| {
+        let mut placement = item.placement;
+        placement.position.x += item.x;
+        placement.position.y += item.row.map_or(0.0, |row| baselines[row]);
+        Ok(PlacedText {
+            placement,
+            plan: item.text_plan.clone(),
+        })
+    }))?;
+    let indices = crate::data::source::collect_source(items.iter().map(|item| {
+        Ok(usize::from(
+            item.target == crate::layout::AddressRole::WaterfallTerminalLabel,
+        ))
+    }))?;
+    crate::layout::text::visibility::apply(
+        &mut text,
+        &indices,
+        PanelBox::new(panel.x0, panel.x1, 0.0, height),
+        false,
+        scope,
+    )?;
+    for (item, text) in items.iter_mut().zip(text) {
+        item.text_plan = text
+            .plan
+            .translate_paint_region(-item.x, -item.row.map_or(0.0, |row| baselines[row]));
+    }
     Ok(AnnotationPlan {
         items,
         height,

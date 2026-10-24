@@ -394,13 +394,23 @@ pub(crate) fn measure(
         .ok_or_else(|| Error::Render("Beeswarm category labels missing".into()))?;
     let mut hard_pitch = packed.hard_pitch;
     let width = context.axis_label_width.max(1.0 / 1024.0);
-    if chart.y_tick_labels_visible() {
+    let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
+    if chart.y_tick_labels_visible()
+        && !tick_appearance.hidden()
+        && !tick_appearance.layout.is_some_and(|request| {
+            request
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(crate::TextVisibility::reduces)
+        })
+    {
         let mut heights = crate::data::source::collect_source(labels.iter().map(|_| Ok(0.0)))?;
         for index in axes.specs[1].category_labels.indices(labels.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 &labels[index],
-                &theme.typography.axes.tick_label,
+                tick_appearance,
                 width,
                 PhysicalTextAlignment::End,
                 "y-axis tick label",
@@ -408,7 +418,9 @@ pub(crate) fn measure(
                     .fit_scope()
                     .child(crate::layout::AddressRole::AxisLeft, 0)?,
             ))?;
-            heights[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
+            if !plan.lines.is_empty() {
+                heights[index] = plan.occupied_size().1 + 2.0 * crate::layout::LABEL_CLEARANCE;
+            }
         }
         let span = crate::layout::category_label_span(
             &axes.specs[1].category_labels,

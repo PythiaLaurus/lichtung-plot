@@ -3,7 +3,6 @@
 use crate::Error;
 
 use super::data::FacetPanel;
-use super::rendering::facet_label;
 use crate::builder::Plot;
 use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideConsumption, GuideOrientation,
@@ -13,7 +12,7 @@ use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
-use crate::layout::{PanelBox, PhysicalTextAlignment, RootFramePlan};
+use crate::layout::{PanelBox, RootFramePlan};
 use crate::spec::{FacetScales, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -215,14 +214,15 @@ pub(super) fn native_parent(
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
         let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter);
-        let label = facet_label(plot, &facet.cell, data)?;
-        let measured = PanelRequirements::measure(
+        let measured = super::rendering::strip_requirement(
             probes[index]
                 .axes
                 .as_ref()
                 .ok_or_else(|| Error::Render("facet probe is missing its measured axes".into()))?,
+            plot,
+            &facet.cell,
+            data,
             theme,
-            Some(&label),
             probe_cells[facet.row * columns + facet.column],
             &scope.child(AddressRole::FacetCell, index)?,
         )
@@ -307,29 +307,17 @@ pub(super) fn native_parent(
             )? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
-            let label = facet_label(&panel_plot, &facet.cell, data)?;
-            let appearance = &theme.typography.composition.facet_header;
             let strip_scope = scope
                 .child(AddressRole::FacetCell, index)?
                 .child(AddressRole::FacetHeader, 0)?;
-            let text_width = crate::theme::composition::capacity(
-                cell.width(),
-                &theme.facet_strip_lengths()?.horizontal_inset,
-            )?;
-            if text_width <= 0.0 {
-                fit::FitFailure::retain_least(
-                    &mut child_miss,
-                    strip_scope.failure(FitKind::Text, "facet strip has no assigned text width"),
-                );
-            } else if let FitOutcome::Miss(reason) = fit::text(
+            if let FitOutcome::Miss(reason) = fit::outcome(super::rendering::strip_plans(
+                &panel_plot,
+                &facet.cell,
+                data,
                 theme,
-                &label,
-                appearance,
-                text_width,
-                PhysicalTextAlignment::Center,
-                "facet strip",
+                cell.width(),
                 &strip_scope,
-            )? {
+            ))? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
         }
@@ -396,15 +384,16 @@ pub(super) fn native_parent(
         if result.legend.is_some() {
             legend_owner = false;
         }
-        let label = facet_label(&panel_plot, &facet.cell, data)?;
         let cell = cells[facet.row * columns + facet.column];
         let requirement =
-            match fit::outcome(PanelRequirements::measure(
+            match fit::outcome(super::rendering::strip_requirement(
                 result.result.axes.as_ref().ok_or_else(|| {
                     Error::Render("facet panel is missing its measured axes".into())
                 })?,
+                &panel_plot,
+                &facet.cell,
+                data,
                 theme,
-                Some(&label),
                 cell,
                 &cell_scope,
             ))? {

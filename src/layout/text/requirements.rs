@@ -102,16 +102,20 @@ impl PreparedTextRequirement {
         clippy::too_many_arguments,
         reason = "admission receives the complete borrowed text identity"
     )]
-    pub(crate) fn push_into<'a>(
+    pub(crate) fn push_into<'a, 'b>(
         requirements: &mut Vec<Self>,
         address: ComponentAddress,
         role: PreparedTextRole,
         local_index: u32,
         source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
-        appearance: &TextTheme,
+        appearance: impl Into<crate::text::TextAppearance<'b>>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), PreparedTextCensusError> {
+        let appearance = appearance.into();
+        if appearance.hidden() {
+            return Ok(());
+        }
         #[cfg(not(test))]
         if prepared_stage.is_none() {
             return Err(PreparedTextCensusError::MissingPreparedStage);
@@ -128,7 +132,7 @@ impl PreparedTextRequirement {
             local_index,
             source,
             generated_alphabet,
-            appearance,
+            appearance.theme,
             prepared_stage,
         )?);
         Ok(())
@@ -847,6 +851,24 @@ impl PreparedTextRequirement {
 
         let significance = theme.effective_significance(plot.significance_mark_style_override())?;
         for (index, annotation) in plot.significance_annotations().iter().enumerate() {
+            if kind == PlotKind::Coefficient {
+                continue;
+            }
+            let eligible = crate::data::source::collect_source(
+                plot.significance_annotations()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, other)| {
+                        other.endpoints().is_some() == annotation.endpoints().is_some()
+                    })
+                    .map(|(index, _)| Ok(index)),
+            )?;
+            if !crate::text::TextAppearance::from(&significance.label)
+                .layout(theme.text_layouts.significance.as_ref())
+                .includes(index, &eligible)
+            {
+                continue;
+            }
             let address = prepared_address_child(
                 base,
                 AddressRole::Annotation,
@@ -861,7 +883,8 @@ impl PreparedTextRequirement {
                 0,
                 annotation.mark().glyph()?,
                 &[],
-                &significance.label,
+                crate::text::TextAppearance::from(&significance.label)
+                    .layout(theme.text_layouts.significance.as_ref()),
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -973,6 +996,9 @@ fn push_deferred_plot_requirements(
         let appearance = annotation
             .content()
             .appearance(&theme.typography.annotations.panel_text);
+        if appearance.hidden() {
+            continue;
+        }
         push_deferred_body(
             requirements,
             &body_address,
@@ -997,20 +1023,44 @@ fn push_deferred_plot_requirements(
         })?;
     }
     for layer in plot.point_layers() {
+        if layer
+            .label_layout
+            .as_ref()
+            .is_some_and(crate::TextLayout::hidden)
+        {
+            continue;
+        }
         if let Some(labels) = layer.label_values() {
             let appearance =
                 layer.label_appearance(&theme.typography.annotations.point_layer_label)?;
+            let eligible = crate::data::source::collect_source(
+                (0..labels.len())
+                    .filter(|&row| {
+                        point_layer_row_is_visible(
+                            plot,
+                            layer,
+                            row,
+                            filter_point_label_x_to_limits,
+                            filter_point_label_y_to_limits,
+                        )
+                    })
+                    .map(Ok),
+            )?;
             for row in 0..labels.len() {
                 let Some(Some(label)) = labels.get(row) else {
                     continue;
                 };
-                if point_layer_row_is_visible(
-                    plot,
-                    layer,
-                    row,
-                    filter_point_label_x_to_limits,
-                    filter_point_label_y_to_limits,
-                ) {
+                if crate::text::TextAppearance::from(&appearance)
+                    .layout(layer.label_layout.as_ref())
+                    .includes(row, &eligible)
+                    && point_layer_row_is_visible(
+                        plot,
+                        layer,
+                        row,
+                        filter_point_label_x_to_limits,
+                        filter_point_label_y_to_limits,
+                    )
+                {
                     push_deferred_body(
                         requirements,
                         &body_address,
@@ -1027,7 +1077,7 @@ fn push_deferred_plot_requirements(
 
     if kind == PlotKind::Matrix {
         for variable in plot.matrix_variable_names() {
-            for _ in 0..2 {
+            for role in 0..2 {
                 let address = body_address.clone();
                 push_owned(
                     requirements,
@@ -1036,7 +1086,8 @@ fn push_deferred_plot_requirements(
                     body_index,
                     plot.resolve_label(variable)?,
                     &[],
-                    &theme.typography.axes.axis_title,
+                    crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
+                        .layout(theme.text_layouts.matrix[role].as_ref()),
                     prepared_stage.as_deref_mut(),
                 )?;
                 body_index = body_index
@@ -1064,16 +1115,19 @@ fn push_deferred_plot_requirements(
             if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
                 continue;
             }
-            for label in marks.total_font_sources() {
+            for label in marks.total_font_sources(theme.text_layouts.total.as_ref()) {
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     label.as_str(),
                     &[],
-                    label
-                        .appearance(&theme.typography.annotations.waterfall_total)
-                        .theme,
+                    label.appearance(
+                        crate::text::TextAppearance::from(
+                            &theme.typography.annotations.waterfall_total,
+                        )
+                        .layout(theme.text_layouts.total.as_ref()),
+                    ),
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1097,29 +1151,58 @@ fn push_deferred_plot_requirements(
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            for (label, fill) in marks.annotation_labels(theme.marks.get_cells().get_fill_alpha()) {
+            let eligible = crate::data::source::collect_source(
+                marks
+                    .annotation_labels(theme.marks.get_cells().get_fill_alpha())
+                    .map(|(index, _, _)| Ok(index)),
+            )?;
+            for (index, label, fill) in
+                marks.annotation_labels(theme.marks.get_cells().get_fill_alpha())
+            {
+                if !crate::text::TextAppearance::from(theme.contrasting_text(fill)?)
+                    .layout(theme.text_layouts.value.as_ref())
+                    .includes(index, &eligible)
+                {
+                    continue;
+                }
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     label,
                     &[],
-                    theme.contrasting_text(fill)?,
+                    crate::text::TextAppearance::from(theme.contrasting_text(fill)?)
+                        .layout(theme.text_layouts.value.as_ref()),
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            for annotation in marks.null_row_sources() {
+            let eligible = crate::data::source::collect_source(
+                marks.null_row_sources().map(|(index, _)| Ok(index)),
+            )?;
+            for (index, annotation) in marks.null_row_sources() {
+                if !annotation
+                    .appearance(
+                        crate::text::TextAppearance::from(
+                            theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
+                        )
+                        .layout(theme.text_layouts.null_row.as_ref()),
+                    )
+                    .includes(index, &eligible)
+                {
+                    continue;
+                }
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     annotation.as_str(),
                     &[],
-                    annotation
-                        .appearance(
+                    annotation.appearance(
+                        crate::text::TextAppearance::from(
                             theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
                         )
-                        .theme,
+                        .layout(theme.text_layouts.null_row.as_ref()),
+                    ),
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1149,14 +1232,35 @@ fn push_deferred_plot_requirements(
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            for source in marks.detail_sources() {
+            let significance =
+                theme.effective_significance(plot.significance_mark_style_override())?;
+            for (index, source, is_significance) in marks.text_occurrences() {
+                let eligible = crate::data::source::collect_source(
+                    marks
+                        .text_occurrences()
+                        .filter(|(_, _, significance)| *significance == is_significance)
+                        .map(|(index, _, _)| Ok(index)),
+                )?;
+                let selected = crate::text::TextAppearance::from(if is_significance {
+                    &significance.label
+                } else {
+                    &theme.typography.annotations.estimate_detail
+                });
+                let selected = selected.layout(if is_significance {
+                    theme.text_layouts.significance.as_ref()
+                } else {
+                    theme.text_layouts.estimate.as_ref()
+                });
+                if !selected.includes(index, &eligible) {
+                    continue;
+                }
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     source,
                     &[],
-                    &theme.typography.annotations.estimate_detail,
+                    selected,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1166,13 +1270,13 @@ fn push_deferred_plot_requirements(
     Ok(())
 }
 
-fn push_deferred_body<'a>(
+fn push_deferred_body<'a, 'b>(
     requirements: &mut Vec<PreparedTextRequirement>,
     body_address: &ComponentAddress,
     body_index: &mut u32,
     source: impl Into<CensusSource<'a>>,
     generated: &[char],
-    appearance: &TextTheme,
+    appearance: impl Into<crate::text::TextAppearance<'b>>,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     let address = body_address.clone();
@@ -1223,17 +1327,21 @@ fn point_layer_row_is_visible(
 }
 
 impl PreparedTextRequirement {
-    pub(crate) fn push_authored(
+    pub(crate) fn push_authored<'a>(
         requirements: &mut Vec<PreparedTextRequirement>,
         address: ComponentAddress,
         role: PreparedTextRole,
-        source: Option<&crate::Text>,
-        appearance: &TextTheme,
+        source: Option<&'a crate::Text>,
+        appearance: impl Into<crate::text::TextAppearance<'a>>,
         preferred_width_metric: bool,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), Error> {
         if let Some(source) = source {
-            let appearance = source.appearance(appearance).theme;
+            let selected = source.appearance(appearance);
+            if selected.hidden() {
+                return Ok(());
+            }
+            let appearance = selected.theme;
             let metric_address = preferred_width_metric
                 .then(|| address.child(crate::layout::AddressRole::PreferenceMetric, 0))
                 .transpose()?;
@@ -1291,6 +1399,12 @@ fn push_plot_axis_ticks(
                 base.clone()
             };
             for side in 0..2 {
+                if plot.text_layouts.ticks[side]
+                    .as_ref()
+                    .is_some_and(crate::TextLayout::hidden)
+                {
+                    continue;
+                }
                 if side == 1 && !plot.y_tick_labels_visible() {
                     continue;
                 }
@@ -1318,7 +1432,11 @@ fn push_plot_axis_ticks(
                     &axes.specs[side],
                     categories,
                     alphabet,
-                    &theme.typography.axes.tick_label,
+                    theme.tick_text_appearance(if side == 0 {
+                        crate::layout::AxisSide::Bottom
+                    } else {
+                        crate::layout::AxisSide::Left
+                    }),
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1329,6 +1447,12 @@ fn push_plot_axis_ticks(
             .enumerate()
         {
             if side == 1 && !plot.y_tick_labels_visible() {
+                continue;
+            }
+            if plot.text_layouts.ticks[side]
+                .as_ref()
+                .is_some_and(crate::TextLayout::hidden)
+            {
                 continue;
             }
             let address = base.child(
@@ -1345,7 +1469,11 @@ fn push_plot_axis_ticks(
                 spec,
                 automatic_category_labels(plot, kind, side == 0)?,
                 alphabet,
-                &theme.typography.axes.tick_label,
+                theme.tick_text_appearance(if side == 0 {
+                    crate::layout::AxisSide::Bottom
+                } else {
+                    crate::layout::AxisSide::Left
+                }),
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1353,18 +1481,26 @@ fn push_plot_axis_ticks(
     Ok(())
 }
 
-fn push_axis_ticks(
+fn push_axis_ticks<'a>(
     requirements: &mut Vec<PreparedTextRequirement>,
     axis: &ComponentAddress,
     spec: &crate::layout::AxisSpec,
     automatic_categories: Option<Vec<String>>,
     category_generated_alphabet: Option<&[char]>,
-    appearance: &TextTheme,
+    appearance: impl Into<crate::text::TextAppearance<'a>>,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
+    let appearance = appearance.into();
+    let policy = appearance
+        .layout
+        .and_then(|request| request.instructions().visibility.as_ref());
     let exact = spec.exact_ticks.as_deref();
     if let Some(ticks) = exact {
+        let eligible = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
         for (index, tick) in ticks.iter().enumerate() {
+            if policy.is_some_and(|policy| !policy.includes(index, &eligible)) {
+                continue;
+            }
             let address = axis.clone();
             push_owned(
                 requirements,
@@ -1380,8 +1516,12 @@ fn push_axis_ticks(
         }
     } else if let Some(categories) = automatic_categories {
         let count = categories.len();
+        let eligible =
+            crate::data::source::collect_source(spec.category_labels.indices(count).map(Ok))?;
         for (index, category) in categories.into_iter().enumerate() {
-            if !spec.category_labels.includes(index, count) {
+            if !spec.category_labels.includes(index, count)
+                || policy.is_some_and(|policy| !policy.includes(index, &eligible))
+            {
                 continue;
             }
             let address = axis.clone();
@@ -1466,14 +1606,14 @@ fn automatic_category_labels(
     clippy::too_many_arguments,
     reason = "one census insertion keeps the complete structural text identity explicit"
 )]
-fn push_owned<'a>(
+fn push_owned<'a, 'b>(
     requirements: &mut Vec<PreparedTextRequirement>,
     address: ComponentAddress,
     role: PreparedTextRole,
     local_index: u32,
     source: impl Into<CensusSource<'a>>,
     generated_alphabet: &[char],
-    appearance: &TextTheme,
+    appearance: impl Into<crate::text::TextAppearance<'b>>,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     PreparedTextRequirement::push_into(
@@ -2596,10 +2736,13 @@ mod tests {
         .unwrap();
         let prepared = &inputs.estimate.as_ref().unwrap().panels[0].1;
         assert_eq!(
-            prepared.detail_sources().collect::<Vec<_>>(),
-            ["Not estimable", "1.01\u{0301} units", "1.02\u{0301} units"]
+            prepared
+                .text_occurrences()
+                .map(|(_, source, _)| source)
+                .collect::<Vec<_>>(),
+            ["1.01\u{0301} units", "1.02\u{0301} units", "Not estimable"]
         );
-        for source in prepared.detail_sources() {
+        for (_, source, _) in prepared.text_occurrences() {
             let selected: Vec<_> = requirements
                 .iter()
                 .filter(|requirement| requirement.source == source)

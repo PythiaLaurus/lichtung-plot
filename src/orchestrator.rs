@@ -304,7 +304,21 @@ impl Plot {
             context.theme,
             context.fit_scope(),
         )?;
-        let panel_clip = result.layout.projection.panel_box();
+        let panel_clip = if self.panel_text_annotations().iter().any(|annotation| {
+            annotation.position().as_corner().is_none()
+                || annotation.content().get_layout().is_some_and(|layout| {
+                    layout
+                        .instructions()
+                        .overflow
+                        .as_ref()
+                        .is_some_and(|overflow| overflow.failure == crate::TextFailure::Visible)
+                })
+        }) {
+            let (width, height) = self.figure_dimensions()?;
+            crate::layout::PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height))
+        } else {
+            result.layout.projection.panel_box()
+        };
         let canonical_clip = crate::render::backend::validate_clip_region(panel_clip)?.panel();
         let text = crate::data::source::collect_source(result.panel_text.iter().map(|plan| {
             let placed = plan.retained_placement();

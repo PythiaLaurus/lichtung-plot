@@ -92,28 +92,32 @@ struct PreparedCanvasRound<'a> {
 
 struct ResolvedCanvasThemes {
     root: Box<ResolvedTheme>,
-    plots: Vec<Option<ResolvedPlotTheme>>,
-}
-
-enum ResolvedPlotTheme {
-    InheritedRoot,
-    ExplicitPlot(Box<ResolvedTheme>),
+    plots: Vec<Option<Box<ResolvedTheme>>>,
 }
 
 impl ResolvedCanvasThemes {
-    fn new(root: &crate::theme::Theme, placements: &placement::Placements) -> Result<Self, Error> {
-        let root = Box::new(root.resolve()?);
+    fn new(
+        root: &crate::theme::Theme,
+        placements: &placement::Placements,
+        guide_layouts: &[Option<crate::TextLayout>; 3],
+    ) -> Result<Self, Error> {
+        let mut root = Box::new(root.resolve()?);
+        root.text_layouts.guide.clone_from(guide_layouts);
         let plots = placements
             .plots()
             .map(|plot| {
-                plot.map(|plot| match plot.theme_spec() {
-                    None => Ok(ResolvedPlotTheme::InheritedRoot),
-                    Some(theme) => {
-                        let mut theme = Box::new(theme.resolve()?);
-                        theme.canvas_surface_override = Some(root.surfaces.canvas_root);
-                        theme.share_font_environment_from(&root);
-                        Ok(ResolvedPlotTheme::ExplicitPlot(theme))
-                    }
+                plot.map(|plot| {
+                    let mut theme = match plot.theme_spec() {
+                        None => root.clone(),
+                        Some(theme) => {
+                            let mut theme = Box::new(theme.resolve()?);
+                            theme.canvas_surface_override = Some(root.surfaces.canvas_root);
+                            theme.share_font_environment_from(&root);
+                            theme
+                        }
+                    };
+                    theme.text_layouts = plot.text_layouts.clone();
+                    Ok(theme)
                 })
                 .transpose()
             })
@@ -136,14 +140,7 @@ impl ResolvedCanvasThemes {
     }
 
     fn plot(&self, index: usize) -> Option<&ResolvedTheme> {
-        self.plot_selection(index).map(|theme| match theme {
-            ResolvedPlotTheme::InheritedRoot => self.root(),
-            ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
-        })
-    }
-
-    fn plot_selection(&self, index: usize) -> Option<&ResolvedPlotTheme> {
-        self.plots.get(index)?.as_ref()
+        self.plots.get(index)?.as_deref()
     }
 }
 
@@ -248,6 +245,7 @@ fn validate_header_overlap(
 /// without an explicit theme inherit that root. Dimensions are derived from
 /// content unless [`Self::width`] or [`Self::size`] replaces the sizing request.
 pub struct Canvas {
+    guide_text_layouts: [Option<crate::TextLayout>; 3],
     rows: usize,
     columns: usize,
     placements: placement::Placements,
@@ -292,6 +290,16 @@ fn push_text_requirement(
 }
 
 impl Canvas {
+    /// Replace one Canvas-owned Shared guide role's complete layout default.
+    #[must_use]
+    pub fn guide_text_layout(
+        mut self,
+        role: crate::GuideTextRole,
+        layout: crate::TextLayout,
+    ) -> Self {
+        self.guide_text_layouts[role.index()] = Some(layout);
+        self
+    }
     /// Construct a non-empty panel grid.
     pub fn grid(rows: usize, columns: usize) -> Result<Self, Error> {
         if rows == 0 || columns == 0 {
@@ -301,6 +309,7 @@ impl Canvas {
         }
         Ok(Self {
             rows,
+            guide_text_layouts: [None, None, None],
             columns,
             placements: placement::Placements::new(rows, columns)?,
             theme: Arc::new(crate::theme::Theme::publication()),
@@ -1352,7 +1361,11 @@ impl Canvas {
             sizing_request.0,
             sizing_request.1,
             |prepared_stage| {
-                let themes = Arc::new(ResolvedCanvasThemes::new(&self.theme, &self.placements)?);
+                let themes = Arc::new(ResolvedCanvasThemes::new(
+                    &self.theme,
+                    &self.placements,
+                    &self.guide_text_layouts,
+                )?);
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
@@ -2021,6 +2034,7 @@ impl Canvas {
                 };
                 *slot = Some(
                     plot.with_canvas_size(width, height)
+                        .with_output_dimensions(width, height)
                         .with_parent_axis_gutters(),
                 );
             }
@@ -3057,13 +3071,9 @@ impl Canvas {
         probes.resize_with(plots.len(), || None);
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let selection = themes
-                .plot_selection(index)
+            let theme = themes
+                .plot(index)
                 .expect("configured canvas panel has a resolved theme");
-            let theme = match selection {
-                ResolvedPlotTheme::InheritedRoot => themes.root(),
-                ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
-            };
             let result = crate::layout::fit::measured(children.canvas_probe(
                 plot,
                 crate::spec::PlotRenderContext::new(plot.data(), panel, theme),

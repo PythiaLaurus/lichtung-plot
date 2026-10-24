@@ -25,6 +25,7 @@ pub(crate) enum RangePolicy {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AxisSemanticInputs {
+    pub(crate) text_layout: Option<crate::TextLayout>,
     pub(crate) provenance: RangeProvenance,
     pub(crate) scale: AxisScale,
     pub(crate) policy: RangePolicy,
@@ -36,6 +37,7 @@ pub(crate) struct AxisSemanticInputs {
 impl AxisSemanticInputs {
     pub(crate) fn new(spec: &AxisSpec, scale: AxisScale, policy: RangePolicy) -> Self {
         Self {
+            text_layout: None,
             provenance: spec.provenance,
             scale,
             policy,
@@ -61,6 +63,7 @@ impl AxisSemanticInputs {
             format.observe_feedback(round)?;
         }
         self.category_labels.observe(round)?;
+        round.observe_text_layout(self.text_layout.as_ref())?;
         self.generation.observe_feedback(round)
     }
 }
@@ -81,7 +84,7 @@ impl crate::Plot {
             _ => [RangePolicy::ContinuousNice; 2],
         };
         std::array::from_fn(|index| {
-            AxisSemanticInputs::new(
+            let mut inputs = AxisSemanticInputs::new(
                 if index == 0 {
                     self.x_axis_spec()
                 } else {
@@ -97,7 +100,11 @@ impl crate::Plot {
                 } else {
                     policies[index]
                 },
-            )
+            );
+            inputs
+                .text_layout
+                .clone_from(&self.text_layouts.ticks[index]);
+            inputs
         })
     }
 }
@@ -105,6 +112,7 @@ impl crate::Plot {
 /// T5a supplies typography and preferred aspect; mark/density inputs belong to T5c.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StandardPanelInputs {
+    tick_layouts: [Option<crate::TextLayout>; 2],
     pub(crate) axes: crate::theme::AxisTheme,
     pub(crate) tick_label: crate::theme::TextTheme,
     pub(crate) axis_title: crate::theme::TextTheme,
@@ -128,6 +136,7 @@ impl StandardPanelInputs {
         };
         Ok(Self {
             axes: theme.axes.clone(),
+            tick_layouts: theme.text_layouts.ticks.clone(),
             tick_label: retain(&theme.typography.axes.tick_label)?,
             axis_title: retain(&theme.typography.axes.axis_title)?,
             preferred_aspect: [4, 3],
@@ -139,6 +148,7 @@ impl StandardPanelInputs {
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<bool, crate::Error> {
         Ok(self.axes.same_validated(&theme.axes)?
+            && self.tick_layouts == theme.text_layouts.ticks
             && self.tick_label.same(&theme.typography.axes.tick_label)
             && self.axis_title.same(&theme.typography.axes.axis_title))
     }
@@ -148,6 +158,9 @@ impl StandardPanelInputs {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), crate::Error> {
         self.axes.observe_feedback(round)?;
+        for layout in &self.tick_layouts {
+            round.observe_text_layout(layout.as_ref())?;
+        }
         for text in [&self.tick_label, &self.axis_title] {
             round.observe_font_stack(&text.stack)?;
             round.observe_number(text.font_size)?;

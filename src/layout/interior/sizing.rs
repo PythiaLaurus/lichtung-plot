@@ -256,14 +256,13 @@ pub(crate) fn horizontal_gutter_preference(
     let mut label_width = 0.0_f64;
     let mut include_label = |label: &str| -> Result<(), Error> {
         if !label.is_empty() {
-            let plan = theme.measure_text(
+            let plan = theme.measure_appearance_text(
                 label,
-                &theme.typography.axes.tick_label,
+                theme.tick_text_appearance(crate::layout::AxisSide::Left),
                 PhysicalTextAlignment::End,
                 "natural vertical gutter",
-                false,
             )?;
-            label_width = label_width.max(plan.width().max(plan.fit_width()));
+            label_width = label_width.max(plan.occupied_size().0.max(plan.fit_width()));
         }
         Ok(())
     };
@@ -272,11 +271,27 @@ pub(crate) fn horizontal_gutter_preference(
         .filter(|_| plot.y_tick_labels_visible())
     {
         if let Some(labels) = &axes.display_categories[1] {
-            for index in axes.specs[1].category_labels.indices(labels.len()) {
+            let eligible = crate::data::source::collect_source(
+                axes.specs[1].category_labels.indices(labels.len()).map(Ok),
+            )?;
+            for &index in &eligible {
+                if !theme
+                    .tick_text_appearance(crate::layout::AxisSide::Left)
+                    .includes(index, &eligible)
+                {
+                    continue;
+                }
                 include_label(&labels[index])?;
             }
         } else if let Some(ticks) = &axes.specs[1].exact_ticks {
-            for tick in ticks {
+            let eligible = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
+            for (index, tick) in ticks.iter().enumerate() {
+                if !theme
+                    .tick_text_appearance(crate::layout::AxisSide::Left)
+                    .includes(index, &eligible)
+                {
+                    continue;
+                }
                 include_label(&tick.label)?;
             }
         } else if let Some(probe) = axes.numeric_probe(1)? {

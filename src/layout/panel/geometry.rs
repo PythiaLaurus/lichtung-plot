@@ -245,7 +245,6 @@ impl AxisSpec {
                 projection,
                 side,
                 theme,
-                false,
                 self.numeric_request()?.as_ref(),
                 scope,
             )

@@ -5,7 +5,7 @@ use super::{AxisSide, AxisTick, Projection};
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::layout::kernel::nearest_spatial_quanta;
 use crate::layout::ResolvedTextPlan;
-use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
+use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::render::coordinates::{canonical_text, CoordinatePrecision};
 use crate::Error;
 
@@ -60,46 +60,51 @@ impl LabelCell {
         side: AxisSide,
         perpendicular: f64,
     ) -> Result<Option<PlannedTextPlacement>, Error> {
-        let anchor = match side {
-            AxisSide::Bottom => TextAnchor::Middle,
-            AxisSide::Left => TextAnchor::End,
-        };
-        let mut placement = PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), anchor, 0.0);
-        let length = match side {
-            AxisSide::Bottom => plan.width_quanta,
-            AxisSide::Left => plan.height_quanta,
-        };
-        let half = crate::render::backend::nearest_even_text_half(length)
-            .ok_or_else(|| Error::Render("axis label half extent overflow".into()))?;
-        let (mut lower, mut upper) = match side {
-            AxisSide::Bottom => (-half, length - half),
-            AxisSide::Left => (half - length, half),
-        };
-        if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+        let requested = plan.request.as_ref().map(crate::TextLayout::instructions);
+        let anchor = requested
+            .and_then(|request| request.anchor)
+            .unwrap_or_else(|| match side {
+                AxisSide::Bottom => crate::TextAnchor::center(),
+                AxisSide::Left => crate::TextAnchor::center_right(),
+            });
+        let mut placement = crate::layout::text::placement::at(
             plan,
-            placement.position,
-            placement.anchor,
-            placement.rotation,
-            placement.origin,
-            placement.reverse_lines,
-        ) {
-            let (start, end) = match side {
-                AxisSide::Bottom => (ink.left, ink.right),
-                AxisSide::Left => (ink.bottom, ink.top),
-            };
-            lower = lower.min(nearest_spatial_quanta(start)?);
-            upper = upper.max(nearest_spatial_quanta(end)?);
-        }
+            Point2D::new(0.0, 0.0),
+            anchor,
+            0.0,
+            false,
+            requested.and_then(|request| request.offset),
+        )?;
+        let allow = requested.is_some_and(|request| {
+            request.overlap == Some(crate::TextOverlap::Allow)
+                || request
+                    .visibility
+                    .as_ref()
+                    .is_some_and(crate::TextVisibility::reduces)
+                || request
+                    .overflow
+                    .as_ref()
+                    .is_some_and(|overflow| overflow.failure != crate::TextFailure::Error)
+        });
+        let bounds = crate::layout::text::placement::footprint(placement, plan)?;
+        let (lower, upper) = match side {
+            AxisSide::Bottom => (bounds.x0, bounds.x1),
+            AxisSide::Left => (bounds.y0, bounds.y1),
+        };
+        let lower = crate::layout::kernel::ceil_spatial_quanta(-lower)?
+            .checked_neg()
+            .ok_or_else(|| Error::Render("axis label lower bound overflow".into()))?;
+        let upper = crate::layout::kernel::ceil_spatial_quanta(upper)?;
         let minimum = i128::from(nearest_spatial_quanta(self.start)?) - i128::from(lower);
         let maximum = i128::from(nearest_spatial_quanta(self.end)?) - i128::from(upper);
-        if minimum > maximum {
+        if !allow && minimum > maximum {
             return Ok(None);
         }
         let mut center = i128::from(nearest_spatial_quanta(self.center)?);
-        if self.inward {
+        if self.inward && !allow {
             center = center.clamp(minimum, maximum);
         }
-        if center < minimum || center > maximum {
+        if !allow && (center < minimum || center > maximum) {
             return Ok(None);
         }
         let center = i64::try_from(center)
@@ -107,8 +112,14 @@ impl LabelCell {
             as f64
             / 1024.0;
         placement.position = match side {
-            AxisSide::Bottom => Point2D::new(center, perpendicular),
-            AxisSide::Left => Point2D::new(perpendicular, center),
+            AxisSide::Bottom => Point2D::new(
+                placement.position.x + center,
+                placement.position.y + perpendicular,
+            ),
+            AxisSide::Left => Point2D::new(
+                placement.position.x + perpendicular,
+                placement.position.y + center,
+            ),
         };
         placement.position = canonical_text(
             placement.position,

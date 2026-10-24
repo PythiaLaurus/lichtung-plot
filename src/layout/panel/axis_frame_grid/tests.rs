@@ -417,6 +417,49 @@ fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
 }
 
 #[test]
+fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_glyph() {
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    let layout = layout(
+        PanelBox::new(80.0, 680.0, 80.0, 280.0),
+        vec![
+            AxisTick::new(0.5, "First"),
+            AxisTick::new(1.5, "\u{10ffff}"),
+            AxisTick::new(2.5, "Last"),
+        ],
+        Vec::new(),
+        TickSource::SUPPLIED,
+    );
+    assert!(layout.plan_axes(&theme).is_err());
+    theme.text_layouts.ticks[0] = Some(
+        crate::TextLayout::default()
+            .visibility(crate::TextVisibility::every(2, 0, crate::LabelEndpoints::Both).unwrap()),
+    );
+    let plan = layout.plan_axes(&theme).unwrap();
+    assert_eq!(plan.x_axis.eligible_labels, [0, 1, 2]);
+    assert_eq!(
+        plan.x_axis
+            .ticks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, tick)| tick.label.as_ref().map(|_| index))
+            .collect::<Vec<_>>(),
+        [0, 2]
+    );
+    let mut hidden = layout.clone();
+    hidden.x_axis.tick_labels_visible = false;
+    let geometry = hidden.plan_axes(&theme).unwrap();
+    assert_eq!(plan.x_axis.ticks.len(), 3);
+    assert_eq!(
+        plan.grid.as_ref().unwrap().lines,
+        geometry.grid.as_ref().unwrap().lines
+    );
+    for (selected, unlabelled) in plan.x_axis.ticks.iter().zip(&geometry.x_axis.ticks) {
+        assert_eq!(selected.position.to_bits(), unlabelled.position.to_bits());
+        assert_eq!(selected.segment, unlabelled.segment);
+    }
+}
+
+#[test]
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
@@ -678,10 +721,6 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the independent one-quantum fit oracle includes complete source and frozen placement checks"
-)]
 fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
     use super::super::sources::{labels_fit, numeric_tick_plan};
     let theme = crate::Theme::publication().resolve().unwrap();
@@ -722,7 +761,6 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
                 &projection,
                 side,
                 &theme,
-                false,
                 None,
                 &FitScope::root(),
             )

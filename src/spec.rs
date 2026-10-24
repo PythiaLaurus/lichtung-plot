@@ -120,7 +120,7 @@ pub enum PanelCorner {
 /// Caller-owned text block anchored inside a chart panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelTextAnnotation {
-    corner: PanelCorner,
+    position: crate::TextPosition,
     text: crate::Text,
 }
 
@@ -130,15 +130,23 @@ impl PanelTextAnnotation {
     /// Local appearance replaces the complete panel-text role. Alignment applies
     /// within the text block; the selected corner continues to place that block.
     pub fn new(corner: PanelCorner, text: impl Into<crate::Text>) -> Result<Self, crate::Error> {
-        let text = text.into();
-        crate::text::validate_for(text.as_str(), "panel text")?;
-        Ok(Self { corner, text })
+        Self::at(crate::TextPosition::corner(corner), text)
     }
 
-    /// Panel corner that owns the annotation.
+    /// Attach authored text to independent typed data, panel or figure references.
+    pub fn at(
+        position: crate::TextPosition,
+        text: impl Into<crate::Text>,
+    ) -> Result<Self, crate::Error> {
+        let text = text.into();
+        crate::text::validate_for(text.as_str(), "panel text")?;
+        Ok(Self { position, text })
+    }
+
+    /// Semantic reference that owns this annotation's placement.
     #[must_use]
-    pub const fn corner(&self) -> PanelCorner {
-        self.corner
+    pub const fn position(&self) -> &crate::TextPosition {
+        &self.position
     }
 
     /// Verbatim caller-owned annotation text.

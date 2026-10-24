@@ -23,6 +23,8 @@ pub(super) struct HeightMeasurements(std::cell::RefCell<Vec<Option<HeightMeasure
 
 #[derive(Debug, Clone, PartialEq)]
 struct HeightInputs {
+    text_layouts: crate::text::roles::TextRoles,
+    output_dimensions: Option<(u32, u32)>,
     prose: [crate::text::TextSlot; 3],
     axis_titles: [crate::text::TextSlot; 2],
     width: i64,
@@ -51,6 +53,8 @@ impl HeightInputs {
     fn matches_assignment(&self, other: &Self) -> bool {
         if self.width != other.width
             || self.prose != other.prose
+            || self.text_layouts != other.text_layouts
+            || self.output_dimensions != other.output_dimensions
             || self.axis_titles != other.axis_titles
             || self.ranges != other.ranges
             || self.provenance != other.provenance
@@ -132,6 +136,8 @@ impl HeightInputs {
         };
         Ok(Self {
             prose: plot.copy_prose()?,
+            text_layouts: plot.text_layouts.clone(),
+            output_dimensions: plot.output_dimensions,
             axis_titles: plot.copy_axis_titles()?,
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,

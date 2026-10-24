@@ -266,7 +266,8 @@ impl RootTitleBlockPlan {
         let spacing = theme.root_title_lengths(
             Self::appearances(theme, sources).map(|style| style.theme.get_font_size()),
         )?;
-        let adjacent = plans[0].is_some() && plans[1].is_some();
+        let adjacent = plans[0].as_ref().is_some_and(|plan| !plan.lines.is_empty())
+            && plans[1].as_ref().is_some_and(|plan| !plan.lines.is_empty());
         if crate::theme::composition::hard(
             &reserves
                 .height_with_body(minimum_body_height)?
@@ -288,7 +289,9 @@ impl RootTitleBlockPlan {
             if let Some(text) = plan {
                 let top = if index == 2 {
                     crate::theme::spacing::ExactLength::quanta(
-                        crate::layout::kernel::LayoutScalar::from_quanta(text.height_quanta),
+                        crate::layout::kernel::LayoutScalar::from_quanta(
+                            text.occupied_height_quanta(),
+                        ),
                     )?
                     .add_length(&padding.bottom)
                     .after_pixels(span.y0)?
@@ -313,17 +316,20 @@ impl RootTitleBlockPlan {
                             as f64
                             / 1024.0;
                 }
-                let bounds = PanelBox::new(left, left + text.width(), top - text.height(), top);
-                let first = text
-                    .first_baseline_quanta
-                    .ok_or_else(|| Error::Render("present root text has no baseline".into()))?;
+                let bounds = PanelBox::new(
+                    left,
+                    left + text.occupied_size().0,
+                    top - text.occupied_size().1,
+                    top,
+                );
+                let first = text.first_baseline_quanta.unwrap_or(0);
                 let placement = PlannedTextPlacement::baseline(
                     Point2D::new(
                         x,
                         if index == 2 {
                             crate::theme::spacing::ExactLength::quanta(
                                 crate::layout::kernel::LayoutScalar::from_quanta(
-                                    text.height_quanta,
+                                    text.occupied_height_quanta(),
                                 ),
                             )?
                             .subtract(&crate::theme::spacing::ExactLength::quanta(
@@ -346,10 +352,27 @@ impl RootTitleBlockPlan {
                     anchor,
                     0.0,
                 );
+                let placement = crate::layout::text::placement::resolve(
+                    placement,
+                    &text,
+                    Some(PanelBox::new(
+                        text_span.x0,
+                        text_span.x1,
+                        bounds.y0,
+                        bounds.y1,
+                    )),
+                )?;
+                let text = crate::layout::text::placement::contain(
+                    text,
+                    placement,
+                    PanelBox::new(text_span.x0, text_span.x1, bounds.y0, bounds.y1),
+                    scope,
+                )?;
                 if index < 2 {
-                    consumed = consumed.add_quanta(
-                        crate::layout::kernel::LayoutScalar::from_quanta(text.height_quanta),
-                    )?;
+                    consumed =
+                        consumed.add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(
+                            text.occupied_height_quanta(),
+                        ))?;
                     if index == 0 && adjacent {
                         consumed = consumed.add_length(&spacing.title_subtitle_gap);
                     }
@@ -403,7 +426,7 @@ impl RootTitleBlockPlan {
             (0..3).map(|index| {
                 sources[index]
                     .map(|source| {
-                        fit::measured(fit::text(
+                        fit::measured(fit::single_text(
                             theme,
                             source.as_str(),
                             appearances[index],
@@ -421,21 +444,31 @@ impl RootTitleBlockPlan {
             theme.root_title_lengths(appearances.map(|style| style.theme.get_font_size()))?;
         let mut top_reserve = crate::theme::spacing::ExactLength::quanta(
             crate::layout::kernel::LayoutScalar::from_quanta(
-                plans[0].as_ref().map_or(0, |plan| plan.height_quanta),
+                plans[0]
+                    .as_ref()
+                    .map_or(0, ResolvedTextPlan::occupied_height_quanta),
             ),
         )?
         .add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(
-            plans[1].as_ref().map_or(0, |plan| plan.height_quanta),
+            plans[1]
+                .as_ref()
+                .map_or(0, ResolvedTextPlan::occupied_height_quanta),
         ))?;
-        if plans[0].is_some() && plans[1].is_some() {
+        if plans[0].as_ref().is_some_and(|plan| !plan.lines.is_empty())
+            && plans[1].as_ref().is_some_and(|plan| !plan.lines.is_empty())
+        {
             top_reserve = top_reserve.add_length(&spacing.title_subtitle_gap);
         }
-        if plans[0].is_some() || plans[1].is_some() {
+        if plans[..2]
+            .iter()
+            .flatten()
+            .any(|plan| !plan.lines.is_empty())
+        {
             top_reserve = top_reserve.add_length(&spacing.title_block_to_content_clearance);
         }
         let bottom_reserve = if let Some(plan) = &plans[2] {
             spacing.caption_to_content_clearance.add_quanta(
-                crate::layout::kernel::LayoutScalar::from_quanta(plan.height_quanta),
+                crate::layout::kernel::LayoutScalar::from_quanta(plan.occupied_height_quanta()),
             )?
         } else {
             crate::theme::spacing::ExactLength::quanta(

@@ -197,25 +197,14 @@ fn measured_seed(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-    legacy: bool,
 ) -> Result<usize, Error> {
-    let probe = if legacy {
-        theme.measure_legacy_appearance_text(
-            "0",
-            &theme.typography.axes.tick_label,
-            PhysicalTextAlignment::Center,
-            "numeric tick pitch",
-            false,
-        )
-    } else {
-        theme.measure_text(
-            "0",
-            &theme.typography.axes.tick_label,
-            PhysicalTextAlignment::Center,
-            "numeric tick pitch",
-            false,
-        )
-    }?;
+    let probe = theme.measure_text(
+        "0",
+        &theme.typography.axes.tick_label,
+        PhysicalTextAlignment::Center,
+        "numeric tick pitch",
+        false,
+    )?;
     let (x0, x1, y0, y1) = projection.pixel_box();
     let (_, span) = match side {
         AxisSide::Bottom => super::projection::axis_quanta(x0, x1)?,
@@ -568,12 +557,11 @@ pub(crate) fn numeric_tick_plan(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-    legacy: bool,
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
     NumericTickPlan::measure_selected_source(
-        range, generation, log, projection, side, theme, legacy, format, scope, None,
+        range, generation, log, projection, side, theme, format, scope, None,
     )
 }
 
@@ -690,7 +678,6 @@ impl NumericTickPlan {
         projection: &Projection,
         side: AxisSide,
         theme: &ResolvedTheme,
-        legacy: bool,
         format: Option<&crate::numeric::source::AxisRequest<'_>>,
         scope: &crate::layout::fit::FitScope,
         raw: Option<(f64, f64)>,
@@ -722,7 +709,7 @@ impl NumericTickPlan {
         let upper = if generation.is_interval() || generation.target_count().is_some() {
             1
         } else {
-            measured_seed(projection, side, theme, legacy)?
+            measured_seed(projection, side, theme)?
         };
 
         let mut sources = Sources::new(range, log, generation, upper)?;
@@ -827,30 +814,57 @@ pub(crate) fn format_guide_label(value: f64, precision: usize) -> Result<String,
     format_label(value, false, false, precision)
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "candidate sources use the same original-index eligibility, measured cell placement and protected group reduction as final axes"
+)]
 pub(super) fn labels_fit(
     ticks: &[AxisTick],
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
 ) -> Result<bool, Error> {
-    let appearance = &theme.typography.axes.tick_label;
-    let environment = theme.prepared_font_environment()?;
-    for tick in ticks.iter().filter(|tick| !tick.label.is_empty()) {
-        environment
-            .admit_text(
-                &appearance.stack,
-                appearance.weight.into(),
-                &tick.label,
-                None,
-            )
-            .map_err(|error| {
-                Error::Render(format!("numeric axis candidate text admission: {error}"))
-            })?;
+    let appearance = theme.tick_text_appearance(side);
+    if appearance.hidden() {
+        return Ok(true);
     }
+    let eligible = crate::data::source::collect_source(
+        ticks
+            .iter()
+            .enumerate()
+            .filter(|(_, tick)| !tick.label.is_empty())
+            .map(|(index, _)| Ok(index)),
+    )?;
+    let visibility = appearance
+        .layout
+        .and_then(|request| request.instructions().visibility.as_ref());
+    let environment = theme.prepared_font_environment()?;
+    for &index in &eligible {
+        if appearance.includes(index, &eligible) {
+            environment
+                .admit_text(
+                    appearance.theme.get_stack(),
+                    appearance.theme.get_weight().into(),
+                    &ticks[index].label,
+                    None,
+                )
+                .map_err(|error| {
+                    Error::Render(format!("numeric axis candidate text admission: {error}"))
+                })?;
+        }
+    }
+    let allow = appearance.layout.is_some_and(|request| {
+        request.instructions().overlap == Some(crate::TextOverlap::Allow)
+            || request
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(crate::TextVisibility::reduces)
+    });
     let cells = match super::cells::assign(
         ticks,
         false,
-        true,
+        !allow,
         None,
         &crate::CategoryLabelSelection::all(),
         projection,
@@ -861,8 +875,13 @@ pub(super) fn labels_fit(
         Err(crate::layout::fit::PlanError::Fit(_)) => return Ok(false),
         Err(crate::layout::fit::PlanError::Fatal(error)) => return Err(error),
     };
-    for (tick, cell) in ticks.iter().zip(cells) {
+    let mut candidates = Vec::new();
+    crate::data::source::reserve_source(&mut candidates, eligible.len())?;
+    for (index, (tick, cell)) in ticks.iter().zip(cells).enumerate() {
         if tick.label.is_empty() {
+            continue;
+        }
+        if visibility.is_some_and(|policy| !policy.includes(index, &eligible)) {
             continue;
         }
         #[cfg(test)]
@@ -871,29 +890,62 @@ pub(super) fn labels_fit(
         );
         let (width, alignment, role) = match side {
             AxisSide::Bottom => (
-                crate::layout::maximum_width_quanta(cell.capacity())
-                    .map_err(|error| Error::Render(error.to_string()))?,
+                crate::layout::maximum_width_quanta(if allow {
+                    projection.panel_box().width()
+                } else {
+                    cell.capacity()
+                })
+                .map_err(|error| Error::Render(error.to_string()))?,
                 PhysicalTextAlignment::Center,
                 "x-axis tick label",
             ),
             AxisSide::Left => (i64::MAX, PhysicalTextAlignment::End, "y-axis tick label"),
         };
-        let plan = match theme.plan_text_quanta_scoped(
+        let plan = match crate::layout::text::request::measure_quanta(
+            theme,
             &tick.label,
-            &theme.typography.axes.tick_label,
+            appearance,
             width,
             alignment,
             role,
-            false,
+            &crate::layout::fit::ROOT_SCOPE,
+        )? {
+            crate::layout::fit::FitOutcome::Measured(plan) => plan,
+            crate::layout::fit::FitOutcome::Miss(_) => return Ok(false),
+        };
+        let Some(placement) = cell.placement(&plan, side, 0.0)? else {
+            return Ok(false);
+        };
+        candidates.push(crate::layout::text::visibility::Candidate {
+            index,
+            position: cell.center,
+            bounds: crate::layout::text::placement::footprint(placement, &plan)?,
+        });
+    }
+    if let Some(policy) = visibility {
+        let panel = projection.panel_box();
+        let region = match side {
+            AxisSide::Bottom => {
+                crate::layout::PanelBox::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
+            }
+            AxisSide::Left => crate::layout::PanelBox::new(-f64::MAX, f64::MAX, panel.y0, panel.y1),
+        };
+        let failure = appearance
+            .layout
+            .and_then(|request| request.instructions().overflow.as_ref())
+            .map_or(crate::TextFailure::Error, |overflow| overflow.failure);
+        return match crate::layout::text::visibility::reduce(
+            policy,
+            &eligible,
+            &candidates,
+            region,
+            failure,
             &crate::layout::fit::ROOT_SCOPE,
         ) {
-            Ok(plan) => plan,
-            Err(crate::layout::fit::PlanError::Fit(_)) => return Ok(false),
-            Err(crate::layout::fit::PlanError::Fatal(error)) => return Err(error),
+            Ok(_) => Ok(true),
+            Err(crate::layout::fit::PlanError::Fit(_)) => Ok(false),
+            Err(crate::layout::fit::PlanError::Fatal(error)) => Err(error),
         };
-        if cell.placement(&plan, side, 0.0)?.is_none() {
-            return Ok(false);
-        }
     }
     Ok(true)
 }

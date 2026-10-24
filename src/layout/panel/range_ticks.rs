@@ -166,7 +166,6 @@ pub(crate) fn automatic_numeric_ticks(
         projection,
         side,
         theme,
-        false,
         None,
         &crate::layout::fit::ROOT_SCOPE,
     )

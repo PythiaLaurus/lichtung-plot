@@ -180,6 +180,7 @@ impl GuideSpec {
 /// ```
 #[derive(Debug, Clone)]
 pub struct PointLayer {
+    pub(crate) label_layout: Option<crate::TextLayout>,
     x: NumericValues,
     y: NumericValues,
     labels: Option<CategoryValues>,
@@ -284,6 +285,12 @@ impl BarPointLayer {
 }
 
 impl PointLayer {
+    /// Replace the complete layout default for this layer's column-backed labels.
+    #[must_use]
+    pub fn label_text_layout(mut self, layout: crate::TextLayout) -> Self {
+        self.label_layout = Some(layout);
+        self
+    }
     /// Construct an owned point layer with owner-theme styling.
     ///
     /// The x/y values may describe raw observations or any other supplemental
@@ -295,6 +302,7 @@ impl PointLayer {
     pub fn new(x: NumericValues, y: NumericValues) -> Self {
         Self {
             x,
+            label_layout: None,
             y,
             labels: None,
             legend_label: crate::text::TextSlot::EMPTY,

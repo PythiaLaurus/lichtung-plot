@@ -1043,12 +1043,28 @@ fn project(
             layer.points.iter().map(|&(x, y)| Ok(project(x, y))),
         )?;
         let mut text = Vec::new();
+        let mut label_indices = Vec::new();
         if let Some(labels) = &layer.labels {
             let appearance = chart.point_layers()[index]
                 .label_appearance(&theme.typography.annotations.point_layer_label)?;
+            let label_layout = chart.point_layers()[index].label_layout.as_ref();
             crate::data::source::reserve_source(&mut text, labels.len())?;
+            crate::data::source::reserve_source(&mut label_indices, labels.len())?;
             let x_range = layout.projection.x_range();
             let y_range = layout.projection.y_range();
+            let eligible = crate::data::source::collect_source(
+                layer
+                    .points
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, point)| {
+                        point.0 >= x_range.0
+                            && point.0 <= x_range.1
+                            && point.1 >= y_range.0
+                            && point.1 <= y_range.1
+                    })
+                    .map(|(index, _)| Ok(index)),
+            )?;
             let offset = f64::from(style.radius)
                 + theme
                     .annotations
@@ -1060,7 +1076,9 @@ fn project(
                             .get_font_size(),
                     )?
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
-            for ((&(x, y), point), label) in layer.points.iter().zip(&points).zip(labels) {
+            for (source_index, ((&(x, y), point), label)) in
+                layer.points.iter().zip(&points).zip(labels).enumerate()
+            {
                 if x < x_range.0 || x > x_range.1 || y < y_range.0 || y > y_range.1 {
                     continue;
                 }
@@ -1077,20 +1095,42 @@ fn project(
                 .expect("bounded layer index");
                 let length = usize::try_from(cursor.position()).expect("bounded layer index");
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
-                let plan = theme.measure_legacy_appearance_text(
-                    label,
-                    &appearance,
-                    crate::layout::PhysicalTextAlignment::Start,
-                    owner,
-                    false,
-                )?;
-                text.push(PlacedText::middle(
-                    plan,
-                    Point2D::new((point.x + offset).round(), (point.y + offset).round()),
-                    TextAnchor::Start,
-                    0.0,
-                ));
+                let selected = crate::text::TextAppearance::from(&appearance).layout(label_layout);
+                let plan = if label_layout
+                    .and_then(|request| request.instructions().visibility.as_ref())
+                    .is_some_and(|policy| !policy.includes(source_index, &eligible))
+                {
+                    crate::layout::ResolvedTextPlan::hidden_source(
+                        label,
+                        selected,
+                        crate::layout::PhysicalTextAlignment::Start,
+                        owner,
+                    )?
+                } else {
+                    theme.measure_appearance_text(
+                        label,
+                        selected,
+                        crate::layout::PhysicalTextAlignment::Start,
+                        owner,
+                    )?
+                };
+                let position = if label_layout
+                    .is_some_and(|request| request.instructions().offset.is_some())
+                {
+                    *point
+                } else {
+                    Point2D::new((point.x + offset).round(), (point.y + offset).round())
+                };
+                text.push(PlacedText::middle(plan, position, TextAnchor::Start, 0.0)?);
+                label_indices.push(source_index);
             }
+            crate::layout::text::visibility::apply(
+                &mut text,
+                &label_indices,
+                layout.projection.panel_box(),
+                false,
+                scope,
+            )?;
         }
         payload.layers.push((points, style, text));
     }

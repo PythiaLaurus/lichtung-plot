@@ -348,15 +348,24 @@ fn assigned_rows(
     let mut hard =
         crate::data::source::collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
     let mut label_heights = crate::data::source::collect_source((0..count).map(|_| Ok(0.0)))?;
-    for (index, label) in labels
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| labels_visible && selection.includes(*index, count))
-    {
+    for (index, label) in labels.iter().enumerate().filter(|(index, _)| {
+        labels_visible
+            && selection.includes(*index, count)
+            && !theme
+                .tick_text_appearance(crate::layout::AxisSide::Left)
+                .hidden()
+            && !theme.text_layouts.ticks[1].as_ref().is_some_and(|request| {
+                request
+                    .instructions()
+                    .visibility
+                    .as_ref()
+                    .is_some_and(crate::TextVisibility::reduces)
+            })
+    }) {
         let text = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             label,
-            &theme.typography.axes.tick_label,
+            theme.tick_text_appearance(crate::layout::AxisSide::Left),
             tick_width,
             PhysicalTextAlignment::End,
             "y-axis tick label",
@@ -364,7 +373,9 @@ fn assigned_rows(
                 .fit_scope()
                 .child(crate::layout::AddressRole::AxisLeft, 0)?,
         ))?;
-        label_heights[index] = text.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
+        if !text.lines.is_empty() {
+            label_heights[index] = text.occupied_size().1 + 2.0 * crate::layout::LABEL_CLEARANCE;
+        }
     }
     let pitch = if selection.is_all() {
         0.0
@@ -385,7 +396,10 @@ fn assigned_rows(
                 .annotations
                 .get_cells()
                 .value_padding(plan.style.font_size)?;
-            hard[index / width] = hard[index / width].max(padding.height(plan.height())?);
+            if !plan.lines.is_empty() {
+                hard[index / width] =
+                    hard[index / width].max(padding.height(plan.occupied_size().1)?);
+            }
         }
     }
     for (index, plan) in annotations.rows.iter().enumerate() {
@@ -394,7 +408,9 @@ fn assigned_rows(
                 .annotations
                 .get_cells()
                 .null_row_padding(plan.style.font_size)?;
-            hard[index] = hard[index].max(padding.height(plan.height())?);
+            if !plan.lines.is_empty() {
+                hard[index] = hard[index].max(padding.height(plan.occupied_size().1)?);
+            }
         }
     }
 
@@ -510,6 +526,7 @@ impl PreparedHeatmapColor {
 /// continuous domain that actually selected the annotation glyph roles.
 #[derive(Debug)]
 pub(crate) struct HeatmapIntrinsicCache {
+    layouts: crate::text::roles::TextRoles,
     minimum: (f64, f64),
     without_y_labels: (f64, f64),
     color_scale: crate::theme::ContinuousColors,
@@ -539,6 +556,7 @@ impl HeatmapIntrinsicCache {
         theme: &ResolvedTheme,
     ) -> bool {
         self.color_scale.same(&prepared.color.scale)
+            && self.layouts == theme.text_layouts
             && self.category_labels
                 == axes
                     .specs
@@ -584,6 +602,7 @@ impl HeatmapIntrinsicCache {
         };
         Ok(Self {
             minimum,
+            layouts: theme.text_layouts.clone(),
             without_y_labels,
             color_scale,
             contrast_light: text(&theme.typography.annotations.contrast.light)?,
@@ -692,7 +711,11 @@ pub(crate) fn natural_body_height(
                 .get_cells()
                 .value_padding(plan.style.font_size)?;
             heights[index / marks.x_levels.len()] =
-                heights[index / marks.x_levels.len()].max(padding.height(plan.height())?);
+                heights[index / marks.x_levels.len()].max(if plan.lines.is_empty() {
+                    0.0
+                } else {
+                    padding.height(plan.occupied_size().1)?
+                });
         }
     }
     for (index, plan) in annotations.rows.iter().enumerate() {
@@ -701,7 +724,9 @@ pub(crate) fn natural_body_height(
                 .annotations
                 .get_cells()
                 .null_row_padding(plan.style.font_size)?;
-            heights[index] = heights[index].max(padding.height(plan.height())?);
+            if !plan.lines.is_empty() {
+                heights[index] = heights[index].max(padding.height(plan.occupied_size().1)?);
+            }
         }
     }
     Ok(heights.into_iter().sum())
@@ -811,6 +836,25 @@ fn column_label_hard(
     label: &str,
     theme: &ResolvedTheme,
 ) -> Result<f64, Error> {
+    if let Some(layout) = &theme.text_layouts.ticks[0] {
+        if layout.hidden()
+            || layout
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(crate::TextVisibility::reduces)
+            || layout.instructions().overlap == Some(crate::TextOverlap::Allow)
+        {
+            return Ok(0.0);
+        }
+        return Ok(crate::layout::fit::intrinsic_widths(
+            theme,
+            label,
+            theme.tick_text_appearance(crate::layout::AxisSide::Bottom),
+            "Heatmap category intrinsic",
+        )?
+        .0 + 2.0 * crate::layout::LABEL_CLEARANCE);
+    }
     let hard = if prepared.label_fit == HeatmapLabelFit::Wrap {
         crate::layout::fit::intrinsic_widths(
             theme,
@@ -903,16 +947,34 @@ fn analyze_intrinsics(
             .category_labels
             .includes(*index, y_labels.len())
     }) {
-        let plan = theme.measure_text(
+        if theme.text_layouts.ticks[1].as_ref().is_some_and(|layout| {
+            layout
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(crate::TextVisibility::reduces)
+        }) {
+            continue;
+        }
+        let plan = theme.measure_appearance_text(
             label,
-            &theme.typography.axes.tick_label,
+            theme.tick_text_appearance(crate::layout::AxisSide::Left),
             PhysicalTextAlignment::End,
             "Heatmap row intrinsic",
-            false,
         )?;
-        y_label_hard[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
+        if !plan.lines.is_empty() {
+            y_label_hard[index] = plan.occupied_size().1 + 2.0 * crate::layout::LABEL_CLEARANCE;
+        }
     }
 
+    let eligible = crate::data::source::collect_source(
+        prepared
+            .value_labels
+            .iter()
+            .enumerate()
+            .filter(|(_, label)| label.is_some())
+            .map(|(index, _)| Ok(index)),
+    )?;
     for (index, (source, _fill)) in prepared
         .value_labels
         .iter()
@@ -924,12 +986,16 @@ fn analyze_intrinsics(
             .resolved_cell_fill(index, theme.marks.get_cells().get_fill_alpha())
             .expect("prepared finite cell");
         let appearance = theme.contrasting_text(fill)?;
-        let plan = theme.measure_legacy_appearance_text(
+        let appearance =
+            crate::text::TextAppearance::from(appearance).layout(theme.text_layouts.value.as_ref());
+        if !appearance.includes(index, &eligible) {
+            continue;
+        }
+        let plan = theme.measure_appearance_text(
             source,
             appearance,
             PhysicalTextAlignment::Center,
             "heatmap value intrinsic",
-            false,
         )?;
         let padding = theme
             .annotations
@@ -942,8 +1008,12 @@ fn analyze_intrinsics(
             "heatmap value intrinsic",
         )?
         .0;
-        column_hard[index % columns] = column_hard[index % columns].max(padding.width(hard_width)?);
-        row_hard[index / columns] = row_hard[index / columns].max(padding.height(plan.height())?);
+        if !plan.lines.is_empty() {
+            column_hard[index % columns] =
+                column_hard[index % columns].max(padding.width(hard_width)?);
+            row_hard[index / columns] =
+                row_hard[index / columns].max(padding.height(plan.occupied_size().1)?);
+        }
     }
     let total_columns = column_hard.into_iter().try_fold(0.0_f64, |total, width| {
         let next = total + width;
@@ -956,13 +1026,26 @@ fn analyze_intrinsics(
     })?;
     minimum.0 = minimum.0.max(total_columns);
     let default = theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?;
+    let eligible = crate::data::source::collect_source(
+        prepared
+            .null_row_annotations
+            .iter()
+            .enumerate()
+            .filter(|(_, label)| label.is_some())
+            .map(|(index, _)| Ok(index)),
+    )?;
     for (row, source) in prepared
         .null_row_annotations
         .iter()
         .enumerate()
         .filter_map(|(row, text)| Some((row, text.as_ref()?)))
     {
-        let appearance = source.appearance(default);
+        let appearance = source.appearance(
+            crate::text::TextAppearance::from(default).layout(theme.text_layouts.null_row.as_ref()),
+        );
+        if !appearance.includes(row, &eligible) {
+            continue;
+        }
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
             source.as_str(),
@@ -970,21 +1053,22 @@ fn analyze_intrinsics(
             "heatmap fully-null row annotation",
         )?
         .0;
-        let unwrapped = theme.measure_text(
+        let unwrapped = theme.measure_appearance_text(
             source.as_str(),
-            appearance.theme,
+            appearance,
             source
                 .resolved_alignment(crate::TextAlignment::Center)
                 .into(),
             "heatmap fully-null row annotation",
-            appearance.exact_override,
         )?;
         let padding = theme
             .annotations
             .get_cells()
             .null_row_padding(appearance.theme.get_font_size())?;
         minimum.0 = minimum.0.max(padding.width(hard)?);
-        row_hard[row] = row_hard[row].max(padding.height(unwrapped.height())?);
+        if !unwrapped.lines.is_empty() {
+            row_hard[row] = row_hard[row].max(padding.height(unwrapped.occupied_size().1)?);
+        }
     }
     minimum.0 = minimum.0.max(cell.0);
     let without_y_height = row_hard.iter().sum::<f64>().max(cell.1);
@@ -1020,19 +1104,26 @@ fn analyze_intrinsics(
 }
 
 impl HeatmapData {
-    pub(crate) fn null_row_sources(&self) -> impl Iterator<Item = &crate::Text> {
-        self.null_row_annotations.iter().flatten()
+    pub(crate) fn null_row_sources(&self) -> impl Iterator<Item = (usize, &crate::Text)> {
+        self.null_row_annotations
+            .iter()
+            .enumerate()
+            .filter_map(|(index, source)| source.as_ref().map(|source| (index, source)))
     }
 
     pub(crate) fn annotation_labels(
         &self,
         alpha: u8,
-    ) -> impl Iterator<Item = (&str, crate::theme::Color)> {
+    ) -> impl Iterator<Item = (usize, &str, crate::theme::Color)> {
         self.value_labels
             .iter()
             .enumerate()
             .filter_map(move |(index, label)| {
-                Some((label.as_deref()?, self.resolved_cell_fill(index, alpha)?))
+                Some((
+                    index,
+                    label.as_deref()?,
+                    self.resolved_cell_fill(index, alpha)?,
+                ))
             })
     }
 }
@@ -1093,21 +1184,30 @@ pub(crate) fn measure(
                 .into());
         }
         let mut natural = 1.0 / 1024.0;
+        let eligible = crate::data::source::collect_source(
+            chart
+                .y_axis_spec()
+                .category_labels
+                .indices(y_labels.len())
+                .map(Ok),
+        )?;
         for (_, label) in y_labels.iter().enumerate().filter(|(index, _)| {
             chart.y_tick_labels_visible()
+                && theme
+                    .tick_text_appearance(crate::layout::AxisSide::Left)
+                    .includes(*index, &eligible)
                 && chart
                     .y_axis_spec()
                     .category_labels
                     .includes(*index, y_labels.len())
         }) {
-            let plan = theme.measure_text(
+            let plan = theme.measure_appearance_text(
                 label,
-                &theme.typography.axes.tick_label,
+                theme.tick_text_appearance(crate::layout::AxisSide::Left),
                 PhysicalTextAlignment::End,
                 "y-axis category label",
-                false,
             )?;
-            natural = f64::max(natural, plan.width().max(plan.fit_width()));
+            natural = f64::max(natural, plan.occupied_size().0.max(plan.fit_width()));
         }
         let tick_width = if natural <= available || !wrap_labels {
             natural.min(available)
@@ -1150,7 +1250,10 @@ pub(crate) fn measure(
             context.fit_scope(),
             &text,
         )?;
-        let y_labels = if wrap_labels || !chart.y_tick_labels_visible() {
+        let y_labels = if wrap_labels
+            || !chart.y_tick_labels_visible()
+            || theme.text_layouts.ticks[1].is_some()
+        {
             y_labels
         } else {
             fitted_unique_labels(
@@ -1246,7 +1349,7 @@ pub(crate) fn measure(
             crate::layout::AxisSide::Bottom,
             context.fit_scope(),
         )?;
-        let x_labels = if wrap_labels {
+        let x_labels = if wrap_labels || theme.text_layouts.ticks[0].is_some() {
             x_labels
         } else {
             fitted_unique_labels(
@@ -1281,7 +1384,7 @@ pub(crate) fn measure(
     let annotations = annotations
         .ok_or_else(|| Error::Render("selected Heatmap has no measured cell text".into()))?;
 
-    let payload = HeatmapPayload {
+    let mut payload = HeatmapPayload {
         clip: panel,
         cross_style: theme.marks.get_cells().get_missing_cross().backend_style(),
         cells: select_cells(prepared, columns, rows, theme, &annotations)?,
@@ -1872,6 +1975,7 @@ struct CellPayload {
     corners: [Point2D; 4],
     fill: FillStyle,
     text: Option<PlacedText>,
+    text_owner: Option<(bool, usize)>,
     cross: Option<[[Point2D; 2]; 2]>,
 }
 
@@ -1910,33 +2014,49 @@ impl CellPayload {
 
 impl HeatmapPayload {
     fn validate_annotation_ink(
-        &self,
+        &mut self,
 
         scope: &crate::layout::fit::FitScope,
     ) -> Result<(), crate::layout::fit::PlanError> {
-        for (index, cell) in self.cells.iter().enumerate() {
-            let Some(text) = &cell.text else { continue };
-            let mut ink = crate::render::geometry::GeometrySnapshot::new();
-            ink.text(text.placement, &text.plan, None)?;
+        for (index, cell) in self.cells.iter_mut().enumerate() {
+            let Some(text) = &mut cell.text else { continue };
             let containing = PanelBox::new(
                 cell.corners[0].x,
                 cell.corners[2].x,
                 cell.corners[0].y,
                 cell.corners[2].y,
             );
-            if ink.bounds().iter().any(|bounds| {
-                bounds.left < containing.x0
-                    || bounds.right > containing.x1
-                    || bounds.bottom < containing.y0
-                    || bounds.top > containing.y1
-            }) {
-                return Err(scope
-                    .child(crate::layout::AddressRole::HeatmapCell, index)?
-                    .failure(
-                        crate::layout::fit::FitKind::Text,
-                        "required Heatmap annotation ink exceeds its assigned cell",
-                    )
-                    .into());
+            text.plan = crate::layout::text::placement::contain(
+                text.plan.clone(),
+                text.placement,
+                containing,
+                &scope.child(crate::layout::AddressRole::HeatmapCell, index)?,
+            )?;
+        }
+        for merged in [false, true] {
+            let members = crate::data::source::collect_source(
+                self.cells
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, cell)| {
+                        cell.text_owner.is_some_and(|(row, _)| row == merged) && cell.text.is_some()
+                    })
+                    .map(|(index, _)| Ok(index)),
+            )?;
+            let indices =
+                crate::data::source::collect_source(members.iter().map(|&index| {
+                    Ok(self.cells[index].text_owner.expect("selected text owner").1)
+                }))?;
+            let mut text = crate::data::source::collect_source(members.iter().map(|&index| {
+                Ok(self.cells[index]
+                    .text
+                    .as_ref()
+                    .expect("selected text")
+                    .clone())
+            }))?;
+            crate::layout::text::visibility::apply(&mut text, &indices, self.clip, merged, scope)?;
+            for (&index, text) in members.iter().zip(text) {
+                self.cells[index].text = Some(text);
             }
         }
         Ok(())
@@ -2007,13 +2127,18 @@ fn select_cells(
                 )?
                 .backend_style(),
                 cross: None,
+                text_owner: Some((true, y_index)),
                 text: Some(PlacedText {
                     plan: annotation.clone(),
-                    placement: crate::render::backend::PlannedTextPlacement::middle(
-                        Point2D::new(x, f64::midpoint(bottom, top).round()),
-                        anchor,
-                        0.0,
-                    ),
+                    placement: crate::layout::text::placement::resolve(
+                        crate::render::backend::PlannedTextPlacement::middle(
+                            Point2D::new(x, f64::midpoint(bottom, top).round()),
+                            anchor,
+                            0.0,
+                        ),
+                        annotation,
+                        Some(PanelBox::new(left, right, bottom, top)),
+                    )?,
                 }),
             });
             continue;
@@ -2054,10 +2179,12 @@ fn select_cells(
                 )?
                 .backend_style(),
                 text: None,
+                text_owner: None,
                 cross: None,
             };
             if value.is_some() {
                 if let Some(plan) = &annotations.values[y_index * x_count + x_index] {
+                    cell.text_owner = Some((false, y_index * x_count + x_index));
                     cell.text = Some(PlacedText::middle(
                         plan.clone(),
                         Point2D::new(
@@ -2066,7 +2193,7 @@ fn select_cells(
                         ),
                         TextAnchor::Middle,
                         0.0,
-                    ));
+                    )?);
                 }
             } else {
                 let stroke = if let Some(stroke) = cross_width {
@@ -2142,6 +2269,14 @@ fn measure_annotations(
     plans.values.resize(prepared.cells.len(), None);
     plans.rows.resize(prepared.null_row_annotations.len(), None);
     if let HeatmapAnnotations::Values(_) = chart.heatmap_annotations_spec() {
+        let eligible = crate::data::source::collect_source(
+            prepared
+                .value_labels
+                .iter()
+                .enumerate()
+                .filter(|(_, label)| label.is_some())
+                .map(|(index, _)| Ok(index)),
+        )?;
         for (index, value) in prepared.cells.iter().enumerate() {
             let Some(_) = value else { continue };
             let column = index % prepared.x_levels.len();
@@ -2164,14 +2299,17 @@ fn measure_annotations(
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
             let cell_scope = scope.child(AddressRole::HeatmapValueLabel, index)?;
             let measured = text.plan(source, owner, || {
-                fit::measured(fit::text(
+                fit::measured(crate::layout::text::request::measure_occurrence(
                     theme,
                     source,
-                    appearance,
-                    padding.available_width(cell_width)?,
+                    crate::text::TextAppearance::from(appearance)
+                        .layout(theme.text_layouts.value.as_ref()),
+                    crate::layout::maximum_width_quanta(padding.available_width(cell_width)?)
+                        .map_err(|error| Error::Render(error.to_string()))?,
                     PhysicalTextAlignment::Center,
                     owner,
                     &cell_scope,
+                    (index, &eligible),
                 ))
             });
             match measured {
@@ -2183,12 +2321,24 @@ fn measure_annotations(
             }
         }
     }
+    let eligible = crate::data::source::collect_source(
+        prepared
+            .null_row_annotations
+            .iter()
+            .enumerate()
+            .filter(|(_, label)| label.is_some())
+            .map(|(index, _)| Ok(index)),
+    )?;
     for (y_index, annotation) in prepared.null_row_annotations.iter().enumerate() {
         let Some(annotation) = annotation else {
             continue;
         };
-        let appearance = annotation
-            .appearance(theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?);
+        let appearance = annotation.appearance(
+            crate::text::TextAppearance::from(
+                theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
+            )
+            .layout(theme.text_layouts.null_row.as_ref()),
+        );
         let padding = theme
             .annotations
             .get_cells()
@@ -2199,16 +2349,18 @@ fn measure_annotations(
             annotation.as_str(),
             "heatmap fully-null row annotation",
             || {
-                fit::measured(fit::text(
+                fit::measured(crate::layout::text::request::measure_occurrence(
                     theme,
                     annotation.as_str(),
                     appearance,
-                    available_width,
+                    crate::layout::maximum_width_quanta(available_width)
+                        .map_err(|error| Error::Render(error.to_string()))?,
                     annotation
                         .resolved_alignment(crate::TextAlignment::Center)
                         .into(),
                     "heatmap fully-null row annotation",
                     &row_scope,
+                    (y_index, &eligible),
                 ))
             },
         ))? {
@@ -2258,7 +2410,16 @@ fn check_annotation_tracks(
             .annotations
             .get_cells()
             .value_padding(plan.style.font_size)?;
-        if width < padding.width(plan.width())? || height < padding.height(plan.height())? {
+        let strict = plan
+            .request
+            .as_ref()
+            .and_then(|request| request.instructions().overflow.as_ref())
+            .is_none_or(|overflow| overflow.failure == crate::TextFailure::Error);
+        if strict
+            && !plan.lines.is_empty()
+            && (width < padding.width(plan.occupied_size().0)?
+                || height < padding.height(plan.occupied_size().1)?)
+        {
             let precision = prepared
                 .value_presentation
                 .as_ref()
@@ -2276,8 +2437,16 @@ fn check_annotation_tracks(
             .annotations
             .get_cells()
             .null_row_padding(plan.style.font_size)?;
-        if rows[row] - rows[row + 1] < padding.height(plan.height())?
-            || columns[columns.len() - 1] - columns[0] < padding.width(plan.width())?
+        let strict = plan
+            .request
+            .as_ref()
+            .and_then(|request| request.instructions().overflow.as_ref())
+            .is_none_or(|overflow| overflow.failure == crate::TextFailure::Error);
+        if strict
+            && !plan.lines.is_empty()
+            && (rows[row] - rows[row + 1] < padding.height(plan.occupied_size().1)?
+                || columns[columns.len() - 1] - columns[0]
+                    < padding.width(plan.occupied_size().0)?)
         {
             FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapMergedRow, row)?.failure(FitKind::Text,
                 "heatmap: required merged row text exceeds its assigned row; increase chart width or height"));

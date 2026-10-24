@@ -377,11 +377,15 @@ impl PlacedText {
         position: Point2D,
         anchor: TextAnchor,
         rotation: f64,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            placement: crate::layout::text::placement::resolve(
+                PlannedTextPlacement::middle(position, anchor, rotation),
+                &plan,
+                None,
+            )?,
             plan,
-            placement: PlannedTextPlacement::middle(position, anchor, rotation),
-        }
+        })
     }
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         backend.draw_planned_text(self.placement, &self.plan)
@@ -943,16 +947,20 @@ pub(crate) fn validate_bracket(
     coordinates::canonical_bracket(bracket, style.tick_height, style.label_gap)
 }
 
-pub(crate) fn planned_bracket_placement(canonical: CanonicalBracket) -> PlannedTextPlacement {
+pub(crate) fn planned_bracket_placement(
+    canonical: CanonicalBracket,
+    plan: &ResolvedTextPlan,
+) -> Result<PlannedTextPlacement, Error> {
     let position = canonical.label_position.value();
-    match canonical.orientation {
+    let default = match canonical.orientation {
         BracketOrientation::Vertical => {
             PlannedTextPlacement::baseline(position, TextAnchor::Middle, 0.0)
         }
         BracketOrientation::Horizontal => {
             PlannedTextPlacement::middle(position, TextAnchor::Start, 0.0)
         }
-    }
+    };
+    crate::layout::text::placement::resolve(default, plan, None)
 }
 
 pub(crate) fn validate_planned_bracket(
@@ -968,7 +976,7 @@ pub(crate) fn validate_bracket_label(
     call: PlannedSignificanceCall<'_>,
 ) -> Result<(), Error> {
     let plan = &call.label.plan;
-    validate_text_plan(planned_bracket_placement(canonical), plan)?;
+    validate_text_plan(planned_bracket_placement(canonical, plan)?, plan)?;
     if call.label.exact_override != plan.style.exact_override
         || call.bracket.label != plan.source
         || call.style.label_color != plan.style.paint

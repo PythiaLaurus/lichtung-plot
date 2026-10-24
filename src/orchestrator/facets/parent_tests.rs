@@ -224,6 +224,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                 assert!(plan
                     .strip_text
                     .iter()
+                    .flatten()
                     .all(|strip| strip.placement.anchor == TextAnchor::Middle));
                 assert_eq!(plan.panel_plans.len(), 2);
                 children.finish_round(round);

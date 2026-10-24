@@ -456,7 +456,7 @@ impl GeometrySnapshot {
                 weight: ANNOTATION_COLLISION_WEIGHT,
                 ..bounds
             });
-        let placement = backend::planned_bracket_placement(canonical);
+        let placement = backend::planned_bracket_placement(canonical, &call.label.plan)?;
         backend::reserve_text_records(&mut self.text, 1)?;
         self.text.push(PositionedText {
             placement,
@@ -863,7 +863,7 @@ impl GeometryBackend {
                 weight: ANNOTATION_COLLISION_WEIGHT,
                 ..bounds
             });
-        let placement = backend::planned_bracket_placement(canonical);
+        let placement = backend::planned_bracket_placement(canonical, label)?;
         self.record_text(placement, label)?;
         let label = planned_text_ink_bounds(
             label,
@@ -1062,7 +1062,28 @@ pub(crate) fn planned_text_ink_bounds(
             (current, line) => current.or(line),
         };
     }
-    bounds.map(GeometryBox::outward)
+    let clip = crate::layout::text::placement::paint_clip(
+        PlannedTextPlacement {
+            position,
+            anchor,
+            rotation,
+            origin: vertical_origin,
+            reverse_lines,
+        },
+        plan,
+    )
+    .ok()?;
+    bounds
+        .map(|bounds| {
+            let mut bounds = GeometryBox::outward(bounds);
+            if plan.request.as_ref().is_some_and(|request| {
+                request.instructions().overlap == Some(crate::TextOverlap::Allow)
+            }) {
+                bounds.weight = 0.0;
+            }
+            bounds
+        })
+        .and_then(|bounds| bounds.clipped(clip))
 }
 
 fn polygon_ring(points: &[CanonicalPoint]) -> Vec<CanonicalPoint> {

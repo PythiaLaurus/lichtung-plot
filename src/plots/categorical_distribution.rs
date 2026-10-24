@@ -18,6 +18,30 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
+    pub(crate) fn series_center(&self, category: &str, series: &str) -> Result<f64, Error> {
+        let sample = match self {
+            Self::Boxplot(marks) => &marks.sample,
+            Self::Violin(marks) => &marks.sample,
+            Self::Supplied(_) => {
+                return Err(Error::Data(
+                    "supplied Raincloud has no positioned series domain".into(),
+                ))
+            }
+        };
+        let group = sample
+            .groups
+            .iter()
+            .find(|group| group.label == category && group.group_label.as_deref() == Some(series))
+            .ok_or_else(|| {
+                Error::Data(
+                    "annotation category-series pair is absent from the actual distribution".into(),
+                )
+            })?;
+        Ok(crate::plots::distribution_sample::center(
+            group,
+            sample.group_levels.len(),
+        ))
+    }
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,

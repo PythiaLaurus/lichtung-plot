@@ -127,7 +127,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
     spanning.canvas_owner = Some(crate::data::source::source_arc([2, 2, 0, 0, 2, 1]).unwrap());
     assert_changed_height_inputs(
         make(format.clone(), format.clone()).erase(),
-        [
+        vec![
             spanning,
             make(format.clone(), format.clone())
                 .x_category_labels(crate::CategoryLabelSelection::every(2).unwrap())

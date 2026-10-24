@@ -2020,6 +2020,14 @@ support is added through their shared allocation path later.
 
 ### 16. Unify Text Anchors And Role Attachments
 
+Delivered: fractional appearance, shared measured box/baseline/fraction anchors,
+typed annotation references, offsets, bounds/wrapping, terminal spatial handling,
+text-only visibility and typed role attachments are live. Request/clip metadata
+shares immutable glyph content; role/default identity reaches feedback and caches.
+Focused anchor, native-reference, header/TextPanel, guide, Heatmap, estimate,
+significance, Waterfall and frozen facet checks cover affected paths. General
+orientation, derived ellipsis views and font fitting remain the following steps.
+
 Extend live TextLayout with box/baseline/fractional justification, typed annotation
 references, screen/text-local offsets, finite text bounds, wrapping and explicit
 overlap/clip/visibility policies. Add fractional font size through complete

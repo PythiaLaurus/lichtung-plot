@@ -1353,7 +1353,7 @@ fn plan_panel_attempt(
             }
         }
         if is_inside(position) {
-            let corner = crate::decorations::panel_text::conflicting_legend_corner(
+            let corner = crate::decorations::panel_text::conflicting_legend_annotation(
                 &result.panel_text,
                 legend.bounds,
             );
@@ -1707,7 +1707,7 @@ fn top_right_clearance(
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
-        if crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
+        if crate::decorations::panel_text::conflicting_legend_annotation(&result.panel_text, bounds)
             .is_some()
         {
             continue;
@@ -1778,8 +1778,11 @@ fn lowest_overlap_clearance(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
         if !legend_fits_panel(bounds, result.layout.projection.panel_box())
-            || crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
-                .is_some()
+            || crate::decorations::panel_text::conflicting_legend_annotation(
+                &result.panel_text,
+                bounds,
+            )
+            .is_some()
         {
             continue;
         }

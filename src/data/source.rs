@@ -142,11 +142,16 @@ pub(crate) fn reserve_source<T>(values: &mut Vec<T>, additional: usize) -> Resul
 }
 
 pub(crate) fn collect_source<T>(
-    values: impl ExactSizeIterator<Item = Result<T, Error>>,
+    values: impl Iterator<Item = Result<T, Error>>,
 ) -> Result<Vec<T>, Error> {
     let mut retained = Vec::new();
-    reserve_source(&mut retained, values.len())?;
+    let (minimum, maximum) = values.size_hint();
+    reserve_source(&mut retained, maximum.unwrap_or(minimum))?;
     for value in values {
+        if retained.len() == retained.capacity() {
+            let additional = retained.len().max(1);
+            reserve_source(&mut retained, additional)?;
+        }
         retained.push(value?);
     }
     Ok(retained)

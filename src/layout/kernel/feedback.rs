@@ -60,6 +60,7 @@ enum Observation {
     AuthoredText(crate::Text),
     NumericEmitter(crate::numeric::function::Emitter),
     PositionFunction(crate::spec::ticks::function::Function),
+    TextLayout(Option<crate::TextLayout>),
     NumericContext(std::sync::Arc<crate::numeric::context::ContextInfo>),
     TextPlan(ResolvedTextPlan),
     Guide(std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>),
@@ -173,6 +174,12 @@ fn find_index<T>(entries: &[T], mut matches: impl FnMut(&T) -> bool) -> Option<u
 }
 
 impl FeedbackRound {
+    pub(crate) fn observe_text_layout(
+        &mut self,
+        layout: Option<&crate::TextLayout>,
+    ) -> Result<(), Error> {
+        self.observe(Observation::TextLayout(layout.cloned()))
+    }
     fn owned_by(address: &ComponentAddress, owners: &[ComponentAddress]) -> bool {
         find_index(owners, |owner| address.is_within(owner)).is_some()
     }

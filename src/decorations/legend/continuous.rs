@@ -17,7 +17,7 @@ fn hard(value: &ExactLength) -> Result<i64, Error> {
     Ok(value.round(SpatialRounding::Ceil)?.quanta())
 }
 
-fn centered_text(plan: ResolvedTextPlan, x: f64, y: f64) -> PlacedText {
+fn centered_text(plan: ResolvedTextPlan, x: f64, y: f64) -> Result<PlacedText, Error> {
     PlacedText::middle(plan, Point2D::new(x, y), TextAnchor::Middle, 0.0)
 }
 
@@ -60,12 +60,11 @@ pub(super) fn intrinsic_width(
         .map(String::as_str)
         .chain(descriptor.missing.iter().map(|key| key.label.as_str()))
     {
-        let plan = theme.measure_text(
+        let plan = theme.measure_appearance_text(
             label,
-            &theme.typography.guides.legend_label,
+            theme.guide_text_appearance(crate::GuideTextRole::Number),
             PhysicalTextAlignment::Start,
             "continuous guide value width",
-            false,
         )?;
         let column = metrics
             .exact
@@ -79,7 +78,7 @@ pub(super) fn intrinsic_width(
     if let Some(text) = &descriptor.numeric.explanation {
         let candidate = ExactLength::pixels(crate::numeric::slot::preferred_width(
             text,
-            &theme.typography.guides.legend_label,
+            theme.guide_text_appearance(crate::GuideTextRole::Number),
             theme,
         )?)?;
         if width.compare(&candidate).is_lt() {
@@ -126,15 +125,21 @@ impl ColorContent {
             descriptor.numeric.labels.len(),
             "continuous guide labels",
         )?;
+        let eligible =
+            crate::data::source::collect_source((0..descriptor.numeric.labels.len()).map(Ok))?;
         for (index, label) in descriptor.numeric.labels.iter().enumerate() {
-            let plan = theme.measure_legacy_appearance_text(
+            let appearance = theme.guide_text_appearance(crate::GuideTextRole::Number);
+            let plan = fit::measured(crate::layout::text::request::measure_occurrence(
+                theme,
                 label,
-                &theme.typography.guides.legend_label,
+                appearance,
+                width,
                 PhysicalTextAlignment::Center,
                 "continuous guide value",
-                false,
-            )?;
-            if plan.width().max(plan.fit_width()) > super::measurement::pixels(width) {
+                scope,
+                (index, &eligible),
+            ))?;
+            if plan.occupied_size().0.max(plan.fit_width()) > super::measurement::pixels(width) {
                 return Err(scope
                     .child(AddressRole::GuideLabel, index)?
                     .failure(
@@ -155,12 +160,11 @@ impl ColorContent {
             .missing
             .as_ref()
             .map(|key| {
-                theme.measure_legacy_appearance_text(
+                theme.measure_appearance_text(
                     &key.label,
-                    &theme.typography.guides.legend_label,
+                    theme.guide_text_appearance(crate::GuideTextRole::Entry),
                     PhysicalTextAlignment::Start,
                     "continuous guide missing key",
-                    false,
                 )
             })
             .transpose()?;
@@ -197,7 +201,7 @@ impl ColorContent {
             "continuous guide projected extents",
         )?;
         for plan in &labels {
-            let placed = centered_text(plan.clone(), 0.0, 0.0);
+            let placed = centered_text(plan.clone(), 0.0, 0.0)?;
             let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(placed.placement, &placed.plan, None)?;
             let painted = ink
@@ -256,11 +260,11 @@ impl ColorContent {
         .max(metrics.minimum);
         let label_height = labels
             .iter()
-            .map(ResolvedTextPlan::height)
+            .map(|plan| plan.occupied_size().1)
             .fold(0.0_f64, f64::max);
         let label_width = labels
             .iter()
-            .map(|plan| plan.width().max(plan.fit_width()))
+            .map(|plan| plan.occupied_size().0.max(plan.fit_width()))
             .fold(0.0_f64, f64::max);
         let explanation = descriptor
             .numeric
@@ -269,7 +273,7 @@ impl ColorContent {
             .map(|text| {
                 crate::numeric::slot::ExplanationPlan::measure(
                     text,
-                    &theme.typography.guides.legend_label,
+                    theme.guide_text_appearance(crate::GuideTextRole::Number),
                     super::measurement::pixels(width),
                     crate::TextAlignment::Start,
                     theme,
@@ -458,8 +462,22 @@ impl ColorContent {
                     gradient.y0 + length * fraction,
                 )
             };
-            labels.push(centered_text(plan, x, y));
+            labels.push(centered_text(plan, x, y)?);
         }
+        let indices = crate::data::source::collect_source((0..labels.len()).map(Ok))?;
+        let region = PanelBox::new(
+            0.0,
+            content_width.pixels_rounded(SpatialRounding::Floor)?,
+            -occupied_height.pixels_rounded(SpatialRounding::Floor)?,
+            0.0,
+        );
+        crate::layout::text::visibility::apply(
+            &mut labels,
+            &indices,
+            region,
+            !self.horizontal,
+            scope,
+        )?;
         let missing = self
             .missing
             .zip(descriptor.missing.as_ref())
@@ -478,7 +496,7 @@ impl ColorContent {
                         Point2D::new(label_x, bottom + row_height / 2.0),
                         TextAnchor::Start,
                         0.0,
-                    ),
+                    )?,
                 ))
             })
             .transpose()?;
@@ -501,7 +519,17 @@ impl ColorContent {
             missing,
             explanation,
         };
-        if !measured.labels_have_clearance(self.horizontal, metrics.row_gap)? {
+        let custom = measured.labels.iter().any(|label| {
+            label.plan.request.as_ref().is_some_and(|request| {
+                request.instructions().overlap == Some(crate::TextOverlap::Allow)
+                    || request
+                        .instructions()
+                        .visibility
+                        .as_ref()
+                        .is_some_and(crate::TextVisibility::reduces)
+            })
+        });
+        if !custom && !measured.labels_have_clearance(self.horizontal, metrics.row_gap)? {
             return Err(scope
                 .failure(
                     FitKind::LegendOrGuide,
@@ -563,6 +591,7 @@ impl MeasuredColorBody {
         let text = |text: &PlacedText| {
             let mut text = text.clone();
             text.placement.position = translate(text.placement.position);
+            text.plan = text.plan.translate_paint_region(x, y);
             LegendCall::Text(text)
         };
         let bounds = self.gradient;

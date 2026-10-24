@@ -185,7 +185,6 @@ fn fixed_sources_refuse_caps_and_text_nonfit_while_preferred_sources_keep_comple
             &projection,
             super::super::AxisSide::Bottom,
             &theme,
-            false,
             None,
             &crate::layout::fit::ROOT_SCOPE,
         )

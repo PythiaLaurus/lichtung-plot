@@ -104,7 +104,7 @@ data-dependent restrictions. An already faceted Plot cannot be embedded in Canva
   Covered nonanchors are occupied but never become independent producers or range
   group aliases; all inventories/capture visit each anchor once.
 - Plot/Canvas prose, x/y titles and TextPanel title/body use the common owned `Text`
-  value from the private text module. Its optional complete TextTheme and TextLayout alignment
+  value from the private text module. Its optional complete TextTheme and TextLayout request
   resolve locally over the owning roles before font preparation. Optional prose
   slots retain alignment instructions before content exists; plain replacement
   retains instructions and a present layout replaces the whole request. Complete

@@ -5,7 +5,7 @@ pub(crate) mod fit;
 pub(crate) mod interior;
 pub(crate) mod kernel;
 mod panel;
-mod text;
+pub(crate) mod text;
 mod unicode16;
 
 pub(crate) use canvas::{PanelBox, RootFramePlan};

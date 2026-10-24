@@ -202,7 +202,10 @@ impl PreparedWaterfall {
     }
 
     /// Every actual successful source reachable under admitted window feedback.
-    pub(crate) fn total_font_sources(&self) -> impl Iterator<Item = &crate::Text> {
+    pub(crate) fn total_font_sources<'a>(
+        &'a self,
+        layout: Option<&'a crate::TextLayout>,
+    ) -> impl Iterator<Item = &'a crate::Text> {
         self.total_variants
             .iter()
             .flatten()
@@ -210,8 +213,28 @@ impl PreparedWaterfall {
                 TotalVariant::Ready(prepared) => Some(prepared),
                 TotalVariant::Collision => None,
             })
-            .flat_map(|prepared| prepared.totals.iter())
-            .filter_map(|(_, source)| source.as_ref())
+            .flat_map(move |prepared| {
+                prepared
+                    .totals
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(index, (_, source))| {
+                        let text = source.as_ref()?;
+                        let mut eligible = [0; 2];
+                        let mut count = 0;
+                        for (index, (_, source)) in prepared.totals.iter().enumerate() {
+                            if source.is_some() {
+                                eligible[count] = index;
+                                count += 1;
+                            }
+                        }
+                        let request = text.get_layout().or(layout);
+                        request
+                            .and_then(|request| request.instructions().visibility.as_ref())
+                            .is_none_or(|policy| policy.includes(index, &eligible[..count]))
+                            .then_some(text)
+                    })
+            })
             .chain(self.total_explanations())
     }
 }
@@ -263,7 +286,7 @@ mod tests {
             assert_eq!(labels, expected);
             assert_eq!(
                 marks
-                    .total_font_sources()
+                    .total_font_sources(None)
                     .map(crate::Text::as_str)
                     .collect::<Vec<_>>(),
                 expected

@@ -16,6 +16,7 @@ pub(crate) struct GuideMeasurements {
 
 #[derive(Debug)]
 struct CachedMeasurement {
+    layouts: [Option<crate::TextLayout>; 3],
     descriptor: Arc<PreparedGuide>,
     owner: ComponentAddress,
     ordinal: u32,
@@ -101,6 +102,7 @@ pub(super) fn measure_assigned(
                 && entry.appearance.same(&theme.legend)
                 && entry.title.same(&theme.typography.guides.legend_title)
                 && entry.label.same(&theme.typography.guides.legend_label)
+                && entry.layouts == theme.text_layouts.guide
             {
                 *compact_changes = entry.compact_changes;
                 return entry.outcome.copy();
@@ -117,6 +119,7 @@ pub(super) fn measure_assigned(
         scope,
     )?;
     let cached = CachedMeasurement {
+        layouts: theme.text_layouts.guide.clone(),
         descriptor,
         owner: scope.address.clone(),
         ordinal: scope.ordinal,

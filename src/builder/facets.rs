@@ -162,6 +162,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.root_size == other.root_size
             && other.numeric.matches(self)
             && self.alpha == other.alpha
+            && self.text_layouts == other.text_layouts
+            && self.output_dimensions == other.output_dimensions
             && guides.matches_source(self)
             && *guides == other.guides
     }
@@ -236,6 +238,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         let [x_axis_spec, y_axis_spec] = axes;
         let [global_hue_levels, global_group_levels, global_line_condition_levels] = levels;
         Ok(ComposedInputs {
+            text_layouts: self.text_layouts.clone(),
+            output_dimensions: self.output_dimensions,
             prose: self.copy_prose()?,
             axis_titles: self.copy_axis_titles()?,
             x_axis_spec,
@@ -322,6 +326,11 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {
         self.root_size = crate::layout::RootSize::new(width, height);
+        self
+    }
+
+    pub(crate) fn with_output_dimensions(mut self, width: u32, height: u32) -> Self {
+        self.output_dimensions = Some((width, height));
         self
     }
 }

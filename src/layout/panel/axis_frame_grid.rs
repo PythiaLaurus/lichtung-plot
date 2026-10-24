@@ -459,7 +459,7 @@ impl Axis {
             PhysicalTextAlignment::Center => (TextAnchor::Middle, 0.0),
             PhysicalTextAlignment::End => (TextAnchor::End, plan.width() - half),
         };
-        Ok(match side {
+        let default = match side {
             AxisSide::Bottom => {
                 PlannedTextPlacement::middle(Point2D::new(center.x + offset, center.y), anchor, 0.0)
             }
@@ -468,7 +468,17 @@ impl Axis {
                 anchor,
                 -90.0,
             ),
-        })
+        };
+        let default = if plan
+            .request
+            .as_ref()
+            .is_some_and(|request| request.instructions().anchor.is_some())
+        {
+            PlannedTextPlacement::middle(center, TextAnchor::Middle, default.rotation)
+        } else {
+            default
+        };
+        crate::layout::text::placement::resolve(default, plan, None)
     }
 
     pub(crate) fn validate_ticks(
@@ -524,21 +534,41 @@ impl Axis {
         }
         if self.source == TickSource::EXACT {
             let mut width = 1.0 / 1024.0;
-            for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
-                let plan = theme.measure_text(
+            let eligible = crate::data::source::collect_source(
+                self.ticks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, tick)| !tick.label.is_empty())
+                    .map(|(index, _)| Ok(index)),
+            )?;
+            let appearance = theme.tick_text_appearance(AxisSide::Left);
+            for &index in &eligible {
+                if !appearance.includes(index, &eligible) {
+                    continue;
+                }
+                let tick = &self.ticks[index];
+                let plan = theme.measure_appearance_text(
                     &tick.label,
-                    &theme.typography.axes.tick_label,
+                    appearance,
                     PhysicalTextAlignment::End,
                     "y-axis exact tick label",
-                    false,
                 )?;
-                width = f64::max(width, plan.width().max(plan.fit_width()));
+                width = f64::max(width, plan.occupied_size().0.max(plan.fit_width()));
             }
             Ok(width)
         } else {
+            let eligible = crate::data::source::collect_source(
+                self.category_labels.indices(self.ticks.len()).map(Ok),
+            )?;
             theme.intrinsic_tick_label_width(
-                self.category_labels
-                    .indices(self.ticks.len())
+                eligible
+                    .iter()
+                    .copied()
+                    .filter(|&index| {
+                        theme
+                            .tick_text_appearance(AxisSide::Left)
+                            .includes(index, &eligible)
+                    })
                     .map(|index| self.ticks[index].label.as_str()),
                 panel.height(),
             )
@@ -555,10 +585,20 @@ impl Axis {
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
         let categorical = self.source == TickSource::SUPPLIED;
+        let tick_text = theme.tick_text_appearance(side);
+        let visible = self.tick_labels_visible && !tick_text.hidden();
+        let allow = tick_text.layout.is_some_and(|request| {
+            request.instructions().overlap == Some(crate::TextOverlap::Allow)
+                || request
+                    .instructions()
+                    .visibility
+                    .as_ref()
+                    .is_some_and(crate::TextVisibility::reduces)
+        });
         let cells = cells::assign(
             &self.ticks,
             categorical,
-            self.tick_labels_visible,
+            visible && !allow,
             self.assigned_cells.as_deref(),
             &self.category_labels,
             projection,
@@ -566,7 +606,7 @@ impl Axis {
             scope,
         )?;
         let panel = projection.panel_box();
-        let vertical_width = if side == AxisSide::Left && self.tick_labels_visible {
+        let vertical_width = if side == AxisSide::Left && visible {
             self.vertical_label_width(panel, theme)?
         } else {
             0.0
@@ -608,8 +648,6 @@ impl Axis {
         let segment_end = AxisLengths::before(&tick_end, anchor)?;
         let mut ticks = Vec::new();
         fit::reserve(&mut ticks, self.ticks.len(), "frozen axis ticks")?;
-        let mut label_extent = 0.0_f64;
-        let mut labels_present = false;
         let (gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
                 &lengths.x_tick_label_gap,
@@ -627,7 +665,10 @@ impl Axis {
             ),
         };
         let eligible_labels = crate::data::source::collect_source(
-            self.category_labels.indices(self.ticks.len()).map(Ok),
+            self.category_labels
+                .indices(self.ticks.len())
+                .filter(|&index| categorical || !self.ticks[index].label.is_empty())
+                .map(Ok),
         )?;
         for (index, (tick, cell)) in self.ticks.iter().zip(cells).enumerate() {
             let segment = match side {
@@ -640,21 +681,31 @@ impl Axis {
                     Point2D::new(segment_end, cell.center),
                 ],
             };
-            let label = if !self.tick_labels_visible
+            let label = if !visible
                 || !self.category_labels.includes(index, self.ticks.len())
                 || (!categorical && tick.label.is_empty())
+                || tick_text
+                    .layout
+                    .and_then(|request| request.instructions().visibility.as_ref())
+                    .is_some_and(|visibility| !visibility.includes(index, &eligible_labels))
             {
                 None
             } else {
-                labels_present = true;
                 let (width, alignment) = match side {
-                    AxisSide::Bottom => (cell.capacity(), PhysicalTextAlignment::Center),
+                    AxisSide::Bottom => (
+                        if allow {
+                            panel.width()
+                        } else {
+                            cell.capacity()
+                        },
+                        PhysicalTextAlignment::Center,
+                    ),
                     AxisSide::Left => (vertical_width, PhysicalTextAlignment::End),
                 };
-                let plan = fit::measured(fit::text(
+                let mut plan = fit::measured(fit::text(
                     theme,
                     &tick.label,
-                    &standard.tick_label,
+                    tick_text,
                     width,
                     alignment,
                     tick_role,
@@ -675,25 +726,18 @@ impl Axis {
                         ),
                     )
                 })?;
-                // Gutter extents are translation invariant. Subtracting large
-                // absolute anchors can otherwise alternate a feedback quantum.
-                if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
-                    &plan,
-                    Point2D::new(0.0, 0.0),
-                    placement.anchor,
-                    placement.rotation,
-                    placement.origin,
-                    placement.reverse_lines,
-                ) {
-                    label_extent = label_extent.max(match side {
-                        AxisSide::Bottom => plan.height() / 2.0 - ink.bottom,
-                        AxisSide::Left => -ink.left,
-                    });
+                if !allow {
+                    let bounds = crate::layout::text::placement::footprint(placement, &plan)?;
+                    let region = match side {
+                        AxisSide::Bottom => {
+                            crate::layout::PanelBox::new(cell.start, cell.end, bounds.y0, bounds.y1)
+                        }
+                        AxisSide::Left => {
+                            crate::layout::PanelBox::new(bounds.x0, bounds.x1, cell.start, cell.end)
+                        }
+                    };
+                    plan = crate::layout::text::placement::contain(plan, placement, region, scope)?;
                 }
-                label_extent = label_extent.max(match side {
-                    AxisSide::Bottom => plan.height(),
-                    AxisSide::Left => plan.width(),
-                });
                 Some((plan, placement))
             };
             ticks.push(FrozenTick {
@@ -703,12 +747,84 @@ impl Axis {
                 label,
             });
         }
+        if let Some(policy) = tick_text
+            .layout
+            .and_then(|request| request.instructions().visibility.as_ref())
+        {
+            let candidates = crate::data::source::collect_source(
+                ticks
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, tick)| {
+                        tick.label
+                            .as_ref()
+                            .map(|(plan, placement)| (index, tick, plan, placement))
+                    })
+                    .map(|(index, tick, plan, placement)| {
+                        Ok(crate::layout::text::visibility::Candidate {
+                            index,
+                            position: tick.cell.center,
+                            bounds: crate::layout::text::placement::footprint(*placement, plan)?,
+                        })
+                    }),
+            )?;
+            let region = match side {
+                AxisSide::Bottom => {
+                    crate::layout::PanelBox::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
+                }
+                AxisSide::Left => {
+                    crate::layout::PanelBox::new(-f64::MAX, f64::MAX, panel.y0, panel.y1)
+                }
+            };
+            let failure = tick_text
+                .layout
+                .and_then(|request| request.instructions().overflow.as_ref())
+                .map_or(crate::TextFailure::Error, |overflow| overflow.failure);
+            let selected = crate::layout::text::visibility::reduce(
+                policy,
+                &eligible_labels,
+                &candidates,
+                region,
+                failure,
+                scope,
+            )?;
+            for (candidate, visible) in candidates.iter().zip(selected) {
+                if !visible {
+                    ticks[candidate.index].label = None;
+                }
+            }
+        }
+        let mut labels_present = false;
+        let mut label_extent = 0.0_f64;
+        for tick in &ticks {
+            if let Some((plan, _)) = &tick.label {
+                if plan.lines.is_empty() {
+                    continue;
+                }
+                labels_present = true;
+                // A zero perpendicular reference keeps requirements invariant
+                // under independently rounded parent translations.
+                let mut local_plan = plan.clone();
+                local_plan.clear_paint_region();
+                let local = tick
+                    .cell
+                    .placement(&local_plan, side, 0.0)?
+                    .ok_or_else(|| {
+                        Error::Render("selected axis label lost its local placement".into())
+                    })?;
+                let bounds = crate::layout::text::placement::footprint(local, &local_plan)?;
+                label_extent = label_extent.max(match side {
+                    AxisSide::Bottom => plan.height() / 2.0 - bounds.y0,
+                    AxisSide::Left => -bounds.x0,
+                });
+            }
+        }
         let mut gutter = outward;
         if labels_present {
             gutter = gutter.add_length(gap).add_pixels(label_extent)?;
         }
         let title = if let Some(label) = &self.label {
-            let plan = fit::measured(fit::text(
+            let plan = fit::measured(fit::single_text(
                 theme,
                 label.as_str(),
                 title_appearance,
@@ -817,7 +933,12 @@ impl Axis {
             .iter()
             .map(|tick| tick.cell.center + half_tick - end)
             .fold(0.0_f64, f64::max);
-        for (plan, placement) in title.iter().chain(explanation.iter()) {
+        for (plan, placement) in ticks
+            .iter()
+            .filter_map(|tick| tick.label.as_ref())
+            .chain(title.iter())
+            .chain(explanation.iter())
+        {
             if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
                 plan,
                 placement.position,

@@ -103,8 +103,10 @@ including an explicit default reset.
 
 PanelTextAnnotation retains Text with complete appearance/request equality.
 Its local TextTheme replaces the complete Plot panel-text role, including the
-font metric used by panel_text_padding. The corner continues to place the whole
-block; TextLayout alignment chooses physical line alignment inside that block.
+font metric used by panel_text_padding. TextPosition owns its scientific/panel/root
+reference; TextLayout independently owns the measured block anchor, offset, bounds,
+wrapping, overflow, visibility and overlap. Alignment controls lines, not references.
+One common transform and actual logical/ink footprint serve measurement and output.
 
 HeatmapNullRowAnnotation retains Text independently of its semantic row key.
 Local exact appearance replaces the selected missing-fill contrast role; omission

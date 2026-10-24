@@ -307,6 +307,22 @@ impl SvgBackend {
 
 impl<S: SvgSink> SvgSerializer<S> {
     fn draw_multiline_planned_text(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
+        if text.0.suppressed {
+            return Ok(());
+        }
+        if let Some(clip) = text.0.clip {
+            self.begin_canonical_clip(clip)?;
+        }
+        let result = self.draw_planned_lines(text);
+        let end = if text.0.clip.is_some() {
+            self.end_clip()
+        } else {
+            Ok(())
+        };
+        crate::render::backend::finish_scope(result, end, "text-local clip")
+    }
+
+    fn draw_planned_lines(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
         let plan = &text.0.plan;
         let fill = SvgPaint::from(plan.style.paint).attributes("fill");
         let family = Self::escape_text(&plan.style.stack_source);

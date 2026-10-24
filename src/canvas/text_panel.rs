@@ -11,6 +11,9 @@ use crate::text::TextAppearance;
 use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
+#[cfg(test)]
+mod tests;
+
 #[expect(
     clippy::cast_precision_loss,
     reason = "the assigned cell is bounded by exact u32 root dimensions"
@@ -63,24 +66,32 @@ impl TextPanelIntrinsics {
         )?;
 
         let edges = lengths.inset.times(2);
-        let title_ch = theme
-            .measure_text(
-                "0",
-                title_style.theme,
-                PhysicalTextAlignment::Start,
-                "TextPanel title 66ch",
-                title_style.exact_override,
-            )?
-            .width();
-        let body_ch = theme
-            .measure_text(
-                "0",
-                body_style.theme,
-                PhysicalTextAlignment::Start,
-                "TextPanel body 66ch",
-                body_style.exact_override,
-            )?
-            .width();
+        let title_ch = if title_style.hidden() {
+            0.0
+        } else {
+            theme
+                .measure_text(
+                    "0",
+                    title_style.theme,
+                    PhysicalTextAlignment::Start,
+                    "TextPanel title 66ch",
+                    title_style.exact_override,
+                )?
+                .width()
+        };
+        let body_ch = if body_style.hidden() {
+            0.0
+        } else {
+            theme
+                .measure_text(
+                    "0",
+                    body_style.theme,
+                    PhysicalTextAlignment::Start,
+                    "TextPanel body 66ch",
+                    body_style.exact_override,
+                )?
+                .width()
+        };
         Ok(Self {
             title,
             body,
@@ -89,8 +100,18 @@ impl TextPanelIntrinsics {
                 crate::theme::composition::hard(
                     &edges
                         .add_length(&lengths.gap)
-                        .add_length(&title_style.theme.line_pitch_exact()?)
-                        .add_length(&body_style.theme.line_pitch_exact()?),
+                        .add_length(
+                            &title_style
+                                .theme
+                                .line_pitch_exact()?
+                                .times(u32::from(!title_style.hidden())),
+                        )
+                        .add_length(
+                            &body_style
+                                .theme
+                                .line_pitch_exact()?
+                                .times(u32::from(!body_style.hidden())),
+                        ),
                 )?,
             ),
             preferred_width: crate::theme::composition::hard(
@@ -116,7 +137,7 @@ pub(super) fn natural_height(
         theme.text_panel_lengths(title.theme.get_font_size(), body.theme.get_font_size())?;
 
     let available = crate::theme::composition::capacity(width, &lengths.inset.times(2))?;
-    let title = fit::measured(fit::text(
+    let title = fit::measured(fit::single_text(
         theme,
         source.title(),
         title,
@@ -126,7 +147,7 @@ pub(super) fn natural_height(
         &FitScope::root(),
     ))
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    let body = fit::measured(fit::text(
+    let body = fit::measured(fit::single_text(
         theme,
         source.body(),
         body,
@@ -141,8 +162,8 @@ pub(super) fn natural_height(
             .inset
             .times(2)
             .add_length(&lengths.gap)
-            .add_pixels(title.height())?
-            .add_pixels(body.height())?,
+            .add_pixels(title.occupied_size().1)?
+            .add_pixels(body.occupied_size().1)?,
     )
 }
 
@@ -246,7 +267,7 @@ impl TextPanelPlan {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         let maximum_width = pixels(assigned);
-        let title = match fit::text(
+        let title = match fit::single_text(
             theme,
             source.title(),
             title_style,
@@ -258,7 +279,7 @@ impl TextPanelPlan {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let body = match fit::text(
+        let body = match fit::single_text(
             theme,
             source.body(),
             body_style,
@@ -335,30 +356,56 @@ impl TextPanelPlan {
         let title_baseline = title.plan().first_baseline_quanta.unwrap_or(0);
         let body_baseline = body.plan().first_baseline_quanta.unwrap_or(0);
 
-        Ok(FitOutcome::Measured(Self {
-            layer: format!("canvas-text-panel-{index}"),
-            cell,
-            title_placement: PlannedTextPlacement::baseline(
-                Point2D::new(
-                    title_x,
-                    lengths
-                        .inset
-                        .add_pixels(pixels(title_baseline))?
-                        .before_pixels(pixels(y1))?,
-                ),
+        let title_top = lengths.inset.before_pixels(pixels(y1))?;
+        let body_top = body_offset.before_pixels(pixels(y1))?;
+        let bottom = lengths.inset.after_pixels(pixels(y0))?;
+        let title_placement = crate::layout::text::placement::resolve(
+            PlannedTextPlacement::baseline(
+                Point2D::new(title_x, title_top - pixels(title_baseline)),
                 title_anchor,
                 0.0,
             ),
-            body_placement: PlannedTextPlacement::baseline(
-                Point2D::new(
-                    body_x,
-                    body_offset
-                        .add_pixels(pixels(body_baseline))?
-                        .before_pixels(pixels(y1))?,
-                ),
+            title.plan(),
+            Some(PanelBox::new(
+                x,
+                right,
+                title_top - title.height(),
+                title_top,
+            )),
+        )?;
+        let body_placement = crate::layout::text::placement::resolve(
+            PlannedTextPlacement::baseline(
+                Point2D::new(body_x, body_top - pixels(body_baseline)),
                 body_anchor,
                 0.0,
             ),
+            body.plan(),
+            Some(PanelBox::new(x, right, bottom, body_top)),
+        )?;
+        let title = match crate::layout::fit::outcome(crate::layout::text::placement::contain(
+            title.plan().clone(),
+            title_placement,
+            PanelBox::new(x, right, title_top - title.height(), title_top),
+            &title_scope,
+        ))? {
+            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        let body = match crate::layout::fit::outcome(crate::layout::text::placement::contain(
+            body.plan().clone(),
+            body_placement,
+            PanelBox::new(x, right, bottom, body_top),
+            &body_scope,
+        ))? {
+            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+
+        Ok(FitOutcome::Measured(Self {
+            layer: format!("canvas-text-panel-{index}"),
+            cell,
+            title_placement,
+            body_placement,
             title,
             body,
         }))

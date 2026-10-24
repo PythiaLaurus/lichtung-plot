@@ -27,6 +27,30 @@ pub(crate) fn text_census_labels(
 ) -> Result<(), Error> {
     let selectors = data::facet_selectors(source, source.data())?;
     for panel in data::extract_panels(source, &selectors, None, source.data())? {
+        if source.text_layouts.facet.iter().any(Option::is_some) {
+            for (index, selector) in panel.cell.iter().enumerate() {
+                let role = if panel.cell.as_slice().len() == 1 {
+                    1
+                } else {
+                    index
+                };
+                if source.text_layouts.facet[role]
+                    .as_ref()
+                    .is_some_and(crate::TextLayout::hidden)
+                {
+                    continue;
+                }
+                visit(
+                    format_args!(
+                        "{} = {}",
+                        source.resolve_label(&selector.variable)?,
+                        source.resolve_label(&selector.level)?
+                    )
+                    .into(),
+                )?;
+            }
+            continue;
+        }
         match panel.cell.as_slice() {
             [] => visit("".into())?,
             [selector] => visit(
@@ -160,7 +184,7 @@ pub(super) struct FacetPlan {
     canvas_layout: crate::layout::RootFramePlan,
     outer: crate::layout::PanelBox,
     shared_axis_origin: (f64, f64),
-    strip_text: Vec<crate::render::backend::PlacedText>,
+    strip_text: Vec<Vec<crate::render::backend::PlacedText>>,
     shared_axis_text: Vec<crate::render::backend::PlacedText>,
     panel_plots: Vec<Plot>,
     legends: Vec<Option<crate::decorations::legend::LegendDrawPlan>>,
@@ -1016,6 +1040,9 @@ mod feedback_tests {
         .facet(crate::FacetSpec::column(
             crate::CategoryValues::new("facet", [&text, &text, "second", "second"]).unwrap(),
         ))
+        .facet_column_text_layout(
+            crate::TextLayout::default().anchor(crate::TextAnchor::top_center()),
+        )
         .x_label(&text)
         .y_label(&text)
         .title("Outer title\nShort")
@@ -1024,7 +1051,7 @@ mod feedback_tests {
         .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
+        let theme = source.resolve_theme().unwrap();
         crate::layout::plan_exact_root(
             source.sizing_request().requested_dimensions().0,
             source.sizing_request().requested_dimensions().1,
@@ -1083,6 +1110,7 @@ mod feedback_tests {
                 let expected = plan
                     .strip_text
                     .iter()
+                    .flatten()
                     .chain(&plan.shared_axis_text)
                     .collect::<Vec<_>>();
                 assert!(expected.iter().any(|text| text
@@ -1094,6 +1122,12 @@ mod feedback_tests {
                     .shared_axis_text
                     .iter()
                     .all(|planned| planned.plan.source == text));
+                assert!(plan.strip_text.iter().flatten().all(|text| text
+                    .plan
+                    .request
+                    .as_ref()
+                    .is_some_and(|request| request.instructions().anchor
+                        == Some(crate::TextAnchor::top_center()))));
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
                 let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                 let projections = crate::layout::Projection::test_projection_calls();

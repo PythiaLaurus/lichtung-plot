@@ -310,21 +310,10 @@ impl Plot {
         reason = "one exhaustive pre-backend validator covers every typed chart channel"
     )]
     pub(crate) fn validate_channel_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        if !self.panel_text_annotations().is_empty() {
-            if kind == PlotKind::Matrix {
-                return Err(Error::Data(
-                    "matrix: panel text annotations require one standard chart panel".into(),
-                ));
-            }
-            let mut corners = HashSet::new();
-            for annotation in self.panel_text_annotations() {
-                if !corners.insert(annotation.corner()) {
-                    return Err(Error::Data(format!(
-                        "plot kind {kind:?}: duplicate panel text annotation corner {:?}",
-                        annotation.corner()
-                    )));
-                }
-            }
+        if !self.panel_text_annotations().is_empty() && kind == PlotKind::Matrix {
+            return Err(Error::Data(
+                "matrix: panel text annotations require one standard chart panel".into(),
+            ));
         }
         if self.histogram_composite_geometry_input().is_some() {
             if kind != PlotKind::Histogram {

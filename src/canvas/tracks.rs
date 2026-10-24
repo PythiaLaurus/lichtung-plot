@@ -49,8 +49,37 @@ fn centered_x(
     Ok((origin + pixels(offset), anchor))
 }
 
+fn place_header(
+    plan: crate::layout::ResolvedTextPlan,
+    region: PanelBox,
+    position: Point2D,
+    anchor: TextAnchor,
+    scope: &FitScope,
+) -> Result<FitOutcome<PlacedText>, Error> {
+    let placement = crate::layout::text::placement::resolve(
+        crate::render::backend::PlannedTextPlacement::middle(position, anchor, 0.0),
+        &plan,
+        Some(region),
+    )?;
+    Ok(
+        match fit::outcome(crate::layout::text::placement::contain(
+            plan, placement, region, scope,
+        ))? {
+            FitOutcome::Measured(plan) => FitOutcome::Measured(PlacedText { plan, placement }),
+            FitOutcome::Miss(reason) => FitOutcome::Miss(reason),
+        },
+    )
+}
+
 fn required(value: f64) -> Result<i64, Error> {
     nearest_spatial_quanta(crate::layout::kernel::required_length(value)?)
+}
+
+fn centered_y(region: PanelBox, plan: &crate::layout::ResolvedTextPlan) -> Result<f64, Error> {
+    let bottom = position(region.y0 + (region.height() - plan.height()) / 2.0)?;
+    let half = crate::render::backend::nearest_even_text_half(plan.height_quanta)
+        .ok_or_else(|| Error::Render("Canvas header half height overflow".into()))?;
+    Ok(bottom + pixels(plan.height_quanta - half))
 }
 
 fn checked(value: i128) -> Result<i64, Error> {
@@ -278,22 +307,21 @@ pub(super) fn allocate(
                 "Canvas row header span is outside declared Grid tracks".into(),
             ));
         }
-        let appearance = header.text.appearance(header_role);
-        let plan = theme.measure_text(
+        let appearance = header.text.appearance(header_role).require_single()?;
+        let plan = theme.measure_appearance_text(
             header.text.as_str(),
-            appearance.theme,
+            appearance,
             header
                 .text
                 .resolved_alignment(crate::TextAlignment::Center)
                 .into(),
             "Canvas row header intrinsic",
-            appearance.exact_override,
         )?;
         row_header_width = row_header_width.max(crate::theme::composition::hard(
             &theme
                 .header_lengths(appearance.theme.get_font_size())?
                 .row_header_padding
-                .add_pixels(plan.width())?,
+                .add_pixels(plan.occupied_size().0)?,
         )?);
         row_header_plans.push(plan);
     }
@@ -497,7 +525,7 @@ pub(super) fn allocate(
         .zip(&row_header_plans)
         .zip(&row_header_owners)
     {
-        let height = required(plan.height())?;
+        let height = required(plan.occupied_size().1)?;
         heights.push(GridRequirement {
             start: header.start,
             span: header.span,
@@ -670,7 +698,7 @@ pub(super) fn allocate(
             i128::from(x_positions[end]) + i128::from(columns[end]),
         )?);
         let appearance = header.text.appearance(header_role);
-        let plan = match fit::text(
+        let plan = match fit::single_text(
             theme,
             header.text.as_str(),
             appearance,
@@ -689,7 +717,7 @@ pub(super) fn allocate(
             &theme
                 .header_lengths(appearance.theme.get_font_size())?
                 .column_header_padding
-                .add_pixels(plan.height())?,
+                .add_pixels(plan.occupied_size().1)?,
         )?);
         column_plans.push((plan, left, right));
     }
@@ -710,7 +738,7 @@ pub(super) fn allocate(
     for (index, title) in row_titles.iter().enumerate() {
         let appearance = title.text.appearance(header_role);
         let header_lengths = theme.header_lengths(appearance.theme.get_font_size())?;
-        let plan = match fit::text(
+        let plan = match fit::single_text(
             theme,
             title.text.as_str(),
             appearance,
@@ -731,7 +759,7 @@ pub(super) fn allocate(
         let reserve = required(crate::theme::composition::hard(
             &header_lengths
                 .row_title_vertical_padding
-                .add_pixels(plan.height())?,
+                .add_pixels(plan.occupied_size().1)?,
         )?)?;
         row_title_heights[title.start] = reserve;
         row_title_plans.push(plan);
@@ -902,52 +930,103 @@ pub(super) fn allocate(
         .checked_add(row_headers.len())
         .ok_or_else(|| Error::Render("Canvas header storage overflowed".into()))?;
     crate::render::backend::reserve_text_records(&mut headers, header_count)?;
-    for (header, (plan, left, right)) in column_headers.iter().zip(column_plans) {
+    for (index, (header, (plan, left, right))) in
+        column_headers.iter().zip(column_plans).enumerate()
+    {
         let (x, anchor) = centered_x(left, right, &plan)?;
+        let inset = theme
+            .header_lengths(plan.style.font_size)?
+            .column_header_padding
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
+            / 2.0;
+        let region = PanelBox::new(
+            left,
+            right,
+            header_outer.y1 - pixels(header_quanta) + inset,
+            header_outer.y1 - inset,
+        );
+        let y = centered_y(region, &plan)?;
+        let text = match place_header(
+            plan,
+            region,
+            Point2D::new(x, y),
+            anchor,
+            &FitScope::new(&header_owners[index], 0),
+        )? {
+            FitOutcome::Measured(text) => text,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
         headers.push(CanvasHeaderPlan {
             request: header.text.try_copy()?,
-            text: PlacedText::middle(
-                plan,
-                Point2D::new(x, position(header_outer.y1 - pixels(header_quanta) / 2.0)?),
-                anchor,
-                0.0,
-            ),
+            text,
         });
     }
-    for (header, plan) in row_headers.iter().zip(row_header_plans) {
+    for (index, (header, plan)) in row_headers.iter().zip(row_header_plans).enumerate() {
         let top = tracks.rows[header.start].1;
         let bottom = tracks.rows[header.start + header.span - 1].0;
         let (x, anchor) = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
+        let inset = theme
+            .header_lengths(plan.style.font_size)?
+            .row_header_padding
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
+            / 2.0;
+        let region = PanelBox::new(
+            header_outer.x0 + inset,
+            header_outer.x0 + row_header_width - inset,
+            bottom,
+            top,
+        );
+        let y = centered_y(region, &plan)?;
+        let text = match place_header(
+            plan,
+            region,
+            Point2D::new(x, y),
+            anchor,
+            &FitScope::new(&row_header_owners[index], 0),
+        )? {
+            FitOutcome::Measured(text) => text,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
         headers.push(CanvasHeaderPlan {
             request: header.text.try_copy()?,
-            text: PlacedText::middle(
-                plan,
-                Point2D::new(x, position(f64::midpoint(bottom, top))?),
-                anchor,
-                0.0,
-            ),
+            text,
         });
     }
     let mut measured_row_titles = Vec::new();
     crate::render::backend::reserve_text_records(&mut measured_row_titles, row_titles.len())?;
-    for (title, plan) in row_titles.iter().zip(row_title_plans) {
+    for (index, (title, plan)) in row_titles.iter().zip(row_title_plans).enumerate() {
         let row = title.start;
         let (x, anchor) = centered_x(title_left, title_right, &plan)?;
+        let spacing = theme.header_lengths(plan.style.font_size)?;
+        let horizontal = spacing
+            .row_title_horizontal_padding
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
+            / 2.0;
+        let vertical = spacing
+            .row_title_vertical_padding
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
+            / 2.0;
+        let lower = tracks.rows[row].1 + pixels(axis_row_tops[row]);
+        let region = PanelBox::new(
+            title_left + horizontal,
+            title_right - horizontal,
+            lower + vertical,
+            lower + pixels(row_title_heights[row]) - vertical,
+        );
+        let y = centered_y(region, &plan)?;
+        let text = match place_header(
+            plan,
+            region,
+            Point2D::new(x, y),
+            anchor,
+            &FitScope::new(&row_title_owners[index], 0),
+        )? {
+            FitOutcome::Measured(text) => text,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
         measured_row_titles.push(CanvasHeaderPlan {
             request: title.text.try_copy()?,
-            text: PlacedText::middle(
-                plan,
-                Point2D::new(
-                    x,
-                    position(
-                        tracks.rows[row].1
-                            + pixels(axis_row_tops[row])
-                            + pixels(row_title_heights[row]) / 2.0,
-                    )?,
-                ),
-                anchor,
-                0.0,
-            ),
+            text,
         });
     }
     Ok(FitOutcome::Measured(CanvasGridAssignment {

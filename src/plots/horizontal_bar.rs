@@ -33,7 +33,7 @@ pub(crate) fn measure_marks(
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;
-    let attached_label_plans = bar_data::attached_significance_text_plans(
+    let mut attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,
         &attached.appearance.label,
@@ -122,13 +122,14 @@ pub(crate) fn measure_marks(
         significance.y_range,
         crate::layout::interior::ClearanceAxis::X,
     )?;
-    validate_bar_significance_collisions(
-        &attached,
-        prepared,
-        &layout,
-        &attached_label_plans,
+    bar_data::validate_attached_text(
+        &prepared.significance,
+        &mut attached_label_plans,
+        layout.projection.panel_box(),
         context.fit_scope(),
+        true,
         domain_expansion.is_some(),
+        |mark, plan| place_bar_significance(&attached, mark, plan, prepared, &layout),
     )?;
 
     let mut payload = bar_data::BarPayload {
@@ -208,12 +209,7 @@ pub(crate) fn measure_marks(
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
         payload.text.push(place_bar_significance(
-            &attached,
-            mark,
-            text_plan,
-            prepared,
-            &layout,
-            domain_expansion.is_some(),
+            &attached, mark, text_plan, prepared, &layout,
         )?);
     }
     for point in &prepared.points {
@@ -283,76 +279,23 @@ fn place_bar_significance(
     text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
     layout: &Layout,
-    pending_domain: bool,
 ) -> Result<PlacedText, Error> {
     let gap = attached.appearance.gap_pixels()?;
     let y = attached.center(mark, prepared);
     let (edge_x, y) = layout.projection.project(mark.edge, y);
-    let width = text_plan.width();
-    let panel = layout.projection.panel_box();
-    let (x, anchor, fits) = if mark.positive {
+    let (x, anchor) = if mark.positive {
         let x = edge_x + gap;
-        (x, TextAnchor::Start, x + width <= panel.x1)
+        (x, TextAnchor::Start)
     } else {
         let x = edge_x - gap;
-        (x, TextAnchor::End, x - width >= panel.x0)
+        (x, TextAnchor::End)
     };
-    if !pending_domain && !fits {
-        return Err(Error::Render(format!(
-            "horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range",
-            mark.label
-        )));
-    }
-    Ok(PlacedText::middle(
+    PlacedText::middle(
         text_plan.clone(),
         Point2D::new(x.round(), y.round()),
         anchor,
         0.0,
-    ))
-}
-
-fn validate_bar_significance_collisions(
-    attached: &bar_data::BarSignificance,
-    prepared: &PreparedBars,
-    layout: &Layout,
-    text_plans: &[ResolvedTextPlan],
-    scope: &crate::layout::fit::FitScope,
-
-    pending_domain: bool,
-) -> Result<(), crate::layout::fit::PlanError> {
-    if prepared.significance.is_empty() {
-        return Ok(());
-    }
-    let gap = attached.appearance.gap_pixels()?;
-    let mut bounds = Vec::new();
-    crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
-    for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
-        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-        let y = attached.center(mark, prepared);
-        let (edge_x, y) = layout.projection.project(mark.edge, y);
-        let width = text_plan.width();
-        let height = text_plan.height();
-        let (x0, x1) = if mark.positive {
-            (edge_x + gap, edge_x + gap + width)
-        } else {
-            (edge_x - gap - width, edge_x - gap)
-        };
-        let candidate = (x0, x1, y - height / 2.0, y + height / 2.0);
-        let panel = layout.projection.panel_box();
-        if !pending_domain && (x0 < panel.x0 || x1 > panel.x1) {
-            return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range", mark.label)).into());
-        }
-
-        if bounds.iter().any(|&(x0, x1, y0, y1)| {
-            candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
-        }) {
-            return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision,
-                "horizontal bar significance marks overlap; enlarge the chart or reduce mark typography"
-            ).into());
-        }
-        bounds.push(candidate);
-    }
-    Ok(())
+    )
 }
 
 fn project_bar(

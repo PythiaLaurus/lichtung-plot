@@ -1,5 +1,15 @@
 //! Shared source syntax for authored and prepared display text.
 
+pub(crate) mod layout;
+pub(crate) mod position;
+pub(crate) mod roles;
+pub use layout::{
+    TextAnchor, TextBounds, TextFailure, TextOffset, TextOffsetFrame, TextOverflow, TextOverlap,
+    TextVisibility, TextWrapping,
+};
+pub use position::{DataCoordinate, TextCoordinate, TextPosition};
+pub use roles::GuideTextRole;
+
 /// Authored display text with optional complete appearance and layout instructions.
 ///
 /// Plain strings carry no local instructions. Content validation happens
@@ -80,12 +90,13 @@ impl Text {
     }
 
     const fn edit_alignment(&mut self, alignment: TextAlignment) {
+        if self.layout.is_none() {
+            // The replaced value is known None. Forget only that empty value so
+            // this existing const edit does not require const Arc destruction.
+            std::mem::forget(self.layout.replace(TextLayout::EMPTY));
+        }
         if let Some(layout) = &mut self.layout {
             layout.alignment = Some(alignment);
-        } else {
-            self.layout = Some(TextLayout {
-                alignment: Some(alignment),
-            });
         }
     }
 
@@ -112,10 +123,15 @@ impl Text {
         })
     }
 
-    pub(crate) fn appearance<'a>(&'a self, role: &'a crate::TextTheme) -> TextAppearance<'a> {
+    pub(crate) fn appearance<'a>(
+        &'a self,
+        role: impl Into<TextAppearance<'a>>,
+    ) -> TextAppearance<'a> {
+        let role = role.into();
         TextAppearance {
-            theme: self.style.as_ref().unwrap_or(role),
-            exact_override: self.style.is_some(),
+            theme: self.style.as_ref().unwrap_or(role.theme),
+            exact_override: self.style.is_some() || role.exact_override,
+            layout: self.layout.as_ref().or(role.layout),
         }
     }
 
@@ -224,10 +240,51 @@ impl From<&String> for Text {
 /// A supplied default request is an explicit reset, distinct from no request.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TextLayout {
-    alignment: Option<TextAlignment>,
+    pub(crate) alignment: Option<TextAlignment>,
+    instructions: Option<std::sync::Arc<TextInstructions>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct TextInstructions {
+    pub(crate) anchor: Option<TextAnchor>,
+    pub(crate) offset: Option<TextOffset>,
+    pub(crate) bounds: Option<TextBounds>,
+    pub(crate) wrapping: Option<TextWrapping>,
+    pub(crate) overflow: Option<TextOverflow>,
+    pub(crate) overlap: Option<TextOverlap>,
+    pub(crate) visibility: Option<TextVisibility>,
 }
 
 impl TextLayout {
+    pub(crate) fn hidden(&self) -> bool {
+        self.instructions()
+            .visibility
+            .as_ref()
+            .is_some_and(|visibility| visibility.hidden)
+    }
+    pub(crate) const EMPTY: Self = Self {
+        alignment: None,
+        instructions: None,
+    };
+
+    pub(crate) fn instructions(&self) -> &TextInstructions {
+        static EMPTY: TextInstructions = TextInstructions {
+            anchor: None,
+            offset: None,
+            bounds: None,
+            wrapping: None,
+            overflow: None,
+            overlap: None,
+            visibility: None,
+        };
+        self.instructions.as_deref().unwrap_or(&EMPTY)
+    }
+    pub(crate) fn edit_instructions(&mut self) -> &mut TextInstructions {
+        std::sync::Arc::make_mut(
+            self.instructions
+                .get_or_insert_with(|| std::sync::Arc::new(TextInstructions::default())),
+        )
+    }
     /// Set physical line alignment within the text block.
     #[must_use]
     pub const fn alignment(mut self, alignment: TextAlignment) -> Self {
@@ -236,11 +293,21 @@ impl TextLayout {
     }
 }
 
+macro_rules! layout_edits {
+    ($($field:ident:$value:ty),+ $(,)?) => {impl TextLayout {$(
+        #[doc = concat!("Replace this request's `",stringify!($field),"` instruction.")]
+        #[must_use]
+        pub fn $field(mut self,value:$value) -> Self {self.edit_instructions().$field=Some(value);self}
+    )+}};
+}
+layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility}
+
 /// One immutable selected role, including exact-appearance provenance.
 #[derive(Clone, Copy)]
 pub(crate) struct TextAppearance<'a> {
     pub(crate) theme: &'a crate::TextTheme,
     pub(crate) exact_override: bool,
+    pub(crate) layout: Option<&'a TextLayout>,
 }
 
 impl<'a> From<&'a crate::TextTheme> for TextAppearance<'a> {
@@ -248,7 +315,42 @@ impl<'a> From<&'a crate::TextTheme> for TextAppearance<'a> {
         Self {
             theme,
             exact_override: false,
+            layout: None,
         }
+    }
+}
+
+impl TextAppearance<'_> {
+    pub(crate) fn require_single(self) -> crate::Result<Self> {
+        if self
+            .layout
+            .and_then(|request| request.instructions().visibility.as_ref())
+            .is_some_and(crate::TextVisibility::reduces)
+        {
+            return Err(crate::Error::Data("text visibility reduction requires an actual label group, not an independent authored slot".into()));
+        }
+        Ok(self)
+    }
+    pub(crate) fn includes(self, index: usize, eligible: &[usize]) -> bool {
+        self.layout
+            .and_then(|request| request.instructions().visibility.as_ref())
+            .is_none_or(|policy| policy.includes(index, eligible))
+    }
+    pub(crate) fn hidden(self) -> bool {
+        self.layout.is_some_and(|layout| {
+            layout
+                .instructions()
+                .visibility
+                .as_ref()
+                .is_some_and(|visibility| visibility.hidden)
+        })
+    }
+}
+
+impl<'a> TextAppearance<'a> {
+    pub(crate) fn layout(mut self, layout: Option<&'a TextLayout>) -> Self {
+        self.layout = layout;
+        self
     }
 }
 
