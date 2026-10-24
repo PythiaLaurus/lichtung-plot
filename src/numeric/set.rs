@@ -216,6 +216,31 @@ mod tests {
     use crate::numeric::decimal::NumericNotation;
 
     #[test]
+    fn extended_fractional_precision_distinguishes_small_exact_dyadic_sets() {
+        let format = NumericFormat::new(
+            NumericNotation::Decimal,
+            NumericPrecision::AdaptiveFractional { min: 0, max: 20 },
+        )
+        .unwrap();
+        let first = f64::from_bits((1023_u64 - 60) << 52);
+        let second = f64::from_bits((1023_u64 - 59) << 52);
+        let set = format
+            .format_set(&[second, first, second], false, true)
+            .unwrap()
+            .unwrap();
+        assert_eq!(set.precision, 18);
+        assert_eq!(
+            set.labels,
+            [
+                "0.000000000000000002",
+                "0.000000000000000001",
+                "0.000000000000000002"
+            ]
+        );
+        assert_eq!(set.members, [second, first, second].map(f64::to_bits));
+    }
+
+    #[test]
     fn semantic_sets_resolve_uniform_precision_preserve_occurrences_and_exhaust_powers() {
         let exact =
             NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(0)).unwrap();

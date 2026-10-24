@@ -147,9 +147,13 @@ impl Log10Operand {
                 }
             }
         } else {
-            // Spec07: <=3 integral, point, <=17 fractional, e, optional minus,
+            // Spec07: <=3 integral, point, selected fractional digits, e, optional minus,
             // <=ceil(1025/3) exponent digits. A capacity bound, not a length cap.
-            BigInt::from(365_u16)
+            let fractional = match format.precision {
+                ResolvedPrecision::Fractional(digits) => digits,
+                ResolvedPrecision::Significant(digits) => digits - 1,
+            };
+            BigInt::from(348_u16 + u16::from(fractional))
         };
         let length = body + format.prefix.map_or(0, str::len) + format.suffix.map_or(0, str::len);
         let capacity = usize::try_from(length)

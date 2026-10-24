@@ -10,6 +10,9 @@ use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{Error, Result};
 
+pub(super) const MAX_FRACTIONAL_DIGITS: u8 = 20;
+pub(super) const MAX_SIGNIFICANT_DIGITS: u8 = 21;
+
 /// Decimal-point and exponent spelling for numeric presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericNotation {
@@ -76,8 +79,10 @@ impl Default for ResolvedFormat<'_> {
 impl ResolvedFormat<'_> {
     pub(crate) fn validate(&self) -> Result<()> {
         let valid = match self.precision {
-            ResolvedPrecision::Fractional(digits) => digits <= 17,
-            ResolvedPrecision::Significant(digits) => (1..=17).contains(&digits),
+            ResolvedPrecision::Fractional(digits) => digits <= MAX_FRACTIONAL_DIGITS,
+            ResolvedPrecision::Significant(digits) => {
+                (1..=MAX_SIGNIFICANT_DIGITS).contains(&digits)
+            }
         };
         if !valid || !(-324..=324).contains(&self.decimal_scale) {
             return Err(Error::Data(

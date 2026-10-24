@@ -1694,8 +1694,11 @@ The coordinator seals fonts once after accepting the root and before capture, wh
 verifies frozen source coverage/provenance and rejects unplanned text. Numeric
 alphabet/boundary expansion and early-seal query policies are removed. Focused
 ordinary/native axes, Shared guides, local styles and frozen output witnesses retain
-the eight-round root bound. Steps 5–22 remain pending; undelivered target signatures
-are not current APIs.
+the eight-round root bound. Step 5 is in progress: explicit fractional/significant
+precision now admits 0..=20/1..=21 through exact binary64 conversion, certified powers,
+complete sets and precision-derived output reservations. Extended factors, rounding,
+locales, notation and specifier parsing remain pending in this step. Steps 6–22
+remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

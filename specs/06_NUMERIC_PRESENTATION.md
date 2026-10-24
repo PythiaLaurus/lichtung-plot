@@ -38,7 +38,7 @@ the existing borrowed/copy result and const-call capability where applicable.
 | negative_zero | Preserve or Normalize |
 | trailing_zeros | Keep or Trim |
 
-Fractional bounds are 0..=17, significant 1..=17, adaptive min<=max in matching
+Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve and Keep.
 Default is Decimal/Fractional(2) with those same fields. Prefix/suffix retain exact
 bytes including spaces/combining marks: no trim, normalization, inferred units or
@@ -194,7 +194,8 @@ the original operand. For example `12350 -> 12.3k`, `1150000 -> 1.1M`,
 do not reclassify after rounding. Scientific exponent spelling is e12/e-3,
 not e+12/e-03. Whole-source collisions retry scientific fractional precision 2..17,
 retaining zeros and the first unique complete set. This private retry reaches 18
-significant digits, distinct from the public Significant maximum 17.
+significant digits. Omitted-profile retries keep that existing range independently
+of the public Significant maximum 21.
 
 Omitted Forest integral labels are: exponents-2,-1,0,1,2,3 ->
 0.01,0.1,1,10,100,1000;4..8 ->10k,100k,1M,10M,100M;9..11 ->

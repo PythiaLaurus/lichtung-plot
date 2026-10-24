@@ -18,8 +18,10 @@ let percentage = NumericFormat::new(
 
 Raw 0.125 displays `12.5%`. Suffix `%` alone appends literal text without scaling; data,
 coordinates and colors are unchanged. Notation is Decimal/Scientific/Engineering.
-Fractional precision accepts 0..=17, significant 1..=17; adaptive min/max must be
+Fractional precision accepts 0..=20, significant 1..=21; adaptive min/max must be
 ordered within matching bounds. Decimal scale accepts -324..=324.
+These digits come from the exact binary64 value: at Fractional(20), `0.1` displays
+`0.10000000000000000555`. Certified powers use the same extended precision bounds.
 
 Configure a property with its bare name, such as `precision(policy)` or
 `decimal_scale(2)`. Validated consuming edits replace exactly one field; paired

@@ -3,6 +3,7 @@
 
 use super::decimal::{
     NegativeZero, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
+    MAX_FRACTIONAL_DIGITS, MAX_SIGNIFICANT_DIGITS,
 };
 use crate::{Error, Result};
 
@@ -10,22 +11,22 @@ use crate::{Error, Result};
 /// Construction through [`NumericFormat`] validates all bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericPrecision {
-    /// Exactly this many fractional digits, from zero through seventeen.
+    /// Exactly this many fractional digits, from zero through twenty.
     Fractional(u8),
-    /// Exactly this many significant digits, from one through seventeen.
+    /// Exactly this many significant digits, from one through twenty-one.
     Significant(u8),
     /// The smallest common fractional precision distinguishing the complete set.
     AdaptiveFractional {
-        /// Inclusive lower bound, from zero through seventeen.
+        /// Inclusive lower bound, from zero through twenty.
         min: u8,
-        /// Inclusive upper bound, at least `min` and at most seventeen.
+        /// Inclusive upper bound, at least `min` and at most twenty.
         max: u8,
     },
     /// The smallest common significant precision distinguishing the complete set.
     AdaptiveSignificant {
-        /// Inclusive lower bound, from one through seventeen.
+        /// Inclusive lower bound, from one through twenty-one.
         min: u8,
-        /// Inclusive upper bound, at least `min` and at most seventeen.
+        /// Inclusive upper bound, at least `min` and at most twenty-one.
         max: u8,
     },
 }
@@ -38,7 +39,12 @@ impl NumericPrecision {
             Self::AdaptiveFractional { min, max } => (min, max, false),
             Self::AdaptiveSignificant { min, max } => (min, max, true),
         };
-        if min > max || max > 17 || (significant && min == 0) {
+        let limit = if significant {
+            MAX_SIGNIFICANT_DIGITS
+        } else {
+            MAX_FRACTIONAL_DIGITS
+        };
+        if min > max || max > limit || (significant && min == 0) {
             return Err(Error::Data(
                 "numeric presentation precision bounds are invalid".into(),
             ));
@@ -191,7 +197,7 @@ impl NumericFormat {
         Ok(self)
     }
 
-    /// Replace precision; fractional bounds are 0..=17 and significant bounds 1..=17.
+    /// Replace precision; fractional bounds are 0..=20 and significant bounds 1..=21.
     /// Adaptive `min` must not exceed `max`.
     pub fn precision(mut self, value: NumericPrecision) -> Result<Self> {
         self.precision = value;
@@ -341,12 +347,12 @@ mod tests {
         );
 
         for precision in [
-            NumericPrecision::Fractional(18),
+            NumericPrecision::Fractional(21),
             NumericPrecision::Significant(0),
-            NumericPrecision::Significant(18),
+            NumericPrecision::Significant(22),
             NumericPrecision::AdaptiveFractional { min: 2, max: 1 },
             NumericPrecision::AdaptiveSignificant { min: 0, max: 3 },
-            NumericPrecision::AdaptiveSignificant { min: 1, max: 18 },
+            NumericPrecision::AdaptiveSignificant { min: 1, max: 22 },
         ] {
             assert!(matches!(
                 format.clone().precision(precision),

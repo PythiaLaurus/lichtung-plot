@@ -11,7 +11,7 @@ fn main() -> lichtung_plot::Result<()> {
         .suffix("%")?;
     let adaptive = NumericFormat::new(
         NumericNotation::Decimal,
-        NumericPrecision::AdaptiveFractional { min: 0, max: 3 },
+        NumericPrecision::AdaptiveFractional { min: 0, max: 20 },
     )?;
     let scientific = NumericFormat::new(
         NumericNotation::Scientific,

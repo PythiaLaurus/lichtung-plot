@@ -11,7 +11,7 @@ fn fractional_quantization_matches_independent_small_dyadic_rationals() {
             let denominator = 1_u32 << bits;
             let value = f64::from(numerator) / f64::from(denominator);
             for scale in -3_i16..=3 {
-                for precision in 0..=17 {
+                for precision in 0..=20 {
                     let shift = i32::from(scale) + i32::from(precision);
                     let (top, bottom) = if shift >= 0 {
                         (
@@ -159,6 +159,47 @@ fn decimal_emission_obeys_notation_precision_and_zero_occupancy() {
 }
 
 #[test]
+fn extended_precision_matches_independent_binary_rational_cells() {
+    for (value, numerator, denominator_bits, notation, precision, coefficient, expected) in [
+        (
+            0.1,
+            3_602_879_701_896_397_u64,
+            55,
+            NumericNotation::Decimal,
+            ResolvedPrecision::Fractional(20),
+            10_000_000_000_000_000_555_u128,
+            "0.10000000000000000555",
+        ),
+        (
+            1.0_f64.next_up(),
+            (1_u64 << 52) + 1,
+            52,
+            NumericNotation::Scientific,
+            ResolvedPrecision::Significant(21),
+            100_000_000_000_000_022_204,
+            "1.00000000000000022204e0",
+        ),
+    ] {
+        certify_rational_cell(
+            BigUint::from(numerator),
+            BigUint::from(1_u8) << denominator_bits,
+            20,
+            coefficient,
+        );
+        let format = ResolvedFormat {
+            notation,
+            precision,
+            ..ResolvedFormat::default()
+        };
+        assert_eq!(format_finite(value, &format).unwrap(), expected);
+        assert_eq!(
+            format_finite(-value, &format).unwrap(),
+            format!("-{expected}")
+        );
+    }
+}
+
+#[test]
 fn finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output() {
     // Literal 17-significant coefficients, certified independently below against
     // binary rational magnitudes, not the converter's power-of-five decimal form.
@@ -167,7 +208,7 @@ fn finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output() 
             f64::MAX,
             324,
             "1.7976931348623157e632",
-            17_976_931_348_623_157_u64,
+            17_976_931_348_623_157_u128,
             616_i32,
             (BigUint::from(1_u8) << 1024_usize) - (BigUint::from(1_u8) << 971_usize),
             BigUint::from(1_u8),
@@ -267,7 +308,7 @@ fn finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output() 
 
 /// Strict rounding-cell inequalities certify these non-tie rational vectors.
 /// This oracle uses their binary denominator, not production decimal decoding.
-fn certify_rational_cell(numerator: BigUint, denominator: BigUint, shift: i32, coefficient: u64) {
+fn certify_rational_cell(numerator: BigUint, denominator: BigUint, shift: i32, coefficient: u128) {
     let (top, bottom) = if shift >= 0 {
         (
             numerator * BigUint::from(10_u8).pow(shift.unsigned_abs()),

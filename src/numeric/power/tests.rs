@@ -260,11 +260,20 @@ type FractionalVector = (
     &'static str,
 );
 
-const FRACTIONAL_VECTORS: [FractionalVector; 23] = {
+const FRACTIONAL_VECTORS: [FractionalVector; 24] = {
     use NumericNotation::{Decimal, Engineering, Scientific};
     use ResolvedPrecision::{Fractional, Significant};
 
     [
+        (
+            0x3fe0_0000_0000_0000,
+            0,
+            Scientific,
+            Significant(21),
+            "316227766016837933200",
+            -20,
+            "3.16227766016837933200e0",
+        ),
         (
             0x3fe0_0000_0000_0000,
             0,

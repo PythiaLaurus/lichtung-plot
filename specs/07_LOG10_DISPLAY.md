@@ -56,8 +56,8 @@ quantum10^t and fixed multiplier exponent r=n-t before refinement:
 | Any Significant(a) | n-a+1 | a-1 |
 
 Desired coefficient is K=RN_even(M*10^r), physical rounded value R=K*10^t.
-Fractional digits are 0..17, significant a is 1..17. Apart from Decimal fractional,
-r is 0..19. In Decimal fractional r<=-2, M<10 proves coefficient 0 directly;
+Fractional digits are 0..20, significant a is 1..21. Apart from Decimal fractional,
+r is 0..22. In Decimal fractional r<=-2, M<10 proves coefficient 0 directly;
 only negative r=-1 requires intervals. Adaptive precision chooses this concrete
 display precision uniformly at its set owner, independently of numerical refinement.
 
@@ -65,7 +65,7 @@ display precision uniformly at its set owner, independently of numerical refinem
 
 F=0 means exact 10^n. Do not run series or build 10^abs(n). Significant coefficient
 is 10^(a-1), scientific fractional 10^digits, engineering fractional 10^(h+digits),
-with small exponent<=19. Decimal fractional n+digits>=0 is a symbolic one followed
+with small exponent<=22. Decimal fractional n+digits>=0 is a symbolic one followed
 by that many zeros; n+digits<0 rounds to 0 since the value is <=0.1. Decimal significant tiny
 nonzero powers require their full leading-zero output, not rounding to binary64
 zero. Symbolic exponents remain arbitrary-size until checked output conversion.
@@ -218,9 +218,11 @@ converts to usize and passes isize::MAX allocation layout, including affix bytes
 | Significant a, n<a-1 | max(1,n+2)+1+(a-1-n) |
 
 Trim can shorten, not justify constructing an unrepresentable upper bound first.
-For exponent notation r<=19; exponent magnitude needs<=1025 bits and at most
-ceil(1025/3)=342 decimal digits since2^3<10. Mantissa, point,17 fractional digits,
-e and exponent sign give uniform365-byte numeric-body bound. Affixes/storage
+For exponent notation r<=22; exponent magnitude needs<=1025 bits and at most
+ceil(1025/3)=342 decimal digits since2^3<10. Three integral digits, point, selected
+fractional digits (d, or a-1 for significant precision), e and exponent sign give
+a checked capacity bound of 348 plus those fractional digits, at most368 bytes.
+Affixes/storage
 are additional. Decimal fractional output bounds n/r before narrowing/building
 10^r. Tiny integral rounded0 requires no giant negative power.
 
