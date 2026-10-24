@@ -663,10 +663,10 @@ mod intrinsic_tests {
             assert_eq!(chart.prepared_axis_inputs().unwrap().ranges[0], range);
             let widest_probe = theme
                 .measure_text(
-                    "0.50000000000000000",
+                    "0.5",
                     &theme.typography.axes.tick_label,
                     crate::layout::PhysicalTextAlignment::End,
-                    "independent maximum-precision gutter probe",
+                    "independent distinct midpoint gutter probe",
                     false,
                 )
                 .unwrap();

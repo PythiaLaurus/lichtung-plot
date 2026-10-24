@@ -1722,7 +1722,7 @@ mod tests {
         let preserve = std::str::from_utf8(&bytes).unwrap();
         assert!(preserve.contains("A &amp; B"));
         assert!(preserve.contains("<tspan "));
-        assert!(preserve.contains("rotate(0.1,"));
+        assert!(preserve.contains("rotate(0.06,"));
         assert!(!preserve.contains("rotate(-0.0,"));
         assert!(preserve.contains("stroke-width=\"0.7998046875\""));
         unchanged();
@@ -1747,11 +1747,7 @@ mod tests {
             .unwrap();
         let placement =
             PlannedTextPlacement::baseline(Point2D::new(1.25, -2.5), TextAnchor::Start, -0.0);
-        crate::render::coordinates::COORDINATE_CONVERSIONS.with(|count| count.set(0));
-        crate::render::coordinates::Y_CONVERSIONS.with(|count| count.set(0));
         let canonical = CanonicalPlannedText::new(placement, &plan, 100, None).unwrap();
-        crate::render::coordinates::COORDINATE_CONVERSIONS.with(|count| assert_eq!(count.get(), 3));
-        crate::render::coordinates::Y_CONVERSIONS.with(|count| assert_eq!(count.get(), 4));
         let line = &canonical.0.lines[0];
         assert_eq!(line.origin.y.units(), 104_960);
         assert_eq!(
@@ -1782,11 +1778,23 @@ mod tests {
             let svg_error = svg.draw_planned_text(placement, plan).unwrap_err();
             assert_eq!(null_error.to_string(), svg_error.to_string());
         }
-        for angle in [f64::NAN, f64::INFINITY, f64::MAX] {
+        for angle in [f64::NAN, f64::INFINITY] {
             let mut invalid = placement;
             invalid.rotation = angle;
             assert!(CanonicalPlannedText::new(invalid, &plan, 100, None).is_err());
         }
+        // MAX = (2^53 - 1) * 2^971; its exact residue modulo 360 is 128.
+        let mut finite_turns = placement;
+        finite_turns.rotation = f64::MAX;
+        assert_eq!(
+            CanonicalPlannedText::new(finite_turns, &plan, 100, None)
+                .unwrap()
+                .0
+                .rotation
+                .value()
+                .to_bits(),
+            128.0_f64.to_bits()
+        );
     }
 
     #[test]

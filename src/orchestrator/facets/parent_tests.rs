@@ -181,7 +181,6 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
             source = source.subtitle_alignment(alignment);
         }
         let theme = crate::Theme::publication().resolve().unwrap();
-        theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
         crate::layout::plan_root(
             source.sizing_request(),
@@ -198,6 +197,25 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     &inputs,
                     &stage.operation(),
                 )?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    Some(&inputs),
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(format!("facet test census: {error}")))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok((inputs, guide))
             },
             |(inputs, guide), assigned, round| {

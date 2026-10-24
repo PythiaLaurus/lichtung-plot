@@ -916,7 +916,7 @@ impl Axis {
             ticks[index].label = Some((view.plan, view.placement));
         }
         let mut labels_present = false;
-        let mut label_extent = 0.0_f64;
+        let mut label_extent = ExactLength::pixels(0.0)?;
         for tick in &ticks {
             if let Some((plan, _)) = &tick.label {
                 if plan.lines.is_empty() {
@@ -942,17 +942,18 @@ impl Axis {
                     AxisSide::Bottom => &selected_lengths.x_tick_label_gap,
                     AxisSide::Left => &selected_lengths.y_tick_label_gap,
                 };
-                label_extent = label_extent.max(AxisLengths::hard(&selected_gap.add_pixels(
-                    match side {
-                        AxisSide::Bottom => bounds.height(),
-                        AxisSide::Left => bounds.width(),
-                    },
-                )?)?);
+                let extent = selected_gap.add_pixels(match side {
+                    AxisSide::Bottom => bounds.height(),
+                    AxisSide::Left => bounds.width(),
+                })?;
+                if extent.compare(&label_extent).is_gt() {
+                    label_extent = extent;
+                }
             }
         }
         let mut gutter = outward;
         if labels_present {
-            gutter = gutter.add_pixels(label_extent)?;
+            gutter = gutter.add_length(&label_extent);
         }
         let title = if let Some(label) = &self.label {
             let mut plan = fit::measured(fit::single_text(

@@ -1459,6 +1459,9 @@ mod root_title_tests {
                     crate::theme::composition::hard(&canvas.root_text.reserves.bottom).unwrap()
                         > 0.0
                 );
+                // Reference measurement has its own operation. The selected root
+                // must initialize its fonts from its actual source census.
+                let theme = plot.resolve_theme().unwrap();
                 let plan =
                     PlotPlan::new_with_resolved_theme(&plot, PlotKind::Matrix, theme).unwrap();
                 let retained = plan.root.plan().retained_text();

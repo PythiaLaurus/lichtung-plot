@@ -1,6 +1,6 @@
 //! Transcribed from d3-format 3.1.0, commit
 //! 08806c62aa8f7b3fe64925f3989f1491c950a71c, locale/*.json.
-//! https://github.com/d3/d3-format/tree/08806c62aa8f7b3fe64925f3989f1491c950a71c/locale
+//! <https://github.com/d3/d3-format/tree/08806c62aa8f7b3fe64925f3989f1491c950a71c/locale>
 //!
 //! Copyright 2010-2021 Mike Bostock
 //!
