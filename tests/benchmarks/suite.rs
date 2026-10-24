@@ -4,14 +4,11 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-mod alpha;
 mod annotations;
 mod fonts;
 mod legends;
 mod numeric;
-mod sections;
 mod text;
-mod ticks;
 
 pub(super) struct ArtifactBytes {
     pub svg: Vec<u8>,
@@ -48,10 +45,18 @@ fn report_work(prefix: &str, name: &str, run: usize, work: &measurements::Observ
         println!("{prefix}_guide,{name},{run},{guide:?}");
     }
     for gutter in &work.gutters {
-        println!("{prefix}_gutter,{name},{run},{gutter:?}");
+        println!(
+            "{prefix}_gutter,{name},{run},owner={:?},consumed={:?},requested={:?}",
+            gutter.owner, gutter.consumed, gutter.requested
+        );
     }
     for intrinsic in &work.intrinsics {
-        println!("{prefix}_intrinsic,{name},{run},{intrinsic:?}");
+        println!(
+            "{prefix}_intrinsic,{name},{run},scope={:?},counter={},root_round={:?}",
+            intrinsic.scope,
+            intrinsic.counter.name(),
+            intrinsic.root_round
+        );
     }
     for child in &work.children {
         println!("{prefix}_child,{name},{run},{child:?}");
@@ -456,9 +461,6 @@ fn publication_efficiency_measurements() {
     measure("separate10", scatter, publish_plot, true);
     measure("reuse10", scatter, publish_plot, false);
     numeric::measure();
-    sections::measure();
-    ticks::measure();
-    alpha::measure();
 
     for run in 0..3 {
         let start = Instant::now();

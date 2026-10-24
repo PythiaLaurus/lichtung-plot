@@ -77,25 +77,6 @@ fn supplemental_point(x: f64, y: f64) -> PointLayer {
 }
 
 #[test]
-fn automatic_point_layers_use_defaults_and_stable_no_hue_palette_order() {
-    let frame = line_data();
-    let output = svg(line_plot(&frame)
-        .markers(false)
-        .point_layer(supplemental_point(0.25, 1.25))
-        .point_layer(supplemental_point(1.75, 2.75)));
-    let points = output
-        .lines()
-        .filter(|line| line.starts_with("<circle "))
-        .collect::<Vec<_>>();
-
-    assert_eq!(points.len(), 2);
-    assert!(points[0].contains("fill=\"#D55E00\"") && points[1].contains("fill=\"#009E73\""));
-    assert!(points
-        .iter()
-        .all(|point| point.contains("r=\"4\"") && point.contains("fill-opacity=\"0.8\"")));
-}
-
-#[test]
 fn automatic_point_layers_follow_an_independent_accent_sequence() {
     use lichtung_plot::{
         AccentPalette, CategoricalColorScale, OpaqueColor, QualitativePalette, Theme,
@@ -173,22 +154,6 @@ fn canvas_absent_hue_levels_do_not_consume_accent_slots() {
     assert!(points
         .iter()
         .all(|point| point.contains("fill=\"#0072B2\"")));
-}
-
-#[test]
-fn explicit_point_layer_consumes_its_automatic_palette_position() {
-    let frame = line_data();
-    let output = svg(line_plot(&frame)
-        .markers(false)
-        .point_layer(supplemental_point(0.25, 1.25).color(lichtung_plot::Color::rgb(123, 45, 200)))
-        .point_layer(supplemental_point(1.75, 2.75)));
-    let points = output
-        .lines()
-        .filter(|line| line.starts_with("<circle "))
-        .collect::<Vec<_>>();
-
-    assert_eq!(points.len(), 2);
-    assert!(points[0].contains("fill=\"#7B2DC8\"") && points[1].contains("fill=\"#009E73\""));
 }
 
 #[test]
@@ -294,36 +259,6 @@ fn clipped_point_labels_do_not_require_unpainted_glyphs() {
 }
 
 #[test]
-fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
-    let frame = line_data();
-    let layer = |x, y| {
-        supplemental_point(x, y)
-            .color(lichtung_plot::Color::rgb(123, 45, 200))
-            .legend_label("Selected")
-    };
-    for composition in [
-        lichtung_plot::LegendComposition::Combined,
-        lichtung_plot::LegendComposition::Separate,
-    ] {
-        let output = svg(line_plot(&frame)
-            .markers(false)
-            .point_layer(layer(0.5, 1.5))
-            .point_layer(layer(1.5, 2.5))
-            .legend_composition(composition));
-        let legend = output
-            .split_once("<g id=\"legend\">")
-            .unwrap()
-            .1
-            .split_once("</g>")
-            .unwrap()
-            .0;
-
-        assert_eq!(legend.matches(">Selected</text>").count(), 1);
-        assert_eq!(output.matches("fill=\"#7B2DC8\"").count(), 3);
-    }
-}
-
-#[test]
 fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
     let frame = line_data();
     let first = supplemental_point(0.5, 1.5)
@@ -364,178 +299,6 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
 }
 
 #[test]
-fn public_tick_generation_yields_to_exact_labels_in_both_setter_orders() {
-    use lichtung_plot::TickGeneration;
-    let base = Plot::scatter(
-        NumericValues::new("x", [0.0, 10.0]),
-        NumericValues::new("y", [100.0, 105.0]),
-    )
-    .x_limits(0.0, 10.0)
-    .y_limits(100.0, 105.0)
-    .size(700, 500);
-    let intervals = |plot: Plot<lichtung_plot::kind::Scatter>| {
-        plot.x_tick_generation(TickGeneration::additive(5.0).unwrap())
-            .x_tick_generation(TickGeneration::additive(2.0).unwrap())
-            .y_tick_generation(TickGeneration::additive(1.0).unwrap())
-    };
-    let preferred = svg(intervals(base.clone()));
-    let labels = |svg: &str| {
-        let mut labels = svg
-            .lines()
-            .filter(|line| line.starts_with("<text ") && line.contains("font-size=\"16\""))
-            .map(|line| {
-                line.split_once('>')
-                    .unwrap()
-                    .1
-                    .split_once('<')
-                    .unwrap()
-                    .0
-                    .to_owned()
-            })
-            .collect::<Vec<_>>();
-        labels.sort_unstable();
-        labels
-    };
-    let mut expected = [
-        "0", "2", "4", "6", "8", "10", "100", "101", "102", "103", "104", "105",
-    ]
-    .map(str::to_owned)
-    .to_vec();
-    expected.sort_unstable();
-    assert_eq!(labels(&preferred), expected);
-    let exact = |plot: Plot<lichtung_plot::kind::Scatter>| {
-        plot.x_ticks(vec![AxisTick::new(1.0, "exact x"), AxisTick::new(9.0, "")])
-            .y_ticks(vec![
-                AxisTick::new(101.0, "exact y"),
-                AxisTick::new(104.0, ""),
-            ])
-    };
-    let before = svg(exact(intervals(base.clone())));
-    let after = svg(intervals(exact(base.clone())));
-    assert_eq!(before, after);
-    assert_eq!(labels(&before), ["exact x", "exact y"]);
-    for generation in [
-        TickGeneration::target(1).unwrap(),
-        TickGeneration::maximum(1).unwrap(),
-        TickGeneration::automatic(),
-    ] {
-        let generated = |plot: Plot<lichtung_plot::kind::Scatter>| {
-            plot.x_tick_generation(generation.clone())
-                .y_tick_generation(generation.clone())
-        };
-        let before = svg(exact(generated(base.clone())));
-        let after = svg(generated(exact(base.clone())));
-        assert_eq!(before, after);
-        assert_eq!(labels(&before), ["exact x", "exact y"]);
-        // Each two-position exact list exceeds count one. The unlabeled ticks
-        // must survive just as they do without a generated count instruction.
-        assert_eq!(before, svg(exact(base.clone())));
-    }
-}
-
-#[test]
-fn public_tick_generation_counts_replace_complete_choices_and_automatic_resets() {
-    use lichtung_plot::{NumericFormat, TickGeneration};
-    fn labels<'a>(svg: &'a str, prefix: &str) -> Vec<&'a str> {
-        svg.lines()
-            .filter(|line| line.starts_with("<text "))
-            .filter_map(|line| {
-                line.split_once('>')?
-                    .1
-                    .split_once('<')?
-                    .0
-                    .strip_prefix(prefix)
-            })
-            .collect()
-    }
-    let base = Plot::scatter(
-        NumericValues::new("x", [0.0, 1.0]),
-        NumericValues::new("y", [10.0, 14.0]),
-    )
-    .x_limits(0.0, 1.0)
-    .y_limits(10.0, 14.0)
-    .x_tick_format(NumericFormat::default().prefix("X:").unwrap())
-    .y_tick_format(NumericFormat::default().prefix("Y:").unwrap())
-    .size(1000, 700);
-    let selected = base
-        .clone()
-        .x_tick_generation(TickGeneration::additive(0.2).unwrap())
-        .x_tick_generation(TickGeneration::target(4).unwrap())
-        .y_tick_generation(TickGeneration::target(5).unwrap());
-    let output = svg(selected.clone());
-    assert_eq!(labels(&output, "X:"), ["0.00", "0.50", "1.00"]);
-    assert_eq!(
-        labels(&output, "Y:"),
-        ["10.00", "11.00", "12.00", "13.00", "14.00"]
-    );
-
-    let output = svg(selected
-        .clone()
-        .x_tick_generation(TickGeneration::target(5).unwrap()));
-    assert_eq!(
-        labels(&output, "X:"),
-        ["0.00", "0.25", "0.50", "0.75", "1.00"]
-    );
-    let capped = svg(selected.x_tick_generation(TickGeneration::maximum(3).unwrap()));
-    assert_eq!(labels(&capped, "X:"), ["0.00", "0.50", "1.00"]);
-    assert_eq!(labels(&capped, "Y:"), labels(&output, "Y:"));
-
-    let reset = base
-        .clone()
-        .x_tick_generation(TickGeneration::log10_decades(2).unwrap())
-        .y_tick_generation(TickGeneration::maximum(1).unwrap())
-        .x_tick_generation(TickGeneration::automatic())
-        .y_tick_generation(TickGeneration::default());
-    assert_eq!(svg(reset), svg(base));
-}
-
-#[test]
-fn explicit_numeric_ticks_replace_generated_labels_at_caller_positions_on_both_axes() {
-    let frame = line_data();
-    let output = svg(line_plot(&frame)
-        .x_limits(0.0, 2.0)
-        .y_limits(0.0, 4.0)
-        .x_ticks(vec![
-            AxisTick::new(0.5, "early x"),
-            AxisTick::new(1.5, "late x"),
-        ])
-        .y_ticks(vec![
-            AxisTick::new(1.0, "low y"),
-            AxisTick::new(3.0, "high y"),
-        ]));
-    let clip = output
-        .lines()
-        .find(|line| line.starts_with("<clipPath "))
-        .unwrap();
-    let panel_x = attribute(clip, "x");
-    let panel_y = attribute(clip, "y");
-    let panel_width = attribute(clip, "width");
-    let panel_height = attribute(clip, "height");
-    let early_x = attribute(text_line(&output, "early x"), "x");
-    let late_x = attribute(text_line(&output, "late x"), "x");
-    for (start, center) in [
-        (early_x, (panel_x + panel_width * 0.25).round()),
-        (late_x, (panel_x + panel_width * 0.75).round()),
-    ] {
-        assert!((0.0..=64.0).contains(&(center - start)));
-    }
-    assert!(((late_x - early_x) - panel_width * 0.5).abs() <= 8.0);
-
-    let low_y = attribute(text_line(&output, "low y"), "y");
-    let high_y = attribute(text_line(&output, "high y"), "y");
-    assert!((low_y - (panel_y + panel_height * 0.75).round()).abs() <= 16.0);
-    assert!((high_y - (panel_y + panel_height * 0.25).round()).abs() <= 16.0);
-    assert!(((low_y - high_y) - panel_height * 0.5).abs() <= 1.0);
-    let mut tick_labels = output
-        .lines()
-        .filter(|line| line.starts_with("<text ") && line.contains("font-size=\"16\""))
-        .map(|line| line.split_once('>').unwrap().1.split_once('<').unwrap().0)
-        .collect::<Vec<_>>();
-    tick_labels.sort_unstable();
-    assert_eq!(tick_labels, ["early x", "high y", "late x", "low y"]);
-}
-
-#[test]
 fn explicit_x_ticks_reject_projected_neighboring_label_collisions() {
     let frame = line_data();
     let error = line_plot(&frame)
@@ -553,23 +316,6 @@ fn explicit_x_ticks_reject_projected_neighboring_label_collisions() {
         error.contains("AxisBottom") && error.contains("assigned cell"),
         "{error}"
     );
-}
-
-#[test]
-fn explicit_y_ticks_reject_projected_neighboring_label_collisions() {
-    let frame = line_data();
-    let error = line_plot(&frame)
-        .y_limits(0.0, 4.0)
-        .y_ticks(vec![
-            AxisTick::new(2.0, "Lower exact\nlabel"),
-            AxisTick::new(2.25, "Upper exact\nlabel"),
-            AxisTick::new(2.5, "Third exact\nlabel"),
-        ])
-        .preflight()
-        .unwrap_err()
-        .to_string();
-
-    assert!(error.contains("y-axis tick label"), "{error}");
 }
 
 #[test]

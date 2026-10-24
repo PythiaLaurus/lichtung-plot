@@ -24,7 +24,6 @@ use crate::{CategoryOrder, Plot, ValueSort};
 
 #[cfg(test)]
 thread_local! {
-    pub(crate) static ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static BOOTSTRAP_DRAWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -489,8 +488,6 @@ pub(crate) struct BarPayload {
     pub(crate) bars: Vec<BarShape>,
     pub(crate) text: Vec<crate::render::backend::PlacedText>,
     pub(crate) points: Vec<(crate::render::backend::Point2D, PointStyle)>,
-    #[cfg(test)]
-    pub(crate) kind: crate::PlotKind,
 }
 
 /// One numeric-axis request from the selected complete bar, interval and
@@ -573,8 +570,6 @@ impl BarPayload {
         &self,
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
-        #[cfg(test)]
-        count(self.kind, 3);
         crate::render::backend::with_clip(backend, self.clip, |backend| {
             if let Some(line) = &self.zero {
                 backend.draw_line(line, &self.zero_style)?;
@@ -733,8 +728,6 @@ impl BarPayload {
                 })?;
             }
         }
-        #[cfg(test)]
-        count(self.kind, 2);
         result.marks = Some(crate::data::source::source_arc(
             crate::layout::interior::SelectedMarkPlan {
                 payload: crate::layout::interior::MarkPayload::Bars(self),
@@ -743,27 +736,6 @@ impl BarPayload {
         )?);
         Ok(result)
     }
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 4]> = const { std::cell::Cell::new([[0; 4]; 4]) };
-}
-
-#[cfg(test)]
-pub(crate) fn count(kind: crate::PlotKind, stage: usize) {
-    let family = match kind {
-        crate::PlotKind::Bar => 0,
-        crate::PlotKind::HorizontalBar => 1,
-        crate::PlotKind::StackedBar => 2,
-        crate::PlotKind::StackedHorizontalBar => 3,
-        _ => unreachable!(),
-    };
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[family][stage] += 1;
-        counts.set(next);
-    });
 }
 
 pub(crate) fn mode(chart: &Plot) -> BarMode {
@@ -822,9 +794,6 @@ pub(crate) fn attached_significance_text_plans(
     owner: &str,
     exact_override: bool,
 ) -> Result<Vec<crate::layout::ResolvedTextPlan>, Error> {
-    #[cfg(test)]
-    ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(calls.get() + 1));
-
     let eligible =
         crate::data::source::collect_source(marks.iter().map(|mark| Ok(mark.source_index)))?;
     let mut plans = crate::data::source::collect_source(marks.iter().map(|mark| {
@@ -928,8 +897,6 @@ pub(crate) fn prepare_scoped<'a>(
     facet: Option<crate::data::FacetAxisSources<'_>>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
 ) -> Result<PreparedBars, Error> {
-    #[cfg(test)]
-    count(chart.kind(), 0);
     let mut prepared = prepare_core(chart, data, mode, facet)?;
     let category = data
         .column(

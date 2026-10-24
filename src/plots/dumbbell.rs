@@ -209,8 +209,6 @@ pub(crate) struct DumbbellPayload {
 
 impl DumbbellPayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        count(3);
         with_clip(backend, self.clip, |backend| {
             for ((pair, points), connector) in
                 self.pairs.iter().zip(&self.points).zip(&self.connectors)
@@ -229,8 +227,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(1);
     let prepared = chart
         .prepared_dumbbell
         .as_ref()
@@ -359,8 +355,6 @@ fn project(
         geometry.scatter(&pair[..1], &points[0], clip)?;
         geometry.scatter(&pair[1..], &points[1], clip)?;
     }
-    #[cfg(test)]
-    count(2);
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
@@ -405,8 +399,6 @@ pub(crate) fn prepare<'a>(
     data.validate_row_source()?;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
-    #[cfg(test)]
-    count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "dumbbell: categorical y-axis limits are not supported".into(),
@@ -538,20 +530,6 @@ fn resolved_level_index(
 
 fn row_y(category_index: usize, category_count: usize) -> f64 {
     category_count as f64 - category_index as f64 - 0.5
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[usize; 4]> = const { std::cell::Cell::new([0; 4]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
 }
 
 fn replicate_y(

@@ -1,6 +1,4 @@
-use lichtung_plot::{
-    BarInput, CategoryValues, NumericValues, Plot, Significance, SignificanceMark, ValueSort,
-};
+use lichtung_plot::{BarInput, CategoryValues, NumericValues, Plot, ValueSort};
 
 #[path = "../support/visual.rs"]
 mod support;

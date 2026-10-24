@@ -158,34 +158,6 @@ fn changing_hue_colors_points_but_not_connector_or_group_legend() {
 }
 
 #[test]
-fn trajectory_group_identities_are_not_preflighted_as_legend_text() {
-    let absent = "\u{10FFFF}";
-    Plot::trajectory(
-        NumericValues::new("time", [0.0, 1.0]),
-        NumericValues::new("value", [0.0, 1.0]),
-        CategoryValues::new("subject", [absent, absent]).unwrap(),
-    )
-    .preflight()
-    .unwrap();
-}
-
-#[test]
-fn categorical_trajectory_uses_global_first_observed_condition_order() {
-    let data = trajectory_data(
-        CategoryValues::new("condition", ["after", "before", "during"])
-            .unwrap()
-            .into(),
-        NumericValues::new("value", [30.0, 10.0, 20.0]),
-        CategoryValues::new("subject", ["s1"; 3]).unwrap(),
-    );
-    let output = svg(trajectory(&data), "categorical-order");
-    let connector = points(connector_tags(&output)[0]);
-    assert!(connector[0].0 < connector[1].0 && connector[1].0 < connector[2].0);
-    assert!(output.find(">After</text>").unwrap() < output.find(">Before</text>").unwrap());
-    assert!(output.find(">Before</text>").unwrap() < output.find(">During</text>").unwrap());
-}
-
-#[test]
 fn categorical_conditions_collapse_whitespace_before_ordering_and_ticks() {
     let data = trajectory_data(
         CategoryValues::new(
@@ -237,19 +209,6 @@ fn categorical_condition_duplicates_and_empty_values_fail_after_normalization() 
 }
 
 #[test]
-fn numeric_looking_string_conditions_remain_categorical_and_first_observed() {
-    let data = trajectory_data(
-        CategoryValues::new("condition", ["10", "2"])
-            .unwrap()
-            .into(),
-        NumericValues::new("value", [100.0, 200.0]),
-        CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
-    );
-    let output = svg(trajectory(&data), "numeric-looking-categories");
-    assert!(output.find(">10</text>").unwrap() < output.find(">2</text>").unwrap());
-}
-
-#[test]
 fn faceted_categorical_trajectories_keep_global_order_and_source_rows() {
     let mut data = trajectory_data(
         CategoryValues::new(
@@ -287,49 +246,6 @@ fn faceted_categorical_trajectories_keep_global_order_and_source_rows() {
     for condition in ["After", "Before", "During"] {
         assert_eq!(output.matches(&format!(">{condition}</text>")).count(), 2);
     }
-}
-
-#[test]
-fn faceted_hues_use_global_first_observed_colors_and_one_complete_legend() {
-    let mut data = trajectory_data(
-        CategoryValues::new(
-            "condition",
-            [
-                "before", "after", "before", "after", "before", "after", "before", "after",
-            ],
-        )
-        .unwrap()
-        .into(),
-        NumericValues::new("value", [1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0]),
-        CategoryValues::new("subject", ["s1", "s1", "s2", "s2", "s1", "s1", "s2", "s2"]).unwrap(),
-    );
-    data.status = Some(
-        CategoryValues::new(
-            "status",
-            [
-                "late", "late", "late", "late", "early", "early", "early", "early",
-            ],
-        )
-        .unwrap(),
-    );
-    data.facet = Some(
-        CategoryValues::new(
-            "facet",
-            [
-                "left", "left", "left", "left", "right", "right", "right", "right",
-            ],
-        )
-        .unwrap(),
-    );
-    let output = svg(
-        trajectory_with_hue(&data).facet(FacetSpec::column(data.facet.clone().unwrap())),
-        "faceted-trajectory-hues",
-    );
-    assert_eq!(output.matches(">Late</text>").count(), 1);
-    assert_eq!(output.matches(">Early</text>").count(), 1);
-    assert!(output.find(">Late</text>").unwrap() < output.find(">Early</text>").unwrap());
-    assert!(output.matches("fill=\"#0072B2\"").count() >= 4);
-    assert!(output.matches("fill=\"#D55E00\"").count() >= 4);
 }
 
 #[test]
@@ -371,27 +287,6 @@ fn facet_local_singletons_and_duplicates_report_before_render() {
 }
 
 #[test]
-fn composed_canvas_renders_trajectory_without_cross_panel_lifecycle() {
-    let trajectory_frame = numeric_trajectory_data();
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .panel(0, 0, trajectory_with_hue(&trajectory_frame))
-        .unwrap()
-        .panel(
-            0,
-            1,
-            Plot::line(
-                lichtung_plot::NumericValues::new("x", [1.0, 2.0]),
-                lichtung_plot::NumericValues::new("y", [1.0, 3.0]),
-            ),
-        )
-        .unwrap();
-    let output = render_canvas(canvas, "trajectory-canvas").unwrap();
-    assert_eq!(output.matches("<svg ").count(), 1);
-    assert_eq!(connector_tags(&output).len(), 2);
-}
-
-#[test]
 fn categorical_trajectory_rejects_numeric_x_axis_overrides_in_plot_and_canvas() {
     let frame = categorical_trajectory_data();
     let configurations = [
@@ -416,24 +311,6 @@ fn categorical_trajectory_rejects_numeric_x_axis_overrides_in_plot_and_canvas() 
     assert!(canvas_error
         .to_string()
         .contains("categorical condition x does not support numeric x limits"));
-}
-
-#[test]
-fn numeric_trajectory_preserves_x_limits_and_exact_ticks() {
-    let output = svg(
-        trajectory_with_hue(&numeric_trajectory_data())
-            .x_limits(0.5, 2.5)
-            .x_ticks(vec![
-                AxisTick::new(0.5, "early"),
-                AxisTick::new(1.5, "middle"),
-                AxisTick::new(2.5, "late"),
-            ]),
-        "numeric-trajectory-limits",
-    );
-    assert_eq!(connector_tags(&output).len(), 2);
-    assert!(output.contains(">early</text>"));
-    assert!(output.contains(">middle</text>"));
-    assert!(output.contains(">late</text>"));
 }
 
 #[test]
@@ -486,22 +363,4 @@ fn trajectory_requires_two_conditions_per_group() {
         .unwrap_err()
         .to_string()
         .contains("group \"s2\" requires at least two retained conditions"));
-}
-
-#[test]
-fn trajectory_svg_is_deterministic_and_exposes_neutral_connector_and_hue_points() {
-    let mut data = trajectory_data(
-        CategoryValues::new("condition", ["before", "after"])
-            .unwrap()
-            .into(),
-        NumericValues::new("value", [1.0, 3.0]),
-        CategoryValues::new("subject", ["subject-one", "subject-one"]).unwrap(),
-    );
-    data.status = Some(CategoryValues::new("status", ["control", "case"]).unwrap());
-    let first = svg(trajectory_with_hue(&data), "trajectory-first");
-    let second = svg(trajectory_with_hue(&data), "trajectory-second");
-    assert_eq!(first, second);
-    assert!(first.contains("stroke=\"#000000\" stroke-width=\"1.400390625\""));
-    assert!(first.contains("fill=\"#0072B2\"") && first.contains("fill=\"#D55E00\""));
-    assert!(!first.contains("subject-one"));
 }

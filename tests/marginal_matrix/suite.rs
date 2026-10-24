@@ -1,4 +1,4 @@
-use lichtung_plot::{CategoryValues, LegendPolicy, LegendPosition, NumericValues, Plot};
+use lichtung_plot::{CategoryValues, LegendPolicy, NumericValues, Plot};
 
 #[path = "../support/visual.rs"]
 mod support;
@@ -6,5 +6,4 @@ mod support;
 use support::*;
 
 mod contracts;
-mod observations;
 mod scientific;

@@ -24,8 +24,6 @@ pub(crate) fn measure_marks(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
-    #[cfg(test)]
-    bar_data::count(chart.kind(), 1);
     let mode = bar_data::mode(chart);
     let prepared = bar_data::retained(chart)?;
     let resources = theme.prepared_font_environment()?.operation();
@@ -158,8 +156,6 @@ pub(crate) fn measure_marks(
         bars: Vec::new(),
         text: Vec::new(),
         points: Vec::new(),
-        #[cfg(test)]
-        kind: chart.kind(),
     };
     crate::data::source::reserve_source(&mut payload.bars, prepared.bars.len())?;
     crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;

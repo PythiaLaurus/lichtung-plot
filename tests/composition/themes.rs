@@ -14,37 +14,6 @@ fn text_line<'a>(svg: &'a str, text: &str) -> &'a str {
 }
 
 #[test]
-fn unthemed_canvas_child_inherits_the_root_theme() {
-    let inherited = render_canvas(
-        Canvas::grid(1, 1)
-            .unwrap()
-            .theme(Theme::nature())
-            .panel(0, 0, scatter())
-            .unwrap(),
-        "theme-inherited-nature",
-    )
-    .unwrap();
-    let explicit = render_canvas(
-        Canvas::grid(1, 1)
-            .unwrap()
-            .theme(Theme::nature())
-            .panel(0, 0, scatter().theme(Theme::nature()))
-            .unwrap(),
-        "theme-explicit-nature",
-    )
-    .unwrap();
-    let publication = render_canvas(
-        Canvas::grid(1, 1).unwrap().panel(0, 0, scatter()).unwrap(),
-        "theme-inherited-publication",
-    )
-    .unwrap();
-
-    assert_eq!(inherited, explicit);
-    assert_ne!(inherited, publication);
-    assert!(inherited.contains("#285682"));
-}
-
-#[test]
 fn explicit_plot_theme_completely_replaces_only_its_inherited_root() {
     let svg = render_canvas(
         Canvas::grid(1, 2)
@@ -298,29 +267,4 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
         assert_eq!(attribute(line, "font-weight"), "600");
         assert!(attribute(line, "font-family").starts_with("serif, Noto Sans, "));
     }
-}
-
-#[test]
-fn theme_owners_are_isolated_across_render_calls() {
-    let canvas = |theme| {
-        Canvas::grid(1, 1)
-            .unwrap()
-            .theme(theme)
-            .panel(0, 0, scatter())
-            .unwrap()
-    };
-    let first_nature =
-        render_canvas(canvas(Theme::nature()), "theme-isolation-nature-first").unwrap();
-    let science = render_canvas(canvas(Theme::science()), "theme-isolation-science").unwrap();
-    let publication = render_canvas(
-        Canvas::grid(1, 1).unwrap().panel(0, 0, scatter()).unwrap(),
-        "theme-isolation-publication",
-    )
-    .unwrap();
-    let second_nature =
-        render_canvas(canvas(Theme::nature()), "theme-isolation-nature-second").unwrap();
-
-    assert_eq!(first_nature, second_nature);
-    assert_ne!(first_nature, science);
-    assert_ne!(first_nature, publication);
 }

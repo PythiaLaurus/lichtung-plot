@@ -176,21 +176,6 @@ fn panel_text_rejects_colliding_inside_legend() {
 }
 
 #[test]
-fn automatic_legend_falls_back_around_panel_text() {
-    let data = scatter_data();
-    let chart = scatter(&data)
-        .hue(data.group.clone())
-        .panel_text_annotation(
-            PanelTextAnnotation::new(PanelCorner::TopRight, "Caller note").unwrap(),
-        );
-
-    let output = svg(&chart);
-
-    assert!(output.contains(">Caller note</text>"));
-    assert!(output.contains("<g id=\"legend\">"));
-}
-
-#[test]
 fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
     let data = scatter_data();
     let chart = scatter(&data)

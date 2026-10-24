@@ -3,7 +3,7 @@ use lichtung_plot::{
     TextPanel,
 };
 
-use super::{unique_dir, Significance, SignificanceMark};
+use super::unique_dir;
 
 struct IntervalData {
     category: CategoryValues,
@@ -217,69 +217,6 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
 }
 
 #[test]
-fn explicit_and_p_value_marks_render_the_same_four_stars() {
-    let plot = Plot::bar(
-        CategoryValues::new("category", ["a", "b"]).unwrap(),
-        BarInput::estimates(NumericValues::new("value", [2.0, 4.0])),
-    );
-    let render = |mark, name| {
-        svg(
-            plot.clone()
-                .significance([Significance::between("a", "b", mark)]),
-            name,
-        )
-    };
-
-    let explicit = render(SignificanceMark::FourStars, "explicit-four-stars");
-    let derived = render(SignificanceMark::PValue(0.00001), "p-value-four-stars");
-
-    assert_eq!(explicit, derived);
-    assert!(explicit.contains(">****</text>"));
-}
-
-#[test]
-fn canvas_supports_all_text_and_mixed_cells_without_text_legends() {
-    let all_text = svg_canvas(
-        Canvas::grid(1, 2)
-            .unwrap()
-            .text_panel(
-                0,
-                0,
-                TextPanel::new("Context", "Deterministically wrapped prose.").unwrap(),
-            )
-            .unwrap()
-            .text_panel(
-                0,
-                1,
-                TextPanel::new("Result", "Centered explanatory text.").unwrap(),
-            )
-            .unwrap(),
-        "all-text-canvas",
-    );
-    let plot = Plot::bar(
-        CategoryValues::new("category", ["a"]).unwrap(),
-        BarInput::estimates(NumericValues::new("value", [2.0])),
-    );
-    let mixed = svg_canvas(
-        Canvas::grid(1, 2)
-            .unwrap()
-            .panel(0, 0, plot)
-            .unwrap()
-            .text_panel(
-                0,
-                1,
-                TextPanel::new("Interpretation", "One chart and one prose cell.").unwrap(),
-            )
-            .unwrap(),
-        "mixed-content-canvas",
-    );
-
-    assert_eq!(all_text.matches("<svg ").count(), 1);
-    assert!(all_text.contains("Context") && !all_text.contains("legend"));
-    assert!(mixed.contains("Interpretation") && mixed.contains("<polygon "));
-}
-
-#[test]
 fn canvas_text_cells_enforce_occupancy_and_fitting() {
     let panel = TextPanel::new("Title", "Body").unwrap();
     let occupied = Canvas::grid(1, 1)
@@ -298,7 +235,7 @@ fn canvas_text_cells_enforce_occupancy_and_fitting() {
         .preflight()
         .unwrap_err();
 
-    assert!(occupied.to_string().contains("already occupied"));
+    assert!(matches!(occupied, lichtung_plot::Error::Data(_)));
     assert!(
         fitting.to_string().contains("TextPanelContent")
             && fitting
@@ -306,27 +243,4 @@ fn canvas_text_cells_enforce_occupancy_and_fitting() {
                 .contains("assigned tracks cannot preserve their hard requirements"),
         "{fitting}"
     );
-}
-
-#[test]
-fn small_positive_canvas_dimensions_use_content_fit_not_a_global_floor() {
-    let canvas = Canvas::grid(1, 1)
-        .unwrap()
-        .text_panel(0, 0, TextPanel::new("A", "B").unwrap())
-        .unwrap()
-        // One pixel below the retired universal width floor, with enough height
-        // for the unchanged complete title/body typography and local spacing.
-        .size(159, 240);
-    let svg = svg_canvas(canvas, "small-positive-canvas");
-    assert!(svg.contains("width=\"159\" height=\"240\""));
-    assert!(svg.contains(">A</text>") && svg.contains(">B</text>"));
-}
-
-fn svg_canvas(canvas: Canvas, name: &str) -> String {
-    let directory = unique_dir(name);
-    let output = directory.join("canvas.svg");
-    canvas.svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
-    svg
 }

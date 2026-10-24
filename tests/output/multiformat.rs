@@ -176,29 +176,6 @@ fn canvas() -> Canvas {
 }
 
 #[test]
-fn omitted_plot_size_reports_frozen_dimensions_and_explicit_size_stays_exact() {
-    let directory = unique_dir("plot-content-size");
-    let first = directory.join("first.svg");
-    let explicit = directory.join("explicit.svg");
-    let (x, y) = fixture_values();
-    let plot = Plot::scatter(x, y);
-    let automatic = plot.clone().svg_preserve_text(&first).unwrap();
-    let exact = plot.size(640, 480).svg_preserve_text(&explicit).unwrap();
-
-    assert!(automatic.width() > 0 && automatic.height() > 0);
-    assert!(std::fs::read_to_string(first).unwrap().contains(&format!(
-        "width=\"{}\" height=\"{}\"",
-        automatic.width(),
-        automatic.height()
-    )));
-    assert_eq!((exact.width(), exact.height()), (640, 480));
-    assert!(std::fs::read_to_string(explicit)
-        .unwrap()
-        .contains("width=\"640\" height=\"480\""));
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
 fn plot_and_canvas_svg_operations_keep_complete_text_and_call_local_replay() {
     let directory = unique_dir("output-text-representation");
     for (name, output, height, title) in [

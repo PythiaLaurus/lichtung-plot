@@ -215,8 +215,6 @@ impl PreparedRegression {
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
         let fill_alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Single, &[])?;
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
             .x_col()
             .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
@@ -308,8 +306,6 @@ pub(crate) struct RegressionPayload {
 
 impl RegressionPayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(3, 3);
         with_clip(backend, self.clip, |backend| {
             if let Some(band) = &self.band {
                 backend.draw_polygon(band, &self.band_fill)?;
@@ -327,8 +323,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(3, 1);
     let prepared = chart
         .prepared_regression
         .as_ref()
@@ -502,8 +496,6 @@ pub(crate) fn project(
         domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(3, 2);
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     if let Some(band) = &payload.band {
         geometry.polygon(band, &payload.band_fill, Some(clip))?;

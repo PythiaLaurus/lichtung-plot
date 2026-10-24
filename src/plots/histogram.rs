@@ -162,8 +162,6 @@ impl HistogramSemantics {
         let curve_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(0, 0);
         let (range, bins, curve, rugs) = if let Some(input) =
             chart.histogram_composite_geometry_input()
         {
@@ -292,8 +290,6 @@ impl HistogramPayload {
     }
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(0, 3);
         with_clip(backend, self.clip, |backend| {
             for (bin, fill) in &self.bins {
                 backend.draw_polygon(bin, fill)?;
@@ -314,8 +310,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(0, 1);
     let prepared = chart
         .prepared_histogram
         .as_ref()
@@ -459,8 +453,6 @@ pub(crate) fn project(
             .backend_style(),
         domain_expansions: [None; 2],
     };
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(0, 2);
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     let geometry = payload.geometry(Some(clip))?;
     let mut result = PlotRenderResult::new(layout, None);

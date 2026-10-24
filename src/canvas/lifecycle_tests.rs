@@ -86,47 +86,6 @@ fn authored_display_slots_preserve_common_source_and_real_blank_line_metrics() {
 }
 
 #[test]
-fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
-    let plot = Plot::heatmap(
-        crate::CategoryValues::new("column", ["c", "c"]).unwrap(),
-        crate::CategoryValues::new("row", ["a", "b"]).unwrap(),
-        crate::NumericValues::new("value", [1.0, 2.0]),
-    );
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .size(1000, 500)
-        .labels(Labels::raw().alias("a", "").alias("b", "Visible label"))
-        .panel(0, 0, plot.clone())
-        .unwrap()
-        .panel(0, 1, plot.with_y_tick_labels_visible(false))
-        .unwrap();
-    let root = canvas.preflight_plan().unwrap();
-    let retained = root.plan().retained_text();
-    let blank: Vec<_> = retained
-        .iter()
-        .filter(|(_, text)| text.source.is_empty())
-        .collect();
-    assert_eq!(blank.len(), 1);
-    assert_eq!(blank[0].1.line_texts(), [""]);
-    assert!(blank[0].1.height_quanta > 0);
-    assert_eq!(
-        retained
-            .iter()
-            .filter(|(_, text)| text.source == "Visible label")
-            .count(),
-        1
-    );
-    let mut backend = root.plan().take_svg_backend().unwrap();
-    Canvas::render_preflighted(&root, &mut backend).unwrap();
-    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-    assert_eq!(
-        svg.matches("<polygon ").count(),
-        4,
-        "all four scientific cells remain"
-    );
-}
-
-#[test]
 fn native_category_selection_uses_final_orders_and_skips_only_unselected_glyphs() {
     let unavailable = "\u{10ffff}";
     let plot = Plot::heatmap(

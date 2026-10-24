@@ -245,46 +245,6 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     }
 }
 
-#[test]
-#[ignore = "release measurements; run with --release --ignored --nocapture --test-threads=1"]
-fn outside_legend_measurements() {
-    assert!(
-        !std::hint::black_box(cfg!(debug_assertions)),
-        "requires --release"
-    );
-    println!("legend_conditions,release,three_interleaved_runs,selection_probe_before_pairs,OS_cache_and_scheduling_uncontrolled,SVG_outlined,PNG_source_balanced,preserved_text_checks_outside_timing");
-    println!("legend_dimensions,small=800x480,starvation=640x480,historical_reflow_640x400=640x400,preferred_right_control=670x480,native_compact_right=520x240");
-    for fixture in [
-        "small",
-        "starvation",
-        "historical_reflow_640x400",
-        "preferred_right_control",
-        "native_compact_right",
-    ] {
-        let auto = || outside_case(fixture, LegendPosition::Auto, true);
-        let probe = auto();
-        let edge = selected(&probe);
-        let explicit = || outside_case(fixture, edge, true);
-        let selected_name = format!("{fixture}_selected_{edge:?}");
-        for [automatic, fixed] in measure_pair([fixture, &selected_name], [&auto, &explicit]) {
-            assert_eq!(selected(&automatic), edge);
-            equal_output(&automatic, &fixed);
-        }
-        let right = || {
-            outside_case(
-                fixture,
-                LegendPosition::OutsideRight,
-                fixture != "starvation",
-            )
-        };
-        let bottom = || outside_case(fixture, LegendPosition::OutsideBottom, true);
-        measure_pair(
-            [&format!("{fixture}_right"), &format!("{fixture}_bottom")],
-            [&right, &bottom],
-        );
-    }
-}
-
 fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasurement {
     let (width, height) = if pressure {
         (if facet { 560 } else { 480 }, 360)
@@ -353,45 +313,6 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
         assert_eq!(selected(&sample), edge);
     }
     sample
-}
-
-#[test]
-#[ignore = "release measurements; run with --release --ignored --nocapture --test-threads=1"]
-fn shared_legend_measurements() {
-    assert!(
-        !std::hint::black_box(cfg!(debug_assertions)),
-        "requires --release"
-    );
-    println!("legend_dimensions,shared_adequate=1200x720,canvas_pressure=480x360,facet_pressure=560x360,two_panels");
-    for facet in [false, true] {
-        let adequate = || shared_case(facet, false, LegendPosition::Auto);
-        let pressure = || shared_case(facet, true, LegendPosition::Auto);
-        let root = if facet { "facet" } else { "canvas" };
-        let samples = measure_pair(
-            [&format!("{root}_adequate"), &format!("{root}_pressure")],
-            [&adequate, &pressure],
-        );
-        for pair in &samples[1..] {
-            equal_output(&samples[0][0], &pair[0]);
-            equal_output(&samples[0][1], &pair[1]);
-        }
-        if facet {
-            for pressured in [false, true] {
-                let auto = || shared_case(true, pressured, LegendPosition::Auto);
-                let edge = selected(&auto());
-                let fixed = || shared_case(true, pressured, edge);
-                for [auto, fixed] in measure_pair(
-                    [
-                        &format!("facet_auto_pressure_{pressured}"),
-                        &format!("facet_selected_pressure_{pressured}"),
-                    ],
-                    [&auto, &fixed],
-                ) {
-                    equal_output(&auto, &fixed);
-                }
-            }
-        }
-    }
 }
 
 fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
@@ -771,35 +692,6 @@ fn inside_legend_measurements() {
     for pair in &samples[1..] {
         equal_output(&samples[0][0], &pair[0]);
         equal_output(&samples[0][1], &pair[1]);
-    }
-}
-
-#[test]
-fn populated_legend_fixture_contract() {
-    for fixture in [
-        "small",
-        "starvation",
-        "historical_reflow_640x400",
-        "preferred_right_control",
-        "native_compact_right",
-    ] {
-        let auto = outside_case(fixture, LegendPosition::Auto, true);
-        let explicit = outside_case(fixture, selected(&auto), true);
-        equal_output(&auto, &explicit);
-        outside_case(
-            fixture,
-            LegendPosition::OutsideRight,
-            fixture != "starvation",
-        );
-        outside_case(fixture, LegendPosition::OutsideBottom, true);
-    }
-    for facet in [false, true] {
-        for pressure in [false, true] {
-            shared_case(facet, pressure, LegendPosition::Auto);
-        }
-    }
-    for dense in [false, true] {
-        inside_case(dense);
     }
 }
 

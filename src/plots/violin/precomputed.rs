@@ -334,7 +334,7 @@ pub(super) fn measure_marks(
     let colors = crate::plots::categorical_distribution::retained(chart)?
         .resolved_colors(chart, theme, data)?;
 
-    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (index, group) in input.groups.iter().enumerate() {
         let color = colors.color(
             group

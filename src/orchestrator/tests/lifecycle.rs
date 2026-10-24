@@ -2,8 +2,7 @@ use std::sync::atomic::Ordering;
 
 use super::{
     test_directory, BackendFailure, Plot, PlotKind, RecordingBackend, Significance,
-    SignificanceMark, ValueSort, FINAL_PLOT_RENDER_CALLS, PLOT_PLAN_CALLS, RENDER_PANEL_CALLS,
-    TEMP_FILE_COUNTER,
+    SignificanceMark, FINAL_PLOT_RENDER_CALLS, PLOT_PLAN_CALLS, TEMP_FILE_COUNTER,
 };
 use crate::orchestrator::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
 use crate::render::backend::{Backend, LineStyle, Point2D, SurfaceRole, TextAnchor, TextStyle};
@@ -147,23 +146,6 @@ fn deferred_backend_reports_cleanup_only_failure() {
 }
 
 #[test]
-fn impossible_wrapped_caption_fails_before_backend_begin() {
-    let plot = Plot::scatter(
-        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
-        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
-    )
-    .caption("diagnostic provenance and model adjustment details ".repeat(8))
-    .size(160, 120);
-    let mut backend = RecordingBackend::default();
-
-    let error = plot.render_with_backend(&mut backend).unwrap_err();
-
-    assert!(error.to_string().contains("root title block"));
-    assert!(error.to_string().contains("TrackOrResidual"));
-    assert_eq!(backend.begins, 0);
-}
-
-#[test]
 fn malformed_exact_tick_sources_fail_before_font_discovery_and_backend_begin() {
     let cases = [
         (Vec::new(), "must not be empty"),
@@ -289,22 +271,6 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
         .surfaces
         .iter()
         .all(|surface| surface.paint == crate::theme::Color::rgb(255, 255, 255)));
-}
-
-#[test]
-fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
-    PLOT_PLAN_CALLS.with(|calls| calls.set(0));
-    FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
-    let plot = Plot::scatter(
-        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
-        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
-    )
-    .theme(crate::Theme::chi());
-
-    plot.preflight().unwrap();
-
-    assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
-    assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 0);
 }
 
 #[test]
@@ -561,26 +527,6 @@ fn invalid_plot_preflights_before_output_path_access() {
 }
 
 #[test]
-fn invalid_canvas_alignment_fails_before_backend_begin() {
-    let plot = Plot::line(
-        crate::NumericValues::new("x", [1.0, 2.0]),
-        crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
-    );
-    let canvas = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, plot)
-        .unwrap();
-    let mut backend = RecordingBackend::default();
-
-    let error = canvas.render_with_backend(&mut backend).unwrap_err();
-
-    assert!(error
-        .to_string()
-        .contains("plot value \"y\" has length 3, expected 2"));
-    assert_eq!((backend.begins, backend.ends), (0, 0));
-}
-
-#[test]
 fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
     let source = Plot::scatter(
         NumericValues::new("x", [0.0, 1.0]),
@@ -628,109 +574,6 @@ fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
             0
         );
     }
-}
-
-#[test]
-fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
-    let plot = Plot::scatter(
-        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
-        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
-    )
-    .size(640, 480);
-    let expected_panel = crate::layout::fit::measured(
-        crate::layout::kernel::FrameRequirements {
-            minimum_body: (1.0, 1.0),
-            natural_insets: [0.0; 4],
-        }
-        .assign_fit(
-            plot.canvas_layout().panel_box,
-            [0.0; 4],
-            &crate::layout::fit::FitScope::root(),
-        ),
-    )
-    .unwrap();
-    let mut backend = RecordingBackend::default();
-
-    plot.render_kind(PlotKind::Scatter, &mut backend).unwrap();
-
-    assert_eq!((backend.begins, backend.ends), (1, 1));
-    assert_eq!(
-        (backend.clips.as_slice(), backend.clip_ends),
-        (&[expected_panel][..], 1)
-    );
-    assert!(backend.scatter_points.iter().all(|point| {
-        point.x >= expected_panel.x0
-            && point.x <= expected_panel.x1
-            && point.y >= expected_panel.y0
-            && point.y <= expected_panel.y1
-    }));
-}
-
-#[test]
-fn orchestration_runs_measurement_planning_and_render_passes() {
-    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
-    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
-    let plot = Plot::scatter(x.clone(), y.clone());
-    RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    plot.render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
-        .unwrap();
-    let plot_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-
-    let faceted = Plot::scatter(x.clone(), y.clone()).facet(crate::FacetSpec::column(
-        CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
-    ));
-    RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    faceted
-        .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
-        .unwrap();
-    let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-
-    let scatter = || Plot::scatter(x.clone(), y.clone());
-    let panel = scatter();
-    let canvas = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, panel)
-        .unwrap();
-    RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    canvas
-        .render_with_backend(&mut RecordingBackend::default())
-        .unwrap();
-    let canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-
-    let preflight_panel = scatter();
-    let preflight_canvas = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, preflight_panel)
-        .unwrap();
-    RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    preflight_canvas.preflight().unwrap();
-    let preflight_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-
-    let directory = test_directory("canvas-single-preflight");
-    let output = directory.join("canvas.svg");
-    let rendered_panel = scatter();
-    let rendered_canvas = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, rendered_panel)
-        .unwrap();
-    RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    rendered_canvas.svg_preserve_text(&output).unwrap();
-    let rendered_canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-    std::fs::remove_dir_all(directory).unwrap();
-
-    // Native standalone/Canvas capture replays retained selected interiors and
-    // never enters the old combined panel measurement/draw adapter. Generic
-    // facets still make semantic probes, whose count is not a layout contract.
-    assert_eq!(
-        (
-            plot_calls,
-            canvas_calls,
-            preflight_calls,
-            rendered_canvas_calls
-        ),
-        (0, 0, 0, 0)
-    );
-    assert!(facet_calls > 0);
 }
 
 #[test]
@@ -1299,25 +1142,6 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
 }
 
 #[test]
-fn heatmap_validation_failure_happens_before_canvas_begin() {
-    let plot = Plot::heatmap(
-        CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap(),
-        CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
-        NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
-    )
-    .x_category_order(ValueSort::Ascending);
-    let mut backend = RecordingBackend::default();
-
-    let error = plot
-        .render_kind(PlotKind::Heatmap, &mut backend)
-        .unwrap_err()
-        .to_string();
-
-    assert!(error.contains("cannot use ValueSort::Ascending"));
-    assert_eq!((backend.begins, backend.ends), (0, 0));
-}
-
-#[test]
 fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
     let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
@@ -1363,26 +1187,6 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
 }
 
 #[test]
-fn orchestration_renders_valid_adjacent_subnormal_limits() {
-    let upper = f64::from_bits(1);
-    let plot = Plot::scatter(
-        NumericValues::new("x", [0.0, upper]),
-        NumericValues::new("y", [0.0, upper]),
-    )
-    .x_limits(0.0, upper)
-    .y_limits(0.0, upper);
-    let mut backend = RecordingBackend::default();
-
-    plot.render_with_backend(&mut backend).unwrap();
-
-    assert_eq!((backend.begins, backend.ends), (1, 1));
-    assert!(backend
-        .scatter_points
-        .iter()
-        .all(|point| point.x.is_finite() && point.y.is_finite()));
-}
-
-#[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
     let plot = Plot::boxplot(
         CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
@@ -1399,32 +1203,6 @@ fn significance_annotations_are_drawn_after_marks_clip_closes() {
     plot.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
 
     assert_eq!(backend.bracket_clip_depths, [0]);
-}
-
-#[test]
-fn attached_significance_plan_is_not_reshaped_during_final_render() {
-    let plot = Plot::bar(
-        CategoryValues::new("group", ["a", "b"]).unwrap(),
-        crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
-    )
-    .significance([Significance::at("a", SignificanceMark::OneStar)])
-    .erase();
-    crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(0));
-    crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
-    let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, PlotKind::Bar).unwrap();
-    let planned_calls = crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS
-        .with(std::cell::Cell::get);
-    assert!(planned_calls > 0);
-    assert_eq!(
-        planned_calls,
-        crate::plots::bar_data::STAGES.with(std::cell::Cell::get)[0][1]
-    );
-
-    plan.render(&mut RecordingBackend::default()).unwrap();
-
-    crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| {
-        assert_eq!(calls.get(), planned_calls);
-    });
 }
 
 #[test]

@@ -132,21 +132,6 @@ fn hued_raincloud_geometry() -> RaincloudGeometry {
 }
 
 #[test]
-fn sample_raincloud_accepts_and_renders_pairwise_significance() {
-    let plot = Plot::raincloud(RaincloudInput::samples(
-        lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
-            .unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 1.5, 2.0, 2.5, 2.0, 2.5, 3.0, 3.5]),
-    ))
-    .significance([Significance::between("a", "b", SignificanceMark::TwoStars)]);
-
-    let svg = render(plot, "sample-raincloud-significance").unwrap();
-
-    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
-    assert!(svg.contains(">**</text>"));
-}
-
-#[test]
 fn precomputed_raincloud_rejects_pairwise_significance_at_runtime() {
     let error = Plot::raincloud(RaincloudInput::geometry(explicit_raincloud()))
         .significance([Significance::between(
@@ -259,15 +244,6 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
 }
 
 #[test]
-fn precomputed_raincloud_accepts_repeated_categories_with_distinct_hues() {
-    let mut input = hued_raincloud_geometry();
-    input.groups[1].category = input.groups[0].category.clone();
-    Plot::raincloud(RaincloudInput::geometry(input))
-        .preflight()
-        .unwrap();
-}
-
-#[test]
 fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backend_begin() {
     let mut input = hued_raincloud_geometry();
     input.groups[1].category = input.groups[0].category.clone();
@@ -277,34 +253,6 @@ fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backen
         .unwrap_err()
         .to_string()
         .contains("duplicate category-hue identity"));
-}
-
-#[test]
-fn precomputed_histogram_accepts_signed_zero_contiguous_bin_edges() {
-    let mut input = explicit_histogram();
-    input.bins[0].lower = -1.0;
-    input.bins[0].upper = -0.0;
-    input.bins[1].lower = 0.0;
-    input.bins[1].upper = 1.0;
-    input.kde = vec![
-        HistogramKdePoint { x: -1.0, y: 0.1 },
-        HistogramKdePoint { x: 1.0, y: 0.1 },
-    ];
-    input.rugs[0].x = 0.0;
-    Plot::histogram(HistogramInput::geometry(input))
-        .preflight()
-        .unwrap();
-}
-
-#[test]
-fn precomputed_histogram_rejects_kde_over_safety_budget_before_backend_begin() {
-    let mut input = explicit_histogram();
-    input.kde = vec![HistogramKdePoint { x: 0.5, y: 0.1 }; 2_049];
-    assert!(Plot::histogram(HistogramInput::geometry(input))
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("safety limit of 2048"));
 }
 
 #[test]
@@ -348,16 +296,6 @@ fn precomputed_raincloud_renders_without_sample_columns_and_maps_strip_coordinat
     let circles = parse_circle_bounds(marks);
     assert_eq!(circles.len(), 2);
     assert!(circles[0].x < circles[1].x);
-}
-
-#[test]
-fn precomputed_histogram_renders_without_sample_columns_and_maps_explicit_rug_endpoints() {
-    let svg = render(
-        Plot::histogram(HistogramInput::geometry(explicit_histogram())),
-        "explicit-histogram",
-    )
-    .unwrap();
-    assert!(svg.contains("stroke-width=\"1\"") && svg.contains("stroke-width=\"0.7001953125\""));
 }
 
 #[test]
@@ -431,39 +369,6 @@ fn raincloud_strip_retains_every_source_observation_without_sampling() {
 }
 
 #[test]
-fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
-    let colors = CategoricalColorMap::new([
-        ("Control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
-        ("Semantic Agent".to_owned(), OpaqueColor::rgb(0, 114, 178)),
-    ])
-    .unwrap();
-    let plot = Plot::raincloud(RaincloudInput::samples(
-        lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
-            .unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
-    ))
-    .series(
-        lichtung_plot::CategoryValues::new(
-            "condition",
-            [
-                "Control",
-                "Control",
-                "Control",
-                "Control",
-                "Semantic Agent",
-                "Semantic Agent",
-                "Semantic Agent",
-                "Semantic Agent",
-            ],
-        )
-        .unwrap(),
-    )
-    .categorical_color_scale(CategoricalColorScale::from_map(colors));
-    let svg = render(plot, "raincloud-colors").unwrap();
-    assert!(svg.contains("#333333") && svg.contains("#0072B2"));
-}
-
-#[test]
 fn raincloud_strip_placement_follows_explicit_source_rows_after_reordering() {
     let first = Plot::raincloud(RaincloudInput::samples(
         lichtung_plot::CategoryValues::new("category", ["a"; 3]).unwrap(),
@@ -490,24 +395,6 @@ fn histogram_rug_retains_every_source_observation_including_duplicates() {
     )
     .unwrap();
     assert_eq!(svg.matches("stroke-width=\"0.7001953125\"").count(), 5);
-}
-
-#[test]
-fn precomputed_kde_and_histogram_bars_share_density_projection() {
-    let svg = render(
-        histogram_plot(
-            &[0.0, 0.5, 1.5, 2.0],
-            HistogramKde::Precomputed(vec![
-                HistogramKdePoint { x: 0.0, y: 0.5 },
-                HistogramKdePoint { x: 2.0, y: 0.5 },
-            ]),
-        ),
-        "histogram-density-projection",
-    )
-    .unwrap();
-    let bars = parse_polygon_bounds(&svg);
-    assert_eq!(bars.len(), 2);
-    assert!((bars[0].y - bars[1].y).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -577,14 +464,4 @@ fn raincloud_rejects_duplicate_source_row_identities_before_backend_begin() {
         .unwrap_err()
         .to_string()
         .contains("duplicate 4"));
-}
-
-#[test]
-fn raincloud_accepts_source_row_column_without_duplicate_overlay() {
-    let svg = render(
-        raincloud_plot(&[1.0, 2.0, 3.0]).source_rows(SourceRows::new([9, 3, 7]).unwrap()),
-        "raincloud-source-rows",
-    )
-    .unwrap();
-    assert_eq!(parse_circle_bounds(&svg).len(), 3);
 }

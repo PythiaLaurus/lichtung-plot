@@ -250,10 +250,6 @@ impl GeometryBackend {
             state: GeometryCanvasState::Fresh,
         }
     }
-
-    pub(crate) fn into_snapshot(self) -> GeometrySnapshot {
-        self.snapshot
-    }
 }
 
 impl GeometrySnapshot {

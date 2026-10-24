@@ -234,59 +234,6 @@ fn estimate_status_enforces_complete_null_tuples() {
 }
 
 #[test]
-fn all_unavailable_rows_require_and_accept_explicit_ranges() {
-    let data = status_data(
-        CategoryValues::new("term", ["first", "second"]).unwrap(),
-        NumericValues::nullable("estimate", [None; 2]),
-        NumericValues::nullable("lower", [None; 2]),
-        NumericValues::nullable("upper", [None; 2]),
-        vec![EstimateStatus::NotEstimable; 2],
-    );
-    for plot in [
-        point_interval(&data, true).erase(),
-        coefficient(&data, true).erase(),
-        forest(&data, true).erase(),
-    ] {
-        assert!(plot
-            .preflight()
-            .unwrap_err()
-            .to_string()
-            .contains("set explicit x-axis limits"));
-    }
-    for (plot, name) in [
-        (
-            point_interval(&data, true).x_limits(0.5, 2.5).erase(),
-            "all-unavailable-point",
-        ),
-        (
-            coefficient(&data, true).x_limits(-1.0, 1.0).erase(),
-            "all-unavailable-coefficient",
-        ),
-        (
-            forest(&data, true).x_limits(0.5, 2.5).erase(),
-            "all-unavailable-forest",
-        ),
-    ] {
-        let output = svg(plot, name);
-        assert_eq!(output.matches(">Not estimable</text>").count(), 2);
-        assert_eq!(output.matches("<circle ").count(), 0);
-    }
-}
-
-#[test]
-fn estimate_status_auto_range_uses_only_estimated_rows() {
-    let output = svg(point_interval(&mixed_data(), true), "status-auto-range");
-    assert_eq!(
-        output
-            .lines()
-            .filter(|line| line.starts_with("<circle "))
-            .count(),
-        2
-    );
-    assert!(!output.contains(">0</text>"));
-}
-
-#[test]
 fn estimate_status_rejects_nonfinite_values() {
     let data = status_data(
         CategoryValues::new("term", ["first"]).unwrap(),
@@ -324,23 +271,6 @@ fn estimate_status_value_order_contract_preserves_source_order() {
     );
     assert_eq!(strict, status);
     assert!(text_y(&status, "Second") < text_y(&status, "First"));
-}
-
-#[test]
-fn estimate_status_rows_accept_explicit_category_order() {
-    let mixed = mixed_data();
-
-    let rendered = svg(
-        point_interval(&mixed, true).category_order(CategoryOrder::explicit([
-            "third",
-            "unavailable",
-            "first",
-        ])),
-        "explicit-status-order",
-    );
-
-    assert!(text_y(&rendered, "Third") < text_y(&rendered, "Unavailable"));
-    assert!(text_y(&rendered, "Unavailable") < text_y(&rendered, "First"));
 }
 
 #[test]

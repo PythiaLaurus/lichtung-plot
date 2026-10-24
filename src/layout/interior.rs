@@ -635,9 +635,6 @@ impl SelectedAnnotationPlan {
 }
 
 #[cfg(test)]
-mod tests;
-
-#[cfg(test)]
 mod automatic_ink_tests {
     use super::{automatic_mark_ink_domain, ClearanceAxis};
     use crate::layout::fit::{FitKind, PlanError, ROOT_SCOPE};

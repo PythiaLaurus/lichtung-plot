@@ -1,5 +1,5 @@
 use lichtung_plot::{
-    BarInput, Bounds, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoricalColorMap,
+    BarInput, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoricalColorMap,
     CategoricalColorScale, CategoryOrder, CategoryValues, FacetCell, FacetScales, FacetSpec,
     Labels, LegendPolicy, LegendPosition, NumericValues, OpaqueColor, Plot, Significance,
     SignificanceMark, SignificanceTarget, Theme,

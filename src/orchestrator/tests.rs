@@ -14,7 +14,7 @@ use crate::render::primitives::{
     CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
     CanonicalScatter,
 };
-use crate::{CategoryValues, NumericValues, Significance, SignificanceMark, ValueSort};
+use crate::{CategoryValues, NumericValues, Significance, SignificanceMark};
 
 #[path = "../../tests/benchmarks/suite.rs"]
 mod benchmarks;

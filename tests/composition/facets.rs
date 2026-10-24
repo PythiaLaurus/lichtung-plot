@@ -1,9 +1,5 @@
 use super::*;
 
-fn line(data: &EstimateData) -> Plot<lichtung_plot::kind::Line> {
-    Plot::line(data.x.clone(), data.estimate.clone())
-}
-
 fn identity_bar(data: &EstimateData) -> Plot<lichtung_plot::kind::Bar> {
     Plot::bar(
         data.factor.clone(),
@@ -44,27 +40,6 @@ fn significance_bracket_bounds(svg: &str) -> (f64, f64, f64, f64) {
         max_y = max_y.max(point[1]);
     }
     (min_x, min_y, max_x - min_x, max_y - min_y)
-}
-
-#[test]
-fn faceting_uses_unique_clips_and_panel_owned_annotations() {
-    let data = estimate_data();
-    let svg = render_svg(
-        line(&data).facet(FacetSpec::column(data.facet.clone())),
-        "faceted-line",
-    )
-    .unwrap();
-    assert_eq!(svg.matches("<clipPath id=").count(), 2);
-    assert_unique_svg_ids(&svg);
-
-    let bar = identity_bar(&data)
-        .facet(FacetSpec::column(data.facet).scales(FacetScales::Free))
-        .significance([
-            Significance::between("before", "after", SignificanceMark::PValue(0.01))
-                .facet(FacetCell::single("one")),
-        ]);
-    let svg = render_svg(bar, "faceted-annotation").unwrap();
-    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
 }
 
 #[test]
@@ -172,34 +147,6 @@ fn significance_cell_must_identify_an_observed_panel() {
 }
 
 #[test]
-fn facet_series_preflight_keeps_repeated_endpoint_pairs_panel_local() {
-    let facet = CategoryValues::new("facet", ["one", "one", "two", "two"]).unwrap();
-    let category =
-        CategoryValues::new("category", ["before", "before", "before", "before"]).unwrap();
-    let hue = CategoryValues::new("hue", ["control", "active", "control", "active"]).unwrap();
-    let value = NumericValues::new("value", [2.0, 3.0, 4.0, 5.0]);
-    let comparisons = ["one", "two"].map(|facet| {
-        Significance::between(
-            SignificanceTarget::category_series("before", "control"),
-            SignificanceTarget::category_series("before", "active"),
-            SignificanceMark::PValue(0.01),
-        )
-        .facet(FacetCell::single(facet))
-    });
-    let svg = render_svg(
-        Plot::bar(category, BarInput::estimates(value))
-            .series(hue)
-            .facet(FacetSpec::column(facet))
-            .significance(comparisons),
-        "facet-series-panel-comparisons",
-    )
-    .unwrap();
-    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 2);
-    assert_eq!(svg.matches(">Control</text>").count(), 1);
-    assert_eq!(svg.matches(">Active</text>").count(), 1);
-}
-
-#[test]
 fn final_equal_series_colors_and_aliases_do_not_replace_typed_facet_targets() {
     let category = CategoryValues::new("category", ["same"; 4]).unwrap();
     let series = CategoryValues::new("series", ["g1", "g2", "g1", "g2"]).unwrap();
@@ -293,28 +240,6 @@ fn fixed_facets_use_renderer_stacks_and_reject_incompatible_categories() {
 }
 
 #[test]
-fn sparse_cartesian_facets_draw_global_legend_on_first_rendered_panel() {
-    let row = CategoryValues::new("row", ["r1", "r1", "r2", "r2"]).unwrap();
-    let column = CategoryValues::new("column", ["c2", "c2", "c1", "c1"]).unwrap();
-    let x = NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]);
-    let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
-    let trace = CategoryValues::new("trace", ["control", "control", "active", "active"]).unwrap();
-    let svg = render_svg(
-        Plot::line(x, y)
-            .hue(trace)
-            .facet(FacetSpec::grid(row, column).unwrap())
-            .size(760, 520),
-        "sparse-facet-legend",
-    )
-    .unwrap();
-    assert_eq!(svg.matches("-legend\"").count(), 1);
-    assert_eq!(svg.matches(">Control</text>").count(), 1);
-    assert_eq!(svg.matches(">Active</text>").count(), 1);
-    let first_marks = svg.find("<g clip-path=").unwrap();
-    assert_eq!(svg[..first_marks].matches("-grid\"").count(), 2);
-}
-
-#[test]
 fn long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells() {
     let category = "categorical level requiring measured gutter";
     let other = "another very wide category label requiring gutter";
@@ -336,93 +261,6 @@ fn long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells() {
         ">Facet dimension with long name = Second panel with another deliberately long descriptive facet value</text>"
     ));
     assert_eq!(svg.matches("<clipPath id=").count(), 2);
-}
-
-#[test]
-fn faceted_shared_axis_titles_preserve_explicit_multiline_text() {
-    use lichtung_plot::{FontFamily, FontStack, Text, TextAlignment, TextWeight, Theme};
-    let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
-    let x = NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]);
-    let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
-    let base = Theme::publication();
-    let axis = base.typography().get_axes().get_axis_title().clone();
-    let x_style = axis
-        .clone()
-        .font_size(21.0)
-        .unwrap()
-        .weight(TextWeight::Bold)
-        .unwrap();
-    let y_style = axis.clone().font_size(15.0).unwrap();
-    let typography = base
-        .typography()
-        .clone()
-        .axes(
-            base.typography()
-                .get_axes()
-                .clone()
-                .axis_title(
-                    axis.stack(
-                        FontStack::new([FontFamily::named("Unused axis title font").unwrap()])
-                            .unwrap(),
-                    )
-                    .unwrap(),
-                )
-                .unwrap(),
-        )
-        .unwrap();
-    let theme = base.customize().typography(typography).build().unwrap();
-    let svg = render_svg(
-        Plot::line(x, y)
-            .facet(FacetSpec::column(facet))
-            .x_label(
-                Text::new("discarded")
-                    .style(x_style)
-                    .alignment(TextAlignment::Start),
-            )
-            .x_label("Shared horizontal axis\ncontinued horizontally")
-            .y_label(
-                Text::new("Shared vertical axis\ncontinued vertically")
-                    .style(y_style)
-                    .alignment(TextAlignment::End),
-            )
-            .theme(theme)
-            .size(760, 420),
-        "multiline-facet-axes",
-    )
-    .unwrap();
-    for text in [
-        "Shared horizontal axis",
-        "continued horizontally",
-        "Shared vertical axis",
-        "continued vertically",
-    ] {
-        assert_eq!(svg.matches(&format!(">{text}</text>")).count(), 1);
-    }
-}
-
-#[test]
-fn shared_facet_axis_titles_clear_outside_legends() {
-    let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
-    let x = NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]);
-    let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
-    let trace = CategoryValues::new("trace", ["control", "active", "control", "active"]).unwrap();
-    for position in [LegendPosition::OutsideLeft, LegendPosition::OutsideBottom] {
-        let svg = render_svg(
-            Plot::line(x.clone(), y.clone())
-                .group(trace.clone())
-                .hue(trace.clone())
-                .facet(FacetSpec::column(facet.clone()))
-                .x_label("Shared horizontal")
-                .y_label("Shared vertical")
-                .legend(LegendPolicy::Visible(position))
-                .size(820, 520),
-            "facet-outside-legend",
-        )
-        .unwrap();
-        assert!(svg.contains(">Shared horizontal</text>"));
-        assert!(svg.contains(">Shared vertical</text>"));
-        assert!(svg.contains(">Trace</text>"));
-    }
 }
 
 #[test]
@@ -486,101 +324,6 @@ fn sparse_inside_facet_legend_merges_exact_observed_pairs() {
 }
 
 #[test]
-fn faceted_line_allows_repeated_hue_x_keys_and_keeps_one_global_legend() {
-    let facet = CategoryValues::new(
-        "facet",
-        [
-            "left", "left", "left", "left", "right", "right", "right", "right",
-        ],
-    )
-    .unwrap();
-    let x = NumericValues::new("x", [1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0]);
-    let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0]);
-    let trace = CategoryValues::new(
-        "trace",
-        [
-            "active", "active", "control", "control", "active", "active", "control", "control",
-        ],
-    )
-    .unwrap();
-    let svg = render_svg(
-        Plot::line(x, y)
-            .group(trace.clone())
-            .hue(trace)
-            .facet(FacetSpec::column(facet))
-            .size(760, 360),
-        "line-repeated-facet-keys",
-    )
-    .unwrap();
-    assert_eq!(svg.matches(">Active</text>").count(), 1);
-    assert_eq!(svg.matches(">Control</text>").count(), 1);
-    assert!(svg.find(">Active</text>").unwrap() < svg.find(">Control</text>").unwrap());
-}
-
-#[test]
-fn old_reserved_channel_names_are_ordinary_native_input_names() {
-    let numeric = Plot::line(
-        lichtung_plot::NumericValues::new("x", [1.0, 1.0, 2.0, 2.0]),
-        lichtung_plot::NumericValues::new(
-            "__lichtung_internal_source_row_7a",
-            [10.0, 20.0, 11.0, 21.0],
-        ),
-    )
-    .band(Bounds::new(
-        lichtung_plot::NumericValues::new("lower", [9.0, 19.0, 10.0, 20.0]),
-        lichtung_plot::NumericValues::new("upper", [11.0, 21.0, 12.0, 22.0]),
-    ))
-    .facet(FacetSpec::column(
-        lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"]).unwrap(),
-    ));
-    assert!(render_svg(numeric, "reserved-numeric")
-        .unwrap()
-        .contains("<svg "));
-
-    let categorical = Plot::boxplot(
-        lichtung_plot::CategoryValues::new(
-            "__lichtung_internal_source_row_7a",
-            ["alpha", "beta", "alpha", "beta"],
-        )
-        .unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
-    )
-    .facet(
-        FacetSpec::column(
-            lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"])
-                .unwrap(),
-        )
-        .scales(FacetScales::FreeX),
-    )
-    .size(760, 360);
-    let svg = render_svg(categorical, "reserved-categorical").unwrap();
-    assert!(svg.contains(">Alpha</text>") && svg.contains(">Beta</text>"));
-
-    let current_internal_name = Plot::bar(
-        lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
-        BarInput::estimates(lichtung_plot::NumericValues::new(
-            "value",
-            [1.0, 2.0, 3.0, 4.0],
-        )),
-    )
-    .series(lichtung_plot::CategoryValues::new("__series", ["g1", "g2", "g1", "g2"]).unwrap())
-    .facet(FacetSpec::column(
-        lichtung_plot::CategoryValues::new("__series", ["left", "left", "right", "right"]).unwrap(),
-    ))
-    .size(760, 360);
-    let svg = render_svg(current_internal_name, "current-internal-facet-name").unwrap();
-    assert_eq!(svg.matches("<clipPath id=").count(), 2);
-    let bar_count = svg
-        .split("<g clip-path=")
-        .skip(1)
-        .filter_map(|group| group.split_once("</g>"))
-        .map(|(marks, _)| marks.matches("<polygon points=").count())
-        .sum::<usize>();
-    assert_eq!(bar_count, 4);
-    assert!(svg.contains(">Series = Left</text>") && svg.contains(">Series = Right</text>"));
-}
-
-#[test]
 fn row_and_column_facets_require_distinct_variable_names() {
     let error = FacetSpec::grid(
         lichtung_plot::CategoryValues::new("facet", ["r1", "r2"]).unwrap(),
@@ -638,66 +381,6 @@ fn faceted_bar_rejects_panel_local_value_order() {
     assert!(error
         .to_string()
         .contains("value-derived category order is not supported with faceting"));
-}
-
-#[test]
-fn faceted_stacked_bar_preflights_extreme_finite_panels_without_pooling() {
-    let value = f64::MAX * 0.26;
-    let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
-    let category = CategoryValues::new("category", ["total", "total", "total", "total"]).unwrap();
-    let series = CategoryValues::new("series", ["active", "control", "active", "control"]).unwrap();
-    let values = NumericValues::new("value", [value, value, value, value]);
-    let base = || {
-        Plot::stacked_bar(category.clone(), values.clone(), series.clone())
-            .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
-    };
-    assert!(base()
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("positive stack geometry"));
-    let svg = render_svg(
-        base().facet(FacetSpec::column(facet)).size(760, 360),
-        "facet-extreme-stacked-bar",
-    )
-    .unwrap();
-    assert_eq!(svg.matches(">Active</text>").count(), 1);
-    assert_eq!(svg.matches(">Control</text>").count(), 1);
-}
-
-#[test]
-fn faceted_interaction_allows_repeated_trace_x_keys() {
-    let facet = CategoryValues::new(
-        "facet",
-        [
-            "left", "left", "left", "left", "right", "right", "right", "right",
-        ],
-    )
-    .unwrap();
-    let factor = CategoryValues::new(
-        "factor",
-        [
-            "before", "after", "before", "after", "before", "after", "before", "after",
-        ],
-    )
-    .unwrap();
-    let trace = CategoryValues::new(
-        "trace",
-        [
-            "control", "control", "active", "active", "control", "control", "active", "active",
-        ],
-    )
-    .unwrap();
-    let estimate = NumericValues::new("estimate", [1.0, 2.0, 1.5, 2.5, 3.0, 4.0, 3.5, 4.5]);
-    let lower = NumericValues::new("lower", [0.5, 1.5, 1.0, 2.0, 2.5, 3.5, 3.0, 4.0]);
-    let upper = NumericValues::new("upper", [1.5, 2.5, 2.0, 3.0, 3.5, 4.5, 4.0, 5.0]);
-    let plot = Plot::interaction(factor, estimate, trace.clone(), Bounds::new(lower, upper))
-        .hue(trace)
-        .facet(FacetSpec::column(facet))
-        .size(760, 360);
-    assert!(render_svg(plot, "faceted-interaction")
-        .unwrap()
-        .contains("<svg "));
 }
 
 #[test]

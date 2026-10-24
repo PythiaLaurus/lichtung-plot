@@ -5,7 +5,10 @@ use lichtung_plot::{
     NumericValues, Output, Plot, TextPanel,
 };
 
-use super::support::unique_dir;
+#[path = "../support/visual.rs"]
+mod support;
+
+use support::unique_dir;
 
 #[derive(Clone, Copy, Debug)]
 enum Sizing {

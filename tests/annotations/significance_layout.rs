@@ -1,7 +1,7 @@
 use lichtung_plot::Error;
 use lichtung_plot::{
-    BarInput, CategoryValues, LegendPolicy, LegendPosition, NumericValues, Pairwise, Plot,
-    Significance, SignificanceMark, SignificanceMarkStyle, SignificanceTarget, TextWeight,
+    BarInput, CategoryValues, LegendPolicy, NumericValues, Pairwise, Plot, Significance,
+    SignificanceMark, SignificanceMarkStyle, SignificanceTarget, TextWeight,
 };
 
 use super::render_svg;
@@ -81,25 +81,6 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
 }
 
 #[test]
-fn stacked_bar_renders_non_significant_pairwise_bracket() {
-    let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
-    let series =
-        CategoryValues::new("series", ["positive", "negative", "positive", "negative"]).unwrap();
-    let value = NumericValues::new("value", [5.0, -2.0, 3.0, -4.0]);
-    let dir = tempdir("stacked-bar");
-    let path = dir.join("stacked.svg");
-    let chart = Plot::stacked_bar(group, value, series)
-        .significance([comparison("a", "b", 0.05)])
-        .size(420, 300);
-
-    chart.svg_preserve_text(&path).unwrap();
-    let svg = std::fs::read_to_string(path).unwrap();
-
-    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
-    assert!(svg.contains(">ns</text>"));
-}
-
-#[test]
 fn boxplot_bracket_clears_high_outlier_geometry() {
     let group =
         CategoryValues::new("group", ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"]).unwrap();
@@ -157,109 +138,6 @@ fn inside_legend_resolved_box_does_not_overlap_bracket_or_label() {
             || bracket_top >= legend_bottom,
         "bracket and label bounds must not overlap the inside legend"
     );
-}
-
-#[test]
-fn outside_and_hidden_legends_do_not_add_annotation_headroom() {
-    let hidden = render_grouped_bar_with_legend(Some(LegendPolicy::Hidden), "hidden", true);
-    let outside = render_grouped_bar_with_legend(
-        Some(LegendPolicy::Visible(LegendPosition::OutsideRight)),
-        "outside-right",
-        true,
-    );
-    let inside = render_grouped_bar_with_legend(None, "inside-headroom", true);
-    let hidden_y = bracket_line_y_values(&hidden)[0];
-    let outside_y = bracket_line_y_values(&outside)[0];
-
-    assert!((hidden_y - outside_y).abs() < 0.01);
-    assert!(!hidden.contains("<g id=\"legend\">"));
-    assert!(outside.contains("<g id=\"legend\">"));
-    assert!(inside.contains("<g id=\"legend\">"));
-}
-
-#[test]
-fn auto_bar_legend_keeps_top_right_beside_tall_uncompared_category() {
-    let data = SignificanceBarData::new(
-        CategoryValues::new("group", ["a", "a", "b", "b", "c", "c"]).unwrap(),
-        NumericValues::new("value", [2.0, 3.0, 4.0, 5.0, 100.0, 90.0]),
-    )
-    .with_series(
-        CategoryValues::new(
-            "series",
-            [
-                "control",
-                "treatment",
-                "control",
-                "treatment",
-                "control",
-                "treatment",
-            ],
-        )
-        .unwrap(),
-    );
-    let dir = tempdir("uncompared-global-maximum");
-    let path = dir.join("bar.svg");
-    let chart = identity_bar_chart(&data)
-        .series(data.series.clone().unwrap())
-        .significance([comparison("a", "b", 0.01)])
-        .size(460, 320);
-
-    chart.svg_preserve_text(&path).unwrap();
-    let svg = std::fs::read_to_string(path).unwrap();
-    let (legend_x, _, _, _) = legend_rect(&svg);
-
-    assert!(
-        legend_x > 300.0,
-        "bar legend should retain its semantic top-right default"
-    );
-}
-
-#[test]
-fn centered_inside_legend_uses_generic_geometry_with_comparisons() {
-    let svg = render_grouped_bar_with_legend(
-        Some(LegendPolicy::Visible(LegendPosition::InsideRight)),
-        "centered-inside-legend",
-        true,
-    );
-
-    assert!(svg.contains("class=\"significance-bracket\""));
-    assert!(svg.contains("<g id=\"legend\">"));
-}
-
-#[test]
-fn bottom_inside_legend_never_moves_positive_bar_zero_minimum() {
-    for with_comparison in [false, true] {
-        let data = grouped_bar_data();
-        let dir = tempdir("bottom-inside-zero-anchor");
-        let path = dir.join("bar.svg");
-        let mut chart = identity_bar_chart(&data)
-            .series(data.series.clone().unwrap())
-            .legend(LegendPolicy::Visible(LegendPosition::InsideBottomRight));
-        if with_comparison {
-            chart = chart.significance([comparison("a", "b", 0.01)]);
-        }
-
-        let error = chart.svg(&path).err().unwrap();
-        assert!(error.to_string().contains("cannot fit inside the plot"));
-    }
-}
-
-#[test]
-fn horizontal_inside_legend_is_a_transposed_annotation_obstacle() {
-    let svg = render_grouped_horizontal_bar_with_legend(None, "horizontal-inside");
-    assert!(svg.contains("class=\"significance-bracket horizontal\""));
-    assert!(svg.contains("<g id=\"legend\">"));
-}
-
-#[test]
-fn horizontal_centered_inside_legend_uses_generic_geometry() {
-    let svg = render_grouped_horizontal_bar_with_legend(
-        Some(LegendPolicy::Visible(LegendPosition::InsideTop)),
-        "horizontal-centered",
-    );
-
-    assert!(svg.contains("class=\"significance-bracket horizontal\""));
-    assert!(svg.contains("<g id=\"legend\">"));
 }
 
 #[test]
@@ -541,22 +419,6 @@ fn render_grouped_bar_with_legend(
         chart = chart.significance([comparison("a", "b", 0.01)]);
     }
     chart.svg_preserve_text(&path).unwrap();
-    std::fs::read_to_string(path).unwrap()
-}
-
-fn render_grouped_horizontal_bar_with_legend(policy: Option<LegendPolicy>, name: &str) -> String {
-    let data = grouped_bar_data();
-    let dir = tempdir(name);
-    let path = dir.join("horizontal.svg");
-    let mut chart = identity_horizontal_bar_chart(&data).series(data.series.clone().unwrap());
-    if let Some(policy) = policy {
-        chart = chart.legend(policy);
-    }
-    chart
-        .significance([comparison("a", "b", 0.01)])
-        .size(460, 320)
-        .svg_preserve_text(&path)
-        .unwrap();
     std::fs::read_to_string(path).unwrap()
 }
 

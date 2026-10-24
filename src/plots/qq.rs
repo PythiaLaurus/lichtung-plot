@@ -147,8 +147,6 @@ impl PreparedQq {
         let line_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(2, 0);
         if let Some(hue) = chart.hue_col() {
             return Err(Error::Data(format!(
                 "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
@@ -196,8 +194,6 @@ pub(crate) struct QqPayload {
 
 impl QqPayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(2, 3);
         with_clip(backend, self.clip, |backend| {
             if let Some(line) = &self.line {
                 backend.draw_line(line, &self.line_style)?;
@@ -215,8 +211,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(2, 1);
     let prepared = chart
         .prepared_qq
         .as_ref()
@@ -335,8 +329,6 @@ pub(crate) fn project(
         }
     }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(2, 2);
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     if let Some(line) = &payload.line {
         geometry.line(line, &payload.line_style, Some(clip))?;

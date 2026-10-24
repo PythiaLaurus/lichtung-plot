@@ -432,8 +432,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    categorical_distribution::count(chart.kind(), 1);
     let retained = categorical_distribution::retained(chart)?;
     if let PreparedDistribution::Supplied(input) = retained {
         return precomputed::measure_marks(chart, input, context, layout);
@@ -498,7 +496,7 @@ pub(crate) fn measure_marks(
     let n_grid: usize = 64;
     let (support_low, support_high) = support_range;
 
-    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (i, group) in sample.groups.iter().enumerate() {
         let density = &prepared.densities[i];
         let summary = &density.summary;

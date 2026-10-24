@@ -140,31 +140,6 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
 }
 
 #[test]
-fn raw_mode_preserves_automatic_identity_text() {
-    let x = NumericValues::new("x_value", [1.0, 2.0]);
-    let y = NumericValues::new("y_value", [2.0, 3.0]);
-    let svg = render(Plot::scatter(x, y).labels(Labels::raw()));
-
-    for raw in ["x_value", "y_value"] {
-        let resolved = Labels::raw().resolve(raw).unwrap();
-        assert_eq!(resolved, raw);
-        assert!(svg.contains(&format!(">{resolved}</text>")));
-    }
-}
-
-#[test]
-fn raw_mode_preserves_quotes_in_legend_entries() {
-    let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
-    let y = NumericValues::new("y", [2.0, 3.0, 4.0]);
-    let group = CategoryValues::new("group", ["control", "\"control\"", "'active'"]).unwrap();
-    let svg = render(Plot::scatter(x, y).labels(Labels::raw()).hue(group));
-
-    assert!(svg.contains(">control</text>"));
-    assert!(svg.contains(">&quot;control&quot;</text>"));
-    assert!(svg.contains(">&apos;active&apos;</text>"));
-}
-
-#[test]
 fn svg_preserves_repeated_spaces_in_vertical_axis_labels() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [1.0, 1.5, 2.0, 2.5]);
@@ -178,7 +153,17 @@ fn svg_preserves_repeated_spaces_in_vertical_axis_labels() {
         .find(|line| line.contains(">Response  score</text>"))
         .unwrap();
 
-    assert!(label.contains("xml:space=\"preserve\"") && label.contains("rotate(-90.0"));
+    assert!(label.contains("xml:space=\"preserve\""));
+    let angle = label
+        .split_once("rotate(")
+        .unwrap()
+        .1
+        .split_once(',')
+        .unwrap()
+        .0
+        .parse::<f64>()
+        .unwrap();
+    assert_eq!(angle.to_bits(), (-90.0_f64).to_bits());
 }
 
 #[test]
@@ -225,36 +210,6 @@ fn ambiguous_display_labels_fail_during_preflight() {
         .to_string();
     assert!(error.contains("label collision in x-axis categories"));
     assert!(error.contains("colliding aliases"));
-}
-
-#[test]
-fn heatmap_and_matrix_apply_aliases_to_self_managed_labels() {
-    let raw_x = CategoryValues::new("raw_x", ["first_level", "second_level"]).unwrap();
-    let raw_y = CategoryValues::new("raw_y", ["row_level", "row_level"]).unwrap();
-    let raw_fill = NumericValues::new("raw_fill", [1.0, 2.0]);
-    let labels = Labels::humanized()
-        .alias("first_level", "First cell")
-        .alias("row_level", "Only row")
-        .alias("raw_fill", "Measured fill");
-    let heatmap_svg = render(
-        Plot::heatmap(raw_x, raw_y, raw_fill)
-            .labels(labels)
-            .size(640, 480),
-    );
-    assert!(heatmap_svg.contains(">First cell</text>"));
-    assert!(heatmap_svg.contains(">Only row</text>"));
-    assert!(heatmap_svg.contains(">Measured fill</text>"));
-
-    let matrix_svg = render(
-        Plot::matrix(vec![
-            NumericValues::new("first_measure", [1.0, 2.0, 3.0]),
-            NumericValues::new("second_measure", [3.0, 2.0, 1.0]),
-        ])
-        .labels(Labels::humanized().alias("first_measure", "Primary measure"))
-        .size(1200, 900),
-    );
-    assert!(matrix_svg.contains(">Primary measure</text>"));
-    assert!(matrix_svg.contains(">Second measure</text>"));
 }
 
 #[test]

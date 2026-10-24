@@ -293,8 +293,6 @@ impl PreparedEstimate {
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
-        #[cfg(test)]
-        count(chart.kind(), 0);
         if chart.kind() != crate::PlotKind::PointInterval {
             return prepare_model(chart, data, annotations)
                 .map_err(crate::layout::fit::PlanError::into_error);
@@ -375,8 +373,6 @@ pub(crate) struct EstimatePayload {
     reference: Option<[Point2D; 2]>,
     reference_style: LineStyle,
     rows: Vec<EstimateRowPayload>,
-    #[cfg(test)]
-    kind: crate::PlotKind,
 }
 
 impl EstimatePayload {
@@ -401,8 +397,6 @@ impl EstimatePayload {
     }
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        count(self.kind, 3);
         with_clip(backend, self.clip, |backend| {
             if let Some(line) = &self.reference {
                 backend.draw_line(line, &self.reference_style)?;
@@ -424,26 +418,6 @@ impl EstimatePayload {
             Ok(())
         })
     }
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
-}
-
-#[cfg(test)]
-fn count(kind: crate::PlotKind, stage: usize) {
-    let family = match kind {
-        crate::PlotKind::PointInterval => 0,
-        crate::PlotKind::Coefficient => 1,
-        crate::PlotKind::Forest => 2,
-        _ => unreachable!(),
-    };
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[family][stage] += 1;
-        counts.set(next);
-    });
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -999,8 +973,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(chart.kind(), 1);
     let prepared = chart
         .prepared_estimate
         .as_ref()
@@ -1166,8 +1138,6 @@ fn project(
         reference,
         reference_style,
         rows: Vec::new(),
-        #[cfg(test)]
-        kind: chart.kind(),
     };
     let point_style = chart.point_style(
         theme,
@@ -1395,8 +1365,6 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
-    #[cfg(test)]
-    count(chart.kind(), 2);
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
         .with_deferred_annotation_text(deferred_annotation_text);
     result

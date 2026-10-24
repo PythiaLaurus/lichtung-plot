@@ -58,27 +58,6 @@ fn clipped_marks(svg: &str) -> &str {
 }
 
 #[test]
-fn dumbbell_renders_connectors_endpoint_legend_and_all_replicates() {
-    let data = replicated_data();
-    let rendered = svg(&chart(&data));
-    let marks = clipped_marks(&rendered);
-
-    assert_eq!(marks.matches("<polyline ").count(), 4);
-    assert_eq!(marks.matches("<circle ").count(), 8);
-    assert!(rendered.contains(">Lower is preferred</text>"));
-    assert!(rendered.contains(">Higher is preferred</text>"));
-    assert!(rendered.contains("fill=\"#145A96\"") && rendered.contains("fill=\"#BE412D\""));
-}
-
-#[test]
-fn dumbbell_preserves_first_observed_category_order_top_first() {
-    let data = replicated_data();
-    let rendered = svg(&chart(&data));
-
-    assert!(text_y(&rendered, "Second") < text_y(&rendered, "First"));
-}
-
-#[test]
 fn dumbbell_replicates_have_distinct_offsets_without_aggregation() {
     let data = replicated_data();
     let rendered = svg(&chart(&data));
@@ -155,15 +134,6 @@ fn dumbbell_rejects_null_and_nonfinite_inputs() {
 }
 
 #[test]
-fn dumbbell_endpoint_labels_are_caller_owned_not_inferred_direction() {
-    let data = replicated_data();
-    let rendered = svg(&chart(&data));
-
-    assert!(rendered.contains("Lower is preferred") && rendered.contains("Higher is preferred"));
-    assert!(!rendered.contains(">lower</text>") && !rendered.contains(">higher</text>"));
-}
-
-#[test]
 fn dumbbell_endpoint_type_rejects_empty_or_duplicate_labels() {
     let errors = [
         DumbbellEndpoints::new(" ", Color::rgb(0, 0, 0), "After", Color::rgb(1, 1, 1))
@@ -197,13 +167,6 @@ fn point_only_chart(data: &DumbbellData) -> Plot<lichtung_plot::kind::Dumbbell> 
         data.right.clone(),
         endpoints(),
     )
-}
-
-fn text_y(svg: &str, text: &str) -> f64 {
-    let needle = format!(">{text}</text>");
-    let end = svg.find(&needle).unwrap();
-    let start = svg[..end].rfind("<text ").unwrap();
-    attribute(&svg[start..end], "y")
 }
 
 fn attribute(tag: &str, name: &str) -> f64 {

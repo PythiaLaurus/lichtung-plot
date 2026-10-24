@@ -1,7 +1,4 @@
-use lichtung_plot::{
-    CategoryValues, HistogramBins, HistogramInput, HistogramStat, NumericValues, Plot, PointLayer,
-    QqLine,
-};
+use lichtung_plot::{HistogramInput, NumericValues, Plot, QqLine};
 
 #[path = "../support/visual.rs"]
 mod support;

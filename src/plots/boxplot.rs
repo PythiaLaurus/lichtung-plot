@@ -307,8 +307,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    categorical_distribution::count(chart.kind(), 1);
     let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
@@ -374,7 +372,7 @@ pub(crate) fn measure_marks(
         0.5
     };
 
-    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (i, stat) in stats.iter().enumerate() {
         let group = &sample.groups[i];
         let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;

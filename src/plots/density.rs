@@ -265,8 +265,6 @@ impl PreparedDensity {
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(1, 0);
         let column = chart
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
@@ -316,8 +314,6 @@ pub(crate) struct DensityCurvePayload {
 
 impl DensityPayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        crate::layout::interior::distributions::count(1, 3);
         with_clip(backend, self.clip, |backend| {
             for curve in &self.curves {
                 if curve.fill.len() >= 3 {
@@ -337,8 +333,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(1, 1);
     let prepared = chart
         .prepared_density
         .as_ref()
@@ -471,8 +465,6 @@ pub(crate) fn project(
     }
 
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-    #[cfg(test)]
-    crate::layout::interior::distributions::count(1, 2);
     let clip = Some(crate::render::backend::validate_clip_region(payload.clip)?.panel());
     for curve in &payload.curves {
         geometry.polygon(&curve.fill, &curve.fill_style, clip)?;

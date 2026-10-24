@@ -1,17 +1,5 @@
 use crate::{HistogramInput, NumericValues, Plot};
 
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 4]> = const { std::cell::Cell::new([[0; 4]; 4]) };
-}
-
-pub(crate) fn count(family: usize, stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[family][stage] += 1;
-        counts.set(next);
-    });
-}
-
 pub(crate) fn sources() -> [Plot; 4] {
     sources_faceted(None)
 }

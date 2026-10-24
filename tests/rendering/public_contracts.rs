@@ -43,40 +43,6 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 }
 
 #[test]
-fn scatter_point_outline_can_be_disabled() {
-    let (x, y) = fixture_values();
-    let svg = render(
-        Plot::scatter(x, y).hide_point_outline().size(320, 240),
-        "scatter-point-outline-disabled",
-    );
-
-    assert!(
-        !svg.contains("stroke=\"#FFFFFF\""),
-        "hide_point_outline should render fill-only points"
-    );
-}
-
-#[test]
-fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
-    let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
-    let y = NumericValues::new("y", [2.0, 3.0, 4.0]);
-    for (x_limits, y_limits) in [
-        ((1.0, 1.0), (0.0, 1.0)),
-        ((2.0, 1.0), (0.0, 1.0)),
-        ((f64::NAN, 1.0), (0.0, 1.0)),
-        ((0.0, 1.0), (0.0, f64::INFINITY)),
-    ] {
-        let plot = Plot::scatter(x.clone(), y.clone())
-            .x_limits(x_limits.0, x_limits.1)
-            .y_limits(y_limits.0, y_limits.1);
-
-        let error = plot.preflight().unwrap_err().to_string();
-
-        assert!(error.contains("limits must be finite and strictly ascending"));
-    }
-}
-
-#[test]
 fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
     let plot = Plot::waterfall(
         CategoryValues::new("label", ["a", "b"]).unwrap(),

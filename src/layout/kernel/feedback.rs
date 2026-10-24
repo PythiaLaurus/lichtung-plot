@@ -417,26 +417,6 @@ impl FeedbackRound {
             TrialOutcome::Fit
         }
     }
-    #[cfg(test)]
-    pub(crate) fn seed_insets_for_test(
-        &mut self,
-        address: &ComponentAddress,
-        values: [f64; 4],
-    ) -> Result<(), Error> {
-        self.request_insets(address, address, FeedbackKind::AxisGutter, values)?;
-        self.state.consumed = self
-            .state
-            .next
-            .iter()
-            .map(|entry| FeedbackEntry {
-                target: entry.target.clone(),
-                kind: entry.kind,
-                value: entry.value.clone(),
-            })
-            .collect();
-        self.state.requests.clear();
-        Ok(())
-    }
     pub(super) fn new(previous: Option<&RoundState>, ordinal: usize) -> Result<Self, Error> {
         let mut consumed = Vec::new();
         let mut next = Vec::new();

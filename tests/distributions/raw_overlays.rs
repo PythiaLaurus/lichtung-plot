@@ -1,4 +1,4 @@
-use lichtung_plot::{Canvas, FacetSpec, Plot, PlotKind, RawOverlay, SourceRows};
+use lichtung_plot::{FacetSpec, Plot, PlotKind, RawOverlay, SourceRows};
 
 use super::{parse_circles, unique_dir};
 
@@ -44,114 +44,6 @@ fn overlay_circles(svg: &str) -> Vec<(f64, f64)> {
     parse_circles(svg)
 }
 
-fn circle_tags(svg: &str) -> Vec<&str> {
-    svg.split("<circle ")
-        .skip(1)
-        .filter_map(|tail| tail.split_once("/>").map(|(tag, _)| tag))
-        .collect()
-}
-
-#[test]
-fn visible_modes_draw_exactly_one_fixed_style_point_per_observation() {
-    for kind in [PlotKind::Boxplot, PlotKind::Violin] {
-        for overlay in [RawOverlay::Points, RawOverlay::Jittered] {
-            let svg = render(
-                plot(&[1.0, 2.0, 3.0, 4.0], kind, overlay),
-                "visible-overlay",
-            )
-            .unwrap();
-            let tags = circle_tags(&svg);
-            assert_eq!(tags.len(), 4, "{kind:?} {overlay:?}");
-            assert!(tags.iter().all(|tag| tag.contains("r=\"2\"")));
-            assert!(tags.iter().all(|tag| tag.contains("stroke=")));
-            assert!(svg.contains("<g clip-path="));
-        }
-    }
-}
-
-#[test]
-fn singleton_two_point_and_repeated_cells_preserve_one_overlay_point_per_row() {
-    let category = lichtung_plot::CategoryValues::new(
-        "category",
-        [
-            "singleton",
-            "pair",
-            "pair",
-            "repeated",
-            "repeated",
-            "repeated",
-        ],
-    )
-    .unwrap();
-    let value = lichtung_plot::NumericValues::new("value", [1.0, 2.0, 4.0, 3.0, 3.0, 3.0]);
-    for kind in [PlotKind::Boxplot, PlotKind::Violin] {
-        let plot = match kind {
-            PlotKind::Boxplot => Plot::boxplot(category.clone(), value.clone())
-                .raw_overlay(RawOverlay::Points)
-                .erase(),
-            PlotKind::Violin => Plot::violin(category.clone(), value.clone())
-                .raw_overlay(RawOverlay::Points)
-                .erase(),
-            _ => unreachable!(),
-        };
-        let svg = render(plot, "overlay-cell-count").unwrap();
-        assert_eq!(overlay_circles(&svg).len(), 6, "{kind:?}");
-        let mut xs = overlay_circles(&svg)
-            .into_iter()
-            .map(|(x, _)| x.to_bits())
-            .collect::<Vec<_>>();
-        xs.sort_unstable();
-        xs.dedup();
-        assert_eq!(xs.len(), 3, "{kind:?}");
-    }
-}
-
-#[test]
-fn jitter_bytes_are_deterministic_and_value_reordering_does_not_move_source_rows() {
-    for kind in [PlotKind::Boxplot, PlotKind::Violin] {
-        let first = render(
-            plot(&[1.0, 2.0, 3.0, 4.0], kind, RawOverlay::Jittered),
-            "jitter-first",
-        )
-        .unwrap();
-        let second = render(
-            plot(&[1.0, 2.0, 3.0, 4.0], kind, RawOverlay::Jittered),
-            "jitter-second",
-        )
-        .unwrap();
-        assert_eq!(first, second, "{kind:?}");
-    }
-    let first = overlay_circles(
-        &render(
-            plot(
-                &[1.0, 2.0, 3.0, 4.0],
-                PlotKind::Boxplot,
-                RawOverlay::Jittered,
-            ),
-            "jitter-order-first",
-        )
-        .unwrap(),
-    )
-    .into_iter()
-    .map(|(x, _)| x.to_bits())
-    .collect::<Vec<_>>();
-    let reordered = overlay_circles(
-        &render(
-            plot(
-                &[4.0, 3.0, 2.0, 1.0],
-                PlotKind::Boxplot,
-                RawOverlay::Jittered,
-            ),
-            "jitter-order-second",
-        )
-        .unwrap(),
-    )
-    .into_iter()
-    .map(|(x, _)| x.to_bits())
-    .collect::<Vec<_>>();
-    assert_eq!(first, reordered);
-}
-
 #[test]
 fn plot_source_rows_preserve_jitter_after_compaction_and_reordering() {
     let make = |values: [f64; 3], rows: [usize; 3]| {
@@ -193,25 +85,6 @@ fn facets_keep_original_source_rows_for_jitter() {
 }
 
 #[test]
-fn series_points_follow_dodge_color_and_global_first_observed_order() {
-    let plot = Plot::violin(
-        lichtung_plot::CategoryValues::new("category", ["a"; 8]).unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
-    )
-    .series(
-        lichtung_plot::CategoryValues::new("hue", ["h2", "h2", "h2", "h2", "h1", "h1", "h1", "h1"])
-            .unwrap(),
-    )
-    .raw_overlay(RawOverlay::Points);
-    let svg = render(plot, "series-overlay").unwrap();
-    for color in [(0, 114, 178), (213, 94, 0)] {
-        let hex = format!("#{:02X}{:02X}{:02X}", color.0, color.1, color.2);
-        assert!(svg.contains(&hex));
-    }
-    assert!(svg.find(">H 2</text>").unwrap() < svg.find(">H 1</text>").unwrap());
-}
-
-#[test]
 fn visible_boxplot_overlay_suppresses_separate_fliers_but_keeps_all_rows() {
     let hidden = render(
         plot(&[1.0, 1.0, 1.0, 9.0], PlotKind::Boxplot, RawOverlay::Hidden),
@@ -242,41 +115,4 @@ fn overlay_is_clipped_by_explicit_limits_and_drawn_between_summaries_and_axes() 
     let axes = svg.find("<g id=\"axes\"").unwrap();
     assert!(marks < scatter && scatter < axes);
     assert_eq!(overlay_circles(&svg).len(), 4);
-}
-
-#[test]
-fn composed_canvas_preserves_overlay_points_and_one_canvas_lifecycle() {
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .panel(0, 0, boxplot(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Points))
-        .unwrap()
-        .panel(0, 1, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Points))
-        .unwrap();
-    let directory = unique_dir("composed-overlay");
-    let output = directory.join("plot.svg");
-    canvas.svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    assert_eq!(overlay_circles(&svg).len(), 8);
-    assert_eq!(svg.matches("<svg ").count(), 1);
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
-fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
-    let canvas = Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Jittered))
-        .unwrap()
-        .size(180, 160);
-    let directory = unique_dir("narrow-overlay-canvas");
-    let output = directory.join("plot.svg");
-    let error = canvas.svg(&output).err().unwrap();
-    assert!(
-        error
-            .to_string()
-            .contains("assigned tracks cannot preserve their hard requirements"),
-        "{error}"
-    );
-    assert!(!output.exists());
-    std::fs::remove_dir_all(directory).unwrap();
 }

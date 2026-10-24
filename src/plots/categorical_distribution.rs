@@ -187,8 +187,6 @@ impl PreparedDistribution {
         facet: Option<crate::data::FacetAxisSources<'_>>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
-        #[cfg(test)]
-        count(chart.kind(), 0);
         let prepared = match chart.kind() {
             PlotKind::Boxplot => Ok(Self::Boxplot(crate::plots::boxplot::prepare(
                 chart, data, facet,
@@ -272,19 +270,14 @@ pub(crate) struct DistributionPayload {
     clip: crate::layout::PanelBox,
     pub(crate) marks: Vec<Mark>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
-    #[cfg(test)]
-    kind: PlotKind,
 }
 
 impl DistributionPayload {
-    pub(crate) fn new(clip: crate::layout::PanelBox, kind: PlotKind) -> Self {
-        let _ = kind;
+    pub(crate) fn new(clip: crate::layout::PanelBox) -> Self {
         Self {
             clip,
             marks: Vec::new(),
             domain_expansions: [None; 2],
-            #[cfg(test)]
-            kind,
         }
     }
 
@@ -322,8 +315,6 @@ impl DistributionPayload {
     }
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        count(self.kind, 3);
         crate::render::backend::with_clip(backend, self.clip, |backend| {
             for mark in &self.marks {
                 match mark {
@@ -387,8 +378,6 @@ impl DistributionPayload {
                     )?;
             }
         }
-        #[cfg(test)]
-        count(self.kind, 2);
         result.x_domain = crate::spec::AxisDomain::Categorical;
         result.marks = Some(crate::data::source::source_arc(
             crate::layout::interior::SelectedMarkPlan {
@@ -404,24 +393,4 @@ fn categorical_distribution_count(chart: &Plot) -> Result<u32, Error> {
     u32::try_from(retained(chart)?.categories().len()).map_err(|_| {
         Error::Render("categorical distribution count exceeds coordinate range".into())
     })
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
-}
-
-#[cfg(test)]
-pub(crate) fn count(kind: PlotKind, stage: usize) {
-    let family = match kind {
-        PlotKind::Boxplot => 0,
-        PlotKind::Violin => 1,
-        PlotKind::Raincloud => 2,
-        _ => unreachable!(),
-    };
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[family][stage] += 1;
-        counts.set(next);
-    });
 }

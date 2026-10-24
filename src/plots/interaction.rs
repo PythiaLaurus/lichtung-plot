@@ -15,20 +15,6 @@ use crate::{Error, Plot};
 #[cfg(test)]
 pub(crate) mod extraction;
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 struct TraceStyle {
     point_shape: PointShape,
@@ -347,8 +333,6 @@ pub(crate) fn prepare(
 ) -> Result<PreparedInteraction, Error> {
     data.validate_row_source()?;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
-    #[cfg(test)]
-    count(0);
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
@@ -555,8 +539,6 @@ impl InteractionPayload {
     }
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        count(2);
         crate::render::backend::with_clip(backend, self.clip, |backend| {
             for trace in &self.traces {
                 for interval in &trace.intervals {
@@ -584,8 +566,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(1);
     let marks = chart
         .prepared_interaction
         .as_ref()
