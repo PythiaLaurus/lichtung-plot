@@ -2,16 +2,16 @@
 
 use std::borrow::Cow;
 
+#[cfg(test)]
+use crate::font::canonical::RequestedWeight;
 use crate::font::canonical::{
     self, CensusSource, FontPairPreparationRequest, FontStack, PreparedFontEnvironment,
-    RequestedWeight,
 };
 use crate::layout::kernel::ComponentAddress;
 use crate::theme::TextTheme;
 use crate::{Error, Plot, PlotKind, TextWeight};
 
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
-use crate::layout::NUMERIC_ALPHABET as AUTOMATIC_NUMERIC_ALPHABET;
 const HEATMAP_ELISION_ALPHABET: &[char] = &['.'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,8 +43,8 @@ pub(crate) struct PreparedTextRequirement {
 }
 
 impl PreparedTextRequirement {
-    /// Role-local `ch` metrics use a sealed scalar selection just like painted
-    /// text. They are census inputs, never generated glyphs appended at layout.
+    /// Role-local `ch` metrics are known actual sources, prepared along with
+    /// authored text before bounded layout starts.
     pub(crate) fn append_preference_metrics(
         requirements: &mut Vec<Self>,
         theme: &crate::theme::ResolvedTheme,
@@ -431,11 +431,8 @@ impl PreparedTextCensus {
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<PreparedFontEnvironment, PreparedTextCensusError> {
         self.materialize_required_scalars(&mut presence, Some(prepared_stage))?;
-        let environment = PreparedFontEnvironment::discover_for_operation(
-            presence,
-            prepared_stage.operation(),
-            prepared_stage,
-        )?;
+        let environment =
+            PreparedFontEnvironment::discover_for_operation(presence, prepared_stage)?;
         self.prepare_pairs_in(&environment, Some(prepared_stage))?;
         Ok(environment)
     }
@@ -552,20 +549,20 @@ impl PreparedTextCensus {
                 FontPairPreparationRequest::new(
                     pair.pair_ordinal,
                     &pair.stack,
-                    requested_weight(pair.weight),
+                    pair.weight.into(),
                     &pair.required_scalars,
                 )
             }),
             prepared_stage.as_deref_mut(),
         )?;
         for requirement in &self.requirements {
-            environment.prepare_source_units(
-                requirement.pair_ordinal,
+            environment.admit_text(
+                &requirement.stack,
+                requirement.weight.into(),
                 &requirement.source,
                 prepared_stage.as_deref_mut(),
             )?;
         }
-        environment.seal_prepared_pairs()?;
         Ok(())
     }
 }
@@ -804,7 +801,6 @@ impl PreparedTextRequirement {
                 requirements,
                 &x_axis,
                 plot.x_axis_spec(),
-                kind == PlotKind::Forest && plot.axis_scale_spec() == crate::AxisScale::Log10,
                 automatic_category_labels(plot, kind, true)?,
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
@@ -816,7 +812,6 @@ impl PreparedTextRequirement {
                 requirements,
                 &y_axis,
                 plot.y_axis_spec(),
-                false,
                 automatic_category_labels(plot, kind, false)?,
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
@@ -1068,7 +1063,7 @@ fn push_deferred_plot_requirements(
             PreparedTextRole::TickLabel,
             body_index,
             String::new(),
-            AUTOMATIC_NUMERIC_ALPHABET,
+            &[],
             &theme.typography.axes.tick_label,
             prepared_stage,
         )?;
@@ -1258,22 +1253,16 @@ impl PreparedTextRequirement {
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the axis source includes scale, exact precedence, categories and complete typography"
-)]
 fn push_axis_ticks(
     requirements: &mut Vec<PreparedTextRequirement>,
     axis: &ComponentAddress,
     spec: &crate::layout::AxisSpec,
-    power: bool,
     automatic_categories: Option<Vec<String>>,
     category_generated_alphabet: Option<&[char]>,
     appearance: &TextTheme,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     let exact = spec.exact_ticks.as_deref();
-    let format = spec.format.as_deref();
     if let Some(ticks) = exact {
         for (index, tick) in ticks.iter().enumerate() {
             let address = axis.clone();
@@ -1313,32 +1302,10 @@ fn push_axis_ticks(
             PreparedTextRole::TickLabel,
             0,
             String::new(),
-            format.map_or(
-                if power {
-                    crate::layout::panel::FOREST_NUMERIC_ALPHABET
-                } else {
-                    AUTOMATIC_NUMERIC_ALPHABET
-                },
-                |value| value.generated_alphabet(),
-            ),
+            &[],
             appearance,
-            prepared_stage.as_deref_mut(),
+            prepared_stage,
         )?;
-        if let Some(format) = format {
-            for (index, source) in format.boundary_sources()?.into_iter().enumerate() {
-                push_owned(
-                    requirements,
-                    axis.clone(),
-                    PreparedTextRole::TickLabel,
-                    u32::try_from(index + 1)
-                        .map_err(|_| Error::Render("numeric boundary index overflow".into()))?,
-                    source,
-                    &[],
-                    appearance,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
     }
     Ok(())
 }
@@ -1416,14 +1383,6 @@ fn push_owned<'a>(
         prepared_stage,
     )
     .map_err(|error| Error::Render(format!("prepared text census: {error}")))
-}
-
-const fn requested_weight(weight: TextWeight) -> RequestedWeight {
-    match weight {
-        TextWeight::Normal => RequestedWeight::Normal,
-        TextWeight::Semibold => RequestedWeight::Semibold,
-        TextWeight::Bold => RequestedWeight::Bold,
-    }
 }
 
 fn visit_pair_scalars(
@@ -1563,7 +1522,7 @@ mod tests {
         census
             .prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS])
             .unwrap();
-        assert!(environment.prepared_pairs_are_sealed().unwrap());
+        assert!(!environment.prepared_pairs_are_sealed().unwrap());
         assert_eq!(census.counts.unique_pair_scalars, 4);
         let bold_pair = census
             .pairs
@@ -2058,8 +2017,10 @@ mod tests {
     }
 
     #[test]
-    fn generated_numeric_affix_units_choose_whole_faces_before_sealing() {
+    fn numeric_sources_admit_only_reached_affix_units_with_stable_choices() {
         let format = crate::numeric::format::NumericFormat::default()
+            .precision(crate::NumericPrecision::Fractional(0))
+            .unwrap()
             .suffix("\u{0301}")
             .unwrap();
         let mut appearance = appearance("Digits", TextWeight::Normal);
@@ -2074,7 +2035,6 @@ mod tests {
                 &mut requirements,
                 &ComponentAddress::root(),
                 &spec,
-                false,
                 None,
                 None,
                 &appearance,
@@ -2083,40 +2043,84 @@ mod tests {
             Ok(requirements)
         })
         .unwrap();
-        assert_eq!(
-            requirements[0].generated_alphabet.as_ref(),
-            ['-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-        );
-        let mut complete = format.generated_alphabet().to_vec();
-        complete.push('\u{0301}');
         let environment = PreparedFontEnvironment::synthetic_faces(&[
-            ("Digits", format.generated_alphabet()),
+            ("Digits", &['0', '1']),
             ("Marks", &['\u{0301}']),
-            ("Whole", &complete),
+            ("Whole", &['0', '1', '\u{0301}']),
         ]);
         let mut census = PreparedTextCensus::materialize(requirements, None, None).unwrap();
         census
             .prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS])
             .unwrap();
+        assert!(!environment.prepared_pairs_are_sealed().unwrap());
+        environment
+            .admit_text(&appearance.stack, RequestedWeight::Normal, "1", None)
+            .unwrap();
+        let source = format.format_singleton(1.0, false).unwrap();
+        assert_eq!(source, "1\u{0301}");
+        let admissions = canonical::FONT_SOURCE_ADMISSIONS.with(std::cell::Cell::get);
+        assert_eq!(
+            environment
+                .admit_text(&appearance.stack, RequestedWeight::Normal, &source, None)
+                .unwrap(),
+            0
+        );
         let pair = environment
             .prepared_pair(&appearance.stack, RequestedWeight::Normal)
             .unwrap()
             .unwrap();
         assert_eq!(
-            pair.selection_for_unit("0", '0').unwrap(),
+            pair.selection_for_unit("1", '1').unwrap(),
             canonical::ScalarFaceSelection::Face(pair.primary)
         );
-        for digit in '0'..='9' {
-            assert_eq!(
-                pair.selection_for_unit(&format!("{digit}\u{0301}"), digit)
-                    .unwrap(),
-                canonical::ScalarFaceSelection::Face(pair.provenance.candidates[2])
-            );
-        }
+        assert_eq!(
+            pair.selection_for_unit(&source, '1').unwrap(),
+            canonical::ScalarFaceSelection::Face(pair.provenance.candidates[2])
+        );
+        assert!(!pair
+            .selected_scalars
+            .iter()
+            .any(|entry| entry.scalar == '0'));
+        assert_eq!(pair.selected_units.len(), 1);
+        let probes = canonical::FONT_SELECTION_PROBES.with(std::cell::Cell::get);
+        environment
+            .admit_text(&appearance.stack, RequestedWeight::Normal, &source, None)
+            .unwrap();
+        assert_eq!(
+            canonical::FONT_SOURCE_ADMISSIONS.with(std::cell::Cell::get),
+            admissions + 1
+        );
+        assert_eq!(
+            canonical::FONT_SELECTION_PROBES.with(std::cell::Cell::get),
+            probes
+        );
+        assert_eq!(
+            environment
+                .admit_text(&appearance.stack, RequestedWeight::Bold, "0", None)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            environment
+                .prepared_pair(&appearance.stack, RequestedWeight::Normal)
+                .unwrap()
+                .unwrap(),
+            pair
+        );
+        environment.operation().seal_fonts().unwrap();
+        assert!(matches!(
+            environment.admit_text(
+                &appearance.stack,
+                RequestedWeight::Normal,
+                "0\u{0301}",
+                None
+            ),
+            Err(canonical::FontError::PreparedPairAfterSeal { pair_ordinal: 0 })
+        ));
     }
 
     #[test]
-    fn automatic_numeric_axes_contribute_the_closed_alphabet_and_exact_ticks_do_not() {
+    fn numeric_axes_register_pairs_and_exact_ticks_suppress_replaced_format_sources() {
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0]),
             crate::NumericValues::new("y", [3.0, 4.0]),
@@ -2148,11 +2152,12 @@ mod tests {
             .filter(|requirement| !requirement.generated_alphabet.is_empty())
             .collect::<Vec<_>>();
 
-        assert_eq!(generated.len(), 1);
-        assert_eq!(
-            generated[0].generated_alphabet.as_ref(),
-            AUTOMATIC_NUMERIC_ALPHABET
-        );
+        assert!(generated.is_empty());
+        assert!(requirements.iter().any(|requirement| {
+            requirement.component_address.leaf_role() == crate::layout::AddressRole::AxisLeft
+                && requirement.text_role == PreparedTextRole::TickLabel
+                && requirement.source.is_empty()
+        }));
         assert!(requirements.iter().any(|requirement| {
             requirement.text_role == PreparedTextRole::TickLabel
                 && requirement.source == "exact"
@@ -2691,7 +2696,7 @@ mod tests {
         crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
 
         environment
-            .plan_prepared_text(crate::layout::TextPlanInput {
+            .plan_text(crate::layout::TextPlanInput {
                 source: "A",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,
@@ -2709,8 +2714,9 @@ mod tests {
             .unwrap();
         crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
 
+        environment.operation().seal_fonts().unwrap();
         let missing = environment
-            .plan_prepared_text(crate::layout::TextPlanInput {
+            .plan_text(crate::layout::TextPlanInput {
                 source: "B",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,
@@ -2728,7 +2734,9 @@ mod tests {
             .unwrap_err();
         assert!(matches!(
             missing,
-            crate::layout::TextPlanError::MissingPreparedScalar(0x42)
+            crate::layout::TextPlanError::Font(canonical::FontError::PreparedPairAfterSeal {
+                pair_ordinal: 0
+            })
         ));
         crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
     }

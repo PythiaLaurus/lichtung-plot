@@ -56,6 +56,18 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
 }
 
 #[test]
+fn complete_numeric_candidate_admission_precedes_geometric_fit_rejection() {
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1.0, 0.0, 1.0));
+    let ticks = [
+        AxisTick::new(0.0, "First label has no room"),
+        AxisTick::new(1.0, "\u{10ffff}"),
+    ];
+    let error = labels_fit(&ticks, &projection, AxisSide::Bottom, &theme).unwrap_err();
+    assert!(error.to_string().contains("U+10FFFF"), "{error}");
+}
+
+#[test]
 fn six_ch_seed_has_quantized_boundaries_and_a_ten_thousand_bound() {
     assert_eq!(upper_seed_count(0.0, 1024).unwrap(), 2);
     assert_eq!(upper_seed_count(12.0 - 1.0 / 1024.0, 1024).unwrap(), 2);
@@ -611,7 +623,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
 }
 
 #[test]
-fn generated_labels_are_unique_and_covered_by_the_closed_census() {
+fn generated_labels_are_unique_across_decimal_and_power_ranges() {
     let theme = crate::Theme::publication().resolve().unwrap();
     for (range, log) in [
         ((1.000_000_000_000_01, 1.000_000_000_000_09), false),
@@ -633,12 +645,6 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
         )
         .unwrap();
         for (index, tick) in plan.ticks.iter().enumerate() {
-            assert!(tick.label.chars().all(|scalar| if log {
-                FOREST_NUMERIC_ALPHABET
-            } else {
-                NUMERIC_ALPHABET
-            }
-            .contains(&scalar)));
             assert!(plan.ticks[..index]
                 .iter()
                 .all(|previous| previous.label != tick.label));

@@ -160,14 +160,13 @@ pub(crate) fn text<'a>(
     }
     let width = crate::layout::maximum_width_quanta(width)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
-    outcome(theme.plan_text_quanta_with_policy(
+    outcome(theme.plan_text_quanta_scoped(
         source,
         appearance.theme,
         width,
         alignment,
         owner,
         appearance.exact_override,
-        true,
         scope,
     ))
 }

@@ -909,8 +909,8 @@ shrink/elision search, shaping, font admission, locator or formatter invocation.
 
 ### Complete Requested Scope And Scientific Boundary
 
-Implement the full requested numeric capabilities together through NumericFormat,
-not a smaller formatter justified by the present closed-alphabet preparation model.
+Implement the full requested numeric capabilities together through NumericFormat
+and the operation-bound actual-source preparation protocol.
 Structured construction remains supported alongside the chosen D3/Plotly-style
 specifier syntax. Single-value and whole-set functions format generated positions;
 users must not supply every AxisTick merely to customize automatic tick text.
@@ -1168,11 +1168,9 @@ from stable inputs; Output replay never depends on later application state.
 
 ### Actual Numeric Text Preparation And Final Font Sealing
 
-The current generated-alphabet/boundary census seals prepared font pairs in
-`PreparedTextCensus::prepare_pairs_in` before any measurement. Numeric axis sources
-are later created lazily from assigned width and feedback, so arbitrary function
-output cannot be prepared by enumerating a fixed alphabet beforehand. Remove that
-assumption through one actual-source admission protocol:
+Numeric axis sources are created lazily from assigned width and feedback. Prepare
+the actual complete text when its context is reached, using the same operation-bound
+admission protocol for current built-ins and future function output:
 
 1. Resolve scientific applicability, exact-tick suppression, Shared compatibility
    and known required sets before font work. Retain the single root OperationContext
@@ -1687,10 +1685,16 @@ PointLayer legend Text now preserves source-only identity and categorical/litera
 display context, with complete appearance/layout compatibility, selected guide
 metrics, font census and frozen entry alignment. The complete receiving-slot
 inventory is migrated, preserving existing source readers and complete Eq contracts.
-Step 4 is in progress: initial font preparation and unsealed scalar extension now
-share one pair store with stable ordinals/candidate/unit choices and fallible result
-copies. Actual-source admission and moving the seal to accepted-root finalization
-remain pending in this step. Steps 5–22 remain pending; undelivered target signatures
+Step 4 is complete. Known strings and reached numeric candidates share one
+operation-bound actual-source admission transaction and retained pair store, with
+stable ordinals/candidate/scalar/unit choices, fallible storage and one discovery.
+Complete candidates admit their text before geometric fit rejection; repeated sources
+reuse admission and unrelated additions preserve earlier shaped/cache payloads.
+The coordinator seals fonts once after accepting the root and before capture, which
+verifies frozen source coverage/provenance and rejects unplanned text. Numeric
+alphabet/boundary expansion and early-seal query policies are removed. Focused
+ordinary/native axes, Shared guides, local styles and frozen output witnesses retain
+the eight-round root bound. Steps 5–22 remain pending; undelivered target signatures
 are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

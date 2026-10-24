@@ -368,17 +368,33 @@ Shared guide compatibility before census. Visit actual source strings in canonic
 component preorder, role order and local record order. Empty exact labels retain
 identity with zero scalar needs. CSS family names/SVG syntax/suppressed content
 are not painted text. Include actual typography probes and discretionary hyphen.
-Numeric late-generated sources contribute finite grammar/affix boundary units as
-specified in numeric presentation, not guessed labels or isolated scalar unions.
+Register numeric roles without expanding a possible numeric alphabet or affix
+boundary grammar. Width/feedback-dependent sources contribute their actual complete
+strings when reached, before any measurement or geometric rejection of that source.
 
 Assign first-use ordinal to each structurally equal `(FontStack,weight)` pair,
-preserving stack entries. Census pair ordinal, source record/scalars/unit spans,
-then generated alphabet in scalar order. Retain complete base-plus-mark spans
+preserving stack entries. Visit census pair ordinal, source record/scalars/unit spans
+in canonical order. Retain complete base-plus-mark spans
 and face selections; shared character sets do not prove equal unit requirements.
 Initial preparation and unsealed scalar extension use one retained pair store.
 Each pair keeps its original ordinal, canonical candidates and successful scalar/
 unit selections; later extension adds coverage without replacing earlier choices.
 Pair result copies retain fallible storage for candidate, scalar and unit payloads.
+
+One private operation-bound actual-source admission transaction serves known census
+strings and later intrinsic/constrained planning. It admits missing scalars, the
+discretionary hyphen and complete combining units, or registers a newly used pair
+with a stable new ordinal. Repeating a reached `(pair,source)` does not repeat
+selection or source materialization. Initial preparation uses PreparedStage;
+measured additions use the retained operation's open admission capability and
+fallible local storage, never a stale PreparedStage or second discovery operation.
+
+After the selected root round, dimensions and complete fit are accepted, the root
+coordinator seals each retained environment exactly once before final capture.
+Sealed environments reject new pair/scalar/unit coverage. Capture checks each
+selected text's source coverage and original pair provenance read-only and accepts
+only preplanned text/bracket labels; it cannot admit glyphs or shape raw strings.
+Null, preserved/outlined SVG, PNG and Output replay consume frozen glyphs and bytes.
 
 ### Canonical Candidate Selection
 
@@ -573,7 +589,9 @@ Only these named consequences transfer:
 Requests name source,target,kind and resolvable predicate; conflicting nonaggregating
 identities are internal errors. Shared guide merging is preparation, not feedback.
 Breaks/tick sources/edges/packing/track choices are payload, not new consequence
-kinds. Later domains use already sealed text grammar/face lists.
+kinds. Later domains retain the same canonical candidate lists and earlier choices;
+actual newly reached text is admitted before measurement, until the accepted root's
+final font seal.
 
 Converge when effective outgoing feedback equals consumed feedback, no miss remains
 and complete immutable plan passes semantic/geometry/containment/root-ink validation.
@@ -618,12 +636,13 @@ Production has no cumulative accounting of visits, planning records, topology,
 measurement calls, cache insertions, discovery events or estimated bytes. No
 claim ticket, quota switch, fee-only error or replacement whole-operation score
 is permitted. Retain independent operation/source identity, cache synchronization,
-full equality, font census sealing, real length/capacity checks and fallible
+full equality, accepted-root font sealing, real length/capacity checks and fallible
 first-party allocation. External allocator OOM is not promised recoverable.
 
 Lifecycle order is semantic/option validation, scientific/domain/guide preparation,
-complete text census and fonts, intrinsics, one width choice, bounded constrained
-rounds, complete fit validation, immutable capture/count/reservation, one final
+known text census and initial fonts, intrinsics, one width choice, bounded constrained
+rounds with actual-source admission, complete fit validation, final font sealing,
+immutable capture/count/reservation, one final
 Null lifecycle, concrete same-plan replay and format-local publication. Capture
 each selected producer once; never rerun it to determine size. Count serialization
 from immutable commands, reserve canonical output and scratch before Null.

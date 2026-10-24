@@ -879,6 +879,10 @@ fn shared_color_titles_reject_style_and_request_presence_conflicts_before_fonts(
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the Shared final-set contract retains style, one final font seal and pre-font policy refusals together"
+)]
 fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflicts_before_fonts() {
     use crate::numeric::{
         decimal::{NegativeZero, NumericNotation, TrailingZeros},
@@ -888,6 +892,13 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .unwrap()
         .suffix(" u")
         .unwrap();
+    let title_style = Theme::publication()
+        .typography()
+        .get_guides()
+        .get_legend_title()
+        .clone()
+        .font_size(21)
+        .unwrap();
     let plot = |values, format| {
         Plot::heatmap(
             crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
@@ -895,6 +906,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
             crate::NumericValues::new("value", values),
         )
         .color_label_format(format)
+        .color_label(crate::Text::new("Final scale").style(title_style.clone()))
     };
     let first = plot([1.01, 1.02], format.clone());
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -918,7 +930,25 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
             .panel(0, 1, plot([3.1, 3.2], second))
             .unwrap()
     };
+    crate::font::canonical::FONT_FINAL_SEALS.with(|calls| calls.set(0));
     let root = canvas(format.clone()).preflight_plan().unwrap();
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_FINAL_SEALS.with(std::cell::Cell::get),
+        1
+    );
+    let title = root
+        .plan()
+        .retained_text()
+        .into_iter()
+        .find(|(_, text)| text.source == "Final scale")
+        .unwrap()
+        .1;
+    assert_eq!(title.style.font_size, 21);
+    assert!(title.style.exact_override);
     for source in ["1 u", "3 u"] {
         assert_eq!(
             root.plan()
@@ -1307,15 +1337,18 @@ fn heading_instructions_are_role_local_order_independent_and_frozen() {
     }
 }
 
-pub(super) fn capture_counters() -> [usize; 6] {
-    [
-        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-        crate::layout::Projection::test_projection_calls(),
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
-        crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
-        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
-        crate::orchestrator::SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get),
-    ]
+pub(super) fn capture_counters() -> ([usize; 6], [usize; 6]) {
+    (
+        [
+            crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+            crate::layout::Projection::test_projection_calls(),
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+            crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            crate::orchestrator::SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get),
+        ],
+        crate::font::canonical::planning_counts(),
+    )
 }
 
 /// Parent interaction uses representative coordinate, categorical, grid and

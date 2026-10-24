@@ -4,14 +4,15 @@ use crate::Error;
 use std::cell::RefCell;
 
 use crate::font::canonical::PreparedFontEnvironment;
-use crate::layout::{
-    DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight,
-    TextPlanInput, TextPlanProvenance,
-};
+#[cfg(test)]
+use crate::layout::{DeferredAnnotationTextPlan, PhysicalTextAlignment};
+use crate::layout::{PanelBox, ResolvedTextPlan};
+#[cfg(test)]
+use crate::render::backend::TextAnchor;
 use crate::render::backend::{
     self, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
     PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, SignificanceBracket,
-    SurfaceRole, TextAnchor, TextStyle,
+    SurfaceRole, TextStyle,
 };
 use crate::render::coordinates::CanonicalPoint;
 use crate::render::coordinates::{CanonicalBox, CanonicalRoundedBox};
@@ -476,67 +477,6 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         })
     }
 
-    fn plan_text(
-        &self,
-        source: &str,
-        style: &TextStyle,
-        line_height: TextLineHeight,
-        alignment: PhysicalTextAlignment,
-        owner: &str,
-    ) -> Result<ResolvedTextPlan, Error> {
-        self.font_environment
-            .plan_prepared_text(TextPlanInput {
-                source,
-                stack: &style.font_family,
-                weight: style.weight,
-                font_size: style.font_size,
-                line_height,
-                maximum_width_quanta: i64::MAX,
-                alignment,
-                paint: style.color,
-                provenance: TextPlanProvenance {
-                    pair_ordinal: pair_ordinal(style.weight),
-                    owner: owner.to_owned(),
-                },
-                exact_override: false,
-            })
-            .map_err(|error| Error::Render(format!("{owner}: {error}")))
-    }
-
-    fn plan_raw_bracket(
-        &self,
-        bracket: &SignificanceBracket,
-        style: &BracketStyle,
-    ) -> Result<DeferredAnnotationTextPlan, Error> {
-        let alignment = match bracket.orientation {
-            backend::BracketOrientation::Vertical => PhysicalTextAlignment::Center,
-            backend::BracketOrientation::Horizontal => PhysicalTextAlignment::Start,
-        };
-        let plan = self
-            .font_environment
-            .plan_prepared_text(TextPlanInput {
-                source: &bracket.label,
-                stack: &style.font_family,
-                font_size: style.font_size,
-                weight: style.weight,
-                line_height: TextLineHeight::Multiplier(
-                    style.line_height / f64::from(style.font_size),
-                ),
-                maximum_width_quanta: i64::MAX,
-                alignment,
-                paint: style.label_color,
-                provenance: TextPlanProvenance {
-                    pair_ordinal: pair_ordinal(style.weight),
-                    owner: "significance bracket label capture".into(),
-                },
-                exact_override: false,
-            })
-            .map_err(|error| {
-                Error::Render(format!("significance bracket label capture: {error}"))
-            })?;
-        Ok(DeferredAnnotationTextPlan::from_resolved(plan))
-    }
-
     fn into_plan(self, width: u32, height: u32) -> Result<TextReplayPlan, Error> {
         let calls = self.calls;
         let mut depth = 0_usize;
@@ -632,22 +572,6 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
                 ..*style
             },
         ))
-    }
-}
-
-const fn pair_ordinal(weight: crate::TextWeight) -> u32 {
-    match weight {
-        crate::TextWeight::Normal => 0,
-        crate::TextWeight::Semibold => 1,
-        crate::TextWeight::Bold => 2,
-    }
-}
-
-const fn alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
-    match anchor {
-        TextAnchor::Start => PhysicalTextAlignment::Start,
-        TextAnchor::Middle => PhysicalTextAlignment::Center,
-        TextAnchor::End => PhysicalTextAlignment::End,
     }
 }
 
@@ -794,36 +718,10 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
-        self.reserve_call()?;
-        let canonical = crate::render::coordinates::canonical_text(
-            position,
-            style.rotation,
-            crate::render::coordinates::CoordinatePrecision::CssQuantum,
-        )?;
-        let placement = PlannedTextPlacement::middle(position, style.anchor, style.rotation);
-        let plan = self.plan_text(
-            text,
-            style,
-            TextLineHeight::Multiplier(1.2),
-            alignment(style.anchor),
-            "raw text capture",
-        )?;
-        backend::validate_text_plan(placement, &plan)?;
-        let canonical = CanonicalPlannedText::from_validated(
-            canonical,
-            placement,
-            &plan,
-            self.height,
-            Some(self.final_stage),
-        )?;
-        self.calls.push(PlannedCall::PlannedText(PlannedTextCall {
-            canonical,
-            #[cfg(test)]
-            placement,
-            #[cfg(test)]
-            plan,
-        }));
-        Ok(())
+        let _ = (position, text, style);
+        Err(Error::Render(
+            "scene capture requires preplanned text".into(),
+        ))
     }
 
     fn draw_planned_text(
@@ -831,6 +729,9 @@ impl Backend for TextPlanningBackend<'_, '_> {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
+        self.font_environment
+            .validate_admitted_text(&plan.style.stack, &plan.pair_provenance, &plan.source)
+            .map_err(|error| Error::Render(format!("frozen text capture: {error}")))?;
         self.reserve_call()?;
         let canonical =
             CanonicalPlannedText::new(placement, plan, self.height, Some(self.final_stage))?;
@@ -866,35 +767,17 @@ impl Backend for TextPlanningBackend<'_, '_> {
         bracket: &SignificanceBracket,
         style: &BracketStyle,
     ) -> Result<(), Error> {
-        self.reserve_call()?;
-        let geometry = backend::validate_bracket(bracket, style)?;
-        let label = self.plan_raw_bracket(bracket, style)?;
-        let canonical = CanonicalPlannedBracket::from_geometry(
-            geometry,
-            PlannedSignificanceCall {
-                bracket,
-                style,
-                label: &label,
-            },
-            self.height,
-            Some(self.final_stage),
-        )?;
-        #[cfg(test)]
-        let (bracket, style) = self.copy_bracket(bracket, style)?;
-        self.calls
-            .push(PlannedCall::PlannedBracket(PlannedBracketCall {
-                canonical,
-                #[cfg(test)]
-                bracket,
-                #[cfg(test)]
-                style,
-                #[cfg(test)]
-                label,
-            }));
-        Ok(())
+        let _ = (bracket, style);
+        Err(Error::Render(
+            "scene capture requires a preplanned bracket label".into(),
+        ))
     }
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
+        let plan = &call.label.plan;
+        self.font_environment
+            .validate_admitted_text(&plan.style.stack, &plan.pair_provenance, &plan.source)
+            .map_err(|error| Error::Render(format!("frozen bracket capture: {error}")))?;
         self.reserve_call()?;
         let canonical = CanonicalPlannedBracket::new(call, self.height, Some(self.final_stage))?;
         #[cfg(test)]
@@ -1612,6 +1495,12 @@ mod tests {
         theme: &crate::theme::ResolvedTheme,
         capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
     ) -> crate::layout::FrozenRoot<TextReplayPlan> {
+        theme
+            .prepared_font_environment()
+            .unwrap()
+            .operation()
+            .seal_fonts()
+            .unwrap();
         crate::layout::plan_exact_root(
             100,
             100,
@@ -1719,57 +1608,86 @@ mod tests {
         };
         let theme = crate::Theme::publication().resolve().unwrap();
         let source = " A & B\n\nC \u{5d0}\u{5d1}  D";
-        let root = capture_test_plan(&theme, |backend| {
-            for (anchor, alignment) in [
-                (TextAnchor::Start, PhysicalTextAlignment::Start),
-                (TextAnchor::Middle, PhysicalTextAlignment::Center),
-                (TextAnchor::End, PhysicalTextAlignment::End),
-            ] {
-                let plan = theme.measure_text(
+        let plans = [
+            PhysicalTextAlignment::Start,
+            PhysicalTextAlignment::Center,
+            PhysicalTextAlignment::End,
+        ]
+        .map(|alignment| {
+            theme
+                .measure_text(
                     source,
                     &theme.typography.root.title,
                     alignment,
                     "canonical text",
                     false,
-                )?;
+                )
+                .unwrap()
+        });
+        let label_role = theme
+            .typography
+            .annotations
+            .significance_label
+            .clone()
+            .font_size(12)
+            .unwrap()
+            .weight(crate::TextWeight::Normal)
+            .unwrap()
+            .color(Color::rgb(4, 5, 6))
+            .unwrap()
+            .line_height(1.2)
+            .unwrap();
+        let labels =
+            [PhysicalTextAlignment::Center, PhysicalTextAlignment::Start].map(|alignment| {
+                DeferredAnnotationTextPlan::from_resolved(
+                    theme
+                        .measure_text("**", &label_role, alignment, "canonical bracket", false)
+                        .unwrap(),
+                )
+            });
+        let root = capture_test_plan(&theme, |backend| {
+            for (anchor, plan) in [TextAnchor::Start, TextAnchor::Middle, TextAnchor::End]
+                .into_iter()
+                .zip(&plans)
+            {
                 for angle in [-0.0, -0.04, 0.06, -89.96] {
                     let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
                     backend.draw_planned_text(
                         PlannedTextPlacement::middle(position, anchor, angle),
-                        &plan,
+                        plan,
                     )?;
                     backend.draw_planned_text(
                         PlannedTextPlacement::baseline(position, anchor, angle),
-                        &plan,
+                        plan,
                     )?;
                 }
             }
-            backend.draw_text(
-                Point2D::new(20.125, 30.25),
-                source,
-                &replay_text_style(&theme),
-            )?;
-            for orientation in [BracketOrientation::Vertical, BracketOrientation::Horizontal] {
-                backend.draw_bracket(
-                    &SignificanceBracket {
+            for (orientation, label) in
+                [BracketOrientation::Vertical, BracketOrientation::Horizontal]
+                    .into_iter()
+                    .zip(&labels)
+            {
+                backend.draw_planned_bracket(PlannedSignificanceCall {
+                    bracket: &SignificanceBracket {
                         x_left: -0.0,
                         x_right: 21.125,
                         y: 31.25,
                         label: "**".into(),
                         orientation,
                     },
-                    &BracketStyle {
+                    style: &BracketStyle {
                         color: Color::rgb(1, 2, 3),
                         label_color: Color::rgb(4, 5, 6),
                         width: 0.8,
-                        font_family: theme.typography.root.title.stack.clone(),
+                        font_family: label.plan.style.stack.clone(),
                         font_size: 12,
                         line_height: 14.4,
                         weight: crate::TextWeight::Normal,
                         label_gap: 4.125,
                         tick_height: 7.0,
                     },
-                )?;
+                    label,
+                })?;
             }
             reset();
             Ok(())
@@ -1907,9 +1825,46 @@ mod tests {
         SPATIAL_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
     }
 
+    fn storage_labels(
+        theme: &crate::theme::ResolvedTheme,
+    ) -> (ResolvedTextPlan, DeferredAnnotationTextPlan) {
+        let text = theme
+            .measure_text(
+                "A<&\u{03a9}",
+                &theme.typography.root.title,
+                PhysicalTextAlignment::Center,
+                "storage text",
+                false,
+            )
+            .unwrap();
+        let role = theme
+            .typography
+            .annotations
+            .significance_label
+            .clone()
+            .font_size(12)
+            .unwrap()
+            .weight(crate::TextWeight::Normal)
+            .unwrap()
+            .color(Color::rgb(3, 2, 1))
+            .unwrap()
+            .line_height(1.2)
+            .unwrap();
+        let label = theme
+            .measure_text(
+                "*",
+                &role,
+                PhysicalTextAlignment::Center,
+                "storage bracket",
+                false,
+            )
+            .unwrap();
+        (text, DeferredAnnotationTextPlan::from_resolved(label))
+    }
+
     fn storage_fixture(
         backend: &mut dyn Backend,
-        theme: &crate::theme::ResolvedTheme,
+        labels: &(ResolvedTextPlan, DeferredAnnotationTextPlan),
     ) -> Result<(), Error> {
         let bounds = PanelBox::new(0.0, 100.0, 0.0, 100.0);
         let points = [
@@ -1942,31 +1897,31 @@ mod tests {
                 GradientStop::new(1.0, (255, 255, 255)),
             ],
         )?;
-        backend.draw_text(
-            Point2D::new(50.0, 50.0),
-            "A<&\u{03a9}",
-            &replay_text_style(theme),
+        backend.draw_planned_text(
+            PlannedTextPlacement::middle(Point2D::new(50.0, 50.0), TextAnchor::Middle, 0.0),
+            &labels.0,
         )?;
-        backend.draw_bracket(
-            &SignificanceBracket {
+        backend.draw_planned_bracket(PlannedSignificanceCall {
+            bracket: &SignificanceBracket {
                 x_left: 10.0,
                 x_right: 30.0,
                 y: 60.0,
                 label: "*".into(),
                 orientation: BracketOrientation::Vertical,
             },
-            &BracketStyle {
+            style: &BracketStyle {
                 color: Color::rgb(1, 2, 3),
                 label_color: Color::rgb(3, 2, 1),
                 width: 0.8,
-                font_family: theme.typography.root.title.stack.clone(),
+                font_family: labels.1.plan.style.stack.clone(),
                 font_size: 12,
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
                 label_gap: 4.0,
                 tick_height: 7.0,
             },
-        )?;
+            label: &labels.1,
+        })?;
         backend.end_clip()?;
         backend.end_layer()
     }
@@ -1979,7 +1934,8 @@ mod tests {
         NULL_END_CALLS.with(|calls| calls.set(0));
         crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::render::svg_backend::SVG_END_CALLS.with(|calls| calls.set(0));
-        let plan = capture_test_plan(&theme, |backend| storage_fixture(backend, &theme));
+        let labels = storage_labels(&theme);
+        let plan = capture_test_plan(&theme, |backend| storage_fixture(backend, &labels));
         let plan = plan.plan();
         let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
@@ -2080,8 +2036,15 @@ mod tests {
     }
 
     #[test]
-    fn raw_font_stack_failure_precedes_final_backend_lifecycles() {
+    fn capture_rejects_unplanned_text_and_brackets_without_font_work() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        theme
+            .prepared_font_environment()
+            .unwrap()
+            .operation()
+            .seal_fonts()
+            .unwrap();
+        let fonts = crate::font::canonical::planning_counts();
         for bracket in [false, true] {
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
@@ -2133,17 +2096,25 @@ mod tests {
                 },
             );
             let Err(error) = result else {
-                panic!("an unprepared raw font stack must be rejected");
+                panic!("capture must reject text without a measured plan");
             };
             assert!(error.to_string().contains("capture"), "{error}");
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         }
+        assert_eq!(crate::font::canonical::planning_counts(), fonts);
     }
 
     #[test]
     fn every_nonempty_canonical_storage_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let labels = storage_labels(&theme);
+        theme
+            .prepared_font_environment()
+            .unwrap()
+            .operation()
+            .seal_fonts()
+            .unwrap();
         for payload in [
             "canonical SVG scopes",
             "canonical SVG replacements",
@@ -2170,7 +2141,7 @@ mod tests {
                         "storage refusal",
                         &theme,
                         stage,
-                        |backend| storage_fixture(backend, &theme),
+                        |backend| storage_fixture(backend, &labels),
                     )
                 },
             );
@@ -2301,31 +2272,40 @@ mod tests {
     }
 
     #[test]
-    fn raw_text_capture_is_immutable_and_svg_replay_uses_only_planned_calls() {
+    fn planned_text_capture_owns_its_source_and_replays_without_font_work() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let style = replay_text_style(&theme);
         let position = Point2D::new(40.5, 61.5);
+        let placement = PlannedTextPlacement::middle(position, TextAnchor::Middle, 0.0);
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let source = String::from("captured text");
+        let text = theme
+            .measure_text(
+                &source,
+                &theme.typography.root.title,
+                PhysicalTextAlignment::Center,
+                "captured text",
+                false,
+            )
+            .unwrap();
+        drop(source);
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let mut captures = 0;
         let plan = capture_test_plan(&theme, |backend| {
             captures += 1;
-            let result = backend.draw_text(position, &source, &style);
-            drop(source); // The producer is genuinely FnOnce; replay owns its source.
+            let result = backend.draw_planned_text(placement, &text);
+            drop(text); // The producer is genuinely FnOnce; replay owns its plan.
             result
         });
         let plan = plan.plan();
         assert_eq!(captures, 1);
-        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-        assert!(shapes > 0);
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         validate_text_replay_plan(100, 100, plan, "single capture").unwrap();
 
         assert_eq!(plan.call_count(), 1);
         assert_eq!(plan.calls.capacity(), 1);
         let PlannedCall::PlannedText(call) = &plan.calls[0] else {
-            panic!("captured raw text");
+            panic!("captured planned text");
         };
         assert_eq!(call.placement.position, position);
         for replay_plan in [plan, plan] {
@@ -2334,18 +2314,33 @@ mod tests {
             let mut svg = SvgBackend::in_memory(100, 100);
             let mut replay = TextReplayBackend::new(&mut svg, replay_plan);
             replay.begin(100, 100).unwrap();
-            replay.draw_text(position, "captured text", &style).unwrap();
+            replay.draw_planned_text(placement, &call.plan).unwrap();
             replay.end().unwrap();
 
             SVG_RAW_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             SVG_PLANNED_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shapes));
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         }
     }
 
     #[test]
-    fn capture_append_refusal_precedes_payload_shaping() {
+    fn capture_append_refusal_precedes_frozen_text_materialization() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = theme
+            .measure_text(
+                "retained text",
+                &theme.typography.root.title,
+                PhysicalTextAlignment::Start,
+                "refused capture",
+                false,
+            )
+            .unwrap();
+        theme
+            .prepared_font_environment()
+            .unwrap()
+            .operation()
+            .seal_fonts()
+            .unwrap();
         let mut pass = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
@@ -2366,15 +2361,20 @@ mod tests {
                         crate::layout::kernel::force_reservation_failure(
                             crate::layout::kernel::ReservationStage::Final,
                         );
-                        let mut invalid = replay_text_style(&theme);
-                        invalid.font_size = 0;
-                        backend.draw_text(Point2D::new(0.0, 0.0), "not shaped", &invalid)
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::baseline(
+                                Point2D::new(0.0, 0.0),
+                                TextAnchor::Start,
+                                0.0,
+                            ),
+                            &text,
+                        )
                     },
                 )
             },
         );
         let Err(error) = result else {
-            panic!("capture must refuse append before shaping");
+            panic!("capture must refuse append before freezing payloads");
         };
         assert!(
             error.to_string().contains("prepared scene calls"),
@@ -2480,11 +2480,22 @@ mod tests {
     #[test]
     fn frozen_scene_replay_consumes_exactly_the_captured_calls() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let style = replay_text_style(&theme);
         let position = Point2D::new(40.0, 60.0);
+        let placement = PlannedTextPlacement::middle(position, TextAnchor::Middle, 0.0);
+        let labels = ["first", "second"].map(|source| {
+            theme
+                .measure_text(
+                    source,
+                    &theme.typography.root.title,
+                    PhysicalTextAlignment::Center,
+                    "retained call",
+                    false,
+                )
+                .unwrap()
+        });
         let plan = capture_test_plan(&theme, |backend| {
-            backend.draw_text(position, "first", &style)?;
-            backend.draw_text(position, "second", &style)
+            backend.draw_planned_text(placement, &labels[0])?;
+            backend.draw_planned_text(placement, &labels[1])
         });
         let plan = plan.plan();
 
@@ -2619,44 +2630,6 @@ mod tests {
             let svg_error = svg.draw_planned_bracket(call()).unwrap_err();
             assert_eq!(null_error.to_string(), svg_error.to_string());
         }
-    }
-
-    #[test]
-    fn raw_bracket_capture_freezes_and_replays_one_label_plan() {
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let bracket = SignificanceBracket {
-            x_left: 10.0,
-            x_right: 20.0,
-            y: 30.0,
-            label: "***".into(),
-            orientation: BracketOrientation::Vertical,
-        };
-        let style = BracketStyle {
-            color: Color::rgb(0, 0, 0),
-            label_color: Color::rgb(1, 2, 3),
-            width: 1.0,
-            font_family: theme.typography.root.title.stack.clone(),
-            font_size: 12,
-            line_height: 14.4,
-            weight: crate::TextWeight::Semibold,
-            label_gap: 4.0,
-            tick_height: 7.0,
-        };
-        let plan = capture_test_plan(&theme, |backend| backend.draw_bracket(&bracket, &style));
-        let plan = plan.plan();
-
-        let [PlannedCall::PlannedBracket(captured)] = plan.calls.as_slice() else {
-            panic!("expected one raw bracket call");
-        };
-        assert_eq!(captured.label.plan.source, bracket.label);
-        assert_eq!(captured.label.plan.style.paint, style.label_color);
-        assert!(!captured.label.exact_override);
-
-        let mut null = NullBackend::default();
-        let mut replay = TextReplayBackend::new(&mut null, plan);
-        replay.begin(100, 100).unwrap();
-        replay.draw_bracket(&bracket, &style).unwrap();
-        replay.end().unwrap();
     }
 
     #[test]

@@ -250,10 +250,10 @@ fn selected_soft_hyphen_uses_the_sealed_literal_hyphen_fallback() {
     environment
         .prepare_source_units(0, "A\u{ad}AA", None)
         .unwrap();
-    environment.seal_prepared_pairs().unwrap();
+    environment.operation().seal_fonts().unwrap();
     let mut request = tests::input("A\u{ad}AA", 12_288, PhysicalTextAlignment::Start);
     request.stack = &stack;
-    let planned = environment.plan_prepared_text(request).unwrap();
+    let planned = environment.plan_text(request).unwrap();
     assert_eq!(planned.source, "A\u{ad}AA");
     let runs = &planned.lines[0].runs;
     assert_eq!(runs.len(), 2);
@@ -619,25 +619,15 @@ fn source_units_select_complete_faces_without_reassigning_standalone_bases() {
     }
     // Reacquisition must retain the units prepared by the unsealed query.
     assert_eq!(pair.selected_units.len(), 2);
-    environment.seal_prepared_pairs().unwrap();
+    environment.operation().seal_fonts().unwrap();
     canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
-    assert_eq!(
-        environment.plan_prepared_text(request.clone()).unwrap(),
-        planned
-    );
+    assert_eq!(environment.plan_text(request.clone()).unwrap(), planned);
     request.source = "AA\u{301}\u{301}";
-    for prepared_only in [false, true] {
-        let error = if prepared_only {
-            environment.plan_prepared_text(request.clone())
-        } else {
-            environment.plan_text(request.clone())
-        }
-        .unwrap_err();
-        assert!(matches!(
-            error,
-            TextPlanError::Font(FontError::UnknownUnit { pair_ordinal: 0 })
-        ));
-    }
+    let error = environment.plan_text(request.clone()).unwrap_err();
+    assert!(matches!(
+        error,
+        TextPlanError::Font(FontError::PreparedPairAfterSeal { pair_ordinal: 0 })
+    ));
     assert_eq!(
         environment
             .prepared_pair(&stack, RequestedWeight::Normal)
@@ -670,8 +660,8 @@ fn unsealed_queries_extend_scalars_and_prepare_new_units_before_selection() {
         .unwrap();
     assert_eq!(intrinsic.natural_width_quanta, marked.width_quanta);
     assert_eq!(environment.plan_text(request.clone()).unwrap(), marked);
-    environment.seal_prepared_pairs().unwrap();
-    assert_eq!(environment.plan_prepared_text(request).unwrap(), marked);
+    environment.operation().seal_fonts().unwrap();
+    assert_eq!(environment.plan_text(request).unwrap(), marked);
 }
 
 #[test]

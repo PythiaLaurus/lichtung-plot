@@ -831,6 +831,9 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         .validate_dimensions(dimensions.0, dimensions.1)?;
     let assigned = RootSize::new(width, height);
 
+    resources
+        .seal_fonts()
+        .map_err(|error| Error::Render(format!("accepted root font sealing: {error}")))?;
     reservations.phase = ReservationStage::Final;
     let mut allocation = Vec::new();
     let mut final_stage = FinalStage {

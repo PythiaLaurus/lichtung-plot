@@ -20,10 +20,10 @@ caller data / analysis results
 owned semantic values -> Plot / Canvas
           |
           v
-validation -> scientific preparation -> fonts -> layout
+validation -> scientific preparation -> initial fonts -> layout / text admission
           |
           v
-immutable selected plan -> capture -> Null validation -> canonical scene
+accepted plan -> final font seal -> capture -> Null validation -> canonical scene
           |
           +-> outlined SVG
           +-> preserve-text SVG

@@ -528,7 +528,7 @@ mod natural_sizing_tests {
     }
 
     #[test]
-    fn natural_prose_metrics_use_the_sealed_role_specific_font_pair() {
+    fn natural_prose_metrics_use_the_prepared_role_specific_font_pair() {
         let plot = Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0]),
             crate::NumericValues::new("y", [3.0, 4.0]),
@@ -1039,6 +1039,8 @@ impl PlotPlan {
             },
             |prepared, assigned, layout, final_stage| {
                 let (width, height) = assigned.dimensions()?;
+                #[cfg(test)]
+                let fonts = crate::font::canonical::planning_counts();
                 let replay = capture_text_replay_plan(
                     width,
                     height,
@@ -1057,6 +1059,12 @@ impl PlotPlan {
                         )
                     },
                 )?;
+                #[cfg(test)]
+                assert_eq!(
+                    crate::font::canonical::planning_counts(),
+                    fonts,
+                    "Plot capture must not discover, resolve, probe, admit, seal or shape fonts"
+                );
                 Ok(replay)
             },
         )?;
@@ -1568,6 +1576,10 @@ mod retained_legend_tests {
     use crate::orchestrator::measurements::{self, Counter};
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one prepared font operation carries selected legend operands through mutation, capture and replay"
+    )]
     fn standalone_capture_uses_selected_legend_operands_not_measured_style_or_position() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
@@ -1593,6 +1605,25 @@ mod retained_legend_tests {
                         .child(crate::layout::AddressRole::PlotBody, 0)?,
                     false,
                 )?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    Some(&inputs),
+                    &source,
+                    source.kind(),
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok(inputs)
             },
             |inputs, assigned, round| {

@@ -246,6 +246,8 @@ fn exact_root_reservation_failures_precede_concrete_backend_begin() {
 
 #[test]
 fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    crate::font::canonical::FONT_FINAL_SEALS.with(|calls| calls.set(0));
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));
     FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
     TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
@@ -265,6 +267,14 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
     assert_eq!(TEXT_PLAN_CAPTURE_SESSIONS.with(std::cell::Cell::get), 1);
     assert_eq!(TEXT_REPLAY_SESSIONS.with(std::cell::Cell::get), 1);
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_FINAL_SEALS.with(std::cell::Cell::get),
+        1
+    );
     assert_eq!(
         crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(std::cell::Cell::get),
         1

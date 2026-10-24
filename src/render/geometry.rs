@@ -794,7 +794,7 @@ impl GeometryBackend {
         #[cfg(test)]
         GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         self.font_environment
-            .plan_prepared_text(TextPlanInput {
+            .plan_text(TextPlanInput {
                 source: text,
                 stack: &style.font_family,
                 weight: style.weight,

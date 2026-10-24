@@ -18,7 +18,6 @@ pub use panel::AxisTick;
 pub(crate) use panel::NumericTickPlan;
 pub(crate) use panel::TickSource;
 pub(crate) use panel::LABEL_CLEARANCE;
-pub(crate) use panel::NUMERIC_ALPHABET;
 pub(crate) use panel::{
     anchored_auto_range, continuous_auto_range, display_axis_spec, numeric_tick_plan,
 };

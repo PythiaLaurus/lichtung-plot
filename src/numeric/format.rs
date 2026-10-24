@@ -254,47 +254,6 @@ impl NumericFormat {
         })
     }
 
-    pub(crate) fn generated_alphabet(&self) -> &'static [char] {
-        match self.notation {
-            NumericNotation::Decimal => {
-                &['-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-            }
-            NumericNotation::Scientific | NumericNotation::Engineering => &[
-                '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'e',
-            ],
-        }
-    }
-
-    /// Finite first/last scalar contexts, not sample numbers. Canonical source
-    /// preparation extracts each literal/boundary base-plus-mark selection unit.
-    pub(crate) fn boundary_sources(&self) -> Result<Vec<String>> {
-        let mut sources = Vec::new();
-        let mut join = |a: &str, b: &str| -> Result<()> {
-            let mut text = String::new();
-            let length = a
-                .len()
-                .checked_add(b.len())
-                .ok_or_else(|| Error::Render("numeric affix boundary length overflow".into()))?;
-            crate::data::source::reserve_source_string(&mut text, length)?;
-            text.push_str(a);
-            text.push_str(b);
-            crate::data::source::reserve_source(&mut sources, 1)?;
-            sources.push(text);
-            Ok(())
-        };
-        if let Some(prefix) = self.get_prefix() {
-            for first in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] {
-                join(prefix, first)?;
-            }
-        }
-        if let Some(suffix) = self.get_suffix() {
-            for last in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] {
-                join(last, suffix)?;
-            }
-        }
-        Ok(sources)
-    }
-
     pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,

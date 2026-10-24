@@ -75,12 +75,12 @@ struct TextQueryIndex {
 }
 
 impl TextQueryCache {
-    fn profile_entry(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> Option<usize> {
+    fn profile_entry(&self, input: &TextPlanInput<'_>) -> Option<usize> {
         let (mut low, mut high) = (0, self.profiles.len());
         while low < high {
             let middle = low + (high - low) / 2;
             let index = self.profiles[middle];
-            match self.compare_profile(index, input, prepared_only) {
+            match self.compare_profile(index, input) {
                 std::cmp::Ordering::Less => low = middle + 1,
                 std::cmp::Ordering::Greater => high = middle,
                 std::cmp::Ordering::Equal => {
@@ -104,9 +104,7 @@ impl TextQueryCache {
                                 break;
                             }
                             let index = self.profiles[position];
-                            if self.compare_profile(index, input, prepared_only)
-                                != std::cmp::Ordering::Equal
-                            {
+                            if self.compare_profile(index, input) != std::cmp::Ordering::Equal {
                                 break;
                             }
                             if self.entries[index].appearance.stack.same(input.stack) {
@@ -121,25 +119,14 @@ impl TextQueryCache {
         None
     }
 
-    fn compare_profile(
-        &self,
-        index: usize,
-        input: &TextPlanInput<'_>,
-        prepared_only: bool,
-    ) -> std::cmp::Ordering {
+    fn compare_profile(&self, index: usize, input: &TextPlanInput<'_>) -> std::cmp::Ordering {
         let entry = &self.entries[index];
         let metadata = (
             entry.source.len(),
             entry.appearance.font_size,
             entry.appearance.weight as u8,
-            entry.prepared_only,
         )
-            .cmp(&(
-                input.source.len(),
-                input.font_size,
-                input.weight as u8,
-                prepared_only,
-            ));
+            .cmp(&(input.source.len(), input.font_size, input.weight as u8));
         if metadata != std::cmp::Ordering::Equal {
             return metadata;
         }
@@ -155,13 +142,11 @@ impl TextQueryCache {
         std::cmp::Ordering::Equal
     }
 
-    fn profile_insertion_point(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> usize {
+    fn profile_insertion_point(&self, input: &TextPlanInput<'_>) -> usize {
         let (mut low, mut high) = (0, self.profiles.len());
         while low < high {
             let middle = low + (high - low) / 2;
-            if self.compare_profile(self.profiles[middle], input, prepared_only)
-                == std::cmp::Ordering::Less
-            {
+            if self.compare_profile(self.profiles[middle], input) == std::cmp::Ordering::Less {
                 low = middle + 1;
             } else {
                 high = middle;
@@ -170,18 +155,13 @@ impl TextQueryCache {
         low
     }
 
-    fn query_key(
-        &self,
-        input: &TextPlanInput<'_>,
-        preferred_lines: Option<usize>,
-        prepared_only: bool,
-    ) -> TextQueryKey {
-        let shaping_entry = self.profile_entry(input, prepared_only);
+    fn query_key(&self, input: &TextPlanInput<'_>, preferred_lines: Option<usize>) -> TextQueryKey {
+        let shaping_entry = self.profile_entry(input);
 
         let shaping_state = if let Some(index) = shaping_entry {
             self.entries[index].shaping_state.clone()
         } else {
-            CachedTextQuery::shaping_state(input, prepared_only)
+            CachedTextQuery::shaping_state(input)
         };
         TextQueryKey {
             shaping_entry,
@@ -212,12 +192,12 @@ impl TextQueryCache {
         &self,
         index: &[TextQueryIndex],
         fingerprint: [u8; 32],
-        key: (&TextPlanInput<'_>, Option<usize>, bool),
+        key: (&TextPlanInput<'_>, Option<usize>),
         exact: bool,
 
         shaping_entry: Option<usize>,
     ) -> Option<usize> {
-        let (input, preferred_lines, _prepared_only) = key;
+        let (input, preferred_lines) = key;
         let start = Self::lower_bound(index, fingerprint);
         for candidate in &index[start..] {
             if candidate.fingerprint != fingerprint {
@@ -279,7 +259,6 @@ struct CachedTextQuery {
     owner: String,
     pair_ordinal: u32,
     exact_override: bool,
-    prepared_only: bool,
     width: i64,
     preferred_lines: Option<usize>,
     unwrapped_width: Option<i64>,
@@ -307,16 +286,15 @@ impl CachedTextQuery {
     fn fingerprints(
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
-        prepared_only: bool,
     ) -> ([u8; 32], [u8; 32]) {
-        let state = Self::shaping_state(input, prepared_only);
+        let state = Self::shaping_state(input);
         (
             state.clone().finalize().into(),
             Self::presentation_fingerprint(state, input, preferred_lines),
         )
     }
 
-    fn shaping_state(input: &TextPlanInput<'_>, prepared_only: bool) -> Sha256 {
+    fn shaping_state(input: &TextPlanInput<'_>) -> Sha256 {
         let mut hash = Sha256::new();
         // The complete, unnormalized source fixes paragraph bidi and scripts;
         // language and Unicode policy are fixed for this renderer. The memo is
@@ -326,14 +304,11 @@ impl CachedTextQuery {
         input.stack.hash_into(&mut hash);
 
         hash.update(input.font_size.to_le_bytes());
-        hash.update([
-            match input.weight {
-                TextWeight::Normal => 0,
-                TextWeight::Semibold => 1,
-                TextWeight::Bold => 2,
-            },
-            u8::from(prepared_only),
-        ]);
+        hash.update([match input.weight {
+            TextWeight::Normal => 0,
+            TextWeight::Semibold => 1,
+            TextWeight::Bold => 2,
+        }]);
         hash
     }
 
@@ -552,7 +527,7 @@ impl ResolvedTheme {
             .map_err(|_| crate::Error::Render("axis row capacity overflowed".into()))?;
         let mut width = 1_i64;
         for source in labels {
-            let input = crate::layout::TextPlanInput {
+            let mut input = crate::layout::TextPlanInput {
                 source,
                 stack: &appearance.stack,
                 weight: appearance.weight,
@@ -569,25 +544,26 @@ impl ResolvedTheme {
                 },
                 exact_override: false,
             };
+            input.provenance.pair_ordinal = environment
+                .admit_text(&appearance.stack, appearance.weight.into(), source, None)
+                .map_err(|error| {
+                    Error::Render(format!("axis intrinsic text admission: {error}"))
+                })?;
 
-            let (cached, query_key) =
-                self.cached_text_query(&input, Some(preferred_lines), true)?;
+            let (cached, query_key) = self.cached_text_query(&input, Some(preferred_lines))?;
             let preferred_width = if let Some(CachedTextResult::PreferredWidth(width)) = cached {
                 width
             } else {
                 let analysis = if let Some(CachedTextResult::Reflow(plan)) = cached {
                     plan
                 } else {
-                    let plan = environment
-                        .plan_text_with_policy(input.clone(), true)
-                        .map_err(|error| {
-                            crate::Error::Render(format!("axis intrinsic text analysis: {error}"))
-                        })?;
+                    let plan = environment.plan_text(input.clone()).map_err(|error| {
+                        crate::Error::Render(format!("axis intrinsic text analysis: {error}"))
+                    })?;
                     self.cache_text_query(
                         &input,
                         appearance,
                         None,
-                        true,
                         CachedTextResult::Plan(plan.clone()),
                         TextQueryKey {
                             fingerprint: CachedTextQuery::presentation_fingerprint(
@@ -613,7 +589,6 @@ impl ResolvedTheme {
                     &input,
                     appearance,
                     Some(preferred_lines),
-                    true,
                     CachedTextResult::PreferredWidth(requirements.preferred_width_quanta),
                     query_key,
                 )?;
@@ -665,14 +640,13 @@ impl ResolvedTheme {
         owner: &str,
         exact_override: bool,
     ) -> Result<ResolvedTextPlan, Error> {
-        self.plan_text_quanta_with_policy(
+        self.plan_text_quanta_scoped(
             source,
             appearance,
             i64::MAX,
             alignment,
             owner,
             exact_override,
-            true,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .map_err(crate::layout::fit::PlanError::into_error)
@@ -687,14 +661,13 @@ impl ResolvedTheme {
         owner: &str,
         exact_override: bool,
     ) -> Result<ResolvedTextPlan, Error> {
-        self.plan_text_quanta_with_policy(
+        self.plan_text_quanta_scoped(
             source,
             appearance,
             maximum_width_quanta,
             alignment,
             owner,
             exact_override,
-            true,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .map_err(crate::layout::fit::PlanError::into_error)
@@ -702,9 +675,9 @@ impl ResolvedTheme {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the shared adapter preserves every immutable text-plan input while selecting the phase-owned preparation policy"
+        reason = "the shared adapter preserves every immutable text-plan input and the consuming fit scope"
     )]
-    pub(crate) fn plan_text_quanta_with_policy(
+    pub(crate) fn plan_text_quanta_scoped(
         &self,
         source: &str,
         appearance: &TextTheme,
@@ -712,10 +685,9 @@ impl ResolvedTheme {
         alignment: PhysicalTextAlignment,
         owner: &str,
         exact_override: bool,
-        prepared_only: bool,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
-        let input = TextPlanInput {
+        let mut input = TextPlanInput {
             source,
             stack: appearance.get_stack(),
             weight: appearance.get_weight(),
@@ -725,14 +697,22 @@ impl ResolvedTheme {
             alignment,
             paint: appearance.get_color(),
             provenance: TextPlanProvenance {
-                pair_ordinal: pair_ordinal(appearance.get_weight()),
+                pair_ordinal: 0,
                 owner: owner.to_owned(),
             },
             exact_override,
         };
         let environment = self.prepared_font_environment()?;
+        input.provenance.pair_ordinal = environment
+            .admit_text(
+                appearance.get_stack(),
+                appearance.get_weight().into(),
+                source,
+                None,
+            )
+            .map_err(|error| Error::Render(format!("{owner} text admission: {error}")))?;
 
-        let (cached, query_key) = self.cached_text_query(&input, None, prepared_only)?;
+        let (cached, query_key) = self.cached_text_query(&input, None)?;
 
         let result = match cached {
             Some(CachedTextResult::Plan(plan)) => return Ok(plan),
@@ -746,7 +726,7 @@ impl ResolvedTheme {
                     ..input.clone()
                 })
             }
-            _ => environment.plan_text_with_policy(input.clone(), prepared_only),
+            _ => environment.plan_text(input.clone()),
         };
         let plan = result.map_err(|error| match error {
             crate::layout::TextPlanError::Fit(miss) => scope
@@ -763,7 +743,6 @@ impl ResolvedTheme {
             &input,
             appearance,
             None,
-            prepared_only,
             CachedTextResult::Plan(plan.clone()),
             query_key,
         )?;
@@ -775,16 +754,15 @@ impl ResolvedTheme {
         &self,
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
-        prepared_only: bool,
     ) -> Result<(Option<CachedTextResult>, TextQueryKey), Error> {
         let cache = self
             .text_queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
-        let query_key = cache.query_key(input, preferred_lines, prepared_only);
+        let query_key = cache.query_key(input, preferred_lines);
         let shaping_fingerprint = query_key.shaping_fingerprint;
         let fingerprint = query_key.fingerprint;
-        let key = (input, preferred_lines, prepared_only);
+        let key = (input, preferred_lines);
         if let Some(index) = cache.find_query(
             &cache.exact,
             fingerprint,
@@ -824,7 +802,6 @@ impl ResolvedTheme {
         input: &TextPlanInput<'_>,
         appearance: &TextTheme,
         preferred_lines: Option<usize>,
-        prepared_only: bool,
         result: CachedTextResult,
         mut query_key: TextQueryKey,
     ) -> Result<(), Error> {
@@ -838,12 +815,12 @@ impl ResolvedTheme {
         }
 
         if query_key.shaping_entry.is_none() && cache.entries.len() != query_key.observed_entries {
-            query_key.shaping_entry = cache.profile_entry(input, prepared_only);
+            query_key.shaping_entry = cache.profile_entry(input);
         }
 
         let shaping_fingerprint = query_key.shaping_fingerprint;
         let fingerprint = query_key.fingerprint;
-        let key = (input, preferred_lines, prepared_only);
+        let key = (input, preferred_lines);
         if cache
             .find_query(
                 &cache.exact,
@@ -891,7 +868,7 @@ impl ResolvedTheme {
             None
         };
         let profile_position = if new_shaping {
-            Some(cache.profile_insertion_point(input, prepared_only))
+            Some(cache.profile_insertion_point(input))
         } else {
             None
         };
@@ -930,7 +907,6 @@ impl ResolvedTheme {
             owner: copy(&input.provenance.owner)?,
             pair_ordinal: input.provenance.pair_ordinal,
             exact_override: input.exact_override,
-            prepared_only,
             width: input.maximum_width_quanta,
             preferred_lines,
             result,
@@ -963,6 +939,7 @@ impl ResolvedTheme {
     }
 }
 
+#[cfg(test)]
 const fn pair_ordinal(weight: TextWeight) -> u32 {
     match weight {
         TextWeight::Normal => 0,
@@ -1495,7 +1472,7 @@ mod tests {
             cache.find_query(
                 &cache.exact,
                 [0; 32],
-                (&collision, None, true),
+                (&collision, None),
                 true,
                 Some(expected)
             ),
@@ -1506,7 +1483,7 @@ mod tests {
             cache.find_query(
                 &cache.shaping,
                 [0; 32],
-                (&collision, None, true),
+                (&collision, None),
                 false,
                 Some(expected)
             ),
@@ -1519,7 +1496,7 @@ mod tests {
             .find_query(
                 &cache.exact,
                 [0; 32],
-                (&wrong_provenance, None, true),
+                (&wrong_provenance, None),
                 true,
                 Some(expected)
             )
@@ -1528,7 +1505,7 @@ mod tests {
             cache.find_query(
                 &cache.shaping,
                 [0; 32],
-                (&wrong_provenance, None, true),
+                (&wrong_provenance, None),
                 false,
                 Some(expected)
             ),
@@ -1547,7 +1524,7 @@ mod tests {
             .clone();
         let input = indexed_query_input("A", &appearance, "owner");
 
-        let fingerprints = CachedTextQuery::fingerprints(&input, None, true);
+        let fingerprints = CachedTextQuery::fingerprints(&input, None);
         for change in 0..7 {
             let mut changed = input.clone();
             match change {
@@ -1559,12 +1536,12 @@ mod tests {
                 5 => changed.provenance.owner.push('x'),
                 _ => changed.provenance.pair_ordinal += 1,
             }
-            let changed = CachedTextQuery::fingerprints(&changed, None, true);
+            let changed = CachedTextQuery::fingerprints(&changed, None);
             assert_eq!(changed.0, fingerprints.0);
             assert_ne!(changed.1, fingerprints.1);
         }
         assert_ne!(
-            CachedTextQuery::fingerprints(&input, Some(2), true).1,
+            CachedTextQuery::fingerprints(&input, Some(2)).1,
             fingerprints.1
         );
         for change in 0..4 {
@@ -1577,14 +1554,10 @@ mod tests {
                 _ => changed.weight = TextWeight::Bold,
             }
             assert_ne!(
-                CachedTextQuery::fingerprints(&changed, None, true).0,
+                CachedTextQuery::fingerprints(&changed, None).0,
                 fingerprints.0
             );
         }
-        assert_ne!(
-            CachedTextQuery::fingerprints(&input, None, false).0,
-            fingerprints.0
-        );
     }
 
     #[test]
@@ -1630,6 +1603,51 @@ mod tests {
         assert!(!first.shares_payload(&second));
         assert_eq!(second.source, "X");
         assert_eq!(theme.text_queries.lock().unwrap().profiles.len(), 2);
+    }
+
+    #[test]
+    fn later_font_admissions_preserve_cached_shapes_and_complete_request_payloads() {
+        let theme = Theme::publication().resolve().unwrap();
+        theme
+            .font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic_faces(&[
+                ("Base", &['A']),
+                ("Complete", &['A', '\u{301}']),
+            ])))
+            .unwrap();
+        let appearance = TextTheme {
+            stack: crate::font::canonical::named_stack(&["Base", "Complete"]),
+            ..theme.typography.root.caption.clone()
+        };
+        let measure = |source| {
+            theme
+                .measure_text(
+                    source,
+                    &appearance,
+                    PhysicalTextAlignment::Start,
+                    "actual source",
+                    true,
+                )
+                .unwrap()
+        };
+        let first = measure("A");
+        let marked = measure("A\u{301}");
+        assert_ne!(first.lines[0].runs[0].face, marked.lines[0].runs[0].face);
+        let counts = crate::font::canonical::planning_counts();
+        assert!(first.shares_payload(&measure("A")));
+        assert!(marked.shares_payload(&measure("A\u{301}")));
+        assert_eq!(crate::font::canonical::planning_counts(), counts);
+        theme
+            .prepared_font_environment()
+            .unwrap()
+            .operation()
+            .seal_fonts()
+            .unwrap();
+        let counts = crate::font::canonical::planning_counts();
+        assert!(first.shares_payload(&measure("A")));
+        assert!(marked.shares_payload(&measure("A\u{301}")));
+        assert_eq!(crate::font::canonical::planning_counts(), counts);
+        assert_eq!(theme.text_queries.lock().unwrap().entries.len(), 2);
     }
 
     #[test]

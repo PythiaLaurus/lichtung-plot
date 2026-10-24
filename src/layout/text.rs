@@ -9,9 +9,11 @@ use unicode_bidi::{BidiDataSource, HardcodedBidiData, ParagraphBidiInfo};
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
+#[cfg(test)]
+use crate::font::canonical::RequestedWeight;
 use crate::font::canonical::{
     self, DesignMetrics, FaceIdentity, FontError, FontStack, GlyphInk, PairProvenance,
-    PreparedFontEnvironment, RequestedWeight, ResolvedFontPair, ScalarFaceSelection,
+    PreparedFontEnvironment, ResolvedFontPair, ScalarFaceSelection,
     ShapedRun as CanonicalShapedRun, ShapingDirection,
 };
 use crate::theme::Color;
@@ -725,30 +727,10 @@ impl PreparedFontEnvironment {
         &self,
         input: TextPlanInput<'_>,
     ) -> Result<ResolvedTextPlan, TextPlanError> {
-        self.plan_text_with_policy(input, false)
-    }
-
-    pub(crate) fn plan_text_with_policy(
-        &self,
-        input: TextPlanInput<'_>,
-        prepared_only: bool,
-    ) -> Result<ResolvedTextPlan, TextPlanError> {
-        match measure_text(
-            self,
-            input,
-            prepared_only && self.prepared_pairs_are_sealed()?,
-            None,
-        )? {
+        match measure_text(self, input, None)? {
             TextMeasurement::Assigned(plan) => Ok(plan),
             TextMeasurement::Intrinsic(_) => unreachable!("assigned text request"),
         }
-    }
-
-    pub(crate) fn plan_prepared_text(
-        &self,
-        input: TextPlanInput<'_>,
-    ) -> Result<ResolvedTextPlan, TextPlanError> {
-        self.plan_text_with_policy(input, true)
     }
 
     pub(crate) fn text_intrinsic_requirements(
@@ -756,12 +738,7 @@ impl PreparedFontEnvironment {
         input: TextPlanInput<'_>,
         preferred_lines: usize,
     ) -> Result<TextIntrinsicRequirements, TextPlanError> {
-        match measure_text(
-            self,
-            input,
-            self.prepared_pairs_are_sealed()?,
-            Some(preferred_lines),
-        )? {
+        match measure_text(self, input, Some(preferred_lines))? {
             TextMeasurement::Intrinsic(requirements) => Ok(requirements),
             TextMeasurement::Assigned(_) => unreachable!("intrinsic text request"),
         }
@@ -791,10 +768,8 @@ enum TextMeasurement {
 fn measure_text(
     environment: &PreparedFontEnvironment,
     mut input: TextPlanInput<'_>,
-    prepared_only: bool,
     intrinsic_lines: Option<usize>,
 ) -> Result<TextMeasurement, TextPlanError> {
-    let prepared_only = prepared_only || environment.prepared_pairs_are_sealed()?;
     if input.font_size == 0 {
         return Err(TextPlanError::InvalidFontSize);
     }
@@ -806,56 +781,12 @@ fn measure_text(
     let stack = input.stack;
     let line_height_quanta = resolve_line_height(input.line_height, input.font_size)?;
 
-    let scalar_count = input.source.chars().count();
-    let mut required_scalars = Vec::new();
-    super::unicode16::reserve(&mut required_scalars, scalar_count + 1)?;
-    required_scalars.extend(input.source.chars());
-    if input.source.contains('\u{ad}') {
-        required_scalars.push('-');
-    }
-    let weight = requested_weight(input.weight);
-    let prepared = environment.prepared_pair(stack, weight)?;
-    let mut pair = match prepared {
-        Some(pair) if prepared_only => pair,
-        Some(pair) => {
-            if required_scalars.iter().any(|scalar| {
-                !pair
-                    .selected_scalars
-                    .iter()
-                    .any(|selection| selection.scalar == *scalar)
-            }) {
-                environment.resolve_pair(
-                    pair.provenance.pair_ordinal,
-                    stack,
-                    weight,
-                    &required_scalars,
-                )?
-            } else {
-                pair
-            }
-        }
-        None if prepared_only => return Err(TextPlanError::MissingPreparedPair),
-        None => {
-            environment.prepare_pair(
-                input.provenance.pair_ordinal,
-                stack,
-                weight,
-                &required_scalars,
-                None,
-            )?;
-            environment
-                .prepared_pair(stack, weight)?
-                .ok_or(TextPlanError::MissingPreparedPair)?
-        }
-    };
+    let weight = input.weight.into();
+    environment.admit_text(stack, weight, input.source, None)?;
+    let pair = environment
+        .prepared_pair(stack, weight)?
+        .ok_or(TextPlanError::MissingPreparedPair)?;
     input.provenance.pair_ordinal = pair.provenance.pair_ordinal;
-    if !prepared_only {
-        environment.prepare_source_units(pair.provenance.pair_ordinal, input.source, None)?;
-        pair.selected_units = environment
-            .prepared_pair(stack, weight)?
-            .ok_or(TextPlanError::MissingPreparedPair)?
-            .selected_units;
-    }
     let primary_metrics = environment.face_metrics(pair.primary)?;
 
     let paragraph_seeds = mandatory_paragraph_seeds(input.source)?;
@@ -1276,14 +1207,6 @@ fn checked_multiply(
     value
         .checked_mul(factor)
         .ok_or(TextPlanError::Arithmetic(resource))
-}
-
-fn requested_weight(weight: TextWeight) -> RequestedWeight {
-    match weight {
-        TextWeight::Normal => RequestedWeight::Normal,
-        TextWeight::Semibold => RequestedWeight::Semibold,
-        TextWeight::Bold => RequestedWeight::Bold,
-    }
 }
 
 fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPlanError> {
@@ -2618,9 +2541,12 @@ mod tests {
     }
 
     #[test]
-    fn requested_plan_retains_style_and_pair_provenance() {
+    fn requested_plan_retains_style_and_registered_pair_provenance() {
         let environment = PreparedFontEnvironment::synthetic();
         let mut request = input("A A A", 17_408, PhysicalTextAlignment::End);
+        environment
+            .prepare_pair(7, request.stack, request.weight.into(), &['A', ' '], None)
+            .unwrap();
         request.provenance.pair_ordinal = 7;
         request.provenance.owner = "requested label".into();
         request.exact_override = true;

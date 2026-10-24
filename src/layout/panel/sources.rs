@@ -6,12 +6,6 @@ use crate::theme::ResolvedTheme;
 use crate::{Error, TickGeneration};
 
 pub(super) const MAX_TICKS: usize = TickGeneration::MAX_COUNT as usize;
-pub(crate) const NUMERIC_ALPHABET: &[char] = &[
-    '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', 'e', 'k',
-];
-pub(crate) const FOREST_NUMERIC_ALPHABET: &[char] = &[
-    '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', '^', 'e', 'k',
-];
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
 const FACTORS: [f64; 4] = [1.0, 2.0, 3.0, 5.0];
 
@@ -604,6 +598,20 @@ pub(super) fn labels_fit(
     side: AxisSide,
     theme: &ResolvedTheme,
 ) -> Result<bool, Error> {
+    let appearance = &theme.typography.axes.tick_label;
+    let environment = theme.prepared_font_environment()?;
+    for tick in ticks.iter().filter(|tick| !tick.label.is_empty()) {
+        environment
+            .admit_text(
+                &appearance.stack,
+                appearance.weight.into(),
+                &tick.label,
+                None,
+            )
+            .map_err(|error| {
+                Error::Render(format!("numeric axis candidate text admission: {error}"))
+            })?;
+    }
     let cells = match super::cells::assign(
         ticks,
         false,
@@ -634,14 +642,13 @@ pub(super) fn labels_fit(
             ),
             AxisSide::Left => (i64::MAX, PhysicalTextAlignment::End, "y-axis tick label"),
         };
-        let plan = match theme.plan_text_quanta_with_policy(
+        let plan = match theme.plan_text_quanta_scoped(
             &tick.label,
             &theme.typography.axes.tick_label,
             width,
             alignment,
             role,
             false,
-            true,
             &crate::layout::fit::ROOT_SCOPE,
         ) {
             Ok(plan) => plan,

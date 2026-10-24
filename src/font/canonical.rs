@@ -8,7 +8,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use fontdb::{Database, Family, Source, Stretch, Style, ID};
 use sha2::{Digest, Sha256};
@@ -23,9 +23,23 @@ thread_local! {
     pub(crate) static FONT_PAIR_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FONT_NORMALIZATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SELECTION_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static FONT_SOURCE_ADMISSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static FONT_FINAL_SEALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SHAPED_GLYPH_RETAINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(crate) fn planning_counts() -> [usize; 6] {
+    [
+        FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        FONT_PAIR_RESOLUTION_CALLS.with(std::cell::Cell::get),
+        FONT_SELECTION_PROBES.with(std::cell::Cell::get),
+        FONT_SOURCE_ADMISSIONS.with(std::cell::Cell::get),
+        FONT_FINAL_SEALS.with(std::cell::Cell::get),
+        FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+    ]
 }
 
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
@@ -157,8 +171,12 @@ pub(crate) enum FontError {
     MissingGlyph { pair_ordinal: u32, scalar: u32 },
     #[error("font pair {pair_ordinal} was prepared more than once")]
     DuplicatePreparedPair { pair_ordinal: u32 },
-    #[error("font pair {pair_ordinal} was prepared after the operation census was sealed")]
+    #[error("font pair {pair_ordinal} was prepared after the root's fonts were sealed")]
     PreparedPairAfterSeal { pair_ordinal: u32 },
+    #[error("font operation is already sealed")]
+    OperationSealed,
+    #[error("frozen text does not match admitted font pair {pair_ordinal}")]
+    UnadmittedText { pair_ordinal: u32 },
     #[error("font unit was not admitted in pair {pair_ordinal}")]
     UnknownUnit { pair_ordinal: u32 },
     #[error("unsupported text control U+{scalar:04X}")]
@@ -312,6 +330,16 @@ impl RequestedWeight {
             Self::Normal => 400,
             Self::Semibold => 600,
             Self::Bold => 700,
+        }
+    }
+}
+
+impl From<crate::TextWeight> for RequestedWeight {
+    fn from(weight: crate::TextWeight) -> Self {
+        match weight {
+            crate::TextWeight::Normal => Self::Normal,
+            crate::TextWeight::Semibold => Self::Semibold,
+            crate::TextWeight::Bold => Self::Bold,
         }
     }
 }
@@ -720,6 +748,20 @@ pub(crate) struct SelectedFontUnit {
 }
 
 impl ResolvedFontPair {
+    fn covers_source(&self, source: &str) -> bool {
+        source
+            .chars()
+            .chain(source.contains('\u{ad}').then_some('-'))
+            .all(|scalar| {
+                self.selected_scalars
+                    .iter()
+                    .any(|entry| entry.scalar == scalar)
+            })
+            && selection_units(source)
+                .filter(|unit| unit.chars().count() > 1 && unit.chars().any(is_visible_mark))
+                .all(|unit| self.selected_units.iter().any(|entry| entry.source == unit))
+    }
+
     fn try_copy(
         &self,
         mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -952,12 +994,13 @@ pub(crate) struct CanonicalFontCore {
     preparation: FontPreparation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct PreparedPair {
     stack: FontStack,
     weight: RequestedWeight,
     candidates: Vec<CandidateFace>,
     resolved: ResolvedFontPair,
+    sources: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1050,9 +1093,33 @@ pub(crate) struct OperationContext {
     // Shared by clones independently of accounting and mutable cache contents.
     identity: Arc<()>,
     pub(crate) palette_cache: Arc<Mutex<crate::theme::PaletteCache>>,
+    fonts: Arc<Mutex<FontOperation>>,
+}
+
+#[derive(Debug, Default)]
+struct FontOperation {
+    environments: Vec<Weak<RwLock<CanonicalFontCore>>>,
+    sealed: bool,
 }
 
 impl OperationContext {
+    pub(crate) fn seal_fonts(&self) -> Result<(), FontError> {
+        let mut fonts = self.fonts.lock().map_err(|_| FontError::Synchronization)?;
+        if fonts.sealed {
+            return Err(FontError::OperationSealed);
+        }
+        for environment in fonts.environments.iter().filter_map(Weak::upgrade) {
+            let mut core = environment
+                .write()
+                .map_err(|_| FontError::Synchronization)?;
+            core.prepared_pairs_sealed = true;
+            #[cfg(test)]
+            FONT_FINAL_SEALS.with(|calls| calls.set(calls.get() + 1));
+        }
+        fonts.sealed = true;
+        Ok(())
+    }
+
     pub(crate) fn same_operation(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.identity, &other.identity)
     }
@@ -1061,41 +1128,178 @@ impl OperationContext {
         Self {
             identity: Arc::new(()),
             palette_cache: Arc::default(),
+            fonts: Arc::default(),
         }
     }
 }
 
 impl PreparedFontEnvironment {
+    /// Verify frozen source coverage and pair provenance without adding fonts,
+    /// copying selections, probing faces or shaping text.
+    pub(crate) fn validate_admitted_text(
+        &self,
+        stack: &FontStack,
+        provenance: &PairProvenance,
+        source: &str,
+    ) -> Result<(), FontError> {
+        let core = self.core.read().map_err(|_| FontError::Synchronization)?;
+        if core.prepared_pairs_sealed
+            && core.prepared_pairs.iter().any(|pair| {
+                pair.stack.same(stack)
+                    && pair.resolved.provenance == *provenance
+                    && pair.resolved.covers_source(source)
+            })
+        {
+            Ok(())
+        } else {
+            Err(FontError::UnadmittedText {
+                pair_ordinal: provenance.pair_ordinal,
+            })
+        }
+    }
+
+    /// Admit one reached source into this operation before any metric or shaping
+    /// query. Both initial census and bounded planning use this same transaction.
+    pub(crate) fn admit_text(
+        &self,
+        stack: &FontStack,
+        weight: RequestedWeight,
+        source: &str,
+        mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<u32, FontError> {
+        u32::try_from(source.len())
+            .map_err(|_| FontError::Arithmetic("admitted text source byte range"))?;
+        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
+        if let Some(stage) = stage.as_ref() {
+            if !core.operation.same_operation(&stage.operation()) {
+                return Err(FontError::Arithmetic(
+                    "cannot replace a prepared font operation",
+                ));
+            }
+        }
+        let existing = core
+            .prepared_pairs
+            .iter()
+            .position(|pair| pair.weight == weight && pair.stack.same(stack));
+        if let Some(index) = existing {
+            if core.prepared_pairs[index]
+                .sources
+                .iter()
+                .any(|known| known == source)
+            {
+                return Ok(core.prepared_pairs[index].resolved.provenance.pair_ordinal);
+            }
+        }
+        let ordinal = if let Some(index) = existing {
+            core.prepared_pairs[index].resolved.provenance.pair_ordinal
+        } else {
+            core.prepared_pairs
+                .iter()
+                .map(|pair| pair.resolved.provenance.pair_ordinal)
+                .max()
+                .map_or(Ok(0), |ordinal| {
+                    ordinal
+                        .checked_add(1)
+                        .ok_or(FontError::Arithmetic("font pair ordinal overflow"))
+                })?
+        };
+        if core.prepared_pairs_sealed {
+            return if existing
+                .is_some_and(|index| core.prepared_pairs[index].resolved.covers_source(source))
+            {
+                Ok(ordinal)
+            } else {
+                Err(FontError::PreparedPairAfterSeal {
+                    pair_ordinal: ordinal,
+                })
+            };
+        }
+        let count = source
+            .chars()
+            .count()
+            .checked_add(usize::from(source.contains('\u{ad}')))
+            .ok_or(FontError::Arithmetic("font source scalar count overflow"))?;
+        let mut scalars = Vec::new();
+        reserve_cached_with_stage(&mut scalars, count, stage.as_deref_mut())?;
+        scalars.extend(source.chars());
+        if source.contains('\u{ad}') {
+            scalars.push('-');
+        }
+        let index =
+            core.admit_scalars_in(ordinal, stack, weight, &scalars, stage.as_deref_mut())?;
+        core.prepare_source_units(ordinal, source, stage.as_deref_mut())?;
+        let mut retained = String::new();
+        if let Some(stage) = stage.as_deref_mut() {
+            stage
+                .reserve_prepared_string(&mut retained, source.len(), "admitted text source")
+                .map_err(|error| FontError::Reservation(error.to_string()))?;
+        } else {
+            retained
+                .try_reserve_exact(source.len())
+                .map_err(|_| FontError::Allocation("admitted text source"))?;
+        }
+        reserve_cached_with_stage(&mut core.prepared_pairs[index].sources, 1, stage)?;
+        retained.push_str(source);
+        core.prepared_pairs[index].sources.push(retained);
+        #[cfg(test)]
+        FONT_SOURCE_ADMISSIONS.with(|calls| calls.set(calls.get() + 1));
+        Ok(ordinal)
+    }
+
+    fn for_core(core: CanonicalFontCore) -> Result<Self, FontError> {
+        let operation = core.operation.clone();
+        let core = Arc::new(RwLock::new(core));
+        let mut fonts = operation
+            .fonts
+            .lock()
+            .map_err(|_| FontError::Synchronization)?;
+        if fonts.sealed {
+            return Err(FontError::OperationSealed);
+        }
+        fonts
+            .environments
+            .try_reserve(1)
+            .map_err(|_| FontError::Allocation("operation font environments"))?;
+        fonts.environments.push(Arc::downgrade(&core));
+        Ok(Self { core })
+    }
+
+    #[cfg(test)]
     pub(crate) fn discover_system() -> Result<Self, FontError> {
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
         let scalar_presence = scalar_presence_map()?;
-        Ok(Self {
-            core: Arc::new(RwLock::new(CanonicalFontCore::discover_prepared(
-                FontPreparation::new(),
-                scalar_presence,
-                None,
-            )?)),
-        })
+        Self::for_core(CanonicalFontCore::discover_prepared(
+            FontPreparation::new(),
+            scalar_presence,
+            None,
+        )?)
     }
 
     pub(crate) fn discover_for_operation(
         scalar_presence: Vec<u64>,
-        operation: OperationContext,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<Self, FontError> {
+        let operation = prepared_stage.operation();
+        if operation
+            .fonts
+            .lock()
+            .map_err(|_| FontError::Synchronization)?
+            .sealed
+        {
+            return Err(FontError::OperationSealed);
+        }
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
         let preparation = FontPreparation::for_operation(operation);
-        Ok(Self {
-            core: Arc::new(RwLock::new(CanonicalFontCore::discover_prepared(
-                preparation,
-                scalar_presence,
-                Some(prepared_stage),
-            )?)),
-        })
+        Self::for_core(CanonicalFontCore::discover_prepared(
+            preparation,
+            scalar_presence,
+            Some(prepared_stage),
+        )?)
     }
 
+    #[cfg(test)]
     pub(crate) fn resolve_pair(
         &self,
         pair_ordinal: u32,
@@ -1125,6 +1329,7 @@ impl PreparedFontEnvironment {
         self.core.read().unwrap().operation.clone()
     }
 
+    #[cfg(test)]
     pub(crate) fn reserve_prepared_pairs(
         &self,
         count: usize,
@@ -1150,6 +1355,7 @@ impl PreparedFontEnvironment {
             .prepare_pairs_with_stage(requests, prepared_stage)
     }
 
+    #[cfg(test)]
     pub(crate) fn prepare_pair(
         &self,
         pair_ordinal: u32,
@@ -1169,27 +1375,30 @@ impl PreparedFontEnvironment {
         )
     }
 
-    pub(crate) fn seal_prepared_pairs(&self) -> Result<(), FontError> {
-        self.core
-            .write()
-            .map_err(|_| FontError::Synchronization)?
-            .prepared_pairs_sealed = true;
-        Ok(())
-    }
-
+    #[cfg(test)]
     pub(crate) fn prepare_source_units(
         &self,
         pair_ordinal: u32,
         source: &str,
-        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+        prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), FontError> {
         let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
-        if core.prepared_pairs_sealed {
+        core.prepare_source_units(pair_ordinal, source, prepared_stage)
+    }
+}
+
+impl CanonicalFontCore {
+    fn prepare_source_units(
+        &mut self,
+        pair_ordinal: u32,
+        source: &str,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), FontError> {
+        if self.prepared_pairs_sealed {
             return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
         }
-        // Staged requirements admitted scalar/unit traversal before their source copy.
-
-        let index = core
+        // Scalar coverage is complete before whole combining units are selected.
+        let index = self
             .prepared_pairs
             .iter()
             .position(|pair| pair.resolved.provenance.pair_ordinal == pair_ordinal)
@@ -1197,7 +1406,7 @@ impl PreparedFontEnvironment {
         for unit in selection_units(source)
             .filter(|unit| unit.chars().count() > 1 && unit.chars().any(is_visible_mark))
         {
-            let pair = &core.prepared_pairs[index].resolved;
+            let pair = &self.prepared_pairs[index].resolved;
             let mut found = false;
             for entry in &pair.selected_units {
                 if entry.source == unit {
@@ -1211,7 +1420,7 @@ impl PreparedFontEnvironment {
             let mut selected = None;
             for identity in &pair.provenance.candidates {
                 let mut metadata = None;
-                for face in &core.faces {
+                for face in &self.faces {
                     if face.identity == *identity {
                         metadata = Some(face);
                         break;
@@ -1220,7 +1429,7 @@ impl PreparedFontEnvironment {
                 let metadata = metadata.ok_or(FontError::InvalidMetrics {
                     identity: *identity,
                 })?;
-                let file = &core.files[metadata.file_ordinal];
+                let file = &self.files[metadata.file_ordinal];
                 let parsed =
                     ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|error| {
                         FontError::ParseFace {
@@ -1262,12 +1471,12 @@ impl PreparedFontEnvironment {
             }
 
             reserve_cached_with_stage(
-                &mut core.prepared_pairs[index].resolved.selected_units,
+                &mut self.prepared_pairs[index].resolved.selected_units,
                 1,
                 prepared_stage.as_deref_mut(),
             )?;
             retained.push_str(unit);
-            core.prepared_pairs[index]
+            self.prepared_pairs[index]
                 .resolved
                 .selected_units
                 .push(SelectedFontUnit {
@@ -1277,7 +1486,9 @@ impl PreparedFontEnvironment {
         }
         Ok(())
     }
+}
 
+impl PreparedFontEnvironment {
     pub(crate) fn prepared_pairs_are_sealed(&self) -> Result<bool, FontError> {
         Ok(self
             .core
@@ -1360,9 +1571,7 @@ impl PreparedFontEnvironment {
 
     #[cfg(test)]
     pub(crate) fn synthetic() -> Self {
-        Self {
-            core: Arc::new(RwLock::new(tests::generated_core())),
-        }
+        Self::for_core(tests::generated_core()).unwrap()
     }
 
     /// Retain generated OpenType layout tables for shaping conformance tests.
@@ -1380,17 +1589,16 @@ impl PreparedFontEnvironment {
                 }
             })
             .collect();
-        Self {
-            core: Arc::new(RwLock::new(
-                CanonicalFontCore::from_retained(
-                    files,
-                    &HostGenericNames::default(),
-                    FontPreparation::new(),
-                    scalar_presence_map().unwrap(),
-                )
-                .unwrap(),
-            )),
-        }
+        Self::for_core(
+            CanonicalFontCore::from_retained(
+                files,
+                &HostGenericNames::default(),
+                FontPreparation::new(),
+                scalar_presence_map().unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
     }
 
     /// Real retained SFNT faces with caller-chosen family names and cmap scalars.
@@ -1411,17 +1619,16 @@ impl PreparedFontEnvironment {
                 }
             })
             .collect();
-        Self {
-            core: Arc::new(RwLock::new(
-                CanonicalFontCore::from_retained(
-                    files,
-                    &HostGenericNames::default(),
-                    FontPreparation::new(),
-                    scalar_presence_map().unwrap(),
-                )
-                .unwrap(),
-            )),
-        }
+        Self::for_core(
+            CanonicalFontCore::from_retained(
+                files,
+                &HostGenericNames::default(),
+                FontPreparation::new(),
+                scalar_presence_map().unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
     }
 }
 
@@ -1687,6 +1894,7 @@ impl CanonicalFontCore {
                 },
                 weight: request.weight,
                 candidates: preparation.candidates,
+                sources: Vec::new(),
                 resolved: ResolvedFontPair {
                     provenance: PairProvenance {
                         pair_ordinal: request.pair_ordinal,
@@ -1702,6 +1910,7 @@ impl CanonicalFontCore {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn resolve_pair(
         &mut self,
         pair_ordinal: u32,
@@ -1709,10 +1918,11 @@ impl CanonicalFontCore {
         weight: RequestedWeight,
         required_scalars: &[char],
     ) -> Result<ResolvedFontPair, FontError> {
-        self.resolve_pair_with_stage(pair_ordinal, stack, weight, required_scalars, None)
+        let index = self.admit_scalars_in(pair_ordinal, stack, weight, required_scalars, None)?;
+        self.prepared_pairs[index].resolved.try_copy(None)
     }
 
-    fn resolve_pair_with_stage(
+    fn admit_scalars_in(
         &mut self,
         pair_ordinal: u32,
         stack: &FontStack,
@@ -1720,7 +1930,7 @@ impl CanonicalFontCore {
         required_scalars: &[char],
 
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-    ) -> Result<ResolvedFontPair, FontError> {
+    ) -> Result<usize, FontError> {
         let mut cached_index = None;
         for (index, cached) in self.prepared_pairs.iter().enumerate() {
             if cached.weight == weight && cached.stack.same(stack) {
@@ -1739,7 +1949,7 @@ impl CanonicalFontCore {
                 )),
                 prepared_stage.as_deref_mut(),
             )?;
-            return self.prepared_pairs[index].resolved.try_copy(prepared_stage);
+            return Ok(index);
         };
         let cached = &mut self.prepared_pairs[index];
         let mut missing = Vec::new();
@@ -1793,14 +2003,13 @@ impl CanonicalFontCore {
             reserve_cached_with_stage(
                 &mut cached.resolved.selected_scalars.0,
                 selected.len(),
-                prepared_stage.as_deref_mut(),
+                prepared_stage,
             )?;
 
             cached.resolved.selected_scalars.0.extend(selected);
         }
-        // Return the operation's accumulated coverage. Copies are admitted;
-        // cached metadata and successful scalar selections are never recomputed.
-        cached.resolved.try_copy(prepared_stage)
+        // Cached metadata and successful scalar selections are never recomputed.
+        Ok(index)
     }
 
     pub(crate) fn shape_run(
@@ -4114,7 +4323,7 @@ mod tests {
                 )
                 .unwrap();
         }
-        environment.seal_prepared_pairs().unwrap();
+        environment.operation().seal_fonts().unwrap();
         let pairs = [&literal, &separate, &keyword, &generic].map(|stack| {
             environment
                 .prepared_pair(stack, RequestedWeight::Normal)
@@ -4199,7 +4408,7 @@ mod tests {
     }
 
     #[test]
-    fn sealed_census_reuses_one_normalization_per_stack_and_one_selection_per_pair() {
+    fn registered_pairs_reuse_normalization_and_selection_after_final_sealing() {
         let environment = PreparedFontEnvironment::synthetic();
         let stack = named_stack(&["Test Sans"]);
         FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
@@ -4220,8 +4429,8 @@ mod tests {
                 None,
             )
             .unwrap();
-        environment.seal_prepared_pairs().unwrap();
-        for _ in 0..1000 {
+        environment.operation().seal_fonts().unwrap();
+        {
             let pair = environment
                 .clone()
                 .prepared_pair(&stack, RequestedWeight::Normal)
@@ -4875,12 +5084,32 @@ mod tests {
         environment
             .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
             .unwrap();
-        environment.seal_prepared_pairs().unwrap();
+        environment.operation().seal_fonts().unwrap();
 
         assert!(matches!(
             environment.resolve_pair(1, &stack, RequestedWeight::Normal, &['A']),
             Err(FontError::PreparedPairAfterSeal { pair_ordinal: 1 })
         ));
+        let counts = planning_counts();
+        assert_eq!(
+            environment
+                .admit_text(&stack, RequestedWeight::Normal, "A", None)
+                .unwrap(),
+            0
+        );
+        assert!(matches!(
+            environment.admit_text(&stack, RequestedWeight::Normal, "B", None),
+            Err(FontError::PreparedPairAfterSeal { pair_ordinal: 0 })
+        ));
+        assert!(matches!(
+            environment.admit_text(&stack, RequestedWeight::Bold, "A", None),
+            Err(FontError::PreparedPairAfterSeal { pair_ordinal: 1 })
+        ));
+        assert!(matches!(
+            environment.operation().seal_fonts(),
+            Err(FontError::OperationSealed)
+        ));
+        assert_eq!(planning_counts(), counts);
         assert!(matches!(
             environment.prepare_pairs(
                 std::iter::once(FontPairPreparationRequest::new(
@@ -5165,17 +5394,16 @@ mod tests {
             }
         })
         .collect();
-        let environment = PreparedFontEnvironment {
-            core: Arc::new(RwLock::new(
-                CanonicalFontCore::from_retained(
-                    files,
-                    &HostGenericNames::default(),
-                    FontPreparation::new(),
-                    scalar_presence_map(),
-                )
-                .unwrap(),
-            )),
-        };
+        let environment = PreparedFontEnvironment::for_core(
+            CanonicalFontCore::from_retained(
+                files,
+                &HostGenericNames::default(),
+                FontPreparation::new(),
+                scalar_presence_map(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let complete = named_stack(&["Base", "Complete"]);
         let split = named_stack(&["Base", "Mark"]);
         environment
@@ -5203,7 +5431,7 @@ mod tests {
                 .prepare_source_units(ordinal, "A A\u{0301}", None)
                 .unwrap();
         }
-        environment.seal_prepared_pairs().unwrap();
+        environment.operation().seal_fonts().unwrap();
         let pair = environment
             .prepared_pair(&complete, RequestedWeight::Normal)
             .unwrap()

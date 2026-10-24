@@ -63,7 +63,7 @@ No scientific rescaling occurs.
 Each attachment replaces its own complete policy independently of limits, labels,
 generation, Theme or setter order. Any gains no numeric attachment. Family
 capability does not waive actual categorical-axis rejection before fonts.
-Exact ticks suppress generated formatting/alphabet/affix work in either order,
+Exact ticks suppress replaced numeric conversion and text admission in either order,
 without suppressing actual-axis semantic validation.
 
 | Family | Actual x / y | Additional numeric surface |
@@ -222,7 +222,7 @@ x/y projection at source_y=category_count; shelf fit cannot remove eligible text
 Parent union can change local eligibility. Before fonts resolve each reachable
 mask(neither/base/terminal/both), its uniform precision/result or refusal. Immutable
 exact exclusions make masks unreachable and must not create unnecessary errors.
-Retain potential font grammar for every reachable candidate, separately from
+Retain actual combined strings for every reachable result, separately from
 actual paint membership. Later domain consequences select already prepared
 numeric/result context, not new font discovery or a new layout loop.
 
@@ -303,19 +303,19 @@ integral Forest at most d. Emit midpoint at most once.
 
 Resolve applicability, exact/category suppression, final domains, Shared policy
 compatibility and required sets before fonts. Known labels contribute full
-concatenated strings/affixes/names and base-plus-mark spans. Later generated axes
-contribute closed grammar, not sample labels or numeric value enumeration:
-Decimal `-.0123456789`, exponent notation adds e, Automatic adds M/e/k, default
-Forest adds ^. Include actual metric0 and declared literals. No generated plus,
-locale/grouping, Unicode minus, infinity or NaN; valid affixes add their own bytes.
+concatenated strings/affixes/names and base-plus-mark spans. Register generated-axis
+roles and actual metric0 without expanding a numeric alphabet or hypothetical
+affix boundaries. Retain the actual complete strings of each reached candidate,
+then admit all their font requirements before measurement or geometric rejection.
+A font error in a later member remains fatal even if an earlier label cannot fit.
 
-Retain actual internal affix units and every finite possible boundary unit from
-numeric grammar. For leading suffix combining marks join them with each possible
-terminal digit or default k/M; derive applicable prefix/numeric/name-space units
-with the same selection operation. Isolated scalar coverage is insufficient to
-preserve whole base-plus-mark preference. Resolve/retain faces and seal units
-before numeric measurement. Later feedback cannot add units, parse a stack or
-select a new face. No Cartesian enumeration of numeric values.
+One operation-bound admission path extends the canonical pair's missing scalars
+and complete combining units, including an affix mark joined to its actual digit.
+It can register a newly used pair without rediscovery or replacing prior choices.
+Isolated scalar coverage is insufficient to preserve whole-unit preference.
+Do not enumerate hypothetical values, terminal digits or uncalled producer output.
+The accepted root seals fonts once after bounded measurement and before capture;
+capture verifies source coverage and pair provenance without new font work.
 
 Terminal-source intrinsic uses singleton midpoint/minimum adaptive precision as
 an intrinsic input, not proof a later source fits. Natural low/mid/high probes are
@@ -336,7 +336,8 @@ Lower text caches intentionally key actual complete text and used shaping/
 presentation inputs after conversion; identical text/role/provenance can share
 glyph analysis without duplicating upstream numeric policies. Full equality still
 checks indexed fingerprint collisions. Cache enablement/order cannot select
-another number spelling or precision.
+another number spelling or precision. Unrelated admissions and the final seal do
+not invalidate earlier shaped plans or introduce a global admission-epoch key.
 
 Freeze final strings, selected precision, face/glyphs and placement. Capture, Null,
 SVG/PNG and Output reuse perform no numeric conversion, source selection or new
