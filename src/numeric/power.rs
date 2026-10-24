@@ -7,7 +7,8 @@
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::decimal::{
-    DecimalBuffer, NumericNotation, ResolvedFormat, ResolvedPrecision, RoundedDecimal,
+    DecimalBuffer, NumericNotation, NumericRounding, ResolvedFormat, ResolvedPrecision,
+    RoundedDecimal,
 };
 use crate::{Error, Result};
 
@@ -28,7 +29,7 @@ pub(crate) struct Log10Operand {
 pub(crate) struct PowerPlan {
     pub(crate) quantum: BigInt,
     pub(crate) multiplier: BigInt,
-    pub(crate) zero: bool,
+    pub(crate) tiny: bool,
     pub(crate) output: DecimalBuffer,
 }
 
@@ -123,14 +124,14 @@ impl Log10Operand {
             }
         };
         let multiplier = &self.decade - &quantum;
-        let zero = format.notation == NumericNotation::Decimal
+        let tiny = format.notation == NumericNotation::Decimal
             && matches!(format.precision, ResolvedPrecision::Fractional(_))
             && multiplier < BigInt::from(if self.fraction.bits() == 0 { 0_i8 } else { -1 });
         let body = if format.notation == NumericNotation::Decimal {
             let integral = std::cmp::max(BigInt::from(1_u8), &self.decade + 2_u8);
             match format.precision {
                 ResolvedPrecision::Fractional(digits) => {
-                    let integral = if zero { BigInt::from(1_u8) } else { integral };
+                    let integral = if tiny { BigInt::from(1_u8) } else { integral };
                     integral
                         + if digits == 0 {
                             0
@@ -162,7 +163,7 @@ impl Log10Operand {
             .ok_or_else(|| {
                 Error::Render("Log10 presentation output length is not representable".into())
             })?;
-        let integer_bits = if self.fraction.bits() == 0 || zero || multiplier.sign() == Sign::Minus
+        let integer_bits = if self.fraction.bits() == 0 || tiny || multiplier.sign() == Sign::Minus
         {
             1025
         } else {
@@ -179,16 +180,26 @@ impl Log10Operand {
         Ok(PowerPlan {
             quantum,
             multiplier,
-            zero,
+            tiny,
             output,
         })
     }
 
-    pub(super) fn symbolic(&self, plan: &PowerPlan) -> Option<RoundedDecimal> {
-        (self.fraction.bits() == 0 || plan.zero).then(|| RoundedDecimal {
+    pub(super) fn symbolic(
+        &self,
+        plan: &PowerPlan,
+        rounding: NumericRounding,
+    ) -> Option<RoundedDecimal> {
+        (self.fraction.bits() == 0 || plan.tiny).then(|| RoundedDecimal {
             negative: false,
-            coefficient: BigUint::from(u8::from(!plan.zero)),
-            exponent: if plan.zero {
+            coefficient: BigUint::from(u8::from(
+                !plan.tiny
+                    || matches!(
+                        rounding,
+                        NumericRounding::AwayFromZero | NumericRounding::Ceiling
+                    ),
+            )),
+            exponent: if plan.tiny {
                 plan.quantum.clone()
             } else {
                 self.decade.clone()

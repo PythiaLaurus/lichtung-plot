@@ -5,7 +5,7 @@
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::Log10Operand;
-use crate::numeric::decimal::{nearest_integer, ResolvedFormat, RoundedDecimal};
+use crate::numeric::decimal::{round_integer, ResolvedFormat, RoundedDecimal};
 use crate::{Error, Result};
 
 pub(crate) struct CertifiedPower {
@@ -51,7 +51,7 @@ impl PowerFormatter {
             self.stages.clear();
         }
         let plan = operand.plan(format)?;
-        let rounded = if let Some(symbolic) = operand.symbolic(&plan) {
+        let rounded = if let Some(symbolic) = operand.symbolic(&plan, format.rounding) {
             symbolic
         } else {
             let negative = plan.multiplier.sign() == Sign::Minus;
@@ -79,8 +79,8 @@ impl PowerFormatter {
                 } else {
                     (unit, lower * &multiplier, upper * multiplier)
                 };
-                let lower = nearest_integer(&lower, &denominator);
-                let upper = nearest_integer(&upper, &denominator);
+                let lower = round_integer(&lower, &denominator, false, format.rounding);
+                let upper = round_integer(&upper, &denominator, false, format.rounding);
                 if lower == upper {
                     break RoundedDecimal {
                         negative: false,

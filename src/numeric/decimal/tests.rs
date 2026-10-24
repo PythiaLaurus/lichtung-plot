@@ -1,6 +1,67 @@
 use super::*;
 
 #[test]
+fn rounding_preserves_signed_neighbors_and_both_tie_parities() {
+    use NumericRounding::{
+        AwayFromZero, Ceiling, Floor, NearestAway, NearestEven, NearestTowardZero, TowardZero,
+    };
+    // Exact dyadics straddle a half-cell and exercise its odd/even neighbors.
+    for (rounding, expected) in [
+        (
+            NearestEven,
+            [("1", "-1"), ("2", "-2"), ("2", "-2"), ("2", "-2")],
+        ),
+        (
+            NearestAway,
+            [("1", "-1"), ("2", "-2"), ("2", "-2"), ("3", "-3")],
+        ),
+        (
+            NearestTowardZero,
+            [("1", "-1"), ("1", "-1"), ("2", "-2"), ("2", "-2")],
+        ),
+        (
+            TowardZero,
+            [("1", "-1"), ("1", "-1"), ("1", "-1"), ("2", "-2")],
+        ),
+        (
+            AwayFromZero,
+            [("2", "-2"), ("2", "-2"), ("2", "-2"), ("3", "-3")],
+        ),
+        (Floor, [("1", "-2"), ("1", "-2"), ("1", "-2"), ("2", "-3")]),
+        (
+            Ceiling,
+            [("2", "-1"), ("2", "-1"), ("2", "-1"), ("3", "-2")],
+        ),
+    ] {
+        let format = crate::NumericFormat::new(
+            NumericNotation::Decimal,
+            crate::NumericPrecision::Fractional(0),
+        )
+        .unwrap()
+        .rounding(rounding)
+        .unwrap();
+        for (value, (positive, negative)) in [1.125, 1.5, 1.875, 2.5].into_iter().zip(expected) {
+            assert_eq!(format.format_singleton(value, false).unwrap(), positive);
+            assert_eq!(format.format_singleton(-value, false).unwrap(), negative);
+        }
+    }
+    let floor = ResolvedFormat {
+        precision: ResolvedPrecision::Fractional(0),
+        rounding: Floor,
+        negative_zero: NegativeZero::Normalize,
+        ..ResolvedFormat::default()
+    };
+    assert_eq!(format_finite(-f64::from_bits(1), &floor).unwrap(), "-1");
+    assert_eq!(format_finite(-0.0, &floor).unwrap(), "0");
+    let ceiling = ResolvedFormat {
+        rounding: Ceiling,
+        negative_zero: NegativeZero::Preserve,
+        ..floor
+    };
+    assert_eq!(format_finite(-f64::from_bits(1), &ceiling).unwrap(), "-0");
+}
+
+#[test]
 fn fractional_quantization_matches_independent_small_dyadic_rationals() {
     // Independent bounded u128 oracle: the source is the exact rational n/2^b.
     // All floating construction operations here are exact, and no float-to-text

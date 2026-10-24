@@ -55,9 +55,11 @@ quantum10^t and fixed multiplier exponent r=n-t before refinement:
 | Engineering Fractional(digits) | g-digits | h+digits |
 | Any Significant(a) | n-a+1 | a-1 |
 
-Desired coefficient is K=RN_even(M*10^r), physical rounded value R=K*10^t.
+Desired coefficient is K=Q_mode(M*10^r), physical rounded value R=K*10^t.
+Q_mode is the numeric policy's exact rounding operation (NearestEven by default).
 Fractional digits are 0..20, significant a is 1..21. Apart from Decimal fractional,
-r is 0..22. In Decimal fractional r<=-2, M<10 proves coefficient 0 directly;
+r is 0..22. In Decimal fractional r<=-2, M<10 proves coefficient 0 for nearest,
+TowardZero and Floor, or 1 for AwayFromZero and Ceiling, without refinement;
 only negative r=-1 requires intervals. Adaptive precision chooses this concrete
 display precision uniformly at its set owner, independently of numerical refinement.
 
@@ -66,7 +68,8 @@ display precision uniformly at its set owner, independently of numerical refinem
 F=0 means exact 10^n. Do not run series or build 10^abs(n). Significant coefficient
 is 10^(a-1), scientific fractional 10^digits, engineering fractional 10^(h+digits),
 with small exponent<=22. Decimal fractional n+digits>=0 is a symbolic one followed
-by that many zeros; n+digits<0 rounds to 0 since the value is <=0.1. Decimal significant tiny
+by that many zeros; n+digits<0 rounds to 0, or to one quantum under AwayFromZero/
+Ceiling, since the positive value is <=0.1 quantum. Decimal significant tiny
 nonzero powers require their full leading-zero output, not rounding to binary64
 zero. Symbolic exponents remain arbitrary-size until checked output conversion.
 
@@ -78,12 +81,16 @@ For interval endpoint Y/S, S=2^p:
 r>=0: numerator=Y*10^r, denominator=S
 r=-1: numerator=Y, denominator=10*S
 q=numerator/denominator; z=numerator%denominator
-K=q+[2*z>denominator or (2*z==denominator and q odd)]
+NearestEven: K=q+[2*z>denominator or (2*z==denominator and q odd)]
+NearestAway: K=q+[2*z>=denominator]
+NearestTowardZero: K=q+[2*z>denominator]
+TowardZero/Floor: K=q
+AwayFromZero/Ceiling: K=q+[z!=0]
 ```
 
 Accept only equal endpoint integer K at the **same t**, before text, trimming or
-affixes. RN_even is monotone, including ties; equal endpoint rounding certifies
-the intervening real. Do not independently choose decades from endpoints: upper
+affixes. Each rounding operation is monotone, including ties; equal endpoint
+rounding certifies the intervening real. Do not independently choose decades from endpoints: upper
 mantissa may exceed10 while true M<10, without changing the exact selected quantum.
 
 For positive K with c digits, rounded decade is n_R=t+c-1; Scientific mantissa is
@@ -194,8 +201,9 @@ along precision doubling. Enclosures need not nest; each contains the same M.
 For reduced rational E=a/b, if10^E=c/d were reduced rational, prime2 valuation
 of(c/d)^b=10^a gives b*(v2(c)-v2(d))=a, hence b divides a and b=1. Nonintegral
 rational E therefore gives irrational V, also for negative a. Decimal rounding
-boundaries(k+1/2)*10^t are rational. A nonintegral power lies a positive distance
-from adjacent boundaries; shrinking mantissa enclosures times fixed exact 10^r
+boundaries(k+1/2)*10^t for nearest modes and k*10^t for directed modes are rational.
+A nonintegral power lies a positive distance from adjacent boundaries; shrinking
+mantissa enclosures times fixed exact 10^r
 eventually lie wholly in one cell. Endpoint rounding then agrees. Integral E
 already has exact symbolic handling.
 
@@ -212,7 +220,7 @@ converts to usize and passes isize::MAX allocation layout, including affix bytes
 
 | Decimal policy | Conservative numeric-body capacity including carry |
 | --- | --- |
-| Fractional d, proved0 | 1+(d>0 ?1+d:0) |
+| Fractional d, tiny symbolic shortcut | 1+(d>0 ?1+d:0) |
 | Fractional d, otherwise | max(1,n+2)+(d>0 ?1+d:0) |
 | Significant a, n>=a-1 | max(1,n+2) |
 | Significant a, n<a-1 | max(1,n+2)+1+(a-1-n) |

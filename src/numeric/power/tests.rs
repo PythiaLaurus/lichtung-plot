@@ -10,6 +10,37 @@ fn text(operand: &Log10Operand, format: &ResolvedFormat<'_>) -> String {
 }
 
 #[test]
+fn directed_powers_separate_integer_boundaries_and_keep_tiny_shortcuts_symbolic() {
+    use crate::numeric::decimal::NumericRounding::{Ceiling, Floor};
+    // Monotonicity puts 10^(+/-2^-1074) on opposite sides of 1;
+    // 3^2 < 10 < 4^2 independently bounds the sqrt(10) cell.
+    let mut formatter = certified::PowerFormatter::default();
+    for (rounding, below, above, root, tiny) in
+        [(Floor, "0", "1", "3", "0"), (Ceiling, "1", "2", "4", "1")]
+    {
+        let format = ResolvedFormat {
+            precision: ResolvedPrecision::Fractional(0),
+            rounding,
+            ..ResolvedFormat::default()
+        };
+        for (exponent, expected) in [
+            (-f64::from_bits(1), below),
+            (f64::from_bits(1), above),
+            (0.5, root),
+        ] {
+            let operand = Log10Operand::new(exponent, 0).unwrap();
+            assert_eq!(formatter.format(&operand, &format).unwrap().text, expected);
+        }
+        let operand = Log10Operand::new(-f64::MAX, 0).unwrap();
+        assert_eq!(formatter.format(&operand, &format).unwrap().text, tiny);
+        assert!(
+            formatter.attempts.is_empty(),
+            "tiny values do not construct a huge power"
+        );
+    }
+}
+
+#[test]
 fn exact_exponent_reduction_retains_scaled_floor_and_full_dyadic_remainders() {
     // Independent common-denominator representation: every finite binary64 is
     // an integer multiple of 2^-1074. This oracle never reduces a denominator or
@@ -193,13 +224,13 @@ fn integral_powers_emit_symbolically_and_refuse_giant_decimal_runs_before_materi
         "[0\u{0301}%00"
     );
     let fractional = Log10Operand::new(-2000.5, 0).unwrap();
-    assert!(fractional.plan(&format).unwrap().zero);
+    assert!(fractional.plan(&format).unwrap().tiny);
     assert_eq!(text(&fractional, &format), "[0\u{0301}%00");
     let fractional = Log10Operand::new(-0.5, 0).unwrap();
     let plan = fractional.plan(&format).unwrap();
     assert_eq!(plan.quantum, BigInt::from(-2));
     assert_eq!(plan.multiplier, BigInt::from(1));
-    assert!(!plan.zero);
+    assert!(!plan.tiny);
 }
 
 #[test]

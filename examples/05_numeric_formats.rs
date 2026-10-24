@@ -2,12 +2,13 @@
 
 use lichtung_plot::{
     AxisScale, Canvas, CategoryValues, CoefficientInput, HeatmapAnnotations, NumericFormat,
-    NumericNotation, NumericPrecision, NumericValues, Plot,
+    NumericNotation, NumericPrecision, NumericRounding, NumericValues, Plot,
 };
 
 fn main() -> lichtung_plot::Result<()> {
     let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
         .decimal_scale(2)?
+        .rounding(NumericRounding::NearestAway)?
         .suffix("%")?;
     let adaptive = NumericFormat::new(
         NumericNotation::Decimal,

@@ -24,7 +24,7 @@ and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
 
 ## NumericFormat Value
 
-NumericFormat is opaque Clone/Debug/PartialEq/Eq with seven private normalized
+NumericFormat is opaque Clone/Debug/PartialEq/Eq with private normalized
 fields. A consuming `field(value)` edit returns Result and replaces only its
 field, validating the complete result. Its paired `get_field()` reader retains
 the existing borrowed/copy result and const-call capability where applicable.
@@ -37,14 +37,18 @@ the existing borrowed/copy result and const-call capability where applicable.
 | prefix / suffix | Optional owned literal text, nonempty and control-free when supplied |
 | negative_zero | Preserve or Normalize |
 | trailing_zeros | Keep or Trim |
+| rounding | NearestEven (default), NearestAway, NearestTowardZero, TowardZero, AwayFromZero, Floor, Ceiling |
 
 Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
-bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve and Keep.
+bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve, Keep
+and NearestEven rounding.
 Default is Decimal/Fractional(2) with those same fields. Prefix/suffix retain exact
 bytes including spaces/combining marks: no trim, normalization, inferred units or
 inserted spacing. `prefix(value)` / `suffix(value)` accept supplied strings, not an
 empty-string reset; reconstruct without an affix to omit it. Equality includes
 all fields and bounds, absent/present affixes and literal bytes.
+The `rounding(value)` edit validates the complete policy and retains that choice
+through preparation, feedback, copies and Shared compatibility.
 
 Percent presentation is explicit scale 2 plus suffix `%`: raw 0.125 with
 Fractional(1) becomes `12.5%`. Suffix alone merely appends `%`.
@@ -95,7 +99,7 @@ the rendering contract, not a formatter expansion.
 
 Decode binary64 sign/significand/exponent. Ordinary conversion derives exact
 decimal coefficient/exponent using powers of2/5, shifts decimal exponent by scale,
-and rounds once by exact quotient/remainder/parity. Do not multiply by an
+and rounds once by exact signed quotient/remainder/parity. Do not multiply by an
 intermediate f64 power, use platform transcendentals, parse text back into data
 or format an approximate physical Forest power. Forest exponent 0.5/Fractional(2)
 is `3.16`; scale 2 plus `%` gives `316.23%`. This does not claim an inverse of
@@ -106,6 +110,14 @@ For nonzero magnitude with mathematical decade k, Significant(p) quantizes at
 normalized mantissa, Engineering fractional its unrounded engineering mantissa.
 Engineering exponent is Euclidean multiple of3, nonzero mantissa in[1,1000).
 Carry changes decimal point/exponent, not numeric rounding a second time.
+
+NearestEven chooses the even coefficient on an exact half-cell; NearestAway and
+NearestTowardZero choose the larger/smaller magnitude on a tie. TowardZero and
+AwayFromZero truncate/increment magnitude on a nonzero remainder. Floor increments
+negative magnitudes, Ceiling positive magnitudes. Exact values never increment.
+For example, at Fractional(0), -1.5 becomes -2 with Floor/NearestAway, -1 with
+Ceiling/NearestTowardZero; 2.5 becomes 2 with NearestEven and 3 with NearestAway.
+Actual or rounded negative-zero normalization runs only after that quantization.
 
 Decimal Significant/Keep retains requested fractional significance where
 expressible: 1 at p=3 is `1.00`, 0.125 at p=5 is `0.12500`,

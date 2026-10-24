@@ -1,7 +1,7 @@
 # Scientific Numeric Formatting
 
-NumericFormat, NumericNotation, NumericPrecision, NegativeZero and TrailingZeros
-are crate-root values. Fields/implementation are private and validated.
+NumericFormat, NumericNotation, NumericPrecision, NumericRounding, NegativeZero
+and TrailingZeros are crate-root values. Fields/implementation are private and validated.
 
 ```rust
 use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision};
@@ -32,9 +32,13 @@ Decimal/Fractional(2).
 Affixes are nonempty control-free literal text including spaces/combining marks.
 Reconstruct without an affix to omit it; no empty-string reset or format string.
 
-Rounding is once nearest/ties-to-even after exact decimal scaling. Carry does not
-round again. Normalize removes actual/rounded negative-zero sign; Trim removes
-fractional zeros/empty point, not integral place-value zeros. Engineering always
+Rounding defaults to nearest/ties-to-even after exact decimal scaling. Use
+`rounding(NumericRounding::Floor)` for rounding toward negative infinity, or select
+NearestAway, NearestTowardZero, TowardZero, AwayFromZero or Ceiling. At Fractional(0),
+Floor displays -1.5 as `-2`, Ceiling as `-1`; NearestEven displays 2.5 as `2`,
+NearestAway as `3`. The same policy applies to certified mathematical powers.
+Carry does not round again. Normalize removes actual/rounded negative-zero sign;
+Trim removes fractional zeros/empty point, not integral place-value zeros. Engineering always
 uses a multiple-of-three exponent, including e0, without inferred SI prefixes.
 
 | Attachment | Actual consumer |

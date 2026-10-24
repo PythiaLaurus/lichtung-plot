@@ -24,6 +24,25 @@ pub enum NumericNotation {
     Engineering,
 }
 
+/// Exact rounding at the selected decimal quantum, before numeric emission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericRounding {
+    /// Round to the nearest value; an exact tie chooses the even coefficient.
+    NearestEven,
+    /// Round to the nearest value; an exact tie rounds away from zero.
+    NearestAway,
+    /// Round to the nearest value; an exact tie rounds toward zero.
+    NearestTowardZero,
+    /// Discard the fractional remainder toward zero.
+    TowardZero,
+    /// Round every nonzero fractional remainder away from zero.
+    AwayFromZero,
+    /// Round toward negative infinity.
+    Floor,
+    /// Round toward positive infinity.
+    Ceiling,
+}
+
 /// One precision already selected by its semantic owner, never by geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResolvedPrecision {
@@ -60,6 +79,7 @@ pub(crate) struct ResolvedFormat<'a> {
     pub(crate) suffix: Option<&'a str>,
     pub(crate) negative_zero: NegativeZero,
     pub(crate) trailing_zeros: TrailingZeros,
+    pub(crate) rounding: NumericRounding,
 }
 
 impl Default for ResolvedFormat<'_> {
@@ -72,6 +92,7 @@ impl Default for ResolvedFormat<'_> {
             suffix: None,
             negative_zero: NegativeZero::Preserve,
             trailing_zeros: TrailingZeros::Keep,
+            rounding: NumericRounding::NearestEven,
         }
     }
 }
@@ -259,7 +280,12 @@ impl FiniteDecimal {
             self.coefficient * BigUint::from(10_u8).pow(shift.unsigned_abs())
         } else {
             let denominator = BigUint::from(10_u8).pow(shift.unsigned_abs());
-            nearest_integer(&self.coefficient, &denominator)
+            round_integer(
+                &self.coefficient,
+                &denominator,
+                self.negative,
+                format.rounding,
+            )
         };
         RoundedDecimal {
             negative: self.negative,
@@ -269,11 +295,34 @@ impl FiniteDecimal {
     }
 }
 
-/// One exact nearest-even quantizer for ordinary rationals and power endpoints.
-pub(super) fn nearest_integer(numerator: &BigUint, denominator: &BigUint) -> BigUint {
+/// One exact signed-magnitude quantizer for ordinary rationals and power endpoints.
+pub(super) fn round_integer(
+    numerator: &BigUint,
+    denominator: &BigUint,
+    negative: bool,
+    rounding: NumericRounding,
+) -> BigUint {
     let mut quotient = numerator / denominator;
-    let twice_remainder = (numerator % denominator) << 1_usize;
-    if twice_remainder > *denominator || (twice_remainder == *denominator && quotient.bit(0)) {
+    let remainder = numerator % denominator;
+    let increment = match rounding {
+        NumericRounding::TowardZero => false,
+        NumericRounding::AwayFromZero => remainder.bits() != 0,
+        NumericRounding::Floor => negative && remainder.bits() != 0,
+        NumericRounding::Ceiling => !negative && remainder.bits() != 0,
+        NumericRounding::NearestEven
+        | NumericRounding::NearestAway
+        | NumericRounding::NearestTowardZero => {
+            let twice = remainder << 1_usize;
+            twice > *denominator
+                || (twice == *denominator
+                    && match rounding {
+                        NumericRounding::NearestEven => quotient.bit(0),
+                        NumericRounding::NearestAway => true,
+                        _ => false,
+                    })
+        }
+    };
+    if increment {
         quotient += 1_u8;
     }
     quotient

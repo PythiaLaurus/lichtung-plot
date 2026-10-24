@@ -1696,9 +1696,12 @@ alphabet/boundary expansion and early-seal query policies are removed. Focused
 ordinary/native axes, Shared guides, local styles and frozen output witnesses retain
 the eight-round root bound. Step 5 is in progress: explicit fractional/significant
 precision now admits 0..=20/1..=21 through exact binary64 conversion, certified powers,
-complete sets and precision-derived output reservations. Extended factors, rounding,
-locales, notation and specifier parsing remain pending in this step. Steps 6–22
-remain pending; undelivered target signatures are not current APIs.
+complete sets and precision-derived output reservations. All seven NumericRounding
+choices now share one signed quantizer for finite values and certified power endpoints,
+including directed integer-boundary refinement, symbolic tiny powers and complete
+policy identity. Extended factors, locales, notation and specifier parsing remain
+pending in this step. Steps 6–22 remain pending; undelivered target signatures are
+not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

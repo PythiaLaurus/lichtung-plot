@@ -2,8 +2,8 @@
 //! views borrow its affixes; adaptive precision is selected by a semantic set.
 
 use super::decimal::{
-    NegativeZero, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
-    MAX_FRACTIONAL_DIGITS, MAX_SIGNIFICANT_DIGITS,
+    NegativeZero, NumericNotation, NumericRounding, ResolvedFormat, ResolvedPrecision,
+    TrailingZeros, MAX_FRACTIONAL_DIGITS, MAX_SIGNIFICANT_DIGITS,
 };
 use crate::{Error, Result};
 
@@ -72,8 +72,8 @@ impl NumericPrecision {
 
 /// Immutable, locale-free scientific numeric presentation.
 ///
-/// Rounding is nearest with ties to even, after exact decimal scaling. Affixes
-/// are literal: a percent suffix alone does not scale the scientific value.
+/// Rounding defaults to nearest with ties to even, after exact decimal scaling.
+/// Affixes are literal: a percent suffix alone does not scale the scientific value.
 /// Adaptive precision is selected uniformly for each complete semantic set,
 /// independently of geometric fit. The default is Decimal/Fractional(2), scale
 /// zero, absent affixes, preserved negative zero and retained trailing zeros.
@@ -113,6 +113,7 @@ pub struct NumericFormat {
     suffix: Option<String>,
     negative_zero: NegativeZero,
     trailing_zeros: TrailingZeros,
+    rounding: NumericRounding,
 }
 
 impl Default for NumericFormat {
@@ -125,6 +126,7 @@ impl Default for NumericFormat {
             suffix: None,
             negative_zero: NegativeZero::Preserve,
             trailing_zeros: TrailingZeros::Keep,
+            rounding: NumericRounding::NearestEven,
         }
     }
 }
@@ -147,10 +149,12 @@ impl NumericFormat {
                 .transpose()?,
             negative_zero: self.negative_zero,
             trailing_zeros: self.trailing_zeros,
+            rounding: self.rounding,
         })
     }
 
-    /// Construct a validated format with scale zero, no affixes, Preserve and Keep.
+    /// Construct a validated format with scale zero, no affixes, Preserve, Keep
+    /// and NearestEven rounding.
     pub fn new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self> {
         let value = Self {
             notation,
@@ -243,6 +247,14 @@ impl NumericFormat {
         Ok(self)
     }
 
+    /// Replace exact rounding at the selected decimal quantum.
+    /// Signed floor/ceiling and tie handling apply before negative-zero normalization.
+    pub fn rounding(mut self, value: NumericRounding) -> Result<Self> {
+        self.rounding = value;
+        self.validate()?;
+        Ok(self)
+    }
+
     fn validate(&self) -> Result<()> {
         let (min, _) = self.precision.bounds()?;
         self.resolve_at(min)?.validate()
@@ -257,6 +269,7 @@ impl NumericFormat {
             suffix: self.suffix.as_deref(),
             negative_zero: self.negative_zero,
             trailing_zeros: self.trailing_zeros,
+            rounding: self.rounding,
         })
     }
 
@@ -282,7 +295,8 @@ impl NumericFormat {
             }
         }
         round.observe_count(self.negative_zero as usize)?;
-        round.observe_count(self.trailing_zeros as usize)
+        round.observe_count(self.trailing_zeros as usize)?;
+        round.observe_count(self.rounding as usize)
     }
 }
 
