@@ -851,7 +851,7 @@ impl<'a> PlotRenderContext<'a> {
             *target = crate::layout::AxisSpec {
                 provenance: source.provenance,
                 limits: source.limits,
-                generation: source.generation,
+                generation: source.generation.clone(),
                 format: source.format.clone(),
                 numeric_source: source.numeric_source.clone(),
                 exact_ticks: source

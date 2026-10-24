@@ -12,7 +12,7 @@ fn plot() -> Plot<crate::kind::Scatter> {
 }
 
 #[test]
-fn generation_copy_and_composed_identity_include_both_axes() {
+fn generation_cloning_and_composed_identity_include_both_axes() {
     let mut plot = plot()
         .x_tick_generation(TickGeneration::additive(2.0).unwrap())
         .y_tick_generation(TickGeneration::additive(1.0).unwrap())
@@ -38,16 +38,20 @@ fn generation_copy_and_composed_identity_include_both_axes() {
     assert!(plot.same_composed_inputs(&retained, &retained.guides));
     plot.x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.x_axis_spec.generation = retained.x_axis_spec.generation;
+    plot.x_axis_spec
+        .generation
+        .clone_from(&retained.x_axis_spec.generation);
     plot.y_axis_spec.generation = TickGeneration::automatic();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.y_axis_spec.generation = retained.y_axis_spec.generation;
+    plot.y_axis_spec
+        .generation
+        .clone_from(&retained.y_axis_spec.generation);
     for selection in [
         TickGeneration::target(5).unwrap(),
         TickGeneration::maximum(5).unwrap(),
     ] {
         let mut changed = plot.clone();
-        changed.x_axis_spec.generation = selection;
+        changed.x_axis_spec.generation = selection.clone();
         assert!(!changed.same_composed_inputs(&retained, &retained.guides));
         let counted = changed
             .retain_composed_inputs(ScopedGuideInputs::for_test(&changed))

@@ -186,7 +186,7 @@ impl AxisRequest<'_> {
         let mut info = self
             .source
             .indexed(positions, power, role, purpose, Some(domain))?;
-        info.generation = Some(self.generation);
+        info.generation = Some(self.generation.clone());
         self.format.materialize(
             &self.source.operation,
             info,

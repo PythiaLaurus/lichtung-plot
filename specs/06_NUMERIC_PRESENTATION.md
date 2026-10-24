@@ -425,11 +425,17 @@ numeric/result context, not new font discovery or a new layout loop.
 
 ## TickGeneration And Exact Ticks
 
-TickGeneration is opaque Clone/Copy/Debug/Default/PartialEq. One complete private
-choice holds Automatic, Additive, Log10Decades, Target or Maximum. Default and
-automatic() select Automatic/reset. Additive is finite positive f64; Log10Decades
-positive u32; target/maximum counts are1..=10000. Getters are is_automatic,
-additive_step,decade_step,target_count,maximum_count. No competing optional fields.
+TickGeneration is opaque Clone/Debug/Default/PartialEq/Eq, not Copy. One private
+primary locator is Automatic, Target or Interval; an independent optional positive
+maximum caps generated positions. Maximum is Automatic plus that cap, never a
+parallel locator implementation. Interval retains its admitted Linear/Log10 scale
+binding and exact represented step; the additive/decade readers project those
+constructor semantics. Default and automatic() reset the entire request.
+is_automatic tests the complete default, including absence of a cap. Additive is
+finite positive f64; Log10Decades positive u32; target/maximum counts remain
+1..=10000. Getters are is_automatic, additive_step, decade_step, target_count,
+maximum_count. Consumers explicitly borrow/clone the complete policy through axis
+semantics, feedback, facets and composed child/height dependencies.
 
 x_tick_generation/y_tick_generation use the existing 17 NumericX/15 NumericY gates
 in `src/kind.rs`. Each replaces that axis's whole instruction. Any/Heatmap/Matrix

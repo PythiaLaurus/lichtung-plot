@@ -134,7 +134,10 @@ impl HeightInputs {
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
             provenance: [plot.x_axis_spec().provenance, plot.y_axis_spec().provenance],
-            generation: [plot.x_axis_spec().generation, plot.y_axis_spec().generation],
+            generation: [
+                plot.x_axis_spec().generation.clone(),
+                plot.y_axis_spec().generation.clone(),
+            ],
             resolved_x: plot
                 .resolved_facet_x_range()
                 .map(|range| [range.0.to_bits(), range.1.to_bits()]),

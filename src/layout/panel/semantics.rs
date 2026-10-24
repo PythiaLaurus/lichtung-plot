@@ -38,7 +38,7 @@ impl AxisSemanticInputs {
             provenance: spec.provenance,
             scale,
             policy,
-            generation: spec.generation,
+            generation: spec.generation.clone(),
             format: if spec.exact_ticks.is_some() || policy == RangePolicy::CategorySlots {
                 None
             } else {

@@ -191,7 +191,7 @@ impl AxisSpec {
                         Error::Render("numeric axis format lacks its operation-bound owner".into())
                     })?,
                     provenance: self.provenance,
-                    generation: self.generation,
+                    generation: self.generation.clone(),
                 })
             })
             .transpose()
@@ -234,7 +234,7 @@ impl AxisSpec {
         if supplied.is_empty() {
             super::numeric_tick_plan(
                 range,
-                self.generation,
+                self.generation.clone(),
                 false,
                 projection,
                 side,

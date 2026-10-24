@@ -1554,7 +1554,7 @@ fn prepare(
             } else {
                 source.limits
             },
-            generation: source.generation,
+            generation: source.generation.clone(),
             format: source.format.clone(),
             numeric_source: None,
             exact_ticks: if logarithmic && side == 0 {

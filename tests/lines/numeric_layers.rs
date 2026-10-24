@@ -420,8 +420,8 @@ fn public_tick_generation_yields_to_exact_labels_in_both_setter_orders() {
         TickGeneration::automatic(),
     ] {
         let generated = |plot: Plot<lichtung_plot::kind::Scatter>| {
-            plot.x_tick_generation(generation)
-                .y_tick_generation(generation)
+            plot.x_tick_generation(generation.clone())
+                .y_tick_generation(generation.clone())
         };
         let before = svg(exact(generated(base.clone())));
         let after = svg(generated(exact(base.clone())));

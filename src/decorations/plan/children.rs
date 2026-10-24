@@ -531,7 +531,11 @@ mod tests {
                 crate::TickGeneration::target(5).unwrap(),
                 crate::TickGeneration::maximum(5).unwrap(),
             ] {
-                variants.push(make(format.clone()).x_tick_generation(generation).erase());
+                variants.push(
+                    make(format.clone())
+                        .x_tick_generation(generation.clone())
+                        .erase(),
+                );
                 variants.push(make(format.clone()).y_tick_generation(generation).erase());
             }
             for alpha in [

@@ -250,7 +250,7 @@ impl Sources {
         let target = generation.target_count();
         let upper = target.map_or(upper, |count| count as usize);
         let singleton = target == Some(1) || generation.maximum_count() == Some(1);
-        let cap = match generation {
+        let cap = match &generation {
             _ if singleton => 1,
             value if value.is_interval() && log => 4 * 20 + 1,
             value if value.is_interval() => 4 * 633 + 1,
@@ -259,6 +259,8 @@ impl Sources {
             }
             _ => upper + 1,
         };
+        let base = generation.additive_step().unwrap_or(0.0);
+        let log_base = generation.decade_step().map_or(0, u64::from);
         Ok(Self {
             range,
             log,
@@ -266,8 +268,8 @@ impl Sources {
             upper,
             ordinal: 0,
             cap,
-            base: generation.additive_step().unwrap_or(0.0),
-            log_base: generation.decade_step().map_or(0, u64::from),
+            base,
+            log_base,
             factor: 0,
             previous_step: None,
             intervals_done: false,
@@ -441,7 +443,7 @@ pub(crate) fn numeric_tick_plan(
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
-    Sources::new(range, log, generation, 1)?;
+    Sources::new(range, log, generation.clone(), 1)?;
 
     NumericTickPlan::measure_selected_source(
         range, generation, log, projection, side, theme, legacy, format, scope,
@@ -516,7 +518,7 @@ impl NumericTickPlan {
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         // Validate semantic inputs before asking for the metric probe or environment.
-        Sources::new(range, log, generation, 1)?;
+        Sources::new(range, log, generation.clone(), 1)?;
         let probe = if legacy {
             theme.measure_legacy_appearance_text(
                 "0",

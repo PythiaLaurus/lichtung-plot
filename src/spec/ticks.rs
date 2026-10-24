@@ -23,22 +23,37 @@ use crate::{Error, Result};
 /// ```compile_fail
 /// let _ = lichtung_plot::TickGeneration::Target(0);
 /// ```
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+/// Requests are owned and cloneable, not Copy:
+/// ```compile_fail
+/// use lichtung_plot::TickGeneration;
+/// let request = TickGeneration::automatic();
+/// let moved = request;
+/// let _ = (moved, request);
+/// ```
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct TickGeneration {
-    selection: Selection,
+    primary: Primary,
+    maximum: Option<u32>,
 }
 
 // All admitted floating steps are finite and strictly positive.
 impl Eq for TickGeneration {}
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-enum Selection {
+#[derive(Debug, Clone, Default, PartialEq)]
+enum Primary {
     #[default]
     Automatic,
-    Additive(f64),
-    Log10Decades(u32),
+    Interval {
+        step: f64,
+        binding: IntervalBinding,
+    },
     Target(u32),
-    Maximum(u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IntervalBinding {
+    Linear,
+    Log10,
 }
 
 impl TickGeneration {
@@ -47,13 +62,14 @@ impl TickGeneration {
     /// Use renderer-owned automatic density and nice-step selection.
     pub const fn automatic() -> Self {
         Self {
-            selection: Selection::Automatic,
+            primary: Primary::Automatic,
+            maximum: None,
         }
     }
 
-    /// Inspect whether the selection is Automatic.
+    /// Inspect whether the complete request is Automatic without an explicit cap.
     pub const fn is_automatic(&self) -> bool {
-        matches!(self.selection, Selection::Automatic)
+        matches!(self.primary, Primary::Automatic) && self.maximum.is_none()
     }
 
     /// Prefer a finite strictly positive additive step on a linear numeric axis.
@@ -64,7 +80,11 @@ impl TickGeneration {
             ));
         }
         Ok(Self {
-            selection: Selection::Additive(step),
+            primary: Primary::Interval {
+                step,
+                binding: IntervalBinding::Linear,
+            },
+            maximum: None,
         })
     }
 
@@ -76,7 +96,11 @@ impl TickGeneration {
             ));
         }
         Ok(Self {
-            selection: Selection::Log10Decades(decades),
+            primary: Primary::Interval {
+                step: f64::from(decades),
+                binding: IntervalBinding::Log10,
+            },
+            maximum: None,
         })
     }
 
@@ -87,7 +111,8 @@ impl TickGeneration {
     pub fn target(count: u32) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
-            selection: Selection::Target(count),
+            primary: Primary::Target(count),
+            maximum: None,
         })
     }
 
@@ -98,7 +123,8 @@ impl TickGeneration {
     pub fn maximum(count: u32) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
-            selection: Selection::Maximum(count),
+            primary: Primary::Automatic,
+            maximum: Some(count),
         })
     }
 
@@ -113,47 +139,35 @@ impl TickGeneration {
 
     /// Inspect the target count, or None for another selection.
     pub const fn target_count(&self) -> Option<u32> {
-        match self.selection {
-            Selection::Target(count) => Some(count),
+        match self.primary {
+            Primary::Target(count) => Some(count),
             _ => None,
         }
     }
 
     /// Inspect the hard maximum count, or None for another selection.
     pub const fn maximum_count(&self) -> Option<u32> {
-        match self.selection {
-            Selection::Maximum(count) => Some(count),
-            _ => None,
-        }
+        self.maximum
     }
 
     pub(crate) const fn is_interval(&self) -> bool {
-        matches!(
-            self.selection,
-            Selection::Additive(_) | Selection::Log10Decades(_)
-        )
+        matches!(self.primary, Primary::Interval { .. })
     }
 
     pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
-        match self.selection {
-            Selection::Automatic => round.observe_count(0),
-            Selection::Additive(step) => {
+        round.observe_count(self.maximum.map_or(0, |count| count as usize))?;
+        match self.primary {
+            Primary::Automatic => round.observe_count(0),
+            Primary::Interval { step, binding } => {
                 round.observe_count(1)?;
+                round.observe_count(binding as usize)?;
                 round.observe_number(step)
             }
-            Selection::Log10Decades(step) => {
-                round.observe_count(2)?;
-                round.observe_count(step as usize)
-            }
-            Selection::Target(count) => {
+            Primary::Target(count) => {
                 round.observe_count(3)?;
-                round.observe_count(count as usize)
-            }
-            Selection::Maximum(count) => {
-                round.observe_count(4)?;
                 round.observe_count(count as usize)
             }
         }
@@ -161,16 +175,27 @@ impl TickGeneration {
 
     /// Inspect the positive additive step, or None for another selection.
     pub const fn additive_step(&self) -> Option<f64> {
-        match self.selection {
-            Selection::Additive(step) => Some(step),
+        match self.primary {
+            Primary::Interval {
+                step,
+                binding: IntervalBinding::Linear,
+            } => Some(step),
             _ => None,
         }
     }
 
     /// Inspect the positive integral decade step, or None for another selection.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Log10 binding is constructed only from a nonzero exactly represented u32"
+    )]
     pub const fn decade_step(&self) -> Option<u32> {
-        match self.selection {
-            Selection::Log10Decades(step) => Some(step),
+        match self.primary {
+            Primary::Interval {
+                step,
+                binding: IntervalBinding::Log10,
+            } => Some(step as u32),
             _ => None,
         }
     }

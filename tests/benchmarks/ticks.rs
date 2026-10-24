@@ -142,7 +142,7 @@ fn assert_output(
     sample: &CaseMeasurement,
     fixture: Fixture,
     request: Request,
-    generation: TickGeneration,
+    generation: &TickGeneration,
 ) {
     let bytes = sample.output.as_ref().unwrap();
     let svg = std::str::from_utf8(bytes.preserved_svg.as_ref().unwrap()).unwrap();
@@ -213,14 +213,14 @@ fn assert_output(
 fn case(
     fixture: Fixture,
     request: Request,
-    generation: TickGeneration,
+    generation: &TickGeneration,
     disabled: bool,
 ) -> CaseMeasurement {
     let previous = DISABLE_CHILD_REUSE.with(|flag| flag.replace(disabled));
     let result = std::panic::catch_unwind(|| {
         measure_case(
             &format!("ticks_{fixture:?}_{request:?}_{generation:?}_{disabled}"),
-            || Root::new(fixture, request, generation),
+            || Root::new(fixture, request, generation.clone()),
             Root::publish,
             true,
             true,
@@ -255,8 +255,8 @@ fn generated_tick_choices_survive_all_root_modes_parents_and_cache_disabled_repl
             TickGeneration::maximum(3).unwrap(),
         ] {
             for request in [Request::Automatic, Request::Width, Request::Exact] {
-                let cached = case(fixture, request, generation, false);
-                let uncached = case(fixture, request, generation, true);
+                let cached = case(fixture, request, &generation, false);
+                let uncached = case(fixture, request, &generation, true);
                 equal_output(&cached, &uncached);
             }
         }
@@ -269,7 +269,7 @@ pub(super) fn measure() {
         case(
             Fixture::Linear,
             Request::Exact,
-            TickGeneration::target(128).unwrap(),
+            &TickGeneration::target(128).unwrap(),
             false,
         )
     };
@@ -277,7 +277,7 @@ pub(super) fn measure() {
         case(
             Fixture::Linear,
             Request::Exact,
-            TickGeneration::maximum(12).unwrap(),
+            &TickGeneration::maximum(12).unwrap(),
             false,
         )
     };
@@ -289,7 +289,7 @@ pub(super) fn measure() {
     let uncached = case(
         Fixture::Linear,
         Request::Exact,
-        TickGeneration::maximum(12).unwrap(),
+        &TickGeneration::maximum(12).unwrap(),
         true,
     );
     equal_output(&samples[0][1], &uncached);

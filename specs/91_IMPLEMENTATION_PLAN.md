@@ -1719,7 +1719,11 @@ raw Canvas/facet/source identity, resolved domains and mathematical power operan
 Lazy built-in helpers reuse complete-set precision with exposed factors frozen;
 unused fields do not allocate. Shared callbacks run only for merged final domains,
 exact ticks suppress numeric calls, and final sealing closes materialization before
-callback-free SVG/outline/PNG publication. Steps 8–22 remain pending; undelivered target signatures are
+callback-free SVG/outline/PNG publication. Step 8 is complete: TickGeneration now
+owns one Automatic/Target/Interval primary locator and an independent positive
+maximum, with Maximum normalized to capped Automatic. Interval preserves admitted
+scale binding; explicit cloning replaces Copy through consumers and dependencies.
+The complete reset has no cap. Steps 9–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

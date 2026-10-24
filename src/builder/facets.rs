@@ -190,7 +190,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         for (target, source) in axes.iter_mut().zip([&self.x_axis_spec, &self.y_axis_spec]) {
             target.limits = source.limits;
             target.provenance = source.provenance;
-            target.generation = source.generation;
+            target.generation.clone_from(&source.generation);
             target.format.clone_from(&source.format);
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();
