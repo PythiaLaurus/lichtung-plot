@@ -328,6 +328,74 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
 }
 
 #[test]
+fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor() {
+    CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
+    let plot = || {
+        Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+    };
+    let canvas = Canvas::grid(2, 2)
+        .unwrap()
+        .size(1400, 1000)
+        .panel_span(0, 0, 2, 1, plot())
+        .unwrap()
+        .panel(0, 1, plot())
+        .unwrap()
+        .panel(1, 1, plot())
+        .unwrap()
+        .row_header(0, 1, "Upper")
+        .unwrap()
+        .row_header(1, 1, "Lower")
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    assert!(root.prepared().interiors[2].is_none());
+    assert_eq!(root.prepared().interiors.iter().flatten().count(), 3);
+    let evidence = CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| evidence.borrow().clone());
+    let assignments = &evidence[evidence.len() - 3..];
+    let tall = assignments[0].0;
+    let top = assignments[1].0;
+    let bottom = assignments[2].0;
+    assert_eq!(tall.y1.to_bits(), top.y1.to_bits());
+    assert_eq!(tall.y0.to_bits(), bottom.y0.to_bits());
+    assert!(tall.height() > top.height() + bottom.height());
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    assert_eq!(capture_counters(), counters);
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    let y = |source: &str| -> f64 {
+        let line = svg
+            .lines()
+            .find(|line| line.contains(&format!(">{source}<")))
+            .unwrap();
+        line.split(" y=\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
+    assert!(y("Upper") < y("Lower"));
+    let invalid = Canvas::grid(2, 2)
+        .unwrap()
+        .panel_span(0, 0, 2, 1, plot())
+        .unwrap()
+        .panel(0, 1, plot())
+        .unwrap()
+        .panel(1, 1, plot())
+        .unwrap();
+    assert!(invalid
+        .row_title(1, "Cuts through span")
+        .unwrap()
+        .preflight()
+        .is_err());
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one composed root witnesses content edits, whole resets, local style census and independent parent precedence"
@@ -1470,12 +1538,12 @@ fn position_functions_consume_shared_views_once_and_freeze_without_optional_reus
         .x_tick_generation(generation.clone())
         .x_tick_format(format.clone())
     };
-    let canvas = Canvas::grid(1, 2)
+    let canvas = Canvas::grid(2, 2)
         .unwrap()
         .size(1600, 600)
         .panel(0, 0, plot([0.0, 100.0]))
         .unwrap()
-        .panel(0, 1, plot([20.0, 120.0]))
+        .panel_span(0, 1, 2, 1, plot([20.0, 120.0]))
         .unwrap()
         .x_range_group(vec![(0, 0), (0, 1)])
         .unwrap();
@@ -1899,13 +1967,13 @@ fn assert_shared_alpha_declarations() {
         .with_alpha(AlphaTarget::Point, AlphaEncoding::observations(values))
     };
     let shared = |first, second| {
-        Canvas::grid(1, 2)
+        Canvas::grid(2, 2)
             .unwrap()
             .size(1200, 700)
             .legend_policy(CanvasLegendPolicy::Shared)
             .panel(0, 0, first)
             .unwrap()
-            .panel(0, 1, second)
+            .panel_span(0, 1, 2, 1, second)
             .unwrap()
     };
     let root = shared(

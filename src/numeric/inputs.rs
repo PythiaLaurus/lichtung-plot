@@ -15,7 +15,7 @@ pub(crate) struct NumericInputs {
     cells: Option<NumericFormat>,
     estimates: Option<NumericFormat>,
     totals: Option<Arc<NumericFormat>>,
-    cell: Option<Arc<(usize, usize)>>,
+    owner: Option<Arc<[usize; 6]>>,
 }
 
 fn cells<K: crate::kind::Marker>(plot: &Plot<K>) -> Option<&NumericFormat> {
@@ -40,13 +40,13 @@ impl NumericInputs {
                 .map(NumericFormat::try_copy)
                 .transpose()?,
             totals: plot.total_format_spec().cloned(),
-            cell: plot.numeric_cell.clone(),
+            owner: plot.canvas_owner.clone(),
         })
     }
 
     pub(crate) fn matches<K: crate::kind::Marker>(&self, plot: &Plot<K>) -> bool {
         self.scale == plot.axis_scale_spec()
-            && self.cell == plot.numeric_cell
+            && self.owner == plot.canvas_owner
             && self.axes[0] == plot.x_axis_spec().format
             && self.axes[1] == plot.y_axis_spec().format
             && self.color.as_ref() == plot.color_label_format_spec()

@@ -603,6 +603,25 @@ CanvasGridAssignment separates declared row/column boundaries from optional owne
 rectangles. Headers and row titles consume declared boundaries, never an owner's
 rectangle as a surrogate row edge. Only configured anchors are child destinations.
 
+panel_span requests a validated positive rectangular Plot footprint. Grid hard and
+preferred requirements cover the complete row/column intervals, using the canonical
+span allocator rather than dividing minima or charging only an anchor track. Measure
+width-dependent prose, native bodies and guides at the full spanning width; the one
+height consequence covers the entire row interval. Leading/trailing gutters and
+owned ink attach only to the footprint's outer edges. Intervening gaps and other
+owners' reserved bands contribute once to its continuous rectangle, with row-order
+bottom/top orientation distinct from column-order left/right. Shared-guide minima
+use the same owner minima and canonical spanning requirements. Prepared child and
+height identity retains declared shape/footprint, full geometry and consumed insets
+alongside existing numeric/text/guide feedback.
+
+FirstColumnPerRow resolves occupancy into distinct row-band owners, visits a band
+once, and requires every participating Plot to cover the identical row interval.
+Missing/TextPanel peers or unequal vertical footprints refuse before fonts; equal
+visible names cannot replace full raw/order/policy identity. Coordinate range groups
+name anchors only. A row title at r cannot cut an owner with start<r<end, and at
+outer boundaries it retains the prohibition on conflicting local Plot headings.
+
 Canvas cells are Plot/TextPanel/empty, row-major with all declared holes/trailing
 slots. Spanning records occur once at minimum covered coordinate, ordered header,
 row title, range group,cell, then declaration. Range groups are nonvisual.

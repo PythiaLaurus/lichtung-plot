@@ -1,5 +1,18 @@
 # Rendering Contract
 
+Canvas::panel_span owns one positive checked rectangular footprint with its sole
+anchor at the top-left coordinate. Placement rejects empty/overflowing/out-of-grid
+footprints and any Plot/TextPanel overlap in either insertion order. Covered slots
+are occupied, not repeated payloads. The parent supplies the entire rectangle,
+including intervening track gaps; standalone child requests do not override it.
+Natural, exact-width/content-height and exact-pair roots share this allocation path.
+Shared range members must name configured Plot anchors. FirstColumnPerRow requires
+equal vertical owner intervals across each complete row band and equal full category
+orders/selection policies. Structural interval mismatch and row titles cutting through
+a footprint fail before fonts. External headers retain declared track boundaries.
+Guide/font/scientific preparation and final capture retain one contribution per
+real owner, without duplicated source occurrences or partial publication.
+
 ## Scientific Inputs And Validation
 
 Plot consumes owned immutable native values. Semantic constructors return exact

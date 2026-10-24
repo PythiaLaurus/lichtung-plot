@@ -2,6 +2,9 @@
 
 use crate::{Error, Plot, TextPanel};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Footprint {
     pub row: usize,
@@ -81,6 +84,12 @@ impl Placements {
             .as_ref()
             .map(|owner| owner.footprint)
     }
+    pub fn anchor(&self, row: usize, column: usize) -> Option<usize> {
+        if row >= self.rows || column >= self.columns {
+            return None;
+        }
+        self.occupancy[row * self.columns + column]
+    }
 
     pub fn insert(&mut self, footprint: Footprint, mut payload: Payload) -> Result<(), Error> {
         let row_end = footprint
@@ -107,10 +116,14 @@ impl Placements {
         }
         let anchor = footprint.row * self.columns + footprint.column;
         if let Payload::Plot(plot) = &mut payload {
-            plot.numeric_cell = Some(crate::data::source::source_arc((
+            plot.canvas_owner = Some(crate::data::source::source_arc([
+                self.rows,
+                self.columns,
                 footprint.row,
                 footprint.column,
-            ))?);
+                footprint.row_span,
+                footprint.column_span,
+            ])?);
         }
         self.owners[anchor] = Some(Owner { footprint, payload });
         for row in footprint.row..row_end {

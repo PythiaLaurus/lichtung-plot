@@ -103,6 +103,10 @@ fn recorded_heights_require_complete_text_requests_even_when_geometry_can_match(
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one identity witness contrasts complete numeric, guide and footprint inputs at equal width/domain"
+)]
 fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and_domain() {
     let format = NumericFormat::default();
     let make = |guide, values| {
@@ -119,9 +123,12 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
         .clone()
         .negative_zero(NegativeZero::Normalize)
         .unwrap();
+    let mut spanning = make(format.clone(), format.clone()).erase();
+    spanning.canvas_owner = Some(crate::data::source::source_arc([2, 2, 0, 0, 2, 1]).unwrap());
     assert_changed_height_inputs(
         make(format.clone(), format.clone()).erase(),
         [
+            spanning,
             make(format.clone(), format.clone())
                 .x_category_labels(crate::CategoryLabelSelection::every(2).unwrap())
                 .erase(),

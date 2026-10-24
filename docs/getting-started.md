@@ -1,5 +1,29 @@
 # Getting Started
 
+## Rectangular Canvas Panels
+
+`panel_span(row, column, row_span, column_span, plot)` places one Plot over a full
+rectangle; `panel` is its 1×1 convenience. For two panels on the left and one tall
+panel on the right:
+
+```rust
+# use lichtung_plot::{Canvas, NumericValues, Plot};
+# let plot = || Plot::scatter(NumericValues::new("x",[0.0,1.0]),NumericValues::new("y",[1.0,0.0]));
+let canvas = Canvas::grid(2, 2)?
+    .panel(0, 0, plot())?
+    .panel(1, 0, plot())?
+    .panel_span(0, 1, 2, 1, plot())?;
+# let _ = canvas;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+The tall Plot has one continuous body and one set of prose/axes/guides. Every covered
+cell is occupied, including nonanchors, so overlapping Plot/TextPanel insertions
+fail. Range groups refer only to anchor coordinates. Shared categorical row bands
+require matching vertical footprints; the unequal-height example uses the default
+EveryPlot labels. Row titles cannot cut through a span. Parent-assigned geometry
+overrides standalone child size requests. See `examples/11_canvas_spans.rs`.
+
 `lichtung-plot` renders owned immutable display values. Publication SVG,
 preserve-text SVG, and PNG output are unconditional crate capabilities. Callers
 convert external data containers into the renderer's native values at their

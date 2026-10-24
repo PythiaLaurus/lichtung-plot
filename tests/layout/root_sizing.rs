@@ -268,7 +268,7 @@ fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
         .unwrap()
         .panel(0, 0, child("First"))
         .unwrap()
-        .panel(0, 1, child("Second"))
+        .panel_span(0, 1, 2, 1, child("Second"))
         .unwrap()
         .text_panel(
             1,

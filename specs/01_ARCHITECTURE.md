@@ -99,6 +99,10 @@ data-dependent restrictions. An already faceted Plot cannot be embedded in Canva
   and derives slot occupancy without copying payloads. Prepared theme/domain/text
   arrays retain anchor slot identities. Declared track edges are independent of
   assigned owner rectangles and supply header/row-title geometry.
+  panel_span places one rectangular Plot owner across rows/columns and internal
+  gaps. panel and single-cell TextPanels use the same full-footprint occupancy path.
+  Covered nonanchors are occupied but never become independent producers or range
+  group aliases; all inventories/capture visit each anchor once.
 - Plot/Canvas prose, x/y titles and TextPanel title/body use the common owned `Text`
   value from the private text module. Its optional complete TextTheme and TextLayout alignment
   resolve locally over the owning roles before font preparation. Optional prose

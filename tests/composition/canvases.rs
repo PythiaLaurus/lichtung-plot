@@ -280,13 +280,13 @@ fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
         .color_label("Fill\nshared")
     };
     let svg = render_canvas(
-        Canvas::grid(1, 2)
+        Canvas::grid(2, 2)
             .unwrap()
             .size(1200, 640)
             .theme(theme)
             .panel(0, 0, plot([0.0, 2.0]))
             .unwrap()
-            .panel(0, 1, plot([1.0, 5.0]))
+            .panel_span(0, 1, 2, 1, plot([1.0, 5.0]))
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared),
         "shared-continuous-heatmaps",
@@ -1220,19 +1220,29 @@ fn shared_canvas_equal_color_entries_keep_a_typed_bar_target_in_its_owner() {
 }
 
 #[test]
-fn all_canvas_grids_precede_any_marks() {
+fn spanning_canvas_keeps_three_complete_owners_and_all_grids_precede_marks() {
     let data = estimate_data();
     let svg = render_canvas(
-        Canvas::grid(1, 2)
+        Canvas::grid(2, 2)
             .unwrap()
             .panel(0, 0, estimate_line(&data))
             .unwrap()
-            .panel(0, 1, Plot::scatter(data.x, data.estimate))
+            .panel(1, 0, estimate_line(&data))
+            .unwrap()
+            .panel_span(
+                0,
+                1,
+                2,
+                1,
+                Plot::scatter(data.x, data.estimate).title("Tall owner"),
+            )
             .unwrap(),
         "grid-before-marks",
     )
     .unwrap();
-    assert_grid_layers_before_marks(&svg, &["panel-0-grid", "panel-1-grid"]);
+    assert_grid_layers_before_marks(&svg, &["panel-0-grid", "panel-1-grid", "panel-2-grid"]);
+    assert_eq!(svg.matches("<clipPath ").count(), 3);
+    assert_eq!(svg.matches(">Tall owner<").count(), 1);
 }
 
 #[test]

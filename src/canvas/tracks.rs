@@ -13,6 +13,7 @@ use crate::layout::kernel::{
 use crate::layout::PhysicalTextAlignment;
 use crate::layout::{AddressRole, ComponentAddress, PanelBox};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
+use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
 #[expect(
@@ -54,6 +55,121 @@ fn required(value: f64) -> Result<i64, Error> {
 
 fn checked(value: i128) -> Result<i64, Error> {
     i64::try_from(value).map_err(|_| Error::Render("Canvas track arithmetic overflowed".into()))
+}
+
+fn interior_insets(insets: &[[i64; 2]], start: usize, span: usize, rows: bool) -> i128 {
+    let trailing = usize::from(!rows);
+    (start..start + span - 1)
+        .map(|index| {
+            i128::from(insets[index][trailing]) + i128::from(insets[index + 1][1 - trailing])
+        })
+        .sum()
+}
+
+fn plot_minimum(
+    plot: &Plot,
+    title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let mut hard = plot.intrinsic_body_minimum(theme)?;
+    let sources = plot.prose();
+    hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
+        theme, sources, hard.1,
+    )?;
+    let title = title.widths().0;
+    hard.0 = hard.0.max(if sources.iter().any(Option::is_some) {
+        theme.root_outer_width(title)?
+    } else {
+        title
+    });
+    Ok(hard)
+}
+
+pub(super) fn minimum(
+    placements: &super::placement::Placements,
+    plots: &[Option<Plot>],
+    text: &[Option<TextPanelIntrinsics>],
+    titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    themes: &ResolvedCanvasThemes,
+    scope: &FitScope,
+) -> Result<FitOutcome<(f64, f64)>, Error> {
+    let (rows, columns) = placements.shape();
+    let owners = crate::data::source::collect_source((0..placements.len()).map(|index| {
+        ComponentAddress::root().child(
+            AddressRole::CanvasCell,
+            u32::try_from(index)
+                .map_err(|_| Error::Render("Canvas minimum owner overflow".into()))?,
+        )
+    }))?;
+    let mut requirements = [Vec::new(), Vec::new()];
+    for (index, address) in owners.iter().enumerate() {
+        let Some(footprint) = placements.footprint(index) else {
+            continue;
+        };
+        let hard = if let Some(plot) = &plots[index] {
+            plot_minimum(
+                plot,
+                titles[index].expect("Plot title intrinsics"),
+                themes.plot(index).expect("Plot theme"),
+            )?
+        } else if let Some(text) = text[index] {
+            text.minimum
+        } else {
+            continue;
+        };
+        for (axis, (start, span, hard)) in [
+            (footprint.column, footprint.column_span, hard.0),
+            (footprint.row, footprint.row_span, hard.1),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            fit::reserve(&mut requirements[axis], 1, "Canvas spanning minimum")?;
+            requirements[axis].push(GridRequirement {
+                start,
+                span,
+                hard: required(hard)?,
+                preferred: required(hard)?,
+                fill: true,
+                address,
+            });
+        }
+    }
+    let mut result = [0.0; 2];
+    for (axis, count) in [columns, rows].into_iter().enumerate() {
+        let base = crate::data::source::collect_source((0..count).map(|_| {
+            Ok(TrackSpec {
+                min: 0,
+                preferred: 0,
+                max: None,
+                flexible: false,
+            })
+        }))?;
+        match allocate_grid_axis(
+            &base,
+            &requirements[axis],
+            None,
+            [0, 0],
+            required(themes.root().composition_grid_gap()?)?,
+            None,
+            true,
+            scope,
+        )? {
+            FitOutcome::Measured(assignment) => {
+                let sum = assignment
+                    .sizes
+                    .iter()
+                    .map(|&value| i128::from(value))
+                    .sum::<i128>()
+                    + i128::from(required(themes.root().composition_grid_gap()?)?)
+                        * i128::try_from(count.saturating_sub(1))
+                            .map_err(|_| Error::Render("Canvas minimum gap overflow".into()))?;
+                result[axis] = pixels(checked(sum)?);
+            }
+            FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
+        }
+    }
+    Ok(FitOutcome::Measured((result[0], result[1])))
 }
 
 pub(super) struct CanvasGridAssignment {
@@ -203,17 +319,24 @@ pub(super) fn allocate(
             let theme = themes.plot(index).expect("prepared Plot theme");
             let (left, right) =
                 crate::layout::interior::sizing::horizontal_gutter_preference(plot, theme)?;
-            let insets = &mut column_insets[index % columns];
-            insets[0] = insets[0].max(required(left)?);
-            insets[1] = insets[1].max(required(right)?);
+            let footprint = placements.footprint(index).expect("Plot owner");
+            column_insets[footprint.column][0] =
+                column_insets[footprint.column][0].max(required(left)?);
+            let end = footprint.column + footprint.column_span - 1;
+            column_insets[end][1] = column_insets[end][1].max(required(right)?);
         }
         for group in &content.source.x_range_groups {
             let aligned = group.iter().fold([0_i64; 2], |maximum, &index| {
-                let insets = column_insets[index % columns];
-                [maximum[0].max(insets[0]), maximum[1].max(insets[1])]
+                let footprint = placements.footprint(index).expect("range group owner");
+                [
+                    maximum[0].max(column_insets[footprint.column][0]),
+                    maximum[1].max(column_insets[footprint.column + footprint.column_span - 1][1]),
+                ]
             });
             for &index in group {
-                column_insets[index % columns] = aligned;
+                let footprint = placements.footprint(index).expect("range group owner");
+                column_insets[footprint.column][0] = aligned[0];
+                column_insets[footprint.column + footprint.column_span - 1][1] = aligned[1];
             }
         }
     }
@@ -223,12 +346,16 @@ pub(super) fn allocate(
                 "Canvas gutter lies outside its declared Grid".into(),
             ));
         }
-        let col = &mut column_insets[column];
-        col[0] = col[0].max(required(requirement.left)?);
-        col[1] = col[1].max(required(requirement.right)?);
-        let row = &mut row_insets[row];
-        row[0] = row[0].max(required(requirement.bottom)?);
-        row[1] = row[1].max(required(requirement.top)?);
+        let Some(footprint) = placements.footprint(row * columns + column) else {
+            continue;
+        };
+        let end_column = column + footprint.column_span - 1;
+        let end_row = row + footprint.row_span - 1;
+        column_insets[column][0] = column_insets[column][0].max(required(requirement.left)?);
+        column_insets[end_column][1] =
+            column_insets[end_column][1].max(required(requirement.right)?);
+        row_insets[end_row][0] = row_insets[end_row][0].max(required(requirement.bottom)?);
+        row_insets[row][1] = row_insets[row][1].max(required(requirement.top)?);
     }
     let grid = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut owners = Vec::new();
@@ -258,22 +385,16 @@ pub(super) fn allocate(
             let child_theme = themes
                 .plot(index)
                 .expect("configured Plot retains its theme");
-            let mut hard = plot.intrinsic_body_minimum(child_theme)?;
+            let hard = plot_minimum(
+                plot,
+                plot_titles[index].expect("Plot text intrinsics"),
+                child_theme,
+            )?;
             let title = plot_titles[index]
                 .expect("configured Plot retains prepared text intrinsics")
                 .widths();
             let sources = plot.prose();
             let present = sources.map(|value| value.is_some());
-            hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
-                child_theme,
-                sources,
-                hard.1,
-            )?;
-            hard.0 = hard.0.max(if present.into_iter().any(|value| value) {
-                child_theme.root_outer_width(title.0)?
-            } else {
-                title.0
-            });
             let preferred = if content.is_some() {
                 let body = crate::layout::interior::sizing::body_preference(
                     plot,
@@ -331,19 +452,28 @@ pub(super) fn allocate(
         let footprint = placements
             .footprint(index)
             .ok_or_else(|| Error::Render("Canvas intrinsic has no canonical owner".into()))?;
+        let horizontal = interior_insets(
+            &column_insets,
+            footprint.column,
+            footprint.column_span,
+            false,
+        );
+        let vertical = interior_insets(&row_insets, footprint.row, footprint.row_span, true);
         widths.push(GridRequirement {
             start: footprint.column,
             span: footprint.column_span,
-            hard: required(hard.0)?,
-            preferred: required(preferred_width.max(hard.0))?,
+            hard: checked((i128::from(required(hard.0)?) - horizontal).max(0))?,
+            preferred: checked(
+                (i128::from(required(preferred_width.max(hard.0))?) - horizontal).max(0),
+            )?,
             fill: true,
             address: &owners[index],
         });
         heights.push(GridRequirement {
             start: footprint.row,
             span: footprint.row_span,
-            hard: required(hard.1)?,
-            preferred: required(hard.1)?,
+            hard: checked((i128::from(required(hard.1)?) - vertical).max(0))?,
+            preferred: checked((i128::from(required(hard.1)?) - vertical).max(0))?,
             fill: true,
             address: &owners[index],
         });
@@ -625,7 +755,13 @@ pub(super) fn allocate(
 
             let index = usize::try_from(child.address.leaf_slot_index())
                 .map_err(|_| Error::Render("Canvas content slot index overflowed".into()))?;
-            let width = pixels(columns[index % columns.len()]);
+            let footprint = placements.footprint(index).expect("height owner");
+            let end_column = footprint.column + footprint.column_span - 1;
+            let end_row = footprint.row + footprint.row_span - 1;
+            let width = pixels(checked(
+                i128::from(x_positions[end_column]) + i128::from(columns[end_column])
+                    - i128::from(x_positions[footprint.column]),
+            )?);
             let height = if let Some(plot) = &plots[index] {
                 let dependencies = content.source.consumed_guide_dependencies(
                     index,
@@ -644,10 +780,10 @@ pub(super) fn allocate(
                     content.round,
                     child.address,
                     [
-                        column_insets[index % columns.len()][0],
-                        column_insets[index % columns.len()][1],
-                        row_insets[index / columns.len()][0],
-                        row_insets[index / columns.len()][1],
+                        column_insets[footprint.column][0],
+                        column_insets[end_column][1],
+                        row_insets[end_row][0],
+                        row_insets[footprint.row][1],
                     ],
                     content.measurements,
                     &dependencies,
@@ -657,7 +793,11 @@ pub(super) fn allocate(
             } else {
                 0.0
             };
-            child.preferred = required(height)?.max(child.hard);
+            child.preferred = checked(
+                (i128::from(required(height)?)
+                    - interior_insets(&row_insets, footprint.row, footprint.row_span, true))
+                .max(i128::from(child.hard)),
+            )?;
         }
     }
     let mut y1 = checked(i128::from(y1) - i128::from(header_quanta))?;
@@ -740,15 +880,19 @@ pub(super) fn allocate(
     }
     crate::layout::fit::reserve(&mut assigned, count, "Canvas assigned owners")?;
 
-    for (row, row_inset) in row_insets.iter().enumerate() {
-        for (column, column_inset) in column_insets.iter().enumerate() {
-            assigned.push(
-                placements
-                    .footprint(row * columns.len() + column)
-                    .map(|footprint| tracks.owner(footprint)),
-            );
+    for (row, _) in row_insets.iter().enumerate() {
+        for (column, _) in column_insets.iter().enumerate() {
+            let footprint = placements.footprint(row * columns.len() + column);
+            assigned.push(footprint.map(|footprint| tracks.owner(footprint)));
             if content.is_some() {
-                content_insets.push([column_inset[0], column_inset[1], row_inset[0], row_inset[1]]);
+                content_insets.push(footprint.map_or([0; 4], |footprint| {
+                    [
+                        column_insets[footprint.column][0],
+                        column_insets[footprint.column + footprint.column_span - 1][1],
+                        row_insets[footprint.row + footprint.row_span - 1][0],
+                        row_insets[footprint.row][1],
+                    ]
+                }));
             }
         }
     }

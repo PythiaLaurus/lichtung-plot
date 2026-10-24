@@ -334,16 +334,101 @@ impl Canvas {
     /// let _ = Canvas::grid(1, 1).unwrap().panel(0, 0, erased);
     /// ```
     pub fn panel<K: crate::kind::ExactFamily>(
-        mut self,
+        self,
         row: usize,
         column: usize,
         plot: Plot<K>,
     ) -> Result<Self, Error> {
+        self.panel_span(row, column, 1, 1, plot)
+    }
+
+    /// Place one Plot across a checked rectangle, including internal track gaps.
+    /// Only the top-left anchor owns preparation, prose, guides and capture.
+    /// ```
+    /// use lichtung_plot::{Canvas, NumericValues, Plot};
+    /// let plot = || Plot::scatter(NumericValues::new("x",[0.0,1.0]),NumericValues::new("y",[1.0,0.0]));
+    /// let canvas = Canvas::grid(2,2)?
+    ///     .panel(0,0,plot())?.panel(1,0,plot())?
+    ///     .panel_span(0,1,2,1,plot())?;
+    /// # let _ = canvas;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    pub fn panel_span<K: crate::kind::ExactFamily>(
+        mut self,
+        row: usize,
+        column: usize,
+        row_span: usize,
+        column_span: usize,
+        plot: Plot<K>,
+    ) -> Result<Self, Error> {
         self.placements.insert(
-            placement::Footprint::cell(row, column),
+            placement::Footprint {
+                row,
+                column,
+                row_span,
+                column_span,
+            },
             placement::Payload::Plot(Box::new(plot.erase())),
         )?;
         Ok(self)
+    }
+
+    pub(crate) fn owner_topology(&self, index: usize) -> Option<[usize; 6]> {
+        let owner = self.placements.footprint(index)?;
+        Some([
+            self.rows,
+            self.columns,
+            owner.row,
+            owner.column,
+            owner.row_span,
+            owner.column_span,
+        ])
+    }
+
+    fn category_bands(&self) -> Result<Vec<Vec<usize>>, Error> {
+        let mut bands = Vec::new();
+        let mut row = 0;
+        while row < self.rows {
+            let first = self
+                .placements
+                .anchor(row, 0)
+                .filter(|&index| self.placements.plot(index).is_some())
+                .ok_or_else(|| {
+                    Error::Data("shared category band requires a first-column Plot owner".into())
+                })?;
+            let band = self.placements.footprint(first).expect("occupied anchor");
+            if band.row != row {
+                return Err(Error::Data(
+                    "shared category row intervals do not agree".into(),
+                ));
+            }
+            let mut members = Vec::new();
+            let mut column = 0;
+            while column < self.columns {
+                let index = self
+                    .placements
+                    .anchor(row, column)
+                    .filter(|&index| self.placements.plot(index).is_some())
+                    .ok_or_else(|| {
+                        Error::Data(
+                            "shared category band requires Plot peers across every column".into(),
+                        )
+                    })?;
+                let footprint = self.placements.footprint(index).expect("occupied anchor");
+                if footprint.row != band.row || footprint.row_span != band.row_span {
+                    return Err(Error::Data(
+                        "shared category owners must cover the same row interval".into(),
+                    ));
+                }
+                crate::data::source::reserve_source(&mut members, 1)?;
+                members.push(index);
+                column += footprint.column_span;
+            }
+            crate::data::source::reserve_source(&mut bands, 1)?;
+            bands.push(members);
+            row += band.row_span;
+        }
+        Ok(bands)
     }
 
     /// Place one validated text panel in an unoccupied zero-based grid cell.
@@ -668,6 +753,9 @@ impl Canvas {
     }
 
     fn validate_structure(&self) -> Result<(), Error> {
+        if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
+            self.category_bands()?;
+        }
         for source in [
             self.title.source(),
             self.subtitle.source(),
@@ -723,20 +811,25 @@ impl Canvas {
             }
         }
         for title in &self.row_titles {
-            let start = title.start * self.columns;
-            let end = start + self.columns;
-            if self
-                .placements
-                .plots()
-                .skip(start)
-                .take(end - start)
-                .flatten()
-                .any(|plot| plot.title_text().is_some() || plot.subtitle_text().is_some())
-            {
-                return Err(Error::Data(format!(
-                    "canvas row title cannot coexist with a panel title or subtitle in row {}",
-                    title.start
-                )));
+            for (index, plot) in self.placements.plots().enumerate() {
+                let Some(plot) = plot else {
+                    continue;
+                };
+                let footprint = self.placements.footprint(index).expect("Plot owner");
+                let end = footprint.row + footprint.row_span;
+                if footprint.row < title.start && title.start < end {
+                    return Err(Error::Data(
+                        "Canvas row title would cut through a Plot footprint".into(),
+                    ));
+                }
+                if footprint.row == title.start
+                    && (plot.title_text().is_some() || plot.subtitle_text().is_some())
+                {
+                    return Err(Error::Data(format!(
+                        "canvas row title cannot coexist with a panel title or subtitle in row {}",
+                        title.start
+                    )));
+                }
             }
         }
         Ok(())
@@ -2116,7 +2209,6 @@ impl Canvas {
 
     #[expect(
         clippy::too_many_lines,
-        clippy::cast_precision_loss,
         reason = "one Canvas trial allocates declared tracks and measures every affected child"
     )]
     fn build_canvas_attempt(
@@ -2190,42 +2282,18 @@ impl Canvas {
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
             let gap = themes.root().legend_shared_gap()?;
-            let grid_gap = themes.root().composition_grid_gap()?;
-            let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
-            let mut columns = Vec::new();
-            let mut rows = Vec::new();
-            fit::reserve(&mut columns, self.columns, "Canvas guide column minima")?;
-            fit::reserve(&mut rows, self.rows, "Canvas guide row minima")?;
-            columns.resize(self.columns, positive_span);
-            rows.resize(self.rows, positive_span);
-
-            for (index, plot) in plots.iter().enumerate() {
-                let hard = if let Some(plot) = plot {
-                    plot.intrinsic_body_minimum(
-                        themes.plot(index).expect("Plot retains its theme"),
-                    )?
-                } else if let Some(text) = prepared.text_panel_intrinsics[index] {
-                    text.minimum
-                } else {
-                    continue;
-                };
-                columns[index % self.columns] = columns[index % self.columns].max(hard.0);
-                rows[index / self.columns] = rows[index / self.columns].max(hard.1);
-            }
-            let minimum_width =
-                columns.iter().sum::<f64>() + self.columns.saturating_sub(1) as f64 * grid_gap;
-            let minimum_height =
-                rows.iter().sum::<f64>() + self.rows.saturating_sub(1) as f64 * grid_gap;
-            if !minimum_width.is_finite() || !minimum_height.is_finite() {
-                return Err(Error::Render(
-                    "Canvas shared-guide child tracks overflowed".into(),
-                ));
-            }
-            let frame = crate::decorations::plan::AssignedGuideFrame::new(
-                edge,
-                (minimum_width, minimum_height),
-                gap,
-            );
+            let minimum = match tracks::minimum(
+                &self.placements,
+                &plots,
+                prepared.text_panel_intrinsics,
+                prepared.plot_intrinsics,
+                &themes,
+                &scope,
+            )? {
+                FitOutcome::Measured(minimum) => minimum,
+                FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
+            };
+            let frame = crate::decorations::plan::AssignedGuideFrame::new(edge, minimum, gap);
             let available = frame.available(full_outer, [0.0; 4]);
             let measured = match Legend::measure_assigned(
                 Arc::clone(descriptor),
@@ -2328,8 +2396,9 @@ impl Canvas {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
-            for row in 0..self.rows {
-                let first_index = row * self.columns;
+            for band in self.category_bands()? {
+                let first_index = band[0];
+                let row = first_index / self.columns;
                 let first = plots[first_index].as_ref().ok_or_else(|| {
                     Error::Data(format!(
                         "canvas row {row} requires a configured first-column panel for shared category labels"
@@ -2363,8 +2432,8 @@ impl Canvas {
                     round,
                 )?;
                 let expected_selection = first.y_axis_spec().category_labels.clone();
-                for column in 1..self.columns {
-                    let index = first_index + column;
+                for &index in &band[1..] {
+                    let column = index % self.columns;
                     let plot = plots[index].as_ref().ok_or_else(|| {
                         Error::Data(format!(
                             "canvas row {row} requires panel ({row}, {column}) for shared category labels"
@@ -2521,6 +2590,9 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
             let cell = cells[index].expect("configured owner assignment");
+            for value in self.owner_topology(index).expect("Plot topology") {
+                round.observe_count(value)?;
+            }
             let local = match plot_text::PlotLocalTextPlan::measure(
                 plot,
                 cell,

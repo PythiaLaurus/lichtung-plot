@@ -42,7 +42,10 @@ impl OwnerInfo {
     pub(crate) fn for_plot(plot: &Plot, facet: Option<&crate::FacetCell>) -> Result<Self> {
         Ok(Self {
             kind: Some(plot.kind()),
-            canvas: plot.numeric_cell.as_deref().copied(),
+            canvas: plot
+                .canvas_owner
+                .as_deref()
+                .map(|owner| (owner[2], owner[3])),
             facet: facet.map(crate::FacetCell::try_copy).transpose()?,
             shared: false,
             scope: plot

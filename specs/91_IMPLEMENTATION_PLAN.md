@@ -1755,7 +1755,13 @@ owners and derived occupancy; all preparation/inventory/census/measurement/captu
 consumers preserve anchor slot identities. Declared row/column edges are separate
 from owner assignments and own header/row-title geometry. Existing unit placements
 retain natural, assigned and sparse-grid behavior through the single representation.
-Steps 15–22 remain pending; undelivered target signatures are
+Step 15 is complete: panel_span uses checked whole-footprint occupancy and canonical
+spanning requirements/guide minima in every existing root mode. Full-box child
+measurement preserves one producer and continuous geometry, outer gutter/ink
+ownership and complete footprint/height/reuse identity. Anchor-only ranges,
+compatible distinct category bands, row-title conflicts and declared header edges
+are enforced through the same placement model; TextPanels remain single-cell.
+Steps 16–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
