@@ -219,6 +219,13 @@ line alignment defaults to Center inside the merged row's centered block. Select
 size owns null-row padding, and complete Text participates in annotation Eq and
 intrinsic identity. Existing fully-null/Cartesian/highlight restrictions remain.
 
+WaterfallLabels accepts independent base/terminal Text and retains its name readers
+as `&str`. Prepared total text appends one space and the selected formatted number
+while retaining all local instructions. Ineligible totals are absent, independently
+of name content. Text defaults to the waterfall_total role and Center line alignment
+within the scientific endpoint's centered block. Shared shelf spacing uses the
+maximum selected size of its eligible totals.
+
 ### Guides
 
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and

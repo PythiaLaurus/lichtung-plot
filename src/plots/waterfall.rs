@@ -30,9 +30,9 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) range: (f64, f64),
     // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
     spans: Vec<WaterfallSpan>,
-    total_candidates: [(f64, String); 2],
+    total_candidates: [(f64, crate::Text); 2],
     total_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
-    total_variants: [Option<totals::TotalVariant>; 4],
+    total_variants: Vec<Option<totals::TotalVariant>>,
 }
 
 impl PreparedWaterfall {
@@ -87,6 +87,77 @@ struct BodyGeometry {
 #[cfg(test)]
 mod geometry_tests {
     use super::*;
+
+    #[test]
+    fn authored_totals_keep_independent_styles_at_equal_sources_and_size_the_shared_shelf() {
+        use crate::{FontFamily, FontStack, Text, TextAlignment, WaterfallLabels};
+        let mut theme = crate::Theme::publication();
+        let role = theme.typography.annotations.waterfall_total.clone();
+        let first = Text::new("Endpoint\nshort")
+            .style(role.clone().font_size(23).unwrap())
+            .alignment(TextAlignment::Start);
+        let second = Text::new("Endpoint\nshort")
+            .style(role.font_size(17).unwrap())
+            .alignment(TextAlignment::End);
+        let labels = WaterfallLabels::new(first.clone(), second.clone()).unwrap();
+        assert_eq!(labels.base(), labels.terminal());
+        assert_ne!(labels, WaterfallLabels::new(first.clone(), first).unwrap());
+        theme.typography.annotations.waterfall_total.stack =
+            FontStack::new([FontFamily::named("Unused Waterfall total font").unwrap()]).unwrap();
+        let one = crate::RelativeSpacing::ratio(1, 1).unwrap();
+        theme.annotations = theme
+            .annotations
+            .clone()
+            .waterfall_shelf(crate::ValueShelfSpacing::new(one.clone(), one.clone(), one).unwrap())
+            .unwrap();
+        let source = Plot::waterfall(
+            crate::CategoryValues::new("step", ["one"]).unwrap(),
+            crate::NumericValues::new("delta", [0.0]),
+            10.0,
+        )
+        .total_labels(labels)
+        .total_format(
+            crate::NumericFormat::new(
+                crate::NumericNotation::Decimal,
+                crate::NumericPrecision::Fractional(0),
+            )
+            .unwrap(),
+        )
+        .x_limits(0.0, 20.0)
+        .theme(theme.clone());
+        source.preflight().unwrap();
+        let resolved = theme.resolve().unwrap();
+        let chart =
+            crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
+        let marks = retained(&chart).unwrap();
+        let panel = PanelBox::new(0.0, 800.0, 0.0, 400.0);
+        let projection = crate::layout::Projection::new((0.0, 20.0), (0.0, 1.0), panel.as_tuple());
+        let totals = marks.selected_totals(&projection).unwrap();
+        assert!(totals
+            .totals
+            .iter()
+            .all(|(_, text)| text.as_ref().unwrap().as_str() == "Endpoint\nshort 10"));
+        let shelf = plan_annotations(
+            &projection,
+            panel,
+            1.0,
+            &totals.totals,
+            PlotRenderContext::new(chart.data(), panel, &resolved),
+        )
+        .unwrap();
+        assert_eq!(shelf.items.len(), 2);
+        assert_ne!(shelf.items[0].row, shelf.items[1].row);
+        assert_eq!(shelf.items[0].text_plan.style.font_size, 23);
+        assert_eq!(shelf.items[1].text_plan.style.font_size, 17);
+        assert_eq!(shelf.items[0].anchor, TextAnchor::Start);
+        assert_eq!(shelf.items[1].anchor, TextAnchor::End);
+        assert!(shelf
+            .items
+            .iter()
+            .all(|item| item.text_plan.style.exact_override));
+        let text_height: f64 = shelf.items.iter().map(|item| item.text_plan.height()).sum();
+        assert!((shelf.height - text_height - 3.0 * 23.0).abs() <= 1.0 / 1024.0);
+    }
 
     #[test]
     fn selected_breadth_controls_polygons_and_refuses_only_positive_ink_without_room() {
@@ -374,16 +445,15 @@ pub(crate) fn intrinsic_body_minimum(
         chart.y_axis_spec().limits.unwrap_or(input.ranges[1]),
         (0.0, 1.0, 0.0, 1.0),
     );
-    for (_, text) in &prepared.selected_totals(&projection)?.totals {
-        if text.is_empty() {
-            continue;
-        }
+    let totals = &prepared.selected_totals(&projection)?.totals;
+    for text in totals.iter().filter_map(|(_, text)| text.as_ref()) {
+        let appearance = text.appearance(&theme.typography.annotations.waterfall_total);
         let plan = theme.measure_text(
-            text,
-            &theme.typography.annotations.waterfall_total,
-            PhysicalTextAlignment::Center,
+            text.as_str(),
+            appearance.theme,
+            text.resolved_alignment(crate::TextAlignment::Center).into(),
             "Waterfall total shelf intrinsic",
-            false,
+            appearance.exact_override,
         )?;
         height = height.max(plan.height());
     }
@@ -391,7 +461,7 @@ pub(crate) fn intrinsic_body_minimum(
         theme
             .annotations
             .get_waterfall_shelf()
-            .lengths(theme.typography.annotations.waterfall_total.get_font_size())?
+            .lengths(total_shelf_size(totals, theme))?
             .padding
             .times(2)
             .add_pixels(height)?
@@ -480,25 +550,26 @@ pub(crate) fn prepare(
     let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let (spans, range) = prepare_spans(base, &deltas, data, &alpha)?;
     let running = spans.last().map_or(base, |span| span.end);
-    let (base_label, terminal_label) = chart
-        .waterfall_labels_spec()
-        .map_or(("base", "total"), |labels| {
-            (labels.base(), labels.terminal())
-        });
-    let total_candidates = [
-        (base, crate::data::source::copy_source_string(base_label)?),
-        (
-            running,
-            crate::data::source::copy_source_string(terminal_label)?,
-        ),
-    ];
+    let [base_label, terminal_label] = chart.waterfall_labels_spec().map_or_else(
+        || {
+            Ok::<_, Error>([
+                crate::Text::from(crate::data::source::copy_source_string("base")?),
+                crate::Text::from(crate::data::source::copy_source_string("total")?),
+            ])
+        },
+        |labels| {
+            let [base, terminal] = labels.contents();
+            Ok([base.try_copy()?, terminal.try_copy()?])
+        },
+    )?;
+    let total_candidates = [(base, base_label), (running, terminal_label)];
     Ok(PreparedWaterfall {
         labels,
         range,
         spans,
         total_candidates,
         total_format: chart.total_format_spec().cloned(),
-        total_variants: std::array::from_fn(|_| None),
+        total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
     })
 }
 
@@ -757,7 +828,7 @@ pub(crate) fn measure(
                     annotation.x,
                     layout.projection.panel_box().y1 + baselines[annotation.row],
                 ),
-                TextAnchor::Middle,
+                annotation.anchor,
                 0.0,
             ),
             plan: text_plan,
@@ -960,6 +1031,7 @@ struct Annotation {
     target: crate::layout::AddressRole,
     text_plan: ResolvedTextPlan,
     x: f64,
+    anchor: TextAnchor,
     row: usize,
 }
 
@@ -975,11 +1047,27 @@ struct ShelfRow {
     below: i64,
 }
 
+fn total_shelf_size(
+    candidates: &[(f64, Option<crate::Text>); 2],
+    theme: &crate::theme::ResolvedTheme,
+) -> u32 {
+    candidates
+        .iter()
+        .filter_map(|(_, text)| text.as_ref())
+        .map(|text| {
+            text.appearance(&theme.typography.annotations.waterfall_total)
+                .theme
+                .get_font_size()
+        })
+        .max()
+        .unwrap_or(theme.typography.annotations.waterfall_total.get_font_size())
+}
+
 fn plan_annotations(
     projection: &crate::layout::Projection,
     panel: PanelBox,
     source_y: f64,
-    candidates: &[(f64, String); 2],
+    candidates: &[(f64, Option<crate::Text>); 2],
     context: PlotRenderContext<'_>,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
     let theme = context.theme;
@@ -992,13 +1080,14 @@ fn plan_annotations(
     let metrics = theme
         .annotations
         .get_waterfall_shelf()
-        .lengths(theme.typography.annotations.waterfall_total.get_font_size())?;
+        .lengths(total_shelf_size(candidates, theme))?;
     let gap = metrics
         .gap
         .round(crate::layout::kernel::SpatialRounding::Ceil)?
         .quanta();
     let producer = context.producer_text()?;
     for (index, (value, text)) in candidates.iter().enumerate() {
+        let Some(text) = text else { continue };
         let target = if index == 0 {
             crate::layout::AddressRole::WaterfallBaseLabel
         } else {
@@ -1008,13 +1097,14 @@ fn plan_annotations(
         if !projection.contains_data(*value, source_y) {
             continue;
         }
-        let text_plan = producer.plan(text, "waterfall total annotation", || {
+        let appearance = text.appearance(&theme.typography.annotations.waterfall_total);
+        let text_plan = producer.plan(text.as_str(), "waterfall total annotation", || {
             Ok(theme.measure_text(
-                text,
-                &theme.typography.annotations.waterfall_total,
-                PhysicalTextAlignment::Center,
+                text.as_str(),
+                appearance.theme,
+                text.resolved_alignment(crate::TextAlignment::Center).into(),
                 "waterfall total annotation",
-                false,
+                appearance.exact_override,
             )?)
         })?;
         let width = text_plan.width();
@@ -1028,7 +1118,8 @@ fn plan_annotations(
             // diagnostic before allocation; child paths have their own admission.
 
             crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
-                "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
+                "waterfall: total annotation {:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
+                text.as_str(),
                 required_width,
                 panel.width()
             )));
@@ -1036,9 +1127,20 @@ fn plan_annotations(
         }
         let (projected_x, _) = projection.project(*value, source_y);
         let x_quanta = crate::layout::kernel::nearest_spatial_quanta(projected_x)?;
-        let x = x_quanta as f64 / 1024.0;
+        let half = crate::render::backend::nearest_even_text_half(text_plan.width_quanta)
+            .ok_or_else(|| Error::Render("Waterfall text half width overflow".into()))?;
+        let (anchor, offset) = match text_plan.style.alignment {
+            PhysicalTextAlignment::Start => (TextAnchor::Start, -half),
+            PhysicalTextAlignment::Center => (TextAnchor::Middle, 0),
+            PhysicalTextAlignment::End => (TextAnchor::End, text_plan.width_quanta - half),
+        };
+        let x = x_quanta
+            .checked_add(offset)
+            .ok_or_else(|| Error::Render("Waterfall text anchor overflow".into()))?
+            as f64
+            / 1024.0;
         let placement =
-            PlannedTextPlacement::baseline(Point2D::new(0.0, 0.0), TextAnchor::Middle, 0.0);
+            PlannedTextPlacement::baseline(Point2D::new(offset as f64 / 1024.0, 0.0), anchor, 0.0);
         let ink = crate::render::geometry::planned_text_ink_bounds(
             &text_plan,
             placement.position,
@@ -1057,8 +1159,6 @@ fn plan_annotations(
             .max(crate::layout::kernel::ceil_spatial_quanta(
                 ink.map_or(0.0, |ink| (-ink.bottom).max(0.0)),
             )?);
-        let half = crate::render::backend::nearest_even_text_half(text_plan.width_quanta)
-            .ok_or_else(|| Error::Render("Waterfall text half width overflow".into()))?;
         let lower = (-half).min(-crate::layout::kernel::ceil_spatial_quanta(
             ink.map_or(0.0, |ink| (-ink.left).max(0.0)),
         )?);
@@ -1104,6 +1204,7 @@ fn plan_annotations(
             target,
             text_plan,
             x,
+            anchor,
             row,
         });
     }

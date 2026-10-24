@@ -441,6 +441,10 @@ plus one-quantum safety is a private containment invariant. Heatmap finite value
 cells and fully-null merged rows have distinct source collections/padding:5 versus
 4 vertical default pixels, 6 versus 12 total horizontal. All size/wrap/final fit
 consumers use the matching collection and final selected contrast role.
+Waterfall total names can supply independent complete Text styles. The retained
+name-plus-number uses that style throughout census, measurement and drawing.
+The shared shelf's padding/gap/row_gap use the maximum selected size of eligible
+totals; each line block keeps its own font size and leading.
 
 ## Data-Color Scales
 

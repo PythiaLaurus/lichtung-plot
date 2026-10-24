@@ -355,32 +355,41 @@ impl DumbbellEndpoints {
 /// Caller-owned labels for waterfall base and terminal annotations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WaterfallLabels {
-    base: String,
-    terminal: String,
+    base: crate::Text,
+    terminal: crate::Text,
 }
 
 impl WaterfallLabels {
     /// Construct verbatim display labels for the base and terminal values.
-    pub fn new(base: impl Into<String>, terminal: impl Into<String>) -> Result<Self, crate::Error> {
+    /// Each Text retains independent complete appearance and line alignment for
+    /// the displayed name plus formatted numeric value. Readers borrow the name.
+    pub fn new(
+        base: impl Into<crate::Text>,
+        terminal: impl Into<crate::Text>,
+    ) -> Result<Self, crate::Error> {
         let labels = Self {
             base: base.into(),
             terminal: terminal.into(),
         };
-        crate::text::validate_for(&labels.base, "waterfall base label")?;
-        crate::text::validate_for(&labels.terminal, "waterfall terminal label")?;
+        crate::text::validate_for(labels.base.as_str(), "waterfall base label")?;
+        crate::text::validate_for(labels.terminal.as_str(), "waterfall terminal label")?;
         Ok(labels)
     }
 
     /// Verbatim label for the base or expected output.
     #[must_use]
     pub fn base(&self) -> &str {
-        &self.base
+        self.base.as_str()
     }
 
     /// Verbatim label for the terminal value or final prediction.
     #[must_use]
     pub fn terminal(&self) -> &str {
-        &self.terminal
+        self.terminal.as_str()
+    }
+
+    pub(crate) const fn contents(&self) -> [&crate::Text; 2] {
+        [&self.base, &self.terminal]
     }
 }
 

@@ -1681,7 +1681,9 @@ Canvas headers and row titles now retain independent exact styles and line align
 through font preparation, selected padding, track requirements and frozen feedback.
 Heatmap null-row text now retains complete Text through contrast selection, census,
 selected padding, intrinsic identity, track allocation and frozen placement.
-Waterfall endpoint labels and PointLayer legend labels remain pending within this step.
+Waterfall base/terminal Text now retains independent instructions through eligible
+name-plus-number preparation, font census, shared shelf metrics and frozen placement.
+PointLayer legend labels remain pending within this step.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

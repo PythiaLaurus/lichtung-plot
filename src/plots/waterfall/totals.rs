@@ -7,7 +7,7 @@ use crate::{Error, Result};
 
 #[derive(Debug)]
 pub(super) struct PreparedTotals {
-    pub(super) totals: [(f64, String); 2],
+    pub(super) totals: [(f64, Option<crate::Text>); 2],
     pub(super) numeric: std::sync::Arc<NumericPresentation>,
 }
 
@@ -107,7 +107,7 @@ impl PreparedWaterfall {
         let mut totals = self
             .total_candidates
             .each_ref()
-            .map(|(value, _)| (*value, String::new()));
+            .map(|(value, _)| (*value, None));
         for (index, ((_, name), (_, source))) in
             self.total_candidates.iter().zip(&mut totals).enumerate()
         {
@@ -117,15 +117,18 @@ impl PreparedWaterfall {
             let number = labels
                 .next()
                 .ok_or_else(|| Error::Render("Waterfall numeric occurrence missing".into()))?;
+            let mut label = String::new();
             let length = name
+                .as_str()
                 .len()
                 .checked_add(1)
                 .and_then(|length| length.checked_add(number.len()))
                 .ok_or_else(|| Error::Render("Waterfall total source length overflow".into()))?;
-            crate::data::source::reserve_source_string(source, length)?;
-            source.push_str(name);
-            source.push(' ');
-            source.push_str(number);
+            crate::data::source::reserve_source_string(&mut label, length)?;
+            label.push_str(name.as_str());
+            label.push(' ');
+            label.push_str(number);
+            *source = Some(name.try_copy_with_source(label)?);
         }
         Ok(TotalVariant::Ready(PreparedTotals {
             totals,
@@ -137,7 +140,7 @@ impl PreparedWaterfall {
     }
 
     /// Every actual successful source reachable under admitted window feedback.
-    pub(crate) fn total_font_sources(&self) -> impl Iterator<Item = &str> {
+    pub(crate) fn total_font_sources(&self) -> impl Iterator<Item = &crate::Text> {
         self.total_variants
             .iter()
             .flatten()
@@ -146,7 +149,7 @@ impl PreparedWaterfall {
                 TotalVariant::Collision => None,
             })
             .flat_map(|prepared| prepared.totals.iter())
-            .filter_map(|(_, source)| (!source.is_empty()).then_some(source.as_str()))
+            .filter_map(|(_, source)| source.as_ref())
     }
 }
 
@@ -192,11 +195,16 @@ mod tests {
             let labels: Vec<_> = selected
                 .totals
                 .iter()
-                .filter(|(_, text)| !text.is_empty())
-                .map(|(_, text)| text.as_str())
+                .filter_map(|(_, text)| text.as_ref().map(crate::Text::as_str))
                 .collect();
             assert_eq!(labels, expected);
-            assert_eq!(marks.total_font_sources().collect::<Vec<_>>(), expected);
+            assert_eq!(
+                marks
+                    .total_font_sources()
+                    .map(crate::Text::as_str)
+                    .collect::<Vec<_>>(),
+                expected
+            );
             assert_eq!(
                 selected.numeric.set.precision,
                 if expected.len() == 2 { 2 } else { 0 }

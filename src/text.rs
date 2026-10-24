@@ -97,8 +97,12 @@ impl Text {
     }
 
     pub(crate) fn try_copy(&self) -> crate::Result<Self> {
+        self.try_copy_with_source(crate::data::source::copy_source_string(&self.source)?)
+    }
+
+    pub(crate) fn try_copy_with_source(&self, source: String) -> crate::Result<Self> {
         Ok(Self {
-            source: crate::data::source::copy_source_string(&self.source)?,
+            source,
             style: self
                 .style
                 .as_ref()

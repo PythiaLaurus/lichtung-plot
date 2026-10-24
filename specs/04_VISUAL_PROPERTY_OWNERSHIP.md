@@ -103,6 +103,13 @@ retains contrast selection. Its selected size owns null-row padding and row-trac
 requirements. Physical line alignment defaults to Center inside the centered
 merged-row block; complete request equality owns intrinsic reuse.
 
+WaterfallLabels keeps independent base/terminal Text values with complete Eq.
+Formatting appends the selected number to the name in one retained Text without
+dropping instructions. Each local style replaces waterfall_total, including before
+font preparation. Endpoint projection centers the block and line alignment resolves
+inside it. The common shelf's metrics use the maximum eligible selected font size;
+numeric eligibility/source order and collision checks remain scientific policies.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

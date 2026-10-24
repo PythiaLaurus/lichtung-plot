@@ -1087,9 +1087,11 @@ fn push_deferred_plot_requirements(
                     requirements,
                     &body_address,
                     &mut body_index,
-                    label,
+                    label.as_str(),
                     &[],
-                    &theme.typography.annotations.waterfall_total,
+                    label
+                        .appearance(&theme.typography.annotations.waterfall_total)
+                        .theme,
                     prepared_stage.as_deref_mut(),
                 )?;
             }

@@ -173,6 +173,10 @@ the block while the chosen corner keeps ownership of block placement.
 inside a fully-null Cartesian row. The row key keeps its semantic validation;
 local Text style replaces the missing-fill contrast role and determines padding.
 
+`WaterfallLabels::new(base, terminal)` accepts independent Text values for the two
+names. Their styles and line alignment apply to each complete name-plus-number
+annotation. The shared shelf uses the largest selected size among eligible totals.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not
