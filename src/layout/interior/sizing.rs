@@ -2,7 +2,7 @@
 
 use crate::decorations::legend::discrete::PreparedGuide;
 use crate::layout::fit::{self, FitScope};
-use crate::layout::kernel::{FeedbackKind, FeedbackRound, RootSize};
+use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{ComponentAddress, PhysicalTextAlignment};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
@@ -117,19 +117,6 @@ pub(crate) fn guided_body_height(
             preference.1,
         )?
         .max(measured.1))
-}
-
-pub(crate) fn integral(value: f64) -> Result<u32, Error> {
-    let quanta = crate::layout::kernel::ceil_spatial_quanta(value)?;
-    let pixels = (i128::from(quanta) + 1023) / 1024;
-    u32::try_from(pixels)
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| {
-            Error::Render(
-                "natural root dimension is not representable as positive CSS pixels".into(),
-            )
-        })
 }
 
 #[expect(
@@ -380,24 +367,18 @@ pub(crate) fn plot_size(
             0.0
         };
     let horizontal = guide.as_ref().is_some_and(GuidedPreference::horizontal);
-    let mut outer_width = theme.root_outer_width(
-        preference.0 + initial_left + initial_right + if horizontal { 0.0 } else { guide_width },
-    )?;
-    if horizontal {
-        outer_width = outer_width.max(theme.root_outer_width(guide_width)?);
-    }
-    for (source, role) in plot.prose().into_iter().zip(
-        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(theme, plot.prose()),
-    ) {
-        if let Some(source) = source {
-            outer_width = outer_width.max(theme.root_outer_width(text_width(
-                theme,
-                source.as_str(),
-                role,
-            )?)?);
-        }
-    }
-    let width = requested_width.map_or_else(|| integral(outer_width), Ok)?;
+    let width = requested.select_width(if requested_width.is_none() {
+        outer_width(
+            plot,
+            theme,
+            preference.0,
+            (initial_left, initial_right),
+            guide_width,
+            horizontal,
+        )?
+    } else {
+        0.0
+    })?;
     let owner = ComponentAddress::root().child(crate::layout::AddressRole::PlotBody, 0)?;
     let gutters = round.insets(&owner, FeedbackKind::AxisGutter);
     let ink = round.insets(&owner, FeedbackKind::OwnedInk);
@@ -442,10 +423,33 @@ pub(crate) fn plot_size(
                 .add_length(&panel_edge),
         )?
     };
-    let height = integral(theme.root_outer_height(&prose.height_with_body(
+    let height = root_dimension(theme.root_outer_height(&prose.height_with_body(
         body_height.max(guide_height) + bottom + gutters[3] + ink[2] + ink[3],
     )?)?)?;
     Ok(RootSize::new(width, height))
+}
+
+fn outer_width(
+    plot: &Plot,
+    theme: &ResolvedTheme,
+    body: f64,
+    gutters: (f64, f64),
+    guide: f64,
+    horizontal: bool,
+) -> Result<f64, Error> {
+    let mut width = theme
+        .root_outer_width(body + gutters.0 + gutters.1 + if horizontal { 0.0 } else { guide })?;
+    if horizontal {
+        width = width.max(theme.root_outer_width(guide)?);
+    }
+    for (source, role) in plot.prose().into_iter().zip(
+        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(theme, plot.prose()),
+    ) {
+        if let Some(source) = source {
+            width = width.max(theme.root_outer_width(text_width(theme, source.as_str(), role)?)?);
+        }
+    }
+    Ok(width)
 }
 
 impl Plot {
@@ -697,9 +701,12 @@ mod tests {
 
     #[test]
     fn upward_css_conversion_preserves_extreme_representability() {
-        assert_eq!(super::integral(1.0 / 1024.0).unwrap(), 1);
-        assert_eq!(super::integral(300.0 + 1.0 / 1024.0).unwrap(), 301);
-        assert_eq!(super::integral(f64::from(u32::MAX)).unwrap(), u32::MAX);
+        assert_eq!(super::root_dimension(1.0 / 1024.0).unwrap(), 1);
+        assert_eq!(super::root_dimension(300.0 + 1.0 / 1024.0).unwrap(), 301);
+        assert_eq!(
+            super::root_dimension(f64::from(u32::MAX)).unwrap(),
+            u32::MAX
+        );
         for value in [
             0.0,
             -1.0,
@@ -707,7 +714,7 @@ mod tests {
             f64::NAN,
             f64::from(u32::MAX) + 1.0 / 1024.0,
         ] {
-            assert!(super::integral(value).is_err());
+            assert!(super::root_dimension(value).is_err());
         }
     }
 }

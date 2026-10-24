@@ -710,6 +710,16 @@ Plot's standalone request. The coordinator validates zeros before preparation,
 locks the first selected width and retains exact-height enforcement independently
 of automatic-height feedback.
 
+Natural width composition stops after the shared canonical column allocation,
+before measuring TextPanel/Plot child heights or assigning rows. Canvas column
+requirements include spanning owners, local prose/PerPlot guides, headers, row
+headers and shared gutters; assigned layout consumes the same summaries and
+allocator. Facets likewise have a column-only pass. A vertical shared facet title
+still consumes scoped natural Grid height for its perpendicular width, so that
+necessary local dependency remains measured and fallible. After width selection,
+content/strip/prose heights are measured at that width under existing feedback.
+All routes share the checked outward public-dimension conversion.
+
 At most **eight rounds cover the entire root**, with no nested convergence loop.
 Round1 uses prepared base domains, intrinsic gutters and empty reserve/alignment.
 Only these named consequences transfer:

@@ -247,8 +247,7 @@ pub(super) struct ContentSizing<'a> {
 
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
-    reason = "one Canvas Grid owns canonical sparse topology, root TextPanels, per-Plot minima, and measured gutters"
+    reason = "the Grid's existing owners and prepared summaries are shared by both measurement phases"
 )]
 pub(super) fn allocate(
     outer: PanelBox,
@@ -264,6 +263,107 @@ pub(super) fn allocate(
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<CanvasGridAssignment>, Error> {
+    Ok(
+        match measure(
+            outer,
+            placements,
+            plots,
+            text_panels,
+            plot_titles,
+            column_headers,
+            row_headers,
+            row_titles,
+            gutters,
+            themes,
+            scope,
+            content,
+            Phase::Complete,
+        )? {
+            FitOutcome::Measured(Measurement::Complete(assignment)) => {
+                FitOutcome::Measured(assignment)
+            }
+            FitOutcome::Miss(failure) => FitOutcome::Miss(failure),
+            FitOutcome::Measured(Measurement::Columns(_)) => unreachable!("complete Grid phase"),
+        },
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "natural columns consume the same span/header/prose/guide summaries as assigned Grid layout"
+)]
+pub(super) fn natural_width(
+    placements: &super::placement::Placements,
+    plots: &[Option<Plot>],
+    text_panels: &[Option<TextPanelIntrinsics>],
+    plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    column_headers: &[CanvasHeader],
+    row_headers: &[CanvasHeader],
+    row_titles: &[CanvasHeader],
+    themes: &ResolvedCanvasThemes,
+    scope: &FitScope,
+    content: &ContentSizing<'_>,
+) -> Result<FitOutcome<f64>, Error> {
+    if !content.natural_width {
+        return Err(Error::Render(
+            "natural columns require a natural-width assignment".into(),
+        ));
+    }
+    Ok(
+        match measure(
+            PanelBox::new(0.0, 0.0, 0.0, 0.0),
+            placements,
+            plots,
+            text_panels,
+            plot_titles,
+            column_headers,
+            row_headers,
+            row_titles,
+            &[],
+            themes,
+            scope,
+            Some(content),
+            Phase::Columns,
+        )? {
+            FitOutcome::Measured(Measurement::Columns(width)) => FitOutcome::Measured(width),
+            FitOutcome::Miss(failure) => FitOutcome::Miss(failure),
+            FitOutcome::Measured(Measurement::Complete(_)) => {
+                unreachable!("column preference phase")
+            }
+        },
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Columns,
+    Complete,
+}
+enum Measurement {
+    Columns(f64),
+    Complete(CanvasGridAssignment),
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one Canvas Grid owns canonical sparse topology, root TextPanels, per-Plot minima, and measured gutters"
+)]
+fn measure(
+    outer: PanelBox,
+    placements: &super::placement::Placements,
+    plots: &[Option<Plot>],
+    text_panels: &[Option<TextPanelIntrinsics>],
+    plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    column_headers: &[CanvasHeader],
+    row_headers: &[CanvasHeader],
+    row_titles: &[CanvasHeader],
+    gutters: &[(usize, usize, PanelRequirements)],
+    themes: &ResolvedCanvasThemes,
+    scope: &FitScope,
+    content: Option<&ContentSizing<'_>>,
+    phase: Phase,
+) -> Result<FitOutcome<Measurement>, Error> {
     let (rows, columns) = placements.shape();
     let count = rows
         .checked_mul(columns)
@@ -634,7 +734,9 @@ pub(super) fn allocate(
     let width = i128::from(x1) - i128::from(x0) - horizontal_gutters;
     let height = i128::from(y1) - i128::from(y0) - vertical_gutters;
     if (width <= 0 && !content.is_some_and(|value| value.natural_width))
-        || (height <= 0 && !content.is_some_and(|value| value.natural_height))
+        || (phase == Phase::Complete
+            && height <= 0
+            && !content.is_some_and(|value| value.natural_height))
     {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
@@ -684,6 +786,9 @@ pub(super) fn allocate(
     let grid_width = pixels(checked(
         cursor - i128::from(nearest_spatial_quanta(header_outer.x0)?),
     )?);
+    if phase == Phase::Columns {
+        return Ok(FitOutcome::Measured(Measurement::Columns(grid_width)));
+    }
     let mut column_plans = Vec::new();
     crate::layout::fit::reserve(
         &mut column_plans,
@@ -1029,12 +1134,14 @@ pub(super) fn allocate(
             text,
         });
     }
-    Ok(FitOutcome::Measured(CanvasGridAssignment {
-        owners: assigned,
-        tracks,
-        headers,
-        row_titles: measured_row_titles,
-        size: (grid_width, grid_height),
-        content_insets,
-    }))
+    Ok(FitOutcome::Measured(Measurement::Complete(
+        CanvasGridAssignment {
+            owners: assigned,
+            tracks,
+            headers,
+            row_titles: measured_row_titles,
+            size: (grid_width, grid_height),
+            content_insets,
+        },
+    )))
 }

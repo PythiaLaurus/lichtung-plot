@@ -43,8 +43,7 @@ pub(super) struct GridAssignment {
 
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
-    reason = "one measured facet Grid retains row-major sparse cells, gutters, and both axis vectors"
+    reason = "facet ownership and prepared summaries are shared by both measurement phases"
 )]
 pub(super) fn allocate(
     data: PlotData<'_>,
@@ -57,6 +56,91 @@ pub(super) fn allocate(
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<GridAssignment>, Error> {
+    Ok(
+        match measure(
+            data,
+            outer,
+            shape,
+            panels,
+            minima,
+            gutters,
+            theme,
+            scope,
+            content,
+            Phase::Complete,
+        )? {
+            FitOutcome::Measured(Measurement::Complete(grid)) => FitOutcome::Measured(grid),
+            FitOutcome::Miss(failure) => FitOutcome::Miss(failure),
+            FitOutcome::Measured(Measurement::Columns(_)) => {
+                unreachable!("complete facet Grid phase")
+            }
+        },
+    )
+}
+
+pub(super) fn natural_width(
+    data: PlotData<'_>,
+    shape: (usize, usize),
+    panels: &[FacetPanel],
+    minima: &[(f64, f64)],
+    theme: &ResolvedTheme,
+    scope: &FitScope,
+    content: &ContentSizing<'_>,
+) -> Result<FitOutcome<f64>, Error> {
+    if !content.natural_width {
+        return Err(Error::Render(
+            "natural facet columns require a natural-width assignment".into(),
+        ));
+    }
+    Ok(
+        match measure(
+            data,
+            PanelBox::new(0.0, 0.0, 0.0, 0.0),
+            shape,
+            panels,
+            minima,
+            &[],
+            theme,
+            scope,
+            Some(content),
+            Phase::Columns,
+        )? {
+            FitOutcome::Measured(Measurement::Columns(width)) => FitOutcome::Measured(width),
+            FitOutcome::Miss(failure) => FitOutcome::Miss(failure),
+            FitOutcome::Measured(Measurement::Complete(_)) => {
+                unreachable!("facet column preference phase")
+            }
+        },
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Columns,
+    Complete,
+}
+enum Measurement {
+    Columns(f64),
+    Complete(GridAssignment),
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one measured facet Grid retains row-major sparse cells, gutters, and both axis vectors"
+)]
+fn measure(
+    data: PlotData<'_>,
+    outer: PanelBox,
+    shape: (usize, usize),
+    panels: &[FacetPanel],
+    minima: &[(f64, f64)],
+    gutters: &[(usize, usize, PanelRequirements)],
+    theme: &ResolvedTheme,
+    scope: &FitScope,
+    content: Option<&ContentSizing<'_>>,
+    phase: Phase,
+) -> Result<FitOutcome<Measurement>, Error> {
     let (rows, columns) = shape;
     if rows == 0 || columns == 0 || panels.len() != minima.len() {
         return Err(Error::Render(
@@ -197,7 +281,9 @@ pub(super) fn allocate(
     let width = i128::from(x1) - i128::from(x0) - horizontal_reserved;
     let height = i128::from(y1) - i128::from(y0) - vertical_reserved;
     if (width <= 0 && !content.is_some_and(|value| value.natural_width))
-        || (height <= 0 && !content.is_some_and(|value| value.natural_height))
+        || (phase == Phase::Complete
+            && height <= 0
+            && !content.is_some_and(|value| value.natural_height))
     {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
@@ -239,6 +325,18 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
+    let grid_width = checked(
+        columns.iter().map(|&value| i128::from(value)).sum::<i128>()
+            + horizontal_reserved
+            + i128::from(gap)
+                * i128::try_from(columns.len().saturating_sub(1))
+                    .map_err(|_| Error::Render("facet gap count overflowed".into()))?,
+    )?;
+    if phase == Phase::Columns {
+        return Ok(FitOutcome::Measured(Measurement::Columns(pixels(
+            grid_width,
+        ))));
+    }
     if let Some(content) = content {
         for (index, ((panel, child), minimum)) in
             panels.iter().zip(&mut heights).zip(minima).enumerate()
@@ -330,13 +428,6 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
-    let grid_width = checked(
-        columns.iter().map(|&value| i128::from(value)).sum::<i128>()
-            + horizontal_reserved
-            + i128::from(gap)
-                * i128::try_from(columns.len().saturating_sub(1))
-                    .map_err(|_| Error::Render("facet gap count overflowed".into()))?,
-    )?;
     let grid_height = checked(
         rows.iter().map(|&value| i128::from(value)).sum::<i128>()
             + vertical_reserved
@@ -385,10 +476,12 @@ pub(super) fn allocate(
             ));
         }
     }
-    Ok(FitOutcome::Measured(GridAssignment {
-        cells,
-        size: (pixels(grid_width), pixels(grid_height)),
-    }))
+    Ok(FitOutcome::Measured(Measurement::Complete(
+        GridAssignment {
+            cells,
+            size: (pixels(grid_width), pixels(grid_height)),
+        },
+    )))
 }
 
 #[cfg(test)]

@@ -1158,7 +1158,7 @@ impl UnfacetedPlotPlan {
 
         let mut plot = panel_plan.plot_with_planned_limits(source);
         if content_height {
-            let height = crate::layout::interior::sizing::integral(
+            let height = crate::layout::kernel::root_dimension(
                 canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
             )?;
             plot = plot.with_canvas_size(source.canvas_dimensions()?.0, height);

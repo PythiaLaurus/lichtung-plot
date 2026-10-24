@@ -2373,7 +2373,7 @@ impl Canvas {
             .as_ref()
             .map(|_| GuideAllocation::width(outer.width()))
             .transpose()?;
-        let current_height = crate::layout::interior::sizing::integral(
+        let current_height = crate::layout::kernel::root_dimension(
             canvas_layout.panel_box.y1 + canvas_layout.insets.top,
         )?;
         for slot in &mut plots {
@@ -2889,7 +2889,7 @@ impl Canvas {
         let plan = CanvasPlan {
             dimensions: (
                 assigned.dimensions()?.0,
-                crate::layout::interior::sizing::integral(
+                crate::layout::kernel::root_dimension(
                     canvas_layout.panel_box.y1 + canvas_layout.insets.top,
                 )?,
             ),

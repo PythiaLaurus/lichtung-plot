@@ -2138,6 +2138,13 @@ checks and strict Clippy pass.
 
 ### 21. Separate Natural Width Composition From Height Work
 
+Delivered: Canvas and facets stop a natural-column pass in their existing span/
+sparse-track allocator before general child-height work. The vertical shared facet
+title retains its actual local Grid-height dependency. Plot outer-width composition
+and common outward root-dimension selection are explicit before content heights.
+Focused root-mode, mixed/all-text, native Matrix and uncapped-height-independence
+checks preserve the existing three-mode contracts.
+
 Factor the necessary width-first paths in Plot, facets and the now span-aware
 Canvas while retaining their current three-mode behavior. Use the same column
 summaries/allocator for natural and assigned dimensions, including Plot footprints,

@@ -7,8 +7,8 @@ use crate::decorations::legend::discrete::scoped::{
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{self, FitScope};
-use crate::layout::interior::sizing::{body_preference, integral, text_width};
-use crate::layout::kernel::{FeedbackKind, FeedbackRound, RootSize};
+use crate::layout::interior::sizing::{body_preference, text_width};
+use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PanelBox};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
@@ -406,7 +406,7 @@ pub(super) fn content_frame(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height = integral(theme.root_outer_height(&prose.height_with_body(height)?)?)?;
+    let height = root_dimension(theme.root_outer_height(&prose.height_with_body(height)?)?)?;
     crate::layout::RootFramePlan::measure(
         (width, height),
         theme,
@@ -542,7 +542,28 @@ pub(super) fn measure(
     // Initial selection excludes feedback. Empty/trailing tracks and spanning text
     // use precisely the rendering allocator's declared topology.
     let mut preferred_width = if requested_width.is_none() {
-        theme.root_outer_width(allocate(None, &[])?.size.0 + guide.0 + guide_gap)?
+        let width = fit::measured(super::tracks::natural_width(
+            &source.placements,
+            &plots,
+            &prepared.text_panel_intrinsics,
+            &prepared.plot_intrinsics,
+            &source.column_headers,
+            &source.row_headers,
+            &source.row_titles,
+            &prepared.themes,
+            &FitScope::root(),
+            &super::tracks::ContentSizing {
+                source,
+                interiors: &prepared.interiors,
+                round,
+                measurements: Some(measurements),
+                shared_allocation: None,
+                natural_width: true,
+                natural_height: true,
+            },
+        ))
+        .map_err(fit::PlanError::into_error)?;
+        theme.root_outer_width(width + guide.0 + guide_gap)?
     } else {
         0.0
     };
@@ -561,7 +582,7 @@ pub(super) fn measure(
             }
         }
     }
-    let width = requested_width.map_or_else(|| integral(preferred_width), Ok)?;
+    let width = requested.select_width(preferred_width)?;
     let grid = allocate(Some(theme.root_inner_width(f64::from(width))?), &gutters)?;
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
@@ -571,7 +592,8 @@ pub(super) fn measure(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height =
-        integral(theme.root_outer_height(&prose.height_with_body(grid.size.1.max(guide.1))?)?)?;
+    let height = root_dimension(
+        theme.root_outer_height(&prose.height_with_body(grid.size.1.max(guide.1))?)?,
+    )?;
     Ok(RootSize::new(width, height))
 }

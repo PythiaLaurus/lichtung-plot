@@ -2,6 +2,87 @@ use super::*;
 use crate::decorations::legend::discrete::scoped::{DependencyUse, GuideAllocation};
 use crate::numeric::{decimal::NegativeZero, format::NumericFormat};
 
+#[test]
+fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
+    let source = Canvas::grid(1, 1)
+        .unwrap()
+        .text_panel(
+            0,
+            0,
+            crate::TextPanel::new(
+                "Width owner",
+                crate::Text::new("Complete source with no permitted height").layout(
+                    crate::TextLayout::default()
+                        .bounds(crate::TextBounds::new(None, Some(0.0), None).unwrap()),
+                ),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let themes = super::super::ResolvedCanvasThemes::new(
+        &source.theme,
+        &source.placements,
+        &source.guide_text_layouts,
+    )
+    .unwrap();
+    let interiors = vec![None];
+    let plots = vec![None];
+    let (_, text, prose) = source.prepare_intrinsics(&themes, &interiors).unwrap();
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 800,
+            height: 600,
+        },
+        |_| Ok(()),
+        |(), assigned, round| {
+            let content = super::super::tracks::ContentSizing {
+                source: &source,
+                interiors: &interiors,
+                round,
+                measurements: None,
+                shared_allocation: None,
+                natural_width: true,
+                natural_height: true,
+            };
+            let width = fit::measured(super::super::tracks::natural_width(
+                &source.placements,
+                &plots,
+                &text,
+                &prose,
+                &[],
+                &[],
+                &[],
+                &themes,
+                &FitScope::root(),
+                &content,
+            ))
+            .map_err(fit::PlanError::into_error)?;
+            assert!(width > 0.0);
+            let full = super::super::tracks::allocate(
+                PanelBox::new(0.0, 0.0, 0.0, 0.0),
+                &source.placements,
+                &plots,
+                &text,
+                &prose,
+                &[],
+                &[],
+                &[],
+                &[],
+                &themes,
+                &FitScope::root(),
+                Some(&content),
+            );
+            assert!(full.is_err() || matches!(full, Ok(fit::FitOutcome::Miss(_))));
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
+        },
+        |(), _, (), _| Ok(()),
+    )
+    .unwrap();
+}
+
 fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item = Plot>) {
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(

@@ -4,8 +4,8 @@ use super::{data, tracks, PreparedFacetGuide};
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{self, FitScope};
-use crate::layout::interior::sizing::{integral, text_width};
-use crate::layout::kernel::{FeedbackKind, FeedbackRound, RootSize};
+use crate::layout::interior::sizing::text_width;
+use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PanelBox};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
@@ -159,15 +159,37 @@ pub(in crate::orchestrator) fn natural_size(
     };
     let requested_width = request.exact_width();
     let mut preferred = if requested_width.is_none() {
-        let natural = allocate(None, &[])?;
+        // The vertical shared title genuinely consumes natural Grid height.
+        // Without it, column selection has no child-height dependency.
+        let natural = if labels[1].is_some() {
+            allocate(None, &[])?.size
+        } else {
+            let width = fit::measured(tracks::natural_width(
+                data,
+                (selectors.rows, selectors.columns),
+                &panels,
+                &minima,
+                theme,
+                &FitScope::root(),
+                &tracks::ContentSizing {
+                    plot: &base,
+                    inputs,
+                    round,
+                    natural_width: true,
+                    natural_height: true,
+                },
+            ))
+            .map_err(fit::PlanError::into_error)?;
+            (width, 0.0)
+        };
         let axes = super::planning::shared_axis_requirements(
             labels[0].as_ref(),
             labels[1].as_ref(),
             theme,
-            PanelBox::new(0.0, natural.size.0, 0.0, natural.size.1),
+            PanelBox::new(0.0, natural.0, 0.0, natural.1),
         )
         .map_err(fit::PlanError::into_error)?;
-        let body = theme.root_outer_width(natural.size.0 + axes[0])?;
+        let body = theme.root_outer_width(natural.0 + axes[0])?;
         if horizontal {
             body.max(theme.root_outer_width(guide_size.0)?)
         } else {
@@ -191,7 +213,7 @@ pub(in crate::orchestrator) fn natural_size(
             }
         }
     }
-    let width = requested_width.map_or_else(|| integral(preferred), Ok)?;
+    let width = request.select_width(preferred)?;
     let root_gutters = round.insets(
         &ComponentAddress::root().child(AddressRole::RootBody, 0)?,
         FeedbackKind::AxisGutter,
@@ -216,7 +238,7 @@ pub(in crate::orchestrator) fn natural_size(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height = integral(theme.root_outer_height(&prose.height_with_body(
+    let height = root_dimension(theme.root_outer_height(&prose.height_with_body(
         grid.size.1.max(guide_size.1) + root_gutters[2].max(axes[2]) + grid_gutters[2],
     )?)?)?;
     Ok(RootSize::new(width, height))

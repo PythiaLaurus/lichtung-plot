@@ -582,6 +582,11 @@ pub(crate) enum RootRequest {
 }
 
 impl RootRequest {
+    pub(crate) fn select_width(self, preference: f64) -> Result<u32, Error> {
+        self.validate()?;
+        self.exact_width()
+            .map_or_else(|| root_dimension(preference), Ok)
+    }
     pub(crate) const fn exact_width(self) -> Option<u32> {
         match self {
             Self::Natural => None,
@@ -710,6 +715,17 @@ pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
     )]
     let value = length.0 as f64 / 1024.0;
     Ok(value)
+}
+
+pub(crate) fn root_dimension(value: f64) -> Result<u32, Error> {
+    LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil)?
+        .canonical_dimension()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| {
+            Error::Render(
+                "natural root dimension is not representable as positive CSS pixels".into(),
+            )
+        })
 }
 
 /// Prepare once, coordinate at most eight complete rounds, then freeze once.
