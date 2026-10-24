@@ -152,8 +152,8 @@ impl Intrinsics {
                 // using the same indivisible numeric formatter as tick selection.
                 let value = f64::midpoint(axes.ranges[side].0, axes.ranges[side].1);
                 let power = axes.logarithmic && side == 0;
-                let label = if let Some(format) = &axes.specs[side].format {
-                    format.format_singleton(value, power)?
+                let label = if let Some(probe) = axes.numeric_probe(side)? {
+                    crate::data::source::copy_source_string(&probe.labels[1])?
                 } else {
                     crate::layout::panel::format_label(value, power, false, 0)?
                 };
@@ -365,7 +365,7 @@ impl InteriorRoute {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
                         inputs.specs[side].generation,
-                        inputs.specs[side].format.as_deref(),
+                        inputs.specs[side].numeric_request()?.as_ref(),
                         panel,
                         context.theme,
                         context.fit_scope(),

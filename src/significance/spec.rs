@@ -111,6 +111,33 @@ enum FacetCellLayout {
 }
 
 impl FacetCell {
+    pub(crate) fn try_copy(&self) -> crate::Result<Self> {
+        match &self.layout {
+            FacetCellLayout::Single(level) => Ok(Self::single(
+                crate::data::source::copy_source_string(level)?,
+            )),
+            FacetCellLayout::Grid { row, column } => Ok(Self::grid(
+                crate::data::source::copy_source_string(row)?,
+                crate::data::source::copy_source_string(column)?,
+            )),
+        }
+    }
+    /// Raw level of a single-dimensional facet address.
+    pub fn single_level(&self) -> Option<&str> {
+        if let FacetCellLayout::Single(level) = &self.layout {
+            Some(level)
+        } else {
+            None
+        }
+    }
+    /// Raw row and column levels of a crossed facet address.
+    pub fn grid_levels(&self) -> Option<(&str, &str)> {
+        if let FacetCellLayout::Grid { row, column } = &self.layout {
+            Some((row, column))
+        } else {
+            None
+        }
+    }
     /// Select one level of a row, column, or wrapped facet.
     #[must_use]
     pub fn single(level: impl Into<String>) -> Self {

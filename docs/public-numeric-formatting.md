@@ -1,5 +1,44 @@
 # Scientific Numeric Formatting
 
+## Custom Labels Without Custom Tick Positions
+
+```rust
+use lichtung_plot::{NumericFormat, NumericIdentity, NumericValues, Plot};
+
+let policy = NumericFormat::default().value_function(|context| {
+    let label = context.format_builtin()?;
+    Ok(match context.value().identity() {
+        NumericIdentity::Tick { source_index: 0, .. } => format!("start: {label}"),
+        _ => label,
+    })
+});
+let _plot = Plot::scatter(
+    NumericValues::new("x", [0.0, 1.0]), NumericValues::new("y", [0.0, 1.0]),
+).x_tick_format(policy);
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+`set_function` receives the entire ordered semantic set and returns NumericLabels;
+`context.format_builtin()?.explanation("Adjusted values")` replaces the one common
+Text slot. Helpers are lazy, nonrecursive and use complete-set adaptive precision,
+locale and frozen factors. Ignoring a helper does not allocate unused numeric fields.
+Returned text is final: no localization or rounding is applied afterward.
+
+Contexts distinguish intrinsic probes from actual sets and expose raw source
+identity, Canvas/facet owners and resolved domains. Forest operands remain exact
+mathematical powers. Clone a policy to share callback identity; independent closures
+are incompatible in a Shared guide even if they return equal text. `builtin()`
+restores built-in emission without resetting options.
+
+Functions run serially once per reached semantic context per terminal operation,
+independent of optional layout reuse. Different candidate sets can require separate
+calls. Stable inputs require stable application output. Exact ticks suppress numeric
+functions; empty owners do not invoke them. Errors are fatal, cardinality is checked,
+and ordinary consumer collision rules still apply. Frozen Output publications never
+invoke the function again.
+
+## Built-In Policies
+
 NumericFormat, NumericNotation, NumericPrecision, NumericRounding, NegativeZero
 and TrailingZeros are crate-root values. Fields/implementation are private and validated.
 

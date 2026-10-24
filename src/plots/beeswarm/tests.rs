@@ -154,6 +154,12 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: prepared.scale.domain(),
         exact: false,
         format: Some(std::sync::Arc::new(format.clone())),
+        numeric_source: crate::numeric::source::NumericSource::for_plot(
+            &source,
+            &crate::font::canonical::OperationContext::new(),
+            None,
+        )
+        .unwrap(),
     };
     let sibling = ContinuousContributor {
         field: "color".into(),
@@ -166,6 +172,12 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: (-4.0, 12.0),
         exact: true,
         format: Some(std::sync::Arc::new(format)),
+        numeric_source: crate::numeric::source::NumericSource::for_plot(
+            &source,
+            &crate::font::canonical::OperationContext::new(),
+            None,
+        )
+        .unwrap(),
     };
     let shared = ContinuousContributor::merge([contributor, sibling])
         .unwrap()
@@ -198,6 +210,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         None,
         None,
         None,
+        &crate::font::canonical::OperationContext::new(),
     )
     .unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();

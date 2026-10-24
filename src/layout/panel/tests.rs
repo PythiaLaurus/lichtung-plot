@@ -119,6 +119,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
             limits: None,
             generation: crate::TickGeneration::automatic(),
             format: None,
+            numeric_source: None,
             exact_ticks: Some(
                 (0..count)
                     .map(|index| AxisTick::new(f64::from(index), ""))
@@ -148,6 +149,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
             limits: None,
             generation: crate::TickGeneration::automatic(),
             format: None,
+            numeric_source: None,
             exact_ticks: Some(
                 positions
                     .into_iter()
@@ -169,6 +171,7 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
         limits: None,
         generation: crate::TickGeneration::automatic(),
         format: None,
+        numeric_source: None,
         exact_ticks: Some(vec![
             AxisTick::new(-f64::MAX, "same"),
             AxisTick::new(0.0, ""),
@@ -525,6 +528,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
         ]),
         generation: crate::TickGeneration::automatic(),
         format: None,
+        numeric_source: None,
     };
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),

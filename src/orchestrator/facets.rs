@@ -60,15 +60,20 @@ pub(crate) fn text_census_labels(
 pub(crate) struct FacetTextCensusPanel<'a> {
     plot: &'a Plot,
     panel: data::FacetPanel,
+    cell: Option<crate::FacetCell>,
 }
 
 impl FacetTextCensusPanel<'_> {
     pub(crate) fn data(&self) -> crate::data::PlotData<'_> {
         crate::data::PlotData::with_rows(self.plot, &self.panel.rows, &self.panel.source_rows)
+            .with_numeric_facet(self.cell.as_ref())
     }
 
     pub(crate) fn scope(&self) -> Result<String, Error> {
         self.panel.render_scope()
+    }
+    pub(crate) fn numeric_cell(&self) -> Option<&crate::FacetCell> {
+        self.cell.as_ref()
     }
 
     pub(crate) fn significance_annotations(
@@ -106,9 +111,25 @@ pub(crate) fn text_census_panels<'a>(
     let panels = data::extract_panels(source, &selectors, None, source_data)?;
     data::validate_significance_facet_anchors(source, &panels)?;
     crate::data::source::collect_source(panels.into_iter().map(|panel| {
+        let cell = match panel.cell.as_slice() {
+            [one] => Some(crate::FacetCell::single(
+                crate::data::source::copy_source_string(&one.level)?,
+            )),
+            [row, column] => Some(crate::FacetCell::grid(
+                crate::data::source::copy_source_string(&row.level)?,
+                crate::data::source::copy_source_string(&column.level)?,
+            )),
+            [] => None,
+            _ => {
+                return Err(Error::Render(
+                    "numeric facet identity requires at most two selectors".into(),
+                ))
+            }
+        };
         Ok(FacetTextCensusPanel {
             plot: source,
             panel,
+            cell,
         })
     }))
 }

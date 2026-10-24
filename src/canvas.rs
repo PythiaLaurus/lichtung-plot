@@ -356,7 +356,9 @@ impl Canvas {
                 "canvas panel ({row}, {column}) is already occupied"
             )));
         }
-        self.panels[index] = Some(plot.erase());
+        let mut plot = plot.erase();
+        plot.numeric_cell = Some(crate::data::source::source_arc((row, column))?);
+        self.panels[index] = Some(plot);
         Ok(self)
     }
 
@@ -1188,6 +1190,7 @@ impl Canvas {
                             Some(&scope),
                             shared_x.get(index).copied().flatten(),
                             self.labels.as_ref(),
+                            &resources,
                         )?)
                     }
                     Some(plot) => {
@@ -1206,11 +1209,13 @@ impl Canvas {
                             crate::plots::shared_x::prepare_scatter_plot(
                                 &plot,
                                 scatter[index].take().expect("prepared Scatter component"),
+                                &resources,
                             )?
                         } else {
                             crate::plots::shared_x::prepare_line_plot(
                                 &plot,
                                 line[index].take().expect("prepared line component"),
+                                &resources,
                             )?
                         })
                     }

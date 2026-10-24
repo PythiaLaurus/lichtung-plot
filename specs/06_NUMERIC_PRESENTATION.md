@@ -10,8 +10,8 @@ provenance, clipping, source identities or color mapping.
 
 There is one normalized rounding/emission engine with private consumer-default
 profiles and explicit mathematical operand kinds. No compatibility formatter,
-runtime version selector, host/environment locale inference, callback or Canvas
-format override is provided. Exact ticks,
+runtime version selector, host/environment locale inference or Canvas format
+override is provided. Exact ticks,
 categories, guide identities, significance, PointLayer/panel/null-row strings and
 Waterfall names are never parsed as numeric data. Data-alpha mapping remains a
 separate [paint contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
@@ -20,9 +20,57 @@ Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
 `src/numeric/profiles.rs`, `src/numeric/set.rs`, `src/numeric/inputs.rs`,
 `src/numeric/locale.rs`, `src/numeric/locale/data.rs`, `src/numeric/emission.rs`,
 `src/numeric/prefixes.rs`, `src/numeric/prefixes/selection.rs`, `src/numeric/specifier.rs`,
+`src/numeric/context.rs`, `src/numeric/function.rs`, `src/numeric/table.rs`,
+`src/numeric/source.rs`, `src/numeric/unit.rs`,
 `src/spec/ticks.rs` and `src/layout/panel/sources.rs`. Mathematical power display
 is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
+
+## Formatting Functions And Semantic Materialization
+
+`value_function` and `set_function` replace only emission, retaining the normalized
+built-in fields. They accept higher-ranked fallible Fn views with Send + Sync +
+'static bounds; Plot clones share an immutable handle. Equal handles plus equal
+normalized fields compare equal; independent handles never gain equality from
+their output, address, closure type or Debug. `builtin()` clears the handle alone.
+Calls are serial in owner/source order. Applications must return stable results
+for stable semantic inputs; results are frozen before publication.
+
+Borrowed NumericSetContext exposes owner, role, ActualSet/IntrinsicProbe purpose,
+ordered values/identities including duplicates, optional resolved domain, locale
+and common factors. Value contexts add original occurrence index and member factors.
+Raw Canvas cells, FacetCell single/grid levels, category keys and signed operand
+bits precede any aliases. Ordinary operands are Binary64; Forest positions and
+logarithmic domain endpoints are mathematical PowerOfTen exponents. Raw bounds are
+present only when retained, never reconstructed by inverting a rounded logarithm.
+
+Factors/unit/explanation metadata resolve before callback invocation. Built-in
+helpers bypass only the callback and lazily convert the complete enclosing set,
+with one adaptive precision and the already exposed frozen factors. Ignored helpers
+perform no numeric emission or field-padding allocation. Helper errors remain
+fallible; successful results are reused within the invocation. In function mode,
+automatic promotion resolves at the policy's minimum precision before invocation;
+helper precision refinement cannot replace those exposed factors.
+
+Returned strings are final authored display text: no trimming, digit substitution,
+humanization or second numeric rounding. NumericLabels must supply exactly one
+string per occurrence. An optional Text replaces the one common explanation with
+ordinary content/style/layout retention rules. Collisions retain consumer-specific
+complete-source behavior, never hidden callback retries at another precision.
+Function errors are fatal with semantic owner/source context. Empty owners invoke
+no function and contribute no explanation. Exact ticks suppress all numeric-function
+work for that axis, including intrinsic probes.
+
+The operation-local PresentationTable keys complete normalized policy/handle,
+owner, purpose, original ordered identities/bits, resolved domain/provenance,
+generation and eligibility window. It is required semantic storage, independent
+of optional layout caches. Repeated candidate queries consume the retained result;
+distinct reached sets/domain consequences can invoke new contexts. Shared color
+guides suppress replaced local formatting and invoke only after compatible policies
+and final domains merge. Actual returned text is admitted before measurement.
+Final accepted-root sealing clears candidate storage and rejects further
+materialization; selected results/context survive in immutable plans. Null, SVG,
+outlining, PNG and Output replay invoke no numeric functions or font planning.
 
 ## NumericFormat Value
 

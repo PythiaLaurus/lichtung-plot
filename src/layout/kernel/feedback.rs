@@ -58,6 +58,8 @@ enum Observation {
     Count(usize),
     Text(String),
     AuthoredText(crate::Text),
+    NumericEmitter(crate::numeric::function::Emitter),
+    NumericContext(std::sync::Arc<crate::numeric::context::ContextInfo>),
     TextPlan(ResolvedTextPlan),
     Guide(std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>),
     Alpha(std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>),
@@ -603,6 +605,19 @@ impl FeedbackRound {
 
     pub(crate) fn observe_authored_text(&mut self, value: &crate::Text) -> Result<(), Error> {
         self.observe(Observation::AuthoredText(value.try_copy()?))
+    }
+
+    pub(crate) fn observe_numeric_emitter(
+        &mut self,
+        value: &crate::numeric::function::Emitter,
+    ) -> Result<(), Error> {
+        self.observe(Observation::NumericEmitter(value.clone()))
+    }
+    pub(crate) fn observe_numeric_context(
+        &mut self,
+        value: &std::sync::Arc<crate::numeric::context::ContextInfo>,
+    ) -> Result<(), Error> {
+        self.observe(Observation::NumericContext(value.clone()))
     }
 
     pub(crate) fn observe_string(&mut self, value: &str) -> Result<(), Error> {

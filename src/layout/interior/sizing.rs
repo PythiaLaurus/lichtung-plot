@@ -279,26 +279,17 @@ pub(crate) fn horizontal_gutter_preference(
             for tick in ticks {
                 include_label(&tick.label)?;
             }
+        } else if let Some(probe) = axes.numeric_probe(1)? {
+            for label in &probe.labels {
+                include_label(label)?;
+            }
         } else {
             for value in [
                 axes.ranges[1].0,
                 f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
                 axes.ranges[1].1,
             ] {
-                if let Some(format) = &axes.specs[1].format {
-                    let (min, max) = format.get_precision().bounds()?;
-                    let mut formatter = crate::numeric::power::certified::PowerFormatter::default();
-                    for digits in min..=max {
-                        include_label(&format.format_selected(
-                            value,
-                            digits,
-                            false,
-                            &mut formatter,
-                        )?)?;
-                    }
-                } else {
-                    include_label(&crate::layout::format_guide_label(value, 0)?)?;
-                }
+                include_label(&crate::layout::format_guide_label(value, 0)?)?;
             }
         }
     }

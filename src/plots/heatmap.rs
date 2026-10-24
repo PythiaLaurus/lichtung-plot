@@ -1428,24 +1428,52 @@ pub(crate) fn prepare<'a>(
         active_cell(heatmap_layout, x_index, y_index) && value.is_none()
     });
 
-    let value_presentation =
-        if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
-            let format = crate::data::source::source_arc(format.try_copy()?)?;
-            let mut members = Vec::new();
-            crate::data::source::reserve_source(&mut members, cells.iter().flatten().count())?;
-            members.extend(cells.iter().flatten().copied());
-            let set = format.format_set(&members, false, false)?.ok_or_else(|| {
+    let value_presentation = if let HeatmapAnnotations::Values(format) =
+        chart.heatmap_annotations_spec()
+    {
+        let format = crate::data::source::source_arc(format.try_copy()?)?;
+        let source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+        let values = crate::numeric::source::collect_values(
+            cells.iter().flatten().count(),
+            cells
+                .iter()
+                .enumerate()
+                .filter_map(|(index, value)| value.map(|value| (index, value)))
+                .map(|(index, value)| {
+                    Ok(crate::numeric::context::ContextValue {
+                        bits: value.to_bits(),
+                        power: false,
+                        identity: crate::numeric::context::Identity::Heatmap(
+                            crate::data::source::copy_source_string(
+                                &y_levels[index / x_levels.len()],
+                            )?,
+                            crate::data::source::copy_source_string(
+                                &x_levels[index % x_levels.len()],
+                            )?,
+                        ),
+                    })
+                }),
+        )?;
+        let info = source.context(
+            crate::NumericRole::HeatmapValues,
+            crate::NumericPurpose::ActualSet,
+            values,
+            None,
+        )?;
+        let set = format
+            .materialize(&source.operation, info, false)?
+            .ok_or_else(|| {
                 Error::Data("Heatmap value labels are not unique at configured precision".into())
             })?;
-            Some(crate::data::source::source_arc(
-                crate::numeric::set::NumericPresentation {
-                    format: Some(format),
-                    set,
-                },
-            )?)
-        } else {
-            None
-        };
+        Some(crate::data::source::source_arc(
+            crate::numeric::set::NumericPresentation {
+                format: Some(format),
+                set,
+            },
+        )?)
+    } else {
+        None
+    };
     let mut selected = value_presentation
         .as_ref()
         .map(|presentation| presentation.set.labels.iter());
@@ -1474,13 +1502,24 @@ pub(crate) fn prepare<'a>(
         },
     ))?;
     let color_format = chart.color_label_format_spec().cloned();
+    let numeric_source = crate::numeric::source::NumericSource::for_data(chart, data)?;
     let colorbar_values = if chart.continuous_guide_suppressed() {
         None
     } else {
         Some(crate::decorations::legend::descriptor::domain_presentation(
             (domain.minimum, domain.maximum),
             domain.center,
-            color_format.as_deref(),
+            color_format.as_deref().map(|format| {
+                (
+                    format,
+                    &numeric_source,
+                    if color.selection.get_domain().is_some() {
+                        crate::NumericRangeOrigin::Explicit
+                    } else {
+                        crate::NumericRangeOrigin::Automatic
+                    },
+                )
+            }),
         )?)
     };
     let mut prepared = HeatmapData {

@@ -61,6 +61,7 @@ pub(crate) struct FacetAxisSources<'a> {
 /// A borrowed semantic plot view, optionally restricted to selected source rows.
 #[derive(Clone, Copy)]
 pub(crate) struct PlotData<'a> {
+    numeric_facet: Option<&'a crate::FacetCell>,
     plot: &'a crate::builder::Plot,
     rows: Option<&'a [usize]>,
     source_rows: Option<&'a [usize]>,
@@ -82,6 +83,7 @@ impl<'a> PlotData<'a> {
     pub(crate) const fn new(plot: &'a crate::builder::Plot) -> Self {
         Self {
             plot,
+            numeric_facet: None,
             rows: None,
             source_rows: None,
             operation: None,
@@ -101,6 +103,7 @@ impl<'a> PlotData<'a> {
     ) -> Self {
         Self {
             plot,
+            numeric_facet: None,
             rows: Some(rows),
             source_rows: Some(source_rows),
             operation: None,
@@ -115,6 +118,14 @@ impl<'a> PlotData<'a> {
     ) -> Self {
         self.operation = Some(resources);
         self
+    }
+
+    pub(crate) fn with_numeric_facet(mut self, facet: Option<&'a crate::FacetCell>) -> Self {
+        self.numeric_facet = facet;
+        self
+    }
+    pub(crate) const fn numeric_facet(self) -> Option<&'a crate::FacetCell> {
+        self.numeric_facet
     }
 
     pub(crate) fn source_resources(

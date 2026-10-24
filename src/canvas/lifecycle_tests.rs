@@ -1137,6 +1137,221 @@ fn common_numeric_text_has_distinct_measured_owners_and_frozen_contained_output(
     assert!(narrow.preflight().is_err());
 }
 
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one composed callback lifecycle follows local cells, a merged Shared domain, exact powers and all frozen publication paths"
+)]
+fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_publication() {
+    use crate::{NumericFormat, NumericIdentity, NumericOperand, NumericPurpose, NumericRole};
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+    let frozen = Arc::new(AtomicBool::new(false));
+    let guide_calls = Arc::new(AtomicUsize::new(0));
+    let cells = Arc::new(Mutex::new(Vec::new()));
+    let guide = {
+        let invocations = guide_calls.clone();
+        let frozen = frozen.clone();
+        NumericFormat::from_specifier(".0f")
+            .unwrap()
+            .set_function(move |context| {
+                assert!(!frozen.load(Ordering::SeqCst));
+                assert_eq!(context.role(), NumericRole::ContinuousColor);
+                assert!(context.owner().is_shared());
+                assert_eq!(context.domain().unwrap().data_limits(), Some((1.01, 3.2)));
+                assert_eq!(context.purpose(), NumericPurpose::ActualSet);
+                invocations.fetch_add(1, Ordering::SeqCst);
+                Ok(context.format_builtin()?.explanation("Combined guide"))
+            })
+    };
+    let cell = {
+        let cells = cells.clone();
+        let frozen = frozen.clone();
+        NumericFormat::default().value_function(move |context| {
+            assert!(!frozen.load(Ordering::SeqCst));
+            let owner = context.set().owner().canvas_cell().unwrap();
+            let NumericIdentity::HeatmapCell { row, column } = context.value().identity() else {
+                panic!("raw cell identity")
+            };
+            assert_eq!(row, "raw_row");
+            assert!(matches!(column, "raw_a" | "raw_b"));
+            cells.lock().unwrap().push((owner, context.index()));
+            Ok(format!("raw012:{}", context.format_builtin()?))
+        })
+    };
+    let heatmap = |values| {
+        Plot::heatmap(
+            crate::CategoryValues::new("column", ["raw_a", "raw_b"]).unwrap(),
+            crate::CategoryValues::new("row", ["raw_row", "raw_row"]).unwrap(),
+            crate::NumericValues::new("color", values),
+        )
+        .color_label_format(guide.clone())
+        .annotations(crate::HeatmapAnnotations::Values(cell.clone()))
+    };
+    let contexts = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+    let powers = {
+        let contexts = contexts.clone();
+        let frozen = frozen.clone();
+        NumericFormat::default().set_function(move |context| {
+            assert!(!frozen.load(Ordering::SeqCst));
+            assert_eq!(context.owner().canvas_cell(), Some((0, 2)));
+            assert_eq!(context.owner().plot_kind(), Some(crate::PlotKind::Forest));
+            let domain = context.domain().unwrap();
+            assert_eq!(domain.data_limits(), Some((0.1, 10.0)));
+            assert_eq!(domain.scale(), crate::AxisScale::Log10);
+            let bits: Vec<_> = context
+                .values()
+                .iter()
+                .map(|value| {
+                    let NumericOperand::PowerOfTen { exponent } = value.operand() else {
+                        panic!("exact mathematical power")
+                    };
+                    exponent.to_bits()
+                })
+                .collect();
+            let (lower, upper) = domain.scale_limits();
+            assert!(contexts.lock().unwrap().insert((
+                context.purpose() as u8,
+                (lower.to_bits(), upper.to_bits()),
+                bits
+            )));
+            context.format_builtin()
+        })
+    };
+    let forest = Plot::forest(
+        crate::CategoryValues::new("term", ["ratio"]).unwrap(),
+        crate::NumericValues::new("estimate", [1.0]),
+        crate::Bounds::new(
+            crate::NumericValues::new("lower", [0.2]),
+            crate::NumericValues::new("upper", [5.0]),
+        ),
+        1.0,
+    )
+    .scale(crate::AxisScale::Log10)
+    .x_limits(0.1, 10.0)
+    .x_tick_format(powers);
+    let root = Canvas::grid(1, 3)
+        .unwrap()
+        .size(1800, 650)
+        .legend_policy(CanvasLegendPolicy::Shared)
+        .panel(0, 0, heatmap([1.01, 1.02]))
+        .unwrap()
+        .panel(0, 1, heatmap([3.1, 3.2]))
+        .unwrap()
+        .panel(0, 2, forest)
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    assert_eq!(guide_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *cells.lock().unwrap(),
+        [((0, 0), 0), ((0, 0), 1), ((0, 1), 0), ((0, 1), 1)]
+    );
+    assert!(contexts
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|key| key.0 == NumericPurpose::ActualSet as u8));
+    assert!(contexts
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|key| key.0 == NumericPurpose::IntrinsicProbe as u8));
+    assert_eq!(
+        root.plan()
+            .retained_text()
+            .iter()
+            .filter(|(_, text)| text.source == "Combined guide")
+            .count(),
+        1
+    );
+    frozen.store(true, Ordering::SeqCst);
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let scene = RenderedScene::new(1800, 650, backend.into_output()).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let output = crate::Output::new(scene)
+        .svg_preserve_text(directory.path().join("selectable"))
+        .unwrap()
+        .svg(directory.path().join("outlined"))
+        .unwrap()
+        .png_preview(directory.path().join("preview"))
+        .unwrap();
+    assert_eq!((output.width(), output.height()), (1800, 650));
+    assert_eq!(capture_counters(), counters);
+    assert_eq!(guide_calls.load(Ordering::SeqCst), 1);
+    let suppressed = NumericFormat::default()
+        .set_function(|_| panic!("exact ticks suppress every numeric callback"));
+    Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_tick_format(suppressed)
+    .x_ticks(vec![
+        crate::AxisTick::new(0.0, "origin"),
+        crate::AxisTick::new(1.0, "end"),
+    ])
+    .preflight()
+    .unwrap();
+}
+
+#[test]
+fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
+    use std::sync::{Arc, Mutex};
+    let observed = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
+    let contexts = observed.clone();
+    let format = crate::NumericFormat::default().set_function(move |context| {
+        let owner = context.owner();
+        let facet = owner.facet_cell().unwrap();
+        assert!(facet.single_level().is_none());
+        let (row, column) = facet.grid_levels().unwrap();
+        assert_eq!(row, "raw_row");
+        assert!(matches!(column, "raw_a" | "raw_b"));
+        let values: Vec<_> = context
+            .values()
+            .iter()
+            .map(|value| match value.operand() {
+                crate::NumericOperand::Binary64(value) => value.to_bits(),
+                crate::NumericOperand::PowerOfTen { .. } => panic!("ordinary facet"),
+            })
+            .collect();
+        let domain = context.domain().unwrap().scale_limits();
+        assert!(contexts.lock().unwrap().insert((
+            column.to_owned(),
+            context.purpose() as u8,
+            (domain.0.to_bits(), domain.1.to_bits()),
+            values
+        )));
+        context.format_builtin()
+    });
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
+    )
+    .facet(
+        crate::FacetSpec::grid(
+            crate::CategoryValues::new("r", ["raw_row"; 4]).unwrap(),
+            crate::CategoryValues::new("c", ["raw_a", "raw_a", "raw_b", "raw_b"]).unwrap(),
+        )
+        .unwrap(),
+    )
+    .x_tick_format(format)
+    .size(1000, 600);
+    crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(true));
+    let result = source.preflight();
+    crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+    result.unwrap();
+    let contexts = observed.lock().unwrap();
+    for column in ["raw_a", "raw_b"] {
+        assert!(contexts
+            .iter()
+            .any(|key| key.0 == column && key.1 == crate::NumericPurpose::ActualSet as u8));
+    }
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one Shared declaration contract checks actual union members, Hidden, aliases and complete custom recipes before fonts"

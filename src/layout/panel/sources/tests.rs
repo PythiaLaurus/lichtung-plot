@@ -524,7 +524,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
             AxisSide::Bottom,
             &theme,
             false,
-            Some(&format),
+            Some(&crate::numeric::source::AxisRequest::for_test(&format)),
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
@@ -690,7 +690,7 @@ fn generated_labels_are_unique_across_decimal_and_power_ranges() {
         AxisSide::Bottom,
         &theme,
         false,
-        Some(&configured),
+        Some(&crate::numeric::source::AxisRequest::for_test(&configured)),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -769,6 +769,7 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
         limits: Some((0.0, 10.0)),
         generation: TickGeneration::maximum(1).unwrap(),
         format: None,
+        numeric_source: None,
         exact_ticks: Some(vec![AxisTick::new(1.0, ""), AxisTick::new(9.0, "same")]),
     };
     let y = super::super::AxisSpec {
@@ -776,6 +777,7 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
         limits: Some((0.0, 10.0)),
         generation: TickGeneration::additive(2.0).unwrap(),
         format: None,
+        numeric_source: None,
         exact_ticks: None,
     };
     let layout = super::super::Layout::new_with_axis_specs_in_panel_box(

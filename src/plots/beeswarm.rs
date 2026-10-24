@@ -177,13 +177,24 @@ pub(crate) fn prepare(
             .then_with(|| a.3.source_row.cmp(&b.3.source_row))
     });
     let format = chart.color_label_format_spec().cloned();
+    let numeric_source = crate::numeric::source::NumericSource::for_data(chart, data)?;
     let values = if chart.continuous_guide_suppressed() {
         None
     } else {
         Some(crate::decorations::legend::descriptor::domain_presentation(
             color_range,
             selection.get_center(),
-            format.as_deref(),
+            format.as_deref().map(|format| {
+                (
+                    format,
+                    &numeric_source,
+                    if selection.get_domain().is_some() {
+                        crate::NumericRangeOrigin::Explicit
+                    } else {
+                        crate::NumericRangeOrigin::Automatic
+                    },
+                )
+            }),
         )?)
     };
     let scale = crate::theme::ContinuousColors::selected(color_range, &selection)?;

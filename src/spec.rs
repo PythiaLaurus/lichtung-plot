@@ -633,7 +633,6 @@ pub(crate) struct PlotRenderContext<'a> {
     prepared_kind: Option<PlotKind>,
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
-    producer_text: Option<&'a [crate::render::backend::PlacedText]>,
     pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
     pub(crate) self_managed_legend:
         Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
@@ -661,7 +660,6 @@ impl<'a> PlotRenderContext<'a> {
             prepared_kind: None,
             theme,
             facet_scales: None,
-            producer_text: None,
             panel_text: None,
             self_managed_legend: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
@@ -689,7 +687,6 @@ impl<'a> PlotRenderContext<'a> {
             prepared_kind: None,
             theme,
             facet_scales: None,
-            producer_text: None,
             panel_text: None,
             self_managed_legend: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
@@ -734,7 +731,10 @@ impl<'a> PlotRenderContext<'a> {
 
     pub(crate) fn producer_text(self) -> Result<ProducerText<'a>, Error> {
         let mut lookup = std::collections::HashMap::new();
-        if let Some(frozen) = self.producer_text {
+        let frozen = self
+            .selected_interior
+            .map(|result| result.producer_text.as_slice());
+        if let Some(frozen) = frozen {
             // Four bucket records per entry also covers the hash table's control bytes.
 
             lookup
@@ -747,16 +747,12 @@ impl<'a> PlotRenderContext<'a> {
                     .or_insert(&text.plan);
             }
         }
-        Ok(ProducerText {
-            frozen: self.producer_text,
-            lookup,
-        })
+        Ok(ProducerText { frozen, lookup })
     }
 
     pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
         self.selected_interior = Some(result);
         self.retained_axes = result.axes.as_ref();
-        self.producer_text = Some(&result.producer_text);
         self.panel_text = Some(&result.panel_text);
         self.self_managed_legend = Some(&result.self_managed_legend);
         self
@@ -857,6 +853,7 @@ impl<'a> PlotRenderContext<'a> {
                 limits: source.limits,
                 generation: source.generation,
                 format: source.format.clone(),
+                numeric_source: source.numeric_source.clone(),
                 exact_ticks: source
                     .exact_ticks
                     .as_ref()
@@ -888,6 +885,9 @@ impl<'a> PlotRenderContext<'a> {
                     *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
                 }
                 specs[side].limits = Some(*range);
+                specs[side]
+                    .numeric_source
+                    .clone_from(&axes.specs[side].numeric_source);
             }
         }
         Layout::new_with_ticks_and_axis_specs_in_panel_box(

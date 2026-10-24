@@ -1094,6 +1094,7 @@ pub(crate) struct OperationContext {
     identity: Arc<()>,
     pub(crate) palette_cache: Arc<Mutex<crate::theme::PaletteCache>>,
     fonts: Arc<Mutex<FontOperation>>,
+    pub(crate) numeric_presentations: Arc<Mutex<crate::numeric::table::PresentationTable>>,
 }
 
 #[derive(Debug, Default)]
@@ -1104,6 +1105,10 @@ struct FontOperation {
 
 impl OperationContext {
     pub(crate) fn seal_fonts(&self) -> Result<(), FontError> {
+        self.numeric_presentations
+            .lock()
+            .map_err(|_| FontError::Synchronization)?
+            .seal();
         let mut fonts = self.fonts.lock().map_err(|_| FontError::Synchronization)?;
         if fonts.sealed {
             return Err(FontError::OperationSealed);
@@ -1129,6 +1134,7 @@ impl OperationContext {
             identity: Arc::new(()),
             palette_cache: Arc::default(),
             fonts: Arc::default(),
+            numeric_presentations: Arc::default(),
         }
     }
 }

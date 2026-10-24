@@ -32,6 +32,7 @@ pub(crate) struct ContinuousContributor {
     pub domain: (f64, f64),
     pub exact: bool,
     pub format: Option<Arc<NumericFormat>>,
+    pub numeric_source: crate::numeric::source::NumericSource,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,6 +118,14 @@ impl ContinuousContributor {
             domain: semantics.domain,
             exact,
             format: semantics.format,
+            numeric_source: input
+                .axes
+                .first()
+                .and_then(|(_, axes)| axes.specs[0].numeric_source.as_deref())
+                .ok_or_else(|| {
+                    Error::Render("continuous guide lacks its operation-bound owner".into())
+                })?
+                .try_copy()?,
         }))
     }
 
@@ -126,7 +135,15 @@ impl ContinuousContributor {
         let mut combined: Option<ContinuousDescriptor> = None;
         let mut automatic = None;
         let mut samples = Vec::new();
+        let mut numeric_source: Option<crate::numeric::source::NumericSource> = None;
         for contributor in contributors {
+            if let Some(source) = &mut numeric_source {
+                if source.owner.kind != contributor.numeric_source.owner.kind {
+                    source.owner.kind = None;
+                }
+            } else {
+                numeric_source = Some(contributor.numeric_source.try_copy()?);
+            }
             if let Some(existing) = &mut combined {
                 let same_center = match (existing.center, contributor.selection.get_center()) {
                     (None, None) => true,
@@ -203,20 +220,51 @@ impl ContinuousContributor {
             }
         }
         if let Some(existing) = &mut combined {
-            existing.selection = existing.selection.clone().domain(
-                existing
-                    .exact
-                    .then(|| crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1))
-                    .transpose()?,
-            )?;
-            existing.stops =
-                crate::theme::ContinuousColors::selected(existing.domain, &existing.selection)?
-                    .guide_stops(&samples)?;
-            existing.numeric =
-                domain_presentation(existing.domain, existing.center, existing.format.as_deref())?;
+            let source = numeric_source
+                .as_mut()
+                .ok_or_else(|| Error::Render("shared guide source identity missing".into()))?;
+            finish_shared(existing, &samples, source)?;
         }
         Ok(combined)
     }
+}
+
+fn finish_shared(
+    existing: &mut ContinuousDescriptor,
+    samples: &[f64],
+    source: &mut crate::numeric::source::NumericSource,
+) -> crate::Result<()> {
+    existing.selection = existing.selection.clone().domain(
+        existing
+            .exact
+            .then(|| crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1))
+            .transpose()?,
+    )?;
+    existing.stops =
+        crate::theme::ContinuousColors::selected(existing.domain, &existing.selection)?
+            .guide_stops(samples)?;
+    source.owner.shared = true;
+    source.owner.canvas = None;
+    source.owner.facet = None;
+    let mut scope = String::new();
+    let prefix = "shared continuous ";
+    let length = prefix
+        .len()
+        .checked_add(existing.field.len())
+        .ok_or_else(|| Error::Render("shared numeric owner length overflow".into()))?;
+    crate::data::source::reserve_source_string(&mut scope, length)?;
+    scope.push_str(prefix);
+    scope.push_str(&existing.field);
+    source.owner.scope = Some(scope);
+    existing.numeric = domain_presentation(
+        existing.domain,
+        existing.center,
+        existing
+            .format
+            .as_deref()
+            .map(|format| (format, &*source, crate::NumericRangeOrigin::ParentResolved)),
+    )?;
+    Ok(())
 }
 
 fn same_stops(left: &[ColorStop], right: &[ColorStop]) -> bool {
@@ -250,7 +298,11 @@ fn same_text(left: &str, right: &str) -> bool {
 pub(crate) fn domain_presentation(
     domain: (f64, f64),
     center: Option<f64>,
-    format: Option<&NumericFormat>,
+    format: Option<(
+        &NumericFormat,
+        &crate::numeric::source::NumericSource,
+        crate::NumericRangeOrigin,
+    )>,
 ) -> Result<FormattedSet, Error> {
     let mut values = [0.0_f64; 3];
     let count = if same_value(domain.0, domain.1) {

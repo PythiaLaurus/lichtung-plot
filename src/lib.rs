@@ -87,6 +87,11 @@ pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
+pub use numeric::context::{
+    CoordinateAxis, NumericDomain, NumericFactors, NumericIdentity, NumericLabels, NumericOperand,
+    NumericOwner, NumericPurpose, NumericRangeOrigin, NumericRole, NumericSetContext, NumericValue,
+    NumericValueContext,
+};
 pub use numeric::decimal::{
     NegativeZero, NumericNotation, NumericRadix, NumericRounding, TrailingZeros,
 };

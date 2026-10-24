@@ -33,6 +33,7 @@ pub(crate) struct PreparedWaterfall {
     total_candidates: [(f64, crate::Text); 2],
     total_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     total_variants: Vec<Option<totals::TotalVariant>>,
+    numeric_source: crate::numeric::source::NumericSource,
 }
 
 impl PreparedWaterfall {
@@ -570,6 +571,7 @@ pub(crate) fn prepare(
         total_candidates,
         total_format: chart.total_format_spec().cloned(),
         total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
+        numeric_source: crate::numeric::source::NumericSource::for_data(chart, data)?,
     })
 }
 

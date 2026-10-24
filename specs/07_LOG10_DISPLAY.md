@@ -1,5 +1,11 @@
 # Certified Forest Power Conversion
 
+Numeric formatting functions receive retained mathematical exponent operands as
+NumericOperand::PowerOfTen, not rounded physical powers. Their built-in helpers
+use this certified engine with complete-set precision and frozen exact factors.
+Domain views retain scale exponents and expose finite raw limits only when
+genuinely retained; no inverse of a rounded logarithm is invented for a callback.
+
 ## Mathematical Operand
 
 For finite binary64 exponent e and validated decimal scale s in[-324,324], format

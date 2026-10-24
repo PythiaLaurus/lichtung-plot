@@ -179,6 +179,23 @@ impl Layout {
 }
 
 impl AxisSpec {
+    pub(crate) fn numeric_request(
+        &self,
+    ) -> Result<Option<crate::numeric::source::AxisRequest<'_>>, Error> {
+        self.format
+            .as_deref()
+            .map(|format| {
+                Ok(crate::numeric::source::AxisRequest {
+                    format,
+                    source: self.numeric_source.clone().ok_or_else(|| {
+                        Error::Render("numeric axis format lacks its operation-bound owner".into())
+                    })?,
+                    provenance: self.provenance,
+                    generation: self.generation,
+                })
+            })
+            .transpose()
+    }
     pub(crate) fn layout_ticks(
         &self,
         supplied: Vec<AxisTick>,
@@ -223,7 +240,7 @@ impl AxisSpec {
                 side,
                 theme,
                 false,
-                self.format.as_deref(),
+                self.numeric_request()?.as_ref(),
                 scope,
             )
         } else {

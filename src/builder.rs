@@ -515,6 +515,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     interaction_styles: Option<Vec<crate::InteractionStyle>>,
     categorical_color_scale: Option<crate::theme::CategoricalColorScale>,
     render_scope: Option<String>,
+    pub(crate) numeric_cell: Option<Arc<(usize, usize)>>,
     pub(crate) prepared_discrete_guides:
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) prepared_axes:
@@ -661,6 +662,7 @@ impl Plot<crate::kind::Any> {
             interaction_styles: None,
             categorical_color_scale: None,
             render_scope: None,
+            numeric_cell: None,
             prepared_discrete_guides: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_scatter: None,
@@ -1079,6 +1081,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             interaction_styles,
             categorical_color_scale,
             render_scope,
+            numeric_cell,
             axis_gutter_owner,
             y_tick_labels_visible,
             waterfall_labels,
@@ -1189,6 +1192,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             interaction_styles,
             categorical_color_scale,
             render_scope,
+            numeric_cell,
             axis_gutter_owner,
             y_tick_labels_visible,
             waterfall_labels,

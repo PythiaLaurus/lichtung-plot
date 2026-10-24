@@ -438,7 +438,7 @@ pub(crate) fn numeric_tick_plan(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
-    format: Option<&crate::numeric::format::NumericFormat>,
+    format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
     Sources::new(range, log, generation, 1)?;
@@ -452,11 +452,24 @@ impl NumericTickPlan {
     fn formatted(
         positions: &[f64],
         log: bool,
-        format: &crate::NumericFormat,
+        format: &crate::numeric::source::AxisRequest<'_>,
         theme: &ResolvedTheme,
         mut source: TickSource,
+        projection: &Projection,
+        side: AxisSide,
     ) -> Result<Option<Self>, Error> {
-        let Some(set) = format.format_set(positions, log, true)? else {
+        let range = match side {
+            AxisSide::Bottom => projection.x_range(),
+            AxisSide::Left => projection.y_range(),
+        };
+        let Some(set) = format.materialize(
+            positions,
+            log,
+            side,
+            range,
+            crate::NumericPurpose::ActualSet,
+        )?
+        else {
             return Ok(None);
         };
         source.precision = Some(set.precision);
@@ -499,7 +512,7 @@ impl NumericTickPlan {
         side: AxisSide,
         theme: &ResolvedTheme,
         legacy: bool,
-        format: Option<&crate::numeric::format::NumericFormat>,
+        format: Option<&crate::numeric::source::AxisRequest<'_>>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         // Validate semantic inputs before asking for the metric probe or environment.
@@ -538,7 +551,9 @@ impl NumericTickPlan {
                 let mut unique = false;
                 let mut numeric = None;
                 if let Some(format) = format {
-                    if let Some(plan) = Self::formatted(&positions, log, format, theme, source)? {
+                    if let Some(plan) =
+                        Self::formatted(&positions, log, format, theme, source, projection, side)?
+                    {
                         source = plan.source;
                         ticks = plan.ticks;
                         numeric = plan.numeric;

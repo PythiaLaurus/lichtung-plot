@@ -23,8 +23,15 @@ fn main() -> lichtung_plot::Result<()> {
         NumericValues::new("time", [1.0, 2.0]),
         NumericValues::new("fraction", [0.125, 0.875]),
     )
-    .y_tick_format(percent.clone())
-    .title("Explicit percentage scaling");
+    .y_tick_format(percent.clone().value_function(|context| {
+        let label = context.format_builtin()?;
+        Ok(if context.index() == 0 {
+            format!("start: {label}")
+        } else {
+            label
+        })
+    }))
+    .title("Custom labels on automatic positions");
     let cells = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"])?,
         CategoryValues::new("row", ["one", "one"])?,
@@ -39,10 +46,14 @@ fn main() -> lichtung_plot::Result<()> {
         CategoryValues::new("term", ["a", "b"])?,
         CoefficientInput::estimates(NumericValues::new("estimate", [1.01, 1.02])),
     )
-    .estimate_labels(adaptive.unit(Some(NumericUnit::new(
-        "units",
-        NumericUnitPlacement::Shared,
-    )))?)
+    .estimate_labels(
+        adaptive
+            .unit(Some(NumericUnit::new(
+                "units",
+                NumericUnitPlacement::Shared,
+            )))?
+            .set_function(|context| Ok(context.format_builtin()?.explanation("Adjusted values"))),
+    )
     .title("One complete estimate set");
     let totals = Plot::waterfall(
         CategoryValues::new("step", ["gain", "loss"])?,
@@ -68,7 +79,25 @@ fn main() -> lichtung_plot::Result<()> {
     .scale(AxisScale::Log10)
     .x_tick_format(scientific)
     .title("Certified mathematical powers");
-    let prefixes = Plot::scatter(
+    let output = Canvas::grid(3, 2)?
+        .width(1200)
+        .panel(0, 0, axes)?
+        .panel(0, 1, cells)?
+        .panel(1, 0, estimates)?
+        .panel(1, 1, totals)?
+        .panel(2, 0, forest)?
+        .panel(2, 1, prefix_plot()?)?
+        .svg_preserve_text(std::env::temp_dir().join("numeric_formats"))?;
+    println!(
+        "numeric_formats.svg: {}×{} CSS pixels",
+        output.width(),
+        output.height()
+    );
+    Ok(())
+}
+
+fn prefix_plot() -> lichtung_plot::Result<Plot<lichtung_plot::kind::Scatter>> {
+    Ok(Plot::scatter(
         NumericValues::new("distance", [1000.0, 2500.0]),
         NumericValues::new("mass", [1_000_000.0, 2_000_000.0]),
     )
@@ -83,20 +112,5 @@ fn main() -> lichtung_plot::Result<()> {
             ))?)?
             .unit(Some(NumericUnit::new("", NumericUnitPlacement::Shared)))?,
     )
-    .title("Repeated SI units and one common factor");
-    let output = Canvas::grid(3, 2)?
-        .width(1200)
-        .panel(0, 0, axes)?
-        .panel(0, 1, cells)?
-        .panel(1, 0, estimates)?
-        .panel(1, 1, totals)?
-        .panel(2, 0, forest)?
-        .panel(2, 1, prefixes)?
-        .svg_preserve_text(std::env::temp_dir().join("numeric_formats"))?;
-    println!(
-        "numeric_formats.svg: {}×{} CSS pixels",
-        output.width(),
-        output.height()
-    );
-    Ok(())
+    .title("Repeated SI units and one common factor"))
 }

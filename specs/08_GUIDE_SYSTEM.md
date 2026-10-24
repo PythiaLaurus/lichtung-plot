@@ -7,6 +7,11 @@ common explanation is a measured internal section operand using the existing
 legend-label role unless its Text supplies a local style/layout. It participates
 in intrinsic width, assigned section height, ink containment, source census and
 frozen replay; it is neither a separate unit legend nor post-render text.
+Function policies compare shared immutable handle identity plus all normalized
+options before invocation. Replaced local guide functions are suppressed. Only
+the merged final-domain semantic owner invokes the function, retaining its one
+ordered result/explanation independently of optional layout caches. Returned text
+is validated/admitted/measured unchanged, with no locale or rounding postprocess.
 
 ## One Explanatory Owner
 

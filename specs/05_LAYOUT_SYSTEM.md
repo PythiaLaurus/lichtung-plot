@@ -369,6 +369,14 @@ component preorder, role order and local record order. Empty exact labels retain
 identity with zero scalar needs. CSS family names/SVG syntax/suppressed content
 are not painted text. Include actual typography probes and discretionary hyphen.
 Common numeric factor/unit explanations are ordinary required Text content.
+Numeric functions materialize reached semantic owner/purpose/source/domain contexts
+once in the root operation, independently of optional layout reuse. Intrinsic
+low/mid/high probes are identified preferences, not required unique sources. Exact
+ticks suppress these probes and actual numeric functions. Candidate output and
+explanation source are admitted before text measurement; the final root seal also
+closes semantic materialization, retaining selected plans for callback-free capture
+and publication. Complete callback handles, raw identities and context participate
+in feedback/child identity even when current strings agree.
 Axis plans reserve their outside tick/title block and endpoint ink; continuous
 guides reserve one internal block after final-domain merging. Heatmap Values,
 Coefficient numeric labels and Waterfall totals reserve independent common-text

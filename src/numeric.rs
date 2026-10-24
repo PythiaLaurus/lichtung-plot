@@ -15,9 +15,11 @@
 use crate::Error;
 use num_bigint::BigUint;
 
+pub(crate) mod context;
 pub(crate) mod decimal;
 pub(crate) mod emission;
 pub(crate) mod format;
+pub(crate) mod function;
 pub(crate) mod inputs;
 pub(crate) mod locale;
 pub(crate) mod mapping;
@@ -25,7 +27,9 @@ pub(crate) mod prefixes;
 pub(crate) mod profiles;
 pub(crate) mod set;
 pub(crate) mod slot;
+pub(crate) mod source;
 mod specifier;
+pub(crate) mod table;
 pub(crate) mod unit;
 pub(crate) mod values;
 

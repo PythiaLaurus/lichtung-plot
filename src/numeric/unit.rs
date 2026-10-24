@@ -72,6 +72,14 @@ impl NumericUnit {
 pub struct NumericExplanation(Arc<crate::text::TextSlot>);
 
 impl NumericExplanation {
+    pub(super) fn replace_callback(&self, current: Option<Text>, incoming: Text) -> Result<Text> {
+        let mut slot = self.0.try_copy()?;
+        if let Some(current) = current {
+            slot.replace(current);
+        }
+        slot.replace(incoming);
+        slot.resolve_source(String::new())
+    }
     /// Generate content from the selected factor and shared unit.
     pub fn automatic() -> Self {
         Self(Arc::new(crate::text::TextSlot::EMPTY))
@@ -120,6 +128,26 @@ impl Default for UnitPolicy {
 }
 
 impl NumericFormat {
+    pub(super) fn numeric_explanation(&self, scales: &[SelectedScale]) -> Result<Option<Text>> {
+        let generated = if let Some(unit) = self
+            .units
+            .unit
+            .as_ref()
+            .filter(|unit| unit.placement == NumericUnitPlacement::Shared)
+        {
+            if scales.windows(2).any(|pair| pair[0] != pair[1]) {
+                return Err(Error::Data(
+                    "shared numeric unit requires one common factor and affix selection".into(),
+                ));
+            }
+            scales
+                .first()
+                .map_or_else(|| Ok(String::new()), |scale| common_text(scale, unit))?
+        } else {
+            String::new()
+        };
+        self.units.explanation.resolve(generated)
+    }
     /// Set or clear literal unit text, validating its single-line tokens.
     pub fn unit(mut self, value: Option<NumericUnit>) -> Result<Self> {
         if let Some(unit) = &value {

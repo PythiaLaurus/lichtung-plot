@@ -1713,7 +1713,13 @@ required authored-or-generated explanation flow through axes, continuous guides,
 cell values, Coefficient labels and Waterfall totals. Measured slots contribute
 natural width/height, assigned geometry, feedback, font census and frozen capture;
 Shared guides resolve the common explanation only after final-domain merging.
-Steps 7–22 remain pending; undelivered target signatures are
+Step 7 is complete: serial owned formatting functions share immutable handle
+identity and operation-local semantic materialization. Borrowed contexts retain
+raw Canvas/facet/source identity, resolved domains and mathematical power operands.
+Lazy built-in helpers reuse complete-set precision with exposed factors frozen;
+unused fields do not allocate. Shared callbacks run only for merged final domains,
+exact ticks suppress numeric calls, and final sealing closes materialization before
+callback-free SVG/outline/PNG publication. Steps 8–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

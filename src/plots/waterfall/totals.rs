@@ -55,7 +55,7 @@ impl PreparedWaterfall {
                 continue;
             }
             if self.total_variants[usize::from(mask)].is_none() {
-                self.total_variants[usize::from(mask)] = Some(self.prepare_variant(mask)?);
+                self.total_variants[usize::from(mask)] = Some(self.prepare_variant(mask, axes)?);
             }
         }
         self.selected_totals(&projection)?;
@@ -98,7 +98,11 @@ impl PreparedWaterfall {
         }
     }
 
-    fn prepare_variant(&self, mask: u8) -> Result<TotalVariant> {
+    fn prepare_variant(
+        &self,
+        mask: u8,
+        axes: &crate::plots::shared_x::PreparedAxes,
+    ) -> Result<TotalVariant> {
         let mut members = [0.0; 2];
         let mut count = 0;
         for (index, (value, _)) in self.total_candidates.iter().enumerate() {
@@ -109,7 +113,42 @@ impl PreparedWaterfall {
         }
         let members = &members[..count];
         let set = if let Some(format) = &self.total_format {
-            let Some(set) = format.format_set(members, false, false)? else {
+            let values = crate::numeric::source::collect_values(
+                count,
+                self.total_candidates
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| mask & (1 << index) != 0)
+                    .map(|(index, (value, _))| {
+                        Ok(crate::numeric::context::ContextValue {
+                            bits: value.to_bits(),
+                            power: false,
+                            identity: if index == 0 {
+                                crate::numeric::context::Identity::Base
+                            } else {
+                                crate::numeric::context::Identity::Terminal
+                            },
+                        })
+                    }),
+            )?;
+            let range = axes.specs[0].limits.unwrap_or(axes.ranges[0]);
+            let domain = crate::numeric::context::DomainInfo::axis(
+                range,
+                crate::AxisScale::Linear,
+                axes.specs[0].provenance,
+                Some(range),
+            );
+            let mut info = self.numeric_source.context(
+                crate::NumericRole::WaterfallTotals,
+                crate::NumericPurpose::ActualSet,
+                values,
+                Some(domain),
+            )?;
+            info.window = Some(std::array::from_fn(|index| {
+                let (a, b) = axes.specs[index].limits.unwrap_or(axes.ranges[index]);
+                (a.to_bits(), b.to_bits())
+            }));
+            let Some(set) = format.materialize(&self.numeric_source.operation, info, false)? else {
                 return Ok(TotalVariant::Collision);
             };
             set

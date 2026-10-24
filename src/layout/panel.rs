@@ -57,6 +57,7 @@ pub struct AxisSpec {
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
     pub(crate) generation: crate::TickGeneration,
     pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
+    pub(crate) numeric_source: Option<std::sync::Arc<crate::numeric::source::NumericSource>>,
 }
 
 /// A single tick on an axis: a data-space position and the

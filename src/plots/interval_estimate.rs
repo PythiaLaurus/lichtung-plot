@@ -847,14 +847,38 @@ fn prepare_model<'a>(
         .estimate_labels_spec()
         .map(|format| -> Result<_, Error> {
             let format = crate::data::source::source_arc(format.try_copy()?)?;
-            let mut members = Vec::new();
-            crate::data::source::reserve_source(&mut members, estimates.iter().flatten().count())?;
-            members.extend(estimates.iter().flatten().map(|tuple| tuple.estimate));
-            let set = format.format_set(&members, false, false)?.ok_or_else(|| {
-                Error::Data(
-                    "Coefficient estimate labels are not unique at configured precision".into(),
-                )
-            })?;
+            let source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+            let values = crate::numeric::source::collect_values(
+                estimates.iter().flatten().count(),
+                estimates
+                    .iter()
+                    .zip(&labels)
+                    .filter_map(|(estimate, label)| {
+                        estimate.as_ref().map(|estimate| (estimate, label))
+                    })
+                    .map(|(estimate, label)| {
+                        Ok(crate::numeric::context::ContextValue {
+                            bits: estimate.estimate.to_bits(),
+                            power: false,
+                            identity: crate::numeric::context::Identity::Estimate(
+                                crate::data::source::copy_source_string(label)?,
+                            ),
+                        })
+                    }),
+            )?;
+            let info = source.context(
+                crate::NumericRole::CoefficientLabels,
+                crate::NumericPurpose::ActualSet,
+                values,
+                None,
+            )?;
+            let set = format
+                .materialize(&source.operation, info, false)?
+                .ok_or_else(|| {
+                    Error::Data(
+                        "Coefficient estimate labels are not unique at configured precision".into(),
+                    )
+                })?;
             crate::data::source::source_arc(crate::numeric::set::NumericPresentation {
                 format: Some(format),
                 set,
@@ -1296,7 +1320,7 @@ fn project(
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
     generation: crate::TickGeneration,
-    format: Option<&crate::numeric::format::NumericFormat>,
+    format: Option<&crate::numeric::source::AxisRequest<'_>>,
     panel: crate::layout::PanelBox,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,

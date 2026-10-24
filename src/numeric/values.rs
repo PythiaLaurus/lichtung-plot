@@ -113,21 +113,14 @@ pub(crate) fn axis_preferences(plot: &Plot, theme: &ResolvedTheme) -> Result<(f6
             if axes.specs[side].exact_ticks.is_some() || axes.categories[side].is_some() {
                 continue;
             }
-            if let Some(format) = &axes.specs[side].format {
-                let range = axes.specs[side].limits.unwrap_or(axes.ranges[side]);
-                if let Some(set) = format.format_set(
-                    &[range.0, f64::midpoint(range.0, range.1), range.1],
-                    axes.logarithmic && side == 0,
-                    false,
-                )? {
-                    if let Some(text) = set.explanation {
-                        let preference = super::slot::preferred_width(
-                            &text,
-                            &theme.typography.axes.tick_label,
-                            theme,
-                        )?;
-                        *preferred = preferred.max(preference);
-                    }
+            if let Some(set) = axes.numeric_probe(side)? {
+                if let Some(text) = set.explanation {
+                    let preference = super::slot::preferred_width(
+                        &text,
+                        &theme.typography.axes.tick_label,
+                        theme,
+                    )?;
+                    *preferred = preferred.max(preference);
                 }
             }
         }

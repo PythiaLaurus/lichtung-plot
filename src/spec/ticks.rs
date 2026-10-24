@@ -28,6 +28,9 @@ pub struct TickGeneration {
     selection: Selection,
 }
 
+// All admitted floating steps are finite and strictly positive.
+impl Eq for TickGeneration {}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 enum Selection {
     #[default]

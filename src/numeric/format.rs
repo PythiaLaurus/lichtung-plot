@@ -122,6 +122,7 @@ pub struct NumericFormat {
     presentation: Presentation,
     prefixes: NumericPrefixes,
     pub(super) units: std::sync::Arc<super::unit::UnitPolicy>,
+    pub(super) emitter: super::function::Emitter,
 }
 
 impl Default for NumericFormat {
@@ -140,6 +141,7 @@ impl Default for NumericFormat {
             presentation: Presentation::default(),
             prefixes: NumericPrefixes::none(),
             units: std::sync::Arc::new(super::unit::UnitPolicy::default()),
+            emitter: super::function::Emitter::default(),
         }
     }
 }
@@ -168,6 +170,7 @@ impl NumericFormat {
             presentation: self.presentation.clone(),
             prefixes: self.prefixes.clone(),
             units: self.units.clone(),
+            emitter: self.emitter.clone(),
         })
     }
 
@@ -329,6 +332,17 @@ impl NumericFormat {
         &self.prefixes
     }
 
+    pub(super) fn locale_ref(&self) -> &NumericLocale {
+        &self.presentation.locale
+    }
+    pub(super) fn factor_inputs(&self) -> (f64, i16, NumericRate) {
+        (
+            f64::from_bits(self.multiplier_bits),
+            self.decimal_scale,
+            self.rate,
+        )
+    }
+
     pub(super) fn present(&self, ascii: &str, scale: &SelectedScale) -> Result<String> {
         self.presentation.emit(
             ascii,
@@ -402,6 +416,7 @@ impl NumericFormat {
         self.presentation.observe(round)?;
         self.prefixes.observe(round)?;
         self.units.observe(round)?;
+        round.observe_numeric_emitter(&self.emitter)?;
         for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {
