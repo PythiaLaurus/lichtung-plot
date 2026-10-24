@@ -1750,7 +1750,12 @@ once per operation-bound owner/domain/provenance/parallel-span context. Stable
 geometric cells preserve drawable unsorted/duplicate results. Caps precede copies
 and formatting; exact ticks suppress both functions; final sealing precedes frozen
 callback-free publication independently of optional layout reuse.
-Steps 14–22 remain pending; undelivered target signatures are
+Step 14 is complete: Plot/TextPanel placements use canonical payload/footprint
+owners and derived occupancy; all preparation/inventory/census/measurement/capture
+consumers preserve anchor slot identities. Declared row/column edges are separate
+from owner assignments and own header/row-title geometry. Existing unit placements
+retain natural, assigned and sparse-grid behavior through the single representation.
+Steps 15–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

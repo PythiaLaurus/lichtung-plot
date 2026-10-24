@@ -22,6 +22,7 @@ use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, LegendComposition, Output, Plot, PlotKind, Theme};
 
 mod dependencies;
+mod placement;
 mod plot_text;
 mod sizing;
 mod text_panel;
@@ -100,22 +101,21 @@ enum ResolvedPlotTheme {
 }
 
 impl ResolvedCanvasThemes {
-    fn new(root: &crate::theme::Theme, plots: &[Option<Plot>]) -> Result<Self, Error> {
+    fn new(root: &crate::theme::Theme, placements: &placement::Placements) -> Result<Self, Error> {
         let root = Box::new(root.resolve()?);
-        let plots = plots
-            .iter()
+        let plots = placements
+            .plots()
             .map(|plot| {
-                plot.as_ref()
-                    .map(|plot| match plot.theme_spec() {
-                        None => Ok(ResolvedPlotTheme::InheritedRoot),
-                        Some(theme) => {
-                            let mut theme = Box::new(theme.resolve()?);
-                            theme.canvas_surface_override = Some(root.surfaces.canvas_root);
-                            theme.share_font_environment_from(&root);
-                            Ok(ResolvedPlotTheme::ExplicitPlot(theme))
-                        }
-                    })
-                    .transpose()
+                plot.map(|plot| match plot.theme_spec() {
+                    None => Ok(ResolvedPlotTheme::InheritedRoot),
+                    Some(theme) => {
+                        let mut theme = Box::new(theme.resolve()?);
+                        theme.canvas_surface_override = Some(root.surfaces.canvas_root);
+                        theme.share_font_environment_from(&root);
+                        Ok(ResolvedPlotTheme::ExplicitPlot(theme))
+                    }
+                })
+                .transpose()
             })
             .collect::<Result<Vec<_>, Error>>()?;
         Ok(Self { root, plots })
@@ -250,8 +250,7 @@ fn validate_header_overlap(
 pub struct Canvas {
     rows: usize,
     columns: usize,
-    panels: Vec<Option<Plot>>,
-    text_panels: Vec<Option<TextPanel>>,
+    placements: placement::Placements,
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
     legend_composition: LegendComposition,
@@ -300,14 +299,10 @@ impl Canvas {
                 "canvas grid rows and columns must both be greater than zero".into(),
             ));
         }
-        let panel_count = rows
-            .checked_mul(columns)
-            .ok_or_else(|| Error::Data("canvas grid dimensions exceed allocation limits".into()))?;
         Ok(Self {
             rows,
             columns,
-            panels: (0..panel_count).map(|_| None).collect(),
-            text_panels: (0..panel_count).map(|_| None).collect(),
+            placements: placement::Placements::new(rows, columns)?,
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
             legend_composition: LegendComposition::Combined,
@@ -344,21 +339,10 @@ impl Canvas {
         column: usize,
         plot: Plot<K>,
     ) -> Result<Self, Error> {
-        if row >= self.rows || column >= self.columns {
-            return Err(Error::Data(format!(
-                "canvas panel ({row}, {column}) is outside {}x{} grid",
-                self.rows, self.columns
-            )));
-        }
-        let index = row * self.columns + column;
-        if self.panels[index].is_some() || self.text_panels[index].is_some() {
-            return Err(Error::Data(format!(
-                "canvas panel ({row}, {column}) is already occupied"
-            )));
-        }
-        let mut plot = plot.erase();
-        plot.numeric_cell = Some(crate::data::source::source_arc((row, column))?);
-        self.panels[index] = Some(plot);
+        self.placements.insert(
+            placement::Footprint::cell(row, column),
+            placement::Payload::Plot(Box::new(plot.erase())),
+        )?;
         Ok(self)
     }
 
@@ -369,19 +353,10 @@ impl Canvas {
         column: usize,
         panel: TextPanel,
     ) -> Result<Self, Error> {
-        if row >= self.rows || column >= self.columns {
-            return Err(Error::Data(format!(
-                "canvas panel ({row}, {column}) is outside {}x{} grid",
-                self.rows, self.columns
-            )));
-        }
-        let index = row * self.columns + column;
-        if self.panels[index].is_some() || self.text_panels[index].is_some() {
-            return Err(Error::Data(format!(
-                "canvas panel ({row}, {column}) is already occupied"
-            )));
-        }
-        self.text_panels[index] = Some(panel);
+        self.placements.insert(
+            placement::Footprint::cell(row, column),
+            placement::Payload::Text(panel),
+        )?;
         Ok(self)
     }
 
@@ -703,12 +678,14 @@ impl Canvas {
         {
             crate::text::validate_for(source, "canvas prose")?;
         }
-        if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
+        if self.placements.plots().all(|plot| plot.is_none())
+            && self.placements.texts().all(|text| text.is_none())
+        {
             return Err(Error::Data(
                 "canvas requires at least one configured panel".into(),
             ));
         }
-        for plot in self.panels.iter().flatten() {
+        for plot in self.placements.plots().flatten() {
             let kind = plot.kind();
             plot.validate_configuration(kind)?;
             crate::layout::interior::CompositionChildPolicy::Canvas.validate_child(plot)?;
@@ -725,7 +702,7 @@ impl Canvas {
         }
         for group in &self.x_range_groups {
             for &index in group {
-                let plot = self.panels[index].as_ref().ok_or_else(|| {
+                let plot = self.placements.plot(index).ok_or_else(|| {
                     Error::Data(format!(
                         "canvas x-range group references unconfigured panel {index}"
                     ))
@@ -748,8 +725,11 @@ impl Canvas {
         for title in &self.row_titles {
             let start = title.start * self.columns;
             let end = start + self.columns;
-            if self.panels[start..end]
-                .iter()
+            if self
+                .placements
+                .plots()
+                .skip(start)
+                .take(end - start)
                 .flatten()
                 .any(|plot| plot.title_text().is_some() || plot.subtitle_text().is_some())
             {
@@ -770,13 +750,13 @@ impl Canvas {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(None);
         }
-        let Some(_) = self.panels.iter().flatten().next() else {
+        let Some(_) = self.placements.plots().flatten().next() else {
             return Ok(None);
         };
 
         let mut contributors = Vec::new();
-        crate::data::source::reserve_source(&mut contributors, self.panels.len())?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        crate::data::source::reserve_source(&mut contributors, self.placements.len())?;
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
             if !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
                 continue;
@@ -808,7 +788,7 @@ impl Canvas {
         interiors: &mut [Option<crate::layout::interior::PreparedInteriorInputs>],
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
             let Some(input) = interiors.get_mut(index).and_then(Option::as_mut) else {
                 continue;
@@ -848,8 +828,8 @@ impl Canvas {
             return Ok(None);
         }
         let mut groups = Vec::new();
-        crate::data::source::reserve_source(&mut groups, self.panels.len())?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        crate::data::source::reserve_source(&mut groups, self.placements.len())?;
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
             let Some(dimension) = plot.categorical_color_field() else {
                 continue;
@@ -894,8 +874,8 @@ impl Canvas {
         resources: &crate::font::canonical::OperationContext,
     ) -> Result<Option<Arc<PreparedGuide>>, Error> {
         let mut contributions = Vec::new();
-        crate::data::source::reserve_source(&mut contributions, self.panels.len())?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        crate::data::source::reserve_source(&mut contributions, self.placements.len())?;
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(source) = plot else { continue };
             let mut plot = self.cell_visibility(source.clone(), index);
             if let Some(labels) = &self.labels {
@@ -955,13 +935,14 @@ impl Canvas {
             return Ok(ranges);
         }
 
-        stage.reserve_prepared(&mut ranges, self.panels.len(), "shared x domains")?;
-        ranges.resize(self.panels.len(), None);
+        stage.reserve_prepared(&mut ranges, self.placements.len(), "shared x domains")?;
+        ranges.resize(self.placements.len(), None);
         for group in &self.x_range_groups {
             let mut shared: Option<(f64, f64)> = None;
             for &index in group {
-                let plot = self.panels[index]
-                    .as_ref()
+                let plot = self
+                    .placements
+                    .plot(index)
                     .expect("validated shared x member");
                 let range = if let Some(marks) = &reference[index] {
                     marks.x_range(plot)?
@@ -999,8 +980,9 @@ impl Canvas {
             }
             let shared = shared.expect("validated nonempty shared x group");
             for &index in group {
-                let plot = self.panels[index]
-                    .as_ref()
+                let plot = self
+                    .placements
+                    .plot(index)
                     .expect("validated shared x member");
                 if let Some(ticks) = plot.explicit_x_ticks() {
                     for tick in ticks {
@@ -1039,21 +1021,28 @@ impl Canvas {
         Error,
     > {
         let mut interiors = Vec::new();
-        stage.reserve_prepared(&mut interiors, self.panels.len(), "Canvas interior inputs")?;
+        stage.reserve_prepared(
+            &mut interiors,
+            self.placements.len(),
+            "Canvas interior inputs",
+        )?;
         let resources = stage.operation();
         let mut scatter = Vec::new();
-        stage.reserve_prepared(&mut scatter, self.panels.len(), "Canvas Scatter semantics")?;
+        stage.reserve_prepared(
+            &mut scatter,
+            self.placements.len(),
+            "Canvas Scatter semantics",
+        )?;
         let mut line = Vec::new();
-        stage.reserve_prepared(&mut line, self.panels.len(), "Canvas line semantics")?;
+        stage.reserve_prepared(&mut line, self.placements.len(), "Canvas line semantics")?;
         let mut reference = Vec::new();
         stage.reserve_prepared(
             &mut reference,
-            self.panels.len(),
+            self.placements.len(),
             "Canvas distribution/reference semantics",
         )?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             let suppressed = plot
-                .as_ref()
                 .filter(|plot| {
                     matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
                         && matches!(
@@ -1063,12 +1052,12 @@ impl Canvas {
                 })
                 .map(|plot| plot.clone().with_suppressed_continuous_guide());
             let plot = if suppressed.is_some() {
-                &suppressed
+                suppressed.as_ref()
             } else {
                 plot
             };
             reference.push(
-                match plot.as_ref().filter(|plot| {
+                match plot.filter(|plot| {
                     matches!(
                         plot.kind(),
                         PlotKind::Histogram
@@ -1110,7 +1099,7 @@ impl Canvas {
                 },
             );
             line.push(
-                match plot.as_ref().filter(|plot| {
+                match plot.filter(|plot| {
                     matches!(
                         plot.kind(),
                         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
@@ -1126,26 +1115,21 @@ impl Canvas {
                     None => None,
                 },
             );
-            scatter.push(
-                match plot
-                    .as_ref()
-                    .filter(|plot| plot.kind() == PlotKind::Scatter)
-                {
-                    Some(plot) => {
-                        let data = plot
-                            .configured_source_rows()?
-                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
-                            .with_operation(&resources);
-                        Some(crate::plots::scatter::PreparedScatter::new(plot, data)?)
-                    }
-                    None => None,
-                },
-            );
+            scatter.push(match plot.filter(|plot| plot.kind() == PlotKind::Scatter) {
+                Some(plot) => {
+                    let data = plot
+                        .configured_source_rows()?
+                        .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
+                        .with_operation(&resources);
+                    Some(crate::plots::scatter::PreparedScatter::new(plot, data)?)
+                }
+                None => None,
+            });
         }
         let shared_x = self.prepare_shared_x(stage, &scatter, &line, &reference)?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             interiors.push(
-                match plot.as_ref().filter(|plot| {
+                match plot.filter(|plot| {
                     matches!(
                         plot.kind(),
                         PlotKind::Scatter
@@ -1226,8 +1210,8 @@ impl Canvas {
         }
         for group in &self.x_range_groups {
             if !group.iter().any(|&index| {
-                self.panels[index]
-                    .as_ref()
+                self.placements
+                    .plot(index)
                     .is_some_and(|plot| plot.user_x_limits().is_none())
             }) {
                 continue;
@@ -1275,12 +1259,12 @@ impl Canvas {
             sizing_request.0,
             sizing_request.1,
             |prepared_stage| {
-                let themes = Arc::new(ResolvedCanvasThemes::new(&self.theme, &self.panels)?);
+                let themes = Arc::new(ResolvedCanvasThemes::new(&self.theme, &self.placements)?);
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
                 let color_domains = self.prepare_color_domains(&interiors)?;
-                for (index, plot) in self.panels.iter().enumerate() {
+                for (index, plot) in self.placements.plots().enumerate() {
                     if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
                         let global_hues = color_domains.as_ref().and_then(|groups| {
                             groups
@@ -1428,7 +1412,7 @@ impl Canvas {
         // after the font census and before any parent allocation or child probe.
         for (index, inputs) in interiors.iter().enumerate() {
             if let Some(inputs) = inputs {
-                let source = self.panels[index].as_ref().expect("prepared Canvas panel");
+                let source = self.placements.plot(index).expect("prepared Canvas panel");
                 let plot = self.cell_visibility(source.clone(), index);
                 inputs.prepare_intrinsics(
                     &plot,
@@ -1439,10 +1423,10 @@ impl Canvas {
         let mut text_panels = Vec::new();
         crate::layout::fit::reserve(
             &mut text_panels,
-            self.text_panels.len(),
+            self.placements.len(),
             "TextPanel intrinsic summaries",
         )?;
-        for panel in &self.text_panels {
+        for panel in self.placements.texts() {
             text_panels.push(
                 panel
                     .as_ref()
@@ -1453,11 +1437,11 @@ impl Canvas {
         let mut plot_titles = Vec::new();
         crate::layout::fit::reserve(
             &mut plot_titles,
-            self.panels.len(),
+            self.placements.len(),
             "Canvas Plot text intrinsics",
         )?;
 
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             let summary = plot
                 .as_ref()
                 .map(|plot| -> Result<_, Error> {
@@ -1588,7 +1572,7 @@ impl Canvas {
                 Some(prepared_stage),
             )?;
         }
-        for (index, panel) in self.text_panels.iter().enumerate() {
+        for (index, panel) in self.placements.texts().enumerate() {
             let Some(panel) = panel else { continue };
             let address = root.child(
                 crate::layout::AddressRole::TextPanelContent,
@@ -1632,7 +1616,7 @@ impl Canvas {
             }
         }
 
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
 
             let mut plot = plot.clone();
@@ -1674,7 +1658,7 @@ impl Canvas {
             &root,
             prepared_stage,
         )?;
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             if plot.is_some() {
                 let owner = root.child(
                     crate::layout::AddressRole::CanvasCell,
@@ -1890,10 +1874,10 @@ impl Canvas {
         let mut plots = Vec::new();
         crate::layout::fit::reserve(
             &mut plots,
-            self.panels.len(),
+            self.placements.len(),
             "Canvas scoped configurations",
         )?;
-        for (index, source) in self.panels.iter().enumerate() {
+        for (index, source) in self.placements.plots().enumerate() {
             let Some(source) = source else {
                 plots.push(None);
                 continue;
@@ -2076,7 +2060,7 @@ impl Canvas {
     fn complete_cell_gutters(
         &self,
         plots: &[Option<Plot>],
-        cells: &[PanelBox],
+        cells: &[Option<PanelBox>],
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
@@ -2090,7 +2074,7 @@ impl Canvas {
             let theme = themes.plot(index).expect("configured Canvas plot theme");
             let dependencies = self.consumed_guide_dependencies(
                 index,
-                cells[index].width(),
+                cells[index].expect("configured owner assignment").width(),
                 shared_allocation,
                 round,
             )?;
@@ -2100,8 +2084,12 @@ impl Canvas {
             };
             let probe = match children.canvas_probe(
                 plot,
-                crate::spec::PlotRenderContext::new(plot.data(), cells[index], theme)
-                    .with_guides(&guides),
+                crate::spec::PlotRenderContext::new(
+                    plot.data(),
+                    cells[index].expect("configured owner assignment"),
+                    theme,
+                )
+                .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
                 round,
@@ -2169,7 +2157,7 @@ impl Canvas {
             let gutters = sizing::grid_gutters(self, round)?;
             let grid = tracks::allocate(
                 PanelBox::new(0.0, width, 0.0, 0.0),
-                (self.rows, self.columns),
+                &self.placements,
                 &plots,
                 prepared.text_panel_intrinsics,
                 prepared.plot_intrinsics,
@@ -2313,7 +2301,7 @@ impl Canvas {
         }
         let provisional = match tracks::allocate(
             outer,
-            (self.rows, self.columns),
+            &self.placements,
             &plots,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
@@ -2336,7 +2324,7 @@ impl Canvas {
                 })
                 .as_ref(),
         )? {
-            FitOutcome::Measured(grid) => grid.cells,
+            FitOutcome::Measured(grid) => grid.owners,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
@@ -2352,7 +2340,9 @@ impl Canvas {
                     .expect("configured canvas panel has a resolved theme");
                 let dependencies = self.consumed_guide_dependencies(
                     first_index,
-                    provisional[first_index].width(),
+                    provisional[first_index]
+                        .expect("configured owner assignment")
+                        .width(),
                     shared_allocation,
                     round,
                 )?;
@@ -2364,7 +2354,7 @@ impl Canvas {
                     first,
                     crate::spec::PlotRenderContext::new(
                         first.data(),
-                        provisional[first_index],
+                        provisional[first_index].expect("configured owner assignment"),
                         expected_theme,
                     )
                     .with_guides(&guides),
@@ -2391,7 +2381,9 @@ impl Canvas {
                         .expect("configured canvas panel has a resolved theme");
                     let dependencies = self.consumed_guide_dependencies(
                         index,
-                        provisional[index].width(),
+                        provisional[index]
+                            .expect("configured owner assignment")
+                            .width(),
                         shared_allocation,
                         round,
                     )?;
@@ -2401,8 +2393,12 @@ impl Canvas {
                     };
                     if plot_category_domain(
                         plot,
-                        crate::spec::PlotRenderContext::new(plot.data(), provisional[index], theme)
-                            .with_guides(&guides),
+                        crate::spec::PlotRenderContext::new(
+                            plot.data(),
+                            provisional[index].expect("configured owner assignment"),
+                            theme,
+                        )
+                        .with_guides(&guides),
                         children,
                         index,
                         round,
@@ -2425,10 +2421,10 @@ impl Canvas {
         let mut requirements = Vec::new();
         fit::reserve(
             &mut requirements,
-            self.panels.len(),
+            self.placements.len(),
             "Canvas gutter requirements",
         )?;
-        for index in 0..self.panels.len() {
+        for index in 0..self.placements.len() {
             let address = grid_address.child(
                 crate::layout::AddressRole::CanvasCell,
                 u32::try_from(index)
@@ -2475,7 +2471,7 @@ impl Canvas {
         }
         let grid = match tracks::allocate(
             outer,
-            (self.rows, self.columns),
+            &self.placements,
             &plots,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
@@ -2501,7 +2497,8 @@ impl Canvas {
             FitOutcome::Measured(grid) => grid,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let cells = grid.cells;
+        grid.tracks.observe(round)?;
+        let cells = grid.owners;
         let content_insets = grid.content_insets;
         let headers = grid.headers;
         let row_titles = grid.row_titles;
@@ -2523,9 +2520,10 @@ impl Canvas {
                 .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
+            let cell = cells[index].expect("configured owner assignment");
             let local = match plot_text::PlotLocalTextPlan::measure(
                 plot,
-                cells[index],
+                cell,
                 theme,
                 [self.panel_title_alignment, self.panel_subtitle_alignment],
                 prepared.plot_intrinsics[index].expect("configured Canvas Plot text intrinsics"),
@@ -2558,12 +2556,8 @@ impl Canvas {
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
             let source_rows = plot.configured_source_rows()?;
-            let dependencies = self.consumed_guide_dependencies(
-                index,
-                cells[index].width(),
-                shared_allocation,
-                round,
-            )?;
+            let dependencies =
+                self.consumed_guide_dependencies(index, cell.width(), shared_allocation, round)?;
             let guides = GuideConsumption {
                 dependencies: &dependencies,
                 ..SUPPRESSED_GUIDES
@@ -2625,7 +2619,7 @@ impl Canvas {
                 let preferred = sizing::measured_preference(
                     plot,
                     &panel_plan,
-                    cells[index].height() - local.body.height(),
+                    cell.height() - local.body.height(),
                     round,
                     &owner,
                     theme,
@@ -2633,7 +2627,7 @@ impl Canvas {
                 if let Some(measurements) = prepared.measurements {
                     measurements.record(
                         plot,
-                        cells[index].width(),
+                        cell.width(),
                         preferred,
                         content_insets[index],
                         round,
@@ -2645,9 +2639,9 @@ impl Canvas {
                     &owner,
                     &target,
                     FeedbackKind::ContentHeight,
-                    [cells[index].width(), 0.0, preferred, 0.0],
+                    [cell.width(), 0.0, preferred, 0.0],
                 )?;
-                if request.is_some() || preferred > cells[index].height() + 1.0 / 1024.0 {
+                if request.is_some() || preferred > cell.height() + 1.0 / 1024.0 {
                     round.miss(
                         &target,
                         crate::layout::kernel::FitKind::TrackOrResidual,
@@ -2717,7 +2711,7 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("canvas grid address overflowed".into()))?,
             )?;
-            round.observe_box(cells[index])?;
+            round.observe_box(cells[index].expect("measured owner assignment"))?;
             if let Some(request) = round.request_insets(
                 &address,
                 &address,
@@ -2741,9 +2735,9 @@ impl Canvas {
         let mut text_panels = Vec::new();
         crate::render::backend::reserve_text_records(
             &mut text_panels,
-            self.text_panels.iter().flatten().count(),
+            self.placements.texts().flatten().count(),
         )?;
-        for (index, text_panel) in self.text_panels.iter().enumerate() {
+        for (index, text_panel) in self.placements.texts().enumerate() {
             let Some(text_panel) = text_panel else {
                 continue;
             };
@@ -2752,7 +2746,7 @@ impl Canvas {
             match TextPanelPlan::measure(
                 text_panel,
                 index,
-                cells[index],
+                cells[index].expect("configured TextPanel assignment"),
                 themes.root(),
                 intrinsic,
                 &scope,
@@ -2781,7 +2775,7 @@ impl Canvas {
         let mut panels = Vec::new();
         fit::reserve(&mut panels, measured.len(), "Canvas selected panels")?;
         for (index, kind, panel_plan, local) in measured {
-            let cell = cells[index];
+            let cell = cells[index].expect("measured owner assignment");
             let mut layers = [String::new(), String::new(), String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
                 crate::data::source::reserve_source_string(layer, 40)?;

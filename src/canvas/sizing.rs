@@ -345,8 +345,12 @@ pub(super) fn grid_gutters(
 ) -> Result<Vec<(usize, usize, PanelRequirements)>, Error> {
     let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut gutters = Vec::new();
-    fit::reserve(&mut gutters, source.panels.len(), "Canvas content gutters")?;
-    for index in 0..source.panels.len() {
+    fit::reserve(
+        &mut gutters,
+        source.placements.len(),
+        "Canvas content gutters",
+    )?;
+    for index in 0..source.placements.len() {
         let owner = grid_owner.child(
             AddressRole::CanvasCell,
             u32::try_from(index)
@@ -430,10 +434,10 @@ pub(super) fn measure(
     let mut plots = Vec::new();
     fit::reserve(
         &mut plots,
-        source.panels.len(),
+        source.placements.len(),
         "Canvas content sizing children",
     )?;
-    for (index, panel) in source.panels.iter().enumerate() {
+    for (index, panel) in source.placements.plots().enumerate() {
         let Some(panel) = panel else {
             plots.push(None);
             continue;
@@ -507,7 +511,7 @@ pub(super) fn measure(
     let allocate = |width: Option<f64>, gutters: &[(usize, usize, PanelRequirements)]| {
         fit::measured(super::tracks::allocate(
             PanelBox::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
-            (source.rows, source.columns),
+            &source.placements,
             &plots,
             &prepared.text_panel_intrinsics,
             &prepared.plot_intrinsics,

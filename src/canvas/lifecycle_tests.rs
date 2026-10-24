@@ -277,8 +277,8 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
     let outer = PanelBox::new(0.0, 650.0, 0.0, 500.0);
     let plan = crate::layout::fit::measured(tracks::allocate(
         outer,
-        (1, 2),
-        &canvas.panels,
+        &canvas.placements,
+        &[None, None],
         &prepared.text_panel_intrinsics,
         &prepared.plot_intrinsics,
         &canvas.column_headers,
@@ -303,7 +303,7 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         assert!(text.style.exact_override);
         assert_eq!(text.lines.len(), 2);
     }
-    let cell = plan.cells[0];
+    let cell = plan.owners[0].unwrap();
     let quanta = crate::layout::kernel::nearest_spatial_quanta;
     assert_eq!(
         quanta(cell.x0 - outer.x0).unwrap(),
@@ -313,7 +313,10 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         quanta(outer.y1 - cell.y1).unwrap(),
         column.height_quanta + 25 * 1024 + title.height_quanta + 21 * 1024,
     );
-    assert_eq!(quanta(cell.y1).unwrap(), quanta(plan.cells[1].y1).unwrap());
+    assert_eq!(
+        quanta(cell.y1).unwrap(),
+        quanta(plan.owners[1].unwrap().y1).unwrap()
+    );
     assert_eq!(
         plan.headers[0].text.placement.anchor,
         crate::render::backend::TextAnchor::Start
@@ -828,8 +831,9 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
         }
         let layer_slot = usize::from(!layer_first);
         assert_eq!(
-            canvas.panels[layer_slot]
-                .as_ref()
+            canvas
+                .placements
+                .plot(layer_slot)
                 .unwrap()
                 .effective_legend_composition(),
             Separate
@@ -2229,7 +2233,13 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
     for (kind, plot) in plots {
         if *kind == PlotKind::Matrix {
             let mut rejected = Canvas::grid(1, 1).unwrap();
-            rejected.panels[0] = Some(plot.clone());
+            rejected
+                .placements
+                .insert(
+                    placement::Footprint::cell(0, 0),
+                    placement::Payload::Plot(Box::new(plot.clone())),
+                )
+                .unwrap();
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
             assert!(rejected.preflight_plan().is_err());
             assert_eq!(
@@ -2244,7 +2254,13 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
         ) {
             continue;
         }
-        canvas.panels[index] = Some(plot.clone().title(format!("{kind:?}")));
+        canvas
+            .placements
+            .insert(
+                placement::Footprint::cell(index / 2, index % 2),
+                placement::Payload::Plot(Box::new(plot.clone().title(format!("{kind:?}")))),
+            )
+            .unwrap();
         index += 1;
     }
     assert_eq!(index, 4);

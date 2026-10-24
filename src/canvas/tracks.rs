@@ -57,11 +57,37 @@ fn checked(value: i128) -> Result<i64, Error> {
 }
 
 pub(super) struct CanvasGridAssignment {
-    pub cells: Vec<PanelBox>,
+    pub owners: Vec<Option<PanelBox>>,
+    pub tracks: DeclaredTracks,
     pub headers: Vec<CanvasHeaderPlan>,
     pub row_titles: Vec<CanvasHeaderPlan>,
     pub size: (f64, f64),
     pub content_insets: Vec<[i64; 4]>,
+}
+
+pub(super) struct DeclaredTracks {
+    columns: Vec<(f64, f64)>,
+    rows: Vec<(f64, f64)>,
+}
+impl DeclaredTracks {
+    fn owner(&self, footprint: super::placement::Footprint) -> PanelBox {
+        PanelBox::new(
+            self.columns[footprint.column].0,
+            self.columns[footprint.column + footprint.column_span - 1].1,
+            self.rows[footprint.row + footprint.row_span - 1].0,
+            self.rows[footprint.row].1,
+        )
+    }
+    pub fn observe(&self, round: &mut crate::layout::kernel::FeedbackRound) -> Result<(), Error> {
+        for edges in [&self.columns, &self.rows] {
+            round.observe_count(edges.len())?;
+            for &(lower, upper) in edges {
+                round.observe_number(lower)?;
+                round.observe_number(upper)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 pub(super) struct ContentSizing<'a> {
@@ -81,7 +107,7 @@ pub(super) struct ContentSizing<'a> {
 )]
 pub(super) fn allocate(
     outer: PanelBox,
-    shape: (usize, usize),
+    placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
@@ -93,7 +119,7 @@ pub(super) fn allocate(
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<CanvasGridAssignment>, Error> {
-    let (rows, columns) = shape;
+    let (rows, columns) = placements.shape();
     let count = rows
         .checked_mul(columns)
         .ok_or_else(|| Error::Render("Canvas Grid topology overflowed".into()))?;
@@ -302,17 +328,20 @@ pub(super) fn allocate(
         let Some((hard, preferred_width)) = minimum else {
             continue;
         };
+        let footprint = placements
+            .footprint(index)
+            .ok_or_else(|| Error::Render("Canvas intrinsic has no canonical owner".into()))?;
         widths.push(GridRequirement {
-            start: index % columns,
-            span: 1,
+            start: footprint.column,
+            span: footprint.column_span,
             hard: required(hard.0)?,
             preferred: required(preferred_width.max(hard.0))?,
             fill: true,
             address: &owners[index],
         });
         heights.push(GridRequirement {
-            start: index / columns,
-            span: 1,
+            start: footprint.row,
+            span: footprint.row_span,
             hard: required(hard.1)?,
             preferred: required(hard.1)?,
             fill: true,
@@ -623,7 +652,7 @@ pub(super) fn allocate(
                     content.measurements,
                     &dependencies,
                 )?
-            } else if let Some(text) = &content.source.text_panels[index] {
+            } else if let Some(text) = content.source.placements.text(index) {
                 super::text_panel::natural_height(text, width, theme)?
             } else {
                 0.0
@@ -682,7 +711,25 @@ pub(super) fn allocate(
             cursor -= i128::from(gap);
         }
     }
-    let mut cells = Vec::new();
+    let tracks = DeclaredTracks {
+        columns: crate::data::source::collect_source(x_positions.iter().zip(&columns).map(
+            |(&left, &width)| {
+                Ok((
+                    pixels(left),
+                    pixels(checked(i128::from(left) + i128::from(width))?),
+                ))
+            },
+        ))?,
+        rows: crate::data::source::collect_source(y_positions.iter().zip(&rows).map(
+            |(&top, &height)| {
+                Ok((
+                    pixels(checked(i128::from(top) - i128::from(height))?),
+                    pixels(top),
+                ))
+            },
+        ))?,
+    };
+    let mut assigned = Vec::new();
     let mut content_insets = Vec::new();
     if content.is_some() {
         crate::layout::fit::reserve(
@@ -691,23 +738,17 @@ pub(super) fn allocate(
             "Canvas content dependency insets",
         )?;
     }
-    crate::layout::fit::reserve(&mut cells, count, "Canvas assigned cells")?;
+    crate::layout::fit::reserve(&mut assigned, count, "Canvas assigned owners")?;
 
-    for (row, &top) in y_positions.iter().enumerate() {
-        for (column, (&left, &width)) in x_positions.iter().zip(&columns).enumerate() {
-            cells.push(PanelBox::new(
-                pixels(left),
-                pixels(checked(i128::from(left) + i128::from(width))?),
-                pixels(checked(i128::from(top) - i128::from(rows[row]))?),
-                pixels(top),
-            ));
+    for (row, row_inset) in row_insets.iter().enumerate() {
+        for (column, column_inset) in column_insets.iter().enumerate() {
+            assigned.push(
+                placements
+                    .footprint(row * columns.len() + column)
+                    .map(|footprint| tracks.owner(footprint)),
+            );
             if content.is_some() {
-                content_insets.push([
-                    column_insets[column][0],
-                    column_insets[column][1],
-                    row_insets[row][0],
-                    row_insets[row][1],
-                ]);
+                content_insets.push([column_inset[0], column_inset[1], row_inset[0], row_inset[1]]);
             }
         }
     }
@@ -730,8 +771,8 @@ pub(super) fn allocate(
         });
     }
     for (header, plan) in row_headers.iter().zip(row_header_plans) {
-        let top = cells[header.start * columns.len()].y1;
-        let bottom = cells[(header.start + header.span - 1) * columns.len()].y0;
+        let top = tracks.rows[header.start].1;
+        let bottom = tracks.rows[header.start + header.span - 1].0;
         let (x, anchor) = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
         headers.push(CanvasHeaderPlan {
             request: header.text.try_copy()?,
@@ -755,7 +796,7 @@ pub(super) fn allocate(
                 Point2D::new(
                     x,
                     position(
-                        cells[row * columns.len()].y1
+                        tracks.rows[row].1
                             + pixels(axis_row_tops[row])
                             + pixels(row_title_heights[row]) / 2.0,
                     )?,
@@ -766,7 +807,8 @@ pub(super) fn allocate(
         });
     }
     Ok(FitOutcome::Measured(CanvasGridAssignment {
-        cells,
+        owners: assigned,
+        tracks,
         headers,
         row_titles: measured_row_titles,
         size: (grid_width, grid_height),

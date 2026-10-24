@@ -595,6 +595,14 @@ guides/annotations/overlays once. Facets use Plot frames beneath one owner, not
 new roots; fixed dimensions use outer shared axes with corresponding empty cell
 axes, free dimensions local axes with empty outer slots.
 
+Canvas placement uses one canonical payload/footprint record per anchor plus a
+derived occupancy lookup, not separate Plot and TextPanel stores. Grid-sized
+prepared arrays contain values only at anchors, preserving source and CanvasCell
+identity through preparation, guide contribution, child measurement and capture.
+CanvasGridAssignment separates declared row/column boundaries from optional owner
+rectangles. Headers and row titles consume declared boundaries, never an owner's
+rectangle as a surrogate row edge. Only configured anchors are child destinations.
+
 Canvas cells are Plot/TextPanel/empty, row-major with all declared holes/trailing
 slots. Spanning records occur once at minimum covered coordinate, ordered header,
 row title, range group,cell, then declaration. Range groups are nonvisual.
