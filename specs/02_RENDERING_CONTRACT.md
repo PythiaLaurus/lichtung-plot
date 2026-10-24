@@ -213,6 +213,12 @@ its existing text reader returns `&str`. Local style replaces the Plot's panel-t
 role before the census. Local line alignment is independent of corner ownership,
 and the selected size determines the annotation's font-relative padding and fit.
 
+HeatmapNullRowAnnotation takes a semantic row-label string and displayed Text.
+Local exact style replaces the selected missing-fill contrast role before fonts;
+line alignment defaults to Center inside the merged row's centered block. Selected
+size owns null-row padding, and complete Text participates in annotation Eq and
+intrinsic identity. Existing fully-null/Cartesian/highlight restrictions remain.
+
 ### Guides
 
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and

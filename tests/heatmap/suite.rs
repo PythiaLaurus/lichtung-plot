@@ -802,6 +802,7 @@ fn diverging_cells_choose_complete_light_or_dark_text_before_paint() {
 
 #[test]
 fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
+    use lichtung_plot::{Color, Text, TextAlignment, Theme};
     let data = HeatmapData::new(
         CategoryValues::new(
             "column",
@@ -822,12 +823,25 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     );
     let annotation = HeatmapNullRowAnnotation::new(
         "not fit",
-        " No finite measurements\r\n\r\nwere available for this modeled outcome. ",
+        Text::new(" No finite measurements\r\n\r\nwere available for this modeled outcome. ")
+            .style(
+                Theme::publication()
+                    .typography()
+                    .get_annotations()
+                    .get_contrast()
+                    .get_dark()
+                    .clone()
+                    .font_size(17)
+                    .unwrap()
+                    .color(Color::rgb(12, 34, 56))
+                    .unwrap(),
+            )
+            .alignment(TextAlignment::Start),
     )
     .unwrap();
     let svg = render(&data, |chart| {
         chart
-            .size(480, 300)
+            .size(480, 400)
             .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
             .heatmap_null_row_annotation(annotation)
     })
@@ -837,6 +851,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     assert_eq!(marks.matches("<polygon ").count(), 4);
     assert_eq!(marks.matches("<polyline ").count(), 0);
     assert!(marks.contains(">0.12</text>") && marks.contains(">0.50</text>"));
+    assert!(marks.contains("fill=\"#0C2238\""));
     assert!(
         marks.matches("<text ").count() > 4,
         "annotation was not wrapped: {marks}"

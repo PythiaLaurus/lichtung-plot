@@ -1112,14 +1112,18 @@ fn push_deferred_plot_requirements(
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            for annotation in plot.heatmap_null_row_annotations_spec() {
+            for annotation in marks.null_row_sources() {
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
-                    annotation.text(),
+                    annotation.as_str(),
                     &[],
-                    theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
+                    annotation
+                        .appearance(
+                            theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
+                        )
+                        .theme,
                     prepared_stage.as_deref_mut(),
                 )?;
             }

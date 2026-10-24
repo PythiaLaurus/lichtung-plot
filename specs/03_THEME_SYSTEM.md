@@ -177,6 +177,9 @@ Canvas headers and row titles independently replace composition_header with a
 complete local Text style. Each named header padding uses that selected size;
 shared band extents take the maximum complete text-plus-padding requirement.
 The minimum for declared empty Canvas tracks still uses the owner's Theme metric.
+Heatmap null-row Text may replace the selected missing-fill contrast appearance;
+its chosen size supplies both null-row padding products. Ordinary value labels
+continue to use their own final-cell contrast selection.
 
 TypographyTheme and each nested text-role group use consuming `property(value)`
 edits and paired borrowed `get_property()` readers. For example,

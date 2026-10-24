@@ -97,6 +97,12 @@ Its local TextTheme replaces the complete Plot panel-text role, including the
 font metric used by panel_text_padding. The corner continues to place the whole
 block; TextLayout alignment chooses physical line alignment inside that block.
 
+HeatmapNullRowAnnotation retains Text independently of its semantic row key.
+Local exact appearance replaces the selected missing-fill contrast role; omission
+retains contrast selection. Its selected size owns null-row padding and row-track
+requirements. Physical line alignment defaults to Center inside the centered
+merged-row block; complete request equality owns intrinsic reuse.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

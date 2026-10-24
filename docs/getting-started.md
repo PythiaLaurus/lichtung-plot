@@ -169,6 +169,10 @@ size used by that header's padding.
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.
 
+`HeatmapNullRowAnnotation::new(row_key, text)` accepts Text for the explanation
+inside a fully-null Cartesian row. The row key keeps its semantic validation;
+local Text style replaces the missing-fill contrast role and determines padding.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

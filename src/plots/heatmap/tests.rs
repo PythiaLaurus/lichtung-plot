@@ -10,6 +10,74 @@ fn payload(result: &PlotRenderResult) -> &HeatmapPayload {
 }
 
 #[test]
+fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_request() {
+    use crate::{FontFamily, FontStack, HeatmapNullRowAnnotation, Text, TextAlignment};
+    let mut theme = crate::Theme::publication();
+    let style = theme
+        .typography
+        .annotations
+        .contrast
+        .dark
+        .clone()
+        .font_size(23)
+        .unwrap();
+    let text = Text::new("Unavailable\nshort")
+        .style(style)
+        .alignment(TextAlignment::End);
+    let annotation = HeatmapNullRowAnnotation::new("empty", text.clone()).unwrap();
+    let reset =
+        HeatmapNullRowAnnotation::new("empty", text.layout(crate::TextLayout::default())).unwrap();
+    assert_eq!(annotation.text(), reset.text());
+    assert_ne!(annotation, reset);
+    let unavailable =
+        FontStack::new([FontFamily::named("Unused null-row contrast font").unwrap()]).unwrap();
+    theme.typography.annotations.contrast.light.stack = unavailable.clone();
+    theme.typography.annotations.contrast.dark.stack = unavailable;
+    let cells = theme
+        .annotations
+        .get_cells()
+        .clone()
+        .null_row_horizontal_padding(crate::RelativeSpacing::ratio(1, 1).unwrap())
+        .unwrap()
+        .null_row_vertical_padding(crate::RelativeSpacing::ratio(1, 1).unwrap())
+        .unwrap();
+    theme.annotations = theme.annotations.clone().cells(cells).unwrap();
+    let source = Plot::heatmap(
+        crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
+        crate::CategoryValues::new("y", ["empty", "empty"]).unwrap(),
+        crate::NumericValues::nullable("fill", [None, None]),
+    )
+    .continuous_color_scale(
+        crate::ContinuousColorScale::sequential(
+            None,
+            Some(crate::ColorDomain::exact(0.0, 1.0).unwrap()),
+        )
+        .unwrap(),
+    )
+    .heatmap_null_row_annotation(annotation)
+    .theme(theme.clone());
+    source.preflight().unwrap();
+    let resolved = theme.resolve().unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
+    let result = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(0.0, 500.0, 0.0, 200.0),
+            &resolved,
+        ))
+        .unwrap();
+    let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
+    assert_eq!(plan.source, "Unavailable\nshort");
+    assert_eq!(plan.style.font_size, 23);
+    assert!(plan.style.exact_override);
+    assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
+    assert_eq!(plan.lines.len(), 2);
+    let minimum = intrinsic_body_minimum(&chart, &resolved).unwrap();
+    assert!(minimum.1 >= plan.height() + 23.0);
+    assert!(minimum.0 >= plan.width() + 23.0);
+}
+
+#[test]
 fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let source = |format| {
         Plot::heatmap(

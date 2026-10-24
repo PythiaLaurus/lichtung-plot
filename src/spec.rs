@@ -215,21 +215,26 @@ pub enum HeatmapAnnotations {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeatmapNullRowAnnotation {
     row_label: String,
-    text: String,
+    text: crate::Text,
 }
 
 impl HeatmapNullRowAnnotation {
     /// Construct an annotation targeting one normalized heatmap y-category.
+    /// Text can replace the complete selected contrast style and line alignment;
+    /// row identity remains a semantic string and is validated independently.
     pub fn new(
         row_label: impl Into<String>,
-        text: impl Into<String>,
+        text: impl Into<crate::Text>,
     ) -> Result<Self, crate::Error> {
         let annotation = Self {
             row_label: row_label.into(),
             text: text.into(),
         };
         validate_heatmap_annotation_label(&annotation.row_label, "row label")?;
-        crate::text::validate_for(&annotation.text, "heatmap fully-null row annotation text")?;
+        crate::text::validate_for(
+            annotation.text.as_str(),
+            "heatmap fully-null row annotation text",
+        )?;
         Ok(annotation)
     }
 
@@ -242,6 +247,10 @@ impl HeatmapNullRowAnnotation {
     /// Verbatim text wrapped inside the merged row.
     #[must_use]
     pub fn text(&self) -> &str {
+        self.text.as_str()
+    }
+
+    pub(crate) const fn content(&self) -> &crate::Text {
         &self.text
     }
 }
