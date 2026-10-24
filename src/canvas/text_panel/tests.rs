@@ -62,3 +62,86 @@ fn body_anchor_uses_the_enlarged_post_inset_sequence_cell_not_the_whole_panel() 
         );
     }
 }
+
+#[test]
+fn assigned_sequence_height_fits_body_without_shrinking_an_independent_heading() {
+    use crate::{TextFit, TextFitGrouping};
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let heading = theme.typography.composition.text_panel_title.clone();
+    let body = theme
+        .typography
+        .composition
+        .body
+        .clone()
+        .font_size(14.25)
+        .unwrap();
+    let source = TextPanel::new(
+        Text::new("Independent title").style(heading.clone()),
+        Text::new("Complete first line\nComplete second line")
+            .style(body.clone())
+            .layout(
+                TextLayout::default().fit(
+                    TextFit::shrink_to(10.25)
+                        .unwrap()
+                        .grouping(TextFitGrouping::Uniform),
+                ),
+            ),
+    )
+    .unwrap();
+    let title = theme
+        .measure_text(
+            source.title(),
+            &heading,
+            crate::layout::PhysicalTextAlignment::Start,
+            "height witness title",
+            false,
+        )
+        .unwrap();
+    let floor = theme
+        .measure_text(
+            source.body(),
+            &body.clone().font_size(11.5).unwrap(),
+            crate::layout::PhysicalTextAlignment::Start,
+            "independent requested body height",
+            false,
+        )
+        .unwrap();
+    let lengths = theme
+        .text_panel_lengths(heading.get_font_size(), body.get_font_size())
+        .unwrap();
+    let height = lengths
+        .inset
+        .times(2)
+        .add_length(&lengths.gap)
+        .add_pixels(title.height() + floor.height())
+        .unwrap()
+        .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)
+        .unwrap();
+    let intrinsic = TextPanelIntrinsics::prepare(&source, &theme).unwrap();
+    let plan = fit::measured(TextPanelPlan::measure(
+        &source,
+        0,
+        PanelBox::new(0.0, 400.0, 0.0, height),
+        &theme,
+        intrinsic,
+        &FitScope::root(),
+    ))
+    .unwrap();
+    assert_eq!(
+        plan.title.plan().style.font_size.to_bits(),
+        heading.get_font_size().to_bits()
+    );
+    assert!((10.25..14.25).contains(&plan.body.plan().style.font_size));
+    assert_eq!(plan.body.plan().source, source.body());
+    assert!(plan
+        .body
+        .plan()
+        .fit_input
+        .as_ref()
+        .unwrap()
+        .height
+        .is_some());
+    let footprint =
+        crate::layout::text::placement::footprint(plan.body_placement, plan.body.plan()).unwrap();
+    assert!(footprint.y0 >= 0.0 && footprint.y1 <= height);
+}

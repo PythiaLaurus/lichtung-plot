@@ -267,7 +267,7 @@ impl TextPanelPlan {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         let maximum_width = pixels(assigned);
-        let title = match fit::single_text(
+        let mut title = match fit::single_text(
             theme,
             source.title(),
             title_style,
@@ -279,7 +279,7 @@ impl TextPanelPlan {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let body = match fit::single_text(
+        let mut body = match fit::single_text(
             theme,
             source.body(),
             body_style,
@@ -295,17 +295,30 @@ impl TextPanelPlan {
             nearest_spatial_quanta(crate::layout::kernel::required_length(title.height())?)?;
         let body_height =
             nearest_spatial_quanta(crate::layout::kernel::required_length(body.height())?)?;
-        let rows = [TrackSpec {
-            min: 0,
-            preferred: 0,
-            max: None,
-            flexible: false,
-        }; 2];
+        let title_minimum =
+            crate::layout::text::font_fit::minimum_height(theme, source.title(), title_style)?
+                .unwrap_or(title_height);
+        let body_minimum =
+            crate::layout::text::font_fit::minimum_height(theme, source.body(), body_style)?
+                .unwrap_or(body_height);
+        let rows = [(title_style, title_height), (body_style, body_height)].map(
+            |(appearance, preferred)| {
+                let fits = appearance
+                    .layout
+                    .is_some_and(|request| request.instructions().fit.is_some());
+                TrackSpec {
+                    min: 0,
+                    preferred: 0,
+                    max: fits.then_some(preferred),
+                    flexible: fits,
+                }
+            },
+        );
         let row_children = [
             GridRequirement {
                 start: 0,
                 span: 1,
-                hard: title_height,
+                hard: title_minimum.min(title_height),
                 preferred: title_height,
                 fill: false,
                 address: &title_scope.address,
@@ -313,7 +326,7 @@ impl TextPanelPlan {
             GridRequirement {
                 start: 1,
                 span: 1,
-                hard: body_height,
+                hard: body_minimum.min(body_height),
                 preferred: body_height,
                 fill: false,
                 address: &body_scope.address,
@@ -334,6 +347,32 @@ impl TextPanelPlan {
             &owner,
         )? {
             FitOutcome::Measured(value) => value,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        title = match crate::layout::text::request::measure_height(
+            theme,
+            source.title(),
+            title_style,
+            maximum_width,
+            pixels(allocation.sizes[0]),
+            title_alignment.into(),
+            "text panel title",
+            &title_scope,
+        )? {
+            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        body = match crate::layout::text::request::measure_height(
+            theme,
+            source.body(),
+            body_style,
+            maximum_width,
+            pixels(allocation.sizes[1]),
+            body_alignment.into(),
+            "text panel body",
+            &body_scope,
+        )? {
+            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         let x = lengths.inset.after_pixels(pixels(x0))?;
@@ -369,7 +408,7 @@ impl TextPanelPlan {
             Some(PanelBox::new(
                 x,
                 right,
-                title_top - title.height(),
+                title_top - pixels(allocation.sizes[0]),
                 title_top,
             )),
         )?;
@@ -385,7 +424,7 @@ impl TextPanelPlan {
         let title = match crate::layout::fit::outcome(crate::layout::text::placement::contain(
             title.plan().clone(),
             title_placement,
-            PanelBox::new(x, right, title_top - title.height(), title_top),
+            PanelBox::new(x, right, title_top - pixels(allocation.sizes[0]), title_top),
             &title_scope,
         ))? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),

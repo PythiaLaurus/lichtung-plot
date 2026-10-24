@@ -371,7 +371,8 @@ fn assigned_rows(
                 .child(crate::layout::AddressRole::AxisLeft, 0)?,
         ))?;
         if !text.lines.is_empty() {
-            label_heights[index] = text.occupied_size().1 + 2.0 * crate::layout::LABEL_CLEARANCE;
+            label_heights[index] = crate::layout::text::font_fit::hard_height(theme, &text)?.0
+                + 2.0 * crate::layout::LABEL_CLEARANCE;
         }
     }
     let pitch = if selection.is_all() {
@@ -389,24 +390,27 @@ fn assigned_rows(
     }
     for (index, plan) in annotations.values.iter().enumerate() {
         if let Some(plan) = plan {
-            let padding = theme
-                .annotations
-                .get_cells()
-                .value_padding(plan.style.font_size)?;
+            let (height, size) = crate::layout::text::font_fit::hard_height(theme, plan)?;
+            let padding = theme.annotations.get_cells().value_padding(size)?;
             if !plan.lines.is_empty() {
-                hard[index / width] =
-                    hard[index / width].max(padding.height(plan.occupied_size().1)?);
+                hard[index / width] = hard[index / width].max(if height == 0.0 {
+                    0.0
+                } else {
+                    padding.height(height)?
+                });
             }
         }
     }
     for (index, plan) in annotations.rows.iter().enumerate() {
         if let Some(plan) = plan {
-            let padding = theme
-                .annotations
-                .get_cells()
-                .null_row_padding(plan.style.font_size)?;
+            let (height, size) = crate::layout::text::font_fit::hard_height(theme, plan)?;
+            let padding = theme.annotations.get_cells().null_row_padding(size)?;
             if !plan.lines.is_empty() {
-                hard[index] = hard[index].max(padding.height(plan.occupied_size().1)?);
+                hard[index] = hard[index].max(if height == 0.0 {
+                    0.0
+                } else {
+                    padding.height(height)?
+                });
             }
         }
     }
@@ -1221,7 +1225,7 @@ pub(crate) fn measure(
         )?;
         columns = Some(assigned);
         let column_edges = columns.as_ref().expect("assigned Heatmap columns");
-        let measured = measure_annotations(
+        let mut measured = measure_annotations(
             chart,
             prepared,
             column_edges,
@@ -1238,6 +1242,41 @@ pub(crate) fn measure(
             chart.y_tick_labels_visible(),
             tick_width,
             context.with_panel(panel),
+        )?;
+        for (index, plan) in measured.values.iter_mut().enumerate() {
+            if let Some(text) = plan {
+                let row = index / x_count;
+                *text = crate::layout::text::font_fit::assign_height(
+                    theme,
+                    text,
+                    assigned[row] - assigned[row + 1],
+                    &context
+                        .fit_scope()
+                        .child(crate::layout::AddressRole::HeatmapValueLabel, index)?,
+                )?;
+            }
+        }
+        for (row, plan) in measured.rows.iter_mut().enumerate() {
+            if let Some(text) = plan {
+                *text = crate::layout::text::font_fit::assign_height(
+                    theme,
+                    text,
+                    assigned[row] - assigned[row + 1],
+                    &context
+                        .fit_scope()
+                        .child(crate::layout::AddressRole::HeatmapMergedRow, row)?,
+                )?;
+            }
+        }
+        crate::layout::text::font_fit::uniform_options(
+            theme,
+            &mut measured.values,
+            context.fit_scope(),
+        )?;
+        crate::layout::text::font_fit::uniform_options(
+            theme,
+            &mut measured.rows,
+            context.fit_scope(),
         )?;
         check_annotation_tracks(
             prepared,
@@ -2222,22 +2261,24 @@ fn measure_annotations(
                 .ok_or_else(|| {
                     Error::Render("heatmap value has no prepared resolved fill".into())
                 })?;
-            let appearance = theme.contrasting_text(fill)?;
-            let padding = theme
-                .annotations
-                .get_cells()
-                .value_padding(appearance.get_font_size())?;
+            let mut assigned_theme = theme.clone();
+            let geometry = theme.annotations.get_cells();
+            assigned_theme.text_padding = Some((
+                geometry.get_value_horizontal_padding().clone(),
+                geometry.get_value_vertical_padding().clone(),
+            ));
+            let appearance = assigned_theme.contrasting_text(fill)?;
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
             let cell_scope = scope.child(AddressRole::HeatmapValueLabel, index)?;
             let measured = text.plan(source, owner, || {
                 fit::measured(crate::layout::text::request::measure_occurrence(
-                    theme,
+                    &assigned_theme,
                     source,
                     crate::text::TextAppearance::from(appearance)
                         .layout(theme.text_layouts.value.as_ref()),
-                    crate::layout::maximum_width_quanta(padding.available_width(cell_width)?)
+                    crate::layout::maximum_width_quanta(cell_width)
                         .map_err(|error| Error::Render(error.to_string()))?,
                     PhysicalTextAlignment::Center,
                     owner,
@@ -2277,16 +2318,22 @@ fn measure_annotations(
             .get_cells()
             .null_row_padding(appearance.theme.get_font_size())?;
         let available_width = padding.available_width(columns[columns.len() - 1] - columns[0])?;
+        let mut assigned_theme = theme.clone();
+        let geometry = theme.annotations.get_cells();
+        assigned_theme.text_padding = Some((
+            geometry.get_null_row_horizontal_padding().clone(),
+            geometry.get_null_row_vertical_padding().clone(),
+        ));
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
         let block = match fit::outcome(text.plan(
             annotation.as_str(),
             "heatmap fully-null row annotation",
             || {
                 fit::measured(crate::layout::text::request::measure_occurrence(
-                    theme,
+                    &assigned_theme,
                     annotation.as_str(),
                     appearance,
-                    crate::layout::maximum_width_quanta(available_width)
+                    crate::layout::maximum_width_quanta(columns[columns.len() - 1] - columns[0])
                         .map_err(|error| Error::Render(error.to_string()))?,
                     annotation
                         .resolved_alignment(crate::TextAlignment::Center)
@@ -2314,6 +2361,8 @@ fn measure_annotations(
         }
         plans.rows[y_index] = Some(block.plan().clone());
     }
+    crate::layout::text::font_fit::uniform_options(theme, &mut plans.values, scope)?;
+    crate::layout::text::font_fit::uniform_options(theme, &mut plans.rows, scope)?;
     match miss {
         Some(failure) => Err(failure.into()),
         None => Ok(plans),

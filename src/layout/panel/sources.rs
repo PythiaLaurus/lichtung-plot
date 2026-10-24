@@ -900,7 +900,9 @@ pub(super) fn labels_fit(
     };
     let mut candidates = Vec::new();
     crate::data::source::reserve_source(&mut candidates, eligible.len())?;
-    for (index, (tick, cell)) in ticks.iter().zip(cells).enumerate() {
+    let mut selected_plans = Vec::new();
+    crate::data::source::reserve_source(&mut selected_plans, eligible.len())?;
+    for (index, (tick, cell)) in ticks.iter().zip(&cells).enumerate() {
         if tick.label.is_empty() {
             continue;
         }
@@ -924,18 +926,50 @@ pub(super) fn labels_fit(
             ),
             AxisSide::Left => (i64::MAX, PhysicalTextAlignment::End, "y-axis tick label"),
         };
-        let plan = match crate::layout::text::request::measure_quanta(
-            theme,
-            &tick.label,
-            appearance,
-            width,
-            alignment,
-            role,
-            &crate::layout::fit::ROOT_SCOPE,
-        )? {
+        let measured = match side {
+            AxisSide::Bottom => crate::layout::text::request::measure_quanta(
+                theme,
+                &tick.label,
+                appearance,
+                width,
+                alignment,
+                role,
+                &crate::layout::fit::ROOT_SCOPE,
+            ),
+            AxisSide::Left => crate::layout::text::request::measure_height(
+                theme,
+                &tick.label,
+                appearance,
+                f64::from(u32::MAX),
+                cell.capacity(),
+                alignment,
+                role,
+                &crate::layout::fit::ROOT_SCOPE,
+            ),
+        };
+        let plan = match measured? {
             crate::layout::fit::FitOutcome::Measured(plan) => plan,
             crate::layout::fit::FitOutcome::Miss(_) => return Ok(false),
         };
+        selected_plans.push(plan);
+    }
+    match crate::layout::text::font_fit::uniform(
+        theme,
+        &mut selected_plans,
+        &crate::layout::fit::ROOT_SCOPE,
+    ) {
+        Ok(()) => {}
+        Err(crate::layout::fit::PlanError::Fit(_)) => return Ok(false),
+        Err(crate::layout::fit::PlanError::Fatal(error)) => return Err(error),
+    }
+    let mut selected_plans = selected_plans.into_iter();
+    for (index, (tick, cell)) in ticks.iter().zip(cells).enumerate() {
+        if tick.label.is_empty()
+            || visibility.is_some_and(|policy| !policy.includes(index, &eligible))
+        {
+            continue;
+        }
+        let plan = selected_plans.next().expect("selected tick metric");
         let Some(placement) = cell.placement(&plan, side, 0.0)? else {
             return Ok(false);
         };

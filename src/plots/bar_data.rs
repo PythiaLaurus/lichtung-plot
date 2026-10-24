@@ -827,7 +827,7 @@ pub(crate) fn attached_significance_text_plans(
 
     let eligible =
         crate::data::source::collect_source(marks.iter().map(|mark| Ok(mark.source_index)))?;
-    crate::data::source::collect_source(marks.iter().map(|mark| {
+    let mut plans = crate::data::source::collect_source(marks.iter().map(|mark| {
         crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
             context.theme,
             &mark.label,
@@ -843,7 +843,10 @@ pub(crate) fn attached_significance_text_plans(
             (mark.source_index, &eligible),
         ))
         .map_err(crate::layout::fit::PlanError::into_error)
-    }))
+    }))?;
+    crate::layout::text::font_fit::uniform(context.theme, &mut plans, context.fit_scope())
+        .map_err(crate::layout::fit::PlanError::into_error)?;
+    Ok(plans)
 }
 
 pub(crate) fn validate_attached_text(

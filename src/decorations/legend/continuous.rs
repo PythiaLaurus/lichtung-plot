@@ -150,6 +150,7 @@ impl ColorContent {
             }
             labels.push(plan);
         }
+        crate::layout::text::font_fit::uniform(theme, &mut labels, scope)?;
         if !matches!(labels.len(), 1..=3) {
             return Err(Error::Render(
                 "continuous guide must have one to three prepared labels".into(),

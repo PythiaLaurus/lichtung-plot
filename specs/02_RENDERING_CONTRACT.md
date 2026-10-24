@@ -272,6 +272,18 @@ retains its dense end-ellipsis/three-dot/distinct-view defaults; a present defau
 x/y TextLayout selects complete legal wrapping. The dedicated label-fit API
 and prefix helper are removed.
 
+TextFit permits fixed preferred size, a positive finite shrink floor, or a closed
+fractional range. Equal bounds fix that bound, even when it differs from the
+preferred appearance. Explicit ranges never admit an out-of-range preference.
+ContentFirst tries complete content over permitted sizes before marked views;
+PreferredSizeFirst tries the marked view at the preferred permitted size first.
+The terminal action remains TextOverflow's single choice. Independent is the
+factory default; Uniform selects a common permitted size in the actual eligible
+role group, keeping independent authored slots, axes and contrast roles separate.
+Original appearance, request, assignment and membership survive beside selected
+metrics. Actual parent rows/cells can constrain height; automatic-height preferences
+do not invent a finite height to force shrink. Font trials never rerun formatters.
+
 HeatmapNullRowAnnotation takes a semantic row-label string and displayed Text.
 Local exact style replaces the selected missing-fill contrast role before fonts;
 line alignment defaults to Center inside the merged row's centered block. Selected

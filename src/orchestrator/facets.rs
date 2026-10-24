@@ -625,6 +625,41 @@ impl FacetPlan {
                 for facet in &panels {
                     strip_text.push(rendering::plan_facet_strip(&planned_plot, facet, theme)?);
                 }
+                for role in 0..2 {
+                    let members = crate::data::source::collect_source(
+                        strip_text
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(panel, parts)| {
+                                parts
+                                    .iter()
+                                    .enumerate()
+                                    .filter(move |(part, _)| {
+                                        if parts.len() == 1 {
+                                            role == 1
+                                        } else {
+                                            *part == role
+                                        }
+                                    })
+                                    .map(move |(part, _)| (panel, part))
+                            })
+                            .map(Ok),
+                    )?;
+                    let mut text = crate::data::source::collect_source(
+                        members
+                            .iter()
+                            .map(|&(panel, part)| Ok(strip_text[panel][part].clone())),
+                    )?;
+                    crate::layout::text::font_fit::uniform_placed(
+                        theme,
+                        &mut text,
+                        &crate::layout::fit::ROOT_SCOPE
+                            .child(crate::layout::AddressRole::FacetHeader, role)?,
+                    )?;
+                    for (&(panel, part), text) in members.iter().zip(text) {
+                        strip_text[panel][part] = text;
+                    }
+                }
                 let mut panel_plots = Vec::new();
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();

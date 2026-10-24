@@ -1124,6 +1124,7 @@ fn project(
                 text.push(PlacedText::middle(plan, position, TextAnchor::Start, 0.0)?);
                 label_indices.push(source_index);
             }
+            crate::layout::text::font_fit::uniform_placed(theme, &mut text, scope)?;
             crate::layout::text::visibility::apply(
                 &mut text,
                 &label_indices,

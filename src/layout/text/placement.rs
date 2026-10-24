@@ -71,6 +71,38 @@ fn from_default(placement: PlannedTextPlacement) -> TextAnchor {
     }
 }
 
+/// Reconstruct the already resolved reference, independently of block dimensions.
+pub(crate) fn remeasure(
+    placement: PlannedTextPlacement,
+    old: &ResolvedTextPlan,
+    new: &ResolvedTextPlan,
+) -> Result<PlannedTextPlacement, Error> {
+    let instructions = old.request.as_ref().map(crate::TextLayout::instructions);
+    let anchor = instructions
+        .and_then(|request| request.anchor)
+        .unwrap_or_else(|| from_default(placement));
+    let offset = instructions.and_then(|request| request.offset);
+    let local = at(
+        old,
+        Point2D::new(0.0, 0.0),
+        anchor,
+        placement.rotation,
+        placement.reverse_lines,
+        offset,
+    )?;
+    at(
+        new,
+        Point2D::new(
+            placement.position.x - local.position.x,
+            placement.position.y - local.position.y,
+        ),
+        anchor,
+        placement.rotation,
+        placement.reverse_lines,
+        offset,
+    )
+}
+
 #[expect(
     clippy::cast_precision_loss,
     reason = "measured block coordinates are bounded canonical quanta"

@@ -50,8 +50,11 @@ pub(crate) fn measure(
     let mut analysis = request.clone();
     analysis.edit_instructions().bounds = None;
     analysis.edit_instructions().wrapping = Some(crate::TextWrapping::NoSoftWrap);
+    let mut analysis_theme = theme.clone();
+    analysis_theme.text_height = None;
+    analysis_theme.text_padding = None;
     let basis = match super::request::measure_current(
-        theme,
+        &analysis_theme,
         source,
         TextAppearance {
             layout: Some(&analysis),

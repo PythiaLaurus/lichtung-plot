@@ -69,6 +69,45 @@ pub(crate) struct PanelAxisPlan {
     requirements: PanelRequirements,
 }
 
+impl PanelAxisPlan {
+    /// Matrix variable-title roles span their edge cells, but never merge axes'
+    /// independent numeric tick groups or the row and column title roles.
+    pub(crate) fn uniform_titles(
+        plans: &mut [&mut Self],
+        side: AxisSide,
+        theme: &ResolvedTheme,
+        scope: &FitScope,
+    ) -> Result<(), PlanError> {
+        let mut text = crate::data::source::collect_source(
+            plans
+                .iter()
+                .filter_map(|plan| match side {
+                    AxisSide::Bottom => plan.x_axis.title.as_ref(),
+                    AxisSide::Left => plan.y_axis.title.as_ref(),
+                })
+                .map(|(plan, placement)| {
+                    Ok(crate::render::backend::PlacedText {
+                        plan: plan.clone(),
+                        placement: *placement,
+                    })
+                }),
+        )?;
+        crate::layout::text::font_fit::uniform_placed(theme, &mut text, scope)?;
+        let mut text = text.into_iter();
+        for plan in plans {
+            let title = match side {
+                AxisSide::Bottom => &mut plan.x_axis.title,
+                AxisSide::Left => &mut plan.y_axis.title,
+            };
+            if title.is_some() {
+                let selected = text.next().expect("retained Matrix title");
+                *title = Some((selected.plan, selected.placement));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 struct FramePlan {
     sides: [Option<[Point2D; 2]>; 4],
@@ -671,7 +710,7 @@ impl Axis {
         let segment_end = AxisLengths::before(&tick_end, anchor)?;
         let mut ticks = Vec::new();
         fit::reserve(&mut ticks, self.ticks.len(), "frozen axis ticks")?;
-        let (gap, title_gap, title_width, tick_role, title_role) = match side {
+        let (_gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
                 &lengths.x_tick_label_gap,
                 &lengths.x_title_tick_label_gap,
@@ -693,6 +732,52 @@ impl Axis {
                 .filter(|&index| categorical || !self.ticks[index].label.is_empty())
                 .map(Ok),
         )?;
+        let label_indices = crate::data::source::collect_source(
+            eligible_labels
+                .iter()
+                .copied()
+                .filter(|&index| visible && tick_text.includes(index, &eligible_labels))
+                .map(Ok),
+        )?;
+        let mut label_plans = fit::collect(
+            "axis text group",
+            label_indices.iter().map(|&index| {
+                let (width, alignment) = match side {
+                    AxisSide::Bottom => (
+                        if allow {
+                            panel.width()
+                        } else {
+                            cells[index].capacity()
+                        },
+                        PhysicalTextAlignment::Center,
+                    ),
+                    AxisSide::Left => (vertical_width, PhysicalTextAlignment::End),
+                };
+                fit::measured(match side {
+                    AxisSide::Bottom => fit::text(
+                        theme,
+                        &self.ticks[index].label,
+                        tick_text,
+                        width,
+                        alignment,
+                        tick_role,
+                        scope,
+                    ),
+                    AxisSide::Left => crate::layout::text::request::measure_height(
+                        theme,
+                        &self.ticks[index].label,
+                        tick_text,
+                        width,
+                        cells[index].capacity(),
+                        alignment,
+                        tick_role,
+                        scope,
+                    ),
+                })
+            }),
+        )?;
+        crate::layout::text::font_fit::uniform(theme, &mut label_plans, scope)?;
+        let mut label_plans = label_indices.iter().zip(label_plans);
         for (index, (tick, cell)) in self.ticks.iter().zip(cells).enumerate() {
             let segment = match side {
                 AxisSide::Bottom => [
@@ -714,27 +799,18 @@ impl Axis {
             {
                 None
             } else {
-                let (width, alignment) = match side {
-                    AxisSide::Bottom => (
-                        if allow {
-                            panel.width()
-                        } else {
-                            cell.capacity()
-                        },
-                        PhysicalTextAlignment::Center,
-                    ),
-                    AxisSide::Left => (vertical_width, PhysicalTextAlignment::End),
+                let (_, mut plan) = label_plans.next().ok_or_else(|| {
+                    crate::Error::Render("axis text group lost a selected member".into())
+                })?;
+                let selected_lengths = standard
+                    .axes
+                    .get_spacing()
+                    .lengths(plan.style.font_size, title_appearance.theme.get_font_size())?;
+                let selected_gap = match side {
+                    AxisSide::Bottom => &selected_lengths.x_tick_label_gap,
+                    AxisSide::Left => &selected_lengths.y_tick_label_gap,
                 };
-                let mut plan = fit::measured(fit::text(
-                    theme,
-                    &tick.label,
-                    tick_text,
-                    width,
-                    alignment,
-                    tick_role,
-                    scope,
-                ))?;
-                let offset = outward.add_length(gap);
+                let offset = outward.add_length(selected_gap);
                 let local = cells::LabelCell::local(&plan, side)?;
                 let footprint = crate::layout::text::placement::footprint(local, &plan)?;
                 let perpendicular = match side {
@@ -858,15 +934,25 @@ impl Axis {
                         Error::Render("selected axis label lost its local placement".into())
                     })?;
                 let bounds = crate::layout::text::placement::footprint(local, &local_plan)?;
-                label_extent = label_extent.max(match side {
-                    AxisSide::Bottom => bounds.height(),
-                    AxisSide::Left => bounds.width(),
-                });
+                let selected_lengths = standard
+                    .axes
+                    .get_spacing()
+                    .lengths(plan.style.font_size, title_appearance.theme.get_font_size())?;
+                let selected_gap = match side {
+                    AxisSide::Bottom => &selected_lengths.x_tick_label_gap,
+                    AxisSide::Left => &selected_lengths.y_tick_label_gap,
+                };
+                label_extent = label_extent.max(AxisLengths::hard(&selected_gap.add_pixels(
+                    match side {
+                        AxisSide::Bottom => bounds.height(),
+                        AxisSide::Left => bounds.width(),
+                    },
+                )?)?);
             }
         }
         let mut gutter = outward;
         if labels_present {
-            gutter = gutter.add_length(gap).add_pixels(label_extent)?;
+            gutter = gutter.add_pixels(label_extent)?;
         }
         let title = if let Some(label) = &self.label {
             let mut plan = fit::measured(fit::single_text(
@@ -888,11 +974,19 @@ impl Axis {
                 title_role,
                 scope,
             ))?;
+            let selected_lengths = standard
+                .axes
+                .get_spacing()
+                .lengths(tick_text.theme.get_font_size(), plan.style.font_size)?;
+            let title_gap = match side {
+                AxisSide::Bottom => &selected_lengths.x_title_tick_label_gap,
+                AxisSide::Left => &selected_lengths.y_title_tick_label_gap,
+            };
             let separation = if labels_present {
                 title_gap
             } else {
                 match side {
-                    AxisSide::Bottom => &lengths.x_title_without_tick_labels_gap,
+                    AxisSide::Bottom => &selected_lengths.x_title_without_tick_labels_gap,
                     AxisSide::Left => title_gap,
                 }
             };

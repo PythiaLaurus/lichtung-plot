@@ -61,6 +61,74 @@ fn guide_ellipsis_retains_original_metadata_and_replays_one_selected_view_across
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+#[test]
+fn assigned_canvas_freezes_combined_anchor_rotation_ellipsis_and_fractional_fit() {
+    use lichtung_plot::{
+        Text, TextAnchor, TextBounds, TextElision, TextEllipsis, TextFailure, TextFit,
+        TextFitPriority, TextLayout, TextOverflow, TextPanel, TextRotation, TextRotationMode,
+        Theme,
+    };
+    let directory = unique_dir("assigned-font-fit");
+    let first = directory.join("first.svg");
+    let second = directory.join("second.svg");
+    let source = "An independently authored scientific explanation with a long ending";
+    let style = Theme::publication()
+        .typography()
+        .get_composition()
+        .get_body()
+        .clone()
+        .font_size(14.25)
+        .unwrap();
+    let body = Text::new(source).style(style).layout(
+        TextLayout::default()
+            .anchor(TextAnchor::center())
+            .rotation(TextRotation::degrees(30.05).unwrap())
+            .rotation_mode(TextRotationMode::AlignAfterRotation)
+            .bounds(TextBounds::new(Some(100.0), Some(30.0), Some(1)).unwrap())
+            .fit(TextFit::shrink_to(10.25).unwrap())
+            .fit_priority(TextFitPriority::PreferredSizeFirst)
+            .overflow(TextOverflow::ellipsis(
+                TextEllipsis::new(TextElision::Middle),
+                TextFailure::Error,
+            )),
+    );
+    let output = Canvas::grid(1, 1)
+        .unwrap()
+        .text_panel(0, 0, TextPanel::new("Independent heading", body).unwrap())
+        .unwrap()
+        .size(400, 300)
+        .svg_preserve_text(&first)
+        .unwrap();
+    output
+        .svg(directory.join("outlines.svg"))
+        .unwrap()
+        .png_preview(directory.join("preview.png"))
+        .unwrap()
+        .svg_preserve_text(&second)
+        .unwrap();
+    let bytes = std::fs::read(first).unwrap();
+    assert_eq!(bytes, std::fs::read(second).unwrap());
+    let svg = std::str::from_utf8(&bytes).unwrap();
+    let document = roxmltree::Document::parse(svg).unwrap();
+    let selected = document
+        .descendants()
+        .find(|node| node.attribute("data-original-source") == Some(source))
+        .unwrap();
+    let painted = selected
+        .descendants()
+        .find(|node| node.has_tag_name("text"))
+        .unwrap();
+    assert!(painted.text().unwrap().contains('…'));
+    let size: f64 = painted.attribute("font-size").unwrap().parse().unwrap();
+    assert!((10.25..=14.25).contains(&size));
+    assert!(svg.contains("rotate(30.05"));
+    assert_eq!(
+        png_dimensions(&std::fs::read(directory.join("preview.png")).unwrap()),
+        (400, 300)
+    );
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 fn plot() -> Plot<lichtung_plot::kind::Scatter> {
     Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0]),

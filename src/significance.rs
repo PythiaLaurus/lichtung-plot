@@ -352,6 +352,15 @@ fn plan_comparisons_at_with_label(
         .copied()
         .fold(f64::NEG_INFINITY, f64::max);
 
+    let mut labels = crate::data::source::collect_source(
+        resolved
+            .iter()
+            .map(|comparison| Ok(comparison.label.plan.clone())),
+    )?;
+    crate::layout::text::font_fit::uniform(theme, &mut labels, scope)?;
+    for (comparison, label) in resolved.iter_mut().zip(labels) {
+        comparison.label = DeferredAnnotationTextPlan::from_resolved(label);
+    }
     resolved.sort_by(|left, right| {
         left.left
             .cmp(&right.left)

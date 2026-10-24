@@ -233,6 +233,29 @@ pub(crate) fn intrinsic_widths<'a>(
     let requirements = unwrapped
         .intrinsic_from_analysis(1)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
+    let floor_appearance = appearance
+        .layout
+        .and_then(|request| request.instructions().fit)
+        .map(|policy| {
+            policy
+                .bounds(appearance.theme.get_font_size())
+                .and_then(|(minimum, _)| appearance.theme.clone().font_size(minimum))
+        })
+        .transpose()?;
+    let floor_requirements = if let Some(style) = &floor_appearance {
+        theme
+            .measure_text(
+                source,
+                style,
+                PhysicalTextAlignment::Start,
+                owner,
+                appearance.exact_override,
+            )?
+            .intrinsic_from_analysis(1)
+            .map_err(|error| Error::Render(format!("{owner}: {error}")))?
+    } else {
+        requirements
+    };
     let hard = if appearance.layout.is_some_and(|request| {
         request
             .instructions()
@@ -251,9 +274,9 @@ pub(crate) fn intrinsic_widths<'a>(
     } else if appearance.layout.is_some_and(|request| {
         request.instructions().wrapping == Some(crate::TextWrapping::NoSoftWrap)
     }) {
-        requirements.natural_width_quanta as f64 / 1024.0
+        floor_requirements.natural_width_quanta as f64 / 1024.0
     } else {
-        requirements.hard_width_quanta as f64 / 1024.0
+        floor_requirements.hard_width_quanta as f64 / 1024.0
     };
     let hard = appearance
         .layout

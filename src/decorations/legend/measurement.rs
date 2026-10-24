@@ -405,6 +405,10 @@ fn measure_title(
     clippy::too_many_arguments,
     reason = "section text measurement consumes the owner's fixed width variant and resolved role metrics"
 )]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one section assigns keys and grouped text before deriving row tracks"
+)]
 fn measure_section(
     section: &PreparedGuideSection,
     intrinsic: &SectionIntrinsics,
@@ -446,7 +450,7 @@ fn measure_section(
     let title_height = add(title_ascent, title_descent)?;
     let title_occupancy = length(title_height)?.add_length(&title_gap);
     let eligible = crate::data::source::collect_source((0..section.entries().len()).map(Ok))?;
-    let entries = fit::collect(
+    let mut entries = fit::collect(
         "measured guide entries",
         section
             .entries()
@@ -492,6 +496,16 @@ fn measure_section(
                 })
             }),
     )?;
+    let mut text = crate::data::source::collect_source(
+        entries.iter().map(|entry| Ok(entry.block.plan().clone())),
+    )?;
+    crate::layout::text::font_fit::uniform(theme, &mut text, scope)?;
+    for ((entry, text), intrinsic) in entries.iter_mut().zip(text).zip(&intrinsic.entries) {
+        let (ascent, descent) = text_extents(&text)?;
+        entry.ascent = ascent.max(intrinsic.ascent);
+        entry.descent = descent.max(intrinsic.descent);
+        entry.block = TextBlock::from_resolved(text);
+    }
     Ok(MeasuredSection {
         title_gap,
         title_width: ExactLength::pixels(title.occupied_size().0.max(title.fit_width()))?,

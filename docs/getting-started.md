@@ -242,6 +242,15 @@ The marker is unnecessary when complete text fits. Heatmap uses its existing den
 three-dot default through this engine; explicit `.x_tick_text_layout(TextLayout::default())`
 and the corresponding y attachment select complete wrapping instead.
 
+To prefer the theme's size but allow a local fractional floor, add
+`.fit(TextFit::shrink_to(10.25)?)` to the same layout. `TextFit::range(10.0, 18.0)?`
+also permits bounded growth. Complete content is preferred by default; use
+`.fit_priority(TextFitPriority::PreferredSizeFirst)` to try an allowed ellipsis at
+the preferred permitted size before shrinking. `.grouping(TextFitGrouping::Uniform)`
+on a fit program selects one size for the actual eligible role group, not unrelated
+axes, contrast roles or independently authored title/body slots. Terminal refusal,
+hide, clip and local-overflow choices still come only from `TextOverflow`.
+
 `HeatmapNullRowAnnotation::new(row_key, text)` accepts Text for the explanation
 inside a fully-null Cartesian row. The row key keeps its semantic validation;
 local Text style replaces the missing-fill contrast role and determines padding.

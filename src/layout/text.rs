@@ -20,6 +20,7 @@ use crate::theme::Color;
 use crate::TextWeight;
 
 pub(crate) mod ellipsis;
+pub(crate) mod font_fit;
 pub(crate) mod placement;
 mod rational;
 pub(crate) mod request;
@@ -83,6 +84,7 @@ pub(crate) struct TextPlanProvenance {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextPlanInput<'a> {
+    pub(crate) size_trace: Option<std::sync::Arc<font_fit::stability::Stability>>,
     pub(crate) direction: crate::TextDirection,
     pub(crate) source: &'a str,
     pub(crate) stack: &'a FontStack,
@@ -266,6 +268,9 @@ impl From<ParagraphBidiInfo<'_>> for ParagraphBidiData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedTextPayload {
+    pub(crate) fit_input: Option<std::sync::Arc<font_fit::FitInput>>,
+    pub(crate) fit_group:
+        Option<std::sync::Arc<(crate::layout::ComponentAddress, Vec<font_fit::GroupMember>)>>,
     pub(crate) original_source: Option<std::sync::Arc<String>>,
     pub(crate) display_map: Option<std::sync::Arc<Vec<DisplayFragment>>>,
     pub(crate) selected_rotation: Option<crate::TextRotation>,
@@ -410,6 +415,8 @@ impl ResolvedTextPlan {
         let theme = appearance.theme;
         Ok(Self(
             std::sync::Arc::new(ResolvedTextPayload {
+                fit_input: None,
+                fit_group: None,
                 original_source: None,
                 display_map: None,
                 selected_rotation: None,
@@ -1020,7 +1027,16 @@ fn measure_text(
     let _ = u32::try_from(input.source.len()).map_err(|_| TextPlanError::SourceTooLong)?;
 
     let stack = input.stack;
+    let scale = FontScale {
+        size: input.font_size,
+        trace: input.size_trace.as_ref(),
+    };
     let line_height_quanta = resolve_line_height(input.line_height, input.font_size)?;
+    if let Some(trace) = scale.trace {
+        trace.observe(line_height_quanta, |size| {
+            resolve_line_height(input.line_height, size)
+        })?;
+    }
 
     let weight = input.weight.into();
     environment.admit_text(stack, weight, input.source, None)?;
@@ -1056,7 +1072,7 @@ fn measure_text(
             .map_err(|_| TextPlanError::Arithmetic("grapheme index"))?;
         if paragraph.is_empty() {
             if intrinsic_lines.is_none() {
-                let whole = empty_line(seed.span, ending, primary_metrics, input.font_size)?;
+                let whole = empty_line(seed.span, ending, primary_metrics, scale)?;
                 retain_paragraph(
                     &mut analyzed_paragraphs,
                     AnalyzedParagraph {
@@ -1102,7 +1118,7 @@ fn measure_text(
             seed.span,
             seed.span,
             ending,
-            input.font_size,
+            scale,
             &bidi,
             &items,
             hyphen_face,
@@ -1137,7 +1153,7 @@ fn measure_text(
 
         super::unicode16::reserve(&mut boundaries, 1)?;
         boundaries.insert(0, 0);
-        let prefixes = proposal_prefixes(&whole.plan, &boundaries, input.font_size)?;
+        let prefixes = proposal_prefixes(&whole.plan, &boundaries, scale)?;
         let last = boundaries.len() - 1;
         let shape = |start: usize, end: usize| {
             let span = TextSourceSpan::new(
@@ -1150,7 +1166,7 @@ fn measure_text(
                 seed.span,
                 span,
                 ending_grapheme_index(&grapheme_ends, boundaries[end], grapheme_start)?,
-                input.font_size,
+                scale,
                 &bidi,
                 &items,
                 hyphen_face,
@@ -1357,11 +1373,12 @@ fn prefix_difference(
     end.add(&start.negated()?, "proposal difference")
 }
 
-fn proposal_prefixes(
+fn proposal_prefixes<'a>(
     whole: &TextLinePlan,
     boundaries: &[usize],
-    font_size: f64,
+    font_size: impl Into<FontScale<'a>>,
 ) -> Result<Vec<ExactRational>, TextPlanError> {
+    let font_size = font_size.into();
     let mut prefixes = Vec::new();
     super::unicode16::reserve(&mut prefixes, boundaries.len())?;
     prefixes.resize(boundaries.len(), ExactRational::ZERO);
@@ -1574,12 +1591,13 @@ struct BuiltLine {
     descent: i64,
 }
 
-fn empty_line(
+fn empty_line<'a>(
     span: TextSourceSpan,
     ending_grapheme_index: u32,
     primary_metrics: DesignMetrics,
-    font_size: f64,
+    font_size: impl Into<FontScale<'a>>,
 ) -> Result<BuiltLine, TextPlanError> {
+    let font_size = font_size.into();
     let (ascent, descent) = scaled_metrics(primary_metrics, font_size)?;
     let descent = descent
         .checked_neg()
@@ -1610,17 +1628,18 @@ fn empty_line(
     clippy::too_many_lines,
     reason = "contextual shaping keeps glyph retention and exact line geometry ordered"
 )]
-fn prepare_line(
+fn prepare_line<'a>(
     environment: &PreparedFontEnvironment,
     source: &str,
     paragraph_span: TextSourceSpan,
     line_span: TextSourceSpan,
     ending_grapheme_index: u32,
-    font_size: f64,
+    font_size: impl Into<FontScale<'a>>,
     bidi: &ParagraphBidiData,
     items: &[ScalarItem],
     hyphen_face: Option<FaceIdentity>,
 ) -> Result<BuiltLine, TextPlanError> {
+    let font_size = font_size.into();
     let selected_soft_hyphen = (line_span.end_byte < paragraph_span.end_byte
         && source[line_span.range()].ends_with('\u{ad}'))
     .then(|| {
@@ -2049,15 +2068,16 @@ struct BuiltRun {
     clippy::too_many_lines,
     reason = "freeze origins and ink in one pass while retaining exact advances for wrapping"
 )]
-fn scale_run(
+fn scale_run<'a>(
     shaped: CanonicalShapedRun,
     source_span: TextSourceSpan,
     script: Script,
-    font_size: f64,
+    font_size: impl Into<FontScale<'a>>,
     line_pen_x: &ExactRational,
     line_pen_y: &ExactRational,
     bidi_level: u8,
 ) -> Result<BuiltRun, TextPlanError> {
+    let font_size = font_size.into();
     let mut glyphs = Vec::new();
 
     super::unicode16::reserve(&mut glyphs, shaped.glyphs.len())?;
@@ -2175,7 +2195,7 @@ fn exact_glyph_ink(
     ink: GlyphInk,
     x_offset: i32,
     y_offset: i32,
-    font_size: f64,
+    font_size: FontScale<'_>,
     units_per_em: u16,
 ) -> Result<ExactInk, TextPlanError> {
     Ok(ExactInk {
@@ -2210,7 +2230,11 @@ fn exact_glyph_ink(
     })
 }
 
-fn scaled_metrics(metrics: DesignMetrics, font_size: f64) -> Result<(i64, i64), TextPlanError> {
+fn scaled_metrics<'a>(
+    metrics: DesignMetrics,
+    font_size: impl Into<FontScale<'a>>,
+) -> Result<(i64, i64), TextPlanError> {
+    let font_size = font_size.into();
     let ascender = scale_design(i64::from(metrics.ascender), font_size, metrics.units_per_em)?
         .ceil_i64("face ascender")?;
     let descender = scale_design(
@@ -2324,6 +2348,8 @@ fn finalize_plan(
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(
         std::sync::Arc::new(ResolvedTextPayload {
+            fit_input: None,
+            fit_group: None,
             original_source: None,
             display_map: None,
             selected_rotation: None,
@@ -2394,12 +2420,27 @@ impl ExactInk {
     }
 }
 
-fn scale_design(
+#[derive(Clone, Copy)]
+struct FontScale<'a> {
+    size: f64,
+    trace: Option<&'a std::sync::Arc<font_fit::stability::Stability>>,
+}
+impl From<f64> for FontScale<'_> {
+    fn from(size: f64) -> Self {
+        Self { size, trace: None }
+    }
+}
+
+fn scale_design<'a>(
     design: i64,
-    font_size: f64,
+    font_size: impl Into<FontScale<'a>>,
     units_per_em: u16,
 ) -> Result<ExactRational, TextPlanError> {
-    ExactRational::design(design, font_size, units_per_em)
+    let scale = font_size.into();
+    scale.trace.map_or_else(
+        || ExactRational::design(design, scale.size, units_per_em),
+        |trace| ExactRational::tracked_design(design, scale.size, units_per_em, trace),
+    )
 }
 
 fn resolve_line_height(line_height: TextLineHeight, font_size: f64) -> Result<i64, TextPlanError> {
@@ -2482,6 +2523,7 @@ mod tests {
         alignment: PhysicalTextAlignment,
     ) -> TextPlanInput<'_> {
         TextPlanInput {
+            size_trace: None,
             direction: crate::TextDirection::Auto,
             source,
             stack: canonical::test_sans_stack(),

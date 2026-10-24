@@ -1376,6 +1376,15 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
         )
         .color_label_format(guide.clone())
         .annotations(crate::HeatmapAnnotations::Values(cell.clone()))
+        .value_text_layout(
+            crate::TextLayout::default()
+                .bounds(crate::TextBounds::new(Some(70.0), None, None).unwrap())
+                .fit(
+                    crate::TextFit::range(10.25, 14.25)
+                        .unwrap()
+                        .grouping(crate::TextFitGrouping::Uniform),
+                ),
+        )
     };
     let contexts = Arc::new(Mutex::new(std::collections::BTreeSet::new()));
     let powers = {
@@ -1435,7 +1444,14 @@ fn numeric_functions_materialize_semantic_contexts_once_and_never_run_during_pub
     .x_tick_generation(
         crate::TickGeneration::multiplicative(1.0, 2.0, crate::TickRequirement::Fixed).unwrap(),
     )
-    .x_tick_format(powers);
+    .x_tick_format(powers)
+    .x_tick_text_layout(
+        crate::TextLayout::default().fit(
+            crate::TextFit::range(10.25, 14.25)
+                .unwrap()
+                .grouping(crate::TextFitGrouping::Uniform),
+        ),
+    );
     let root = Canvas::grid(1, 3)
         .unwrap()
         .size(1800, 650)

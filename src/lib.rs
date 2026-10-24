@@ -127,9 +127,10 @@ pub use spec::{
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use text::{
     DataCoordinate, DataPosition, GuideTextRole, Text, TextAlignment, TextAnchor, TextBounds,
-    TextCoordinate, TextDirection, TextElision, TextEllipsis, TextFailure, TextLayout, TextOffset,
-    TextOffsetFrame, TextOrientation, TextOverflow, TextOverlap, TextPosition, TextRotation,
-    TextRotationMode, TextVisibility, TextWrapping,
+    TextCoordinate, TextDirection, TextElision, TextEllipsis, TextFailure, TextFit,
+    TextFitGrouping, TextFitPriority, TextLayout, TextOffset, TextOffsetFrame, TextOrientation,
+    TextOverflow, TextOverlap, TextPosition, TextRotation, TextRotationMode, TextVisibility,
+    TextWrapping,
 };
 pub use theme::{
     AccentPalette, AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,

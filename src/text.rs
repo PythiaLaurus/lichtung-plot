@@ -1,6 +1,8 @@
 //! Shared source syntax for authored and prepared display text.
 
+mod fit;
 pub(crate) mod layout;
+pub use fit::{TextFit, TextFitGrouping, TextFitPriority};
 pub(crate) mod orientation;
 pub(crate) mod position;
 pub use orientation::{TextOrientation, TextRotation, TextRotationMode};
@@ -248,6 +250,8 @@ pub struct TextLayout {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TextInstructions {
+    pub(crate) fit: Option<TextFit>,
+    pub(crate) fit_priority: Option<TextFitPriority>,
     pub(crate) direction: Option<TextDirection>,
     pub(crate) orientation: Option<TextOrientation>,
     pub(crate) rotation_mode: Option<TextRotationMode>,
@@ -274,6 +278,8 @@ impl TextLayout {
 
     pub(crate) fn instructions(&self) -> &TextInstructions {
         static EMPTY: TextInstructions = TextInstructions {
+            fit: None,
+            fit_priority: None,
             direction: None,
             orientation: None,
             rotation_mode: None,
@@ -308,7 +314,7 @@ macro_rules! layout_edits {
         pub fn $field(mut self,value:$value) -> Self {self.edit_instructions().$field=Some(value);self}
     )+}};
 }
-layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility,orientation:TextOrientation,rotation_mode:TextRotationMode,direction:TextDirection}
+layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility,orientation:TextOrientation,rotation_mode:TextRotationMode,direction:TextDirection,fit:TextFit,fit_priority:TextFitPriority}
 impl TextLayout {
     /// Replace orientation with one fixed screen angle.
     #[must_use]

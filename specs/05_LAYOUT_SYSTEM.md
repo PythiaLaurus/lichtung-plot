@@ -302,6 +302,26 @@ is checked on the actual selected owner group after visibility, never on a chang
 scientific domain. Heatmap's omitted dense policy is a default common request;
 explicit complete wrapping replaces it with no alternate elision implementation.
 
+Local font fitting uses exact design-space lower bounds and measured proposals,
+then a finite traversal of quantized metric cells if the proposals/endpoints fail.
+Every reached affine metric rounding contributes its exact downward stability
+interval, found by ordered-positive-binary64 bisection with real tie ownership.
+All glyph edges/origins, proposal widths, leading, wrap decisions and derived-view
+weights are unchanged inside their intersection. Exclude only that certified cell,
+then visit its represented predecessor; at least one finite bit pattern is removed
+per iteration. No global wrapping monotonicity or sampled-size quota is assumed.
+The true floor and permitted upper boundary remain included unless an exact
+optimistic metric bound proves them impossible. Accepted plans are fully reshaped,
+scaled, wrapped and transformed at the selected size, not scaled SVG groups.
+
+Trials bypass the optional text-query cache and release failed glyph arrays. The
+selected plan retains the preferred appearance separately and no trial-analysis
+payload. Group fitting intersects actual permitted intervals and freezes complete
+membership/assignments. TextPanel sequences allocate real hard metric floors before
+remeasuring at assigned row heights; Heatmap cells also reevaluate their declared
+font-relative padding at each candidate. Selected text updates its owned clearance,
+not root padding, mark metrics or automatic locator preference seeds.
+
 Unbroken words/identifiers remain intact regardless of assigned width; even a
 short technical name such as `LightGBM` is not internally split to fit a compact
 cell. Callers choose explicit mandatory breaks or prepare display labels before

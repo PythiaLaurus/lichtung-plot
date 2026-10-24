@@ -2942,6 +2942,7 @@ mod tests {
 
         environment
             .plan_text(crate::layout::TextPlanInput {
+                size_trace: None,
                 direction: crate::TextDirection::Auto,
                 source: "A",
                 stack: canonical::test_sans_stack(),
@@ -2963,6 +2964,7 @@ mod tests {
         environment.operation().seal_fonts().unwrap();
         let missing = environment
             .plan_text(crate::layout::TextPlanInput {
+                size_trace: None,
                 direction: crate::TextDirection::Auto,
                 source: "B",
                 stack: canonical::test_sans_stack(),

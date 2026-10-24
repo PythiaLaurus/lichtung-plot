@@ -2186,6 +2186,7 @@ mod tests {
         let environment = PreparedFontEnvironment::synthetic();
         let plan = environment
             .plan_text(TextPlanInput {
+                size_trace: None,
                 direction: crate::TextDirection::Auto,
                 source: "A",
                 stack: crate::font::canonical::test_sans_stack(),

@@ -2094,6 +2094,14 @@ Update text/numeric/guide/layout contracts and examples with the working behavio
 
 ### 19. Add Configurable Local Font Fit
 
+Delivered: fractional fixed/shrink/range programs, both priorities, actual-role
+uniform groups and floor terminal actions use certified exact metric cells rather
+than a sampled-size quota. Preferred appearance and group/assignment identity are
+retained beside selected metrics; failed trial payloads are not cached. Actual
+TextPanel/Heatmap height and padding constraints are consumed before capture.
+Focused metric-boundary, nonmonotone quantization, grouping, callback and combined
+Canvas SVG/outline/PNG witnesses exercise these paths.
+
 Implement fixed/shrink/bounded-grow policies with fractional size bounds and a
 justified finite metric-based fitting algorithm. Support independent/uniform groups,
 both user-confirmed shrink/ellipsis priorities and explicit floor-failure actions,

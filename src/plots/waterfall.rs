@@ -1326,6 +1326,7 @@ fn plan_annotations(
             item.target == crate::layout::AddressRole::WaterfallTerminalLabel,
         ))
     }))?;
+    crate::layout::text::font_fit::uniform_placed(theme, &mut text, scope)?;
     crate::layout::text::visibility::apply(
         &mut text,
         &indices,

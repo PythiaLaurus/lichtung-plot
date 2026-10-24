@@ -1294,6 +1294,7 @@ fn project(
                 .expect("prepared text occurrence")
                 .clone())
         }))?;
+        crate::layout::text::font_fit::uniform_placed(theme, &mut labels, context.fit_scope())?;
         crate::layout::text::visibility::apply(
             &mut labels,
             &indices,

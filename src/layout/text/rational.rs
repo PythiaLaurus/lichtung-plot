@@ -13,7 +13,22 @@ use std::sync::Arc;
 pub(super) enum ExactRational {
     Small(i128, i128),
     Wide(Arc<(BigInt, BigInt)>),
+    Tracked(Arc<Tracked>),
 }
+
+#[derive(Debug)]
+pub(super) struct Tracked {
+    value: ExactRational,
+    slope: ExactRational,
+    constant: ExactRational,
+    trace: Arc<super::font_fit::stability::Stability>,
+}
+impl PartialEq for Tracked {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+impl Eq for Tracked {}
 
 impl ExactRational {
     pub const ZERO: Self = Self::Small(0, 1);
@@ -50,6 +65,7 @@ impl ExactRational {
         match self {
             Self::Small(n, d) => ((*n).into(), (*d).into()),
             Self::Wide(pair) => pair.as_ref().clone(),
+            Self::Tracked(tracked) => tracked.value.parts(),
         }
     }
 
@@ -95,6 +111,14 @@ impl ExactRational {
     }
 
     pub fn negated(&self) -> Result<Self, TextPlanError> {
+        if let Self::Tracked(value) = self {
+            return Ok(Self::Tracked(Arc::new(Tracked {
+                value: value.value.negated()?,
+                slope: value.slope.negated()?,
+                constant: value.constant.negated()?,
+                trace: Arc::clone(&value.trace),
+            })));
+        }
         if let Self::Small(n, d) = self {
             if let Some(n) = n.checked_neg() {
                 return Ok(Self::Small(n, *d));
@@ -104,7 +128,26 @@ impl ExactRational {
         Self::wide(-n, d)
     }
 
-    pub fn add(&self, other: &Self, _resource: &'static str) -> Result<Self, TextPlanError> {
+    #[expect(
+        clippy::only_used_in_recursion,
+        reason = "the consuming metric label follows affine decomposition; wide exact addition cannot overflow"
+    )]
+    pub fn add(&self, other: &Self, resource: &'static str) -> Result<Self, TextPlanError> {
+        if let Self::Tracked(value) = self {
+            let (rhs, slope, constant) = match other {
+                Self::Tracked(rhs) => (&rhs.value, rhs.slope.clone(), rhs.constant.clone()),
+                _ => (other, Self::ZERO, other.clone()),
+            };
+            return Ok(Self::Tracked(Arc::new(Tracked {
+                value: value.value.add(rhs, resource)?,
+                slope: value.slope.add(&slope, resource)?,
+                constant: value.constant.add(&constant, resource)?,
+                trace: Arc::clone(&value.trace),
+            })));
+        }
+        if matches!(other, Self::Tracked(_)) {
+            return other.add(self, resource);
+        }
         if let (Self::Small(a, b), Self::Small(c, d)) = (self, other) {
             let g = i128::try_from(gcd(b.unsigned_abs(), d.unsigned_abs()))
                 .expect("positive denominators");
@@ -122,6 +165,17 @@ impl ExactRational {
     }
 
     fn rounded(&self, mode: u8, resource: &'static str) -> Result<i64, TextPlanError> {
+        if let Self::Tracked(value) = self {
+            let result = value.value.rounded(mode, resource)?;
+            value.trace.observe(result, |size| {
+                value
+                    .slope
+                    .multiply(&Self::design(1, size, 1024)?)?
+                    .add(&value.constant, resource)?
+                    .rounded(mode, resource)
+            })?;
+            return Ok(result);
+        }
         if let Self::Small(n, d) = self {
             let q = n.div_euclid(*d);
             let r = n.rem_euclid(*d);
@@ -190,6 +244,33 @@ impl ExactRational {
         } else {
             other
         }
+    }
+
+    pub(super) fn multiply(&self, other: &Self) -> Result<Self, TextPlanError> {
+        if let (Self::Small(a, b), Self::Small(c, d)) = (self, other) {
+            if let (Some(n), Some(d)) = (a.checked_mul(*c), b.checked_mul(*d)) {
+                return Self::new(n, d);
+            }
+        }
+        let (a, b) = self.parts();
+        let (c, d) = other.parts();
+        Self::wide(a * c, b * d)
+    }
+    pub(super) fn tracked_design(
+        design: i64,
+        size: f64,
+        em: u16,
+        trace: &Arc<super::font_fit::stability::Stability>,
+    ) -> Result<Self, TextPlanError> {
+        Ok(Self::Tracked(Arc::new(Tracked {
+            value: Self::design(design, size, em)?,
+            slope: Self::design(design, 1.0, em)?,
+            constant: Self::ZERO,
+            trace: Arc::clone(trace),
+        })))
+    }
+    pub(super) fn greater(&self, other: &Self) -> bool {
+        self.cmp(other).is_gt()
     }
 }
 

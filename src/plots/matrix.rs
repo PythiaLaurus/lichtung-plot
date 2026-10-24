@@ -831,6 +831,16 @@ pub(crate) fn measure(
         }
     }
 
+    let mut title_axes =
+        crate::data::source::collect_source(cells.iter_mut().map(|cell| Ok(&mut cell.axes)))?;
+    for side in [layout::AxisSide::Bottom, layout::AxisSide::Left] {
+        layout::PanelAxisPlan::uniform_titles(
+            &mut title_axes,
+            side,
+            &axis_theme,
+            context.fit_scope(),
+        )?;
+    }
     // --- Legend (when hue is active) ---
     let legend_payload = if let Some(legend) = &legend {
         let right_edge = outer.x1;

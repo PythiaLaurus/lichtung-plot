@@ -38,6 +38,9 @@ thread_local! {
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
+    pub(crate) text_size_trial: Option<Arc<crate::layout::text::font_fit::stability::Stability>>,
+    pub(crate) text_height: Option<i64>,
+    pub(crate) text_padding: Option<(crate::RelativeSpacing, crate::RelativeSpacing)>,
     pub(crate) text_layouts: crate::text::roles::TextRoles,
     pub(crate) text_direction: Option<std::sync::Arc<crate::text::orientation::DirectionFrame>>,
     appearance: Theme,
@@ -395,6 +398,14 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    #[cfg(test)]
+    pub(crate) fn text_query_count(&self) -> usize {
+        self.text_queries
+            .lock()
+            .expect("text query cache")
+            .entries
+            .len()
+    }
     pub(crate) fn apply_text_defaults(&mut self, kind: crate::PlotKind) {
         if kind == crate::PlotKind::Heatmap {
             for side in 0..2 {
@@ -476,6 +487,9 @@ impl ResolvedTheme {
         Ok(Self {
             appearance,
             text_layouts: crate::text::roles::TextRoles::default(),
+            text_size_trial: None,
+            text_height: None,
+            text_padding: None,
             text_direction: None,
             canvas_surface_override: None,
             font_environment: Arc::new(OnceLock::new()),
@@ -622,6 +636,7 @@ impl ResolvedTheme {
         let mut width = 1_i64;
         for source in labels {
             let mut input = crate::layout::TextPlanInput {
+                size_trace: None,
                 direction: crate::TextDirection::Auto,
                 source,
                 stack: &appearance.stack,
@@ -765,6 +780,7 @@ impl ResolvedTheme {
         scope: &crate::layout::fit::FitScope,
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let mut input = TextPlanInput {
+            size_trace: self.text_size_trial.clone(),
             direction,
             source,
             stack: appearance.get_stack(),
@@ -790,6 +806,21 @@ impl ResolvedTheme {
             )
             .map_err(|error| Error::Render(format!("{owner} text admission: {error}")))?;
 
+        // Size trials are deliberately not optional-cache entries: failed glyph
+        // arrays and their certificates die with this local candidate.
+        if self.text_size_trial.is_some() {
+            return environment.plan_text(input).map_err(|error| match error {
+                crate::layout::TextPlanError::Fit(miss) => scope
+                    .failure(
+                        crate::layout::fit::FitKind::Text,
+                        format!("{owner} text planning: {miss}"),
+                    )
+                    .into(),
+                error => crate::layout::fit::PlanError::Fatal(Error::Render(format!(
+                    "{owner} text planning: {error}"
+                ))),
+            });
+        }
         let (cached, query_key) = self.cached_text_query(&input, None)?;
 
         let result = match cached {
@@ -1455,6 +1486,7 @@ mod tests {
         owner: &str,
     ) -> TextPlanInput<'a> {
         TextPlanInput {
+            size_trace: None,
             direction: crate::TextDirection::Auto,
             source,
             stack: &appearance.stack,

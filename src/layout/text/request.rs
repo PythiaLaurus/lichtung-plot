@@ -55,7 +55,71 @@ pub(crate) fn measure(
     )
 }
 
+/// A real parent row assignment, never an invented automatic-height constraint.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parent supplies an independent finite height in addition to the original text request"
+)]
+pub(crate) fn measure_height(
+    theme: &ResolvedTheme,
+    source: &str,
+    appearance: TextAppearance<'_>,
+    width: f64,
+    height: f64,
+    alignment: PhysicalTextAlignment,
+    owner: &str,
+    scope: &FitScope,
+) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    let Some(original) = appearance
+        .layout
+        .filter(|request| request.instructions().fit.is_some())
+    else {
+        return measure(theme, source, appearance, width, alignment, owner, scope);
+    };
+    let mut assigned = theme.clone();
+    assigned.text_height = Some(capacity(height)?);
+    Ok(
+        match measure(
+            &assigned, source, appearance, width, alignment, owner, scope,
+        )? {
+            FitOutcome::Measured(mut plan) => {
+                if let Some(input) = plan.payload_mut().fit_input.as_mut() {
+                    std::sync::Arc::make_mut(input).height = Some(capacity(height)?);
+                }
+                FitOutcome::Measured(plan.with_request(Some(original)))
+            }
+            FitOutcome::Miss(miss) => FitOutcome::Miss(miss),
+        },
+    )
+}
+
 pub(crate) fn measure_quanta(
+    theme: &ResolvedTheme,
+    source: &str,
+    appearance: TextAppearance<'_>,
+    width: i64,
+    alignment: PhysicalTextAlignment,
+    owner: &str,
+    scope: &FitScope,
+) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    if !appearance.hidden()
+        && appearance
+            .layout
+            .is_some_and(|request| request.instructions().fit.is_some())
+    {
+        return Ok(
+            match super::font_fit::measure(
+                theme, source, appearance, width, alignment, owner, scope,
+            )? {
+                FitOutcome::Measured(plan) => FitOutcome::Measured(plan.freeze_orientation()?),
+                FitOutcome::Miss(miss) => FitOutcome::Miss(miss),
+            },
+        );
+    }
+    measure_unfitted(theme, source, appearance, width, alignment, owner, scope)
+}
+
+pub(super) fn measure_unfitted(
     theme: &ResolvedTheme,
     source: &str,
     appearance: TextAppearance<'_>,
@@ -111,18 +175,32 @@ pub(super) fn measure_current(
             owner,
         )?));
     }
-    let Some(request) = appearance.layout else {
-        return fit::outcome(theme.plan_text_quanta_scoped(
-            source,
-            appearance.theme,
-            width,
-            alignment,
-            owner,
-            appearance.exact_override,
-            crate::TextDirection::Auto,
-            scope,
-        ));
-    };
+    let request = appearance.layout.unwrap_or(&crate::TextLayout::EMPTY);
+    let mut width = width;
+    let mut assigned_height = theme.text_height;
+    if let Some((horizontal, vertical)) = &theme.text_padding {
+        let padding =
+            |spacing: &crate::RelativeSpacing, size: f64| -> Result<i64, super::TextPlanError> {
+                Ok(spacing
+                    .product(crate::theme::LocalMetric::css_pixels(size)?)
+                    .round(crate::layout::kernel::SpatialRounding::Ceil)?
+                    .quanta())
+            };
+        let h = padding(horizontal, appearance.theme.get_font_size())
+            .map_err(|error| Error::Render(error.to_string()))?;
+        let v = padding(vertical, appearance.theme.get_font_size())
+            .map_err(|error| Error::Render(error.to_string()))?;
+        if let Some(trace) = &theme.text_size_trial {
+            trace
+                .observe(h, |size| padding(horizontal, size))
+                .map_err(|error| Error::Render(error.to_string()))?;
+            trace
+                .observe(v, |size| padding(vertical, size))
+                .map_err(|error| Error::Render(error.to_string()))?;
+        }
+        width = width.saturating_sub(h).max(0);
+        assigned_height = assigned_height.map(|height| height.saturating_sub(v).max(0));
+    }
     if let Some(crate::text::orientation::Orientation::Data(from, to)) = request
         .instructions()
         .orientation
@@ -238,7 +316,7 @@ pub(super) fn measure_current(
         ),
         FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
     };
-    let mut plan = plan.with_request(Some(request));
+    let mut plan = plan.with_request(appearance.layout);
     if let Some(angle) = rotated.filter(|_| wrap) {
         let (sine, cosine) = crate::text::orientation::components(angle);
         let mut previous = maximum;
@@ -262,7 +340,7 @@ pub(super) fn measure_current(
                 scope,
             ))? {
                 FitOutcome::Measured(value) => {
-                    plan = value.with_request(Some(request));
+                    plan = value.with_request(appearance.layout);
                     previous = next;
                 }
                 FitOutcome::Miss(_) => break,
@@ -285,12 +363,19 @@ pub(super) fn measure_current(
     } else {
         plan.width()
     };
+    let physical_height = if let Some(angle) = rotated {
+        let (sine, cosine) = crate::text::orientation::components(angle);
+        plan.width() * sine.abs() + plan.height() * cosine.abs()
+    } else {
+        plan.height()
+    };
     let fits = miss.is_none()
         && physical_width <= assigned as f64 / 1024.0
         && bounds
             .and_then(|bounds| bounds.width)
             .is_none_or(|bound| plan.width() <= bound.get())
         && plan.height_quanta <= height
+        && assigned_height.is_none_or(|height| physical_height <= height as f64 / 1024.0)
         && bounds
             .and_then(|bounds| bounds.lines)
             .is_none_or(|limit| plan.lines.len() <= limit);
