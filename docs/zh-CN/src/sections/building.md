@@ -4,9 +4,15 @@
 [English](../en/index.html#build-docs)
 
 [图库](#gallery)运行公开示例并展示真实产物，不维护另一套绘图实现，也不复用旧图。
-缩略图直接跳到本页[首张图](#first-plot)、[数值策略](#numeric-policies)和
-[文本布局](#text-layout)的代码讲解。页面展示轮廓 SVG；保留文字的下载复用同一个冻结
-Output。目前尚未完成全部 25 个图族的图像目录，完整列表见[图族选择](#families)。
+缩略图直接跳到本页六个科学绘图讲解：[散点](#first-plot)、[分布](#distributions)、
+[热图](#expression-heatmap)、[效应区间](#effect-intervals)、[时间响应](#time-response)及
+[校准](#calibration)。[数值策略](#numeric-policies)和[文本布局](#text-layout)图仍作为
+正文中的技术参考，不再充当首页缩略图。页面展示轮廓 SVG；保留文字的下载复用同一个
+冻结 Output。目前尚未完成全部 25 个图族的图像目录，完整列表见[图族选择](#families)。
+
+每张展示图都有明确的变量、单位或参照，采用统一的示例局部主题及可读的画幅比例。
+合成数据和给定的示意区间均明确标注。应同时检查原尺寸图和图库尺度下的图像；编译
+成功、SVG 有效不代表视觉质量合格，不得为了缩略图好看而裁掉标签或数据。
 
 ### 本地构建
 

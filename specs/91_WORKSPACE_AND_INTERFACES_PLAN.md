@@ -28,7 +28,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Objective | Current status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
-| Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, same-page image-to-code walkthroughs, shared runnable-source includes, zero-argument examples with optional output redirection and three executed gallery workflows. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
+| Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
@@ -318,6 +318,16 @@ Give each case a stable semantic identity and metadata linking its source, outpu
 artifacts, purpose, tutorial anchor and API references. A program can produce
 several figures and a figure can support several tutorial topics. Keep metadata about
 navigation/artifacts, not a new serialized plotting language.
+
+Distinguish scientific showcase cases from technical reference figures in the
+same inventory and execution path. The opening grids feature complete scientific
+questions, not sparse setter/formatting probes. Keep meaningful variables, units,
+references and complete labels. Mark synthetic data and supplied illustrative
+intervals honestly; do not imply real-study provenance or automatic inference.
+The shared appearance lives in the renderer package's example support and uses
+only public APIs, without changing core defaults. Review actual images at full
+size and gallery scale, not just successful builds or syntactically valid SVG.
+Use roomy responsive cards without cropping figure content.
 
 Examples run without arguments, using the current working directory by default;
 an optional directory argument redirects output. Gallery builds choose isolated

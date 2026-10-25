@@ -15,7 +15,7 @@ fn escape(text: &str) -> String {
 
 pub fn cards(cases: &[Case], language: usize) -> Result<String> {
     let mut html = "<div class=\"gallery-grid\">\n".to_owned();
-    for case in cases {
+    for case in cases.iter().filter(|case| case.featured) {
         let title = escape(&case.titles[language]);
         writeln!(html, "<article class=\"gallery-card\"><a class=\"gallery-walkthrough\" href=\"#{}\"><img src=\"gallery/{}/{}\" alt=\"{title}\" loading=\"lazy\"><h3>{title}</h3><p>{}</p></a><p class=\"gallery-resources\"><a href=\"https://docs.rs/lichtung-plot/latest/lichtung_plot/{}\">API</a> · <a href=\"examples/{}.rs\">{}</a></p></article>",
             case.target, case.id, case.artifacts[0], escape(&case.purposes[language]), case.api, case.example,
@@ -26,12 +26,13 @@ pub fn cards(cases: &[Case], language: usize) -> Result<String> {
 }
 
 pub fn landing(cases: &[Case]) -> Result<String> {
-    let mut html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>lichtung-plot — Gallery · 图库</title><link rel=\"stylesheet\" href=\"guide.css\"></head><body class=\"gallery-home\"><main><header><h1>lichtung-plot</h1><p>Scientific figures, runnable examples and code walkthroughs · <span lang=\"zh-CN\">科学图形、可运行示例与代码讲解</span></p><nav><a href=\"en/index.html#gallery\" lang=\"en\">English guide</a> · <a href=\"zh-CN/index.html#gallery\" lang=\"zh-CN\">中文指南</a></nav></header><section id=\"gallery\"><h2>Gallery · 图库</h2><div class=\"gallery-grid\">\n".to_owned();
-    for case in cases {
+    let mut html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>lichtung-plot — Gallery · 图库</title><link rel=\"stylesheet\" href=\"guide.css\"></head><body class=\"gallery-home\"><main><header><p class=\"gallery-eyebrow\">SCIENTIFIC FIGURES · 科学绘图</p><h1>lichtung-plot</h1><p class=\"gallery-intro\">Relationships. Distributions. Uncertainty.<br><span lang=\"zh-CN\">从关系、分布到不确定性，用完整图形理解数据。</span></p><nav><a href=\"en/index.html#gallery\" lang=\"en\">English guide →</a> · <a href=\"zh-CN/index.html#gallery\" lang=\"zh-CN\">中文指南 →</a></nav></header><section id=\"gallery\"><h2>Gallery · 图库</h2><p>Choose a figure, then explore its code. All datasets below are synthetic demonstrations.<br><span lang=\"zh-CN\">选择一张图，进入对应代码讲解。下列数据均为合成演示，不是研究结果。</span></p><div class=\"gallery-grid\">\n".to_owned();
+    for case in cases.iter().filter(|case| case.featured) {
         writeln!(html, "<article class=\"gallery-card\"><img src=\"gallery/{}/{}\" alt=\"{} · {}\" loading=\"lazy\"><div class=\"gallery-caption\"><h3><span lang=\"en\">{}</span><br><span lang=\"zh-CN\">{}</span></h3><p><a href=\"en/index.html#{}\" lang=\"en\">Code walkthrough</a> · <a href=\"zh-CN/index.html#{}\" lang=\"zh-CN\">代码讲解</a></p></div></article>",
             case.id, case.artifacts[0], escape(&case.titles[0]), escape(&case.titles[1]), escape(&case.titles[0]), escape(&case.titles[1]), case.target, case.target)?;
     }
-    writeln!(html, "</div><p>{} current workflows; not yet an image catalog for all 25 plot families.<br><span lang=\"zh-CN\">当前展示 {} 个工作流，尚未完成全部 25 个图族的图像目录。</span></p></section></main></body></html>", cases.len(), cases.len())?;
+    let featured = cases.iter().filter(|case| case.featured).count();
+    writeln!(html, "</div><p>{featured} selected scientific workflows; not yet an image catalog for all 25 plot families. Numeric and text-policy demonstrations live in the guide, not this showcase.<br><span lang=\"zh-CN\">当前精选 {featured} 个科学绘图场景，尚未完成全部 25 个图族的图像目录。数值与文本策略演示保留在指南正文，不作为首页展示图。</span></p></section></main></body></html>")?;
     Ok(html)
 }
 

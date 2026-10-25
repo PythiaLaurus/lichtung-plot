@@ -10,8 +10,8 @@
 
 {{#include generated/gallery.md}}
 
-当前展示三个工作流，尚未完成全部 25 个图族的图像目录。
-[图族目录](#families)列出当前所有构造函数。
+当前精选六个科学绘图场景，使用合成演示数据而非研究结果。每张图回答不同的问题；
+尚未完成全部 25 个图族的图像目录。[图族目录](#families)列出当前所有构造函数。
 
 <a id="contents"></a>
 <nav class="page-toc" aria-label="本页目录">
@@ -19,6 +19,11 @@
 <ul>
 <li><a href="#gallery">图库</a></li>
 <li><a href="#first-plot">首张图讲解</a></li>
+<li><a href="#distributions">分布形状</a></li>
+<li><a href="#expression-heatmap">响应热图</a></li>
+<li><a href="#effect-intervals">效应与区间</a></li>
+<li><a href="#time-response">时间响应</a></li>
+<li><a href="#calibration">校准与残差</a></li>
 <li><a href="#installation">安装</a></li>
 <li><a href="#data">原生数据</a></li>
 <li><a href="#families">图族选择</a></li>
@@ -34,6 +39,8 @@
 </nav>
 
 {{#include sections/installation.md}}
+
+{{#include sections/scientific-gallery.md}}
 
 {{#include sections/data.md}}
 

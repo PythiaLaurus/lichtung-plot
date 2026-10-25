@@ -70,8 +70,11 @@ and execute actual gallery programs rather than claim Markdown fragments ran as
 standalone doctests. New independent snippets/scenarios still count at their real
 semantic layer; imported source does not create another plotting implementation.
 
-docs/gallery.tsv contains stable case/source/artifact/tutorial-anchor/API identities
-and peer-language titles/purposes, not plotting configuration.
+docs/gallery.tsv contains stable case/source/artifact/tutorial-anchor/API identities,
+showcase/reference placement and peer-language titles/purposes, not plotting
+configuration. Both placements execute through the same fresh-artifact path;
+only showcase cases appear in the opening grids. Technical policy probes belong
+in their relevant guide sections rather than substituting for scientific figures.
 docs/book-helper/src/content.rs checks that inventory, peer navigation and source
 anchors, including that each gallery target contains its own figure and code.
 docs/book-helper/src/gallery.rs runs each listed executable once into a fresh
@@ -80,6 +83,16 @@ from the same artifact bytes.
 Its first artifact is complete outlined SVG; preserve-text downloads, where
 supplied, come from the same frozen Output. Do not substitute stale images on
 failure, maintain scene hashes/coordinates, or generate artifacts in build.rs.
+
+Showcase selection spans distinct scientific questions and visual grammars, not
+setter inventories or sparse API stress cases. Figures retain meaningful variable
+names, units/references and complete source/labels. Clearly identify synthetic data
+and supplied illustrative bounds; do not invent study provenance or inferential
+claims. Shared gallery appearance belongs to package-local example support through
+public APIs, not changes to renderer defaults. Inspect actual images at original
+and thumbnail scale for legibility, balance and complete content. SVG validity,
+link checks or compilation alone do not establish presentation quality. Do not
+crop scientific content to make cards attractive.
 
 The nonpublished Rust command at docs/book-helper/src/main.rs stages generated
 grids, assets and source downloads under target/book, then invokes the ordinary

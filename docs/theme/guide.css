@@ -20,15 +20,15 @@
 
 .gallery-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
-    gap: 1.2em;
-    margin-block: 1.5em;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2em;
+    margin-block: 2em;
 }
 
 .gallery-card {
     min-width: 0;
-    border: 1px solid var(--table-border-color, #c9cdd1);
-    border-radius: 0.5em;
+    border: 1px solid var(--table-border-color, #dce1e0);
+    border-radius: 0.3em;
     overflow: hidden;
     background: var(--bg, white);
 }
@@ -38,25 +38,37 @@
     color: inherit;
 }
 
+.gallery-card a:focus-visible {
+    outline: 3px solid #207f83;
+    outline-offset: -3px;
+}
+
+.gallery-card:hover {
+    border-color: #207f83;
+}
+
 .gallery-card img {
     display: block;
     width: 100%;
-    height: 15em;
+    aspect-ratio: 3 / 2;
+    height: auto;
     object-fit: contain;
     background: white;
 }
 
 .gallery-card h3,
 .gallery-card p {
-    margin: 0.8em 1em;
+    margin: 0.8em 1.3em;
 }
 
 .gallery-card h3 {
-    font-size: 1.05em;
+    font-size: 1.1em;
+    line-height: 1.5;
 }
 
 .gallery-resources {
     font-size: 0.9em;
+    padding-bottom: 0.8em;
 }
 
 .content main > p > img {
@@ -91,21 +103,61 @@
 .gallery-home {
     margin: 0;
     font: 1em/1.5 system-ui, sans-serif;
-    color: #20272e;
-    background: #f7f8fa;
+    color: #263c46;
+    background: #f5f5f1;
 }
 
 .gallery-home main {
     max-width: 72em;
-    margin: 1.5em auto;
+    margin: 0 auto;
     padding: 1.5em;
 }
 
-.gallery-home a {
-    color: #145fa1;
+.gallery-home header {
+    padding-block: 0.5em 1.2em;
+    border-bottom: 1px solid #dce1e0;
 }
 
-@media (min-width: 90em) {
+.gallery-eyebrow {
+    color: #207f83;
+    font-size: 0.8em;
+    letter-spacing: 0.12em;
+    margin: 0;
+}
+
+.gallery-home h1 {
+    font-size: clamp(2.5em, 5vw, 3.5em);
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+    margin-block: 0.2em;
+}
+
+.gallery-intro {
+    font-size: 1.05em;
+    line-height: 1.6;
+    color: #63737a;
+}
+
+.gallery-home section {
+    padding-top: 1em;
+}
+
+.gallery-home h2 {
+    font-size: 1.5em;
+    margin-block: 0.7em 0.3em;
+}
+
+.gallery-home a {
+    color: #17666b;
+}
+
+@media (max-width: 55em) {
+    .gallery-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 100em) {
     .content main {
         margin-inline-end: 17em;
     }

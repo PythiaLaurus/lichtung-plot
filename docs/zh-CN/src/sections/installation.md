@@ -19,24 +19,32 @@ sans-serif。选定字体栈必须真正覆盖可见文字，详见[输出与字
 <a id="first-plot"></a>
 ### 代码讲解：从数值到首张图
 
-![从自有数值构造的散点图](gallery/first-plot/quick_start.svg)
+![不同底物浓度下的合成酶反应数据](gallery/first-plot/quick_start.svg)
 
-先准备长度相同的两个数值系列。完整示例在内存里构造确定性样本，运行时不下载数据集：
+先准备逐行对齐的底物浓度、反应速率和酶身份。两种响应使用明确的示意饱和方程与固定
+的正乘性扰动，不是实验测量，也不是拟合得到的动力学。完整示例在内存里生成这些数值，
+不下载数据集：
 
 ```rust
 {{#include ../../../../crates/lichtung-plot/examples/01_quick_start.rs:scatter-values}}
 ```
 
-将每个系列包装成具名 `NumericValues`，再传入 `Plot::scatter`。显式 Nature 主题只改变
-外观，不改变科学数据。`base_path` 是当前工作目录下的 `quick_start`；`.svg` 补上 SVG
-后缀，返回冻结的 Output，而不是一个可变后端：
+将两个数值系列包装成具名 `NumericValues`，传入 `Plot::scatter`；`hue` 单独保留酶身份，
+不改变坐标。共用图库主题只改变外观，不改变科学数据。`base_path` 是当前工作目录下
+的 `quick_start`；`.svg` 补上 SVG 后缀，返回冻结的 Output，而不是一个可变后端：
 
 ```rust
 {{#include ../../../../crates/lichtung-plot/examples/01_quick_start.rs:scatter-publication}}
 ```
 
-这里没有指定固定尺寸，绘图器根据完整内容推导尺寸。可以无参数运行精确的示例源码，
-无需自己拼接摘录。从 workspace 根目录运行：
+示例明确请求 840 × 560 CSS 像素，让完整标签在图库中仍然可读。这是示例自己的发布
+选择，不是渲染器默认值。共用主题同样通过普通公开 API 配置：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/support/gallery.rs:gallery-theme}}
+```
+
+可以无参数运行精确的示例源码，无需自己拼接摘录。从 workspace 根目录运行：
 
 ```sh
 cargo run --locked --offline -p lichtung-plot --example 01_quick_start
@@ -51,5 +59,6 @@ cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 [原生数据](#data)解释构造函数所接收的数据。
 
 [完整源码](examples/01_quick_start.rs) · [共享输出辅助代码](examples/support/output.rs) ·
+[图库主题](examples/support/gallery.rs) · [合成输入](examples/support/synthetic.rs) ·
 [原尺寸 SVG](gallery/first-plot/quick_start.svg) ·
 [Plot API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Plot.html) · [返回图库](#gallery)

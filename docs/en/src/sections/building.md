@@ -5,10 +5,19 @@
 
 The [gallery](#gallery) runs public examples and displays their real outputs, not
 another plotting implementation or reused stale images. Thumbnails jump straight
-to the [first plot](#first-plot), [numeric policies](#numeric-policies) and
-[text layout](#text-layout) walkthroughs on this page. Outlined SVG is the display
-form; preserve-text downloads replay the same frozen Output. This is not yet an
-image catalog for all 25 families; see [family selection](#families).
+to six scientific walkthroughs: [scatter](#first-plot), [distributions](#distributions),
+[heatmap](#expression-heatmap), [effect intervals](#effect-intervals),
+[time response](#time-response) and [calibration](#calibration). The
+[numeric policies](#numeric-policies) and [text layout](#text-layout) figures remain
+technical references in the guide, not showcase thumbnails. Outlined SVG is the
+display form; preserve-text downloads replay the same frozen Output. This is not
+yet an image catalog for all 25 families; see [family selection](#families).
+
+Each showcase has meaningful variables, units or an explicit reference, with a
+common example-local theme and readable figure proportions. Synthetic data and
+supplied illustrative intervals are identified as such. Inspect the actual figures
+at full size and gallery scale; successful compilation and valid SVG alone do not
+establish visual quality. Never crop away labels or data to improve a thumbnail.
 
 ### Build locally
 

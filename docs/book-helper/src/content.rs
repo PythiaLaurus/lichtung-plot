@@ -10,6 +10,7 @@ pub struct Case {
     pub artifacts: Vec<String>,
     pub target: String,
     pub api: String,
+    pub featured: bool,
     pub titles: [String; 2],
     pub purposes: [String; 2],
 }
@@ -39,12 +40,17 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
     {
         let fields = line.split('\t').collect::<Vec<_>>();
-        let [id, example, artifacts, target, api, title_en, title_zh, purpose_en, purpose_zh] =
+        let [id, example, artifacts, target, api, placement, title_en, title_zh, purpose_en, purpose_zh] =
             fields.as_slice()
         else {
             return Err(fail(
-                "gallery.tsv requires nine nonempty tab-separated columns",
+                "gallery.tsv requires ten nonempty tab-separated columns",
             ));
+        };
+        let featured = match *placement {
+            "showcase" => true,
+            "reference" => false,
+            _ => return Err(fail(format!("unknown gallery placement: {placement}"))),
         };
         if fields.iter().any(|field| field.trim().is_empty())
             || !identifier(id)
@@ -69,12 +75,13 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
             artifacts,
             target: (*target).into(),
             api: (*api).into(),
+            featured,
             titles: [(*title_en).into(), (*title_zh).into()],
             purposes: [(*purpose_en).into(), (*purpose_zh).into()],
         });
     }
-    if cases.is_empty() {
-        return Err(fail("the gallery must have executable cases"));
+    if !cases.iter().any(|case| case.featured) {
+        return Err(fail("the gallery must have executable showcase cases"));
     }
     Ok(cases)
 }
@@ -350,7 +357,7 @@ pub fn check(root: &Path) -> Result<Vec<Case>> {
             "peer guides must cover the same tutorial anchors, figures and source excerpts",
         ));
     }
-    println!("Checked peer single-page guides: {} shared anchors and {} image-to-code walkthroughs. Prose equivalence still requires review.", english.order.len(), cases.len());
+    println!("Checked peer single-page guides: {} shared anchors, {} showcase walkthroughs and {} reference workflows. Prose equivalence still requires review.", english.order.len(), cases.iter().filter(|case| case.featured).count(), cases.iter().filter(|case| !case.featured).count());
     Ok(cases)
 }
 

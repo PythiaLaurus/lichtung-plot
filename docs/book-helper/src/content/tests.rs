@@ -1,6 +1,6 @@
 use super::{anchor, catalog, navigation, rendered_anchors};
 
-const CASE: &str = "first\t01_quick_start\tquick_start.svg\tfirst-plot\tstruct.Plot.html\tFirst plot\t首张图\tOwned values\t自有数据";
+const CASE: &str = "first\t01_quick_start\tquick_start.svg\tfirst-plot\tstruct.Plot.html\tshowcase\tFirst plot\t首张图\tOwned values\t自有数据";
 
 #[test]
 fn catalog_refuses_duplicate_execution_identities() {

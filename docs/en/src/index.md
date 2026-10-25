@@ -10,8 +10,9 @@ to its code walkthrough below; the main tutorial stays on this page.
 
 {{#include generated/gallery.md}}
 
-These are three current workflows, not yet an image catalog for all 25 families.
-The [family catalog](#families) lists every current constructor.
+Six selected scientific workflows, using synthetic demonstrations rather than
+research results. Each figure asks a different question; this is not yet an image
+catalog for all 25 families. The [family catalog](#families) lists every constructor.
 
 <a id="contents"></a>
 <nav class="page-toc" aria-label="On this page">
@@ -19,6 +20,11 @@ The [family catalog](#families) lists every current constructor.
 <ul>
 <li><a href="#gallery">Gallery</a></li>
 <li><a href="#first-plot">First plot walkthrough</a></li>
+<li><a href="#distributions">Distribution shapes</a></li>
+<li><a href="#expression-heatmap">Response heatmap</a></li>
+<li><a href="#effect-intervals">Effects and intervals</a></li>
+<li><a href="#time-response">Response over time</a></li>
+<li><a href="#calibration">Calibration and residuals</a></li>
 <li><a href="#installation">Installation</a></li>
 <li><a href="#data">Native data</a></li>
 <li><a href="#families">Plot families</a></li>
@@ -34,6 +40,8 @@ The [family catalog](#families) lists every current constructor.
 </nav>
 
 {{#include sections/installation.md}}
+
+{{#include sections/scientific-gallery.md}}
 
 {{#include sections/data.md}}
 
