@@ -51,4 +51,5 @@ right tracks and Matrix trailing track place their guides only once.
 
 See [data alpha](public-data-alpha.md), the
 [guide specification](../specs/08_GUIDE_SYSTEM.md) and
-`examples/06_legend_sections.rs` for the corresponding API use.
+[`06_legend_sections.rs`](../crates/lichtung-plot/examples/06_legend_sections.rs)
+for the corresponding API use.

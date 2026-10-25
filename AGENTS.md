@@ -5,17 +5,32 @@
 Treat `specs/` as the architectural source of truth. Prefer root `Justfile`
 recipes over ad hoc command sequences.
 
+## Workspace
+
+The root Cargo.toml is a virtual workspace. The standalone renderer lives in
+`crates/lichtung-plot/` and is the default member. Keep source, tests, fixtures,
+examples, package README and license texts together in that member. Keep one
+root Cargo.lock and pinned toolchain; share dependency versions and lints through
+the workspace manifest. Add members only with working consumers, not empty shells.
+
+Keep specifications at the workspace root, divided by responsibility; member
+documentation references shared contracts rather than duplicating them. Root
+verification recipes explicitly select the workspace, not only default members.
+
 ## Standalone Boundary
 
-`lichtung-plot` is a standalone scientific renderer. It must not depend on,
-import, or dispatch into any other `lichtung-*` crate. It owns its errors,
+The `lichtung-plot` core crate is a standalone scientific renderer. It must not
+depend on, import, or dispatch into any other `lichtung-*` crate. It owns its errors,
 visual annotation types, rendering lifecycle, output contracts, and font
-policy.
+policy. Adapters and bindings depend on its public API, never the reverse.
+Core-only consumers must not compile adapter or binding dependencies.
 
 Do not add network access, asset provisioning.
 
-Do not add Python files or a `tools/` directory. Keep development and test
-support within the existing Rust project structure.
+Python package code, stubs, tests and examples belong only in `bindings/python/`
+when that binding is implemented. Do not add Python-based renderer/development
+support elsewhere or a `tools/` directory. Keep Rust development and test support
+within workspace members.
 
 ## Current Contract
 
@@ -28,7 +43,9 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 
 ## Testing
 
-Keep the test suite within these size limits:
+Keep the whole workspace's test suite within these shared size limits, including
+bindings and automated documentation/gallery scenarios; new members do not gain
+separate allowances:
 
 | Layer | Reasonable scale | Upper limit |
 | --- | --- | --- |
@@ -68,7 +85,7 @@ independently justified numerical rounding, containment, source completeness and
 same-operation replay equality remain meaningful checks. Do not repin whole-scene
 goldens to make a test pass; see `specs/90_DEVELOPMENT.md`.
 
-Compiler validation must use `cargo clippy --locked --offline --all-targets --
+Compiler validation must use `cargo clippy --locked --offline --workspace --all-targets --
 -D warnings` (or `just lint`), never `cargo check`. Pass this requirement to every
 subagent; a successful non-linting build is not a substitute for strict Clippy.
 

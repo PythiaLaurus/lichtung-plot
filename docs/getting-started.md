@@ -22,7 +22,8 @@ cell is occupied, including nonanchors, so overlapping Plot/TextPanel insertions
 fail. Range groups refer only to anchor coordinates. Shared categorical row bands
 require matching vertical footprints; the unequal-height example uses the default
 EveryPlot labels. Row titles cannot cut through a span. Parent-assigned geometry
-overrides standalone child size requests. See `examples/11_canvas_spans.rs`.
+overrides standalone child size requests. See
+[`11_canvas_spans.rs`](../crates/lichtung-plot/examples/11_canvas_spans.rs).
 
 `lichtung-plot` renders owned immutable display values. Publication SVG,
 preserve-text SVG, and PNG output are unconditional crate capabilities. Callers

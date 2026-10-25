@@ -64,8 +64,9 @@ Every selected finite exponent is supported mathematically, including original-
 domain midpoints beyond integral-seed clamps. Scientific notation can represent
 powers outside binary64 physical-value range. Representation/allocation refusal
 is distinct from the mathematical definition and never produces approximate text.
-Source owners are `src/numeric/power.rs`, `src/numeric/power/certified.rs` and the
-common coefficient emitter in `src/numeric/decimal.rs`.
+Source owners are `crates/lichtung-plot/src/numeric/power.rs`,
+`crates/lichtung-plot/src/numeric/power/certified.rs` and the
+common coefficient emitter in `crates/lichtung-plot/src/numeric/decimal.rs`.
 
 ## Exact Reduction And Decimal Quantum
 
@@ -310,10 +311,10 @@ No cache hit changes mathematical acceptance or bypasses real failure.
 
 ## Retained Geometric Operands
 
-`src/numeric/lattice.rs` retains positive represented anchor a, positive represented
+`crates/lichtung-plot/src/numeric/lattice.rs` retains positive represented anchor a, positive represented
 ratio r!=1 and signed arbitrary-size integer k. Its exact operand V=a*r^k is rational;
 the callback borrows the canonical signed decimal index rather than an approximate
-logarithm or physical pow. `src/numeric/logarithm.rs` encloses
+logarithm or physical pow. `crates/lichtung-plot/src/numeric/logarithm.rs` encloses
 `log10(a)+k*log10(r)+log10(abs(effective_factor))`, keeping decimal factor exponents
 symbolic. A negative index reverses ratio-bound endpoints before multiplication.
 
@@ -349,7 +350,7 @@ binary midpoint remains.
 
 ### Geometric Index Bounds
 
-`src/numeric/lattice/generation.rs` uses exact preimages of the represented domain
+`crates/lichtung-plot/src/numeric/lattice/generation.rs` uses exact preimages of the represented domain
 endpoints: rational binary midpoint cells on Linear, dyadic scale midpoint cells on
 Log10, inclusive only for even endpoint significands. Let d be +1 for r>1, -1
 otherwise; internal j increases with value and original k=d*j. Enclose
@@ -368,7 +369,7 @@ prefix and exact cached bounds for both operand kinds.
 
 ## Independent Numerical Verification
 
-The independent Rust owner `src/numeric/power/tests/oracle.rs` must not call
+The independent Rust owner `crates/lichtung-plot/src/numeric/power/tests/oracle.rs` must not call
 production constants, exponential series, range reduction, endpoint quantizer,
 formatter or acceptance test. Decode exponent bits independently and verify the
 exact reduction identity/bounds. Shared pinned integer arithmetic is permitted.

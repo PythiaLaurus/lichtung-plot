@@ -19,9 +19,10 @@ defined by [rendering](02_RENDERING_CONTRACT.md), local appearance metrics by
 [numbers](06_NUMERIC_PRESENTATION.md) and explanatory flow by
 [guides](08_GUIDE_SYSTEM.md).
 
-Private owners are `src/layout/kernel.rs`, `src/layout/kernel/tracks.rs`,
-`src/layout/kernel/feedback.rs`, `src/layout/interior.rs`,
-`src/decorations/plan.rs`, `src/canvas.rs` and `src/orchestrator/facets.rs`.
+Private owners are `crates/lichtung-plot/src/layout/kernel.rs`,
+`crates/lichtung-plot/src/layout/kernel/tracks.rs`, `crates/lichtung-plot/src/layout/kernel/feedback.rs`,
+`crates/lichtung-plot/src/layout/interior.rs`, `crates/lichtung-plot/src/decorations/plan.rs`,
+`crates/lichtung-plot/src/canvas.rs` and `crates/lichtung-plot/src/orchestrator/facets.rs`.
 
 ### Constraints And Results
 
@@ -94,7 +95,7 @@ is normalized bits. Computation uses nearest-even without FMA substitution.
 Strings compare UTF-8 bytes, integers numerically, None before Some, sequences
 elementwise then length. Pointers/hash iteration never select layouts.
 
-Renderer log10 in `src/numeric.rs` is correctly rounded binary64 nearest-even:
+Renderer log10 in `crates/lichtung-plot/src/numeric.rs` is correctly rounded binary64 nearest-even:
 exact-integer outward atanh intervals start at 128 fractional bits and double until
 both endpoints round identically. Exact powers10^0..10^22/exceptional inputs are
 handled explicitly; rationality proves remaining termination. decimal_power uses
@@ -232,7 +233,7 @@ produce b+1 paragraphs including leading/interior/trailing empties, each with at
 least one line; CRLF is one break. GL/WJ behavior remains intact.
 
 All free-form display owners enter this engine through the shared source validator
-in `src/text.rs`, including constructor-validated TextPanel/headers/panel notes and
+in `crates/lichtung-plot/src/text.rs`, including constructor-validated TextPanel/headers/panel notes and
 preflight-validated Plot/Canvas prose. Leading/trailing whitespace, blank lines
 and explicitly empty text survive intrinsic analysis, font census, measurement
 and frozen capture. Empty axis titles are present text; prepared/layout axes use
@@ -404,9 +405,9 @@ wrapping/fallback/shaping. Source accessibility metadata must not paint text twi
 
 ### Explicit Text Adaptation
 
-`src/layout/text/request.rs`, `src/layout/text/placement.rs`,
-`src/layout/text/ellipsis.rs`, `src/layout/text/visibility.rs` and
-`src/layout/text/font_fit.rs` consume one TextLayout through the common text engine.
+`crates/lichtung-plot/src/layout/text/request.rs`, `crates/lichtung-plot/src/layout/text/placement.rs`,
+`crates/lichtung-plot/src/layout/text/ellipsis.rs`, `crates/lichtung-plot/src/layout/text/visibility.rs` and
+`crates/lichtung-plot/src/layout/text/font_fit.rs` consume one TextLayout through the common text engine.
 Natural preference uses complete content at preferred appearance size. Hard
 requirements relax only through an explicitly admitted fit/overflow/visibility
 policy, never because a preferred-size measurement failed.
@@ -695,7 +696,7 @@ windows alone grant no layout-overflow permission.
 ## Topology, Feedback And Reuse
 
 Structural addresses are closed `(role_discriminant,slot_index)` sequences in
-`src/layout/kernel.rs`. Preserve canonical preorder and stable optional slots.
+`crates/lichtung-plot/src/layout/kernel.rs`. Preserve canonical preorder and stable optional slots.
 Inline tick vectors, flow rows/columns, glyph/mark records, packing offsets and
 track values do not create anonymous measured calls or duplicate children.
 

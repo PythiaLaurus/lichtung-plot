@@ -2,23 +2,36 @@
 
 ## Status And Authority
 
-This is an implementation plan, not evidence that the planned components exist.
+This is an implementation plan with the delivered workspace baseline identified
+below; it is not evidence that the remaining planned components exist.
 Current behavior remains defined by [architecture](01_ARCHITECTURE.md),
 [rendering](02_RENDERING_CONTRACT.md), [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md),
 [layout](05_LAYOUT_SYSTEM.md), [numbers](06_NUMERIC_PRESENTATION.md) and
 [development](90_DEVELOPMENT.md). Update those contracts with working behavior,
 not in anticipation of it.
 
-The user has requested a workspace migration, new Polars/ndarray adapters, a
-complete Python interface, and replacement of the loose guides with a serious
-Book-style documentation system and gallery. This plan does not authorize
-implementation, publishing packages, deploying a site, pushing Git refs or
-rewriting history. The repository is still a standalone single-package renderer.
+The scope covers a workspace migration, new Polars/ndarray adapters, a complete
+Python interface, and replacement of the loose guides with a serious Book-style
+documentation system and gallery. The authorized mechanical migration places the
+standalone renderer in a virtual workspace as its only member; adapters, bindings
+and Books remain planned. This document does not authorize implementation of the
+remaining components, package publication, site deployment, Git push or history
+rewriting.
 
 Python object mutation/copy semantics are deliberately unresolved. Record the
 settled scope first; analyze that choice separately and, if source inspection
 cannot settle it, resolve it through analysis and measurements at the beginning
 of the Python-binding work. It must not block the workspace, adapters or Book.
+
+### Delivery Status
+
+| Objective | Current status |
+| --- | --- |
+| Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
+| Peer-language Book/example/gallery foundation | Not implemented; independent of the Python lifecycle choice. |
+| ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
+| Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
+| Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
 ## Confirmed Scope And Constraints
 
@@ -53,7 +66,7 @@ rust-toolchain.toml
 Justfile
 AGENTS.md
 crates/
-  lichtung-plot/                    # existing src/, tests/, examples/
+  lichtung-plot/                    # renderer src/, tests/, examples/
   lichtung-plot-polars/             # new Rust adapter and its public examples
   lichtung-plot-ndarray/            # new Rust adapter and its public examples
 bindings/
@@ -89,11 +102,13 @@ internals or introduce another general data model to make them possible. Interna
 publishable dependencies need both a local path and a release version; an
 in-checkout build is not proof that an independently unpacked package works.
 
-### Repository Policy Migration
+### Repository Policy And Remaining Migration Rules
 
-The current AGENTS/development rules prohibit workspace inheritance/path
-dependencies and Python files. Change those rules deliberately with the actual
-migration, not in this planning-only change:
+The root AGENTS/development rules now admit workspace inheritance and deliberate
+inter-member dependencies while preserving core independence. Specifications
+remain in one workspace-root specs directory, divided by responsibility rather
+than duplicated under members. The mechanical move does not create adapter or
+binding shells. Remaining additions must keep these boundaries:
 
 - Permit workspace-managed dependencies and local member dependencies while
   preserving core independence and package verification.
@@ -102,8 +117,8 @@ migration, not in this planning-only change:
   throughout the repository.
 - Retain no-network/no-asset-provisioning behavior, installed-font policy, modern
   Rust module layout and the single-current-API rule.
-- Migrate formal source-owner paths and repository consumers with the real file
-  move. Do not leave old paths or introduce compatibility packages.
+- Keep formal source-owner paths and repository consumers synchronized with real
+  member paths. Do not leave old paths or introduce compatibility packages.
 - Keep documentation/generation tooling out of production dependency paths.
 
 Audit package-relative fixture/includes, `CARGO_MANIFEST_DIR`, examples, licenses,
@@ -386,11 +401,11 @@ The current native implementation provides the following concrete evidence:
 
 | Owner | Established fact | Consequence, not a timing claim |
 | --- | --- | --- |
-| `src/builder.rs`, `src/values.rs` | Plot input and native numeric/category payloads use Arc; Theme attachments are shared too. | A new configuration need not copy all observation buffers or repeat foreign-input conversion. |
-| `src/builder.rs`, `src/text.rs`, `src/layout/panel.rs` | Plot's derived Clone also clones owned text, annotation/layer vectors and exact tick vectors/strings. | Whole-Plot cloning is not constant-cost in total configuration size, even with shared scientific data. |
-| `src/canvas.rs`, `src/canvas/placement.rs` | Public Canvas is not Clone; its private placements own grid-sized vectors and boxed Plot payloads. | A reusable Python Canvas needs an explicit ownership design; blindly copying placements for every insertion can have quadratic cumulative cost when panel count grows with grid size. |
-| `src/labels.rs` | Alias maps already use Arc::make_mut. | Existing copy-on-write is useful, but repeated edits to shared maps can still copy the map; Arc alone is not a complexity guarantee. |
-| `src/output.rs` | Output is not Clone and its fallible publication methods consume self. | Both configuration models must address reusable Python Output handles and publication failure without rerendering the frozen scene. |
+| `crates/lichtung-plot/src/builder.rs`, `crates/lichtung-plot/src/values.rs` | Plot input and native numeric/category payloads use Arc; Theme attachments are shared too. | A new configuration need not copy all observation buffers or repeat foreign-input conversion. |
+| `crates/lichtung-plot/src/builder.rs`, `crates/lichtung-plot/src/text.rs`, `crates/lichtung-plot/src/layout/panel.rs` | Plot's derived Clone also clones owned text, annotation/layer vectors and exact tick vectors/strings. | Whole-Plot cloning is not constant-cost in total configuration size, even with shared scientific data. |
+| `crates/lichtung-plot/src/canvas.rs`, `crates/lichtung-plot/src/canvas/placement.rs` | Public Canvas is not Clone; its private placements own grid-sized vectors and boxed Plot payloads. | A reusable Python Canvas needs an explicit ownership design; blindly copying placements for every insertion can have quadratic cumulative cost when panel count grows with grid size. |
+| `crates/lichtung-plot/src/labels.rs` | Alias maps already use Arc::make_mut. | Existing copy-on-write is useful, but repeated edits to shared maps can still copy the map; Arc alone is not a complexity guarantee. |
+| `crates/lichtung-plot/src/output.rs` | Output is not Clone and its fallible publication methods consume self. | Both configuration models must address reusable Python Output handles and publication failure without rerendering the frozen scene. |
 
 Public setters commonly consume `self`; some, such as Canvas placement, return
 `Result<Self>`. On Err the caller does not receive the original Rust owner back.

@@ -20,7 +20,7 @@ Plot consumes owned immutable native values. Semantic constructors return exact
 configuration at compile time. Data-dependent checks validate aligned lengths,
 finite values, categorical identities, source provenance, bounds, facets, actual
 axis kinds and representable geometry before backend begin. Standalone and Canvas
-children use the same canonical validator in `src/orchestrator/validation.rs`;
+children use the same canonical validator in `crates/lichtung-plot/src/orchestrator/validation.rs`;
 composition adds restrictions and never weakens Plot invariants.
 
 Required constructor channels have one owner. Trajectory, LinePath, Interaction
@@ -179,7 +179,7 @@ statistics, domains, source membership or categorical identity.
 
 ### Display Text
 
-Free-form display text shares one source-syntax validator in `src/text.rs`.
+Free-form display text shares one source-syntax validator in `crates/lichtung-plot/src/text.rs`.
 Plot/Canvas prose, x/y titles, TextPanel title/body, Canvas headers/row titles,
 panel notes, point labels, guide display text and aliases preserve caller bytes,
 whitespace and mandatory breaks. LF, CRLF and the engine's mandatory separators
@@ -483,5 +483,5 @@ no backup/rollback window and removes owned staging residue. Windows publication
 cleanup uses the exclusive staging handle. POSIX rename/unlink remain pathname
 syscalls: their exact-source claim assumes no external namespace mutation between
 final identity check and syscall. Callers exclude independent concurrent output
-namespace mutation. `src/orchestrator/artifacts.rs` and `src/output.rs` own these
+namespace mutation. `crates/lichtung-plot/src/orchestrator/artifacts.rs` and `crates/lichtung-plot/src/output.rs` own these
 publication/conversion boundaries.

@@ -1,0 +1,94 @@
+[package]
+name = "lichtung-plot"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Strongly typed scientific plotting with deterministic SVG and PNG output"
+documentation = "https://docs.rs/lichtung-plot"
+readme = "README.md"
+publish = false
+autotests = false
+
+[dependencies]
+fontdb.workspace = true
+num-bigint.workspace = true
+rustybuzz.workspace = true
+sha2.workspace = true
+statrs.workspace = true
+thiserror.workspace = true
+ttf-parser.workspace = true
+unicode-bidi.workspace = true
+unicode-properties.workspace = true
+unicode-script.workspace = true
+unicode-segmentation.workspace = true
+png.workspace = true
+resvg.workspace = true
+tempfile.workspace = true
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
+fontconfig-parser.workspace = true
+roxmltree.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+[dev-dependencies]
+# Assert the actual tables shared with rustybuzz, not only its package version.
+unicode-ccc.workspace = true
+unicode-bidi-mirroring.workspace = true
+
+[[test]]
+name = "annotations"
+path = "tests/annotations/suite.rs"
+
+[[test]]
+name = "categorical"
+path = "tests/categorical/suite.rs"
+
+[[test]]
+name = "composition"
+path = "tests/composition/suite.rs"
+
+[[test]]
+name = "distributions"
+path = "tests/distributions/suite.rs"
+
+[[test]]
+name = "estimates"
+path = "tests/estimates/suite.rs"
+
+[[test]]
+name = "heatmap"
+path = "tests/heatmap/suite.rs"
+
+[[test]]
+name = "interactions"
+path = "tests/interactions/suite.rs"
+
+[[test]]
+name = "layout"
+path = "tests/layout/suite.rs"
+
+[[test]]
+name = "lines"
+path = "tests/lines/suite.rs"
+
+[[test]]
+name = "marginal-matrix"
+path = "tests/marginal_matrix/suite.rs"
+
+[[test]]
+name = "output"
+path = "tests/output/suite.rs"
+
+[[test]]
+name = "rendering"
+path = "tests/rendering/suite.rs"
+
+[[test]]
+name = "statistics"
+path = "tests/statistics/suite.rs"
+
+[lints]
+workspace = true

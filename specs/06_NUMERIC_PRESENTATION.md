@@ -16,14 +16,17 @@ categories, guide identities, significance, PointLayer/panel/null-row strings an
 Waterfall names are never parsed as numeric data. Data-alpha mapping remains a
 separate [paint contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
 
-Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
-`src/numeric/profiles.rs`, `src/numeric/set.rs`, `src/numeric/inputs.rs`,
-`src/numeric/locale.rs`, `src/numeric/locale/data.rs`, `src/numeric/emission.rs`,
-`src/numeric/prefixes.rs`, `src/numeric/prefixes/selection.rs`, `src/numeric/specifier.rs`,
-`src/numeric/context.rs`, `src/numeric/function.rs`, `src/numeric/table.rs`,
-`src/numeric/source.rs`, `src/numeric/unit.rs`,
-`src/spec/ticks.rs`, `src/layout/panel/sources.rs` and the shared
-`src/layout/panel/sources/{count,interval,geometric}.rs` position owners. Mathematical power
+Source owners are `crates/lichtung-plot/src/numeric/format.rs`,
+`crates/lichtung-plot/src/numeric/decimal.rs`, `crates/lichtung-plot/src/numeric/profiles.rs`,
+`crates/lichtung-plot/src/numeric/set.rs`, `crates/lichtung-plot/src/numeric/inputs.rs`,
+`crates/lichtung-plot/src/numeric/locale.rs`, `crates/lichtung-plot/src/numeric/locale/data.rs`,
+`crates/lichtung-plot/src/numeric/emission.rs`, `crates/lichtung-plot/src/numeric/prefixes.rs`,
+`crates/lichtung-plot/src/numeric/prefixes/selection.rs`, `crates/lichtung-plot/src/numeric/specifier.rs`,
+`crates/lichtung-plot/src/numeric/context.rs`, `crates/lichtung-plot/src/numeric/function.rs`,
+`crates/lichtung-plot/src/numeric/table.rs`, `crates/lichtung-plot/src/numeric/source.rs`,
+`crates/lichtung-plot/src/numeric/unit.rs`, `crates/lichtung-plot/src/spec/ticks.rs`,
+`crates/lichtung-plot/src/layout/panel/sources.rs` and the shared
+`crates/lichtung-plot/src/layout/panel/sources/{count,interval,geometric}.rs` position owners. Mathematical power
 display is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
 
@@ -450,7 +453,7 @@ contradiction. Consumers explicitly borrow/clone the complete policy through axi
 semantics, feedback, facets and composed child/height dependencies.
 
 x_tick_generation/y_tick_generation use the existing 17 NumericX/15 NumericY gates
-in `src/kind.rs`. Each replaces that axis's whole instruction. Any/Heatmap/Matrix
+in `crates/lichtung-plot/src/kind.rs`. Each replaces that axis's whole instruction. Any/Heatmap/Matrix
 gain no attachment. Actual categorical axes reject non-Automatic choices before
 fonts; interval scale-kind mismatch rejects. Counts do not change scientific
 limits, transforms, format or nice-range policy.
@@ -596,7 +599,7 @@ maximum checks the in-domain count before first-party copies/text. Empty output
 contributes no generated text/grid/explanation. Function/coordinate/storage errors
 end the operation; a complete nonfitting source cannot coarsen or substitute a midpoint.
 
-The separate operation-local position table in src/spec/ticks/function.rs keys the
+The separate operation-local position table in crates/lichtung-plot/src/spec/ticks/function.rs keys the
 complete policy/handle, semantic owner, axis, resolved domain/raw bounds/provenance
 and consumed span bits. Repeated queries reuse the owned result independently of
 optional layout caches and unrelated orthogonal geometry. Intrinsic numeric probes

@@ -2,17 +2,19 @@
 
 ## Toolchain, Dependencies And Commands
 
-Use pinned Rust 1.96 with rustfmt/Clippy and tracked Cargo.lock. Prefer root
-Justfile recipes; commands are locked/offline:
+Use pinned Rust 1.96 with rustfmt/Clippy and one tracked root Cargo.lock. The root
+Cargo.toml is a virtual workspace; crates/lichtung-plot is its default member.
+Prefer root Justfile recipes; commands are locked/offline and explicitly select
+the workspace rather than relying on default members:
 
 | Recipe | Contract |
 | --- | --- |
 | just fmt / just fmt-check | Format sources / read-only formatting check |
-| just lint | cargo clippy --locked --offline --all-targets -- -D warnings |
-| just test | All library/integration/example targets, excluding doctests |
-| just test-doc | Execute public examples and compile-fail API boundaries |
-| just docs | Build API documentation with warnings denied |
-| just package | Verify Cargo's independently unpacked distributable package |
+| just lint | cargo clippy --locked --offline --workspace --all-targets -- -D warnings |
+| just test | All members' library/integration/example targets, excluding doctests |
+| just test-doc | Execute all members' public examples and compile-fail API boundaries |
+| just docs | Build all members' API documentation with warnings denied |
+| just package | Verify every workspace package from Cargo's independently unpacked staging directories |
 | just verify | Complete read-only format/lint/tests/doctests/docs/package gate |
 
 Compiler validation must use strict Clippy, never cargo check or a nonlinting
@@ -20,12 +22,26 @@ build as a substitute. Pass that requirement to delegated work. Documentation
 build alone does not execute doctests. Do not claim a discovery-only command,
 filtered zero tests or ignored case as executed behavioral verification.
 
-Declare dependencies directly in Cargo.toml, without workspace inheritance or
-path dependencies. Dependency changes update Cargo.lock and run the complete
-verification gate. Dependencies must not import application analysis/report/runtime
-or other lichtung-crate responsibilities, network provisioning or assets.
-Keep development/test support in existing Rust structure; no Python files or
-tools directory. Modern module layout is foo.rs plus foo/ siblings.
+Workspace members inherit appropriate package metadata, dependency versions and
+lints from the root Cargo.toml. Member manifests declare the dependencies they
+actually consume, including target-specific conditions. Preserve dependency
+features and constraints when moving declarations. Publishable inter-member
+dependencies need a local path and a release version; independently unpacked
+packages must not require the checkout or unpublished registry substitutes.
+Dependency changes update Cargo.lock and run the complete verification gate.
+
+The core renderer remains independent of every other lichtung-* crate. Adapters
+and bindings consume its public API, never private modules or reverse optional
+dependencies. Core-only consumers must not compile adapter/binding dependencies.
+Do not import application analysis/report/runtime responsibilities, network
+provisioning or assets. Add members only with working consumers, not empty shells.
+
+Keep the renderer's source, tests, fixtures, examples, package README and license
+texts together under crates/lichtung-plot. Each member must package its required source inputs
+without reaching outside the independently unpacked package. Keep Rust development/
+test support in workspace members. Python package code, stubs, tests and examples
+are restricted to bindings/python when implemented; no Python development support
+elsewhere or tools directory. Modern module layout is foo.rs plus foo/ siblings.
 
 ## Focused Verification
 
@@ -50,9 +66,11 @@ reference checks and git diff --check, not compiler/tests by default.
 | Module integration, excluding core E2E | 100–300 tests | 300 |
 | Core E2E | 30–80 scenarios | 80 |
 
-The upper bounds limit the maintained suite; the lower ends are not quotas to
-fill. Meaningful coverage may grow within these limits without replacing a test
-in the same change or preserving a historical count. Count ignored tests too.
+The upper bounds apply across all workspace members, bindings, doctests and
+automated documentation/gallery workflows; a new package or runner does not gain
+a separate allowance. The lower ends are not quotas to fill. Meaningful coverage
+may grow within these limits without replacing a test in the same change or
+preserving a historical count. Count ignored tests too.
 Review the affected layer's count when changing tests.
 
 Classify by responsibility, not Cargo target type. A unit test exercises an
@@ -73,13 +91,13 @@ meaningful consumer disappears. Do not add getter/setter inventories, repeated
 per-family smoke/determinism checks, arbitrary pixel/default-style expectations
 or expensive boundary-sized workloads without a distinct useful contract.
 
-Independent Cargo integration targets are declared in Cargo.toml, each with
-tests/<domain>/suite.rs and cohesive sibling modules; shared helpers are in
-tests/support. Targets are annotations, categorical, composition, distributions,
-estimates, heatmap, interactions, layout, lines, marginal-matrix, output, rendering
-and statistics.
-Run one with cargo test --locked --offline --test <target>. Add a target only
-for a distinct contract, not a chronological/catch-all/general suite.
+Core integration targets are declared in crates/lichtung-plot/Cargo.toml, each with
+package-relative tests/<domain>/suite.rs and cohesive sibling modules; shared
+helpers are in that package's tests/support. Targets are annotations, categorical,
+composition, distributions, estimates, heatmap, interactions, layout, lines,
+marginal-matrix, output, rendering and statistics.
+Run one with cargo test --locked --offline -p lichtung-plot --test <target>.
+Add a target only for a distinct contract, not a chronological/catch-all/general suite.
 
 Keep normal externally compiled library-to-file SVG/PNG tests and selected decoded
 pixel/format checks. They cannot all become private mocks. Retain a small internal
@@ -195,8 +213,11 @@ change. For partial admission, retain only the unadmitted scope and its review
 checkpoint. Implementation status belongs in the plan until
 current contracts can be updated with working behavior.
 
-Formal specifications define current rules by subsystem and refer to actual source
-owners. Low-numbered specifications reference files only beneath specs/ and src/.
+Keep one specification system in the workspace-root specs directory, divided by
+responsibility rather than duplicated under members. Formal specifications define
+current rules by subsystem and refer to actual workspace-relative source owners.
+Low-numbered specifications reference files only beneath specs/ and member source
+directories, currently crates/lichtung-plot/src/.
 Keep plans/status, execution logs, commit receipts, historical censuses and
 performance samples out of formal contracts and user guides. User documentation
 explains use; it is not an agent work journal. Source comments/API examples should

@@ -25,14 +25,14 @@ The builder is construction-only and is never stored as a runtime override.
 
 | Component | Complete responsibility | Source |
 | --- | --- | --- |
-| SurfaceTheme | Canvas root and Plot panel RGBA surfaces | `src/theme/resolved.rs` |
-| TypographyTheme | Eighteen complete text roles | `src/theme/typography.rs` |
-| AxisTheme | Ordinary/cell frames, ticks, grid and local gaps | `src/theme/axis.rs` |
-| LegendTheme | One guide's frame, handles, gradient preferences and local gaps | `src/theme/guide.rs` |
-| CompositionTheme | Root alignment/padding, prose relationships, Grid/header/strip chrome | `src/theme/composition.rs` |
-| MarkTheme | Point/fill/line/stroke/cell/extents/neutral/accent roles | `src/theme/mark.rs` |
-| AnnotationTheme | Significance, cell/value/detail, panel text and shelf geometry; contrast backdrop | `src/theme/annotation.rs` |
-| ColorScales | Default qualitative, sequential and diverging mappings | `src/theme/scale_values.rs` |
+| SurfaceTheme | Canvas root and Plot panel RGBA surfaces | `crates/lichtung-plot/src/theme/resolved.rs` |
+| TypographyTheme | Eighteen complete text roles | `crates/lichtung-plot/src/theme/typography.rs` |
+| AxisTheme | Ordinary/cell frames, ticks, grid and local gaps | `crates/lichtung-plot/src/theme/axis.rs` |
+| LegendTheme | One guide's frame, handles, gradient preferences and local gaps | `crates/lichtung-plot/src/theme/guide.rs` |
+| CompositionTheme | Root alignment/padding, prose relationships, Grid/header/strip chrome | `crates/lichtung-plot/src/theme/composition.rs` |
+| MarkTheme | Point/fill/line/stroke/cell/extents/neutral/accent roles | `crates/lichtung-plot/src/theme/mark.rs` |
+| AnnotationTheme | Significance, cell/value/detail, panel text and shelf geometry; contrast backdrop | `crates/lichtung-plot/src/theme/annotation.rs` |
+| ColorScales | Default qualitative, sequential and diverging mappings | `crates/lichtung-plot/src/theme/scale_values.rs` |
 
 SurfaceTheme consumes `canvas_root(value)` and `plot_panel(value)` edits, with
 paired `get_canvas_root()` and `get_plot_panel()` readers. Both edits retain
@@ -87,7 +87,7 @@ metric. S operands (positions/preferences) round nearest-even once; H operands
 aggregation, not by adding individually rounded gaps. Lower/upper ink edges round
 outward. All arithmetic and spatial conversions are checked. No root-size scale,
 epsilon rescue or imposed new public minimum may hide nonzero geometry collapse.
-`src/theme/spacing.rs` owns this representation and resolution.
+`crates/lichtung-plot/src/theme/spacing.rs` owns this representation and resolution.
 
 Built-in local relationships preserve exact represented source lengths divided
 exactly by their original local metrics, not a rounded binary64 division or a
@@ -318,7 +318,7 @@ supplemental is radius 4/alpha 204. Radii in the table's order are
 3,3,4,3,3,3,2,4,4,4,3,2. Body alpha is 255 for bars/boxes/Waterfall, 178 for violins,
 209 for Histogram; bands 46/64 and density areas 56/115/102 in their listed order.
 Inner summary is opaque white. Present neutral/fixed strokes and cell/missing
-paints are constructed explicitly in `src/theme/resolved.rs`, not inferred late
+paints are constructed explicitly in `crates/lichtung-plot/src/theme/resolved.rs`, not inferred late
 from another equal-valued component. Point/fill/stroke data-alpha attachments and
 their actual component census are specified in property ownership.
 
@@ -475,7 +475,7 @@ Preserve input inspection order and exact lookup. Do not trim, casefold,
 Unicode-normalize or resolve display aliases to create keys. Every used key is
 required; unused entries are valid. `CategoricalColorScale::from_palette/from_map`
 selects one complete source, attached only to the fifteen CategoricalScale families
-in `src/kind.rs`. Facets coordinate parent domain before slicing; Shared Canvas
+in `crates/lichtung-plot/src/kind.rs`. Facets coordinate parent domain before slicing; Shared Canvas
 coordinates raw fields in row-major order including visible marks with Hidden
 entries. PerPlot keeps local domains.
 
@@ -484,12 +484,12 @@ requires at least two strictly ordered stops and exact 0/1 endpoints. DivergingG
 requires at least three, exact 0/1 and one unique explicit neutral at 0.5, with stops
 on both sides. Extra ordered stops are valid. No sorting, repair, epsilon merge,
 transparent stop or arbitrary count cap occurs. `neutral()` derives from 0.5.
-Interpolation is the fixed first-party OKLab model in `src/theme/color.rs`.
+Interpolation is the fixed first-party OKLab model in `crates/lichtung-plot/src/theme/color.rs`.
 
 ColorScales owns qualitative, sequential and diverging values. Every built-in
 sequential sequence is `0:#F7FBFF -> 1:#08306B`; diverging is
 `0:(49,130,189), 0.5:(247,247,247), 1:(222,45,38)`. Built-in qualitative/independent
-accent seeds are constructed in `src/theme/resolved.rs`, with stable exact prefixes.
+accent seeds are constructed in `crates/lichtung-plot/src/theme/resolved.rs`, with stable exact prefixes.
 Its consuming `qualitative(value)`, `sequential(value)` and `diverging(value)` edits
 pair with borrowed `get_qualitative()`, `get_sequential()` and `get_diverging()`
 readers. Read-only palette/stop/domain inspection retains its bare names.
@@ -536,7 +536,7 @@ using actual final fill RGBA, panel surface, Canvas surface and opaque planning
 backdrop. The backdrop affects selection only and is never painted.
 
 Use the checked-in 256-entry sRGB-to-linear binary64 table in
-`src/theme/contrast.rs`, whose values correspond to nearest-even evaluation of
+`crates/lichtung-plot/src/theme/contrast.rs`, whose values correspond to nearest-even evaluation of
 `(c/255)/12.92` for channels0..10, otherwise `((c/255+0.055)/1.055)^2.4` with its
 defined binary64 operand order. No runtime platform pow determines the table.
 Starting with opaque backdrop, composite Canvas, panel and fill back-to-front,

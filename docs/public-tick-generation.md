@@ -146,7 +146,7 @@ Clones share one immutable Send+Sync callback identity. The operation materializ
 each reached owner/axis/policy/domain/provenance/span once regardless of optional
 layout caches. Orthogonal geometry is not part of this callback's key. Final
 sealing closes both locator and formatter tables before callback-free publication.
-See `examples/10_tick_functions.rs`.
+See [`10_tick_functions.rs`](../crates/lichtung-plot/examples/10_tick_functions.rs).
 
 ## Category Labels Without Deleting Categories
 
@@ -178,8 +178,9 @@ need, but the same text in an annotation or guide still does. Canvas's separate
 before suppressing whole duplicate axes. Frozen publication preserves the selected
 original indices and full scientific geometry.
 
-See `examples/09_category_labels.rs` for independent bar and Heatmap selections.
+See [`09_category_labels.rs`](../crates/lichtung-plot/examples/09_category_labels.rs)
+for independent bar and Heatmap selections.
 
-See `examples/07_tick_generation.rs` and the
+See [`07_tick_generation.rs`](../crates/lichtung-plot/examples/07_tick_generation.rs) and the
 [numeric specification](../specs/06_NUMERIC_PRESENTATION.md) for complete source
 ordering and bounds.

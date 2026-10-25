@@ -96,5 +96,5 @@ omits explanatory text/fonts, not binding validation or complete input identity.
 Native Heatmap/Beeswarm right tracks and Matrix trailing track place one guide,
 suppressed by Hidden. Color+alpha shares one frame and frozen plan.
 
-See `examples/08_data_alpha.rs` and the
+See [`08_data_alpha.rs`](../crates/lichtung-plot/examples/08_data_alpha.rs) and the
 [guide specification](../specs/08_GUIDE_SYSTEM.md).

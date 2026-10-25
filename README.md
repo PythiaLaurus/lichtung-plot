@@ -8,8 +8,12 @@ The renderer has no dependency on the
 Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
 precomputed inferential annotations as ordinary plotting data.
 
-The renderer is maintained in its own repository. Its architecture and output
-contracts live in [`specs/`](specs/); user guides live in [`docs/`](docs/).
+The repository is a Rust workspace. Its standalone renderer, tests, fixtures and
+runnable examples live in [`crates/lichtung-plot/`](crates/lichtung-plot/), which
+is the default member. The root owns the shared lockfile, pinned toolchain and
+development recipes. Architecture and output contracts stay in [`specs/`](specs/);
+user guides stay in [`docs/`](docs/). Future adapters and bindings are not yet
+workspace members.
 
 ```rust,no_run
 use lichtung_plot::{NumericValues, Plot};
@@ -99,7 +103,7 @@ unobserved combinations. Standalone/facets use the Plot selection, PerPlot uses
 each child's, and Shared uses `Canvas::legend_composition` for every contributor.
 Hidden skips guide-only semantics. Theme, visibility and placement keep their own
 setters. See [composition and ownership](docs/public-legend-composition.md) and
-[`examples/06_legend_sections.rs`](examples/06_legend_sections.rs).
+[`crates/lichtung-plot/examples/06_legend_sections.rs`](crates/lichtung-plot/examples/06_legend_sections.rs).
 
 ## Data Alpha
 
@@ -135,7 +139,7 @@ Declared mappings add numeric/category/interval symbol sections after existing
 symbols and continuous-color content, inside the same guide frame. Existing
 group/hue keys neutralize data-bound alpha to 255. See [units, mappings and family
 capabilities](docs/public-data-alpha.md) and
-[`examples/08_data_alpha.rs`](examples/08_data_alpha.rs).
+[`crates/lichtung-plot/examples/08_data_alpha.rs`](crates/lichtung-plot/examples/08_data_alpha.rs).
 
 ## Exact Element Paint
 
@@ -187,7 +191,7 @@ preferred candidates. `function` supplies positions from the final actual view;
 formatting stays independent. `maximum_count` configures one optional explicit
 cap without replacing the primary locator.
 
-See [`examples/07_tick_generation.rs`](examples/07_tick_generation.rs) for
+See [`crates/lichtung-plot/examples/07_tick_generation.rs`](crates/lichtung-plot/examples/07_tick_generation.rs) for
 independent axis choices and [the public contract](docs/public-tick-generation.md).
 
 ## Scientific Numeric Labels
@@ -216,7 +220,7 @@ Adaptive precision is uniform for a complete semantic set, independently of fit.
 Exact tick strings take precedence. Scientific values and colors are unchanged;
 configured Forest Log10 labels use certified mathematical powers of their tick
 exponents. See [numeric format construction and consumers](docs/public-numeric-formatting.md)
-and [`examples/05_numeric_formats.rs`](examples/05_numeric_formats.rs).
+and [`crates/lichtung-plot/examples/05_numeric_formats.rs`](crates/lichtung-plot/examples/05_numeric_formats.rs).
 
 ## Text Placement And Fit
 
@@ -228,7 +232,7 @@ existing instructions; supplying a whole layout replaces that layout request.
 Panel annotations can anchor to typed data, panel or figure references. Text
 adaptation never removes scientific categories, marks, tick positions or grids.
 See [text configuration](docs/getting-started.md#display-text-and-labels) and
-[`examples/12_text_layout.rs`](examples/12_text_layout.rs) for a fixed data note
+[`crates/lichtung-plot/examples/12_text_layout.rs`](crates/lichtung-plot/examples/12_text_layout.rs) for a fixed data note
 and an independently fitted TextPanel heading.
 
 ## Fonts
@@ -283,14 +287,16 @@ outside this crate.
 
 ## Development
 
-The repository pins its Rust toolchain and tracks `Cargo.lock`. Use focused
-tests and `just lint` for scoped changes. The complete read-only closure gate is:
+The workspace pins its Rust toolchain and tracks one root `Cargo.lock`. Use
+focused tests with `-p lichtung-plot` and `just lint` for scoped changes. Ordinary
+Cargo commands select the core by default; root verification recipes explicitly
+select the whole workspace. The complete read-only closure gate is:
 
 ```bash
 just verify
 ```
 
-`just test` runs library, integration and example targets; `just test-doc`
+`just test` runs every member's library, integration and example targets; `just test-doc`
 executes public examples and compile-fail API boundaries. `just verify` includes
 both, strict Clippy, formatting, documentation and package verification. See
 [`specs/90_DEVELOPMENT.md`](specs/90_DEVELOPMENT.md) for test ownership and stable

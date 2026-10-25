@@ -37,6 +37,7 @@ accepted plan -> final font seal -> capture -> Null validation -> canonical scen
 
 These specifications define one current system. Each concern has one owner;
 cross-references connect requirements rather than creating competing contracts.
+They live at the workspace root, not in separate member-local specification trees.
 
 | Specification | Responsibility |
 | --- | --- |
@@ -53,10 +54,24 @@ cross-references connect requirements rather than creating competing contracts.
 Formal requirements refer to source owners by stable file/module names, not line
 numbers, implementation-stage identifiers, execution logs or historical counts.
 
+## Workspace Boundary
+
+The root Cargo.toml is a virtual workspace with an explicit resolver and one shared
+lockfile. The renderer is the crates/lichtung-plot member and the default member;
+its source, tests, fixtures, examples and package documentation remain together.
+Root recipes explicitly validate the workspace. Dependency versions, appropriate
+package metadata and lints are inherited from the root manifest without changing
+the renderer's public API or private implementation boundaries.
+
+Adapters and bindings consume the core's deliberate public API; the core never
+depends on them or another lichtung-* crate. A core-only consumer must not compile
+adapter or binding dependencies. Members are added with working consumers, not
+speculative empty packages. The renderer is currently the only workspace member.
+
 ## Public And Private Boundaries
 
-`src/lib.rs` defines crate-root exports. Only `kind` and display-only `stats` are
-public modules. Backend, scene, layout, resolved-theme, prepared-source and font
+`crates/lichtung-plot/src/lib.rs` defines crate-root exports. Only `kind` and
+display-only `stats` are public modules. Backend, scene, layout, resolved-theme, prepared-source and font
 operation types stay private. Implementation modules use `foo.rs` with `foo/`
 siblings. There is one API and representation for each project-owned concern;
 replacement migrates callers and removes the old implementation without aliases,
@@ -79,7 +94,8 @@ There are 25 scientific families. Matrix owns a native variable grid and is not
 Canvas-admissible or generic-facetable. Marginal is Canvas-admissible but not
 generic-facetable. The other families retain their sealed capabilities and
 data-dependent restrictions. An already faceted Plot cannot be embedded in Canvas.
-`src/kind.rs` owns the closed capability sets; no erased fallback expands them.
+`crates/lichtung-plot/src/kind.rs` owns the closed capability sets; no erased
+fallback expands them.
 
 ## Ownership And Preparation
 
@@ -95,8 +111,8 @@ data-dependent restrictions. An already faceted Plot cannot be embedded in Canva
 - Canvas owns declared row-major topology, Plot/TextPanel cells, root appearance,
   root prose, headers, shared ranges and Shared-guide policy/chrome. Embedded Plot
   standalone sizing does not control cell allocation.
-  src/canvas/placement.rs stores one payload/validated-footprint record per anchor
-  and derives slot occupancy without copying payloads. Prepared theme/domain/text
+  crates/lichtung-plot/src/canvas/placement.rs stores one payload/validated-footprint
+  record per anchor and derives slot occupancy without copying payloads. Prepared theme/domain/text
   arrays retain anchor slot identities. Declared track edges are independent of
   assigned owner rectangles and supply header/row-title geometry.
   panel_span places one rectangular Plot owner across rows/columns and internal

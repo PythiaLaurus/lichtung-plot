@@ -1,5 +1,8 @@
 # Offline Unicode 16 Profile
 
+Paths beginning with `src/` or `tests/` below are relative to this package's root:
+`crates/lichtung-plot/` in the workspace, or the independently unpacked package.
+
 ## Source And Provenance
 
 The source is the official Unicode 16.0.0 UCD archive, obtained externally from
@@ -195,11 +198,11 @@ Normalization and line breaking retain one fallible implementation each, with
 checked actual input lengths, capacity arithmetic and first-party buffer growth.
 There are no accounting callbacks, cumulative visit/byte quotas or raw CSS
 font-stack parser. Typed font preferences and operation-local normalization reuse
-follow the [font/layout contract](../../../specs/05_LAYOUT_SYSTEM.md).
+follow the [font/layout contract](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/05_LAYOUT_SYSTEM.md).
 
 Rendered text preserves its original bytes; family-name matching alone uses
 NFKC-casefold. Line breaking retains collapsed-scalar context for numeric prefixes,
 previous nonspace positions and RI parity; grapheme filtering intersects sorted
 boundaries without changing legal opportunities. Actual arithmetic, storage,
 font-coverage and sealed-census failures remain errors. Resource and external-corpus
-publication policies are defined in [development](../../../specs/90_DEVELOPMENT.md).
+publication policies are defined in [development](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/90_DEVELOPMENT.md).

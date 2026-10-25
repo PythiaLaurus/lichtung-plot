@@ -1,16 +1,14 @@
-[package]
-name = "lichtung-plot"
-version = "0.1.0"
+[workspace]
+members = ["crates/lichtung-plot"]
+default-members = ["crates/lichtung-plot"]
+resolver = "2"
+
+[workspace.package]
 edition = "2021"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
-description = "Strongly typed scientific plotting with deterministic SVG and PNG output"
-documentation = "https://docs.rs/lichtung-plot"
-readme = "README.md"
-publish = false
-autotests = false
 
-[dependencies]
+[workspace.dependencies]
 fontdb = "=0.23.0"
 num-bigint = "=0.4.8"
 rustybuzz = "=0.20.1"
@@ -28,75 +26,17 @@ png = "0.18"
 # Text is already outlined by the canonical renderer; no SVG font engine.
 resvg = { version = "0.47.0", default-features = false }
 tempfile = "3.27"
-
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
 fontconfig-parser = "=0.5.8"
 roxmltree = "=0.20.0"
-
-[target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
-
-[dev-dependencies]
 # Assert the actual tables shared with rustybuzz, not only its package version.
 unicode-ccc = "=0.4.0"
 unicode-bidi-mirroring = "=0.4.0"
 
-[[test]]
-name = "annotations"
-path = "tests/annotations/suite.rs"
-
-[[test]]
-name = "categorical"
-path = "tests/categorical/suite.rs"
-
-[[test]]
-name = "composition"
-path = "tests/composition/suite.rs"
-
-[[test]]
-name = "distributions"
-path = "tests/distributions/suite.rs"
-
-[[test]]
-name = "estimates"
-path = "tests/estimates/suite.rs"
-
-[[test]]
-name = "heatmap"
-path = "tests/heatmap/suite.rs"
-
-[[test]]
-name = "interactions"
-path = "tests/interactions/suite.rs"
-
-[[test]]
-name = "layout"
-path = "tests/layout/suite.rs"
-
-[[test]]
-name = "lines"
-path = "tests/lines/suite.rs"
-
-[[test]]
-name = "marginal-matrix"
-path = "tests/marginal_matrix/suite.rs"
-
-[[test]]
-name = "output"
-path = "tests/output/suite.rs"
-
-[[test]]
-name = "rendering"
-path = "tests/rendering/suite.rs"
-
-[[test]]
-name = "statistics"
-path = "tests/statistics/suite.rs"
-
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "deny"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"

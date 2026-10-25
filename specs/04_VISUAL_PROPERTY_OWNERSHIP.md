@@ -31,8 +31,9 @@ inspection retains its bare name.
 [Theme construction](03_THEME_SYSTEM.md), [layout](05_LAYOUT_SYSTEM.md),
 [numbers](06_NUMERIC_PRESENTATION.md) and [guides](08_GUIDE_SYSTEM.md) define the
 corresponding value and algorithm contracts. Source owners include
-`src/theme/value.rs`, `src/theme/paint.rs`, `src/builder/configuration.rs`,
-`src/alpha.rs`, `src/alpha/encoding.rs` and `src/decorations/legend/source.rs`.
+`crates/lichtung-plot/src/theme/value.rs`, `crates/lichtung-plot/src/theme/paint.rs`,
+`crates/lichtung-plot/src/builder/configuration.rs`, `crates/lichtung-plot/src/alpha.rs`,
+`crates/lichtung-plot/src/alpha/encoding.rs` and `crates/lichtung-plot/src/decorations/legend/source.rs`.
 
 ## Scope And Precedence
 
@@ -182,7 +183,7 @@ Its const readers `get_color()`, `get_alpha()` and `get_radius()` preserve optio
 request presence. Radius validates immediately; color and byte-alpha edits remain
 infallible, with alpha editing retaining its const-call capability.
 
-PointLayer labels retain the position policy from `src/plots/line.rs`: add final
+PointLayer labels retain the position policy from `crates/lichtung-plot/src/plots/line.rs`: add final
 radius plus resolved nominal gap to both projected coordinates, apply Rust
 `f64::round()` to whole CSS pixels (halfway away from zero), then canonicalize.
 Use horizontal Start, vertical Middle, zero rotation and Start-aligned lines.
@@ -251,8 +252,8 @@ Continuous domains are explicit finite strictly increasing pairs. Constant sourc
 data is valid; no inferred domain widening occurs. Log10 requires positive source
 values/endpoints and finite distinguishable transformed endpoints. Finite values
 outside a domain clamp; nonpositive Log values reject rather than clamp.
-`src/numeric/mapping.rs::normalized_fraction` is the shared overflow-safe owner
-for alpha and continuous colors. Log mapping uses `src/numeric.rs::log10`, not
+`crates/lichtung-plot/src/numeric/mapping.rs::normalized_fraction` is the shared overflow-safe owner
+for alpha and continuous colors. Log mapping uses `crates/lichtung-plot/src/numeric.rs::log10`, not
 the mathematical power-display primitive.
 
 Calculate binary64 `a0 + t * (a1-a0)` in that order, then quantize once nearest/
@@ -363,7 +364,7 @@ consumed members in declaration order, including zero. Empty actual components
 contribute no section. [Guide rules](08_GUIDE_SYSTEM.md) own projection, title,
 member order, Shared compatibility and one-frame measurement.
 
-`src/decorations/legend/alpha.rs` prepares one immutable per-scope three-target
+`crates/lichtung-plot/src/decorations/legend/alpha.rs` prepares one immutable per-scope three-target
 input containing full configured encodings, declarations and actual target/role/
 unit members, independently of explanatory visibility. Hidden/Undeclared removes
 guide text, not this identity or scientific validation. Child, content-height and

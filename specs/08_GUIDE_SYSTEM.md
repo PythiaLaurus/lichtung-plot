@@ -30,11 +30,13 @@ color-plus-alpha is admitted within this envelope; categorical-RGB and continuou
 color Shared contributors remain incompatible. Manual caller-authored entries or
 graphics are outside this contract.
 
-Source owners are `src/decorations/legend/discrete.rs`,
-`src/decorations/legend/discrete/composition.rs`,
-`src/decorations/legend/discrete/projection.rs`,
-`src/decorations/legend/descriptor.rs`, `src/decorations/legend/alpha.rs`,
-`src/decorations/legend/measurement.rs` and `src/decorations/legend/continuous.rs`.
+Source owners are `crates/lichtung-plot/src/decorations/legend/discrete.rs`,
+`crates/lichtung-plot/src/decorations/legend/discrete/composition.rs`,
+`crates/lichtung-plot/src/decorations/legend/discrete/projection.rs`,
+`crates/lichtung-plot/src/decorations/legend/descriptor.rs`,
+`crates/lichtung-plot/src/decorations/legend/alpha.rs`,
+`crates/lichtung-plot/src/decorations/legend/measurement.rs` and
+`crates/lichtung-plot/src/decorations/legend/continuous.rs`.
 Appearance/local metrics belong to [Theme](03_THEME_SYSTEM.md), scientific alpha
 to [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md), source/precision to
 [numbers](06_NUMERIC_PRESENTATION.md), containing placement/feedback to
