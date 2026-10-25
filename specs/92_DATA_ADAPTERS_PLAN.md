@@ -23,9 +23,9 @@ when delivered; proposed names below are not compatibility commitments.
 | Proposed architecture | Two independent conversion crates, adapter-owned free functions and owned native snapshots. No foreign Plot builders, shared adapter framework or new core reader API. |
 | Proposed first scope | Typed one-dimensional channels, explicit provenance, ndarray named columns and labeled two-dimensional heatmaps, and selected Polars numeric columns. |
 
-Implementation review must confirm the proposed signatures against small real
-public consumers before freezing them. Do not silently reduce the promised
-conversion semantics to fit an inconvenient upstream API.
+Refine the proposed signatures through real public consumers during implementation;
+no separate prototype or pre-implementation acceptance test is required. Do not
+silently reduce the promised conversion semantics to fit an inconvenient upstream API.
 
 ## Dependency Direction And Ownership
 
@@ -304,16 +304,17 @@ are provenance failures, not ordinary numeric conversion failures.
   execute queries, read files/URLs, or treat upstream IO support as authorization
   for network access or asset provisioning.
 
-## Dependency And Package Gates
+## Dependencies And Package Verification
 
 Candidate dependency lines for implementation are ndarray **0.17.2** and
 polars-core **0.55.2**, compatible in declared version families with the previously
 researched future NumPy/Polars bridges. [Published ndarray metadata][ndarray-meta]
 declares Rust 1.64; [polars-core metadata][polars-meta] declares edition 2024 but no
 rust-version. Neither published metadata nor source inspection proves that the
-full dependency graph builds on the pinned Rust 1.96 toolchain. Recheck and compile
-the actual resolved set before finalizing manifests; do not upgrade the toolchain
-or choose a different Python lifecycle as an incidental adapter change.
+full dependency graph builds on the pinned Rust 1.96 toolchain. Resolve dependencies
+in the actual adapter implementation and validate them through its required strict
+Clippy run, not a separate compatibility probe before writing code. Do not upgrade
+the toolchain or choose a different Python lifecycle as an incidental adapter change.
 
 Proposed workspace-managed dependency configuration:
 
@@ -336,16 +337,17 @@ Proposed workspace-managed dependency configuration:
   recipes. Missing development dependency cache is a setup/verification blocker,
   not permission to replace locked/offline verification with an unreported mode.
 
-Independent package verification is an early gate, not a final surprise. The core
-is currently unpublished and has `publish = false`. An in-workspace path dependency
-build does not prove that a normalized, unpacked adapter package resolves its core
-dependency. Investigate [Cargo's supported multiple-package packaging][cargo-package]
-with explicit renderer/adapter selections on the pinned toolchain. Verify the
-actual normalized archives and their packaged dependency sources, not checkout
-paths, temporary manifest patches or fabricated registry substitutes. If a needed
-registry version or stock-Cargo verification route is unavailable, report that
-gate as blocked; `--no-verify` or silently publishing the core is not a solution.
-Building coordinated local archives is not evidence of registry publication.
+Independent package verification belongs to delivery after working members and
+consumers exist; it is not a prerequisite for conversion implementation. The core
+is currently unpublished and has `publish = false`, so an in-workspace path
+dependency build alone cannot prove that an unpacked adapter resolves its core
+dependency. At package delivery, use [Cargo's supported packaging][cargo-package]
+to verify the actual normalized archives and their packaged dependency sources,
+not checkout paths, temporary manifest patches or fabricated registry substitutes.
+If the needed registry version or stock-Cargo route is unavailable, report package
+verification as blocked without blocking unrelated conversion work. `--no-verify`
+or silently publishing the core is not a solution. Building coordinated local
+archives is not evidence of registry publication.
 
 ## Documentation And Executable Consumers
 
@@ -378,13 +380,14 @@ The last established census is **800 unit tests** (795 core + 5 Book helper),
 (60 prior core + 18 current gallery root/constituent scenarios). This is planning
 baseline evidence, not a new census run or a separate allowance for adapters.
 
-Before adding implementation tests, audit the current semantic classification and
-identify genuinely redundant/low-value coverage with explicit retained witnesses.
-Do not assume free unit/integration capacity, promise deletions not justified by
-inspection, or merge/parameterize/relabel scenarios to fit. Count reference routes,
-doctests, composed producers, examples and automated gallery scenarios by their
-actual contracts. If no sound space can be recovered, report the conflict before
-expanding the suite; do not raise the ceilings or reduce required adapter behavior.
+When changing tests, classify the added contracts and review the affected layer's
+count under the existing development policy. This is part of the code change,
+not a separate repository-wide audit before implementation. At a ceiling, remove
+only genuinely redundant/low-value coverage with explicit retained witnesses;
+do not promise uninspected deletions or merge/parameterize/relabel scenarios to fit.
+Count reference routes, doctests, composed producers, examples and automated gallery
+scenarios by their actual contracts. Report a real capacity conflict in the affected
+test changes rather than exceeding the ceilings or reducing adapter behavior.
 
 | Evidence | Required semantic coverage, not a mechanical cross-product |
 | --- | --- |
@@ -402,43 +405,48 @@ conversion path. Native payloads being opaque is not grounds for public getter
 inventories, renderer-private imports or copied validators. Do not pin SVG length,
 scene hashes, automatic panel size or internal layout coordinates.
 
-For code changes, run affected conversion tests and public consumers, source/peer
-guide checks and strict workspace validation:
+Once the relevant code exists, run affected conversion tests and public consumers,
+source/peer guide checks and strict workspace validation:
 
 ```sh
 cargo clippy --locked --offline --workspace --all-targets -- -D warnings
 ```
 
-`cargo check` and a successful non-linting build are not substitutes. Actual
-dependency changes require the broad closure gate in development policy; state
-that reason before the run. Local fixes after that use their focused regressions,
-not repeated whole-suite runs. Independently unpacked packages and a standalone
-core-only consumer need their own evidence; workspace success alone is insufficient.
+`cargo check` and a successful non-linting build are not substitutes. At implementation
+closure, satisfy the broad verification required by development policy for actual
+dependency changes; state that reason before the run. Local fixes after that use
+their focused regressions, not repeated whole-suite runs. At delivery, independently
+unpacked packages and a standalone core-only consumer need their own evidence;
+workspace success alone is insufficient.
 This planning-only change needs reference/source consistency and diff checks, not
 compiler tests, package builds or execution of the proposed snippets.
 
-## Delivery Order And Stop Conditions
+## Implementation And Delivery Order
 
-1. **Resolve implementation gates.** Obtain implementation direction; audit test
-   capacity; recheck dependency features, pinned-toolchain compatibility and the
-   actual package-verification route. Approve concrete signatures through bounded
-   consumers, without placeholder members or speculative core changes.
-2. **Deliver ndarray.** Implement scalar/nullable/validity conversions and explicit
-   table/grid mappings with a working strided-view consumer. Complete focused
-   semantic evidence, both guide editions, package-aware docs support and package
-   checks. Keep the renderer public API and dependency graph independent.
-3. **Deliver Polars.** Implement the dtype table, Column/scalar/chunk/mapping paths,
-   exact provenance and selected frame columns through the same native boundary.
-   Deliver its actual consumer, peer documentation and package verification.
-4. **Close shared integration.** Verify both adapters together and the core alone,
-   one lockfile, source-complete archives, actual guide/gallery outputs and the
-   reconciled whole-repository test census. Commit each completed logical objective
+Implementation still requires separate direction. Once requested, start production
+conversion code directly; do not insert an audit, compatibility prototype or
+packaging investigation as a preliminary project.
+
+1. **Implement ndarray.** Add its actual dependency and scalar/nullable/validity
+   conversions with explicit table/grid mappings and a working strided-view consumer.
+   Validate the real implementation with focused tests and strict Clippy; review
+   capacity alongside the affected test changes. Deliver both guide editions and
+   package-aware docs support. Keep the renderer API and dependency graph independent.
+2. **Implement Polars.** Add its actual dependency and implement the dtype table,
+   Column/scalar/chunk/mapping paths, exact provenance and selected frame columns
+   through the same native boundary. Validate its real code and consumer, and
+   deliver peer documentation without a separate advance compatibility exercise.
+3. **Verify delivery.** Check both adapters together and the core alone, one lockfile,
+   source-complete archives, actual guide/gallery outputs and the resulting test
+   census. Verify packaging with the working packages; record unavailable checks
+   without claiming distribution readiness. Commit each completed logical objective
    before unrelated work; do not publish or push without separate authorization.
 
-Stop and report unsupported toolchain/dependency resolution, a real test-capacity
-conflict, unavailable independent package verification, or a requirement for new
-core facilities. Present the concrete unmet consumer and alternatives rather than
-quietly adding a foreign data model, fallback chain or reduced capability set.
+If actual implementation encounters dependency resolution failure, a test-capacity
+conflict, unavailable package verification or a need for new core facilities,
+report the concrete affected step and alternatives. A blocked distribution check
+does not prohibit unrelated implementation. Do not quietly add a foreign data
+model, fallback chain or reduced capability set.
 Python object mutation/copy semantics and bridge selection remain at their existing
 binding-time gate; these Rust adapters neither settle nor block that decision.
 

@@ -138,15 +138,17 @@ together so that the package remains self-contained.
 
 The [ndarray and Polars adapter plan](92_DATA_ADAPTERS_PLAN.md) owns the detailed
 proposed APIs, dtype tables, shape/validity/provenance rules, dependency features,
-documentation integration and implementation gates. Keep those proposals in one
+documentation integration and delivery checks. Keep those proposals in one
 place, not separate competing adapter contracts here.
 
 Both adapters produce the core's existing owned native values, never a parallel
 plot/dataframe model. Preserve ordinary f64 rounding, null-versus-NaN distinctions,
 logical row order, raw category identity and explicit plot-owned SourceRows. The
 core remains independent. Implement ndarray first, then Polars, with working
-consumers and peer-language documentation. Test-capacity and independent-package
-verification gates must be resolved before calling either implementation complete.
+consumers and peer-language documentation. Validate dependencies through the actual
+implementation, review test capacity when changing coverage, and verify archives
+once working packages exist. These are implementation/delivery checks, not a
+separate prerequisite phase before writing conversion code.
 
 ## Complete Python Interface
 
@@ -341,10 +343,11 @@ the appropriately configured [mdBook test command][mdbook-test] where relevant.
 Check isolated code and end-to-end workflows at their real semantic layer instead
 of duplicating every imported fragment as a new test.
 
-Cargo workspace success is not independently unpacked-package success. Resolve
-unpublished inter-member dependency/package verification explicitly; unavailable
-registry data is a blocker, not a pass or a reason to substitute `--no-verify`.
-No package contents or published ref may reintroduce the full Unicode corpus.
+Cargo workspace success is not independently unpacked-package success. At package
+delivery, resolve unpublished inter-member dependency verification explicitly;
+unavailable registry data blocks that verification, not conversion implementation,
+and is not a pass or a reason to substitute `--no-verify`. No package contents or
+published ref may reintroduce the full Unicode corpus.
 
 ### Delivery Order
 
