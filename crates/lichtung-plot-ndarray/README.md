@@ -23,5 +23,5 @@ cargo run --locked --offline -p lichtung-plot-ndarray --example strided_heatmap
 ```
 
 See the peer [English](../../docs/en/src/sections/ndarray.md) and
-[中文](../../docs/zh-CN/src/sections/ndarray.md) guides in the repository and the
+[Chinese](../../docs/zh-CN/src/sections/ndarray.md) guides in the repository and the
 shared [adapter contract](../../specs/09_DATA_ADAPTERS.md).

@@ -59,6 +59,13 @@ prose for equivalent meaning. Mechanical checks do not certify prose equivalence
 or quality. Keep specs as architectural contracts, rustdoc as exact API reference
 and README as an entry point.
 
+Keep narrative documents single-language, not alternating bilingual paragraphs
+or mixed-language headings. Root and docs/ README files remain single English
+entry documents linking to the available guides; do not create language-specific
+README variants. Guide prose belongs to its language directories, independently
+of README placement. Shared code, technical identifiers and language-indexed
+metadata are not prose editions.
+
 Every renderer example runs without arguments and defaults to the current working
 directory. Its shared package-local CLI helper accepts one optional output-directory
 argument and creates that directory if needed. Gallery builds select fresh isolated

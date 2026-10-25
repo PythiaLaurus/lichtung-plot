@@ -26,7 +26,7 @@ and be unique within each axis. Then use ordinary native plot configuration:
 | --- | --- |
 | `numeric(name, view1)` | f32/f64 and primitive integers through 128 bits, including isize/usize and Option forms; normal f64 rounding, no exactness gate. |
 | `categories(name, view1)` | String / &str and their Option forms; exact raw keys, first-observed native order. |
-| `booleans(name, view1)` | bool / Option<bool>, not implicit 0/1. |
+| `booleans(name, view1)` | `bool` / `Option<bool>`, not implicit 0/1. |
 | `source_rows(view1)` | Integer IDs with exact usize range and native uniqueness checks; null is an error. |
 | `numeric_columns(names, view2)` | Observations in rows, named variables in columns; suitable for native scatter matrices, not an implicit heatmap. |
 | `heatmap_values(name, view2, x_keys, y_keys)` | Explicit labeled grid expansion into native x/y/fill. |

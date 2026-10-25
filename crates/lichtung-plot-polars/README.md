@@ -27,5 +27,5 @@ cargo run --locked --offline -p lichtung-plot-polars --example grouped_observati
 
 This package is not yet published. See the peer
 [English](../../docs/en/src/sections/polars.md) and
-[中文](../../docs/zh-CN/src/sections/polars.md) guides and the shared
+[Chinese](../../docs/zh-CN/src/sections/polars.md) guides and the shared
 [adapter contract](../../specs/09_DATA_ADAPTERS.md).
