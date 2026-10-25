@@ -29,7 +29,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
+| ndarray and Polars adapters | Detailed conversion/API/dtype/delivery proposals are in [the adapter plan](92_DATA_ADAPTERS_PLAN.md); not implemented or authorized for implementation by this planning request. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -136,63 +136,17 @@ together so that the package remains self-contained.
 
 ## Data Adapter Contracts
 
-### Shared Native Boundary
+The [ndarray and Polars adapter plan](92_DATA_ADAPTERS_PLAN.md) owns the detailed
+proposed APIs, dtype tables, shape/validity/provenance rules, dependency features,
+documentation integration and implementation gates. Keep those proposals in one
+place, not separate competing adapter contracts here.
 
-Both adapters produce the existing owned native values, including NumericValues,
-CategoryValues, BooleanValues and caller-supplied SourceRows where applicable.
-They preserve aligned slots, missingness, raw keys and order. Conversion is not
-permission to sort, aggregate, impute, drop rows or choose statistical analysis.
-Do not invent row identity from a container address or a newly compacted index.
-
-Copying into an owned native snapshot is admitted. Do not promise zero-copy
-interoperability or retain a foreign mutable buffer as the renderer's source.
-Later changes to the caller's container must not change an existing plot.
-
-Ordinary integer/floating numeric values use the core's f64 representation.
-[Matplotlib's conversion][matplotlib-conversion] and
-[Seaborn's numeric coordinate path][seaborn-conversion] provide concrete precedents
-for float normalization rather than a new exact-integer acceptance policy.
-Distinguish normal representational rounding from actual conversion failure. Never
-turn a failed operation into null, zero or a silently discarded row. Raw category
-and provenance identities do not pass through this numeric conversion.
-
-For example, integer `9007199254740993` becomes binary64 `9007199254740992`;
-this accepted input-boundary rounding is not a promise of exact integer storage.
-[NumPy's casting documentation][numpy-casting] must not be interpreted as a
-per-value proof of exact representability. The native exact/certified numeric
-presentation engine still formats the retained operand under its existing rules.
-
-Preserve the distinction between null and NaN, as in
-[Polars' missing-data contract][polars-missing]. Existing core applicability,
-nonfinite-value and scientific validation remain at their actual consumers;
-the adapter must neither weaken them nor add unrelated source-acceptance passes.
-
-### Polars
-
-Define the concrete column/frame entry points, errors and dtype table before
-exposing an adapter API. Use adapter-owned functions, wrappers or extension traits,
-not orphan-rule-invalid foreign `TryFrom` implementations or a Polars dependency
-inside the renderer.
-
-Cover numeric, categorical/string and Boolean channels with correct nullable,
-multi-chunk, sliced and empty behavior. Decode category identities rather than
-treating foreign dictionary codes as the native dictionary. Preserve native domain
-and explicit-order semantics instead of silently inventing unobserved categories.
-Document unsupported semantic dtypes and any deliberate conversions; temporal
-units or other scientific meaning must not be guessed from physical storage.
-Do not silently execute a lazy query to obtain an eager input.
-
-### ndarray
-
-Define named one-dimensional value conversion and the meaning of any supported
-two-dimensional table/grid entry points. Accept logical views, not only contiguous
-slices. [ndarray's iterator contract][ndarray-order] defines row-major logical
-iteration independently of storage layout; preserve it for transposes and strides.
-
-Specify dimension/label/mask alignment and retain missingness separately from NaN.
-Do not silently flatten an array without defining its axes. An ndarray numerical
-matrix is not automatically the core's `Plot::matrix`, which is a scatter matrix
-of named variables; a heatmap has its separate categorical cell semantics.
+Both adapters produce the core's existing owned native values, never a parallel
+plot/dataframe model. Preserve ordinary f64 rounding, null-versus-NaN distinctions,
+logical row order, raw category identity and explicit plot-owned SourceRows. The
+core remains independent. Implement ndarray first, then Polars, with working
+consumers and peer-language documentation. Test-capacity and independent-package
+verification gates must be resolved before calling either implementation complete.
 
 ## Complete Python Interface
 
@@ -539,11 +493,6 @@ corresponding implementation begins.
 
 [cargo-workspaces]: https://doc.rust-lang.org/cargo/reference/workspaces.html
 [polars-workspace]: https://github.com/pola-rs/polars/blob/rs-0.55.2/Cargo.toml
-[matplotlib-conversion]: https://github.com/matplotlib/matplotlib/blob/v3.11.2/lib/matplotlib/cbook.py
-[seaborn-conversion]: https://github.com/mwaskom/seaborn/blob/v0.13.2/seaborn/_base.py
-[numpy-casting]: https://numpy.org/doc/stable/reference/generated/numpy.can_cast.html
-[polars-missing]: https://docs.pola.rs/user-guide/expressions/missing-data/
-[ndarray-order]: https://docs.rs/ndarray/0.17.2/ndarray/struct.ArrayBase.html
 [maturin-layout]: https://www.maturin.rs/project_layout.html
 [python-layout]: https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
 [pyo3-classes]: https://pyo3.rs/v0.29.3/class.html
