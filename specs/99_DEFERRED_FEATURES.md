@@ -2,8 +2,8 @@
 
 ## Scope And Review Rules
 
-This specification records user-requested deferred reviews outside
-[the implementation plan](91_IMPLEMENTATION_PLAN.md), with explicit review checkpoints.
+This specification records user-requested deferred reviews beyond the current
+renderer contracts, with explicit review checkpoints.
 It grants no implementation authorization, reserves no API/storage/callback and
 does not establish a fallback route. Current behavior is defined by the system
 specifications, particularly [Theme](03_THEME_SYSTEM.md),
@@ -19,7 +19,7 @@ At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
 reject it with a lasting boundary, or re-defer with a new explicit checkpoint.
 No retained item may have an expired or vague checkpoint. IDs are not reused.
-When scope enters the implementation plan, remove it from this inventory in the
+When scope enters an implementation plan, remove it from this inventory in the
 same change, including any admitted subset of a broader item. Update current
 contracts when implemented. A plan is not implementation evidence. Record lasting
 requirements in the owning contract, not a permanent decision ledger.

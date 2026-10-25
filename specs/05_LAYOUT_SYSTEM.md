@@ -10,9 +10,10 @@ do not authorize sibling Cartesian products, exhaustive wrap partitions, global
 quality ranking or root-width search.
 
 Execution is deterministic, not a guarantee to discover every feasible layout.
-Exact roots preserve complete requested content and typography or fail. Automatic
-roots choose a natural preferred width once, then measure content height; they do
-not grow a hidden fixed canvas until something fits. Public inputs/lifecycle are
+Exact roots preserve requested content and typography unless an explicit owned
+text policy permits adaptation; otherwise they fail. Automatic roots choose a
+natural preferred width once, then measure content height; they do not grow a
+hidden fixed canvas until something fits. Public inputs/lifecycle are
 defined by [rendering](02_RENDERING_CONTRACT.md), local appearance metrics by
 [Theme](03_THEME_SYSTEM.md), numerical sources by
 [numbers](06_NUMERIC_PRESENTATION.md) and explanatory flow by
@@ -117,12 +118,17 @@ origin; off-center/jittered observations retain continuous positions.
 | --- | --- |
 | Omitted | Choose natural preferred outer width once, measure at it, derive height |
 | width(w) | Exact positive integral CSS width, measured automatic height |
+| max_width(m) | Natural preferred outer width capped by positive integral CSS m, measured automatic height |
 | size(w,h) | Exact positive pair, fit or fail without changing either |
 
-Latest sizing call replaces the entire request; width clears earlier exact height.
+Latest sizing call replaces the entire request; width or max_width clears earlier
+exact height.
 Zero rejects at preflight. Canvas ignores embedded standalone requests, including
-zero; they are not cell preferences. No public generic bounds, exact-height/auto-
-width or maximum-width mode exists.
+zero; they are not cell preferences. The owning Plot request also controls its
+facets. No public generic bounds, exact-height/auto-width, maximum-height or minimum-
+dimension mode exists. A width cap alone enables no text shrink, abbreviation,
+spacing compression or topology change. Width selection and locking follow
+[root coordination](#root-coordination).
 
 Natural preference composes traced summaries, insets, gaps, guide and scientific
 requirements bottom-up. Prose prefers
@@ -391,10 +397,47 @@ span=right-left and block W, line origin is -left for Start,
 titles/labels start; headers/axes/ticks/guide numbers center; annotations follow
 their typed edge anchor. Root prose has its resolved independent alignment.
 
-Preserve-text SVG retains original content, chosen line boundaries/anchors,
+Preserve-text SVG retains selected display content, chosen line boundaries/anchors,
 validated stack/weight and paragraph bidi metadata. Viewer shaping/fonts may
 differ. Outlined SVG/PNG use frozen generation glyphs/origins without second
 wrapping/fallback/shaping. Source accessibility metadata must not paint text twice.
+
+### Explicit Text Adaptation
+
+`src/layout/text/request.rs`, `src/layout/text/placement.rs`,
+`src/layout/text/ellipsis.rs`, `src/layout/text/visibility.rs` and
+`src/layout/text/font_fit.rs` consume one TextLayout through the common text engine.
+Natural preference uses complete content at preferred appearance size. Hard
+requirements relax only through an explicitly admitted fit/overflow/visibility
+policy, never because a preferred-size measurement failed.
+
+Ellipsis first tries complete text under the actual bounds and intersected line
+caps. Derived views retain complete graphemes and original/synthetic provenance;
+middle elision balances measured advances rather than forcing equal character
+counts or searching a prefix-by-suffix Cartesian product. Each candidate is
+reshaped and checked with the same transformed logical/ink predicate. The local
+program is source-bounded and releases failed payloads; it makes no global
+longest-view claim. Full consumed source analysis precedes abbreviation, so a
+missing source font is fatal. An unused marker contributes no font requirement;
+an actually reached marker is admitted before shaping its view.
+
+Font fitting retains exact design/shape inputs and positive finite fractional
+size bounds. Metric-derived proposals, the real floor/upper boundary and clamped
+preferred size are measured, not accepted from a scale estimate. Optimistic exact
+metric bounds may exclude proven nonfits. Further refinement excludes only
+certified intervals where every reached rounded metric and resulting wrap/view
+decision is unchanged; each step removes at least one represented size. This
+finite program does not assume globally monotone wrapping or use an integer grid
+or arbitrary sampling quota as nonfit evidence. Uniform fitting consumes the full
+actual eligible role group without coupling independent slots or contrast roles.
+
+Every selected size updates origins, outward ink, leading, transformed containment
+and its declared font-relative gaps. Explicit pixel gaps, unrelated mark metrics
+and root padding retain their owners. Size/view trials do not rerun source,
+locator or formatter functions or alter fixed tick positions. Spatial exhaustion
+uses TextOverflow's one terminal action; font, projection, arithmetic and allocation
+failures remain fatal. Selected views, sizes, visibility, clips and transforms
+freeze before capture, with no adaptation during Output replay.
 
 ## Installed Fonts And Pre-Font Census
 
@@ -552,16 +595,17 @@ that same eligible set while preserving all scientific tracks and mark constrain
 Canvas FirstColumnPerRow compares full category domains/order and equal complete
 selection requests before whole-axis suppression, never only equal visible names.
 Measure eligible text with correct orientation and complete outward interval/clearance.
-Only an explicit existing Heatmap label-fit
-policy can transform that family's category text.
+Only the actual owner's TextLayout policy or documented omitted Heatmap elision
+can transform the displayed text; neither changes category geometry.
 
 Numeric labels use a stable geometric view without changing source order or original
 occurrence IDs. Distinct projected centers receive nonoverlapping cells bounded by
 neighbor midpoints and panel endpoints minus clearance. Coincident equal labels
 share drawable cells and retain all tick geometry; incompatible painted labels
 are actual text-layout misses, not source-order/uniqueness errors. Endpoints place inward, interior
-center. Exact labels need not be unique; nonempty strings must fit whole. Empty
-exact labels retain tick/grid positions without text baseline/ink/gutter/collision.
+center. Exact labels need not be unique; nonempty strings fit whole unless their
+axis TextLayout explicitly admits adaptation. Empty exact labels retain tick/grid
+positions without text baseline/ink/gutter/collision.
 Candidate/final placement share canonical anchor and actual-ink predicate.
 
 From outside, top/left order is title, labels, ticks, stroke; bottom/right from
@@ -644,8 +688,9 @@ ink. Step=max(selected step,label height+label gap+tick height), with complete e
 requirements rounded once. Shelf clears target ink/data gap/half-stroke; horizontal
 orientation uses exact axis swap/quarter-turn. Required annotations, panel text,
 cell text and supplemental labels fit their actual containing boxes, not merely
-somewhere inside root. Scientific windows are the explicit clipping exception in
-rendering, not layout-overflow permission.
+somewhere inside root, unless their own explicit TextLayout permits clipping or
+local overflow. Final physical root containment remains mandatory. Scientific
+windows alone grant no layout-overflow permission.
 
 ## Topology, Feedback And Reuse
 
@@ -669,9 +714,15 @@ CanvasGridAssignment separates declared row/column boundaries from optional owne
 rectangles. Headers and row titles consume declared boundaries, never an owner's
 rectangle as a surrogate row edge. Only configured anchors are child destinations.
 
-panel_span requests a validated positive rectangular Plot footprint. Grid hard and
-preferred requirements cover the complete row/column intervals, using the canonical
-span allocator rather than dividing minima or charging only an anchor track. Measure
+panel_span requests a validated positive rectangular Plot footprint at zero-based
+row/column coordinates. Checked exclusive ends must remain within the declared
+Grid. Validate the whole footprint before insertion, rejecting overlap with any
+Plot/TextPanel owner in either insertion order, including covered nonanchors.
+TextPanels remain single-cell participants on that same occupancy path.
+
+Grid hard and preferred requirements cover the complete row/column intervals,
+using the canonical span allocator rather than dividing minima or charging only
+an anchor track. Measure
 width-dependent prose, native bodies and guides at the full spanning width; the one
 height consequence covers the entire row interval. Leading/trailing gutters and
 owned ink attach only to the footprint's outer edges. Intervening gaps and other

@@ -159,12 +159,13 @@ distinction per dimension. Nonfinite/unrepresentable geometry and nonzero source
 geometry collapsed by transformation/quantization still reject, even when hidden
 by clipping. True scientific zeros retain their defined family behavior.
 
-Data windows do not permit clipping required titles, axes/ticks, guides or
-annotations outside assigned boxes. An annotation's explicit visibility/window
-policy may suppress it; otherwise it fits complete uncut ink or fails. Exact image
-size cannot succeed by clipping layout content. Theme chrome absence does not
-remove semantic content. Heatmap's common x/y TextLayout category-label policy is
-not a general text-omission control.
+Data windows do not themselves permit clipping required titles, axes/ticks, guides
+or annotations outside assigned boxes. Text adaptation requires the actual owner's
+explicit TextLayout policy; annotation visibility/window policy remains separate.
+Otherwise required content fits complete uncut ink or fails. Exact image size does
+not implicitly enable clipping layout content. Theme chrome absence does not remove
+semantic content, and Heatmap's category-label policy does not authorize omitting
+unrelated text.
 
 ## Presentation Owners
 
@@ -251,8 +252,10 @@ Explicit Allow removes collision weight, not physical containment or final-root 
 Selected sources, requests, clips and placements are frozen before publication.
 
 TextRotation presets and equal custom finite angles normalize identically to
-[-180,180), without tenth-degree quantization. TextOrientation adds projected typed
-data directions and caller-ordered automatic tick candidates. TextRotationMode
+[-180,180), without tenth-degree quantization. Angles are clockwise degrees from
+physical horizontal in the top-down output frame; horizontal, tilt-up/down and
+vertical-up/down presets are 0, -45/+45 and -90/+90. TextOrientation adds projected
+typed data directions and caller-ordered automatic tick candidates. TextRotationMode
 chooses rotation about the selected measured point or alignment of the rotated
 bounds. Explicit orientation replaces the owner direction and its multiline order;
 omission preserves current owner defaults. Glyphs rotate independently of marks,
@@ -261,6 +264,9 @@ the same transformed logical/paint geometry used by every output.
 
 TextOverflow::ellipsis derives Start/Middle/End or physical Left/Right views with
 a caller marker (including empty), intersected line caps and optional distinctness.
+An explicit TextEllipsis initially uses U+2026 and a one-line cap; both are
+replaceable, including removal of its extra line cap. Distinctness follows the
+actual owner default rather than becoming a universal requirement.
 The original source and original/synthetic display spans remain retained. Views
 cut only at complete graphemes, preserve retained mandatory breaks and paragraph
 direction/embedding controls, and reshape the selected display before acceptance.
@@ -269,14 +275,14 @@ is reached. Nonfit consumes the same explicit terminal action, never a font fall
 Text SVG paints only the selected view and retains original text in nonpainting
 accessibility metadata; outlines/PNG replay those same glyphs. Heatmap omission
 retains its dense end-ellipsis/three-dot/distinct-view defaults; a present default
-x/y TextLayout selects complete legal wrapping. The dedicated label-fit API
-and prefix helper are removed.
+x/y TextLayout selects complete legal wrapping.
 
 TextFit permits fixed preferred size, a positive finite shrink floor, or a closed
 fractional range. Equal bounds fix that bound, even when it differs from the
 preferred appearance. Explicit ranges never admit an out-of-range preference.
-ContentFirst tries complete content over permitted sizes before marked views;
-PreferredSizeFirst tries the marked view at the preferred permitted size first.
+ContentFirst is the default and tries complete content over permitted sizes before
+marked views; PreferredSizeFirst tries the marked view at the preferred permitted
+size first.
 The terminal action remains TextOverflow's single choice. Independent is the
 factory default; Uniform selects a common permitted size in the actual eligible
 role group, keeping independent authored slots, axes and contrast roles separate.

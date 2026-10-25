@@ -117,19 +117,21 @@ before the one quantization. No intermediate binary64 product is formed, even fo
 overflowing/underflowing products. Negative factors reverse the displayed sign;
 zero makes every finite ordinary or mathematical-power operand display zero.
 
-Percent presentation is explicit scale 2 plus suffix `%`: raw 0.125 with
-Fractional(1) becomes `12.5%`. Suffix alone merely appends `%`.
+Percent rate contributes the exact factor 100 and the selected locale's percent
+suffix: raw 0.125 with Fractional(1) becomes `12.5%` under invariant locale.
+A literal suffix alone merely appends `%`.
 No scientific rescaling occurs.
 
 ### Explicit Tokens And Field Emission
 
 NumericLocale::invariant uses ASCII digits/signs, period decimal, comma grouping
 with Cycle[3], percent/per-mille and dollar/empty currency. Named locales transcribe
-all 59 definitions from d3-format 3.1.0 commit
-08806c62aa8f7b3fe64925f3989f1491c950a71c. `named_ids` is the exact catalog;
-unknown/case-changed IDs reject without a host fallback. Source/license attribution
-and the independently collected upstream normalized-token digest accompany the
-Rust constants. Missing named sign/numeral/rate fields use pinned defaults; named
+all 59 definitions from [d3-format 3.1.0's pinned locale catalog](https://github.com/d3/d3-format/tree/08806c62aa8f7b3fe64925f3989f1491c950a71c/locale)
+under its [license](https://github.com/d3/d3-format/blob/08806c62aa8f7b3fe64925f3989f1491c950a71c/LICENSE).
+`named_ids` is the exact catalog; unknown/case-changed IDs reject without a host
+fallback. Source/license attribution and the independently collected upstream
+normalized-token digest accompany the Rust constants. Missing named
+sign/numeral/rate fields use pinned defaults; named
 minus is U+2212, unlike invariant ASCII minus. No runtime JSON, network or assets.
 
 Custom locales own a nonempty decimal token, ten distinct nonempty digit strings,
@@ -156,7 +158,8 @@ in Decimal/Binary/Octal/HexLower/HexUpper; no fixed-size cast or second rounding
 ### Exact Prefix And Factor Selection
 
 NumericPrefixes::si accepts PerValue, WholeSet or Fixed(SiPrefix), with explicit
-KeepThreshold/PromoteOnRounding. Fixed covers the complete BIPM table, including
+KeepThreshold/PromoteOnRounding. Fixed covers the complete
+[BIPM table](https://www.bipm.org/en/measurement-units/si-prefixes), including
 deci/centi/deca/hecto and 2022 additions; automatic engineering steps are multiples
 of three saturated at -30/30. Micro is U+00B5. WholeSet ignores zero members when
 choosing the greatest nonzero scaled magnitude; all-zero SI uses neutral 0.
@@ -165,8 +168,9 @@ Compact rules have strictly increasing finite thresholds, positive finite diviso
 and literal single-line prefix/suffix. Below the first threshold the factor is one
 with empty affixes. Empty automatic tables normalize to none; Fixed must index an
 existing rule. decimal_compact normalizes to the custom 1000/K, 1000000/M,
-1000000000/B, 1000000000000/T table from scales 1.4.0. Literal compact affixes enclose
-the numeric presentation inside outer literal affixes and are not localized digits.
+1000000000/B, 1000000000000/T table from [scales 1.4.0](https://github.com/r-lib/scales/blob/v1.4.0/R/label-number.R).
+Literal compact affixes enclose the numeric presentation inside outer literal
+affixes and are not localized digits.
 
 KeepThreshold uses unrounded absolute magnitudes. PromoteOnRounding compares the
 original signed mathematical operand with exact rounding-cell boundaries, including
@@ -187,6 +191,8 @@ division or physical power. Output reservation precedes giant materializations.
 
 NumericFormat::from_specifier compiles
 `[[fill]align][sign][symbol][0][width][,][.precision][~][type]` into this same policy.
+The syntax reference is the pinned d3-format [locale/normalization](https://github.com/d3/d3-format/blob/08806c62aa8f7b3fe64925f3989f1491c950a71c/src/locale.js)
+and [type table](https://github.com/d3/d3-format/blob/08806c62aa8f7b3fe64925f3989f1491c950a71c/src/formatTypes.js).
 Defaults retain invariant locale, NearestEven and Preserve. Types f/e use fractional
 6; g/r/s/n and p use significant 6; % uses fractional 6; omitted type uses General,
 significant 12 and Trim. r is fixed-decimal significant; s is PerValue SI with
@@ -429,9 +435,10 @@ numeric/result context, not new font discovery or a new layout loop.
 ## TickGeneration And Exact Ticks
 
 TickGeneration is opaque Clone/Debug/Default/PartialEq/Eq, not Copy. One private
-primary locator is Automatic, Target or Interval; an independent optional positive
-maximum caps generated positions. Maximum is Automatic plus that cap, never a
-parallel locator implementation. Interval retains its admitted Linear/Log10 scale
+primary locator is Automatic, Target, Interval, ExactCount, Multiplicative or
+Function; an independent optional positive maximum caps generated positions.
+Maximum is Automatic plus that cap, never a parallel locator implementation.
+Interval retains its admitted Linear/Log10 scale
 binding and exact represented step/origin/space/requirement; the additive/decade readers project those
 constructor semantics. Default and automatic() reset the entire request.
 is_automatic tests the complete default, including absence of a cap. Additive is
@@ -449,12 +456,14 @@ fonts; interval scale-kind mismatch rejects. Counts do not change scientific
 limits, transforms, format or nice-range policy.
 
 Exact x_ticks/y_ticks have nonempty finite strictly ascending data positions in
-the resolved display domain, indivisible verbatim labels, including empty labels.
+the resolved display domain and retain verbatim source labels, including empty labels.
 They replace all generated sources in either setter order. Never merge/cap/drop
-exact positions to satisfy a generated maximum; exact collisions geometrically
-reject instead of moving/rotating/omitting labels. Actual-axis semantic validation
-still applies. Forest exact positions are supplied in raw data space and projected
-by the scientific transform; generated Forest positions are exponents.
+exact positions to satisfy a generated maximum. Exact labels use their axis
+TextLayout: omission keeps complete strict fit, while explicit rotation, fitting,
+overflow or visibility may adapt text without moving/removing positions or
+reformatting the supplied strings. Actual-axis semantic validation still applies.
+Forest exact positions are supplied in raw data space and projected by the
+scientific transform; generated operands follow their locator's Data/Scale semantics.
 
 ### Complete Source Program
 
@@ -677,5 +686,7 @@ not invalidate earlier shaped plans or introduce a global admission-epoch key.
 Freeze final strings, selected precision, face/glyphs and placement. Capture, Null,
 SVG/PNG and Output reuse perform no numeric conversion, source selection or new
 font work. Real storage/precision/length failures remain fatal; layout fit retains
-its typed misses, without lowering precision, clipping required text, truncating
-affixes or introducing another convergence driver.
+its typed misses without implicitly lowering precision, clipping required text,
+truncating affixes or introducing another convergence driver. Explicit TextLayout
+adaptation derives a display view of the retained final spelling, never another
+numeric conversion or callback invocation.

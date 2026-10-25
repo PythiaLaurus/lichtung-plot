@@ -68,7 +68,8 @@ after owner selection. No delayed error strings or sentinel defaults are stored.
 
 ### Units And Exact Local Relationships
 
-Font sizes, radii and tick lengths are positive integral CSS pixels. Present
+Font sizes are positive finite f64 CSS pixels, including fractional sizes;
+radii and tick lengths are positive integral CSS pixels. Present
 stroke widths are finite positive f32 CSS pixels; zero is not absence. Optional
 frames/outlines/grid/ticks use structural None. Alpha is an inclusive u8 byte.
 Normalize signed zero in nonnegative floating quantities/domains/offsets; reject
@@ -116,7 +117,8 @@ by Plot/Canvas heading instructions and CompositionTheme. Composition alignment
 controls block placement and each line across the physical post-inset
 content span, not the data-panel span or bidi-logical edges. All built-ins use
 Center title, None subtitle (follow the effective title) and independent Start
-caption. Root rotation remains fixed.
+caption. Root text defaults to horizontal; an explicit TextLayout orientation
+replaces that default independently of Theme appearance.
 
 ## Colors, Paints And Typography
 
