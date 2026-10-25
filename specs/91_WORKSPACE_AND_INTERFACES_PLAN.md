@@ -1,0 +1,522 @@
+# Workspace, Data Interfaces And Bilingual Documentation
+
+## Status And Authority
+
+This is an implementation plan, not evidence that the planned components exist.
+Current behavior remains defined by [architecture](01_ARCHITECTURE.md),
+[rendering](02_RENDERING_CONTRACT.md), [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md),
+[layout](05_LAYOUT_SYSTEM.md), [numbers](06_NUMERIC_PRESENTATION.md) and
+[development](90_DEVELOPMENT.md). Update those contracts with working behavior,
+not in anticipation of it.
+
+The user has requested a workspace migration, new Polars/ndarray adapters, a
+complete Python interface, and replacement of the loose guides with a serious
+Book-style documentation system and gallery. This plan does not authorize
+implementation, publishing packages, deploying a site, pushing Git refs or
+rewriting history. The repository is still a standalone single-package renderer.
+
+Python object mutation/copy semantics are deliberately unresolved. Record the
+settled scope first; analyze that choice separately and, if source inspection
+cannot settle it, resolve it through analysis and measurements at the beginning
+of the Python-binding work. It must not block the workspace, adapters or Book.
+
+## Confirmed Scope And Constraints
+
+| Concern | Required outcome |
+| --- | --- |
+| Existing adapter/binding code | All three interfaces are new implementations; there is no requested repository/history import. |
+| Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
+| Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
+| Python input | Native Python sequences, NumPy and Polars use the same native-value/rendering route. |
+| Python compatibility | CPython 3.10 is a required minimum, not a version that may be excluded by adopting a moving support-window recommendation. |
+| Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
+| Book languages | Chinese and English have equal status, equivalent content and coverage; neither language is the source or reference edition for the other. |
+| Test scale | Preserve the existing whole-repository ceilings: 800 unit tests, 300 module-integration tests and 80 independent core-E2E scenarios, including ignored cases. |
+| Publication | Package/site build verification is in scope; actual publication, deployment and Git push require separate authorization. |
+
+The [deferred-feature review](99_DEFERRED_FEATURES.md) remains separate. Building
+its workspace/interface prerequisites does not admit the deferred drawing/legend
+work or satisfy its first-publication checkpoint.
+
+## Reference-Backed Architecture
+
+### Workspace And Dependency Direction
+
+Use a virtual workspace root, keeping the rendering crate intact rather than
+splitting fonts, layout, scenes or backends into new public crates. The intended
+organization is:
+
+```text
+Cargo.toml                         # virtual workspace
+Cargo.lock
+rust-toolchain.toml
+Justfile
+AGENTS.md
+crates/
+  lichtung-plot/                    # existing src/, tests/, examples/
+  lichtung-plot-polars/             # new Rust adapter and its public examples
+  lichtung-plot-ndarray/            # new Rust adapter and its public examples
+bindings/
+  python/                          # Rust extension, Python package/tests/examples
+docs/
+  en/book.toml
+  en/src/
+  zh-CN/book.toml
+  zh-CN/src/
+specs/
+```
+
+Do not add empty workspace members before they have working consumers. A small
+nonpublished Rust development package may provide gallery assembly if needed;
+keep root Justfile recipes as the normal entry points and do not build a generic
+workflow framework or add a `tools/` directory.
+
+[Cargo workspaces][cargo-workspaces] and [Polars' workspace][polars-workspace]
+provide direct precedents for a virtual root, shared lockfile/dependency policy,
+member-local packages and explicit default members. Preserve the existing Rust
+edition/toolchain during the mechanical move. Specify the resolver explicitly.
+Share appropriate metadata, dependency versions and lints; do not equate sharing
+metadata with merging the components' public APIs.
+
+Keep ordinary default development lightweight, with the core as the default
+member. Full workspace validation must explicitly select all intended members;
+default-member success is not adapter/binding verification. A core-only consumer
+must not compile Polars, ndarray or Python, including through reverse optional
+features or development helpers used by the core examples.
+
+Adapters use public core constructors and values. Do not expose backend/layout
+internals or introduce another general data model to make them possible. Internal
+publishable dependencies need both a local path and a release version; an
+in-checkout build is not proof that an independently unpacked package works.
+
+### Repository Policy Migration
+
+The current AGENTS/development rules prohibit workspace inheritance/path
+dependencies and Python files. Change those rules deliberately with the actual
+migration, not in this planning-only change:
+
+- Permit workspace-managed dependencies and local member dependencies while
+  preserving core independence and package verification.
+- Permit Python package code, stubs, tests and examples within `bindings/python/`;
+  do not turn that exception into Python-based renderer/development support
+  throughout the repository.
+- Retain no-network/no-asset-provisioning behavior, installed-font policy, modern
+  Rust module layout and the single-current-API rule.
+- Migrate formal source-owner paths and repository consumers with the real file
+  move. Do not leave old paths or introduce compatibility packages.
+- Keep documentation/generation tooling out of production dependency paths.
+
+Audit package-relative fixture/includes, `CARGO_MANIFEST_DIR`, examples, licenses,
+readmes and explicit Cargo test targets. Move the core source, tests and examples
+together so that the package remains self-contained.
+
+## Data Adapter Contracts
+
+### Shared Native Boundary
+
+Both adapters produce the existing owned native values, including NumericValues,
+CategoryValues, BooleanValues and caller-supplied SourceRows where applicable.
+They preserve aligned slots, missingness, raw keys and order. Conversion is not
+permission to sort, aggregate, impute, drop rows or choose statistical analysis.
+Do not invent row identity from a container address or a newly compacted index.
+
+Copying into an owned native snapshot is admitted. Do not promise zero-copy
+interoperability or retain a foreign mutable buffer as the renderer's source.
+Later changes to the caller's container must not change an existing plot.
+
+Ordinary integer/floating numeric values use the core's f64 representation.
+[Matplotlib's conversion][matplotlib-conversion] and
+[Seaborn's numeric coordinate path][seaborn-conversion] provide concrete precedents
+for float normalization rather than a new exact-integer acceptance policy.
+Distinguish normal representational rounding from actual conversion failure. Never
+turn a failed operation into null, zero or a silently discarded row. Raw category
+and provenance identities do not pass through this numeric conversion.
+
+For example, integer `9007199254740993` becomes binary64 `9007199254740992`;
+this accepted input-boundary rounding is not a promise of exact integer storage.
+[NumPy's casting documentation][numpy-casting] must not be interpreted as a
+per-value proof of exact representability. The native exact/certified numeric
+presentation engine still formats the retained operand under its existing rules.
+
+Preserve the distinction between null and NaN, as in
+[Polars' missing-data contract][polars-missing]. Existing core applicability,
+nonfinite-value and scientific validation remain at their actual consumers;
+the adapter must neither weaken them nor add unrelated source-acceptance passes.
+
+### Polars
+
+Define the concrete column/frame entry points, errors and dtype table before
+exposing an adapter API. Use adapter-owned functions, wrappers or extension traits,
+not orphan-rule-invalid foreign `TryFrom` implementations or a Polars dependency
+inside the renderer.
+
+Cover numeric, categorical/string and Boolean channels with correct nullable,
+multi-chunk, sliced and empty behavior. Decode category identities rather than
+treating foreign dictionary codes as the native dictionary. Preserve native domain
+and explicit-order semantics instead of silently inventing unobserved categories.
+Document unsupported semantic dtypes and any deliberate conversions; temporal
+units or other scientific meaning must not be guessed from physical storage.
+Do not silently execute a lazy query to obtain an eager input.
+
+### ndarray
+
+Define named one-dimensional value conversion and the meaning of any supported
+two-dimensional table/grid entry points. Accept logical views, not only contiguous
+slices. [ndarray's iterator contract][ndarray-order] defines row-major logical
+iteration independently of storage layout; preserve it for transposes and strides.
+
+Specify dimension/label/mask alignment and retain missingness separately from NaN.
+Do not silently flatten an array without defining its axes. An ndarray numerical
+matrix is not automatically the core's `Plot::matrix`, which is a scatter matrix
+of named variables; a heatmap has its separate categorical cell semantics.
+
+## Complete Python Interface
+
+### Public Capability Mapping
+
+Use PyO3 and maturin with a mixed package layout, an internal native extension,
+and shipped typing information. [Maturin's project layout][maturin-layout] and
+[PyPA's source-layout guidance][python-layout] address accidental source-tree
+imports and packaging boundaries. Keep Python glue thin; no Python-side renderer,
+parallel scientific specification or JSON round trip is authorized.
+
+Inventory the core exports and actual family capabilities against Python-visible
+constructors, methods, value types and exceptions. Preserve equivalent semantic
+capabilities rather than literally reproducing Rust generics, const qualifiers
+or borrowed lifetimes. [PyO3 class restrictions][pyo3-classes] require concrete
+Python types and deliberate ownership. Erasing everything to Any and accepting
+every setter is not equivalent capability coverage.
+
+Numeric/tick callbacks are required capabilities, not optional simplifications.
+Design their Python-reference ownership, garbage collection, operation identity,
+context lifetime, exception propagation and reentrancy before exposing them.
+Python contexts must not outlive borrowed Rust operations or expose private
+renderer handles. Pure Rust work and Python callbacks need explicit interpreter
+attachment/locking boundaries; see [PyO3 parallelism][pyo3-parallelism]. Do not
+silently stringify and discard an application exception's meaningful context.
+
+Preserve exact-tick precedence, once-per-reached-context materialization and frozen
+Output replay. A new terminal render is distinct from another publication of the
+same Output. Configuration edits must not perform rendering as a hidden cost.
+
+No mutable/immutable Python configuration choice, public Clone addition, new
+render entry point or configuration-storage refactor is authorized merely by this
+capability inventory. Resolve the object-lifecycle design at its explicit gate.
+
+### Input Bridges And Compatible Dependencies
+
+Native sequences, NumPy and Polars converge on the same native data contracts.
+[rust-numpy][rust-numpy] offers readonly ndarray views; consume them into owned
+values instead of retaining a mutable Python buffer during detached rendering.
+Do not force a contiguous-only route or introduce a list/JSON fallback that changes
+missingness, dtype meaning or source order.
+
+Python Polars is not a Rust ABI object. Compare the official
+[pyo3-polars bridge][pyo3-polars-types] with the
+[Arrow PyCapsule protocol][arrow-capsules], including compatibility, supported
+types, dependency footprint, reference/release safety and adapter reuse. Select
+one supported route rather than accumulate fallback chains.
+
+Choose a compatible dependency set, not independently latest package versions.
+Published [pyo3-polars 0.28.0 dependencies][bridge-dependencies] require PyO3 0.29
+and Polars 0.55; [numpy 0.29.0 dependencies][numpy-dependencies] also use PyO3 0.29
+and admit ndarray 0.17. This is a candidate manifest-compatible set, not compiled
+or runtime verification and not a fixed version decision for implementation.
+
+### Python 3.10 And Distribution Verification
+
+Set CPython 3.10 as the minimum. Do not adopt SPEC 0 as a reason to remove it.
+Actual releases of [PyTorch][torch-release], [TensorFlow][tensorflow-release] and
+[Polars][polars-python-release] declare Python 3.10 support; the interface must
+serve that established machine-learning environment.
+
+Do not make latest NumPy the universal minimum. Both
+[NumPy 1.26.4][numpy-one-release] and [NumPy 2.2.6][numpy-two-release] provide
+CPython 3.10 wheels. Validate old-interpreter/current-compatible dependencies as
+well as newer ordinary CPython combinations. Establish the supported dependency,
+OS/architecture and wheel-ABI matrix from actual build/install tests, including
+the oldest supported interpreter. Free-threaded/PyPy support is not implied by a
+`requires-python` range and needs an explicit verified status.
+
+Test installed wheels outside the source tree and build a wheel from the unpacked
+sdist. [Maturin's distribution guidance][maturin-distribution] explicitly treats
+that as a source-completeness check. Metadata, Rust compilation or an editable
+installation alone cannot establish distribution compatibility. Preserve the
+renderer font policy; successful installation does not provision fonts/assets.
+
+## Equal-Status Chinese And English Books
+
+Use mdBook as the user-guide system. Keep specs as architectural contracts and
+rustdoc as the exact Rust API reference. README becomes an introduction/entry
+point, not another full manual. Replace the existing loose guides once the
+receiving chapters are complete; do not maintain competing guide implementations.
+
+Build two peer language editions with matching language-neutral chapter/case
+identities and equivalent topics, capabilities, examples and release scope:
+
+- Neither edition is an authoritative original, translation backlog or fallback.
+- Existing English guides are input material for both editions, not the Chinese
+  edition's semantic authority. Both derive from the same contracts and API.
+- Use idiomatic prose in each language, without requiring sentence-by-sentence
+  literal translation. Review semantic changes in both editions together.
+- Missing chapters/required examples are build/review failures, not permission to
+  insert the other language's page. Language navigation links peer chapters.
+- Mechanically check chapter/case coverage, code includes and links. Do not claim
+  that a structural check proves prose has equivalent meaning.
+
+Organize the learning path around installation/first plot, native data and
+missingness, plot families, axes/numeric formatting, themes/text/annotations,
+facets/Canvas, output/fonts/errors, adapters, Python and gallery. Do not merely
+wrap the existing file order in a sidebar.
+
+Use [mdBook source includes and anchors][mdbook-includes] to share actual runnable
+examples. Do not hand-copy code into both editions or substitute line-number
+fragments for stable semantic anchors. Package executable examples with their
+own crate/binding, using public APIs and self-contained source fixtures.
+
+## Examples And Gallery As One Executable Content System
+
+Examples own runnable code; Book chapters explain it; gallery pages present its
+actual output. [Matplotlib's gallery][matplotlib-gallery] and
+[Sphinx-Gallery's source/execution model][sphinx-gallery] establish this relationship;
+they do not require replacing mdBook with Sphinx or adding another rendering stack.
+
+Give each case a stable semantic identity and metadata linking its source, output
+artifacts, purpose, related chapters and API references. A program can produce
+several figures and a figure can support several chapters. Keep metadata about
+navigation/artifacts, not a new serialized plotting language.
+
+Provide caller-selected example output directories and isolated per-case paths;
+replace fixed shared temporary destinations. Keep fixtures local and deterministic,
+with no data/font downloads. Produce outlined SVG for portable display and derive
+optional PNG thumbnails from the same frozen Output. Preserve-text output remains
+useful for relevant demonstrations, not an excuse for a different layout run.
+
+Build generated pages, images and site output in build/staging directories. Do
+not manually maintain generated scenes or silently substitute stale/placeholder
+images when an example fails. Explicit site assembly coordinates rendering and
+Book assets; ordinary core compilation must not generate a gallery in `build.rs`.
+Use preinstalled, documented generation fonts and record the build environment
+without bundling fonts or claiming cross-environment byte equality.
+
+Make every existing plot family discoverable through a meaningful example, plus
+representative cross-cutting composition/text/numeric cases. This is not a request
+for a family-by-option image matrix. Reuse source and cases already exercising
+the same contract rather than create duplicate rendering suites for each language
+or each documentation entry point.
+
+## Whole-Repository Verification And Delivery Gates
+
+Keep the current ceilings across all crates, Python, doctests, executable Book
+content and automated gallery workflows. Classify their actual contracts before
+adding coverage. A new directory, foreign test runner, generated driver or loop
+does not exempt independently exercised scenarios. Identify and remove genuinely
+redundant coverage and obsolete support where necessary; do not delete distinct
+contracts or raise the limits. Stop and report a real capacity conflict rather
+than disguise it through packaging or relabeling.
+
+| Work | Required bounded evidence |
+| --- | --- |
+| Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
+| Data adapters | Nullable/type/order/provenance and strided/chunked conversion contracts, plus representative public rendering consumers. |
+| Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Books/gallery | Both editions' coverage/links/includes, actual example execution, successful artifact assembly and no stale-source substitution. |
+
+For code changes use focused tests and strict Clippy, never `cargo check`:
+
+```sh
+cargo clippy --locked --offline --workspace --all-targets -- -D warnings
+```
+
+Update root recipes to select their intended scope explicitly. Respect the broad
+closure requirements for dependency changes and the mechanical workspace/package
+migration; state the concrete reason before a full-suite run. Do not repeatedly
+rerun the entire suite after localized repairs. Documentation-only planning needs
+reference/source consistency checks and `git diff --check`, not compiler tests.
+
+Do not mistake `cargo test --all-targets` for executing every example main, or
+`cargo test --doc` for checking Book Markdown. Use actual example execution and
+the appropriately configured [mdBook test command][mdbook-test] where relevant.
+Check isolated code and end-to-end workflows at their real semantic layer instead
+of duplicating every imported fragment as a new test.
+
+Cargo workspace success is not independently unpacked-package success. Resolve
+unpublished inter-member dependency/package verification explicitly; unavailable
+registry data is a blocker, not a pass or a reason to substitute `--no-verify`.
+No package contents or published ref may reintroduce the full Unicode corpus.
+
+### Delivery Order
+
+1. **Mechanical workspace and policy migration.** Move the core without API or
+   algorithm changes, update real source paths/recipes/packaging rules, and verify
+   independence. Do not add future-only interface crates.
+2. **Book/example/gallery foundation.** Establish peer language books and shared
+   runnable-source/output conventions using existing capabilities and examples.
+3. **ndarray adapter.** Deliver its concrete native-value conversions, callers,
+   focused evidence and both-language documentation together.
+4. **Polars adapter.** Deliver its dtype/missingness/order contract and actual
+   consumers with both-language documentation and focused evidence.
+5. **Python lifecycle decision gate.** Resolve the deferred object semantics and
+   necessary public-core ownership facilities before mass-producing bindings.
+6. **Complete Python interface.** Deliver the capability mapping, callbacks, input
+   bridges, typing and distribution verification through the same renderer.
+7. **Integrated content and closure.** Complete bilingual content/gallery coverage
+   and explicit workspace/package/site verification. Report unexecuted external
+   checks honestly; actual release, deployment and push remain separately gated.
+
+Commit each completed logical objective before unrelated work. Commit messages
+describe enduring boundaries/behavior, not numbered delivery stages.
+
+## Open Python Object-Lifecycle Decision
+
+No choice is made here between mutation-and-return-self and new-configuration
+returns. Do not infer a Python decision from Rust's consuming `mut self -> Self`:
+it moves ownership, whereas Python callers can retain aliases. Do not treat either
+design as universally faster or more idiomatic without examining this project.
+
+### What Source Inspection Establishes
+
+Both [Plotly's mutation-and-return-self contract][plotly-updates] and
+[Altair's new-configuration methods][altair-properties] have established
+precedents. A choice of configuration semantics is separate from a choice of
+physical storage or rendering schedule. It is not a contest between inevitably
+deep-copying everything and inevitably mutating without copying.
+
+The current native implementation provides the following concrete evidence:
+
+| Owner | Established fact | Consequence, not a timing claim |
+| --- | --- | --- |
+| `src/builder.rs`, `src/values.rs` | Plot input and native numeric/category payloads use Arc; Theme attachments are shared too. | A new configuration need not copy all observation buffers or repeat foreign-input conversion. |
+| `src/builder.rs`, `src/text.rs`, `src/layout/panel.rs` | Plot's derived Clone also clones owned text, annotation/layer vectors and exact tick vectors/strings. | Whole-Plot cloning is not constant-cost in total configuration size, even with shared scientific data. |
+| `src/canvas.rs`, `src/canvas/placement.rs` | Public Canvas is not Clone; its private placements own grid-sized vectors and boxed Plot payloads. | A reusable Python Canvas needs an explicit ownership design; blindly copying placements for every insertion can have quadratic cumulative cost when panel count grows with grid size. |
+| `src/labels.rs` | Alias maps already use Arc::make_mut. | Existing copy-on-write is useful, but repeated edits to shared maps can still copy the map; Arc alone is not a complexity guarantee. |
+| `src/output.rs` | Output is not Clone and its fallible publication methods consume self. | Both configuration models must address reusable Python Output handles and publication failure without rerendering the frozen scene. |
+
+Public setters commonly consume `self`; some, such as Canvas placement, return
+`Result<Self>`. On Err the caller does not receive the original Rust owner back.
+A Python mutation wrapper cannot simply move the value out, call such a method,
+and assume it can restore the original on failure. Retaining a candidate copy,
+changing a deliberately public ownership facility, or choosing a different
+documented failure protocol has real consequences. Private in-place helpers are
+not automatically available to a separate binding crate. New-configuration
+returns also need a lawful native ownership route; neither design is free.
+
+Transient and retained versions have different memory behavior. In a linear
+configuration chain, released predecessors need not all remain resident, but
+cumulative allocation/copy traffic can still grow with every edit. Retaining many
+branches retains their actual differing configuration. Conversely, a fair mutable
+comparison must include the snapshots/copies needed to produce those same
+independent branches, not compare branch construction with repeatedly overwriting
+one result.
+
+Wrapping an entire configuration in Arc and invoking make_mut can still clone
+that whole configuration when shared; see [Arc's documented behavior][arc-cow].
+Fine-grained sharing/persistent collections add indirection, reference-counting,
+equality/dependency and maintenance costs. Do not prescribe them before measuring
+the simple baseline, or claim that shared observation data proves negligible
+configuration overhead. Do not use a guessed Python reference count as proof
+that a caller cannot observe mutation.
+
+### Compare Complete Observable Semantics
+
+Evaluate these concerns together, not only setter timing:
+
+| Concern | Required comparison |
+| --- | --- |
+| Aliases and variants | Whether an edit changes another name for the same Python object; how callers derive independent plots; whether chaining without assignment discards the result. |
+| Exceptions and ownership | Invalid edits, invalid placement, callback failures and output I/O failures; retained handles must not accidentally become empty or refer to half-applied edits. |
+| Composition | Whether inserting a Plot into Canvas captures a native configuration or keeps a live mutable child reference. Preserve parent ownership, local instructions and one scientific producer per owner rather than accidentally changing composition semantics. |
+| Input independence | Both models use owned native snapshots; neither may turn later NumPy/Polars mutation into an unrequested edit of an existing plot. |
+| Rendering and publication | A terminal render uses stable inputs; an already returned Output stays frozen across later configuration edits and subsequent publications. No implicit cross-operation layout cache or early render may hide construction cost. |
+| Callbacks and threads | Python ownership/cycles, callback identity, exceptions, reentrancy and interpreter attachment. [PyO3 runtime borrowing][pyo3-classes] means holding a mutable object borrow across a callback can prevent reentrant access; immutability alone also does not solve [Python reference cycles][pyo3-gc]. |
+| Native boundary and complexity | Whether the design uses only deliberate public core facilities and preserves one representation/validation path, versus introducing a parallel Python specification, duplicated validators or a general builder hierarchy. |
+| User-facing consistency | Naming, typing, documentation and error behavior must consistently express the selected model across Plot, Canvas, Text/Theme policies and Output; these objects need not all have identical mutability, but differences must be deliberate. |
+
+The mutable-configuration model can be attractive for interactive stepwise edits
+and may avoid some candidate copies where ownership permits it. The
+new-configuration model can make reusable templates and independent variants
+clearer and may isolate configuration changes naturally. These are tradeoffs,
+not proof of a universal performance winner or grounds to reduce API coverage.
+
+### Binding-Time Analysis And Measurement Gate
+
+**Decision: defer the configuration-semantics choice to the beginning of the
+Python-binding work.** Source inspection identifies risks but cannot establish
+actual PyO3/CPython construction latency, allocation behavior or acceptable
+tradeoffs. No benchmark or Python prototype has been executed for this planning
+change. Do not select either model or restructure the core speculatively now.
+
+At that gate:
+
+1. Write concrete alias/variant, edit-failure, composition and repeated-publication
+   examples for each candidate. Specify native ownership and Python-reference
+   lifetimes, including reentrant/throwing callbacks, before comparing speed.
+2. Build bounded internal comparison prototypes through actual PyO3 entry points,
+   covering Plot, fallible Canvas edits and frozen Output reuse. A Rust Clone
+   microbenchmark alone cannot settle the Python interface. Apply strict Clippy
+   and the existing semantic test ceilings to any retained support/tests.
+3. Compare equivalent workloads: small ordinary configurations; large shared
+   numeric inputs with many scalar edits; growing exact-tick/annotation/alias
+   content; progressively populated Canvas grids; and retained branches derived
+   from a common configuration. Include successful output/semantic checks so that
+   reduced content or changed ownership cannot masquerade as an optimization.
+4. Separate foreign-container conversion, Python/FFI/configuration construction,
+   rendering/font discovery and frozen-output publication. Report absolute timing,
+   scaling with input/configuration size, cumulative allocations and independently
+   observed peak memory; do not substitute allocation totals for peak RSS or hide
+   setter cost in total rendering time. Include required CPython 3.10 and a newer
+   supported interpreter. Do not invent a speedup claim or arbitrary universal
+   percentage threshold without evidence and a real workflow.
+5. Choose the least complex design meeting the agreed observable semantics and
+   measured workflow needs. If that evidence still leaves a product tradeoff,
+   present the concrete results and examples to the user then, rather than ask
+   for another abstract mutable/immutable preference now.
+6. Record the selected single public model and justified native API/storage
+   changes before delivering the full binding surface. Migrate affected callers
+   and remove comparison-only alternatives. Do not introduce modes, per-setter
+   inplace switches or competing representations merely to avoid the decision;
+   an additional product capability would need its own established basis and
+   user confirmation.
+
+This is a required bounded decision gate, not indefinite uncertainty or a renderer
+feature in the deferred inventory. Workspace, adapters and peer-language Book
+infrastructure can proceed independently; Python-specific published examples and
+method/lifecycle contracts must wait for the result.
+
+## Reference Sources
+
+References establish particular capabilities/behaviors, not blanket endorsement
+of every upstream design. Published metadata establishes declared compatibility,
+not successful builds of this repository. Recheck the selected versions when the
+corresponding implementation begins.
+
+[cargo-workspaces]: https://doc.rust-lang.org/cargo/reference/workspaces.html
+[polars-workspace]: https://github.com/pola-rs/polars/blob/rs-0.55.2/Cargo.toml
+[matplotlib-conversion]: https://github.com/matplotlib/matplotlib/blob/v3.11.2/lib/matplotlib/cbook.py
+[seaborn-conversion]: https://github.com/mwaskom/seaborn/blob/v0.13.2/seaborn/_base.py
+[numpy-casting]: https://numpy.org/doc/stable/reference/generated/numpy.can_cast.html
+[polars-missing]: https://docs.pola.rs/user-guide/expressions/missing-data/
+[ndarray-order]: https://docs.rs/ndarray/0.17.2/ndarray/struct.ArrayBase.html
+[maturin-layout]: https://www.maturin.rs/project_layout.html
+[python-layout]: https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
+[pyo3-classes]: https://pyo3.rs/v0.29.3/class.html
+[pyo3-parallelism]: https://pyo3.rs/v0.29.3/parallelism.html
+[rust-numpy]: https://github.com/PyO3/rust-numpy/tree/v0.29.0
+[pyo3-polars-types]: https://github.com/pola-rs/polars/blob/rs-0.55.2/pyo3-polars/pyo3-polars/src/types.rs
+[arrow-capsules]: https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
+[bridge-dependencies]: https://crates.io/api/v1/crates/pyo3-polars/0.28.0/dependencies
+[numpy-dependencies]: https://crates.io/api/v1/crates/numpy/0.29.0/dependencies
+[torch-release]: https://pypi.org/pypi/torch/2.14.1/json
+[tensorflow-release]: https://pypi.org/pypi/tensorflow/2.21.0/json
+[polars-python-release]: https://pypi.org/pypi/polars/2.0.0/json
+[numpy-one-release]: https://pypi.org/pypi/numpy/1.26.4/json
+[numpy-two-release]: https://pypi.org/pypi/numpy/2.2.6/json
+[maturin-distribution]: https://www.maturin.rs/distribution.html
+[mdbook-includes]: https://rust-lang.github.io/mdBook/format/mdbook.html
+[matplotlib-gallery]: https://matplotlib.org/stable/gallery/index.html
+[sphinx-gallery]: https://sphinx-gallery.github.io/stable/configuration.html
+[mdbook-test]: https://rust-lang.github.io/mdBook/cli/test.html
+[plotly-updates]: https://plotly.com/python/creating-and-updating-figures/#Chaining-Figure-Operations
+[altair-properties]: https://github.com/vega/altair/blob/v5.5.0/altair/vegalite/v5/api.py
+[arc-cow]: https://doc.rust-lang.org/std/sync/struct.Arc.html#method.make_mut
+[pyo3-gc]: https://pyo3.rs/v0.29.3/class/protocols.html#garbage-collector-integration
