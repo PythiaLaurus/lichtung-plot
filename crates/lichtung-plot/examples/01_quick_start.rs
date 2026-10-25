@@ -1,8 +1,8 @@
 //! Example 01: a minimal scatter using native renderer values.
 //!
-//! Run with: cargo run --example 01_quick_start -p lichtung-plot -- <directory>
+//! Run with: cargo run --example 01_quick_start -p lichtung-plot
 //!
-//! Writes a content-sized `quick_start.svg` to the supplied directory
+//! Writes a content-sized `quick_start.svg` to the working directory by default
 //! from an extensionless base destination, then reports its frozen dimensions.
 
 // ANCHOR: example

@@ -22,11 +22,11 @@ runnable example sources and gallery outputs, not hand-copied plotting programs.
 From the workspace root, with suitable system fonts installed:
 
 ```sh
-cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 ```
 
-Each example requires one caller-selected output directory. The renderer never
-downloads fonts. See [installation](docs/en/src/installation.md) /
+Examples write to the working directory by default; an optional directory after
+`--` redirects output. The renderer never downloads fonts. See [installation](docs/en/src/installation.md) /
 [安装](docs/zh-CN/src/installation.md) for local dependency paths and font requirements.
 
 ## Workspace And Development

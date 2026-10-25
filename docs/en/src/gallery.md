@@ -9,7 +9,7 @@ reimplement plots or reuse old images when execution fails. Initial cases are:
 - [Numeric policies across one composition](gallery-numeric-policies.md)
 - [Data anchoring and independent text fitting](gallery-text-layout.md)
 
-Each page includes the executed source, its caller-selected output directory,
+Each page includes the executed source, its default output behavior,
 related chapter, API reference and actual SVG files. Outlined SVG is the display
 form; a preserve-text download, when supplied, replays the same frozen Output.
 The initial gallery is not yet an image catalog for all 25 families; consult

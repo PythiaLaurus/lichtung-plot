@@ -28,7 +28,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Objective | Current status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
-| Peer-language Book/example/gallery foundation | Delivered: ten peer chapters, shared runnable-source includes, caller-selected example output directories and three executed gallery workflows; full per-family gallery coverage remains for integrated content closure. |
+| Peer-language Book/example/gallery foundation | Delivered: ten peer chapters, shared runnable-source includes, zero-argument examples with optional output redirection and three executed gallery workflows; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
@@ -303,8 +303,9 @@ artifacts, purpose, related chapters and API references. A program can produce
 several figures and a figure can support several chapters. Keep metadata about
 navigation/artifacts, not a new serialized plotting language.
 
-Provide caller-selected example output directories and isolated per-case paths;
-replace fixed shared temporary destinations. Keep fixtures local and deterministic,
+Examples run without arguments, using the current working directory by default;
+an optional directory argument redirects output. Gallery builds choose isolated
+per-case paths internally, without requiring manual directory arguments. Keep fixtures local and deterministic,
 with no data/font downloads. Produce outlined SVG for portable display and derive
 optional PNG thumbnails from the same frozen Output. Preserve-text output remains
 useful for relevant demonstrations, not an excuse for a different layout run.

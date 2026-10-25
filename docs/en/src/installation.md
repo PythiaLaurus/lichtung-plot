@@ -20,13 +20,14 @@ text needs real coverage in the selected stack; see [output and fonts](output.md
 From the workspace root:
 
 ```sh
-cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 ```
 
-Every example requires exactly one output directory and creates it if necessary.
-The example writes `quick_start.svg` there and reports its frozen dimensions.
-Relative directories are relative to the caller's working directory; no fixed
-shared temporary destination is used. `--offline` requires cached Rust dependencies.
+Every example runs without arguments. This example writes `quick_start.svg` to
+the working directory and reports its frozen dimensions. If needed, append
+`-- <directory>` to redirect output; that optional directory is created if absent
+and relative paths are resolved from the working directory. Gallery builds choose
+their isolated directories automatically. `--offline` requires cached Rust dependencies.
 
 ```rust
 {{#include ../../../crates/lichtung-plot/examples/01_quick_start.rs:example}}

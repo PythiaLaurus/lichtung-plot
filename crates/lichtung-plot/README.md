@@ -53,11 +53,12 @@ The package includes runnable examples and self-contained default test fixtures.
 For example, from the workspace root or this package directory:
 
 ```sh
-cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 ```
 
-Every example accepts exactly one caller-selected output directory, creating it
-if needed. That example writes `quick_start.svg` in the selected directory. The
+Examples run without arguments and write to the working directory. An optional
+directory after `--` redirects output and is created if needed. This example
+writes `quick_start.svg`. The
 workspace pins Rust 1.96.0 and maintains the shared lockfile. Root `Justfile`
 recipes validate the whole workspace; use `-p lichtung-plot` for focused Cargo
 commands. Complete Unicode conformance checks are opt-in and require explicit

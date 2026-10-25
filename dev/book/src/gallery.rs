@@ -22,12 +22,16 @@ fn page(case: &Case, language: usize) -> Result<String> {
         case.artifacts[0]
     );
     let labels = if language == 0 {
-        ["Related chapter", "API reference", "Complete example", "Output files", "Run from the workspace root; the directory is caller-selected. The complete source uses examples/support/output.rs, shipped alongside it."]
+        ["Related chapter", "API reference", "Complete example", "Output files", "Run without arguments from the workspace root; files are written to the working directory. An optional directory after -- redirects output. Gallery builds choose isolated directories automatically. The complete source uses examples/support/output.rs, shipped alongside it."]
     } else {
-        ["相关章节", "API 参考", "完整示例", "输出文件", "从 workspace 根目录运行；输出目录由调用者指定。完整源码使用随附的 examples/support/output.rs。"]
+        ["相关章节", "API 参考", "完整示例", "输出文件", "从 workspace 根目录无参数运行，文件默认写入当前工作目录；需要时可在 -- 后追加可选目录。图库构建自动安排隔离目录。完整源码使用随附的 examples/support/output.rs。"]
     };
     writeln!(page, "[{}]({}) · [{}](https://docs.rs/lichtung-plot/latest/lichtung_plot/{}) · [{}](examples/{}.rs) · [{}](examples/support/output.rs)\n", labels[0], case.chapter, labels[1], case.api, labels[2], case.example, if language == 0 { "Output helper" } else { "输出辅助代码" })?;
-    writeln!(page, "{}\n\n```sh\ncargo run --locked --offline -p lichtung-plot --example {} -- target/examples/{}\n```\n", labels[4], case.example, case.id)?;
+    writeln!(
+        page,
+        "{}\n\n```sh\ncargo run --locked --offline -p lichtung-plot --example {}\n```\n",
+        labels[4], case.example
+    )?;
     writeln!(page, "```rust\n{{{{#include ../../../crates/lichtung-plot/examples/{}.rs:example}}}}\n```\n\n## {}\n", case.example, labels[3])?;
     for artifact in &case.artifacts {
         writeln!(page, "- [{artifact}](gallery/{}/{artifact})", case.id)?;

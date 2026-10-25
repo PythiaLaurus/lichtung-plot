@@ -33,7 +33,8 @@ Existing text is not replaced: `plot.v1` becomes `plot.v1.svg`, `plot.png` passe
 svg becomes `plot.png.svg`, and `.plot` becomes `.plot.svg`. Suffix completion
 does not require UTF-8 and occurs after conversion. Parents must already exist;
 directory destinations, including symlinks to directories, fail. The examples'
-CLI helper creates only the explicitly requested output directory for convenience.
+CLI helper defaults to the working directory and creates an optional explicitly
+requested directory for convenience.
 
 Each file is completed at a sibling staging path before atomic publication.
 Preflight/conversion failure preserves an existing destination and removes staging

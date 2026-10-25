@@ -3,7 +3,7 @@
 //! Renders the same data under each of the four themes
 //! (Publication, Nature, Science, CHI) to demonstrate the
 //! theme system. Run with:
-//!   cargo run --example 02_themes -p lichtung-plot -- <directory>
+//!   cargo run --example 02_themes -p lichtung-plot
 
 // ANCHOR: example
 #[path = "support/output.rs"]

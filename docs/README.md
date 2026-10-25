@@ -19,6 +19,13 @@ just book-check
 just book
 ```
 
+Runnable examples need no directory argument and write to the working directory
+by default. An optional argument redirects output. Gallery builds manage their
+isolated output directories automatically.
+
+示例无需提供目录参数，默认输出到当前工作目录；有需要时可用可选参数重定向输出。
+图库构建自动管理隔离输出目录，不要求用户手动安排。
+
 Open `target/book/site/index.html`. `just book` first runs the catalog's examples
 into fresh isolated directories, assembles generated gallery pages and images,
 then invokes official `mdbook build` for both editions. No site is deployed.

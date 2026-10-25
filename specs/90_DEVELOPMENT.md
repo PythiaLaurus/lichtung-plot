@@ -54,9 +54,11 @@ example includes and release scope; review prose for equivalent meaning. Mechani
 coverage checks do not certify prose equivalence or quality. Keep specs as
 architectural contracts, rustdoc as exact API reference and README as an entry point.
 
-Every renderer example requires exactly one caller-selected output directory,
-created by its shared package-local CLI helper. The renderer itself still requires
-publication parents to exist. Keep examples self-contained in their package and
+Every renderer example runs without arguments and defaults to the current working
+directory. Its shared package-local CLI helper accepts one optional output-directory
+argument and creates that directory if needed. Gallery builds select fresh isolated
+directories internally; users do not need to supply them. The renderer itself still
+requires publication parents to exist. Keep examples self-contained in their package and
 include real source through named mdBook anchors, not copied code or line ranges.
 Excerpts retain their complete-example context; compile their owning Cargo targets
 and execute actual gallery programs rather than claim Markdown fragments ran as

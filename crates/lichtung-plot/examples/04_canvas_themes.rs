@@ -3,7 +3,7 @@
 //! Renders an automatic Publication Canvas and an exact-width Nature Canvas
 //! with inherited and explicit Science children, reporting frozen dimensions.
 //! Run with:
-//!   cargo run --example 04_canvas_themes -p lichtung-plot -- <directory>
+//!   cargo run --example 04_canvas_themes -p lichtung-plot
 
 // ANCHOR: example
 #[path = "support/output.rs"]

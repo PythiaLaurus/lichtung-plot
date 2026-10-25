@@ -18,12 +18,13 @@ sans-serif。选定字体栈必须真正覆盖可见文字，详见[输出与字
 从 workspace 根目录运行：
 
 ```sh
-cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 ```
 
-每个示例都要求且只接受一个输出目录，必要时创建该目录。此示例向其中写入
-`quick_start.svg`，并报告冻结后的图形尺寸。相对目录以调用者的工作目录为基准，
-不会使用固定的共享临时路径。`--offline` 要求 Rust 依赖已经缓存。
+每个示例都可以无参数直接运行。此示例默认向当前工作目录写入 `quick_start.svg`，
+并报告冻结后的图形尺寸。有需要时可追加 `-- <directory>` 重定向输出；该可选目录会在
+不存在时创建，相对路径以当前工作目录为基准。图库构建会自动安排隔离目录，
+不要求用户手动提供。`--offline` 要求 Rust 依赖已经缓存。
 
 ```rust
 {{#include ../../../crates/lichtung-plot/examples/01_quick_start.rs:example}}

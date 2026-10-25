@@ -5,9 +5,9 @@
 //!
 //! This example supplies the adjusted display p-value for each named pair.
 //!
-//! Run with: cargo run --example 03_inject_stats -p lichtung-plot -- <directory>
+//! Run with: cargo run --example 03_inject_stats -p lichtung-plot
 //!
-//! Writes a boxplot SVG to the supplied directory.
+//! Writes a boxplot SVG to the working directory by default.
 
 // ANCHOR: example
 #[path = "support/output.rs"]
