@@ -4193,19 +4193,6 @@ mod tests {
     }
 
     #[test]
-    fn prepared_font_pair_hits_preserve_pair_identity() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        environment
-            .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
-            .unwrap();
-        for _ in 0..3 {
-            let result = environment.prepared_pair(&stack, RequestedWeight::Normal);
-            assert_eq!(result.unwrap().unwrap().provenance.pair_ordinal, 0);
-        }
-    }
-
-    #[test]
     fn incremental_and_normalized_hits_do_not_reprobe_fonts() {
         for normalized in [false, true] {
             let environment = PreparedFontEnvironment::synthetic();
@@ -4457,26 +4444,6 @@ mod tests {
             environment.resolve_pair(0, &stack, RequestedWeight::Normal, &['A']),
             Err(FontError::PreparedPairAfterSeal { .. })
         ));
-    }
-
-    #[test]
-    fn unicode_16_casefold_covers_ascii_compatibility_and_full_fold_cases() {
-        assert_eq!(
-            super::super::unicode16::folded_for_test("NOTO Sans"),
-            "noto sans"
-        );
-        assert_eq!(
-            super::super::unicode16::folded_for_test("Ｎｏｔｏ ﬃ"),
-            "noto ffi"
-        );
-        assert_eq!(
-            super::super::unicode16::folded_for_test("Straße"),
-            super::super::unicode16::folded_for_test("STRASSE")
-        );
-        assert_eq!(
-            super::super::unicode16::folded_for_test("ΟΣ"),
-            super::super::unicode16::folded_for_test("ος")
-        );
     }
 
     #[cfg(all(

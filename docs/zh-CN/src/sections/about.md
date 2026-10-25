@@ -15,7 +15,7 @@
 中文与英文是地位相同、范围等价的两套指南，没有原版、翻译待办版或回退版之分。
 两者共享主题锚点和示例引用；文字审阅关注语义一致，而不是逐句对应。
 
-Book 解释使用方法；[Rust API 文档](https://docs.rs/lichtung-plot)提供精确公开签名，
-workspace 中的[规范](https://github.com/PythiaLaurus/lichtung-plot/tree/main/specs)
+指南解释使用方法；[Rust 接口文档](https://docs.rs/lichtung-plot)提供精确公开签名，
+工作区中的[规范](https://github.com/PythiaLaurus/lichtung-plot/tree/main/specs)
 定义架构及契约。代码摘录直接来自随包提供的可执行示例，不是另一套绘图实现；
-请运行链接所指的完整示例，不要将上下文中的摘录当作独立 doctest。
+请运行链接所指的完整示例，不要将上下文中的摘录当作文档中的独立测试程序。

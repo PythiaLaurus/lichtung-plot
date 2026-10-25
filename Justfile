@@ -24,9 +24,9 @@ test-doc:
 docs:
     RUSTDOCFLAGS="-D warnings" cargo doc --locked --offline --workspace --no-deps
 
-# Verify the distributable renderer, not the nonpublished Book assembly command.
+# Verify renderer/adapter packages, excluding the workspace-local Book command.
 package:
-    cargo package --locked --offline -p lichtung-plot --allow-dirty
+    cargo package --locked --offline -p lichtung-plot -p lichtung-plot-ndarray -p lichtung-plot-polars --allow-dirty
 
 # Check peer tutorial anchors, image-to-code links and executable source includes.
 book-check:
@@ -41,4 +41,4 @@ book:
     cargo run --locked --offline -p lichtung-plot-book -- build
 
 # Run the complete read-only repository verification.
-verify: fmt-check lint test test-doc docs package book-check
+verify: fmt-check lint test test-doc docs book-check package

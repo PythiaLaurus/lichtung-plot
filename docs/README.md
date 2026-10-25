@@ -56,7 +56,7 @@ owns case identities, owning packages, source names, required output files, tuto
 references, showcase/reference placement and peer-language titles/descriptions;
 it contains no plotting configuration. Six scientific scenes are featured: scatter,
 raincloud, heatmap, forest, line with bounds and a calibration composition. Two
-additional numeric/text reference workflows and the ndarray conversion example are executed for the guide, without
+additional numeric/text reference workflows and both adapter examples are executed for the guide, without
 appearing as showcase cards. This is not complete image coverage of all 25 families.
 All generated material stays under `target/book/`, never beside maintained source.
 Generation records platform/toolchain, the lockfile and font policy. Fonts must be
@@ -66,7 +66,7 @@ instead of reusing an earlier image. Structural checks do not prove prose equiva
 `just gallery` 只执行和组装，不构建 HTML。`docs/gallery.tsv` 管理案例身份、所属包、源码名称、
 必需文件、教程锚点／API、首页展示或正文参考的归属，以及两种语言的标题和说明，不
 包含绘图配置。首页精选散点、雨云、热图、森林、带边界的折线及校准组合六个场景，
-另外执行两个数值／文本参考工作流和 ndarray 转换示例供正文使用，不把它们放进首页卡片。尚未覆盖全部
+另外执行两个数值／文本参考工作流和两个适配器示例供正文使用，不把它们放进首页卡片。尚未覆盖全部
 25 个图族的图像。生成内容全部位于 `target/book/`，不混入维护中的源码。
 生成记录包含平台／工具链、锁文件和字体策略。字体须预先安装，工具不下载数据或字体。
 缺少产物会使构建失败，不复用旧图。结构检查不能证明文字语义等价。

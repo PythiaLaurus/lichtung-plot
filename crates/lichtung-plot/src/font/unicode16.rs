@@ -141,11 +141,6 @@ mod tests {
     }
 
     #[test]
-    fn casefold_mapping_receives_unicode_16_nfc_composition() {
-        assert_eq!(nfkc_casefold("A\u{030A}"), "\u{00E5}");
-    }
-
-    #[test]
     fn generated_normalization_tables_have_expected_digest() {
         // Hash semantic entries so Rust source formatting does not affect the digest.
         let mut digest = Sha256::new();

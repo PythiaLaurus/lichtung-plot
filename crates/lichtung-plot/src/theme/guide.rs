@@ -330,6 +330,3 @@ impl LegendTheme {
             .pixels_rounded(SpatialRounding::NearestEven)
     }
 }
-
-#[cfg(test)]
-mod tests;

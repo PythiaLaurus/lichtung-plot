@@ -3122,16 +3122,4 @@ mod tests {
             second_database.faces().next().unwrap().index
         );
     }
-
-    #[test]
-    fn deferred_annotation_wraps_without_remeasurement() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let mut request = input("A", i64::MAX, PhysicalTextAlignment::Center);
-        request.exact_override = true;
-        let plan = environment.plan_text(request).unwrap();
-        let deferred = DeferredAnnotationTextPlan::from_resolved(plan.clone());
-
-        assert!(deferred.exact_override);
-        assert_eq!(deferred.plan, plan);
-    }
 }

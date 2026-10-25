@@ -4,9 +4,9 @@
 [简体中文](../zh-CN/index.html#installation)
 
 This development checkout uses Rust 1.96.0. The renderer is the default workspace
-member at `crates/lichtung-plot`; adapters and language bindings are not delivered
-by this guide. Until a release is published, a neighboring Rust application can
-use the actual member path:
+member at `crates/lichtung-plot`; [ndarray](#ndarray) and [Polars](#polars) adapters
+are separate packages, while language bindings remain unimplemented. Until a
+release is published, a neighboring Rust application can use the actual member path:
 
 ```toml
 [dependencies]

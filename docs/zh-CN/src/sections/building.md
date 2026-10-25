@@ -8,7 +8,7 @@
 [热图](#expression-heatmap)、[效应区间](#effect-intervals)、[时间响应](#time-response)及
 [校准](#calibration)。[数值策略](#numeric-policies)和[文本布局](#text-layout)图仍作为
 正文中的技术参考，不再充当首页缩略图。页面展示轮廓 SVG；保留文字的下载复用同一个
-冻结 Output。目前尚未完成全部 25 个图族的图像目录，完整列表见[图族选择](#families)。
+冻结输出对象。目前尚未完成全部 25 个图族的图像目录，完整列表见[图族选择](#families)。
 
 每张展示图都有明确的变量、单位或参照，采用统一的示例局部主题及可读的画幅比例。
 合成数据和给定的示意区间均明确标注。应同时检查原尺寸图和图库尺度下的图像；编译
@@ -16,8 +16,8 @@
 
 ### 本地构建
 
-使用 `cargo install mdbook --version 0.5.4 --locked` 安装一次普通开发 CLI，
-然后从 workspace 根目录运行：
+使用 `cargo install mdbook --version 0.5.4 --locked` 安装一次命令行开发工具，
+然后从工作区根目录运行：
 
 ```sh
 just book-check

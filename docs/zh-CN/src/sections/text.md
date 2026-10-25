@@ -46,12 +46,12 @@ Canvas 将 Plot 与 TextPanel 组合起来。保留文字的发布与图库中�
 默认值。标题、副标题、说明、轴标题、色标标题、Canvas 表头、TextPanel 标题／正文及
 面板注释都使用这一模型。
 
-手写空白和换行保持原样，包括空行；CRLF 视为一次换行。显式空的 prose 占一个空文本行。
+手写空白和换行保持原样，包括空行；CRLF 视为一次换行。显式空的说明文字占一个空文本行。
 制表符和不支持的控制符会失败。精确 AxisTick 的空标签则抑制文字但保留刻度。
-自动名称通过 Labels 的 humanized／raw／alias 展示，不改变原始身份。
+自动名称通过 `Labels` 的易读化、原样保留或别名映射策略展示，不改变原始身份。
 
 Plot 标题和副标题的对齐彼此独立，只有子图未显式指定时才采用 Canvas 面板默认值；
-caption 对齐也独立。标题指令中的 Start／Center／End 是扣除内容边距后的物理方向。
+图注对齐也独立。标题指令中的 `Start`／`Center`／`End` 是扣除内容边距后的物理方向。
 Text 的行对齐程序还区分逻辑 Start／End 与物理 Left／Right。面板指令不改变 Canvas
 根文字、表头或 TextPanel 内容。
 

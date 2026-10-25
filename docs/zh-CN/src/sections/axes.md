@@ -98,7 +98,7 @@ TickContext 提供轴、最终域及来源、原始拥有者和实际 CSS 跨度
 ```
 
 `CategoryLabelSelection::every(stride)` 只选择标签，不删除类别、图元、刻度或网格。
-offset 必须小于 stride；First／Last／Both／None 端点策略将完整域端点并入集合且不重复。
+偏移必须小于步长；`First`／`Last`／`Both`／`None` 端点策略将完整域端点并入集合且不重复。
 stride 为一即 All。x／y 独立，并使用显式、按值或分面局部的最终类别顺序。
 未标标签的类别仍可能在注释或图例中需要文字。
 

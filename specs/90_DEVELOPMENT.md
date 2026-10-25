@@ -14,7 +14,7 @@ the workspace rather than relying on default members:
 | just test | All members' library/integration/example targets, excluding doctests |
 | just test-doc | Execute all members' public examples and compile-fail API boundaries |
 | just docs | Build all members' API documentation with warnings denied |
-| just package | Verify the distributable renderer from Cargo's independently unpacked staging directory; exclude the nonpublished Book command |
+| just package | Verify explicitly selected renderer/ndarray/Polars archives from Cargo's independently unpacked staging directories; exclude the workspace-local Book command |
 | just book-check | Check peer tutorial anchors, image-to-code links, source includes and gallery metadata without rendering |
 | just gallery | Execute catalog examples once and assemble fresh outputs/grids for both editions |
 | just book | Assemble the gallery and invoke installed mdBook 0.5.4 for both single-page guides |
@@ -80,8 +80,8 @@ anchors, including that each gallery target contains its own figure and code.
 docs/book-helper/src/gallery.rs runs each listed executable once into a fresh
 isolated directory, requires its declared outputs, and assembles both editions
 from the same artifact bytes.
-Package ownership is explicit in all eleven inventory columns, with the package
-selected from implemented members. Source downloads use examples/<package>/ paths;
+The eleven-column inventory includes an owning package selected from implemented
+members. Source downloads use examples/<package>/ paths;
 source includes, API links and execution share that same owner, not core-only
 fallback paths. Do not introduce arbitrary commands or duplicate catalogs.
 Its first artifact is complete outlined SVG; preserve-text downloads, where

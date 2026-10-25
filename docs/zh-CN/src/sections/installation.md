@@ -3,9 +3,9 @@
 
 [English](../en/index.html#installation)
 
-当前开发仓库使用 Rust 1.96.0。绘图核心位于 `crates/lichtung-plot`，是默认 workspace
-成员；本指南不声称 adapter 或语言绑定已经交付。在正式版本发布之前，相邻的 Rust
-应用可以引用实际成员路径：
+当前开发仓库使用 Rust 1.96.0。绘图核心位于 `crates/lichtung-plot`，是工作区的默认
+成员。[ndarray 适配器](#ndarray)与 [Polars 适配器](#polars)位于独立包中，语言绑定尚未实现。
+在正式版本发布之前，相邻的 Rust 应用可以引用实际成员路径：
 
 ```toml
 [dependencies]
@@ -44,7 +44,7 @@ sans-serif。选定字体栈必须真正覆盖可见文字，详见[输出与字
 {{#include ../../../../crates/lichtung-plot/examples/support/gallery.rs:gallery-theme}}
 ```
 
-可以无参数运行精确的示例源码，无需自己拼接摘录。从 workspace 根目录运行：
+可以无参数运行精确的示例源码，无需自己拼接摘录。从工作区根目录运行：
 
 ```sh
 cargo run --locked --offline -p lichtung-plot --example 01_quick_start

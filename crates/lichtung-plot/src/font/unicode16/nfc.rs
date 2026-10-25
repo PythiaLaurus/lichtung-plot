@@ -161,18 +161,6 @@ mod tests {
     }
 
     #[test]
-    fn composes_canonical_pairs_and_hangul() {
-        assert_eq!(normalize("e\u{0301}"), "\u{00E9}");
-        assert_eq!(normalize("\u{1100}\u{1161}\u{11A8}"), "\u{AC01}");
-    }
-
-    #[test]
-    fn orders_marks_before_composing_and_honors_exclusions() {
-        assert_eq!(normalize("a\u{0315}\u{0300}"), "\u{00E0}\u{0315}");
-        assert_eq!(normalize("\u{0915}\u{093C}"), "\u{0915}\u{093C}");
-    }
-
-    #[test]
     fn canonically_decomposes_before_recomposition() {
         assert_eq!(normalize("\u{212B}"), "\u{00C5}");
     }

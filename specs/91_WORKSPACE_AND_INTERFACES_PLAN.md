@@ -15,7 +15,7 @@ Python interface, and replacement of the loose guides with a serious Book-style
 documentation system and gallery. The standalone renderer now lives in a virtual
 workspace with a nonpublished Rust Book assembly command. The authorized Book,
 example and gallery foundation covers existing Rust capabilities. Adapter
-implementation is authorized; ndarray is delivered and Polars remains in progress.
+implementation is authorized; ndarray and Polars conversion packages are implemented.
 Bindings remain planned. Package publication, site deployment, Git push and history
 rewriting are not authorized by this implementation work.
 
@@ -30,7 +30,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | ndarray conversion, strided-view consumer and peer guides are implemented under [data adapters](09_DATA_ADAPTERS.md); Polars is the remaining authorized work in [the adapter plan](92_DATA_ADAPTERS_PLAN.md). Package verification remains for delivery. |
+| ndarray and Polars adapters | Both conversion packages, public consumers and peer guides are implemented under [data adapters](09_DATA_ADAPTERS.md). Independent adapter-package verification is blocked by the unpublished core dependency; workspace conversion behavior is verified separately. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -137,10 +137,10 @@ together so that the package remains self-contained.
 
 ## Data Adapter Contracts
 
-The [ndarray and Polars adapter plan](92_DATA_ADAPTERS_PLAN.md) owns the detailed
-proposed APIs, dtype tables, shape/validity/provenance rules, dependency features,
-documentation integration and delivery checks. Keep those proposals in one
-place, not separate competing adapter contracts here.
+The current [data adapter contract](09_DATA_ADAPTERS.md) owns APIs, dtype tables,
+shape/validity/provenance rules, dependency features and documentation integration.
+The completed dedicated adapter plan is removed rather than retained as a competing
+API authority. Python implementation remains at its own decision point below.
 
 Both adapters produce the core's existing owned native values, never a parallel
 plot/dataframe model. Preserve ordinary f64 rounding, null-versus-NaN distinctions,

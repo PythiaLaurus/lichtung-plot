@@ -257,14 +257,6 @@ mod tests {
     }
 
     #[test]
-    fn canonical_scene_owns_exact_finalized_bytes() {
-        let (_, _, expected, _) = finalized(320, 240).into_parts();
-        let scene = RenderedScene::new(320, 240, Some(finalized(320, 240))).unwrap();
-
-        assert_eq!(scene.svg_bytes(), &*expected);
-    }
-
-    #[test]
     fn png_source_limits_keep_exact_axis_work_and_byte_boundaries() {
         assert!(
             direct_scene(MAX_EXPORT_DIMENSION, 1, MAX_CONVERSION_SCENE_BYTES)

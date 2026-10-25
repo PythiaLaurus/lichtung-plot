@@ -105,6 +105,66 @@ the same frozen Output.
 It is one public workflow shared by both guide editions, not separate language
 or per-family rendering tests. Package README and license texts remain member-local.
 
+## Polars
+
+`crates/lichtung-plot-polars/src/lib.rs` exports numeric, categories, booleans,
+source_rows and numeric_columns free functions. Single-column entry points accept
+`&polars_core::prelude::Column` and use its source name. DataFrame column lookup
+returns this type; standalone Series inputs use Polars' existing IntoColumn route.
+The adapter accepts only eager inputs, never LazyFrame or query expressions.
+
+| Entry point / input dtype | Conversion |
+| --- | --- |
+| numeric: Int8/16/32/64/128, UInt8/16/32/64/128, Float16/32/64 | Ordinary f64 normalization, preserving null and present nonfinite values. |
+| categories: String | Exact present string keys and nulls. No numeric parsing or formatting. |
+| categories: Categorical, Enum | Decode actual string identities, never physical dictionary codes. Rebuild first-observed native levels; unobserved levels are not extra observations, and Enum schema order is not an implicit CategoryOrder. |
+| booleans: Boolean | True/false/null, not implicit numeric or string data. |
+| numeric/categories/booleans: Null | The explicit entry point chooses an all-null destination channel of the same logical length. |
+| source_rows: integer dtypes | Exact checked usize IDs, followed by native uniqueness validation. Null, negative and out-of-range IDs fail by logical slot; floating/string/categorical/Null dtypes are not coerced. |
+| Temporal, Decimal, binary, nested, object, extension and unknown dtypes | Unsupported implicit interpretation, including zero-length inputs. Explicitly choose units/project upstream; physical storage does not establish scientific meaning. |
+
+`numeric_columns(&DataFrame, names: &[&str])` returns ordered native columns from
+exactly the literal names selected. No regex/expression/discovery, silent omission,
+sorting or deduplication occurs. Missing/wrong-type selections fail with the named
+column's context, without partially mutating the frame or publishing a destination.
+Native consumers retain their own name/minimum-variable constraints.
+
+### Logical Representation
+
+The conversion modules dispatch on supported logical dtype before reserving or
+materializing data; unsupported empty/semantic columns are not accepted through
+a physical-type or all-null fallback. Typed iterators span all chunks, respecting
+sliced validity offsets. Rechunking is not required and caller data is not edited.
+Repeated ScalarColumns use full logical length, including null and zero length.
+Calling as_materialized_series may allocate and populate an upstream internal cache;
+as_materialized_series_maintain_scalar is not a logical full-column iterator.
+
+Numeric conversion uses typed primitive casts, not the default NonStrict Polars
+cast that can turn failure into null. Categorical/Enum decoding uses a dtype-bounded
+fallible strict cast to String, with its original error source retained. This
+operation introduces neither numeric exactness checking nor a general strict mode.
+All channels preserve slot order and validity; snapshot buffers feed the actual
+public native constructors and are inspectable by local unit tests without adding
+core payload getters. Adapter errors and subsequent core scientific/render errors
+remain distinct.
+
+### Dependencies And Consumer
+
+The workspace pins polars-core 0.55.2 directly with defaults disabled and the
+dtype-i8, dtype-i16, dtype-u8, dtype-u16, dtype-i128, dtype-u128, dtype-f16 and
+dtype-categorical features. A matching Polars facade reexports these same public
+types. No facade default IO/temporal, dtype-full, lazy/cloud/query or ndarray
+bridge features are requested. Upstream core still includes polars-async, Tokio
+and Rayon dependencies; this is not an async/runtime-free graph. Foreign version
+families are not bridged by adapters or compatibility modes.
+
+`examples/grouped_observations.rs` builds a nullable two-chunk response column,
+categorical conditions and explicit integer sample IDs from synthetic observations.
+The frame is dropped before publication to demonstrate native snapshot ownership.
+Outlined/preserve-text SVGs reuse one frozen native Output; the same execution
+serves both guide editions. Like the ndarray example, zero arguments use the
+working directory and one optional nonempty directory is created when needed.
+
 ## Documentation Ownership
 
 The Book helper explicitly allows implemented member packages. Gallery inventory

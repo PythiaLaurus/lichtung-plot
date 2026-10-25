@@ -10,7 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const LANGUAGES: [&str; 2] = ["en", "zh-CN"];
-const PACKAGES: &[&str] = &["lichtung-plot", "lichtung-plot-ndarray"];
+const PACKAGES: &[&str] = &[
+    "lichtung-plot",
+    "lichtung-plot-ndarray",
+    "lichtung-plot-polars",
+];
 const MDBOOK_VERSION: &str = "mdbook v0.5.4";
 
 fn fail(message: impl Into<String>) -> Box<dyn std::error::Error> {

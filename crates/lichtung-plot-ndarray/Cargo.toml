@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Owned native plotting values from logical ndarray views"
+documentation = "https://docs.rs/lichtung-plot-ndarray"
 readme = "README.md"
 publish = false
 

@@ -32,7 +32,7 @@ pub fn landing(cases: &[Case]) -> Result<String> {
             case.id, case.artifacts[0], escape(&case.titles[0]), escape(&case.titles[1]), escape(&case.titles[0]), escape(&case.titles[1]), case.target, case.target)?;
     }
     let featured = cases.iter().filter(|case| case.featured).count();
-    writeln!(html, "</div><p>{featured} selected scientific workflows; not yet an image catalog for all 25 plot families. Numeric and text-policy demonstrations live in the guide, not this showcase.<br><span lang=\"zh-CN\">当前精选 {featured} 个科学绘图场景，尚未完成全部 25 个图族的图像目录。数值与文本策略演示保留在指南正文，不作为首页展示图。</span></p></section></main></body></html>")?;
+    writeln!(html, "</div><p>{featured} selected scientific workflows; not yet an image catalog for all 25 plot families. Numeric, text and data-conversion demonstrations live in the guide, not this showcase.<br><span lang=\"zh-CN\">当前精选 {featured} 个科学绘图场景，尚未完成全部 25 个图族的图像目录。数值、文本与数据转换示例保留在指南正文，不作为首页展示图。</span></p></section></main></body></html>")?;
     Ok(html)
 }
 

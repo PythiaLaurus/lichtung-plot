@@ -27,6 +27,7 @@
 <li><a href="#installation">安装</a></li>
 <li><a href="#data">原生数据</a></li>
 <li><a href="#ndarray">ndarray 视图</a></li>
+<li><a href="#polars">Polars 数据列</a></li>
 <li><a href="#families">图族选择</a></li>
 <li><a href="#numeric-policies">数值案例讲解</a></li>
 <li><a href="#axes">坐标轴与数值</a></li>
@@ -46,6 +47,8 @@
 {{#include sections/data.md}}
 
 {{#include sections/ndarray.md}}
+
+{{#include sections/polars.md}}
 
 {{#include sections/families.md}}
 
