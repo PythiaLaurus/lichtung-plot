@@ -36,7 +36,7 @@ the six plots; the second SVG publication reuses the first Output:
 Run `cargo run --locked --offline -p lichtung-plot --example 05_numeric_formats`
 to execute the complete program in the working directory.
 
-[Complete source](examples/05_numeric_formats.rs) · [Shared output helper](examples/support/output.rs) ·
+[Complete source](examples/lichtung-plot/05_numeric_formats.rs) · [Shared output helper](examples/lichtung-plot/support/output.rs) ·
 [Full-size SVG](gallery/numeric-policies/numeric_formats.svg) ·
 [Selectable-text SVG](gallery/numeric-policies/numeric_formats_text.svg) ·
 [NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html) · [Back to gallery](#gallery)

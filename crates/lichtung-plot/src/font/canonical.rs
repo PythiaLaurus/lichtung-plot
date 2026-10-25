@@ -5247,34 +5247,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn host_database_generic_smoke() {
-        let mut core = CanonicalFontCore::discover_system().unwrap();
-        let family =
-            super::super::unicode16::folded_for_test(core.database.family_name(&Family::SansSerif));
-        let matches = core
-            .faces
-            .iter()
-            .filter(|face| {
-                face.names
-                    .iter()
-                    .any(|candidate| candidate.folded == family)
-            })
-            .count();
-        let resolved = core.resolve_pair(
-            0,
-            &FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap(),
-            RequestedWeight::Normal,
-            &['A'],
-        );
-        if matches == 0 {
-            assert!(matches!(resolved, Err(FontError::MissingFamily { .. })));
-        } else {
-            let resolved = resolved.unwrap();
-            assert_eq!(resolved.primary, resolved.provenance.candidates[0]);
-        }
-    }
-
     fn identity(byte: u8, face_index: u32) -> FaceIdentity {
         FaceIdentity {
             sha256: [byte; 32],

@@ -2,17 +2,16 @@
 
 ## Status And Scope
 
-This is a design and delivery proposal, not an implemented API. The current user
-request authorizes planning, not adapter implementation, dependency installation,
-package publication, site deployment or Git push. No adapter workspace members
-exist yet. Do not add manifests, empty packages or core feature flags in this
-planning change.
+Implementation of both adapters is authorized. ndarray conversion and its working
+consumer now exist; their current API is defined by [data adapters](09_DATA_ADAPTERS.md).
+Polars remains the next implementation below. This document records the remaining
+delivery plan, not authority to publish packages, deploy the site or push Git refs.
 
 The [workspace/interface plan](91_WORKSPACE_AND_INTERFACES_PLAN.md) owns the broader
 delivery order and Python decision gate. Current native behavior remains defined
 by [architecture](01_ARCHITECTURE.md), [rendering](02_RENDERING_CONTRACT.md) and
 [development](90_DEVELOPMENT.md). Promote working behavior into current contracts
-when delivered; proposed names below are not compatibility commitments.
+when delivered; remaining proposed Polars names are not compatibility commitments.
 
 | Basis | Established fact or proposed decision |
 | --- | --- |
@@ -418,13 +417,13 @@ dependency changes; state that reason before the run. Local fixes after that use
 their focused regressions, not repeated whole-suite runs. At delivery, independently
 unpacked packages and a standalone core-only consumer need their own evidence;
 workspace success alone is insufficient.
-This planning-only change needs reference/source consistency and diff checks, not
-compiler tests, package builds or execution of the proposed snippets.
+Documentation-only corrections need reference/source consistency and diff checks,
+not compiler tests or package builds.
 
 ## Implementation And Delivery Order
 
-Implementation still requires separate direction. Once requested, start production
-conversion code directly; do not insert an audit, compatibility prototype or
+Implementation has been requested. Start production conversion code directly;
+do not insert an audit, compatibility prototype or
 packaging investigation as a preliminary project.
 
 1. **Implement ndarray.** Add its actual dependency and scalar/nullable/validity

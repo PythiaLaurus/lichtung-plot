@@ -1,10 +1,20 @@
 use super::{anchor, catalog, navigation, rendered_anchors};
 
-const CASE: &str = "first\t01_quick_start\tquick_start.svg\tfirst-plot\tstruct.Plot.html\tshowcase\tFirst plot\t首张图\tOwned values\t自有数据";
+const CASE: &str = "first\tlichtung-plot\t01_quick_start\tquick_start.svg\tfirst-plot\tstruct.Plot.html\tshowcase\tFirst plot\t首张图\tOwned values\t自有数据";
 
 #[test]
 fn catalog_refuses_duplicate_execution_identities() {
     assert!(catalog(&format!("{CASE}\n{CASE}")).is_err());
+    let other_package = CASE.replacen(
+        "first\tlichtung-plot\t",
+        "second\tlichtung-plot-ndarray\t",
+        1,
+    );
+    assert_eq!(
+        catalog(&format!("{CASE}\n{other_package}")).unwrap().len(),
+        2
+    );
+    assert!(catalog(&CASE.replace("lichtung-plot\t", "unknown-package\t")).is_err());
 }
 
 #[test]

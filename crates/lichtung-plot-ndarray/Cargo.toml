@@ -1,0 +1,17 @@
+[package]
+name = "lichtung-plot-ndarray"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Owned native plotting values from logical ndarray views"
+readme = "README.md"
+publish = false
+
+[dependencies]
+lichtung-plot.workspace = true
+ndarray.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

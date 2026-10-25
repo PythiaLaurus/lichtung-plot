@@ -37,6 +37,8 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 
 - [`crates/lichtung-plot/`](crates/lichtung-plot/): independent renderer, tests,
   fixtures, runnable examples, package README and licenses; the default member.
+- [`crates/lichtung-plot-ndarray/`](crates/lichtung-plot-ndarray/): owned native
+  values from logical ndarray views, named tables and labeled grids.
 - [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
   assembling the single-page guides and executable gallery; no renderer dependency.
 - [`specs/`](specs/): one root architectural source of truth.

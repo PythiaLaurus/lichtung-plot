@@ -67,7 +67,7 @@ their isolated directories automatically. `--offline` requires cached Rust depen
 can publish more formats without rendering again. [Native data](#data) explains
 what the constructor receives.
 
-[Complete source](examples/01_quick_start.rs) · [Shared output helper](examples/support/output.rs) ·
-[Gallery theme](examples/support/gallery.rs) · [Synthetic inputs](examples/support/synthetic.rs) ·
+[Complete source](examples/lichtung-plot/01_quick_start.rs) · [Shared output helper](examples/lichtung-plot/support/output.rs) ·
+[Gallery theme](examples/lichtung-plot/support/gallery.rs) · [Synthetic inputs](examples/lichtung-plot/support/synthetic.rs) ·
 [Full-size SVG](gallery/first-plot/quick_start.svg) ·
 [Plot API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Plot.html) · [Back to gallery](#gallery)

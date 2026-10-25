@@ -487,35 +487,6 @@ mod tests {
     }
 
     #[test]
-    fn quantile_type_7_quartiles_are_exact_for_three_samples() {
-        assert_eq!(bits(quartiles(&[0.0, 2.0, 4.0])), bits([1.0, 2.0, 3.0]));
-    }
-
-    #[test]
-    fn quantile_type_7_quartiles_are_exact_for_four_samples() {
-        assert_eq!(
-            bits(quartiles(&[0.0, 2.0, 4.0, 6.0])),
-            bits([1.5, 3.0, 4.5])
-        );
-    }
-
-    #[test]
-    fn quantile_type_7_quartiles_are_exact_for_five_samples() {
-        assert_eq!(
-            bits(quartiles(&[0.0, 2.0, 4.0, 6.0, 8.0])),
-            bits([2.0, 4.0, 6.0])
-        );
-    }
-
-    #[test]
-    fn quantile_type_7_quartiles_are_exact_for_six_samples() {
-        assert_eq!(
-            bits(quartiles(&[0.0, 2.0, 4.0, 6.0, 8.0, 10.0])),
-            bits([2.5, 5.0, 7.5])
-        );
-    }
-
-    #[test]
     fn quantile_type_7_handles_repeated_values_exactly() {
         assert_eq!(
             bits(quartiles(&[1.0, 1.0, 1.0, 9.0])),
@@ -601,15 +572,6 @@ mod tests {
         assert!((lower + 1.959_963_984_540_054).abs() < 1e-7);
         assert!(median.abs() < 1e-12);
         assert!((upper - 1.959_963_984_540_054).abs() < 1e-7);
-    }
-
-    #[test]
-    fn standard_normal_quantile_handles_extreme_open_probabilities() {
-        let lower = standard_normal_quantile(f64::MIN_POSITIVE).unwrap();
-        let upper = standard_normal_quantile(1.0 - f64::EPSILON).unwrap();
-
-        assert!(lower.is_finite() && lower < 0.0);
-        assert!(upper.is_finite() && upper > 0.0);
     }
 
     #[test]

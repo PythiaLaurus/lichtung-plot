@@ -48,6 +48,7 @@ They live at the workspace root, not in separate member-local specification tree
 | [Numeric presentation](06_NUMERIC_PRESENTATION.md) | Formats, tick generation, complete semantic sets and dependencies |
 | [Certified power conversion](07_LOG10_DISPLAY.md) | Mathematical Forest operand, interval proof, representability and independent oracle |
 | [Guide system](08_GUIDE_SYSTEM.md) | Typed explanations, composition, compatibility, measurement and parent ownership |
+| [Data adapters](09_DATA_ADAPTERS.md) | Foreign input conversion into owned native values, logical order, validity and provenance |
 | [Development](90_DEVELOPMENT.md) | Verification, semantic tests, dependency and publication discipline |
 | [Deferred features](99_DEFERRED_FEATURES.md) | User-requested deferred reviews and their checkpoints |
 

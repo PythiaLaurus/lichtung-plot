@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use crate::{fail, Result, LANGUAGES};
+use crate::{fail, Result, LANGUAGES, PACKAGES};
 
 pub struct Case {
     pub id: String,
+    pub package: String,
     pub example: String,
     pub artifacts: Vec<String>,
     pub target: String,
@@ -40,11 +41,11 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
     {
         let fields = line.split('\t').collect::<Vec<_>>();
-        let [id, example, artifacts, target, api, placement, title_en, title_zh, purpose_en, purpose_zh] =
+        let [id, package, example, artifacts, target, api, placement, title_en, title_zh, purpose_en, purpose_zh] =
             fields.as_slice()
         else {
             return Err(fail(
-                "gallery.tsv requires ten nonempty tab-separated columns",
+                "gallery.tsv requires eleven nonempty tab-separated columns",
             ));
         };
         let featured = match *placement {
@@ -55,10 +56,11 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
         if fields.iter().any(|field| field.trim().is_empty())
             || !identifier(id)
             || !identifier(target)
+            || !PACKAGES.contains(package)
             || !filename(example)
             || !filename(api)
             || !ids.insert(*id)
-            || !examples.insert(*example)
+            || !examples.insert((*package, *example))
         {
             return Err(fail(format!("invalid or duplicate gallery case: {id}")));
         }
@@ -71,6 +73,7 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
         }
         cases.push(Case {
             id: (*id).into(),
+            package: (*package).into(),
             example: (*example).into(),
             artifacts,
             target: (*target).into(),
@@ -187,15 +190,21 @@ fn source(root: &Path, directory: &Path, reference: &str) -> Result<String> {
     if !identifier(name) {
         return Err(fail(format!("invalid semantic anchor: {reference}")));
     }
-    let examples = root.join("crates/lichtung-plot/examples").canonicalize()?;
     let file = directory.join(file).canonicalize()?;
-    if !file.starts_with(&examples) || file.extension().is_none_or(|ext| ext != "rs") {
-        return Err(fail(format!(
-            "include must refer to an owned example: {reference}"
-        )));
+    if file.extension().is_some_and(|ext| ext == "rs") {
+        for package in PACKAGES {
+            let examples = root
+                .join(format!("crates/{package}/examples"))
+                .canonicalize()?;
+            if let Ok(relative) = file.strip_prefix(examples) {
+                anchor(&fs::read_to_string(&file)?, name)?;
+                return Ok(format!("{package}/{}:{name}", relative.display()));
+            }
+        }
     }
-    anchor(&fs::read_to_string(&file)?, name)?;
-    Ok(format!("{}:{name}", file.strip_prefix(examples)?.display()))
+    Err(fail(format!(
+        "include must refer to an owned example: {reference}"
+    )))
 }
 
 fn scan(root: &Path, file: &Path, text: &str, outline: &mut Outline) -> Result<()> {
@@ -256,13 +265,16 @@ fn local_links(root: &Path, text: &str, outline: &Outline, cases: &[Case]) -> Re
                 continue;
             }
         } else if let Some(file) = link.strip_prefix("examples/") {
-            if !file.contains("..")
-                && root
-                    .join("crates/lichtung-plot/examples")
-                    .join(file)
-                    .is_file()
-            {
-                continue;
+            if let Some((package, file)) = file.split_once('/') {
+                if PACKAGES.contains(&package)
+                    && !file.contains("..")
+                    && root
+                        .join(format!("crates/{package}/examples"))
+                        .join(file)
+                        .is_file()
+                {
+                    continue;
+                }
             }
         } else if cases.iter().any(|case| {
             case.artifacts
@@ -333,7 +345,7 @@ fn edition(root: &Path, language: usize, cases: &[Case]) -> Result<Outline> {
         let uses_example = outline.sources.get(&case.target).is_some_and(|sources| {
             sources
                 .iter()
-                .any(|source| source.starts_with(&format!("{}.rs:", case.example)))
+                .any(|source| source.starts_with(&format!("{}/{}.rs:", case.package, case.example)))
         });
         let shows_figure = outline.assets.get(&case.target).is_some_and(|assets| {
             assets.contains(&format!("gallery/{}/{}", case.id, case.artifacts[0]))

@@ -33,7 +33,7 @@ Canvas 排布六幅图，第二次 SVG 发布复用第一次返回的 Output：
 运行 `cargo run --locked --offline -p lichtung-plot --example 05_numeric_formats`
 即可在当前工作目录执行完整程序。
 
-[完整源码](examples/05_numeric_formats.rs) · [共享输出辅助代码](examples/support/output.rs) ·
+[完整源码](examples/lichtung-plot/05_numeric_formats.rs) · [共享输出辅助代码](examples/lichtung-plot/support/output.rs) ·
 [原尺寸 SVG](gallery/numeric-policies/numeric_formats.svg) ·
 [可选择文字 SVG](gallery/numeric-policies/numeric_formats_text.svg) ·
 [NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html) · [返回图库](#gallery)

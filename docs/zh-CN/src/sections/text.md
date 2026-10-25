@@ -33,7 +33,7 @@ Canvas 将 Plot 与 TextPanel 组合起来。保留文字的发布与图库中�
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 12_text_layout`。
 
-[完整源码](examples/12_text_layout.rs) · [共享输出辅助代码](examples/support/output.rs) ·
+[完整源码](examples/lichtung-plot/12_text_layout.rs) · [共享输出辅助代码](examples/lichtung-plot/support/output.rs) ·
 [原尺寸 SVG](gallery/text-layout/text_layout_outlined.svg) ·
 [可选择文字 SVG](gallery/text-layout/text_layout.svg) ·
 [TextLayout API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.TextLayout.html) · [返回图库](#gallery)

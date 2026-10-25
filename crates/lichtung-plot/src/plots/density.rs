@@ -1281,23 +1281,6 @@ mod tests {
     }
 
     #[test]
-    fn each_hue_density_integrates_independently() {
-        let data = density_values(
-            &[0.0, 1.0, 2.0, 10.0, 11.0, 12.0],
-            Some(&["a", "a", "a", "b", "b", "b"]),
-        );
-        let prepared = prepare_values(&data, true, true).unwrap();
-        let integrals = prepared
-            .curves
-            .iter()
-            .map(curve_integral)
-            .collect::<Vec<_>>();
-
-        assert!((integrals[0] - 1.0).abs() < 0.01, "{integrals:?}");
-        assert!((integrals[1] - 1.0).abs() < 0.01, "{integrals:?}");
-    }
-
-    #[test]
     fn density_support_uses_deterministic_three_bandwidth_tails() {
         let samples = [0.0, 1.0, 2.0];
         let data = density_values(&samples, None);

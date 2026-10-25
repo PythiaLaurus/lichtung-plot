@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const LANGUAGES: [&str; 2] = ["en", "zh-CN"];
+const PACKAGES: &[&str] = &["lichtung-plot", "lichtung-plot-ndarray"];
 const MDBOOK_VERSION: &str = "mdbook v0.5.4";
 
 fn fail(message: impl Into<String>) -> Box<dyn std::error::Error> {
@@ -48,18 +49,20 @@ fn stage(root: &Path) -> Result<PathBuf> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let stage = root.join(format!("target/book/work/{}-{nonce}", std::process::id()));
     fs::create_dir_all(&stage)?;
-    copy_tree(
-        &root.join("crates/lichtung-plot/examples"),
-        &stage.join("crates/lichtung-plot/examples"),
-    )?;
+    for package in PACKAGES {
+        let examples = format!("crates/{package}/examples");
+        copy_tree(&root.join(&examples), &stage.join(&examples))?;
+    }
     copy_tree(&root.join("docs/theme"), &stage.join("docs/theme"))?;
     for language in LANGUAGES {
         let book = stage.join("docs").join(language);
         copy_tree(&root.join("docs").join(language), &book)?;
-        copy_tree(
-            &root.join("crates/lichtung-plot/examples"),
-            &book.join("src/examples"),
-        )?;
+        for package in PACKAGES {
+            copy_tree(
+                &root.join(format!("crates/{package}/examples")),
+                &book.join("src/examples").join(package),
+            )?;
+        }
     }
     Ok(stage)
 }

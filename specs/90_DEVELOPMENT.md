@@ -70,7 +70,7 @@ and execute actual gallery programs rather than claim Markdown fragments ran as
 standalone doctests. New independent snippets/scenarios still count at their real
 semantic layer; imported source does not create another plotting implementation.
 
-docs/gallery.tsv contains stable case/source/artifact/tutorial-anchor/API identities,
+docs/gallery.tsv contains stable case/package/source/artifact/tutorial-anchor/API identities,
 showcase/reference placement and peer-language titles/purposes, not plotting
 configuration. Both placements execute through the same fresh-artifact path;
 only showcase cases appear in the opening grids. Technical policy probes belong
@@ -80,6 +80,10 @@ anchors, including that each gallery target contains its own figure and code.
 docs/book-helper/src/gallery.rs runs each listed executable once into a fresh
 isolated directory, requires its declared outputs, and assembles both editions
 from the same artifact bytes.
+Package ownership is explicit in all eleven inventory columns, with the package
+selected from implemented members. Source downloads use examples/<package>/ paths;
+source includes, API links and execution share that same owner, not core-only
+fallback paths. Do not introduce arbitrary commands or duplicate catalogs.
 Its first artifact is complete outlined SVG; preserve-text downloads, where
 supplied, come from the same frozen Output. Do not substitute stale images on
 failure, maintain scene hashes/coordinates, or generate artifacts in build.rs.

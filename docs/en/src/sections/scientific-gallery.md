@@ -5,9 +5,9 @@
 
 Each figure starts with a question, not a list of setters. All values in this
 showcase are synthetic or explicitly supplied illustrations, not research results.
-The examples use the same [gallery theme](examples/support/gallery.rs) and
-[output helper](examples/support/output.rs); examples needing generated variation
-also use the packaged [synthetic inputs](examples/support/synthetic.rs).
+The examples use the same [gallery theme](examples/lichtung-plot/support/gallery.rs) and
+[output helper](examples/lichtung-plot/support/output.rs); examples needing generated variation
+also use the packaged [synthetic inputs](examples/lichtung-plot/support/synthetic.rs).
 
 <a id="distributions"></a>
 ### Raincloud: look beyond the average
@@ -32,7 +32,7 @@ already belongs to this input, so it does not require a second hue channel.
 ```
 
 Run `cargo run --locked --offline -p lichtung-plot --example 13_distributions`.
-[Complete source](examples/13_distributions.rs) · [Full-size SVG](gallery/distributions/distributions.svg) ·
+[Complete source](examples/lichtung-plot/13_distributions.rs) · [Full-size SVG](gallery/distributions/distributions.svg) ·
 [RaincloudInput API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.RaincloudInput.html) · [Back to gallery](#gallery)
 
 <a id="expression-heatmap"></a>
@@ -58,7 +58,7 @@ with a number. Negative and positive branches remain comparable.
 ```
 
 Run `cargo run --locked --offline -p lichtung-plot --example 14_expression_heatmap`.
-[Complete source](examples/14_expression_heatmap.rs) · [Full-size SVG](gallery/expression-heatmap/expression_heatmap.svg) ·
+[Complete source](examples/lichtung-plot/14_expression_heatmap.rs) · [Full-size SVG](gallery/expression-heatmap/expression_heatmap.svg) ·
 [ContinuousColorScale API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.ContinuousColorScale.html) · [Back to gallery](#gallery)
 
 <a id="effect-intervals"></a>
@@ -76,7 +76,7 @@ computed confidence intervals or automatic significance decisions.
 ```
 
 Run `cargo run --locked --offline -p lichtung-plot --example 15_effect_intervals`.
-[Complete source](examples/15_effect_intervals.rs) · [Full-size SVG](gallery/effect-intervals/effect_intervals.svg) ·
+[Complete source](examples/lichtung-plot/15_effect_intervals.rs) · [Full-size SVG](gallery/effect-intervals/effect_intervals.svg) ·
 [Bounds API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Bounds.html) · [Back to gallery](#gallery)
 
 <a id="time-response"></a>
@@ -101,7 +101,7 @@ and its envelope, not independent sampled observations.
 ```
 
 Run `cargo run --locked --offline -p lichtung-plot --example 16_time_response`.
-[Complete source](examples/16_time_response.rs) · [Full-size SVG](gallery/time-response/time_response.svg) ·
+[Complete source](examples/lichtung-plot/16_time_response.rs) · [Full-size SVG](gallery/time-response/time_response.svg) ·
 [Bounds API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Bounds.html) · [Back to gallery](#gallery)
 
 <a id="calibration"></a>
@@ -133,5 +133,5 @@ publication frame without pretending that their different x axes are shared.
 ```
 
 Run `cargo run --locked --offline -p lichtung-plot --example 17_calibration`.
-[Complete source](examples/17_calibration.rs) · [Full-size SVG](gallery/calibration/calibration.svg) ·
+[Complete source](examples/lichtung-plot/17_calibration.rs) · [Full-size SVG](gallery/calibration/calibration.svg) ·
 [Canvas API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Canvas.html) · [Back to gallery](#gallery)

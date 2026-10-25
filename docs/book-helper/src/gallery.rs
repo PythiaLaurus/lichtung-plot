@@ -17,8 +17,8 @@ pub fn cards(cases: &[Case], language: usize) -> Result<String> {
     let mut html = "<div class=\"gallery-grid\">\n".to_owned();
     for case in cases.iter().filter(|case| case.featured) {
         let title = escape(&case.titles[language]);
-        writeln!(html, "<article class=\"gallery-card\"><a class=\"gallery-walkthrough\" href=\"#{}\"><img src=\"gallery/{}/{}\" alt=\"{title}\" loading=\"lazy\"><h3>{title}</h3><p>{}</p></a><p class=\"gallery-resources\"><a href=\"https://docs.rs/lichtung-plot/latest/lichtung_plot/{}\">API</a> · <a href=\"examples/{}.rs\">{}</a></p></article>",
-            case.target, case.id, case.artifacts[0], escape(&case.purposes[language]), case.api, case.example,
+        writeln!(html, "<article class=\"gallery-card\"><a class=\"gallery-walkthrough\" href=\"#{}\"><img src=\"gallery/{}/{}\" alt=\"{title}\" loading=\"lazy\"><h3>{title}</h3><p>{}</p></a><p class=\"gallery-resources\"><a href=\"https://docs.rs/{}/latest/{}/{}\">API</a> · <a href=\"examples/{}/{}.rs\">{}</a></p></article>",
+            case.target, case.id, case.artifacts[0], escape(&case.purposes[language]), case.package, case.package.replace('-', "_"), case.api, case.package, case.example,
             if language == 0 { "Complete source" } else { "完整源码" })?;
     }
     html.push_str("</div>\n");
@@ -74,7 +74,7 @@ pub fn assemble(root: &Path, stage: &Path, cases: &[Case]) -> Result<()> {
                 "--locked",
                 "--offline",
                 "-p",
-                "lichtung-plot",
+                &case.package,
                 "--example",
                 &case.example,
                 "--",

@@ -27,6 +27,7 @@ catalog for all 25 families. The [family catalog](#families) lists every constru
 <li><a href="#calibration">Calibration and residuals</a></li>
 <li><a href="#installation">Installation</a></li>
 <li><a href="#data">Native data</a></li>
+<li><a href="#ndarray">ndarray views</a></li>
 <li><a href="#families">Plot families</a></li>
 <li><a href="#numeric-policies">Numeric walkthrough</a></li>
 <li><a href="#axes">Axes and numbers</a></li>
@@ -44,6 +45,8 @@ catalog for all 25 families. The [family catalog](#families) lists every constru
 {{#include sections/scientific-gallery.md}}
 
 {{#include sections/data.md}}
+
+{{#include sections/ndarray.md}}
 
 {{#include sections/families.md}}
 

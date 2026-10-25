@@ -58,7 +58,7 @@ cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 `.svg` 发布轮廓 SVG。终端渲染返回不透明的 `Output`，后续可发布其他格式而不重新渲染。
 [原生数据](#data)解释构造函数所接收的数据。
 
-[完整源码](examples/01_quick_start.rs) · [共享输出辅助代码](examples/support/output.rs) ·
-[图库主题](examples/support/gallery.rs) · [合成输入](examples/support/synthetic.rs) ·
+[完整源码](examples/lichtung-plot/01_quick_start.rs) · [共享输出辅助代码](examples/lichtung-plot/support/output.rs) ·
+[图库主题](examples/lichtung-plot/support/gallery.rs) · [合成输入](examples/lichtung-plot/support/synthetic.rs) ·
 [原尺寸 SVG](gallery/first-plot/quick_start.svg) ·
 [Plot API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Plot.html) · [返回图库](#gallery)

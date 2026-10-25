@@ -52,24 +52,31 @@ alongside each guide. Excerpts use semantic source anchors, not another plotting
 摘录按语义锚点引用这些示例，不是另一套绘图程序。
 
 `just gallery` executes and assembles without building HTML. `docs/gallery.tsv`
-owns case identities, source names, required output files, tutorial anchors/API
+owns case identities, owning packages, source names, required output files, tutorial anchors/API
 references, showcase/reference placement and peer-language titles/descriptions;
 it contains no plotting configuration. Six scientific scenes are featured: scatter,
 raincloud, heatmap, forest, line with bounds and a calibration composition. Two
-additional numeric/text reference workflows are executed for the guide, without
+additional numeric/text reference workflows and the ndarray conversion example are executed for the guide, without
 appearing as showcase cards. This is not complete image coverage of all 25 families.
 All generated material stays under `target/book/`, never beside maintained source.
 Generation records platform/toolchain, the lockfile and font policy. Fonts must be
 preinstalled; tools never download data or fonts. A missing output fails the build
 instead of reusing an earlier image. Structural checks do not prove prose equivalence.
 
-`just gallery` 只执行和组装，不构建 HTML。`docs/gallery.tsv` 管理案例身份、源码名称、
+`just gallery` 只执行和组装，不构建 HTML。`docs/gallery.tsv` 管理案例身份、所属包、源码名称、
 必需文件、教程锚点／API、首页展示或正文参考的归属，以及两种语言的标题和说明，不
 包含绘图配置。首页精选散点、雨云、热图、森林、带边界的折线及校准组合六个场景，
-另外执行两个数值／文本参考工作流供正文使用，不把它们放进首页卡片。尚未覆盖全部
+另外执行两个数值／文本参考工作流和 ndarray 转换示例供正文使用，不把它们放进首页卡片。尚未覆盖全部
 25 个图族的图像。生成内容全部位于 `target/book/`，不混入维护中的源码。
 生成记录包含平台／工具链、锁文件和字体策略。字体须预先安装，工具不下载数据或字体。
 缺少产物会使构建失败，不复用旧图。结构检查不能证明文字语义等价。
+
+Source downloads use `examples/<package>/...`; includes, API links and executions
+use the same explicit allowlist of implemented packages. The TSV has eleven
+columns, including the owning package; there is no core-only catalog fallback.
+
+源码下载使用 `examples/<package>/...`；源码引用、API 链接与执行统一使用已实现包的
+显式白名单。TSV 共十一列，包含所属包，不保留只支持核心包的兼容清单。
 
 The scientific showcase uses synthetic or supplied illustrative data, clearly
 marked in each figure and walkthrough. Its public-API theme lives beside the

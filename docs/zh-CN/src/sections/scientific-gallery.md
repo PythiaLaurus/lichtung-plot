@@ -4,9 +4,9 @@
 [English](../en/index.html#gallery-recipes)
 
 每张图从一个问题出发，而不是罗列 setter。首页展示的数值都是合成数据或明确给定的
-示意值，不是研究结果。示例共用[图库主题](examples/support/gallery.rs)与
-[输出辅助代码](examples/support/output.rs)；需要生成扰动的示例还使用随包提供的
-[合成输入](examples/support/synthetic.rs)。
+示意值，不是研究结果。示例共用[图库主题](examples/lichtung-plot/support/gallery.rs)与
+[输出辅助代码](examples/lichtung-plot/support/output.rs)；需要生成扰动的示例还使用随包提供的
+[合成输入](examples/lichtung-plot/support/synthetic.rs)。
 
 <a id="distributions"></a>
 ### 雨云图：不要只看均值
@@ -29,7 +29,7 @@
 ```
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 13_distributions`。
-[完整源码](examples/13_distributions.rs) · [原尺寸 SVG](gallery/distributions/distributions.svg) ·
+[完整源码](examples/lichtung-plot/13_distributions.rs) · [原尺寸 SVG](gallery/distributions/distributions.svg) ·
 [RaincloudInput API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.RaincloudInput.html) · [返回图库](#gallery)
 
 <a id="expression-heatmap"></a>
@@ -53,7 +53,7 @@
 ```
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 14_expression_heatmap`。
-[完整源码](examples/14_expression_heatmap.rs) · [原尺寸 SVG](gallery/expression-heatmap/expression_heatmap.svg) ·
+[完整源码](examples/lichtung-plot/14_expression_heatmap.rs) · [原尺寸 SVG](gallery/expression-heatmap/expression_heatmap.svg) ·
 [ContinuousColorScale API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.ContinuousColorScale.html) · [返回图库](#gallery)
 
 <a id="effect-intervals"></a>
@@ -70,7 +70,7 @@
 ```
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 15_effect_intervals`。
-[完整源码](examples/15_effect_intervals.rs) · [原尺寸 SVG](gallery/effect-intervals/effect_intervals.svg) ·
+[完整源码](examples/lichtung-plot/15_effect_intervals.rs) · [原尺寸 SVG](gallery/effect-intervals/effect_intervals.svg) ·
 [Bounds API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Bounds.html) · [返回图库](#gallery)
 
 <a id="time-response"></a>
@@ -93,7 +93,7 @@
 ```
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 16_time_response`。
-[完整源码](examples/16_time_response.rs) · [原尺寸 SVG](gallery/time-response/time_response.svg) ·
+[完整源码](examples/lichtung-plot/16_time_response.rs) · [原尺寸 SVG](gallery/time-response/time_response.svg) ·
 [Bounds API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Bounds.html) · [返回图库](#gallery)
 
 <a id="calibration"></a>
@@ -124,5 +124,5 @@ x 轴伪装成共享轴。
 ```
 
 运行 `cargo run --locked --offline -p lichtung-plot --example 17_calibration`。
-[完整源码](examples/17_calibration.rs) · [原尺寸 SVG](gallery/calibration/calibration.svg) ·
+[完整源码](examples/lichtung-plot/17_calibration.rs) · [原尺寸 SVG](gallery/calibration/calibration.svg) ·
 [Canvas API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.Canvas.html) · [返回图库](#gallery)

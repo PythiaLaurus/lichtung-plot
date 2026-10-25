@@ -35,7 +35,7 @@ outlined gallery image come from one frozen scene, not separate layout runs:
 
 Run `cargo run --locked --offline -p lichtung-plot --example 12_text_layout`.
 
-[Complete source](examples/12_text_layout.rs) · [Shared output helper](examples/support/output.rs) ·
+[Complete source](examples/lichtung-plot/12_text_layout.rs) · [Shared output helper](examples/lichtung-plot/support/output.rs) ·
 [Full-size SVG](gallery/text-layout/text_layout_outlined.svg) ·
 [Selectable-text SVG](gallery/text-layout/text_layout.svg) ·
 [TextLayout API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.TextLayout.html) · [Back to gallery](#gallery)
