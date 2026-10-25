@@ -33,6 +33,16 @@ dependencies need a local path and a release version; independently unpacked
 packages must not require the checkout or unpublished registry substitutes.
 Dependency changes update Cargo.lock and run the complete verification gate.
 
+Distributable renderer/adapter libraries inherit the workspace's `publish =
+["crates-io"]` metadata; workspace-local commands explicitly use `publish = false`.
+Eligibility is not publication or authorization to publish. `just package` selects
+all three libraries together. Cargo 1.96 builds a temporary local registry overlay
+from their real archives, so unpublished inter-member dependencies can be verified
+offline without the checkout or a prior registry release. A dependency marked
+`publish = false` is excluded from that overlay; do not confuse this configuration
+error with a requirement to publish first. Use Cargo's own overlay, not manually
+fabricated registry entries, temporary manifest patches or `--no-verify`.
+
 The core renderer remains independent of every other lichtung-* crate. Adapters
 and bindings consume its public API, never private modules or reverse optional
 dependencies. Core-only consumers must not compile adapter/binding dependencies.

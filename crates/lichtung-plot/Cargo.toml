@@ -7,7 +7,7 @@ license.workspace = true
 description = "Strongly typed scientific plotting with deterministic SVG and PNG output"
 documentation = "https://docs.rs/lichtung-plot"
 readme = "README.md"
-publish = false
+publish.workspace = true
 autotests = false
 
 [dependencies]

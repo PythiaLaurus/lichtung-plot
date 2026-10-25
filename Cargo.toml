@@ -7,6 +7,8 @@ resolver = "2"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
+# Registry eligibility for distributable libraries, not a publication command.
+publish = ["crates-io"]
 
 [workspace.dependencies]
 lichtung-plot = { path = "crates/lichtung-plot", version = "0.1.0" }

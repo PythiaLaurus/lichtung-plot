@@ -30,7 +30,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Both conversion packages, public consumers and peer guides are implemented under [data adapters](09_DATA_ADAPTERS.md). Independent adapter-package verification is blocked by the unpublished core dependency; workspace conversion behavior is verified separately. |
+| ndarray and Polars adapters | Both conversion packages, public consumers and peer guides are implemented under [data adapters](09_DATA_ADAPTERS.md). Strict workspace Clippy and joint offline verification of all three actual package archives passed through Cargo's local overlay; no registry publication was required or performed. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -344,11 +344,12 @@ the appropriately configured [mdBook test command][mdbook-test] where relevant.
 Check isolated code and end-to-end workflows at their real semantic layer instead
 of duplicating every imported fragment as a new test.
 
-Cargo workspace success is not independently unpacked-package success. At package
-delivery, resolve unpublished inter-member dependency verification explicitly;
-unavailable registry data blocks that verification, not conversion implementation,
-and is not a pass or a reason to substitute `--no-verify`. No package contents or
-published ref may reintroduce the full Unicode corpus.
+Cargo workspace success is not independently unpacked-package success. Verify
+the renderer and adapters together through Cargo's temporary archive-backed
+registry overlay, using distributable-library metadata rather than excluding the
+core with `publish = false`. A prior registry publication is not required. Missing
+third-party cache data is not a pass or a reason to substitute `--no-verify`. No
+package contents or published ref may reintroduce the full Unicode corpus.
 
 ### Delivery Order
 

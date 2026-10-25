@@ -7,7 +7,7 @@ license.workspace = true
 description = "Owned native plotting values from eager Polars columns"
 documentation = "https://docs.rs/lichtung-plot-polars"
 readme = "README.md"
-publish = false
+publish.workspace = true
 
 [dependencies]
 lichtung-plot.workspace = true
