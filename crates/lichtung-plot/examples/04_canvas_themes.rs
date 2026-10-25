@@ -3,7 +3,11 @@
 //! Renders an automatic Publication Canvas and an exact-width Nature Canvas
 //! with inherited and explicit Science children, reporting frozen dimensions.
 //! Run with:
-//!   cargo run --example 04_canvas_themes -p lichtung-plot
+//!   cargo run --example 04_canvas_themes -p lichtung-plot -- <directory>
+
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
 
 use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
 
@@ -15,7 +19,7 @@ fn scatter(name: &'static str, values: [f64; 3]) -> Plot<lichtung_plot::kind::Sc
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let directory = std::env::temp_dir();
+    let directory = output::directory()?;
     let default_path = directory.join("canvas_theme_default.svg");
     let output = Canvas::grid(1, 1)?
         .panel(0, 0, scatter("Publication", [1.0, 3.0, 2.0]))?
@@ -47,3 +51,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+// ANCHOR_END: example

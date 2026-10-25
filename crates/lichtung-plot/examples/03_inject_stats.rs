@@ -5,13 +5,18 @@
 //!
 //! This example supplies the adjusted display p-value for each named pair.
 //!
-//! Run with:  cargo run --example 03_inject_stats -p lichtung-plot
+//! Run with: cargo run --example 03_inject_stats -p lichtung-plot -- <directory>
 //!
-//! Writes a boxplot SVG to the system temporary directory.
+//! Writes a boxplot SVG to the supplied directory.
+
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
 
 use lichtung_plot::{CategoryValues, NumericValues, Plot, Significance, SignificanceMark, Theme};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = output::directory()?;
     // Three groups with clearly different means.
     let group_a: Vec<f64> = (0..30).map(|i| 5.0 + f64::from(i) * 0.1).collect();
     let group_b: Vec<f64> = (0..30).map(|i| 8.0 + f64::from(i) * 0.1).collect();
@@ -37,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Significance::between("A", "C", SignificanceMark::PValue(0.000_03)),
     ];
 
-    let path = std::env::temp_dir().join("inject_stats.svg");
+    let path = directory.join("inject_stats.svg");
     Plot::boxplot(
         CategoryValues::new("group", group_col)?,
         NumericValues::new("value", value_col),
@@ -50,3 +55,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("wrote {}", path.display());
     Ok(())
 }
+// ANCHOR_END: example

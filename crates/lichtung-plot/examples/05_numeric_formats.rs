@@ -1,5 +1,9 @@
 //! One scientific numeric policy across axes, values, guides and total shelves.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     AxisScale, Canvas, CategoryValues, CoefficientInput, HeatmapAnnotations, NumericFactor,
     NumericFormat, NumericLocale, NumericNotation, NumericPrecision, NumericPrefixes, NumericRate,
@@ -7,6 +11,7 @@ use lichtung_plot::{
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
         .rate(NumericRate::Percent)?
         .rounding(NumericRounding::NearestAway)?
@@ -87,7 +92,8 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(1, 1, totals)?
         .panel(2, 0, forest)?
         .panel(2, 1, prefix_plot()?)?
-        .svg_preserve_text(std::env::temp_dir().join("numeric_formats"))?;
+        .svg_preserve_text(directory.join("numeric_formats_text.svg"))?
+        .svg(directory.join("numeric_formats.svg"))?;
     println!(
         "numeric_formats.svg: {}×{} CSS pixels",
         output.width(),
@@ -114,3 +120,4 @@ fn prefix_plot() -> lichtung_plot::Result<Plot<lichtung_plot::kind::Scatter>> {
     )
     .title("Repeated SI units and one common factor"))
 }
+// ANCHOR_END: example

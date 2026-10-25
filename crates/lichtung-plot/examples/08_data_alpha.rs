@@ -1,11 +1,16 @@
 //! Observation and explicit-series alpha share one immutable guide lifecycle.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     AlphaEncoding, AlphaValues, Canvas, CategoryValues, LegendPolicy, LegendPosition,
     NumericValues, Plot,
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let points = Plot::scatter(
         NumericValues::new("time", [0.0, 1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("response", [0.0, 0.8, 0.4, 1.3, 1.0]),
@@ -36,7 +41,7 @@ fn main() -> lichtung_plot::Result<()> {
     )?)
     .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
     .title("Explicit series alpha");
-    let destination = std::env::temp_dir().join("data_alpha");
+    let destination = directory.join("data_alpha");
     let output = Canvas::grid(1, 2)?
         .panel(0, 0, points)?
         .panel(0, 1, paths)?
@@ -51,3 +56,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

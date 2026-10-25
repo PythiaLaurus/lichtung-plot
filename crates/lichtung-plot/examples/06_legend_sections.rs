@@ -1,11 +1,16 @@
 //! Observed pair keys versus marginal channel sections, with one guide per owner.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     Bounds, Canvas, CanvasLegendPolicy, CategoryValues, InteractionStyle, Labels,
     LegendComposition, LinePattern, NumericValues, Plot, PointShape,
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let mut conditions = Vec::new();
     let mut groups = Vec::new();
     let mut hues = Vec::new();
@@ -61,14 +66,14 @@ fn main() -> lichtung_plot::Result<()> {
         .size(1600, 1000)
         .panel(0, 0, combined.clone().title("20 observed pair keys"))?
         .panel(0, 1, separate.clone().title("5 group + 4 hue keys"))?
-        .svg_preserve_text(std::env::temp_dir().join("legend_sections"))?;
+        .svg_preserve_text(directory.join("legend_sections.svg"))?;
     let shared = Canvas::grid(1, 2)?
         .size(1600, 1000)
         .legend_composition(LegendComposition::Separate)
         .legend_policy(CanvasLegendPolicy::Shared)
         .panel(0, 0, combined)?
         .panel(0, 1, separate)?
-        .svg_preserve_text(std::env::temp_dir().join("shared_legend_sections"))?;
+        .svg_preserve_text(directory.join("shared_legend_sections.svg"))?;
     println!(
         "legend_sections.svg: {}×{}; shared_legend_sections.svg: {}×{} CSS pixels",
         output.width(),
@@ -78,3 +83,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

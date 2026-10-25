@@ -1,0 +1,14 @@
+[book]
+title = "lichtung-plot User Guide"
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+build-dir = "../../target/book/site/en"
+
+[output.html]
+git-repository-url = "https://github.com/PythiaLaurus/lichtung-plot"
+
+[output.html.playground]
+runnable = false

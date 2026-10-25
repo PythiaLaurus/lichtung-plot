@@ -1,11 +1,16 @@
 //! Independent approximate targets and complete-source maxima, with frozen output.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     Canvas, NumericFormat, NumericValues, Plot, TickGeneration, TickRequirement, TickSingleton,
     TickSpace,
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let observations = Plot::scatter(
         NumericValues::new("fraction", [0.0, 0.25, 0.5, 0.75, 1.0]),
         NumericValues::new("response", [0.0, 0.2, 0.1, 0.8, 0.5]),
@@ -57,7 +62,7 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(2, 0, geometric(2.0)?)?
         .panel(2, 1, geometric(1.5)?)?
         .size(1400, 1500)
-        .svg_preserve_text(std::env::temp_dir().join("tick_generation"))?;
+        .svg_preserve_text(directory.join("tick_generation.svg"))?;
     println!(
         "tick_generation.svg: {}×{} CSS pixels",
         output.width(),
@@ -86,3 +91,4 @@ fn geometric(ratio: f64) -> lichtung_plot::Result<Plot<lichtung_plot::kind::Fore
     .x_tick_format(NumericFormat::from_specifier(".3~g")?)
     .title(format!("Anchored geometric lattice; ratio {ratio}")))
 }
+// ANCHOR_END: example

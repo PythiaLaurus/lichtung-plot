@@ -1,5 +1,9 @@
 //! Data anchoring and text-only adaptation share the normal composed lifecycle.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     Canvas, DataCoordinate, NumericValues, PanelTextAnnotation, Plot, Text, TextAlignment,
     TextAnchor, TextBounds, TextCoordinate, TextElision, TextEllipsis, TextFailure, TextFit,
@@ -7,6 +11,7 @@ use lichtung_plot::{
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let theme = Theme::publication();
     let heading = theme
         .typography()
@@ -50,7 +55,7 @@ fn main() -> lichtung_plot::Result<()> {
         Text::new("Independent complete body. Only the heading permits shrinking or ellipsis.")
             .alignment(TextAlignment::Start),
     )?;
-    let destination = std::env::temp_dir().join("text_layout.svg");
+    let destination = directory.join("text_layout.svg");
     let output = Canvas::grid(1, 2)?
         .theme(theme)
         .panel(0, 0, plot)?
@@ -65,3 +70,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

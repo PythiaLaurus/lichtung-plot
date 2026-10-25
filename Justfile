@@ -24,9 +24,21 @@ test-doc:
 docs:
     RUSTDOCFLAGS="-D warnings" cargo doc --locked --offline --workspace --no-deps
 
-# Verify every workspace package from Cargo's unpacked staging directories.
+# Verify the distributable renderer, not the nonpublished Book assembly command.
 package:
-    cargo package --locked --offline --workspace --allow-dirty
+    cargo package --locked --offline -p lichtung-plot --allow-dirty
+
+# Check peer chapters, links, case identities and executable source anchors.
+book-check:
+    cargo run --locked --offline -p lichtung-plot-book -- check
+
+# Execute the gallery once and assemble fresh sources/artifacts for both Books.
+gallery:
+    cargo run --locked --offline -p lichtung-plot-book -- gallery
+
+# Generate the gallery and build both Books with the installed mdBook CLI.
+book:
+    cargo run --locked --offline -p lichtung-plot-book -- build
 
 # Run the complete read-only repository verification.
-verify: fmt-check lint test test-doc docs package
+verify: fmt-check lint test test-doc docs package book-check

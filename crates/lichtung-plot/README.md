@@ -22,7 +22,8 @@ Plot::scatter(
 ```
 
 The public API is documented on [docs.rs](https://docs.rs/lichtung-plot).
-[User guides](https://github.com/PythiaLaurus/lichtung-plot/tree/main/docs) and
+[English](https://github.com/PythiaLaurus/lichtung-plot/tree/main/docs/en/src) and
+[Chinese](https://github.com/PythiaLaurus/lichtung-plot/tree/main/docs/zh-CN/src) user guides and
 [architectural specifications](https://github.com/PythiaLaurus/lichtung-plot/tree/main/specs)
 are maintained at the workspace root, not copied into this package.
 
@@ -52,10 +53,11 @@ The package includes runnable examples and self-contained default test fixtures.
 For example, from the workspace root or this package directory:
 
 ```sh
-cargo run --locked --offline -p lichtung-plot --example 01_quick_start
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
 ```
 
-That example writes `quick_start.svg` to the system temporary directory. The
+Every example accepts exactly one caller-selected output directory, creating it
+if needed. That example writes `quick_start.svg` in the selected directory. The
 workspace pins Rust 1.96.0 and maintains the shared lockfile. Root `Justfile`
 recipes validate the whole workspace; use `-p lichtung-plot` for focused Cargo
 commands. Complete Unicode conformance checks are opt-in and require explicit

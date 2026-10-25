@@ -1,303 +1,46 @@
 # lichtung-plot
 
-`lichtung-plot` is a strongly typed scientific renderer for owned immutable
-display values. It publishes outlined SVG and PNG artifacts and can also publish
-canonical SVG with preserved text from the same opaque rendered scene.
+A standalone, strongly typed scientific renderer for owned immutable display
+values, with 25 plot families, facets, Canvas composition, themes and text
+adaptation. It publishes outlined SVG, preserve-text SVG and PNG from frozen
+rendered scenes. Applications own inferential analysis; the renderer has no
+network access, asset provisioning or dependency on another `lichtung-*` crate.
 
-The renderer has no dependency on the
-Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
-precomputed inferential annotations as ordinary plotting data.
+## Guides · 使用指南
 
-The repository is a Rust workspace. Its standalone renderer, tests, fixtures and
-runnable examples live in [`crates/lichtung-plot/`](crates/lichtung-plot/), which
-is the default member. The root owns the shared lockfile, pinned toolchain and
-development recipes. Architecture and output contracts stay in [`specs/`](specs/);
-user guides stay in [`docs/`](docs/). Future adapters and bindings are not yet
-workspace members.
+- [English Book](docs/en/src/introduction.md)
+- [中文 Book](docs/zh-CN/src/introduction.md)
+- [Book and gallery build instructions · 文档与图库构建](docs/README.md)
+- [Rust API reference](https://docs.rs/lichtung-plot)
 
-```rust,no_run
-use lichtung_plot::{NumericValues, Plot};
+The two Books are equal-status editions with equivalent scope. They share actual
+runnable example sources and gallery outputs, not hand-copied plotting programs.
+两套 Book 地位相同、范围等价，共享真实可运行示例及图库产物，不手工维护多套绘图代码。
 
-Plot::scatter(
-    NumericValues::new("x", [1.0, 2.0, 3.0]),
-    NumericValues::new("y", [1.5, 2.5, 2.0]),
-)
-.svg("scatter")?; // Publishes scatter.svg.
-# Ok::<(), Box<dyn std::error::Error>>(())
+## First Example
+
+From the workspace root, with suitable system fonts installed:
+
+```sh
+cargo run --locked --offline -p lichtung-plot --example 01_quick_start -- target/examples/first-plot
 ```
 
-## Themes And Composition
+Each example requires one caller-selected output directory. The renderer never
+downloads fonts. See [installation](docs/en/src/installation.md) /
+[安装](docs/zh-CN/src/installation.md) for local dependency paths and font requirements.
 
-Omitting a theme selects Publication for a standalone Plot and for the Canvas
-root. `Canvas::theme` replaces that root; child Plots without their own theme
-inherit it. `Plot::theme` completely replaces the inherited theme for only that
-Plot.
+## Workspace And Development
 
-`Plot::title_alignment` and `Plot::subtitle_alignment` set independent physical
-Start/Center/End instructions. Canvas panel alignment setters supply defaults for
-embedded Plot headings; explicit Plot instructions win. Captions use their
-theme's independent `root_caption_alignment`. Panel instructions do not change
-Canvas-owned prose, headers or TextPanel text.
+- [`crates/lichtung-plot/`](crates/lichtung-plot/): independent renderer, tests,
+  fixtures, runnable examples, package README and licenses; the default member.
+- [`dev/book/`](dev/book/): nonpublished Rust command assembling/checking the Books
+  and executable gallery; no production dependency from the renderer.
+- [`specs/`](specs/): one root architectural source of truth.
+- [`docs/`](docs/): peer-language user guides and gallery catalog.
 
-```rust
-use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
-
-let canvas = Canvas::grid(1, 2)?
-    .theme(Theme::nature())
-    .panel(0, 0, Plot::scatter(
-        NumericValues::new("x", [1.0, 2.0]),
-        NumericValues::new("inherited", [1.0, 2.0]),
-    ))?
-    .panel(0, 1, Plot::scatter(
-        NumericValues::new("x", [1.0, 2.0]),
-        NumericValues::new("replacement", [2.0, 1.0]),
-    ).theme(Theme::science()))?;
-# let _ = canvas;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-Built-in constructors return complete immutable values. Customize any component
-through its validated consuming edits, then build a new theme:
-
-```rust
-use lichtung_plot::{Color, Theme};
-
-let base = Theme::publication();
-let surfaces = base.surfaces().clone()
-    .canvas_root(Color::hex("#FAFAFA")?)?;
-let custom = base.customize().surfaces(surfaces).build()?;
-# let _ = custom;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-Categorical mappings use `CategoricalColorScale` with an ordered
-`QualitativePalette` or exact raw-key `CategoricalColorMap`. Heatmap and Beeswarm
-both accept one `ContinuousColorScale`, containing kind, optional gradient and
-optional exact `ColorDomain`. Data-scale colors use opaque `OpaqueColor`; mark
-roles and explicit data-alpha inputs supply alpha independently. See [complete theme and scale
-construction](docs/complete-theme-foundations.md).
-
-## Discrete Legend Sections
-
-`LegendComposition::Combined` is the default: one section with complete keys for
-observed identities. Select `Separate` to explain mapped channels in ordered
-sections inside one frame:
-
-```rust
-use lichtung_plot::{CategoryValues, LegendComposition, NumericValues, Plot};
-
-let plot = Plot::scatter(
-    NumericValues::new("x", [0.0, 1.0]),
-    NumericValues::new("y", [1.0, 0.0]),
-)
-.hue(CategoryValues::new("cohort", ["control", "treated"])?)
-.legend_composition(LegendComposition::Separate);
-# let _ = plot;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-Explicitly styled Interaction group/hue mappings produce group-style and hue-color
-sections. Unsupported independent pairs refuse before fonts; same-field channels
-stay joint. Sections preserve source mark geometry and independent role/exact alpha and do not invent
-unobserved combinations. Standalone/facets use the Plot selection, PerPlot uses
-each child's, and Shared uses `Canvas::legend_composition` for every contributor.
-Hidden skips guide-only semantics. Theme, visibility and placement keep their own
-setters. See [composition and ownership](docs/public-legend-composition.md) and
-[`crates/lichtung-plot/examples/06_legend_sections.rs`](crates/lichtung-plot/examples/06_legend_sections.rs).
-
-## Data Alpha
-
-`point_alpha`, `line_alpha` and `fill_alpha` replace only the admitted scientific
-component's alpha byte, after normal color/role/exact paint resolution. Outlines,
-text and supplemental layers retain their own paints. Zero preserves scientific
-membership; it does not filter observations or change statistics.
-
-```rust
-use lichtung_plot::{AlphaEncoding, AlphaValues, NumericValues, Plot};
-
-let plot = Plot::scatter(
-    NumericValues::new("x", [0.0, 1.0, 2.0]),
-    NumericValues::new("y", [1.0, 0.5, 1.5]),
-).point_alpha(AlphaEncoding::observations(AlphaValues::linear(
-    NumericValues::new("confidence", [0.0, 0.5, 1.0]),
-    (0.0, 1.0), (0, 255),
-)?));
-# let _ = plot;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-Observations align with complete original slots. Series/aggregate geometry instead
-uses explicit `AlphaEncoding::keyed` values; Histogram fills use exact `bins`, and
-`single` explicitly broadcasts one value. There is no implicit row reduction.
-`AlphaValues::new` accepts arbitrary bytes without explanation. `linear`, `log10`,
-`continuous`, `categorical` and `threshold` explicitly declare mapping semantics.
-Custom functions execute during construction and are never retained. `select`
-keeps a complete pooled declaration for compatible Shared guides. Repeated setters
-replace the complete target; `AlphaEncoding::theme()` resets it.
-
-Declared mappings add numeric/category/interval symbol sections after existing
-symbols and continuous-color content, inside the same guide frame. Existing
-group/hue keys neutralize data-bound alpha to 255. See [units, mappings and family
-capabilities](docs/public-data-alpha.md) and
-[`crates/lichtung-plot/examples/08_data_alpha.rs`](crates/lichtung-plot/examples/08_data_alpha.rs).
-
-## Exact Element Paint
-
-Exact styles accept a complete `Color`, including its byte alpha. An independent
-point-layer alpha replaces that color's alpha in either edit order; omitted
-color, alpha and radius instructions use the owning theme's defaults.
-
-```rust
-use lichtung_plot::{Color, GuideSpec, GuideStyle, LinePattern, NumericValues, Plot, PointLayer};
-
-let points = PointLayer::new(
-    NumericValues::new("selected x", [1.0]),
-    NumericValues::new("selected y", [2.0]),
-)
-.color(Color::hex("#14508C80")?)
-.alpha(192)
-.radius(5)?;
-let guide = GuideStyle::new(Color::rgba(180, 60, 40, 128), 1.5, LinePattern::Dashed)?;
-let plot = Plot::line(
-    NumericValues::new("x", [0.0, 1.0, 2.0]),
-    NumericValues::new("y", [1.0, 2.0, 3.0]),
-)
-.point_layer(points)
-.guide(GuideSpec::horizontal(2.0, guide));
-# let _ = plot;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-## Numeric Tick Generation
-
-`x_tick_generation(TickGeneration::target(5)?)` requests approximately five numeric
-positions, allowing nice-step deviation and measured coarsening.
-`TickGeneration::maximum(4)?` instead bounds the complete generated in-domain list,
-including endpoint positions. Counts use `usize`; there is no application-wide
-10,000-position ceiling for explicit sources.
-
-Use `TickGeneration::additive(2.0)?` for first-tried linear spacing, or
-`TickGeneration::log10_decades(2)?` for divisible integral Forest Log10 exponents.
-The matching `y_tick_generation` independently controls y. Each setter replaces
-the complete choice; `TickGeneration::automatic()` resets it. Bounded local
-coarsening and actual text fit still apply. Exact `x_ticks`/`y_ticks` take
-precedence in either setter order and are never truncated by a generated maximum;
-actual categorical axes reject non-Automatic generation instructions.
-
-`exact_count(count, TickSpace::Data)` retains the complete requested count,
-including an empty source for zero. `interval(step, origin, space, requirement)`
-and `multiplicative(anchor, ratio, requirement)` distinguish fixed sources from
-preferred candidates. `function` supplies positions from the final actual view;
-formatting stays independent. `maximum_count` configures one optional explicit
-cap without replacing the primary locator.
-
-See [`crates/lichtung-plot/examples/07_tick_generation.rs`](crates/lichtung-plot/examples/07_tick_generation.rs) for
-independent axis choices and [the public contract](docs/public-tick-generation.md).
-
-## Scientific Numeric Labels
-
-`NumericFormat` controls generated numeric ticks, continuous guide numbers,
-Heatmap cell values, point-only Coefficient estimate labels and Waterfall totals.
-Choose Decimal/Scientific/Engineering notation, exact or adaptive fractional/
-significant precision, literal affixes and zero handling. Decimal scaling is
-explicit; a percent suffix alone only appends `%`.
-
-```rust
-use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision, NumericValues, Plot};
-
-let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
-    .decimal_scale(2)?
-    .suffix("%")?;
-let plot = Plot::scatter(
-    NumericValues::new("time", [1.0, 2.0]),
-    NumericValues::new("fraction", [0.125, 0.875]),
-).y_tick_format(percent);
-# let _ = plot;
-# Ok::<(), lichtung_plot::Error>(())
-```
-
-Adaptive precision is uniform for a complete semantic set, independently of fit.
-Exact tick strings take precedence. Scientific values and colors are unchanged;
-configured Forest Log10 labels use certified mathematical powers of their tick
-exponents. See [numeric format construction and consumers](docs/public-numeric-formatting.md)
-and [`crates/lichtung-plot/examples/05_numeric_formats.rs`](crates/lichtung-plot/examples/05_numeric_formats.rs).
-
-## Text Placement And Fit
-
-`Text` retains its original source alongside optional complete typography and a
-`TextLayout`. Layout controls line alignment, block anchoring, rotation, bounds,
-visibility, ellipsis and fractional font-size fitting. Plain replacement preserves
-existing instructions; supplying a whole layout replaces that layout request.
-
-Panel annotations can anchor to typed data, panel or figure references. Text
-adaptation never removes scientific categories, marks, tick positions or grids.
-See [text configuration](docs/getting-started.md#display-text-and-labels) and
-[`crates/lichtung-plot/examples/12_text_layout.rs`](crates/lichtung-plot/examples/12_text_layout.rs) for a fixed data note
-and an independently fitted TextPanel heading.
-
-## Fonts
-
-Outlined SVG and PNG generation resolve installed system fonts from this
-default ordered stack and never download or embed font files:
-
-```text
-Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
-```
-
-Each of the eighteen complete text roles owns a typed `FontStack`. Inspect a
-built-in profile through
-`Theme::publication().typography().get_root().get_title().get_stack()`, or construct ordered
-`FontFamily::named` and `FontFamily::generic` entries. A named value is one literal
-family, including any punctuation; it is not a CSS stack expression.
-`ThemeBuilder::font_stack` edits all roles once during construction. A later
-single-role replacement takes precedence normally. Font coverage is checked only
-when a render operation consumes the selected roles.
-
-The normal `.svg(path)` publication method converts all text to vector glyph
-paths. Recipients therefore do not need the generation fonts, but the exact
-paths depend on the fonts installed in the generation environment and the text
-is no longer selectable or searchable. `.svg_preserve_text(path)` instead
-publishes the canonical SVG with accessible, selectable, searchable, and
-editable `<text>` elements; its displayed text depends on fonts available to the
-viewer.
-
-## Figure Size
-
-Plot and Canvas derive dimensions from content by default. Use `.width(600)` for
-an exact CSS-pixel width, `.max_width(600)` to cap the natural complete outer width,
-or `.size(600, 400)` for an exact pair. Width and maximum width derive height from
-content. A cap wider than natural content does not stretch it. Each call replaces
-the complete request: `.size(600, 1).max_width(600)` clears the explicit height.
-Zero dimensions reject during preflight. A cap does not enable text shrinking or
-truncation; content must fit its declared policies. Canvas assigns embedded Plot
-dimensions, ignoring their standalone sizing requests.
-
-The returned `Output::width()` and `height()` report the frozen canonical scene,
-including after chained PNG publications with different raster dimensions.
-
-## Output Formats
-
-Publication SVG with outlined text, preserve-text SVG, and PNG are unconditional
-crate capabilities. Terminal paths are base destinations: SVG methods append
-`.svg` and PNG methods append `.png` unless the final filename already has the
-complete expected suffix under ASCII case-insensitive comparison. Existing
-filename text is never replaced, so `report.v1` becomes `report.v1.svg` and
-`report.png` passed to `.svg` becomes `report.png.svg`. PDF output is deliberately
-outside this crate.
-
-## Development
-
-The workspace pins its Rust toolchain and tracks one root `Cargo.lock`. Use
-focused tests with `-p lichtung-plot` and `just lint` for scoped changes. Ordinary
-Cargo commands select the core by default; root verification recipes explicitly
-select the whole workspace. The complete read-only closure gate is:
-
-```bash
-just verify
-```
-
-`just test` runs every member's library, integration and example targets; `just test-doc`
-executes public examples and compile-fail API boundaries. `just verify` includes
-both, strict Clippy, formatting, documentation and package verification. See
-[`specs/90_DEVELOPMENT.md`](specs/90_DEVELOPMENT.md) for test ownership and stable
-semantic expectations.
+The workspace pins Rust 1.96.0 and tracks one lockfile. Use focused tests and
+`just lint` for code changes. `just book-check` checks both editions without rendering;
+`just book` generates fresh gallery outputs and invokes installed mdBook 0.5.4,
+writing `target/book/site/index.html`. `just verify` is the broad source-verification
+gate; it includes structural Book checks but does not regenerate the gallery/site.
+See [development](specs/90_DEVELOPMENT.md) for verification scope and test limits.

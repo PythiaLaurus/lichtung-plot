@@ -1,8 +1,13 @@
 //! One application rule, independently formatted, consumes the final actual view.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{Canvas, NumericFormat, NumericValues, Plot, TickGeneration};
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let warning = TickGeneration::function(|context| {
         let (lower, upper) = context.domain().data_limits().ok_or_else(|| {
             lichtung_plot::Error::Data("warning locator requires retained raw limits".into())
@@ -28,7 +33,7 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(1, 0, panel((20.0, 80.0)))?
         .panel(2, 0, panel((60.0, 120.0)))?
         .size(1200, 1200)
-        .svg_preserve_text(std::env::temp_dir().join("tick_functions"))?;
+        .svg_preserve_text(directory.join("tick_functions.svg"))?;
     println!(
         "tick_functions.svg: {}×{} CSS pixels",
         output.width(),
@@ -36,3 +41,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

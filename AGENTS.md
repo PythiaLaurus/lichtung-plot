@@ -15,7 +15,9 @@ the workspace manifest. Add members only with working consumers, not empty shell
 
 Keep specifications at the workspace root, divided by responsibility; member
 documentation references shared contracts rather than duplicating them. Root
-verification recipes explicitly select the workspace, not only default members.
+lint/test/API-documentation recipes explicitly select the workspace, not only
+default members. Package verification selects distributable members, excluding
+workspace-local development commands such as `dev/book`.
 
 ## Standalone Boundary
 

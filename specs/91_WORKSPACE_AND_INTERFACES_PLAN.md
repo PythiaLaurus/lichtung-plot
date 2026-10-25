@@ -12,11 +12,11 @@ not in anticipation of it.
 
 The scope covers a workspace migration, new Polars/ndarray adapters, a complete
 Python interface, and replacement of the loose guides with a serious Book-style
-documentation system and gallery. The authorized mechanical migration places the
-standalone renderer in a virtual workspace as its only member; adapters, bindings
-and Books remain planned. This document does not authorize implementation of the
-remaining components, package publication, site deployment, Git push or history
-rewriting.
+documentation system and gallery. The standalone renderer now lives in a virtual
+workspace with a nonpublished Rust Book assembly command. The authorized Book,
+example and gallery foundation covers existing Rust capabilities; adapters and
+bindings remain planned. This document does not authorize implementation of those
+remaining components, package publication, site deployment, Git push or history rewriting.
 
 Python object mutation/copy semantics are deliberately unresolved. Record the
 settled scope first; analyze that choice separately and, if source inspection
@@ -28,7 +28,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Objective | Current status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
-| Peer-language Book/example/gallery foundation | Not implemented; independent of the Python lifecycle choice. |
+| Peer-language Book/example/gallery foundation | Delivered: ten peer chapters, shared runnable-source includes, caller-selected example output directories and three executed gallery workflows; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
@@ -77,10 +77,12 @@ docs/
   zh-CN/book.toml
   zh-CN/src/
 specs/
+dev/
+  book/                            # working nonpublished Book assembly command
 ```
 
-Do not add empty workspace members before they have working consumers. A small
-nonpublished Rust development package may provide gallery assembly if needed;
+Do not add empty workspace members before they have working consumers. The
+nonpublished Rust development package dev/book provides gallery assembly;
 keep root Justfile recipes as the normal entry points and do not build a generic
 workflow framework or add a `tools/` directory.
 

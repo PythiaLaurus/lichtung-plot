@@ -1,8 +1,13 @@
 //! A capped root with one tall scientific owner beside two independent owners.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{Canvas, NumericValues, Plot};
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let plot = || {
         Plot::scatter(
             NumericValues::new("x", [0.0, 1.0, 2.0]),
@@ -17,7 +22,7 @@ fn main() -> lichtung_plot::Result<()> {
         .row_header(0, 1, "Upper row")?
         .row_header(1, 1, "Lower row")?
         .max_width(1200)
-        .svg_preserve_text(std::env::temp_dir().join("canvas_spans"))?;
+        .svg_preserve_text(directory.join("canvas_spans.svg"))?;
     assert!(output.width() <= 1200);
     println!(
         "canvas_spans.svg: {}×{} CSS pixels",
@@ -26,3 +31,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

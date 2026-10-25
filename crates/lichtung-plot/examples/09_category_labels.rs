@@ -1,10 +1,15 @@
 //! Label eligibility is independent from scientific categories, cells and marks.
 
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
+
 use lichtung_plot::{
     BarInput, Canvas, CategoryLabelSelection, CategoryValues, Labels, NumericValues, Plot,
 };
 
 fn main() -> lichtung_plot::Result<()> {
+    let directory = output::directory()?;
     let months = [
         "January",
         "February",
@@ -44,7 +49,7 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(0, 0, bars)?
         .panel(1, 0, cells)?
         .size(1400, 1000)
-        .svg_preserve_text(std::env::temp_dir().join("category_labels"))?;
+        .svg_preserve_text(directory.join("category_labels.svg"))?;
     println!(
         "category_labels.svg: {}×{} CSS pixels",
         output.width(),
@@ -52,3 +57,4 @@ fn main() -> lichtung_plot::Result<()> {
     );
     Ok(())
 }
+// ANCHOR_END: example

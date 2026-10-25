@@ -1,9 +1,13 @@
 //! Example 01: a minimal scatter using native renderer values.
 //!
-//! Run with:  cargo run --example 01_quick_start -p lichtung-plot
+//! Run with: cargo run --example 01_quick_start -p lichtung-plot -- <directory>
 //!
-//! Writes a content-sized `quick_start.svg` to the system temporary directory
+//! Writes a content-sized `quick_start.svg` to the supplied directory
 //! from an extensionless base destination, then reports its frozen dimensions.
+
+// ANCHOR: example
+#[path = "support/output.rs"]
+mod output;
 
 use lichtung_plot::{NumericValues, Plot, Theme};
 
@@ -13,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ys: Vec<f64> = (0..30)
         .map(|i| (f64::from(i) * 0.4).sin() * 5.0 + 10.0)
         .collect();
-    let directory = std::env::temp_dir();
+    let directory = output::directory()?;
     let base_path = directory.join("quick_start");
     let output = Plot::scatter(NumericValues::new("x", xs), NumericValues::new("y", ys))
         .theme(Theme::nature())
@@ -27,3 +31,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+// ANCHOR_END: example
