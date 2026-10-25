@@ -1,6 +1,7 @@
-# Choosing a plot family
+<a id="families"></a>
+## Choosing a plot family
 
-[简体中文](../zh-CN/families.html)
+[简体中文](../zh-CN/index.html#families)
 
 Constructors return exact `Plot<kind::Family>` values. Sealed capabilities expose
 only applicable edits; an unavailable setter is not a runtime option to ignore.
@@ -44,7 +45,7 @@ It preserves common configuration, preflight and publication but does not regain
 family-specific setters. Configure exact plots before inserting them into Canvas.
 Matrix owns its grid and cannot be nested in Canvas or generic facets. Marginal
 can enter Canvas but not generic facets; other families retain their documented
-data-dependent restrictions. See [composition](composition.md).
+data-dependent restrictions. See [composition](#composition).
 
-This catalog covers all 25 families. The initial [gallery](gallery.md) deliberately
+This catalog covers all 25 families. The initial [gallery](#gallery) deliberately
 contains a few cross-cutting workflows, not a claimed image example for every family.

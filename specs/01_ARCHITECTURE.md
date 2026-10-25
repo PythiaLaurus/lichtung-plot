@@ -66,7 +66,7 @@ the renderer's public API or private implementation boundaries.
 Adapters and bindings consume the core's deliberate public API; the core never
 depends on them or another lichtung-* crate. A core-only consumer must not compile
 adapter or binding dependencies. Members are added with working consumers, not
-speculative empty packages. The nonpublished dev/book member assembles user guides
+speculative empty packages. The nonpublished docs/book-helper member assembles user guides
 and gallery artifacts by executing public examples; it is not a renderer
 dependency or another rendering implementation.
 

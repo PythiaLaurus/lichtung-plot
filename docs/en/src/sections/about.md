@@ -1,19 +1,21 @@
-# Introduction
+<a id="about"></a>
+## About this guide
 
-[简体中文](../zh-CN/introduction.html)
+[简体中文](../zh-CN/index.html#about)
 
 `lichtung-plot` is a standalone scientific renderer for owned immutable display
 values. It owns display statistics, validation, text, layout and SVG/PNG
 publication. Applications own scientific analysis and inferential decisions.
 There is no network access, font provisioning, application runtime or PDF backend.
 
-Start with [installation and a first plot](installation.md), then learn
-[native data](data.md), [family selection](families.md), [numeric presentation](axes.md),
-[appearance](themes.md), [text](text.md), [composition](composition.md) and
-[output](output.md). The [gallery](gallery.md) connects real outputs to runnable code.
+Start with [installation and a first plot](#installation), then learn
+[native data](#data), [family selection](#families), [numeric presentation](#axes),
+[appearance](#themes), [text](#text), [composition](#composition) and
+[output](#output). The [gallery](#gallery) links pictures directly to code walkthroughs
+on this page rather than routing through separate example pages.
 
 The Chinese and English editions have equal status and equivalent scope. Neither
-is an original, translation backlog or fallback. Chapter identities and example
+is an original, translation backlog or fallback. Topic anchors and example
 references are shared; prose is reviewed for meaning, not literal sentence matching.
 
 The Books explain usage. [Rust API documentation](https://docs.rs/lichtung-plot)

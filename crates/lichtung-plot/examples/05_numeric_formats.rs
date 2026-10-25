@@ -12,6 +12,7 @@ use lichtung_plot::{
 
 fn main() -> lichtung_plot::Result<()> {
     let directory = output::directory()?;
+    // ANCHOR: numeric-formatters
     let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
         .rate(NumericRate::Percent)?
         .rounding(NumericRounding::NearestAway)?
@@ -24,6 +25,8 @@ fn main() -> lichtung_plot::Result<()> {
         NumericNotation::Scientific,
         NumericPrecision::Significant(3),
     )?;
+    // ANCHOR_END: numeric-formatters
+    // ANCHOR: numeric-axis
     let axes = Plot::scatter(
         NumericValues::new("time", [1.0, 2.0]),
         NumericValues::new("fraction", [0.125, 0.875]),
@@ -37,6 +40,7 @@ fn main() -> lichtung_plot::Result<()> {
         })
     }))
     .title("Custom labels on automatic positions");
+    // ANCHOR_END: numeric-axis
     let cells = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"])?,
         CategoryValues::new("row", ["one", "one"])?,
@@ -84,6 +88,7 @@ fn main() -> lichtung_plot::Result<()> {
     .scale(AxisScale::Log10)
     .x_tick_format(scientific)
     .title("Certified mathematical powers");
+    // ANCHOR: numeric-composition
     let output = Canvas::grid(3, 2)?
         .width(1200)
         .panel(0, 0, axes)?
@@ -94,6 +99,7 @@ fn main() -> lichtung_plot::Result<()> {
         .panel(2, 1, prefix_plot()?)?
         .svg_preserve_text(directory.join("numeric_formats_text.svg"))?
         .svg(directory.join("numeric_formats.svg"))?;
+    // ANCHOR_END: numeric-composition
     println!(
         "numeric_formats.svg: {}×{} CSS pixels",
         output.width(),

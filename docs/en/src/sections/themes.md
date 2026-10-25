@@ -1,6 +1,7 @@
-# Themes, fonts and scales
+<a id="themes"></a>
+## Themes, fonts and scales
 
-[简体中文](../zh-CN/themes.html)
+[简体中文](../zh-CN/index.html#themes)
 
 Theme is a complete immutable value with eight components: SurfaceTheme,
 TypographyTheme, AxisTheme, LegendTheme, CompositionTheme, MarkTheme,
@@ -15,7 +16,7 @@ validate complete values; paired readers are `get_property()`. Read-only Theme
 components retain names such as `typography()`. `build()` validates without font discovery.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/02_themes.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/02_themes.rs:example}}
 ```
 
 All eighteen text roles own stack, RGBA color, positive fractional CSS font size,
@@ -30,7 +31,7 @@ the reduced mathematical ratio. Spacing resolves against the owning text role,
 not root dimensions or approximate `as_f64` inspection. A Shared guide's chrome
 uses Canvas, while source mark appearance remains Plot-owned.
 
-## Color and exact paint
+### Color and exact paint
 
 Data mappings use opaque OpaqueColor; exact/role paint uses RGBA Color with
 independent alpha. A fixed QualitativePalette must cover the raw domain; an
@@ -50,7 +51,7 @@ alpha remain independent; a separately set alpha replaces the complete color's
 alpha byte in either setter order. Supplemental layers, outlines and text do not
 inherit a scientific data-alpha instruction.
 
-## Data alpha and explanations
+### Data alpha and explanations
 
 `point_alpha`, `line_alpha` and `fill_alpha` attach complete AlphaEncoding values
 on supported exact families. Original observation slots remain aligned, including
@@ -79,7 +80,7 @@ alpha to 255; undeclared bytes do not invent an explanation. Shared compatibilit
 requires complete recipes, not merely matching bytes; Hidden does not skip binding validation.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/08_data_alpha.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/08_data_alpha.rs:example}}
 ```
 
 LegendComposition::Combined keeps complete observed keys. Separate explains
@@ -96,8 +97,8 @@ guide positions remain incompatible with Shared. Hidden skips explanatory semant
 not scientific scales. Heatmap/Beeswarm and Matrix retain one native guide track.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/06_legend_sections.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/06_legend_sections.rs:example}}
 ```
 
-See [composition](composition.md), [text](text.md) and the
+See [composition](#composition), [text](#text) and the
 [appearance ownership specification](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/04_VISUAL_PROPERTY_OWNERSHIP.md).

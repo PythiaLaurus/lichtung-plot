@@ -1,6 +1,7 @@
-# Facets and Canvas
+<a id="composition"></a>
+## Facets and Canvas
 
-[简体中文](../zh-CN/composition.html)
+[简体中文](../zh-CN/index.html#composition)
 
 Facets split one scientific plot; Canvas owns separately authored Plot/TextPanel
 owners. FacetSpec::row/column/grid/wrap attaches a complete layout; wrap requires
@@ -15,7 +16,7 @@ anchored at its top-left. Covered slots are occupied, not additional producers.
 Plot/TextPanel overlaps fail in either insertion order; range groups name anchors.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/11_canvas_spans.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/11_canvas_spans.rs:example}}
 ```
 
 A spanning Plot has one continuous body and one set of axes/prose/guides.
@@ -30,13 +31,13 @@ child theme replaces it completely. Root prose, headers, TextPanel and Shared-gu
 chrome use Canvas appearance, while scientific child marks/axes use Plot appearance.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/04_canvas_themes.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/04_canvas_themes.rs:example}}
 ```
 
 Shared ranges and Shared guides are distinct relationships. Matching ranges need
 not imply equal tick-generation or formatting choices. Shared guides retain raw
 identity/paint compatibility and use Canvas composition; conflicting aliases or
-styles fail rather than being merged heuristically. See [themes](themes.md).
+styles fail rather than being merged heuristically. See [themes](#themes).
 
 Configure exact children before insertion. Canvas is not Clone, and Rust's
 consuming methods are ownership transfers, not Python mutation semantics.

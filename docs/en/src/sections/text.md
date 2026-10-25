@@ -1,6 +1,47 @@
-# Text and annotations
+<a id="text"></a>
+## Text and annotations
 
-[简体中文](../zh-CN/text.html)
+[简体中文](../zh-CN/index.html#text)
+
+<a id="text-layout"></a>
+### Walkthrough: a fixed data reference and an adaptable heading
+
+![A data-anchored note beside a locally fitted TextPanel heading](gallery/text-layout/text_layout_outlined.svg)
+
+The left panel's note refers to data coordinates (2,3), not necessarily an observed
+sample. Its reference and block anchor are separate: the data position stays fixed
+while `bottom_left` and the rotation determine how text is drawn around it. They
+do not move scientific points:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-reference}}
+```
+
+The right panel has a different responsibility. Its heading clones the Theme's
+TextPanel title style at 14.25 CSS pixels, then explicitly permits local fitting
+down to 10.25 and end ellipsis within the declared two-line bound. No other text
+or scientific content receives that permission:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-fitting}}
+```
+
+Canvas combines the Plot and TextPanel. The preserve-text publication and the
+outlined gallery image come from one frozen scene, not separate layout runs:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-publication}}
+```
+
+Run `cargo run --locked --offline -p lichtung-plot --example 12_text_layout`.
+
+[Complete source](examples/12_text_layout.rs) · [Shared output helper](examples/support/output.rs) ·
+[Full-size SVG](gallery/text-layout/text_layout_outlined.svg) ·
+[Selectable-text SVG](gallery/text-layout/text_layout.svg) ·
+[TextLayout API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.TextLayout.html) · [Back to gallery](#gallery)
+
+<a id="text-options"></a>
+### Text policies and ownership
 
 `Text` retains original source and optional complete TextTheme/TextLayout
 instructions. Plain-string replacement retains previous instructions; a present
@@ -25,7 +66,7 @@ uses the independent Canvas roles. Local sizes drive their own padding/gaps.
 Axis-title style also owns its relative clearances, including shared facet titles.
 Shared color-guide titles require complete equal Text requests, including explicit resets.
 
-## References, anchors and local adaptation
+### References, anchors and local adaptation
 
 PanelTextAnnotation::new anchors to a corner. `at` instead accepts typed
 Data/Panel/Figure references; TextLayout's block anchor is a separate choice.
@@ -58,10 +99,6 @@ name-plus-number annotation. PointLayer::legend_label has independent Text/style
 from point annotations; repeated layer identities must agree on complete label
 requests and mark keys. None of these changes scientific membership.
 
-```rust
-{{#include ../../../crates/lichtung-plot/examples/12_text_layout.rs:example}}
-```
-
-The [text-layout gallery case](gallery-text-layout.md) shows the exact data anchor
-beside an independently adapted TextPanel heading. See [themes](themes.md) for
-role ownership and [output](output.md) for outlined versus selectable text.
+The [text-layout walkthrough](#text-layout) keeps the data reference and local
+heading adaptation independent. See [themes](#themes) for role ownership and
+[output](#output) for outlined versus selectable text.

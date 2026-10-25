@@ -1,6 +1,48 @@
-# Axes and numeric presentation
+<a id="axes"></a>
+## Axes and numeric presentation
 
-[简体中文](../zh-CN/axes.html)
+[简体中文](../zh-CN/index.html#axes)
+
+<a id="numeric-policies"></a>
+### Walkthrough: six numeric contexts in one composition
+
+![Numeric formatting policies across six Canvas panels](gallery/numeric-policies/numeric_formats.svg)
+
+The figure uses one formatting system in different scientific contexts. First
+construct a percentage policy, a bounded adaptive policy and scientific notation.
+The percent factor is explicit; changing displayed numbers does not change coordinates:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-formatters}}
+```
+
+The upper-left scatter leaves tick positions automatic. Its value callback calls
+the built-in formatter, then adds `start:` to one reached label. This is a label
+edit, not a locator or data transformation:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-axis}}
+```
+
+The other panels apply policies to a Heatmap's cells and guide independently,
+available Coefficient labels, Waterfall totals, certified Forest Log10 powers and
+SI/shared factors. Each consumer owns its complete semantic set. Canvas places
+the six plots; the second SVG publication reuses the first Output:
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-composition}}
+```
+
+Run `cargo run --locked --offline -p lichtung-plot --example 05_numeric_formats`
+to execute the complete program in the working directory.
+
+[Complete source](examples/05_numeric_formats.rs) · [Shared output helper](examples/support/output.rs) ·
+[Full-size SVG](gallery/numeric-policies/numeric_formats.svg) ·
+[Selectable-text SVG](gallery/numeric-policies/numeric_formats_text.svg) ·
+[NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html) · [Back to gallery](#gallery)
+
+<a id="axis-reference"></a>
+### Position and formatting choices
 
 Keep three decisions separate: scientific coordinates/domain, tick **positions**
 (`TickGeneration`) and numeric **spelling** (`NumericFormat`). Limits do not select
@@ -9,7 +51,7 @@ and authoritative in either setter order, including empty labels that keep ticks
 Generated caps never truncate exact ticks. Actual categorical axes reject numeric
 instructions; Any/Matrix and the special Heatmap axes do not acquire generic numeric setters.
 
-## Position sources
+### Position sources
 
 | `TickGeneration` constructor | Meaning |
 | --- | --- |
@@ -51,10 +93,10 @@ tail and refuses. Preferred uses anchored stride sublattices, then an original
 middle member, never an invented off-lattice midpoint.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/07_tick_generation.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/07_tick_generation.rs:example}}
 ```
 
-## Actual-view callbacks and categorical labels
+### Actual-view callbacks and categorical labels
 
 TickContext exposes axis, final domain/provenance, raw owner and actual CSS span.
 Intrinsic preferences do not invoke the locator. Return Data or explicitly typed
@@ -65,7 +107,7 @@ layout nonfit, not a new uniqueness restriction. Empty output retains marks/fram
 title. There is no repair, fallback locator or implicit smaller-count retry.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/10_tick_functions.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/10_tick_functions.rs:example}}
 ```
 
 `CategoryLabelSelection::every(stride)` selects labels without deleting categories,
@@ -75,10 +117,10 @@ choices are independent and use final explicit/value/facet-local category order.
 An unlabeled category can still require text in an annotation or guide.
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/09_category_labels.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/09_category_labels.rs:example}}
 ```
 
-## Numeric policies
+### Numeric policy reference
 
 NumericFormat supports Decimal/Scientific/Engineering, General significant digits
 and Integer Decimal/Binary/Octal/HexLower/HexUpper. Fractional precision is 0..=20,
@@ -132,9 +174,5 @@ fixed value labels may repeat. Forest Log10 formats certified mathematical power
 not rounded physical f64 powers. Shared guides require equal complete policies and
 format their merged domain; shared ranges alone do not force identical ticks.
 
-```rust
-{{#include ../../../crates/lichtung-plot/examples/05_numeric_formats.rs:example}}
-```
-
-See the [numeric gallery case](gallery-numeric-policies.md) and
+See the [numeric walkthrough](#numeric-policies) and
 [NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html).

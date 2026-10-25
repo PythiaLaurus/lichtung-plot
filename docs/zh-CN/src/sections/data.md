@@ -1,6 +1,7 @@
-# 原生数据与科学责任
+<a id="data"></a>
+## 原生数据与科学责任
 
-[English](../en/data.html)
+[English](../en/index.html#data)
 
 绘图器接收 `NumericValues`、`CategoryValues`、`BooleanValues` 及明确的科学输入类型，
 不依赖 dataframe 运行时。它们持有不可变快照。外部容器转换属于应用边界；调用者之后
@@ -14,7 +15,7 @@
 类别有无歧义的值。`Labels::humanized()` 修改展示文字，`Labels::raw()` 保留原始拼写，
 alias 覆盖展示标签。它们都不改变科学身份，完整类别域仍会接受展示名称歧义检查。
 
-## 样本、估计和给定几何
+### 样本、估计和给定几何
 
 - `BarInput::samples` 展示单元均值，默认使用确定性的 95% 百分位 bootstrap 区间。
   `ErrorBar::confidence_interval().level(...)?` 可指定水平，并选择 Student-t，
@@ -30,9 +31,9 @@ alias 覆盖展示标签。它们都不改变科学身份，完整类别域仍�
 `Significance` 展示数据传入。下面的完整示例构造显式两两比较，本身不进行推断检验：
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/03_inject_stats.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/03_inject_stats.rs:example}}
 ```
 
 `Significance::between` 推断 `Pairwise` 放置类型；附着式注释使用另一种类型化放置。
-各图族的能力决定允许哪些放置方式。参见[图族选择](families.md)和[文本注释](text.md)。
+各图族的能力决定允许哪些放置方式。参见[图族选择](#families)和[文本注释](#text)。
 依赖数据的对齐、域及注释错误，会尽可能在字体工作开始前检查。

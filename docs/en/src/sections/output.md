@@ -1,8 +1,9 @@
-# Output, fonts and errors
+<a id="output"></a>
+## Output, fonts and errors
 
-[简体中文](../zh-CN/output.html)
+[简体中文](../zh-CN/index.html#output)
 
-## One rendered scene, several publications
+### One rendered scene, several publications
 
 `.svg` outlines every text element using the operation's installed font bytes and
 checks that no text elements remain. Recipients need no fonts, but the visible
@@ -18,7 +19,7 @@ balanced compression and no density metadata. `.png_with_options` selects exact
 PngSizing/PngCompression values, independently on each call. Output::width/height
 remain canonical CSS dimensions even after different raster sizes.
 
-## Dimensions and destinations
+### Dimensions and destinations
 
 Plot/Canvas derive size from content by default. `width(600)` sets exact outer CSS
 width and derives height; `max_width(600)` caps the complete natural width without
@@ -40,7 +41,7 @@ Each file is completed at a sibling staging path before atomic publication.
 Preflight/conversion failure preserves an existing destination and removes staging
 residue. A chain is not a transaction over all files: each publication is independent.
 
-## Font policy and failure
+### Font policy and failure
 
 Each used text role has its own typed font stack. The default order is Noto Sans,
 Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif. A missing visible
@@ -56,5 +57,5 @@ Deterministic behavior requires matching source, configuration, dependencies and
 font environment. Do not expect cross-revision/OS/font-installation byte equality.
 
 PDF and report generation remain application responsibilities. The
-[gallery](gallery.md) links outlined and preserve-text outputs of the same example
+[gallery](#gallery) links outlined and preserve-text outputs of the same example
 where relevant, without retaining golden hashes or automatic panel coordinates.

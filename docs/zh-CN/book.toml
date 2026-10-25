@@ -9,6 +9,7 @@ build-dir = "../../target/book/site/zh-CN"
 
 [output.html]
 git-repository-url = "https://github.com/PythiaLaurus/lichtung-plot"
+additional-css = ["../theme/guide.css"]
 
 [output.html.playground]
 runnable = false

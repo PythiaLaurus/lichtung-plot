@@ -1,6 +1,7 @@
-# Native data and scientific ownership
+<a id="data"></a>
+## Native data and scientific ownership
 
-[简体中文](../zh-CN/data.html)
+[简体中文](../zh-CN/index.html#data)
 
 The renderer consumes `NumericValues`, `CategoryValues`, `BooleanValues` and
 explicit scientific input types, not a dataframe runtime. They own immutable
@@ -19,7 +20,7 @@ category. `Labels::humanized()` changes presentation, `Labels::raw()` preserves
 spelling, and aliases override display text. None changes scientific identity.
 The complete domain is checked for ambiguous displayed names.
 
-## Samples, estimates and supplied geometry
+### Samples, estimates and supplied geometry
 
 - `BarInput::samples` displays cell means and defaults to deterministic 95%
   percentile-bootstrap intervals. `ErrorBar::confidence_interval().level(...)?`
@@ -38,10 +39,10 @@ following complete example constructs explicit pairwise comparisons; it performs
 no inferential test:
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/03_inject_stats.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/03_inject_stats.rs:example}}
 ```
 
 `Significance::between` infers `Pairwise` placement; attached annotations have a
 different typed placement. Family capabilities determine which placements exist.
-See [family selection](families.md) and [text/annotations](text.md). Data-dependent
+See [family selection](#families) and [text/annotations](#text). Data-dependent
 alignment, domain and annotation errors are checked before font work where possible.

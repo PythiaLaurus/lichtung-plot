@@ -1,0 +1,140 @@
+/* One reading page: in-page navigation replaces mdBook's chapter sidebar. */
+#mdbook-sidebar,
+#mdbook-sidebar-toggle {
+    display: none;
+}
+
+#mdbook-sidebar-toggle-anchor:checked ~ #mdbook-page-wrapper {
+    transform: none;
+    margin-inline-start: 0;
+}
+
+.content main {
+    max-width: 72em;
+}
+
+.content a[id] {
+    display: block;
+    scroll-margin-top: 5em;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
+    gap: 1.2em;
+    margin-block: 1.5em;
+}
+
+.gallery-card {
+    min-width: 0;
+    border: 1px solid var(--table-border-color, #c9cdd1);
+    border-radius: 0.5em;
+    overflow: hidden;
+    background: var(--bg, white);
+}
+
+.content .gallery-card .gallery-walkthrough {
+    display: block;
+    color: inherit;
+}
+
+.gallery-card img {
+    display: block;
+    width: 100%;
+    height: 15em;
+    object-fit: contain;
+    background: white;
+}
+
+.gallery-card h3,
+.gallery-card p {
+    margin: 0.8em 1em;
+}
+
+.gallery-card h3 {
+    font-size: 1.05em;
+}
+
+.gallery-resources {
+    font-size: 0.9em;
+}
+
+.content main > p > img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.5em auto;
+}
+
+.page-toc {
+    padding: 1em;
+    margin-block: 1.5em;
+    border: 1px solid var(--table-border-color, #c9cdd1);
+    border-radius: 0.5em;
+    background: var(--bg, white);
+}
+
+.page-toc h2 {
+    margin-top: 0;
+    font-size: 1.1em;
+}
+
+.page-toc ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11em, 1fr));
+    gap: 0.4em 1.2em;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.gallery-home {
+    margin: 0;
+    font: 1em/1.5 system-ui, sans-serif;
+    color: #20272e;
+    background: #f7f8fa;
+}
+
+.gallery-home main {
+    max-width: 72em;
+    margin: 1.5em auto;
+    padding: 1.5em;
+}
+
+.gallery-home a {
+    color: #145fa1;
+}
+
+@media (min-width: 90em) {
+    .content main {
+        margin-inline-end: 17em;
+    }
+
+    .page-toc {
+        position: fixed;
+        right: 1em;
+        top: 4em;
+        width: 13em;
+        max-height: calc(100vh - 7em);
+        overflow-y: auto;
+        margin: 0;
+    }
+
+    .page-toc ul {
+        display: block;
+    }
+
+    .page-toc li {
+        margin-block: 0.5em;
+    }
+}
+
+@media print {
+    .page-toc {
+        display: none;
+    }
+
+    .content main {
+        margin-inline-end: auto;
+    }
+}

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lichtung-plot", "dev/book"]
+members = ["crates/lichtung-plot", "docs/book-helper"]
 default-members = ["crates/lichtung-plot"]
 resolver = "2"
 

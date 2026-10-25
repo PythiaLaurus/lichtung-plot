@@ -15,9 +15,9 @@ the workspace rather than relying on default members:
 | just test-doc | Execute all members' public examples and compile-fail API boundaries |
 | just docs | Build all members' API documentation with warnings denied |
 | just package | Verify the distributable renderer from Cargo's independently unpacked staging directory; exclude the nonpublished Book command |
-| just book-check | Check peer chapter/source coverage, links, semantic anchors and gallery metadata without rendering |
-| just gallery | Execute catalog examples once and assemble fresh outputs/pages for both editions |
-| just book | Assemble the gallery and invoke installed mdBook 0.5.4 for both Books |
+| just book-check | Check peer tutorial anchors, image-to-code links, source includes and gallery metadata without rendering |
+| just gallery | Execute catalog examples once and assemble fresh outputs/grids for both editions |
+| just book | Assemble the gallery and invoke installed mdBook 0.5.4 for both single-page guides |
 | just verify | Complete source format/lint/tests/doctests/docs/package gate plus structural Book checks; not site generation |
 
 Compiler validation must use strict Clippy, never cargo check or a nonlinting
@@ -49,10 +49,15 @@ elsewhere or tools directory. Modern module layout is foo.rs plus foo/ siblings.
 ## Books, Examples And Gallery
 
 Maintain peer Chinese and English mdBooks in docs/zh-CN and docs/en. Neither is
-the original, translation backlog or fallback. Match chapter identities/order,
-example includes and release scope; review prose for equivalent meaning. Mechanical
-coverage checks do not certify prose equivalence or quality. Keep specs as
-architectural contracts, rustdoc as exact API reference and README as an entry point.
+the original, translation backlog or fallback. Each edition's src/index.md assembles
+one main tutorial page from src/sections authoring fragments; SUMMARY.md lists that
+page, not the fragments as separate chapters. Open with real gallery thumbnails
+linking directly to same-page code walkthroughs. Use an in-page contents menu and
+shared language-neutral explicit anchors rather than chapter-page navigation.
+Match topic order, example includes, figure references and release scope; review
+prose for equivalent meaning. Mechanical checks do not certify prose equivalence
+or quality. Keep specs as architectural contracts, rustdoc as exact API reference
+and README as an entry point.
 
 Every renderer example runs without arguments and defaults to the current working
 directory. Its shared package-local CLI helper accepts one optional output-directory
@@ -65,28 +70,36 @@ and execute actual gallery programs rather than claim Markdown fragments ran as
 standalone doctests. New independent snippets/scenarios still count at their real
 semantic layer; imported source does not create another plotting implementation.
 
-docs/gallery.tsv contains stable case/source/artifact/chapter/API identities and
-peer-language titles/purposes, not plotting configuration. dev/book/src/content.rs
-checks that inventory, peer navigation and source anchors. dev/book/src/gallery.rs
-runs each listed executable once into a fresh isolated directory, requires its
-declared outputs, and assembles both editions from the same artifact bytes.
+docs/gallery.tsv contains stable case/source/artifact/tutorial-anchor/API identities
+and peer-language titles/purposes, not plotting configuration.
+docs/book-helper/src/content.rs checks that inventory, peer navigation and source
+anchors, including that each gallery target contains its own figure and code.
+docs/book-helper/src/gallery.rs runs each listed executable once into a fresh
+isolated directory, requires its declared outputs, and assembles both editions
+from the same artifact bytes.
 Its first artifact is complete outlined SVG; preserve-text downloads, where
 supplied, come from the same frozen Output. Do not substitute stale images on
 failure, maintain scene hashes/coordinates, or generate artifacts in build.rs.
 
-The nonpublished Rust command at dev/book/src/main.rs stages generated pages,
-assets and source downloads under target/book, then invokes the ordinary installed
-mdbook CLI. The site is target/book/site/index.html. mdBook 0.5.4 is a developer
-tool, installed normally with cargo install mdbook --version 0.5.4 --locked, not a
-renderer dependency or automatically provisioned by recipes. Generation records
-platform/toolchain, lockfile and font policy without claiming exact resolved font
-files or cross-environment byte equality. Fonts/data remain preinstalled/local.
-Source checks and generated-site assembly have separate recipes; ordinary core
-compilation does not execute examples, provision tools or generate a site.
+The nonpublished Rust command at docs/book-helper/src/main.rs stages generated
+grids, assets and source downloads under target/book, then invokes the ordinary
+installed mdbook CLI. Keep documentation tooling under docs/, not a top-level dev/
+directory. The site is target/book/site/index.html, a shared visual gallery with
+equal links to both languages' walkthroughs. Build into a fresh staging site,
+reject duplicate rendered IDs, missing gallery targets and unexpanded includes,
+and replace the active site only after both editions pass. Preserve the previous
+site under staging; do not leave obsolete chapter/case HTML in the active site.
+mdBook 0.5.4 is a developer tool, installed normally with
+cargo install mdbook --version 0.5.4 --locked, not a renderer dependency or
+automatically provisioned by recipes. Generation records platform/toolchain,
+lockfile and font policy without claiming exact resolved font files or
+cross-environment byte equality. Fonts/data remain preinstalled/local. Source
+checks and generated-site assembly have separate recipes; ordinary core compilation
+does not execute examples, provision tools or generate a site.
 
 Count independent gallery scenarios even when several share an executable; batch
 drivers and reused language editions do not exempt scenarios. Do not duplicate
-rendering suites for chapter references or languages that use the same source and
+rendering suites for tutorial references or languages that use the same source and
 operation outputs. Package verification selects actual distributable members;
 the workspace-local Book command is not shipped as a standalone user package.
 
@@ -264,7 +277,7 @@ Keep one specification system in the workspace-root specs directory, divided by
 responsibility rather than duplicated under members. Formal specifications define
 current rules by subsystem and refer to actual workspace-relative source owners.
 Low-numbered specifications reference files only beneath specs/ and member source
-directories, currently crates/lichtung-plot/src/ and dev/book/src/.
+directories, currently crates/lichtung-plot/src/ and docs/book-helper/src/.
 Keep plans/status, execution logs, commit receipts, historical censuses and
 performance samples out of formal contracts and user guides. User documentation
 explains use; it is not an agent work journal. Source comments/API examples should

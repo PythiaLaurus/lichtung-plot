@@ -1,6 +1,7 @@
-# 选择图族
+<a id="families"></a>
+## 选择图族
 
-[English](../en/families.html)
+[English](../en/index.html#families)
 
 构造函数返回精确的 `Plot<kind::Family>`。封闭能力只暴露适用的配置方法；
 不存在的 setter 不是一个可以在运行时忽略的选项。
@@ -41,7 +42,7 @@
 `Plot::erase()` 显式产生用于异构存储的 `Plot<kind::Any>`，保留公共配置、预检和发布，
 但不会重新获得图族专属 setter。应在插入 Canvas 前配置精确类型的图。
 Matrix 自己拥有网格，不能进入 Canvas 或通用分面；Marginal 可进入 Canvas，但不支持
-通用分面。其他图族仍有其依赖数据的限制，参见[组合](composition.md)。
+通用分面。其他图族仍有其依赖数据的限制，参见[组合](#composition)。
 
-本目录包含全部 25 个图族。初始[图库](gallery.md)只选择若干跨能力工作流，
+本目录包含全部 25 个图族。初始[图库](#gallery)只选择若干跨能力工作流，
 并不声称已经为每个图族提供图像案例。

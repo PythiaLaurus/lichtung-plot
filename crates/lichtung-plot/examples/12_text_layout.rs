@@ -19,6 +19,7 @@ fn main() -> lichtung_plot::Result<()> {
         .get_text_panel_title()
         .clone()
         .font_size(14.25)?;
+    // ANCHOR: text-reference
     let note = PanelTextAnnotation::at(
         TextPosition::new(
             TextCoordinate::data(DataCoordinate::numeric(2.0)?),
@@ -30,6 +31,7 @@ fn main() -> lichtung_plot::Result<()> {
                 .rotation(TextRotation::degrees(30.05)?),
         ),
     )?;
+    // ANCHOR_END: text-reference
     let plot = Plot::scatter(
         NumericValues::new("x", [0.0, 1.0, 4.0]),
         NumericValues::new("y", [1.0, 0.0, 2.0]),
@@ -38,6 +40,7 @@ fn main() -> lichtung_plot::Result<()> {
     .y_limits(0.0, 4.0)
     .panel_text_annotation(note)
     .title("Scientific coordinates stay unchanged");
+    // ANCHOR: text-fitting
     let title = Text::new("Treatment group with extended follow-up")
         .style(heading)
         .layout(
@@ -50,11 +53,13 @@ fn main() -> lichtung_plot::Result<()> {
                     TextFailure::Error,
                 )),
         );
+    // ANCHOR_END: text-fitting
     let panel = TextPanel::new(
         title,
         Text::new("Independent complete body. Only the heading permits shrinking or ellipsis.")
             .alignment(TextAlignment::Start),
     )?;
+    // ANCHOR: text-publication
     let destination = directory.join("text_layout.svg");
     let output = Canvas::grid(1, 2)?
         .theme(theme)
@@ -63,6 +68,7 @@ fn main() -> lichtung_plot::Result<()> {
         .max_width(1100)
         .svg_preserve_text(&destination)?
         .svg(destination.with_file_name("text_layout_outlined.svg"))?;
+    // ANCHOR_END: text-publication
     println!(
         "text_layout.svg: {}×{} CSS pixels",
         output.width(),

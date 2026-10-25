@@ -1,6 +1,45 @@
-# 文本与注释
+<a id="text"></a>
+## 文本与注释
 
-[English](../en/text.html)
+[English](../en/index.html#text)
+
+<a id="text-layout"></a>
+### 代码讲解：固定的数据参照与可适配标题
+
+![数据锚定注释旁是允许局部字号适配的 TextPanel 标题](gallery/text-layout/text_layout_outlined.svg)
+
+左侧面板的注释引用数据坐标 (2,3)，不要求那里恰好有一个观测样本。参照与块锚点
+相互独立：数据位置保持固定，`bottom_left` 和旋转决定文字如何围绕它绘制，
+不移动科学点：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-reference}}
+```
+
+右侧面板承担不同职责。标题克隆 Theme 中 TextPanel 标题角色的样式并采用 14.25 CSS
+像素，然后明确允许在给定的两行边界内局部缩小到 10.25，必要时进行末尾省略。
+这一许可不扩散到其他文字或科学内容：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-fitting}}
+```
+
+Canvas 将 Plot 与 TextPanel 组合起来。保留文字的发布与图库中的轮廓图来自同一个冻结
+场景，不是两次独立布局：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/12_text_layout.rs:text-publication}}
+```
+
+运行 `cargo run --locked --offline -p lichtung-plot --example 12_text_layout`。
+
+[完整源码](examples/12_text_layout.rs) · [共享输出辅助代码](examples/support/output.rs) ·
+[原尺寸 SVG](gallery/text-layout/text_layout_outlined.svg) ·
+[可选择文字 SVG](gallery/text-layout/text_layout.svg) ·
+[TextLayout API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.TextLayout.html) · [返回图库](#gallery)
+
+<a id="text-options"></a>
+### 文本策略与归属
 
 `Text` 保留原始来源，以及可选的完整 TextTheme／TextLayout 指令。用普通字符串替换
 内容会保留先前指令；显式给出样式或布局则替换那一整项指令。显式默认布局恢复拥有者
@@ -20,7 +59,7 @@ TextPanel 标题和正文可各自选择完整样式／布局；省略时使用 
 局部字号决定自己的内边距及间隔。轴标题样式也拥有其相对留白，包括共享分面标题。
 Shared 色标标题要求完整 Text 请求相等，包括显式重置。
 
-## 参照、锚点与局部适配
+### 参照、锚点与局部适配
 
 PanelTextAnnotation::new 将注释放到角落；`at` 接收类型化的 Data／Panel／Figure 参照。
 TextLayout 的块锚点是另一个独立选择。数据参照由实际面板投影，不从屏幕坐标猜测。
@@ -46,9 +85,5 @@ HeatmapNullRowAnnotation 持有原始行键及 Text 解释。WaterfallLabels 独
 独立于点注释；重复图层身份须在完整标签请求和图元键上保持一致。
 这些设置都不改变科学成员关系。
 
-```rust
-{{#include ../../../crates/lichtung-plot/examples/12_text_layout.rs:example}}
-```
-
-[文本布局案例](gallery-text-layout.md)展示固定数据参照旁的独立 TextPanel 标题适配。
-角色归属见[主题](themes.md)，轮廓文字与可选择文字的差异见[输出](output.md)。
+[文本布局讲解](#text-layout)将数据参照与局部标题适配保持独立。
+角色归属见[主题](#themes)，轮廓文字与可选择文字的差异见[输出](#output)。

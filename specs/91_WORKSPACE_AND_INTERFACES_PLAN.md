@@ -28,7 +28,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Objective | Current status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
-| Peer-language Book/example/gallery foundation | Delivered: ten peer chapters, shared runnable-source includes, zero-argument examples with optional output redirection and three executed gallery workflows; full per-family gallery coverage remains for integrated content closure. |
+| Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, same-page image-to-code walkthroughs, shared runnable-source includes, zero-argument examples with optional output redirection and three executed gallery workflows. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Not implemented; add each with working consumers and its own contract. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
@@ -44,6 +44,8 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Python compatibility | CPython 3.10 is a required minimum, not a version that may be excluded by adopting a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
 | Book languages | Chinese and English have equal status, equivalent content and coverage; neither language is the source or reference edition for the other. |
+| Guide navigation | Each language has one main tutorial page with in-page contents; real gallery images appear first and link directly to same-page code explanations. |
+| Documentation tooling | Keep the Rust helper under docs/book-helper/, without a top-level dev/ directory or renderer dependency. |
 | Test scale | Preserve the existing whole-repository ceilings: 800 unit tests, 300 module-integration tests and 80 independent core-E2E scenarios, including ignored cases. |
 | Publication | Package/site build verification is in scope; actual publication, deployment and Git push require separate authorization. |
 
@@ -72,19 +74,24 @@ crates/
 bindings/
   python/                          # Rust extension, Python package/tests/examples
 docs/
+  book-helper/                     # working nonpublished Rust assembly command
   en/book.toml
-  en/src/
+  en/src/index.md                  # gallery-first main tutorial page
+  en/src/sections/                 # authoring fragments, not separate pages
   zh-CN/book.toml
-  zh-CN/src/
+  zh-CN/src/index.md
+  zh-CN/src/sections/
+  gallery.tsv
+  theme/guide.css
 specs/
-dev/
-  book/                            # working nonpublished Book assembly command
 ```
 
 Do not add empty workspace members before they have working consumers. The
-nonpublished Rust development package dev/book provides gallery assembly;
-keep root Justfile recipes as the normal entry points and do not build a generic
-workflow framework or add a `tools/` directory.
+nonpublished Rust package docs/book-helper provides gallery assembly alongside
+the documentation, without a separate top-level dev/ directory. Keep root Justfile
+recipes as the normal entry points and do not build a generic workflow framework
+or add a `tools/` directory. This placement is a repository organization decision,
+not a requirement imposed by mdBook or the reference projects.
 
 [Cargo workspaces][cargo-workspaces] and [Polars' workspace][polars-workspace]
 provide direct precedents for a virtual root, shared lockfile/dependency policy,
@@ -265,10 +272,12 @@ renderer font policy; successful installation does not provision fonts/assets.
 
 Use mdBook as the user-guide system. Keep specs as architectural contracts and
 rustdoc as the exact Rust API reference. README becomes an introduction/entry
-point, not another full manual. Replace the existing loose guides once the
-receiving chapters are complete; do not maintain competing guide implementations.
+point, not another full manual. The current main tutorial is one page per language;
+src/index.md includes the authoring fragments in src/sections/, and SUMMARY.md
+exposes only the assembled page. Do not maintain competing guide implementations
+or restore separate pages for those fragments.
 
-Build two peer language editions with matching language-neutral chapter/case
+Build two peer language editions with matching language-neutral topic/case
 identities and equivalent topics, capabilities, examples and release scope:
 
 - Neither edition is an authoritative original, translation backlog or fallback.
@@ -276,10 +285,17 @@ identities and equivalent topics, capabilities, examples and release scope:
   edition's semantic authority. Both derive from the same contracts and API.
 - Use idiomatic prose in each language, without requiring sentence-by-sentence
   literal translation. Review semantic changes in both editions together.
-- Missing chapters/required examples are build/review failures, not permission to
-  insert the other language's page. Language navigation links peer chapters.
-- Mechanically check chapter/case coverage, code includes and links. Do not claim
+- Missing topics/required examples are build/review failures, not permission to
+  insert the other language's page. Language navigation links peer tutorial anchors.
+- Mechanically check topic/case coverage, code includes and figure links. Do not claim
   that a structural check proves prose has equivalent meaning.
+
+Start each edition with actual gallery images linking directly to its code
+walkthroughs on the same page. Provide an in-page contents menu for the tutorial;
+do not require repeated page changes between its main topics. The shared root
+gallery offers equal links to both language walkthroughs rather than selecting a
+preferred language for the reader. mdBook builds HTML; it does not require a
+multi-page tutorial.
 
 Organize the learning path around installation/first plot, native data and
 missingness, plot families, axes/numeric formatting, themes/text/annotations,
@@ -293,14 +309,14 @@ own crate/binding, using public APIs and self-contained source fixtures.
 
 ## Examples And Gallery As One Executable Content System
 
-Examples own runnable code; Book chapters explain it; gallery pages present its
-actual output. [Matplotlib's gallery][matplotlib-gallery] and
+Examples own runnable code; guide sections explain it; gallery grids present its
+actual output and link directly to those explanations. [Matplotlib's gallery][matplotlib-gallery] and
 [Sphinx-Gallery's source/execution model][sphinx-gallery] establish this relationship;
 they do not require replacing mdBook with Sphinx or adding another rendering stack.
 
 Give each case a stable semantic identity and metadata linking its source, output
-artifacts, purpose, related chapters and API references. A program can produce
-several figures and a figure can support several chapters. Keep metadata about
+artifacts, purpose, tutorial anchor and API references. A program can produce
+several figures and a figure can support several tutorial topics. Keep metadata about
 navigation/artifacts, not a new serialized plotting language.
 
 Examples run without arguments, using the current working directory by default;
@@ -312,8 +328,11 @@ useful for relevant demonstrations, not an excuse for a different layout run.
 
 Build generated pages, images and site output in build/staging directories. Do
 not manually maintain generated scenes or silently substitute stale/placeholder
-images when an example fails. Explicit site assembly coordinates rendering and
-Book assets; ordinary core compilation must not generate a gallery in `build.rs`.
+images when an example fails. Assemble both language editions into a fresh site,
+validate rendered anchor uniqueness and source expansion, and replace the active
+site only after both editions pass, without retaining obsolete chapter/case pages
+there. Explicit site assembly coordinates rendering and Book assets; ordinary core
+compilation must not generate a gallery in `build.rs`.
 Use preinstalled, documented generation fonts and record the build environment
 without bundling fonts or claiming cross-environment byte equality.
 
@@ -338,7 +357,7 @@ than disguise it through packaging or relabeling.
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Nullable/type/order/provenance and strided/chunked conversion contracts, plus representative public rendering consumers. |
 | Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
-| Books/gallery | Both editions' coverage/links/includes, actual example execution, successful artifact assembly and no stale-source substitution. |
+| Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
 

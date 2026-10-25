@@ -8,14 +8,17 @@ network access, asset provisioning or dependency on another `lichtung-*` crate.
 
 ## Guides · 使用指南
 
-- [English Book](docs/en/src/introduction.md)
-- [中文 Book](docs/zh-CN/src/introduction.md)
+- [English guide source](docs/en/src/index.md)
+- [中文指南源码](docs/zh-CN/src/index.md)
 - [Book and gallery build instructions · 文档与图库构建](docs/README.md)
 - [Rust API reference](https://docs.rs/lichtung-plot)
 
-The two Books are equal-status editions with equivalent scope. They share actual
-runnable example sources and gallery outputs, not hand-copied plotting programs.
-两套 Book 地位相同、范围等价，共享真实可运行示例及图库产物，不手工维护多套绘图代码。
+The two guides are equal-status editions with equivalent scope. Each opens with
+real gallery images linking to code walkthroughs on the same page, with an in-page
+contents menu for the main tutorial. Both share actual runnable examples and
+gallery outputs, not hand-copied plotting programs.
+两套指南地位相同、范围等价，各自以真实图库开篇，图片直接跳到同页代码讲解，主要教程
+通过页内目录导航。两者共享可运行示例及图库产物，不手工维护多套绘图代码。
 
 ## First Example
 
@@ -26,15 +29,16 @@ cargo run --locked --offline -p lichtung-plot --example 01_quick_start
 ```
 
 Examples write to the working directory by default; an optional directory after
-`--` redirects output. The renderer never downloads fonts. See [installation](docs/en/src/installation.md) /
-[安装](docs/zh-CN/src/installation.md) for local dependency paths and font requirements.
+`--` redirects output. The renderer never downloads fonts. See the installation
+sections' sources in [English](docs/en/src/sections/installation.md) /
+[中文](docs/zh-CN/src/sections/installation.md) for local dependency paths and font requirements.
 
 ## Workspace And Development
 
 - [`crates/lichtung-plot/`](crates/lichtung-plot/): independent renderer, tests,
   fixtures, runnable examples, package README and licenses; the default member.
-- [`dev/book/`](dev/book/): nonpublished Rust command assembling/checking the Books
-  and executable gallery; no production dependency from the renderer.
+- [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
+  assembling the single-page guides and executable gallery; no renderer dependency.
 - [`specs/`](specs/): one root architectural source of truth.
 - [`docs/`](docs/): peer-language user guides and gallery catalog.
 

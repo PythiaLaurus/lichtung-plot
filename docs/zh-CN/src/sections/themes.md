@@ -1,6 +1,7 @@
-# 主题、字体与色标
+<a id="themes"></a>
+## 主题、字体与色标
 
-[English](../en/themes.html)
+[English](../en/index.html#themes)
 
 Theme 是包含八个组件的完整不可变值：SurfaceTheme、TypographyTheme、AxisTheme、
 LegendTheme、CompositionTheme、MarkTheme、AnnotationTheme、ColorScales。
@@ -13,7 +14,7 @@ LegendTheme、CompositionTheme、MarkTheme、AnnotationTheme、ColorScales。
 Theme 的只读组件保留 `typography()` 这样的名称。`build()` 验证但不发现字体。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/02_themes.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/02_themes.rs:example}}
 ```
 
 十八个文本角色都独立持有字体栈、RGBA 颜色、正的可含小数 CSS 字号、字重和行高。
@@ -26,7 +27,7 @@ RelativeSpacing::new 保留精确二进制有理数，`ratio(u32,u32)` 保留约
 间距相对自己的文本角色解析，不依赖根尺寸或近似 `as_f64` 查看值。
 Shared 图例外框使用 Canvas，来源图元外观仍由 Plot 拥有。
 
-## 颜色映射与精确画笔
+### 颜色映射与精确画笔
 
 数据映射使用不透明的 OpaqueColor；精确／角色画笔使用带独立 alpha 的 RGBA Color。
 固定 QualitativePalette 必须覆盖原始域；可扩展色板保留前缀并确定性扩展，不循环复用。
@@ -43,7 +44,7 @@ ContinuousColorScale::sequential/diverging，可带匹配的梯度及精确 Colo
 的 alpha 在任意 setter 顺序下都替换完整颜色的 alpha 字节。补充图层、轮廓和文字不
 继承科学数据的 alpha 指令。
 
-## 数据 alpha 与解释
+### 数据 alpha 与解释
 
 `point_alpha`、`line_alpha`、`fill_alpha` 在支持的精确图族上附着完整 AlphaEncoding。
 观测按完整原始槽位对齐，包括不可用或过滤的行；SourceRows ID 不是下标。给定 Raincloud
@@ -65,7 +66,7 @@ nearest/ties-to-even 量化：0..255 上的四分位点得到 [0,64,128,191,255]
 配方一致，而不只是字节一致；Hidden 不跳过绑定验证。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/08_data_alpha.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/08_data_alpha.rs:example}}
 ```
 
 LegendComposition::Combined 保留完整的实际观察键；Separate 按组样式、联合、hue
@@ -80,8 +81,8 @@ LegendComposition::Combined 保留完整的实际观察键；Separate 按组样�
 保留各自唯一的原生图例轨道。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/06_legend_sections.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/06_legend_sections.rs:example}}
 ```
 
-参见[组合](composition.md)、[文本](text.md)及
+参见[组合](#composition)、[文本](#text)及
 [外观属性归属规范](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/04_VISUAL_PROPERTY_OWNERSHIP.md)。

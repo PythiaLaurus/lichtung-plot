@@ -28,7 +28,7 @@ docs:
 package:
     cargo package --locked --offline -p lichtung-plot --allow-dirty
 
-# Check peer chapters, links, case identities and executable source anchors.
+# Check peer tutorial anchors, image-to-code links and executable source includes.
 book-check:
     cargo run --locked --offline -p lichtung-plot-book -- check
 
@@ -36,7 +36,7 @@ book-check:
 gallery:
     cargo run --locked --offline -p lichtung-plot-book -- gallery
 
-# Generate the gallery and build both Books with the installed mdBook CLI.
+# Generate the gallery and build both single-page guides with the installed mdBook.
 book:
     cargo run --locked --offline -p lichtung-plot-book -- build
 

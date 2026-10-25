@@ -52,6 +52,7 @@ fn stage(root: &Path) -> Result<PathBuf> {
         &root.join("crates/lichtung-plot/examples"),
         &stage.join("crates/lichtung-plot/examples"),
     )?;
+    copy_tree(&root.join("docs/theme"), &stage.join("docs/theme"))?;
     for language in LANGUAGES {
         let book = stage.join("docs").join(language);
         copy_tree(&root.join("docs").join(language), &book)?;
@@ -76,17 +77,41 @@ fn require_mdbook() -> Result<()> {
     Ok(())
 }
 
-fn build(root: &Path, stage: &Path) -> Result<()> {
+fn build(root: &Path, stage: &Path, cases: &[content::Case]) -> Result<()> {
     let destination = root.join("target/book/site");
+    let prepared = stage.join("site");
     for language in LANGUAGES {
         run(Command::new("mdbook")
             .arg("build")
             .arg(stage.join("docs").join(language))
             .arg("--dest-dir")
-            .arg(destination.join(language)))?;
+            .arg(prepared.join(language)))?;
+        let page = fs::read_to_string(prepared.join(language).join("index.html"))?;
+        let anchors = content::rendered_anchors(&page)?;
+        for case in cases {
+            if !anchors.contains(case.target.as_str()) {
+                return Err(fail(format!(
+                    "missing rendered walkthrough: {}",
+                    case.target
+                )));
+            }
+        }
     }
-    fs::write(destination.join("index.html"),
-        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>lichtung-plot</title><h1>lichtung-plot</h1><nav><a lang=\"en\" href=\"en/introduction.html\">English</a> · <a lang=\"zh-CN\" href=\"zh-CN/introduction.html\">简体中文</a></nav></html>\n")?;
+    fs::write(prepared.join("index.html"), gallery::landing(cases)?)?;
+    fs::copy(
+        root.join("docs/theme/guide.css"),
+        prepared.join("guide.css"),
+    )?;
+    let previous = stage.join("previous-site");
+    if destination.exists() {
+        fs::rename(&destination, &previous)?;
+    }
+    if let Err(error) = fs::rename(&prepared, &destination) {
+        if previous.exists() {
+            fs::rename(previous, &destination)?;
+        }
+        return Err(error.into());
+    }
     println!("Books built: {}", destination.join("index.html").display());
     Ok(())
 }
@@ -114,7 +139,7 @@ fn main() -> Result<()> {
     let stage = stage(&root)?;
     gallery::assemble(&root, &stage, &cases)?;
     if action == "build" {
-        build(&root, &stage)?;
+        build(&root, &stage, &cases)?;
     } else {
         println!("Fresh gallery sources and outputs: {}", stage.display());
     }

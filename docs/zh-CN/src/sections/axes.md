@@ -1,13 +1,52 @@
-# 坐标轴与数值呈现
+<a id="axes"></a>
+## 坐标轴与数值呈现
 
-[English](../en/axes.html)
+[English](../en/index.html#axes)
+
+<a id="numeric-policies"></a>
+### 代码讲解：同一组合中的六种数值上下文
+
+![同一 Canvas 的六个面板使用数值格式策略](gallery/numeric-policies/numeric_formats.svg)
+
+这张图在不同科学上下文中使用同一套格式系统。先构造百分比、有界自适应及科学计数
+策略。百分比因子是显式的，修改展示数字不会改变坐标：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-formatters}}
+```
+
+左上散点图保留自动刻度位置。数值回调先调用内置格式化，再给其中一个实际到达的标签
+加上 `start:`。这只是标签编辑，不是定位器或数据变换：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-axis}}
+```
+
+其他面板分别配置 Heatmap 的单元值和色标、Coefficient 的可用标签、Waterfall 合计、
+认证的 Forest Log10 幂，以及 SI／共享因子。每个消费者拥有完整的语义集合。
+Canvas 排布六幅图，第二次 SVG 发布复用第一次返回的 Output：
+
+```rust
+{{#include ../../../../crates/lichtung-plot/examples/05_numeric_formats.rs:numeric-composition}}
+```
+
+运行 `cargo run --locked --offline -p lichtung-plot --example 05_numeric_formats`
+即可在当前工作目录执行完整程序。
+
+[完整源码](examples/05_numeric_formats.rs) · [共享输出辅助代码](examples/support/output.rs) ·
+[原尺寸 SVG](gallery/numeric-policies/numeric_formats.svg) ·
+[可选择文字 SVG](gallery/numeric-policies/numeric_formats_text.svg) ·
+[NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html) · [返回图库](#gallery)
+
+<a id="axis-reference"></a>
+### 位置与格式选项
 
 请区分科学坐标及域、刻度**位置**（`TickGeneration`）和数值**拼写**（`NumericFormat`）。
 设置范围不会选择格式，添加后缀也不会改变数据。精确的 `x_ticks`／`y_ticks` 是不可拆分
 且优先的来源，无论 setter 顺序如何；空标签也会保留刻度。生成数量上限不能截断精确
 列表。实际分类轴拒绝数值指令；Any／Matrix 及 Heatmap 专用轴不会因此获得通用数值 setter。
 
-## 位置来源
+### 位置来源
 
 | `TickGeneration` 构造函数 | 含义 |
 | --- | --- |
@@ -43,10 +82,10 @@ f64 幂范围，Log10 操作数仍保留数学含义；回调收到带规范有�
 中间成员，不凭空制造离开格点的中点。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/07_tick_generation.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/07_tick_generation.rs:example}}
 ```
 
-## 实际视图回调与分类标签
+### 实际视图回调与分类标签
 
 TickContext 提供轴、最终域及来源、原始拥有者和实际 CSS 跨度。固有尺寸偏好不会调用
 定位函数。返回 Data 或显式类型化的 Log10Exponents；只有真正保留了原始范围时才会
@@ -55,7 +94,7 @@ TickContext 提供轴、最终域及来源、原始拥有者和实际 CSS 跨度
 空输出保留图元、边框及标题。没有自动修复、回退定位器或隐式减量重试。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/10_tick_functions.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/10_tick_functions.rs:example}}
 ```
 
 `CategoryLabelSelection::every(stride)` 只选择标签，不删除类别、图元、刻度或网格。
@@ -64,10 +103,10 @@ stride 为一即 All。x／y 独立，并使用显式、按值或分面局部的
 未标标签的类别仍可能在注释或图例中需要文字。
 
 ```rust
-{{#include ../../../crates/lichtung-plot/examples/09_category_labels.rs:example}}
+{{#include ../../../../crates/lichtung-plot/examples/09_category_labels.rs:example}}
 ```
 
-## 数值策略
+### 数值策略参考
 
 NumericFormat 支持 Decimal／Scientific／Engineering、有效数字 General，以及
 Decimal／Binary／Octal／HexLower／HexUpper 的 Integer。小数精度为 0..=20，
@@ -113,9 +152,5 @@ Shared 兼容性。`builtin()` 只移除回调，不重置其他选项。
 数值标签则可以重复。Forest Log10 格式化认证的数学幂，而不是舍入过的物理 f64 幂。
 Shared 图例要求完整策略相等，并对合并域统一格式化；共享范围本身不强制刻度一致。
 
-```rust
-{{#include ../../../crates/lichtung-plot/examples/05_numeric_formats.rs:example}}
-```
-
-参见[数值策略案例](gallery-numeric-policies.md)及
+参见[数值策略讲解](#numeric-policies)及
 [NumericFormat API](https://docs.rs/lichtung-plot/latest/lichtung_plot/struct.NumericFormat.html)。
