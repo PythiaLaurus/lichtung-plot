@@ -12,14 +12,128 @@ already exists. Publication, deployment and Git push remain unauthorized.
 The objective is to plot foreign data directly. A caller describes the dataset
 and its mapping to plot roles, or supplies vectors/a matrix directly. Constructing
 NumericValues, CategoryValues, BooleanValues, SourceRows or HeatmapValues must not
-be a prerequisite for an adapter workflow. The existing native-value core API
-remains useful to standalone consumers and as the internal rendering boundary.
+be a prerequisite for a foreign-data workflow. The complete native-value core API
+also remains available unchanged through either adapter, not only to standalone
+consumers or as an internal rendering boundary.
 
 This plan selects the public input grammar and lifecycle below. Rust snippets
 illustrate that design; they have not been compiled and are not claims that the
 interfaces exist. Implementation must validate the inferred types/lifetimes and
 report a concrete incompatibility rather than silently replace these workflows
 with public conversion helpers.
+
+## Complete Native API And Additive Binding Namespace
+
+Either adapter is a complete public entry point to the same renderer. For every
+publicly usable `lichtung_plot::path`, replacing only the crate prefix with
+`lichtung_plot_polars::path` or `lichtung_plot_ndarray::path` must preserve the
+original definition and usage for the resolved core version/configuration. This
+includes all root exports, public modules and their descendants (`kind` and
+`stats` today), constructors, associated methods, traits, generic/capability
+bounds, error variants and result aliases. Do not add adapter-specific allowlists
+or feature gates that hide native items available in that core configuration.
+Private core modules remain private.
+
+The selected export shape in each adapter is:
+
+```rust
+pub use lichtung_plot::*;
+pub mod bind;
+```
+
+These are actual [Rust re-exports][rust-reexports], not copied definitions, newtype
+wrappers or a curated subset. In particular, root Plot, Bounds, AxisValues,
+HistogramInput, RaincloudInput, BarInput, BarSamples, CoefficientInput, FacetSpec,
+PointLayer, BarPointLayer, Error and Result remain the native items, just like
+Canvas, Theme, Color and Output. No native path moves to a nested core/prelude
+module. Do not add adapter-local root definitions that shadow the glob re-export.
+Treat a future core-name collision with bind as a coordinated API-design issue,
+never silently mask a native export. Full export parity is the contract; the
+short list here is not its limit.
+
+The native workflow needs only a prefix substitution, with no bind import,
+extension trait, new `?`, changed arguments or `build()` requirement:
+
+```rust
+use lichtung_plot_polars::{kind, Bounds, NumericValues, Plot};
+
+let native: Plot<kind::Line> = Plot::line(
+    NumericValues::new("time", [0.0, 5.0, 20.0]),
+    NumericValues::new("response", [1.0, 2.0, 3.0]),
+)
+.band(Bounds::new(
+    NumericValues::new("lower", [0.5, 1.5, 2.5]),
+    NumericValues::new("upper", [1.5, 2.5, 3.5]),
+));
+```
+
+The same code works with the ndarray adapter prefix. Imports such as
+`use lichtung_plot_polars::stats::distribution` and native `Error::Data` or
+`Result<T>` also retain their original meaning. A declaration of native Plot is
+not a declaration of an adapter frontend with a lookalike name.
+
+New foreign-data behavior lives only in the deliberate public bind namespace:
+
+| Native API, unchanged | Additional foreign-data API |
+| --- | --- |
+| `adapter::Plot::scatter(native_x, native_y)` | `adapter::bind::scatter(foreign_x, foreign_y)?` |
+| Native Plot constructors and methods | `adapter::bind::data(source).scatter(x, y)?`, followed by source-bound setters |
+| `adapter::Bounds`, native closed input types | Binding descriptors under `adapter::bind`: Bounds, HistogramInput, RaincloudInput, BarInput, CoefficientInput |
+| `adapter::PointLayer::new(native_x, native_y)` | `adapter::bind::point_layer(foreign_x, foreign_y)?` or a local Data context |
+| `adapter::Error`, `adapter::Result<T>` | `adapter::bind::Error`, `adapter::bind::Result<T>` |
+
+Foreign constructors are free functions in bind, with the same family names as
+Data methods. They return `bind::BoundPlot` carrying the real exact-family core
+Plot; source lookup uses `bind::Data`. Prepared layer frontends are
+`bind::BoundPointLayer` and `bind::BoundBarPointLayer`. Bounds, Grid, Facet, Valid,
+Axis, Status, Alpha, AlphaMap, Key, Cells, ColumnIdentity and sealed input bounds
+belong inside bind, never at the adapter root. This replaces the earlier proposed
+adapter-owned root Plot/Bounds/input/layer/error types, rather than retaining a
+second competing entry point. Do not try to add foreign inherent methods to the
+re-exported native Plot or rely on an extension trait to replace its constructors.
+
+### Direct Dependencies, Shared Types And Packaging
+
+A caller needs only its chosen adapter as a direct renderer dependency, including
+for native-only plots, composition, callbacks, type signatures and error handling.
+The core remains a transitive dependency. Users still declare Polars/ndarray when
+their own data-processing code uses those libraries; hiding those dependencies or
+re-exporting their complete ecosystems is not this contract.
+
+The two adapters are not alternatives selected by a global backend switch. They
+can coexist, neither depends on the other, and both must resolve to the same
+compatible core package to share native types:
+
+```text
+application -> lichtung-plot-polars  --+
+            -> lichtung-plot-ndarray -+-> one resolved lichtung-plot package
+```
+
+Re-exporting a definition does not duplicate it. With that shared package,
+`pp::Plot<K>` and `nd::Plot<K>` are the very same native type, as are Canvas,
+Color, Theme, Output, Error, Result and the public kind/stats modules. Only the
+foreign bind frontends and binding errors are adapter-specific. Applications
+normally use crate aliases rather than import both sets into the same unqualified
+names; a duplicate-name import error is not a dependency or type-identity problem.
+
+[Cargo resolution][cargo-resolution] reuses a shared dependency package where
+constraints permit. Incompatible versions or distinct sources can instead resolve
+to distinct packages whose native types are not interchangeable; matching a
+package name alone is not enough. Keep compatible core dependency requirements
+and treat core re-export compatibility as part of each adapter's public API.
+The current workspace dependencies and lockfile already resolve one core package;
+this is not evidence that the planned export/binding API is implemented.
+
+An adapter's [Cargo source archive][cargo-package] contains its own package source
+and dependency declarations, not a recursively embedded copy of the core or its
+other dependencies. The core has its own archive. Joint offline archive
+verification does not merge those archives. In one normal target/build context,
+two dependency edges do not themselves produce two independent renderer crates.
+Features generally combine for shared normal dependencies; different targets,
+host/build contexts or build configurations may produce separate artifacts without
+creating a second public native type universe in the application. Do not promise
+one compiler invocation or exact final-binary size, and do not vendor/copy the
+renderer into either adapter to claim standalone distribution.
 
 ## Comparative Evidence And Chosen Scope
 
@@ -63,7 +177,7 @@ supported containers; they do not establish cross-language Polars compatibility.
 | Candidate | Benefit | Cost | Decision |
 | --- | --- | --- | --- |
 | One fallible function binds all inputs, then returns the core Plot immediately | Minimal wrapper; core style methods need no forwarding. | Later `.hue("condition")`, named bounds and facets cannot resolve without another context or a large up-front options object. | Not the selected ordinary interface. |
-| Dataset context plus exact-family adapter Plot | Fits existing consuming chains; later bindings remain ergonomic; preserves family-specific capabilities. | Both adapters must maintain configuration forwarding. Source-bound plots retain a lookup borrow even after selected values have been copied. Multiple binding calls use multiple `?` operators. | Selected, with explicit ownership, maintenance and completion rules below; not described as zero-cost or automatically small. |
+| Dataset context plus exact-family bind::BoundPlot | Fits existing consuming chains; later bindings remain ergonomic; preserves family-specific capabilities. | Both adapters must maintain configuration forwarding. Source-bound plots retain a lookup borrow even after selected values have been copied. Multiple binding calls use multiple `?` operators. | Selected only as the additive foreign frontend, with explicit ownership and completion rules; root Plot remains a native re-export. |
 | General Mark/Scale/Stat grammar | Uniform arbitrary layers and reusable mappings. | Requires new composition, inference and type-capability contracts beyond data adaptation. | Not part of this replacement. |
 
 The selected interface is Seaborn/Plotly-like in input handling, not a claim of
@@ -73,11 +187,13 @@ framework crate.
 
 ## Public Input Grammar
 
-Both packages export their own Plot and source context Data. `Plot::data(source)`
-borrows the source and does no value conversion. Data is reusable for independent
-constructors; a resulting Plot retains a read-only descriptor of that source, not
-a borrow of the temporary Data object. Exact generic/lifetime spelling is an
-implementation detail; the resulting family remains the core's actual kind marker.
+In each package, `bind::data(source)` borrows the source and does no value
+conversion. The resulting Data is reusable for independent constructors; a
+BoundPlot retains a read-only descriptor of that source, not a borrow of the
+temporary Data object. Exact generic/lifetime spelling is an implementation
+detail; the resulting family remains the core's actual kind marker. All foreign
+constructors and descriptors below are in bind, even when imported locally for
+brevity. Root Plot always keeps its original native-value signatures.
 
 | Position | Polars | ndarray |
 | --- | --- | --- |
@@ -99,8 +215,8 @@ Use sealed adapter-local input bounds where Rust needs them; they admit supporte
 foreign shapes and primitive types, not an external scalar/plugin protocol. Do
 not make callers implement traits or build a public project-specific dataframe.
 Transient input/descriptor lifetimes must not unnecessarily become the completed
-Plot's lifetime. A missing Polars source for a string, or ndarray source for an
-index, is an unresolved-binding error, never a literal/broadcast fallback.
+BoundPlot's lifetime. A missing Polars source for a string, or ndarray source for
+an index, is an unresolved-binding error, never a literal/broadcast fallback.
 
 Role chooses interpretation: numeric, categorical, Boolean and exact provenance
 remain distinct. A trajectory's numeric/category x can follow an unambiguous
@@ -113,9 +229,9 @@ string-number parsing or continuous hue is introduced.
 ### Polars: Dataset And Variable Bindings
 
 ```rust
-use lichtung_plot_polars::{Facet, Plot};
+use lichtung_plot_polars::bind::{self, Facet};
 
-let plot = Plot::data(&frame)
+let plot = bind::data(&frame)
     .scatter("concentration", "response")?
     .hue("condition")?
     .source_rows("sample_id")?
@@ -125,7 +241,7 @@ let plot = Plot::data(&frame)
 let output = plot.svg("response")?;
 ```
 
-The family constructor returns an exact-family adapter Plot retaining the source
+The family constructor returns an exact-family BoundPlot retaining the source
 context for later bindings. A string is never an expression such as `log(x)` or
 an Altair-style field/type shorthand. Missing columns identify the source name
 and plot role. Literal titles, Color/Theme instructions and display labels are
@@ -135,10 +251,10 @@ Direct Column and Series inputs also work without constructing a DataFrame or
 requiring `.into_column()` merely to plot:
 
 ```rust
-let plot = Plot::scatter(&concentration_series, &response_series)?
+let plot = bind::scatter(&concentration_series, &response_series)?
     .hue(&condition_series)?;
 
-let corrected = Plot::data(&frame)
+let corrected = bind::data(&frame)
     .scatter("time", &corrected_response)?
     .hue("condition")?
     .y_label("Corrected response");
@@ -154,14 +270,14 @@ overrides.
 ### ndarray: Direct Vectors And Table Columns
 
 ```rust
-use lichtung_plot_ndarray::Plot;
+use lichtung_plot_ndarray::bind;
 
-let scatter = Plot::scatter(x.view(), y.view())?
+let scatter = bind::scatter(x.view(), y.view())?
     .hue(condition.view())?
     .x_label("Concentration (µM)")
     .y_label("Response");
 
-let selected = Plot::data(measurements.view())
+let selected = bind::data(measurements.view())
     .scatter(0, 2)?
     .hue(condition.view())?;
 ```
@@ -185,14 +301,17 @@ materialized native-value object. Ordinary views need no wrapper.
 ### Explicit X And Multiple Y Variables
 
 ```rust
-let lines = lichtung_plot_polars::Plot::data(&frame)
-    .line("time", ["sensor_a", "sensor_b"])?
-    .facet(lichtung_plot_polars::Facet::wrap("batch", 3))?;
+use lichtung_plot_ndarray as nd;
+use lichtung_plot_polars as pp;
 
-let selected = lichtung_plot_ndarray::Plot::data(table.view())
+let lines = pp::bind::data(&frame)
+    .line("time", ["sensor_a", "sensor_b"])?
+    .facet(pp::bind::Facet::wrap("batch", 3))?;
+
+let selected = nd::bind::data(table.view())
     .line(0, [1, 2])?;
 
-let direct = lichtung_plot_ndarray::Plot::line(time.view(), signals.view())?;
+let direct = nd::bind::line(time.view(), signals.view())?;
 ```
 
 These are one x variable and an ordered collection/matrix of y variables. If x is
@@ -207,8 +326,8 @@ ordinals to distinguish entries; unnamed arrays use column positions. Empty name
 get positional defaults, not fabricated scientific descriptions. Nonempty duplicate
 display names retain native collision validation rather than silent renaming.
 
-The same two-argument constructors can accept a single y or many y because Rust
-can distinguish argument types. Lack of function overloading by argument count
+The same two-argument bind constructors can accept a single y or many y because
+Rust can distinguish argument types. Lack of function overloading by argument count
 is not a reason to invent a separate `_wide(x, ys)` family for this case. Ordinary
 binding errors remain fallible; there is no general deferred transformation graph.
 Keep the listed plain-name/index collection syntax working in the real public
@@ -228,11 +347,11 @@ stacked totals or supplied distribution geometry.
 ### Wide Input Without An Explicit Coordinate
 
 ```rust
-let lines = lichtung_plot_polars::Plot::line_wide(&frame)?;
-let chosen = lichtung_plot_polars::Plot::data(&frame)
+let lines = pp::bind::line_wide(&frame)?;
+let chosen = pp::bind::data(&frame)
     .line_wide(["sensor_a", "sensor_b"])?;
-let indexed = lichtung_plot_ndarray::Plot::line_wide(signals.view())?;
-let distributions = lichtung_plot_polars::Plot::boxplot_wide(&frame)?;
+let indexed = nd::bind::line_wide(signals.view())?;
+let distributions = pp::bind::boxplot_wide(&frame)?;
 ```
 
 `line_wide(source)` and `scatter_wide(source)` explicitly choose row position as
@@ -269,10 +388,10 @@ index selectors. Label aliases retain native collision/replacement rules.
 ### Matrix Heatmaps And Record Cells
 
 ```rust
-use lichtung_plot_ndarray::{Grid, Plot};
+use lichtung_plot_ndarray::bind::{self, Grid};
 
-let plain = Plot::heatmap(signals.view())?;
-let labeled = Plot::heatmap(
+let plain = bind::heatmap(signals.view())?;
+let labeled = bind::heatmap(
     Grid::new(signals.view())
         .x_labels(["A", "B", "C"])
         .y_labels(["Sample 1", "Sample 2"]),
@@ -295,19 +414,19 @@ Polars supports a whole numeric rectangle, selected grid columns, and explicit
 cell records without forcing one interpretation on all three:
 
 ```rust
-use lichtung_plot_polars::{Grid, Plot};
+use lichtung_plot_polars::bind::{self, Grid};
 
-let rectangle = Plot::heatmap(&numeric_frame)?;
-let selected = Plot::data(&frame).heatmap_grid(
+let rectangle = bind::heatmap(&numeric_frame)?;
+let selected = bind::data(&frame).heatmap_grid(
     Grid::columns(["sensor_a", "sensor_b"]).row_labels("sample"),
 )?;
-let records = Plot::data(&cell_frame)
+let records = bind::data(&cell_frame)
     .heatmap_cells("column", "row", "value")?;
 ```
 
 Data's `heatmap_grid(columns)` accepts a plain ordered selection when no Grid
 metadata is needed; ndarray Data accepts indices analogously. Direct
-`Plot::heatmap_cells(x, y, fill)` accepts foreign vectors. The whole-frame heatmap
+`bind::heatmap_cells(x, y, fill)` accepts foreign vectors. The whole-frame heatmap
 requires a supported numeric rectangle (Null is resolved as numeric fill); it
 does not silently discard metadata columns. Record cells preserve native
 categorical coordinate and duplicate-cell rules; `px.density_heatmap`-style
@@ -319,7 +438,7 @@ binning/aggregation is not what this matrix operation means.
 | Grid highlights | A same-shape Boolean ndarray view, Boolean Polars rectangle/ordered column selection, or `Cells(vector)` aligns with cells. True highlights a cell; it does not hide it or define its validity. |
 | Grid source IDs | Exact same-shape integer values/selected integer columns, or `Cells(vector)`, provide one unique ID per expanded cell. A row-length ID field is not repeated across columns. |
 | Record heatmap | One x/y/fill record per slot; highlights and IDs align with those records. |
-| Scatter matrix | `Plot::matrix(source2)` or `data.matrix(columns)` uses columns as variables and rows as observations, with optional positional labels for unnamed arrays. This is never heatmap inference. |
+| Scatter matrix | `bind::matrix(source2)` or `data.matrix(columns)` uses columns as variables and rows as observations, with optional positional labels for unnamed arrays. This is never heatmap inference. |
 
 Expansion order is logical row-major: `(r,c)` occupies slot `r*ncols+c` using
 checked arithmetic. Retain original row and selected source-column identity
@@ -330,16 +449,18 @@ required from callers. Null grid cells retain coordinates; they are not removed.
 ### Supplied Bounds And Independent Supplemental Layers
 
 ```rust
-use lichtung_plot::Color;
-use lichtung_plot_polars::{Bounds, Plot};
+use lichtung_plot_polars::{
+    bind::{self, Bounds},
+    Color,
+};
 
-let points = Plot::data(&observations)
+let points = bind::data(&observations)
     .point_layer("time", "response")?
     .labels("sample")?
     .color(Color::rgb(90, 90, 90))
     .legend_label("Observed");
 
-let fitted = Plot::data(&fit)
+let fitted = bind::data(&fit)
     .line("time", "estimate")?
     .band(Bounds::new("lower", "upper"))?
     .point_layer(points)
@@ -351,17 +472,19 @@ records; the point layer's labels bind to its own 200 points. A layer never look
 up missing fields in the parent source, inherits parent hue/group/facets, or gains
 an independent SourceRows map. There is no index join between the datasets.
 
-Data's `point_layer(x, y)` and direct `PointLayer::new(x, y)` snapshot coordinates
-fallibly and return a prepared typed layer frontend retaining only its own lookup
-context for later labels. Its paint/radius/alpha/text setters preserve native
-semantics. `point_layer(layer)` on an ordinary Line consumes a fully bound layer
-and returns Self, not Result: no unresolved data are attached at that step.
-Standard Into interoperability with the native PointLayer drops the local lookup
-context without requiring a second public conversion-function catalog.
+Data's `point_layer(x, y)` and direct `bind::point_layer(x, y)` snapshot coordinates
+fallibly and return a BoundPointLayer retaining only its own lookup context for
+later labels. Its paint/radius/alpha/text setters preserve native semantics.
+`point_layer(layer)` on a Line BoundPlot consumes a fully bound layer and returns
+Self, not Result: no unresolved data are attached at that step.
+Standard Into interoperability with the root native PointLayer drops the local
+lookup context without requiring a second public conversion-function catalog or
+changing native Plot::point_layer's signature.
 
-`data.bar_point_layer(category, value, color, radius)` and the corresponding
-direct BarPointLayer constructor snapshot their own inputs; an optional
-`.series(binding)?` resolves only in that layer context. The core still resolves
+`data.bar_point_layer(category, value, color, radius)` and direct
+`bind::bar_point_layer(category, value, color, radius)` return a BoundBarPointLayer
+and snapshot their own inputs; an optional `.series(binding)?` resolves only in
+that layer context. The core still resolves
 its categories/series against prepared parent bar centers, not parent row count.
 Only Bar/HorizontalBar accept it. Ordinary PointLayer remains Line-only and
 rejects generic faceting; no per-point hue/size mapping or arbitrary Mark layering
@@ -376,10 +499,10 @@ DataFrame + column bindings / foreign vectors / matrices
         -> existing Plot<K>, scientific preparation, Canvas and Output
 ```
 
-- Keep the two existing adapter packages and dependency direction. Each exports
-  plotting entry points and a typed Plot frontend, not just value converters.
-  `lichtung_plot_polars::Plot` and `lichtung_plot_ndarray::Plot` are the selected
-  foreign-input imports; the standalone `lichtung_plot::Plot` remains unchanged.
+- Keep the two existing adapter packages and dependency direction. Each fully
+  re-exports the native public API and adds bind plotting entry points and typed
+  BoundPlot frontends, not just value converters. Both adapter roots and the
+  standalone core expose the same unchanged native Plot definition.
 - The adapter owns argument interpretation, source lookup, shape/dtype diagnostics
   and binding metadata. Reuse current private conversion code where sound; never
   require users to call it before plotting or rebuild a whole dataframe in a
@@ -388,7 +511,7 @@ DataFrame + column bindings / foreign vectors / matrices
   here. Do not add a generic core data-access trait, generic core source parameter,
   reverse optional dependency or external-buffer rendering path without a concrete
   unmet consumer. No such core refactor is needed to begin this replacement.
-- The frontend wraps the actual core Plot with its existing exact family marker.
+- BoundPlot wraps the actual core Plot with its existing exact family marker.
   Forward appearance, numerical callbacks, text, guides and terminal methods;
   delegate scientific validation, layout, font policy, capture and publication.
   Do not copy those algorithms or maintain a second scientific configuration model.
@@ -397,36 +520,55 @@ DataFrame + column bindings / foreign vectors / matrices
   lose the binding context or return a different builder halfway through a chain.
   Small package-local forwarding macros are acceptable; a new shared framework
   crate or public universal schema is not the objective.
-- `build(self) -> lichtung_plot::Plot<K>` consumes the frontend and returns its
-  actual owned core Plot, preserving the exact family. It is infallible because
-  binding already happened, and it performs no scientific preflight/rendering.
+- `build(self) -> crate::Plot<K>` inside either adapter consumes BoundPlot and
+  returns its actual owned core Plot, preserving the exact family. It is
+  infallible because binding already happened, and it performs no scientific
+  preflight/rendering.
   It is the one explicit Plot handoff for native/adapter Canvas composition, not
   manual value conversion. Normal SVG/PNG output needs no handoff. Do not add
   into_native/as_core aliases, a parallel adapter Canvas or speculative core
-  interoperability refactors.
+  interoperability refactors. Root native Plot needs no build handoff.
 
-Forward core-only methods with their existing names, capability bounds, consuming
-shape, callbacks and return behavior. Data-bearing methods resolve the foreign
-inputs listed here. Keep one package-local forwarding inventory and use it for
-review of added/changed core configuration; macros do not remove maintenance cost.
-Do not hide most styles behind a required `configure_native` closure, use Deref
-to escape the frontend, or create repeated per-setter tests merely to census it.
+On BoundPlot, forward core-only methods with their existing names, capability
+bounds, consuming shape, callbacks and return behavior. Data-bearing methods
+resolve the foreign inputs listed here; their fallible signatures do not replace
+the root native methods. Keep one package-local forwarding inventory and use it
+for review of added/changed core configuration; macros do not remove maintenance
+cost. Native export parity comes from re-exporting, not from this inventory or a
+promise to emulate native methods on a wrapper. Do not hide most styles behind a
+required `configure_native` closure, use Deref to escape the frontend, or create
+repeated per-setter tests merely to census it.
 
 ```rust
-let left = lichtung_plot_polars::Plot::data(&frame)
+use lichtung_plot_ndarray as nd;
+use lichtung_plot_polars as pp;
+
+let left = pp::bind::data(&frame)
     .scatter("time", "response")?
     .hue("condition")?
     .build();
-let right = lichtung_plot_ndarray::Plot::heatmap(matrix.view())?.build();
+let right = nd::bind::heatmap(matrix.view())?.build();
 
-let canvas = lichtung_plot::Canvas::grid(1, 2)?
+let theme: nd::Theme = pp::Theme::science();
+let canvas = pp::Canvas::grid(1, 2)?
+    .theme(theme)
     .panel(0, 0, left)?
     .panel(0, 1, right)?;
 ```
 
+Neither adapter workflow needs a direct core dependency. The same Canvas could
+be named `nd::Canvas`; native Plot values can also cross the two paths directly,
+without build, conversion, erasure or serialization:
+
+```rust
+fn same_native_plot<K: pp::kind::Marker>(plot: pp::Plot<K>) -> nd::Plot<K> {
+    plot
+}
+```
+
 ### Ownership And Failure Timing
 
-Binding operations return adapter Result values. Resolve and snapshot the
+Binding operations return bind::Result values. Resolve and snapshot the
 variables a constructor/data setter actually binds at that call;
 do not materialize every unused source column, render eagerly or accumulate a
 hidden first-error state to avoid Rust's `?` syntax. Ordinary non-data setters
@@ -439,7 +581,7 @@ and Output own their data independently. Direct-vector inputs are not retained
 after snapshotting. These are Rust ownership decisions, not a claim that Seaborn
 is immutable or that the future Python object lifecycle has been settled.
 
-The root whole-DataFrame heatmap/matrix/wide constructors retain the same lookup
+The bind whole-DataFrame heatmap/matrix/wide functions retain the same lookup
 context as Data constructors; a directly bound vector or matrix view does not
 become a source for later name/index lookup. For example, plotting direct vectors
 does not make integer zero a selector into an implicit invented table. Rust must
@@ -471,12 +613,44 @@ Consuming failure follows Rust ownership: Err does not return the previous Plot.
 Terminal methods return the actual native Output and preserve native errors; they
 do not wrap publication in a new lifecycle or silently retry another input route.
 
+### Native Errors And Binding Errors
+
+The root Error/Result are actual core re-exports, preserving native variant
+matching and return types. `bind::Error` owns structural/lookup/dtype context and
+original upstream/native error sources; `bind::Result<T>` uses that error. It must
+provide lossless `From<crate::Error>` independently of context-specific binding
+variants, so a foreign-data workflow can use `?` for both binding and rendering:
+
+```rust
+use lichtung_plot_polars::{bind, Output};
+
+fn render(frame: &polars_core::prelude::DataFrame) -> bind::Result<Output> {
+    Ok(bind::data(frame)
+        .scatter("time", "response")?
+        .svg("response")?)
+}
+```
+
+BoundPlot terminal methods keep native Result<Output> behavior, as do the native
+Canvas and Output. Native-only functions keep returning root `Result<T>` with no
+new adapter wrapping. A function combining two adapters handles their distinct
+bind errors in its own application error enum or a standard boxed error; this
+does not require importing or directly depending on the core. Do not stringify
+binding errors into native Error::Data, widen the core error for foreign-library
+concerns, or pretend native Result can propagate a binding error without an
+explicit application-side conversion. Moving the current adapter error types
+under bind and adding native From support is part of replacement, not behavior
+already provided by the conversion-only packages.
+
 ## Coverage Across The Existing API
 
 All 25 families need source-bound/direct input. In this constructor inventory,
 variables mean literal names in Polars Data, indices in ndarray Data, or admitted
-foreign vectors. Direct Plot constructors accept vectors instead of unresolved
-selectors. Bounds/input descriptors contain bindings rather than native values.
+foreign vectors. Direct bind family functions accept vectors instead of unresolved
+selectors. Bounds/input descriptors in this inventory are explicitly the bind
+types holding bindings; root types and native constructor signatures stay intact.
+Each row is available on Data and as `bind::family(...)` where its direct input
+shape applies, including the documented grid/matrix distinctions.
 
 | Native family | Selected constructor shape | Meaning retained |
 | --- | --- | --- |
@@ -506,9 +680,10 @@ selectors. Bounds/input descriptors contain bindings rather than native values.
 | Beeswarm | `beeswarm(category, value, color)` | Constructor-owned numeric color channel. |
 | Waterfall | `waterfall(category, delta, base)` | Literal base and original ordered delta semantics. |
 
-HistogramInput, RaincloudInput, BarInput and CoefficientInput mirror the core's
-closed scientific choices while holding foreign bindings. BarInput::samples
-retains `.error_bar(native_policy)` before attachment. Supplied geometry types,
+`bind::HistogramInput`, `bind::RaincloudInput`, `bind::BarInput` and
+`bind::CoefficientInput` mirror the core's closed scientific choices while holding
+foreign bindings. `bind::BarInput::samples` retains `.error_bar(native_policy)`
+before attachment. Supplied geometry types,
 references, themes and policies are reused from the core. These are plot-semantic
 descriptors, not a second public dataset representation. No implicit general
 Into<core input> escape hatch is required to use foreign samples.
@@ -516,10 +691,11 @@ Into<core input> escape hatch is required to use foreign samples.
 Adapt every data-bearing position: hue/group/series, provenance, complete facet
 specifications, bounds, status bindings, highlights, point/bar-point layers,
 labels and data-alpha mappings as admitted by the underlying family. Small
-adapter-owned Bounds/Facet/layer/input specifications can hold names or foreign
+bind-owned Bounds/Facet/layer/input specifications can hold names or foreign
 vectors; they express plot semantics, not materialized replacement dataframes.
-Core-only style/policy/geometry values are reused directly rather than renamed.
-Do not require a native-value escape hatch to complete an ordinary adapter plot.
+Core-only style/policy/geometry values are reused from root re-exports directly
+rather than renamed or duplicated. Do not require a native-value escape hatch to
+complete an ordinary adapter plot.
 
 Alignment follows each owning semantic input, not one blanket DataFrame height.
 Bounds and status align with their estimate records. Supplemental layers may use
@@ -564,24 +740,26 @@ this does not retain/reopen the independent foreign selector table. Source-key
 resolution and mapping callbacks have already completed at the local binding call.
 
 ```rust
-use lichtung_plot::EstimateStatus;
-use lichtung_plot_polars::{Alpha, AlphaMap, Bounds, Plot, Status};
+use lichtung_plot_polars::{
+    bind::{self, Alpha, AlphaMap, Bounds, Status},
+    EstimateStatus,
+};
 
-let estimates = Plot::data(&summary)
+let estimates = bind::data(&summary)
     .point_interval("term", "estimate", Bounds::new("lower", "upper"))?
     .estimate_status(Status::categorical("status", [
         ("ok", EstimateStatus::Estimated),
         ("unavailable", EstimateStatus::NotEstimable),
     ]))?;
 
-let alpha = Plot::data(&series_alpha)
+let alpha = bind::data(&series_alpha)
     .alpha_keyed(["condition"], AlphaMap::bytes("stroke_alpha"))?;
-let lines = Plot::data(&frame)
+let lines = bind::data(&frame)
     .line("time", "response")?
     .hue("condition")?
     .line_alpha(alpha)?;
 
-let points = Plot::data(&frame)
+let points = bind::data(&frame)
     .scatter("time", "response")?
     .point_alpha(Alpha::observations(
         AlphaMap::linear("quality", (0.0, 1.0), (64, 255)),
@@ -637,21 +815,25 @@ restrictions. Keep the core's compile-time versus data-dependent distinction.
 
 ## Replacement And Delivery
 
-1. **Replace Polars' public entry point first.** Implement the whole-frame/name
-   binding path and direct Series/Column input, including the explicit-x/many-y
-   case and local supplemental-layer context. Extend that same frontend across
-   the constructor/setter inventory, with real grouped/faceted consumers rather
-   than a separate facade for each example. Reuse private dtype converters and
-   keep selected-field/lookup-context lifetimes separate.
-2. **Replace ndarray's public entry point.** Direct views, selected table columns,
-   direct x/view2 series, matrix heatmaps and explicit multi-column bindings use
-   the same rendering boundary and input grammar, not a different adapter model.
-   Cover validity, bounds and independent layers too, not only a grid shortcut.
+1. **Replace Polars' public entry point first.** Re-export the entire native API
+   unchanged and implement bind's whole-frame/name and direct Series/Column paths,
+   including explicit-x/many-y and local supplemental layers. Extend that same
+   BoundPlot across the constructor/setter inventory, with real grouped/faceted
+   consumers rather than a separate facade for each example. Reuse private dtype
+   converters, keep input/context lifetimes separate, and put binding errors under
+   bind with native-error From support.
+2. **Replace ndarray's public entry point.** Provide the same complete native
+   re-exports and bind namespace. Direct views, selected table columns, direct
+   x/view2 series, matrix heatmaps and explicit multi-column bindings use the same
+   rendering boundary and input grammar, not a different adapter model. Cover
+   validity, bounds and independent layers too, not only a grid shortcut.
 3. **Complete migration and verification.** Replace the adapter examples/guide
    excerpts with direct plotting calls, remove public numeric/categories/booleans/
    source_rows/numeric_columns/heatmap_values conversion exports and native-output
    helper bundles, and keep only private conversion support with real consumers.
-   Migrate their public tests; do not retain aliases, deprecations or dual catalogs.
+   Migrate their public tests and all adapter-local root exports to the selected
+   bind surface; do not retain aliases, deprecations or dual catalogs. Examples
+   import every renderer item through their adapter, not a direct core import.
 
 Migrate each package's callers with its working replacement, not only at the very
 end. Core-native input constructors remain unchanged; removing adapter conversion
@@ -672,13 +854,15 @@ request one new E2E per row or mechanically parameterize all families/options.
 
 | Contract | Required evidence |
 | --- | --- |
+| Complete native export parity | Re-export all native root/public module paths without adapter shadowing. Migrate a native consumer using only the crate-prefix substitution; include generic kind, native Bounds/input/layer and Error/Result usage and a public stats path without rendering a new scenario per item. |
+| Dependency and native identity | Adapter-only renderer dependencies suffice for native configuration, callbacks, output and error types. In the existing composition witness, use both bind routes, an unchanged native Plot and cross-path Theme/Canvas types from the one resolved core; no adapter Canvas, erasure or conversion for native items. Use bounded compile consumers during implementation, not a separate compatibility project or per-export echo tests. |
 | Source and direct-variable grammar | Whole Polars frame/name binding, direct Series and Column without IntoColumn, mixed named x/external y, and ndarray index/view binding; missing fields/indices and wrong selected dtype identify the role. |
 | Explicit-x/many-y meaning | An irregular x such as `[0, 5, 20]` with selected a/b never becomes row positions or treats time as a third series; selection order and raw column identity survive, with no invented Cartesian product. |
 | Omitted-coordinate wide input | Deliberate row-position/default-column-category semantics; typed numeric discovery does not silently omit an explicitly selected unsupported variable. Row versus Cells alignment is operation-defined, including when lengths happen to coincide. |
 | Independent layers and bounds | A 30-record supplied line/band and 200-record point layer bind independently; labels resolve in the point source, no parent hue/facet inheritance or global DataFrame-height rule. Sample bars versus supplied estimates remain distinct. |
 | Grid orientation and membership | A non-square strided matrix maps source `(r,c)` to the correct row/column; true-present validity and true-highlight Booleans stay distinct, missing cells keep coordinates, and per-cell exact IDs are not repeated row IDs. Use semantic source/axis relationships, not placement coordinates or SVG goldens. |
 | Lifecycle and callbacks | A bound Data object can be temporary/reused, direct input temporaries expire after binding, a named-source borrow ends at build, native output replays without reopening sources, and alpha/numeric callbacks retain their native timing. |
-| Capabilities and interoperability | Representative unsupported native methods remain unavailable, native data-dependent restrictions remain preflight errors, and both adapter plots compose through native Canvas without erasure or manual value conversion. |
+| Capabilities and error boundaries | Representative unsupported native/BoundPlot methods remain unavailable, native data-dependent restrictions remain preflight errors, root Error/Result retain native identity, and bind::Result can propagate binding and original native failures with `?` without stringification. |
 
 These examples guide focused unit/module coverage and migration of existing
 public workflows, not separate compatibility prototypes before implementation.
@@ -732,3 +916,6 @@ No language-tooling rewrite is part of adapter replanning.
 [altair-layers]: https://altair-viz.github.io/user_guide/compound_charts.html
 [matplotlib-image]: https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html
 [plotly-rust]: https://docs.rs/plotly/0.14.1/src/plotly/traces/scatter.rs.html#305-381
+[rust-reexports]: https://doc.rust-lang.org/reference/items/use-declarations.html#use-visibility
+[cargo-resolution]: https://doc.rust-lang.org/cargo/reference/resolver.html#semver-compatibility
+[cargo-package]: https://doc.rust-lang.org/cargo/commands/cargo-package.html

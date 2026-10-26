@@ -7,10 +7,20 @@ their public design has been rejected: callers should pass foreign data to
 plotting interfaces, not first construct native values themselves. These sections
 describe the current code, not the intended replacement or an accepted completion
 of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
-owns the selected replacement design: typed variable/column-collection binding,
-direct vectors, matrix/record heatmaps and local supplemental-layer contexts.
-It compares the upstream input models and records lifecycle/forwarding costs;
-this replanning change does not implement it.
+owns the selected replacement design: complete unchanged native API re-exports
+plus additive bind variable/column-collection inputs, direct vectors, matrix/record
+heatmaps and local supplemental layers. It compares upstream input models and
+records lifecycle/forwarding costs; this replanning change does not implement it.
+
+The replacement requires every public `lichtung_plot::path` to work through
+either adapter with only its crate prefix changed, preserving the native type or
+module and original signatures. Root Plot, Bounds, input/layer types and Error/
+Result must not be shadowed by foreign-input wrappers. Those additions live in
+bind. Users need no separate direct renderer dependency, and the two adapters can
+coexist and re-export identical native types from one compatible resolved core.
+Re-exports do not copy definitions; adapter source archives declare the core
+dependency rather than embedding its sources. The current conversion exports and
+adapter-owned root errors below do not yet meet this replacement contract.
 
 ## Native Boundary
 
