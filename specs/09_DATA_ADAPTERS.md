@@ -7,7 +7,10 @@ their public design has been rejected: callers should pass foreign data to
 plotting interfaces, not first construct native values themselves. These sections
 describe the current code, not the intended replacement or an accepted completion
 of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
-owns the proposed replacement. This replanning change does not implement it.
+owns the selected replacement design: typed variable/column-collection binding,
+direct vectors, matrix/record heatmaps and local supplemental-layer contexts.
+It compares the upstream input models and records lifecycle/forwarding costs;
+this replanning change does not implement it.
 
 ## Native Boundary
 

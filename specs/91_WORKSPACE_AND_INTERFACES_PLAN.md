@@ -31,7 +31,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) replaces public conversion with data-source/variable binding, direct vectors and matrix plotting; not implemented yet. |
+| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) selects typed source-bound plotting, direct vectors, explicit-x/multiple-y mappings, separate grid/cell heatmaps and local layer contexts; not implemented yet. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -142,8 +142,19 @@ The [current adapter description](09_DATA_ADAPTERS.md) records the conversion-on
 implementation without presenting it as an accepted public design. The
 [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md) owns the replacement:
 foreign data sources plus variable bindings, direct vectors and family-specific
-matrix/wide input. Internal native-value conversion is permitted, not an obligatory
-user preprocessing step. No generic core data-access framework is prescribed.
+matrix/wide input. A scalar selector denotes one variable; an ordered selector
+collection in an admitted many-y position denotes multiple variables with the
+explicit x preserved. `_wide` is reserved for an omitted coordinate/category.
+Grid and record-cell heatmaps are distinct operations. Supplemental layers bind
+in their own source context without parent-mapping inheritance. Internal native
+conversion is permitted, not an obligatory user preprocessing step.
+
+The typed frontend retains native family bounds and owns the real core Plot.
+It forwards native configuration deliberately, without claiming zero maintenance
+cost. Source-bound plots keep a lookup borrow; infallible build drops that context
+and returns the exact core Plot for existing Canvas composition. Direct inputs
+are released after binding. No core data-access framework, general Mark/Scale/Stat
+grammar, adapter Canvas or reverse dependency is prescribed.
 
 Preserve ordinary f64 rounding, null-versus-NaN distinctions, logical row order,
 category identity and explicit provenance. The core remains independent; adapters
@@ -326,7 +337,7 @@ than disguise it through packaging or relabeling.
 | Work | Required bounded evidence |
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
-| Data adapters | Dataset/name and direct-vector bindings, matrix/wide interpretation, data-bearing setters and owned completion; preserve nullable/type/order/provenance and strided/chunked behavior through representative public workflows. |
+| Data adapters | Dataset/name and direct-vector bindings, explicit-x/multiple-y versus omitted-coordinate wide interpretation, grid/cell orientation and provenance, independently aligned layers, data-bearing setters and owned completion; preserve nullable/type/order and strided/chunked behavior through representative public workflows. |
 | Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
@@ -363,11 +374,13 @@ package contents or published ref may reintroduce the full Unicode corpus.
 2. **Book/example/gallery foundation.** Establish peer language books and shared
    runnable-source/output conventions using existing capabilities and examples.
 3. **Polars plotting interface replacement.** Deliver whole-dataset/name binding,
-   direct Series/Column input and the native family's data-bearing capabilities;
-   migrate callers and peer guides, removing the public conversion-only surface.
+   direct Series/Column input, explicit multi-variable selection, local layer
+   contexts and native data-bearing capabilities; migrate callers and peer guides,
+   removing the public conversion-only surface.
 4. **ndarray plotting interface replacement.** Deliver direct views, selected table
-   columns, matrix/wide input and the same capability coverage; migrate callers
-   and peer guides with focused evidence, removing the old conversion surface.
+   columns, explicit-x/view2 series, matrix/wide input and the same capability
+   coverage; migrate callers and peer guides with focused evidence, removing the
+   old conversion surface.
 5. **Python lifecycle decision gate.** Resolve the deferred object semantics and
    necessary public-core ownership facilities before mass-producing bindings.
 6. **Complete Python interface.** Deliver the capability mapping, callbacks, input

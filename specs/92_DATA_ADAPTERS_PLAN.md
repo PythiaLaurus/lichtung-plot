@@ -15,10 +15,13 @@ NumericValues, CategoryValues, BooleanValues, SourceRows or HeatmapValues must n
 be a prerequisite for an adapter workflow. The existing native-value core API
 remains useful to standalone consumers and as the internal rendering boundary.
 
-Names below are concrete proposals to refine through real implementation, not
-compiled examples or frozen compatibility commitments.
+This plan selects the public input grammar and lifecycle below. Rust snippets
+illustrate that design; they have not been compiled and are not claims that the
+interfaces exist. Implementation must validate the inferred types/lifetimes and
+report a concrete incompatibility rather than silently replace these workflows
+with public conversion helpers.
 
-## What Seaborn Establishes
+## Comparative Evidence And Chosen Scope
 
 Use [Seaborn 0.13.2's input model][seaborn-data] as evidence for user-facing data
 handling, not as a requirement to reproduce its entire plotting architecture:
@@ -42,7 +45,70 @@ numeric hue inference, filtering, temporal scales, estimators and automatic
 inferential intervals require their own renderer contracts. ndarray and Polars
 do not acquire pandas indexes merely because Seaborn has them.
 
-## Proposed User Workflows
+The additional research changes concrete API decisions, not just the reference
+list. Examples in this table describe each library's interface, using its own
+supported containers; they do not establish cross-language Polars compatibility.
+
+| Task and reference | Advantage | Cost or limitation | Adapter decision |
+| --- | --- | --- | --- |
+| [Plotly Express][plotly-input] `px.scatter(frame, x="time", y="response", color="condition")`; `px.scatter(array, x=0, y=2)` | Dataset/name binding, direct vectors and integer ndarray column selection share one high-level route; current Python Plotly supports Polars through Narwhals. | A parameter can represent a field, vector or field collection; those interpretations need explicit rules. | Give Polars literal-name bindings and ndarray logical-index bindings, with typed foreign vectors as alternatives. Do not import Narwhals or a dataframe framework into the Rust renderer. |
+| [Plotly mixed-form][plotly-wide] `px.line(frame, x="time", y=["a", "b"])` | A real x column and multiple y columns need no user reshape. | Whole-table numeric discovery can accidentally include time/ID columns; generated labels cannot invent missing scientific meaning. | Support explicit single-x/multiple-y selection. Reserve `_wide` for omitted x/category, not every multi-column call. |
+| [ggplot2 layers][ggplot-layers] `geom_line(data=fit, ...) + geom_point(data=observations, ...)`; [Seaborn Objects][seaborn-layers] `.add(mark, data=other, ...)` | Layers can specify their own datasets and mappings; reuse is natural. | Inherited mappings can refer to absent fields; ggplot2 exposes inherit.aes and Seaborn Objects can index-join against constructor data. | Resolve supplemental layers in their own context. Do not inherit parent hue/facets, join indexes or require parent-sized arrays. Do not add an arbitrary-layer grammar. |
+| [AlgebraOfGraphics][aog-input] `mapping(:time, direct(corrected))`; `mapping(:time, [:a, :b], color=dims(1))` | Direct vectors, mixed inputs and selected wide columns remain plot inputs. | `direct` and dimension selectors add concepts; its direct-matrix route is documented as experimental. | Rust types distinguish vectors from selectors without a mandatory Direct wrapper. Adopt ordered multi-column selection, not the complete algebra/dimension system. |
+| [Altair field/datum/value][altair-encoding], [fold][altair-data] and [layers][altair-layers] | Field mappings, constants, display encodings and chart-local transforms are explicit. | Its record-oriented grammar makes ordinary matrix/vector input more elaborate; copying it would create a second graphics specification. | Keep bindings separate from literal style and labels. No field-expression strings, JSON round trip or mandatory user fold/melt. |
+| [Matplotlib matrices][matplotlib-image] and [plotly.rs ndarray][plotly-rust] | Direct arrays can be converted internally; matrix orientation can be stated explicitly. | Direct acceptance is not zero-copy. plotly.rs' ndarray constructors copy into vectors and are not a table-mapping API. | Accept views directly, define row/column roles, retain private native snapshots and make their cost explicit. |
+
+### Frontend Architecture Decision
+
+| Candidate | Benefit | Cost | Decision |
+| --- | --- | --- | --- |
+| One fallible function binds all inputs, then returns the core Plot immediately | Minimal wrapper; core style methods need no forwarding. | Later `.hue("condition")`, named bounds and facets cannot resolve without another context or a large up-front options object. | Not the selected ordinary interface. |
+| Dataset context plus exact-family adapter Plot | Fits existing consuming chains; later bindings remain ergonomic; preserves family-specific capabilities. | Both adapters must maintain configuration forwarding. Source-bound plots retain a lookup borrow even after selected values have been copied. Multiple binding calls use multiple `?` operators. | Selected, with explicit ownership, maintenance and completion rules below; not described as zero-cost or automatically small. |
+| General Mark/Scale/Stat grammar | Uniform arbitrary layers and reusable mappings. | Requires new composition, inference and type-capability contracts beyond data adaptation. | Not part of this replacement. |
+
+The selected interface is Seaborn/Plotly-like in input handling, not a claim of
+identical scientific defaults or implementation. Reuse the renderer instead of
+adding reverse dependencies, a generic core data-access framework or a new shared
+framework crate.
+
+## Public Input Grammar
+
+Both packages export their own Plot and source context Data. `Plot::data(source)`
+borrows the source and does no value conversion. Data is reusable for independent
+constructors; a resulting Plot retains a read-only descriptor of that source, not
+a borrow of the temporary Data object. Exact generic/lifetime spelling is an
+implementation detail; the resulting family remains the core's actual kind marker.
+
+| Position | Polars | ndarray |
+| --- | --- | --- |
+| Dataset | `&DataFrame`, eager only | `ArrayView2<T>` or its Valid descriptor, observations in rows |
+| One selected variable in Data | `"response"`: exact literal column name | `2`: zero-based logical column index |
+| One direct variable | `&Series` or `&Column`, without IntoColumn ceremony | `ArrayView1<T>`, including admitted Option elements |
+| Ordered selected variables | `["a", "b"]` or borrowed name slice | `[1, 2]` or borrowed index slice |
+| Direct many-y input | Ordered borrowed Series or Column collection | `ArrayView2<T>`, rows aligned with x and columns representing series |
+| Whole grid | Numeric DataFrame rectangle | `ArrayView2<T>` |
+
+Collections of selectors are admitted only in a documented multi-variable
+position, not automatically in every argument. A Polars slice of names is not a
+vector of string observations; use a Series/Column for those observations. An
+ndarray index collection is not a numeric data vector; use a one-dimensional
+view for values. This makes single-field, field-collection and direct-vector
+interpretations type-directed, not a length/content guessing rule.
+
+Use sealed adapter-local input bounds where Rust needs them; they admit supported
+foreign shapes and primitive types, not an external scalar/plugin protocol. Do
+not make callers implement traits or build a public project-specific dataframe.
+Transient input/descriptor lifetimes must not unnecessarily become the completed
+Plot's lifetime. A missing Polars source for a string, or ndarray source for an
+index, is an unresolved-binding error, never a literal/broadcast fallback.
+
+Role chooses interpretation: numeric, categorical, Boolean and exact provenance
+remain distinct. A trajectory's numeric/category x can follow an unambiguous
+admitted dtype; an all-Null ambiguous x requires an explicit `Axis::numeric(...)`
+or `Axis::categorical(...)` descriptor. No automatic numeric-category formatting,
+string-number parsing or continuous hue is introduced.
+
+## Concrete User Workflows
 
 ### Polars: Dataset And Variable Bindings
 
@@ -59,11 +125,11 @@ let plot = Plot::data(&frame)
 let output = plot.svg("response")?;
 ```
 
-`Plot::data(&DataFrame)` creates a source-binding context, not a converted table.
-The family constructor returns an exact-family adapter Plot retaining that
-context for later bindings. A plain string means a literal column name in that
-context, never a parsing expression, constant string column or failed-lookup
-fallback. Missing columns identify the source name and plot role in the error.
+The family constructor returns an exact-family adapter Plot retaining the source
+context for later bindings. A string is never an expression such as `log(x)` or
+an Altair-style field/type shorthand. Missing columns identify the source name
+and plot role. Literal titles, Color/Theme instructions and display labels are
+not resolved as fields. `hue("red")` selects a field named red, not a paint.
 
 Direct Column and Series inputs also work without constructing a DataFrame or
 requiring `.into_column()` merely to plot:
@@ -71,6 +137,11 @@ requiring `.into_column()` merely to plot:
 ```rust
 let plot = Plot::scatter(&concentration_series, &response_series)?
     .hue(&condition_series)?;
+
+let corrected = Plot::data(&frame)
+    .scatter("time", &corrected_response)?
+    .hue("condition")?
+    .y_label("Corrected response");
 ```
 
 Data-bound plots can mix a named source variable with a direct vector. Record-form
@@ -104,49 +175,197 @@ meaning. Standalone vectors and selected columns use the same binding rules.
 
 Logical strides, transposes, reversed axes, Fortran storage and already-broadcast
 views remain supported. No contiguous intermediate is required from the caller.
-An explicit validity argument, when needed, accompanies the borrowed input as a
-small input descriptor; it does not produce a public native-value object. Keep
-true-means-present validity and exact-shape checks distinct from NumPy mask
-semantics. Ordinary views need no descriptor or wrapper ceremony.
+When explicit validity is needed, `Valid::new(values.view(), present.view())`
+is a borrowed descriptor accepted wherever that shape/role is admitted, including
+selected-table and grid input. Construction describes input; the binding call
+checks exact rank/shape and snapshots it. True means present; Option absence and
+false validity both mean null. This is not a NumPy true-means-hidden mask or a
+materialized native-value object. Ordinary views need no wrapper.
 
-### Matrices And Wide Data
+### Explicit X And Multiple Y Variables
 
 ```rust
-let heatmap = lichtung_plot_ndarray::Plot::heatmap(signals.view())?;
-let lines = lichtung_plot_ndarray::Plot::line_wide(series.view())?;
+let lines = lichtung_plot_polars::Plot::data(&frame)
+    .line("time", ["sensor_a", "sensor_b"])?
+    .facet(lichtung_plot_polars::Facet::wrap("batch", 3))?;
+
+let selected = lichtung_plot_ndarray::Plot::data(table.view())
+    .line(0, [1, 2])?;
+
+let direct = lichtung_plot_ndarray::Plot::line(time.view(), signals.view())?;
+```
+
+These are one x variable and an ordered collection/matrix of y variables. If x is
+`[0, 5, 20]`, both series use those actual values, never `[0, 1, 2]`. Selection
+preserves order and errors on an empty collection, duplicates, missing/out-of-range
+selectors or an explicitly selected unsupported dtype. A one-element collection
+still requests series expansion; it is not silently changed into scalar binding.
+Selecting both x and y collections does not request a Cartesian product.
+Selected variables retain raw source names/indices as identities. Direct
+many-Series input retains supplied names as label metadata and uses stable local
+ordinals to distinguish entries; unnamed arrays use column positions. Empty names
+get positional defaults, not fabricated scientific descriptions. Nonempty duplicate
+display names retain native collision validation rather than silent renaming.
+
+The same two-argument constructors can accept a single y or many y because Rust
+can distinguish argument types. Lack of function overloading by argument count
+is not a reason to invent a separate `_wide(x, ys)` family for this case. Ordinary
+binding errors remain fallible; there is no general deferred transformation graph.
+Keep the listed plain-name/index collection syntax working in the real public
+consumers; do not replace it with a mandatory selector DSL during implementation.
+
+| Multi-variable operation | Native meaning |
+| --- | --- |
+| `line(x, ys)` | Repeat x for each y variable; column identity supplies the default native group and hue. The core sorts each numeric series; no new estimator is installed. |
+| `scatter(x, ys)` | Repeat x; column identity supplies default hue, not a fictitious connectivity group. |
+| `boxplot(category, ys)`, `violin(category, ys)` | Repeat the category variable; column identity supplies the positioned series. Native sample summaries remain native. |
+| `raincloud(RaincloudInput::samples(category, ys))` | The same category/positioned-series expansion, using the native sample route rather than supplied geometry. |
+
+Other constructor positions remain single-variable unless explicitly listed.
+No arbitrary wide interpretation is added to interval estimates, trajectories,
+stacked totals or supplied distribution geometry.
+
+### Wide Input Without An Explicit Coordinate
+
+```rust
+let lines = lichtung_plot_polars::Plot::line_wide(&frame)?;
+let chosen = lichtung_plot_polars::Plot::data(&frame)
+    .line_wide(["sensor_a", "sensor_b"])?;
+let indexed = lichtung_plot_ndarray::Plot::line_wide(signals.view())?;
 let distributions = lichtung_plot_polars::Plot::boxplot_wide(&frame)?;
 ```
 
-Rust cannot overload one function by argument count. Explicit `_wide` and
-cell/grid entry points distinguish genuinely different data interpretations;
-they are not versions or compatibility aliases. A table-plus-mapping constructor
-and a standalone direct-matrix constructor can live on different context types.
+`line_wide(source)` and `scatter_wide(source)` explicitly choose row position as
+x; callers select the ordinary x/many-y constructor when a real coordinate exists.
+`boxplot_wide`, `violin_wide` and `raincloud_wide` use column identity as primary
+category and cells as observations. Data offers the same omitted-coordinate
+operations on an explicit column collection. These names distinguish data
+meanings, not API versions or aliases for explicit-x calls.
+
+Whole-frame Polars wide operations choose supported numeric dtypes in schema
+order, excluding metadata, unsupported semantic dtypes and untyped Null columns.
+Explicit numeric selections can resolve Null through the requested numeric role.
+Document automatic selection; do not claim the adapter can recognize a numeric
+time/ID column as metadata. No usable selected variables is an error. ndarray
+uses all logical columns in view order unless Data selects columns explicitly.
+
+After expansion, ordinary row-scoped hue/group/series/facet bindings repeat by
+source row. Their default unit is fixed by the operation, not guessed from length.
+`Cells(input)` explicitly binds an already-expanded foreign vector, including
+cell-level facets/alpha or unique IDs. Generated series defaults are installed
+through actual native roles; a later group/hue/series setter replaces that role
+as it does in the core. Do not secretly restore a replaced grouping or infer a
+new cross-product. Native applicability still governs the resulting plot.
+
+`ColumnIdentity` is a plot-role selector for the generated wide-column dimension,
+not a magic source field name. It can be used in a facet or alpha key, for example
+`Facet::wrap(ColumnIdentity, 2)`. A literal source column named variable/series
+continues to mean that source column. Generate collision-free private native
+identities and retain their mapping; never expose a reserved-name parser. For
+unnamed ndarray columns use stable positional display defaults; optional
+`data.column_labels(labels)?` supplies one label per source column without changing
+index selectors. Label aliases retain native collision/replacement rules.
+
+### Matrix Heatmaps And Record Cells
+
+```rust
+use lichtung_plot_ndarray::{Grid, Plot};
+
+let plain = Plot::heatmap(signals.view())?;
+let labeled = Plot::heatmap(
+    Grid::new(signals.view())
+        .x_labels(["A", "B", "C"])
+        .y_labels(["Sample 1", "Sample 2"]),
+)?
+.heatmap_highlight(highlights.view())?;
+```
+
+Grid is an optional borrowed plot-input descriptor for axis metadata, not a
+flattened cell table. Raw views work without it. Axis-label counts must match
+their dimensions. Internally generated axis keys stay separate from labels;
+labels neither merge positions nor become application provenance. Duplicate
+display-label collisions retain the core's normal validation; do not promise
+label behavior the native Labels contract cannot express.
+Grid labels are installed through native Labels aliases at construction. A later
+`.labels(...)` call replaces that complete policy, including those aliases, just
+as it does for the core; do not keep an invisible overriding alias cache. Source
+positions and their private identity map do not change when label policy changes.
+
+Polars supports a whole numeric rectangle, selected grid columns, and explicit
+cell records without forcing one interpretation on all three:
+
+```rust
+use lichtung_plot_polars::{Grid, Plot};
+
+let rectangle = Plot::heatmap(&numeric_frame)?;
+let selected = Plot::data(&frame).heatmap_grid(
+    Grid::columns(["sensor_a", "sensor_b"]).row_labels("sample"),
+)?;
+let records = Plot::data(&cell_frame)
+    .heatmap_cells("column", "row", "value")?;
+```
+
+Data's `heatmap_grid(columns)` accepts a plain ordered selection when no Grid
+metadata is needed; ndarray Data accepts indices analogously. Direct
+`Plot::heatmap_cells(x, y, fill)` accepts foreign vectors. The whole-frame heatmap
+requires a supported numeric rectangle (Null is resolved as numeric fill); it
+does not silently discard metadata columns. Record cells preserve native
+categorical coordinate and duplicate-cell rules; `px.density_heatmap`-style
+binning/aggregation is not what this matrix operation means.
 
 | Input operation | Defined meaning |
 | --- | --- |
-| ndarray `heatmap(view2)` | Cell `(r,c)` is fill, x is column position `c`, y is row position `r`. Labels/order may be supplied optionally. Never require user flattening or mandatory raw string keys. |
-| Polars rectangular heatmap | Selected numeric columns form the grid in source/selection order; source column names label x. Rows retain positional identities; an optional row-label variable supplies display labels. The whole-frame form requires a numeric rectangle; an explicit grid selection can exclude metadata columns. |
-| Table-bound heatmap with x/y/value variables | Record-form cells use those explicit bindings; duplicate-cell and native applicability rules remain intact. This is distinct from interpreting a rectangle. |
-| Wide line/scatter | Each numeric column is a series, row position is x, cell value is y and column identity is grouping/color identity. Native collective-mark behavior applies. |
-| Wide boxplot/violin/raincloud | Column identity is the categorical variable; cells are its observations. Only the native family computes its existing display statistics. |
-| Scatter matrix | Columns are variables and rows are observations, passed to the core's native scatter-matrix constructor. This is not a heatmap. |
+| Rectangular heatmap | Cell `(r,c)` is fill, x is column `c`, y is row `r`; row zero is displayed at the top and columns left-to-right, consistent with the current native heatmap. Explicit native ordering may reorder presentation, not source identity. |
+| Grid highlights | A same-shape Boolean ndarray view, Boolean Polars rectangle/ordered column selection, or `Cells(vector)` aligns with cells. True highlights a cell; it does not hide it or define its validity. |
+| Grid source IDs | Exact same-shape integer values/selected integer columns, or `Cells(vector)`, provide one unique ID per expanded cell. A row-length ID field is not repeated across columns. |
+| Record heatmap | One x/y/fill record per slot; highlights and IDs align with those records. |
+| Scatter matrix | `Plot::matrix(source2)` or `data.matrix(columns)` uses columns as variables and rows as observations, with optional positional labels for unnamed arrays. This is never heatmap inference. |
 
-The Polars whole-frame wide form chooses supported numeric columns in schema
-order, explicitly documented as part of that operation. It must not silently
-discard a column the caller explicitly selected. Explicit selection preserves
-caller order and errors on missing/unsupported columns. A matrix-wide operation
-with no usable variables fails clearly rather than returning an unrelated plot.
-Do not assign an undefined wide meaning to every family: use explicit variable
-bindings when a family's roles cannot be inferred unambiguously.
+Expansion order is logical row-major: `(r,c)` occupies slot `r*ncols+c` using
+checked arithmetic. Retain original row and selected source-column identity
+privately for diagnostics and aligned expansion. No transposition to match storage
+layout, implicit compaction, imputation or visible string-key construction is
+required from callers. Null grid cells retain coordinates; they are not removed.
 
-Expansion order is logical row-major: `(r,c)` occupies slot `r*ncols+c`, with
-checked shape arithmetic. Track source row/column origins privately for aligned
-bindings and diagnostics. A row-scoped facet variable repeats by source row;
-column identity supplies the default wide-series/category role. Other wide
-bindings must state whether they address source rows, columns or expanded cells;
-do not guess an axis from equal lengths. A grid highlight accepts a same-shape
-Boolean matrix directly, such as `.heatmap_highlight(mask.view())?`, and uses the
-same logical cell order. Record-form highlights remain one value per record.
+### Supplied Bounds And Independent Supplemental Layers
+
+```rust
+use lichtung_plot::Color;
+use lichtung_plot_polars::{Bounds, Plot};
+
+let points = Plot::data(&observations)
+    .point_layer("time", "response")?
+    .labels("sample")?
+    .color(Color::rgb(90, 90, 90))
+    .legend_label("Observed");
+
+let fitted = Plot::data(&fit)
+    .line("time", "estimate")?
+    .band(Bounds::new("lower", "upper"))?
+    .point_layer(points)
+    .title("Supplied fit and observations");
+```
+
+Here fit may have 30 rows and observations 200. Bounds bind to fit's estimate
+records; the point layer's labels bind to its own 200 points. A layer never looks
+up missing fields in the parent source, inherits parent hue/group/facets, or gains
+an independent SourceRows map. There is no index join between the datasets.
+
+Data's `point_layer(x, y)` and direct `PointLayer::new(x, y)` snapshot coordinates
+fallibly and return a prepared typed layer frontend retaining only its own lookup
+context for later labels. Its paint/radius/alpha/text setters preserve native
+semantics. `point_layer(layer)` on an ordinary Line consumes a fully bound layer
+and returns Self, not Result: no unresolved data are attached at that step.
+Standard Into interoperability with the native PointLayer drops the local lookup
+context without requiring a second public conversion-function catalog.
+
+`data.bar_point_layer(category, value, color, radius)` and the corresponding
+direct BarPointLayer constructor snapshot their own inputs; an optional
+`.series(binding)?` resolves only in that layer context. The core still resolves
+its categories/series against prepared parent bar centers, not parent row count.
+Only Bar/HorizontalBar accept it. Ordinary PointLayer remains Line-only and
+rejects generic faceting; no per-point hue/size mapping or arbitrary Mark layering
+is added. Reuse the native types for style, endpoints and supplied geometry.
 
 ## Architecture: Adapt The Interface, Reuse The Renderer
 
@@ -158,8 +377,8 @@ DataFrame + column bindings / foreign vectors / matrices
 ```
 
 - Keep the two existing adapter packages and dependency direction. Each exports
-  plotting entry points and a small typed Plot frontend, not just value converters.
-  `lichtung_plot_polars::Plot` and `lichtung_plot_ndarray::Plot` are the proposed
+  plotting entry points and a typed Plot frontend, not just value converters.
+  `lichtung_plot_polars::Plot` and `lichtung_plot_ndarray::Plot` are the selected
   foreign-input imports; the standalone `lichtung_plot::Plot` remains unchanged.
 - The adapter owns argument interpretation, source lookup, shape/dtype diagnostics
   and binding metadata. Reuse current private conversion code where sound; never
@@ -178,16 +397,37 @@ DataFrame + column bindings / foreign vectors / matrices
   lose the binding context or return a different builder halfway through a chain.
   Small package-local forwarding macros are acceptable; a new shared framework
   crate or public universal schema is not the objective.
-- A `build()` handoff may consume the frontend and return its real core Plot<K>
-  for mixed native/adapter Canvas composition. It is a plot-builder completion,
-  not manual data conversion. Normal adapter SVG/PNG output needs no handoff.
-  Start with this existing-core-compatible path, rather than assuming Canvas or
-  every core constructor needs an interoperability refactor.
+- `build(self) -> lichtung_plot::Plot<K>` consumes the frontend and returns its
+  actual owned core Plot, preserving the exact family. It is infallible because
+  binding already happened, and it performs no scientific preflight/rendering.
+  It is the one explicit Plot handoff for native/adapter Canvas composition, not
+  manual value conversion. Normal SVG/PNG output needs no handoff. Do not add
+  into_native/as_core aliases, a parallel adapter Canvas or speculative core
+  interoperability refactors.
+
+Forward core-only methods with their existing names, capability bounds, consuming
+shape, callbacks and return behavior. Data-bearing methods resolve the foreign
+inputs listed here. Keep one package-local forwarding inventory and use it for
+review of added/changed core configuration; macros do not remove maintenance cost.
+Do not hide most styles behind a required `configure_native` closure, use Deref
+to escape the frontend, or create repeated per-setter tests merely to census it.
+
+```rust
+let left = lichtung_plot_polars::Plot::data(&frame)
+    .scatter("time", "response")?
+    .hue("condition")?
+    .build();
+let right = lichtung_plot_ndarray::Plot::heatmap(matrix.view())?.build();
+
+let canvas = lichtung_plot::Canvas::grid(1, 2)?
+    .panel(0, 0, left)?
+    .panel(0, 1, right)?;
+```
 
 ### Ownership And Failure Timing
 
-Prefer fallible binding operations returning adapter Result<Plot<...>>. Resolve
-and snapshot the variables a constructor/data setter actually binds at that call;
+Binding operations return adapter Result values. Resolve and snapshot the
+variables a constructor/data setter actually binds at that call;
 do not materialize every unused source column, render eagerly or accumulate a
 hidden first-error state to avoid Rust's `?` syntax. Ordinary non-data setters
 keep the underlying core method's shape and behavior.
@@ -199,28 +439,79 @@ and Output own their data independently. Direct-vector inputs are not retained
 after snapshotting. These are Rust ownership decisions, not a claim that Seaborn
 is immutable or that the future Python object lifecycle has been settled.
 
+The root whole-DataFrame heatmap/matrix/wide constructors retain the same lookup
+context as Data constructors; a directly bound vector or matrix view does not
+become a source for later name/index lookup. For example, plotting direct vectors
+does not make integer zero a selector into an implicit invented table. Rust must
+allow a temporary direct vector/descriptor to expire after its binding call while
+a separate DataFrame context remains borrowed.
+
+DataFrame/array mutation or destruction is unavailable while a retained source
+borrow remains live, even though selected values have been copied. A caller can
+finish binding and call build to release it, then drop/edit foreign inputs before
+native configuration, rendering or publication. Direct plots need no build merely
+to release their source. Frozen Output replay never reopens either source.
+
+Copying selected values, wide/grid expansion and coexistence with a borrowed
+source consume memory; no zero-copy or performance improvement is claimed. Do
+not normalize unused columns or clone the complete DataFrame just to erase a
+lifetime. Avoid obvious duplicate binding of the same field/role within one
+construction by sharing native immutable payloads where possible; no global
+cache, address-based identity or speculative persistent storage is required.
+
 Lookup/unsupported dtype/shape failures belong to the binding call, with role,
 source variable and logical slot/cell context where relevant. Native scientific
 errors retain their existing preflight/render timing and original error sources;
 do not duplicate every core check in the frontend or parse core error strings.
+In particular, finite-value/bounds/status applicability cannot be rejected early
+in a way that prevents a valid later explicit status binding. Bad array rank,
+length, selection, validity shape and dtype are structural binding errors. Bad
+native family/unit/facet/geometry combinations keep native preflight ownership.
+Consuming failure follows Rust ownership: Err does not return the previous Plot.
+Terminal methods return the actual native Output and preserve native errors; they
+do not wrap publication in a new lifecycle or silently retry another input route.
 
 ## Coverage Across The Existing API
 
-All 25 families need direct source-bound/vector input, not just a scatter facade:
+All 25 families need source-bound/direct input. In this constructor inventory,
+variables mean literal names in Polars Data, indices in ndarray Data, or admitted
+foreign vectors. Direct Plot constructors accept vectors instead of unresolved
+selectors. Bounds/input descriptors contain bindings rather than native values.
 
-| Family group | Input responsibilities |
-| --- | --- |
-| Scatter, Line, Regression, Marginal | Coordinate variables; Line's supplied band and supplemental point data bind through the same frontend. |
-| Histogram, Density, Qq | Direct sample variables; preserve the native histogram samples-versus-supplied-geometry distinction. |
-| Trajectory, LinePath, Interaction | Constructor-owned group/condition/estimate variables and supplied interaction bounds. Numeric/categorical axes follow native applicability, not arbitrary dtype inference. |
-| Boxplot, Violin, Raincloud | Category and sample variables; native summaries/raw overlays and supplied raincloud geometry remain available. |
-| Bar, HorizontalBar, StackedBar, StackedHorizontalBar | Category/value/positioned-series variables; explicit sample versus supplied-estimate/bounds choices, not an added analysis policy. |
-| PointInterval, Forest, Coefficient | Category/term, estimate and explicit lower/upper bindings; keep reference values and availability semantics separate from foreign dtype conversion. |
-| Dumbbell | Category and paired endpoint variables; endpoint labels are display metadata. |
-| Heatmap | Rectangle and record input, optional axis labels, Boolean highlights and null-cell semantics. |
-| Matrix | Ordered numeric variable selection; retain native matrix-specific composition/faceting restrictions. |
-| Beeswarm | Category, value and continuous-color variables. |
-| Waterfall | Category and delta variables; base, totals and their display rules remain native. |
+| Native family | Selected constructor shape | Meaning retained |
+| --- | --- | --- |
+| Scatter | `scatter(x, y_or_ys)` | Single coordinates or defined many-y expansion. |
+| Histogram | `histogram(HistogramInput::samples(value))` or `histogram(HistogramInput::geometry(geometry))` | Samples versus complete supplied geometry, never dtype-based guessing. |
+| Density | `density(value)` | Native sample density. |
+| Qq | `qq(value)` | Native sample/reference policies. |
+| PointInterval | `point_interval(category, estimate, Bounds::new(lower, upper))` | Required supplied interval; explicit status remains separate. |
+| Line | `line(x, y_or_ys)` | Sorted numeric series, optional supplied band and PointLayer. |
+| Trajectory | `trajectory(x, y, group)` | Constructor-owned group and numeric/categorical x. |
+| LinePath | `line_path(x, y, group)` | Numeric x and original source-order paths. |
+| Interaction | `interaction(condition, estimate, group, Bounds::new(lower, upper))` | Constructor-owned group and supplied intervals. |
+| Coefficient | `coefficient(term, CoefficientInput::estimates(estimate))` or `coefficient(term, CoefficientInput::estimates_with_intervals(estimate, bounds))` | Point-only versus explicit bounds. |
+| Forest | `forest(term, estimate, bounds, reference)` | Required bounds and literal scientific reference. |
+| Dumbbell | `dumbbell(category, left, right, endpoints)` | Foreign paired values, native DumbbellEndpoints display policy. |
+| Heatmap | `heatmap(grid)` / `data.heatmap_grid(columns)` / `heatmap_cells(x, y, fill)` | Explicit rectangle/record interpretation, not binning. |
+| Bar | `bar(category, BarInput::samples(value))`, `bar(category, BarInput::estimates(value))` or `bar(category, BarInput::estimates_with_error_bars(value, bounds))` | Closed source modes; native mean/error-bar behavior. |
+| HorizontalBar | `horizontal_bar(category, bar_input)` | Same closed sources, native sign/reference capabilities. |
+| StackedBar | `stacked_bar(category, value, series)` | Required positioned-series values and native sum semantics. |
+| StackedHorizontalBar | `stacked_horizontal_bar(category, value, series)` | Same stack semantics and exact family. |
+| Boxplot | `boxplot(category, value_or_values)` | Native samples and explicit positioned series for multi-value input. |
+| Violin | `violin(category, value_or_values)` | Native density/sample policies and multi-value series. |
+| Raincloud | `raincloud(RaincloudInput::samples(category, value_or_values))` or `raincloud(RaincloudInput::geometry(geometry))` | Native sample/supplied-geometry distinction. |
+| Regression | `regression(x, y)` | Existing core OLS/band policy, not a new adapter estimator. |
+| Marginal | `marginal(x, y)` | Native composed views and applicability. |
+| Matrix | `matrix(source2)` or `data.matrix(columns)` | Ordered variables, observations in rows; no generic facets. |
+| Beeswarm | `beeswarm(category, value, color)` | Constructor-owned numeric color channel. |
+| Waterfall | `waterfall(category, delta, base)` | Literal base and original ordered delta semantics. |
+
+HistogramInput, RaincloudInput, BarInput and CoefficientInput mirror the core's
+closed scientific choices while holding foreign bindings. BarInput::samples
+retains `.error_bar(native_policy)` before attachment. Supplied geometry types,
+references, themes and policies are reused from the core. These are plot-semantic
+descriptors, not a second public dataset representation. No implicit general
+Into<core input> escape hatch is required to use foreign samples.
 
 Adapt every data-bearing position: hue/group/series, provenance, complete facet
 specifications, bounds, status bindings, highlights, point/bar-point layers,
@@ -240,6 +531,78 @@ Alpha must still bind to its actual native unit (observations, records, series,
 aggregates, bins or Single). Do not turn every source column into observation alpha
 or reduce arbitrary rows to a collective value. Likewise, do not infer estimate
 availability from nulls when the native contract requires an explicit status.
+
+### Facets, Status And Alpha: Concrete Binding Surface
+
+| Input | Selected surface | Resolution and alignment |
+| --- | --- | --- |
+| Bounds | `Bounds::new(lower, upper)`; `.band(bounds)?` on Line | Resolve together in the owning constructor/line context. Many-y bounds require matching selected-column collections or same-shape matrices; one pair is not silently reused for every series. |
+| Facets | `Facet::row(v)`, `column(v)`, `grid(row, column)`, `wrap(v, columns)`, then `.scales(native_policy)` | Deferred small descriptor consumed by `.facet(spec)?`; row/grid/wrap exclusivity and native family restrictions remain. |
+| Provenance | `.source_rows(binding)?` | Exact native IDs. Record inputs align with records; wide/grid inputs require Cells or same-shape/selected-column IDs, never an inferred ID product. |
+| Status | `.estimate_status(Status::boolean(binding))?`; `Status::categorical(binding, explicit_map)`; direct native EstimateStatus sequence or ndarray status view | Boolean true maps to Estimated, false to NotEstimable only because this descriptor explicitly requests that mapping. Null/unknown keys fail; missing numeric tuples never infer status. |
+| Heatmap highlights | `.heatmap_highlight(binding)?` | Record Boolean vector or the documented cell grid; no implicit numeric 0/1. |
+| Observation alpha | `.point_alpha(Alpha::observations(map))?` and native-admitted target equivalents | Resolve numeric/category/byte sources and preserve actual original-slot membership. Wide row maps repeat by origin; Cells requests explicit expanded values. |
+| Single alpha | `Alpha::single(map)`; `Alpha::theme()` | Single resolves exactly one explicit source value; it is not inferred by observing a constant column. Theme resets only that target. |
+| Keyed alpha | `Alpha::keyed(keys, map)` in the plot source, or `data.alpha_keyed(keys, map)?` in an independent selector table | Exact actual series/aggregate keys, optional facet keys, unique tuples; no observation reduction or implicit join. |
+| Bin alpha | `Alpha::bins(bounds, facet_keys, map)` or `data.alpha_bins(bounds, facet_keys, map)?` | Exact native histogram intervals and optional owning-facet keys; no sample-to-bin inference or approximate edge matching. |
+
+AlphaMap holds one of `bytes`, `linear`, `log10`, `continuous`, `categorical` or
+`threshold`, with the same source/domain/range/callback meaning as native
+AlphaValues. Its source is a foreign binding, not a caller-built NumericValues.
+Byte inputs remain exact non-null u8 values, not ordinary f64 rounding or floating
+opacity. Mapping callbacks run at the binding call under native materialization
+rules; no callback or borrowed selector table survives in the stored encoding.
+
+Keys can use a source field directly when names coincide, or
+`Key::new(plot_field, source_binding)` when an independent table uses a different
+name. ColumnIdentity selects the private generated column field without naming
+it as a source column. Key only describes native alpha selectors; it is not a
+general dataframe schema. Local `data.alpha_*` calls return a prepared owned Alpha
+which later setters attach without resolving its names in the parent source.
+Symbolic plot-field targets resolve against parent role metadata at attachment;
+this does not retain/reopen the independent foreign selector table. Source-key
+resolution and mapping callbacks have already completed at the local binding call.
+
+```rust
+use lichtung_plot::EstimateStatus;
+use lichtung_plot_polars::{Alpha, AlphaMap, Bounds, Plot, Status};
+
+let estimates = Plot::data(&summary)
+    .point_interval("term", "estimate", Bounds::new("lower", "upper"))?
+    .estimate_status(Status::categorical("status", [
+        ("ok", EstimateStatus::Estimated),
+        ("unavailable", EstimateStatus::NotEstimable),
+    ]))?;
+
+let alpha = Plot::data(&series_alpha)
+    .alpha_keyed(["condition"], AlphaMap::bytes("stroke_alpha"))?;
+let lines = Plot::data(&frame)
+    .line("time", "response")?
+    .hue("condition")?
+    .line_alpha(alpha)?;
+
+let points = Plot::data(&frame)
+    .scatter("time", "response")?
+    .point_alpha(Alpha::observations(
+        AlphaMap::linear("quality", (0.0, 1.0), (64, 255)),
+    ))?;
+```
+
+No broad new analysis or arbitrary channel mapping follows from these helpers.
+For example, Scatter still has no scientific line_alpha method, Regression's
+band setter still accepts native RegressionBand rather than foreign Bounds,
+Matrix/Marginal still lack generic facets, and supplied geometry retains runtime
+restrictions. Keep the core's compile-time versus data-dependent distinction.
+
+## Scientific Meaning Is Not Copied From A Similar Signature
+
+| Situation | Upstream behavior | Selected adapter behavior |
+| --- | --- | --- |
+| Repeated x in a line call | [Seaborn lineplot][seaborn-line] defaults to mean aggregation/CI; [Plotly lines][plotly-line] connect in supplied order; [ggplot2 line/path][ggplot-path] distinguish x order and source order. | Bind into the selected native Line, Trajectory or LinePath. Do not silently aggregate, add a CI or change ordering because input came from a dataframe. |
+| Raw ordinary-bar samples | A plotting library may choose an estimator by default. | Explicit BarInput::samples retains the existing core mean and default error-bar policy; this is not a blanket promise that adapters never trigger native statistics. Estimates/bounds use the separate closed mode. |
+| Numeric hue | Seaborn/Plotly can map numeric color continuously. | Normal hue remains the core's categorical capability. Heatmap/Beeswarm retain their explicit continuous channels; a shared spelling does not imply equivalent channel coverage. |
+| Constant style versus field | Altair separates field, datum and value; ggplot2 separates aes mappings from fixed geom parameters. | Literal text/Color/Theme/native policies never become source lookups. Field strings never fall back to constants on lookup failure. |
+| Missingness/masking | Seaborn heatmap mask=true hides a cell. | Valid=true means present; highlight=true means bordered. Native missing-cell and nonfinite rules stay distinct and applicable to their family. |
 
 ## Data Semantics To Preserve
 
@@ -275,12 +638,15 @@ availability from nulls when the native contract requires an explicit status.
 ## Replacement And Delivery
 
 1. **Replace Polars' public entry point first.** Implement the whole-frame/name
-   binding path and direct Series/Column input with a real grouped/faceted plot.
-   Extend that same frontend across the data-bearing capability inventory, not a
-   separate facade for each example. Reuse the existing private dtype converters.
+   binding path and direct Series/Column input, including the explicit-x/many-y
+   case and local supplemental-layer context. Extend that same frontend across
+   the constructor/setter inventory, with real grouped/faceted consumers rather
+   than a separate facade for each example. Reuse private dtype converters and
+   keep selected-field/lookup-context lifetimes separate.
 2. **Replace ndarray's public entry point.** Direct views, selected table columns,
-   matrix heatmaps and defined wide operations use the same native rendering
-   boundary. Cover interval/layer bindings too, not only a dense-grid shortcut.
+   direct x/view2 series, matrix heatmaps and explicit multi-column bindings use
+   the same rendering boundary and input grammar, not a different adapter model.
+   Cover validity, bounds and independent layers too, not only a grid shortcut.
 3. **Complete migration and verification.** Replace the adapter examples/guide
    excerpts with direct plotting calls, remove public numeric/categories/booleans/
    source_rows/numeric_columns/heatmap_values conversion exports and native-output
@@ -296,15 +662,27 @@ These are implementation steps after separate direction, not preflight projects.
 No dependency upgrade, toolchain change or Python bridge decision is needed for
 the input-interface replacement. Retain the established working package metadata
 and Cargo joint offline archive verification; prior registry publication is not
-required. Do not reintroduce the previous false packaging blocker.
+required. Commit each completed logical replacement after its focused checks;
+publication/deployment/push remain separate authorization decisions.
 
 ### Focused Evidence And Documentation
 
-During implementation, verify the actual new contracts: named lookup and mixed
-direct vectors; metadata/position alignment; missing-name/dtype errors; mapping
-across hue/facets/bounds/layers; correct wide/grid origin semantics; source lifetime
-and owned completion; preserved family restrictions; and native composition/Output
-reuse. Existing stride/chunk/rounding tests still matter for private conversion.
+During implementation, use these bounded semantic witnesses; this table does not
+request one new E2E per row or mechanically parameterize all families/options.
+
+| Contract | Required evidence |
+| --- | --- |
+| Source and direct-variable grammar | Whole Polars frame/name binding, direct Series and Column without IntoColumn, mixed named x/external y, and ndarray index/view binding; missing fields/indices and wrong selected dtype identify the role. |
+| Explicit-x/many-y meaning | An irregular x such as `[0, 5, 20]` with selected a/b never becomes row positions or treats time as a third series; selection order and raw column identity survive, with no invented Cartesian product. |
+| Omitted-coordinate wide input | Deliberate row-position/default-column-category semantics; typed numeric discovery does not silently omit an explicitly selected unsupported variable. Row versus Cells alignment is operation-defined, including when lengths happen to coincide. |
+| Independent layers and bounds | A 30-record supplied line/band and 200-record point layer bind independently; labels resolve in the point source, no parent hue/facet inheritance or global DataFrame-height rule. Sample bars versus supplied estimates remain distinct. |
+| Grid orientation and membership | A non-square strided matrix maps source `(r,c)` to the correct row/column; true-present validity and true-highlight Booleans stay distinct, missing cells keep coordinates, and per-cell exact IDs are not repeated row IDs. Use semantic source/axis relationships, not placement coordinates or SVG goldens. |
+| Lifecycle and callbacks | A bound Data object can be temporary/reused, direct input temporaries expire after binding, a named-source borrow ends at build, native output replays without reopening sources, and alpha/numeric callbacks retain their native timing. |
+| Capabilities and interoperability | Representative unsupported native methods remain unavailable, native data-dependent restrictions remain preflight errors, and both adapter plots compose through native Canvas without erasure or manual value conversion. |
+
+These examples guide focused unit/module coverage and migration of existing
+public workflows, not separate compatibility prototypes before implementation.
+Existing stride/chunk/rounding/dictionary tests still matter for private conversion.
 Do not replace them with repeated per-family rendering smoke tests or keep tests
 of removed public conversion functions just to preserve a historical count.
 
@@ -341,3 +719,16 @@ No language-tooling rewrite is part of adapter replanning.
 [seaborn-plot-data]: https://github.com/mwaskom/seaborn/blob/v0.13.2/seaborn/_core/data.py
 [seaborn-wide]: https://github.com/mwaskom/seaborn/blob/v0.13.2/seaborn/_base.py
 [seaborn-matrix]: https://github.com/mwaskom/seaborn/blob/v0.13.2/seaborn/matrix.py
+[seaborn-line]: https://seaborn.pydata.org/generated/seaborn.lineplot.html
+[seaborn-layers]: https://seaborn.pydata.org/generated/seaborn.objects.Plot.add.html
+[plotly-input]: https://plotly.com/python/px-arguments/
+[plotly-wide]: https://plotly.com/python/wide-form/
+[plotly-line]: https://plotly.com/python/line-charts/#Data-Order-in-Line-Charts
+[ggplot-layers]: https://ggplot2.tidyverse.org/reference/geom_point.html
+[ggplot-path]: https://ggplot2.tidyverse.org/reference/geom_path.html
+[aog-input]: https://aog.makie.org/stable/tutorials/intro-v
+[altair-data]: https://altair-viz.github.io/user_guide/data.html#converting-with-fold-transform
+[altair-encoding]: https://altair-viz.github.io/user_guide/encodings/index.html#datum-and-value
+[altair-layers]: https://altair-viz.github.io/user_guide/compound_charts.html
+[matplotlib-image]: https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html
+[plotly-rust]: https://docs.rs/plotly/0.14.1/src/plotly/traces/scatter.rs.html#305-381
