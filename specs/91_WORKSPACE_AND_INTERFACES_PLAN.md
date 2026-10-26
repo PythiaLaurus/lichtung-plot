@@ -14,10 +14,11 @@ The scope covers a workspace migration, new Polars/ndarray adapters, a complete
 Python interface, and replacement of the loose guides with a serious Book-style
 documentation system and gallery. The standalone renderer now lives in a virtual
 workspace with a nonpublished Rust Book assembly command. The authorized Book,
-example and gallery foundation covers existing Rust capabilities. Adapter
-implementation is authorized; ndarray and Polars conversion packages are implemented.
-Bindings remain planned. Package publication, site deployment, Git push and history
-rewriting are not authorized by this implementation work.
+example and gallery foundation covers existing Rust capabilities. The ndarray
+and Polars conversion packages exist, but their conversion-only public
+design has been rejected. Their plotting-interface replacement is being replanned,
+not implemented by this request. Bindings remain planned. Package publication,
+site deployment, Git push and history rewriting are not authorized by this work.
 
 Python object mutation/copy semantics are deliberately unresolved. Record the
 settled scope first; analyze that choice separately and, if source inspection
@@ -30,7 +31,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Both conversion packages, public consumers and peer guides are implemented under [data adapters](09_DATA_ADAPTERS.md). Strict workspace Clippy and joint offline verification of all three actual package archives passed through Cargo's local overlay; no registry publication was required or performed. |
+| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) replaces public conversion with data-source/variable binding, direct vectors and matrix plotting; not implemented yet. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -38,7 +39,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 
 | Concern | Required outcome |
 | --- | --- |
-| Existing adapter/binding code | All three interfaces are new implementations; there is no requested repository/history import. |
+| Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy and Polars use the same native-value/rendering route. |
@@ -137,19 +138,22 @@ together so that the package remains self-contained.
 
 ## Data Adapter Contracts
 
-The current [data adapter contract](09_DATA_ADAPTERS.md) owns APIs, dtype tables,
-shape/validity/provenance rules, dependency features and documentation integration.
-The completed dedicated adapter plan is removed rather than retained as a competing
-API authority. Python implementation remains at its own decision point below.
+The [current adapter description](09_DATA_ADAPTERS.md) records the conversion-only
+implementation without presenting it as an accepted public design. The
+[plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md) owns the replacement:
+foreign data sources plus variable bindings, direct vectors and family-specific
+matrix/wide input. Internal native-value conversion is permitted, not an obligatory
+user preprocessing step. No generic core data-access framework is prescribed.
 
-Both adapters produce the core's existing owned native values, never a parallel
-plot/dataframe model. Preserve ordinary f64 rounding, null-versus-NaN distinctions,
-logical row order, raw category identity and explicit plot-owned SourceRows. The
-core remains independent. Implement ndarray first, then Polars, with working
-consumers and peer-language documentation. Validate dependencies through the actual
-implementation, review test capacity when changing coverage, and verify archives
-once working packages exist. These are implementation/delivery checks, not a
-separate prerequisite phase before writing conversion code.
+Preserve ordinary f64 rounding, null-versus-NaN distinctions, logical row order,
+category identity and explicit provenance. The core remains independent; adapters
+reuse its scientific and rendering behavior. Migrate callers and remove the old
+public conversion surface with the working replacement, without aliases or a
+parallel legacy route. Replace Polars first to establish dataset/name bindings,
+then ndarray's vector/table/matrix routes. Validate actual code, review counts
+when changing tests, and verify working packages at delivery, not through a
+pre-implementation audit or compatibility project. Python remains at its own
+decision point below.
 
 ## Complete Python Interface
 
@@ -322,7 +326,7 @@ than disguise it through packaging or relabeling.
 | Work | Required bounded evidence |
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
-| Data adapters | Nullable/type/order/provenance and strided/chunked conversion contracts, plus representative public rendering consumers. |
+| Data adapters | Dataset/name and direct-vector bindings, matrix/wide interpretation, data-bearing setters and owned completion; preserve nullable/type/order/provenance and strided/chunked behavior through representative public workflows. |
 | Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
@@ -358,10 +362,12 @@ package contents or published ref may reintroduce the full Unicode corpus.
    independence. Do not add future-only interface crates.
 2. **Book/example/gallery foundation.** Establish peer language books and shared
    runnable-source/output conventions using existing capabilities and examples.
-3. **ndarray adapter.** Deliver its concrete native-value conversions, callers,
-   focused evidence and both-language documentation together.
-4. **Polars adapter.** Deliver its dtype/missingness/order contract and actual
-   consumers with both-language documentation and focused evidence.
+3. **Polars plotting interface replacement.** Deliver whole-dataset/name binding,
+   direct Series/Column input and the native family's data-bearing capabilities;
+   migrate callers and peer guides, removing the public conversion-only surface.
+4. **ndarray plotting interface replacement.** Deliver direct views, selected table
+   columns, matrix/wide input and the same capability coverage; migrate callers
+   and peer guides with focused evidence, removing the old conversion surface.
 5. **Python lifecycle decision gate.** Resolve the deferred object semantics and
    necessary public-core ownership facilities before mass-producing bindings.
 6. **Complete Python interface.** Deliver the capability mapping, callbacks, input

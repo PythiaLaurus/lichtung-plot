@@ -1,12 +1,23 @@
 # Data Adapter Contracts
 
+## Current Implementation And Replacement
+
+The conversion-only packages described below exist and have been verified, but
+their public design has been rejected: callers should pass foreign data to
+plotting interfaces, not first construct native values themselves. These sections
+describe the current code, not the intended replacement or an accepted completion
+of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
+owns the proposed replacement. This replanning change does not implement it.
+
 ## Native Boundary
 
 Data adapters are separate workspace members consuming the deliberate public API
 of `lichtung-plot`. The renderer never depends on an adapter or its foreign data
 framework, including through development dependencies. The core remains the
-default member. Adapters do not introduce another Plot builder, dataframe model,
-analysis step, rendering path, runtime or asset provisioning mechanism.
+default member. The current packages export conversion functions rather than
+plotting entry points. They do not own scientific analysis, another rendering
+path, a runtime or asset provisioning. The restriction against adapter plotting
+frontends is not retained as a requirement for the replacement.
 
 Conversion borrows a foreign input only while constructing existing owned native
 NumericValues, CategoryValues, BooleanValues or SourceRows. No mutable foreign
