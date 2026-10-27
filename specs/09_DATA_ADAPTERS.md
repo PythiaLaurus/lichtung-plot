@@ -19,7 +19,7 @@ The replacement requires every public `lichtung_plot::path` to work through
 either adapter with only its crate prefix changed, preserving the native type or
 module and original signatures. Root Plot, Bounds, input/layer types and Error/
 Result must not be shadowed by foreign-input wrappers. The additional top-level
-family constructors and adapter DataError use their own root names. Adapter
+family constructors and AdapterError use their own root names. Adapter
 objects bind foreign fields, views and scientific roles directly without a
 parallel catalog of public input-descriptor types or a mandatory binding
 namespace. Users need no separate direct renderer dependency, and the two

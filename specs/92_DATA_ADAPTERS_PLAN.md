@@ -41,8 +41,10 @@ non-conflicting root family constructors. An illustrative export excerpt is:
 
 ```rust
 pub use lichtung_plot::*;
+mod error;
 mod frontend;
-pub use frontend::{DataPlot, Line, Scatter};
+pub use error::AdapterError;
+pub use frontend::{BarPointLayerAdapter, Line, PlotAdapter, PointLayerAdapter, Scatter};
 ```
 
 The native exports are actual [Rust re-exports][rust-reexports], not copied
@@ -90,8 +92,8 @@ renderers or a division between “data” and “vectors”:
 | Native Plot constructors and methods | `adapter::Scatter::from_data(source, x, y)?`, followed by source-bound setters |
 | Native `Plot<kind::Line>::band(Bounds)` | Adapter Line `.band(lower, upper)?`; each input is resolved by the adapter |
 | Native HistogramInput, RaincloudInput, BarInput/BarSamples, CoefficientInput | Adapter family constructors bind direct inputs and expose meaningful sample/estimate/geometry modes without parallel input types |
-| `adapter::PointLayer::new(native_x, native_y)` | `adapter::DataPointLayer::new(x, y)?` or `::from_data(source, x, y)?` |
-| `adapter::Error`, `adapter::Result<T>` | Adapter binding returns `std::result::Result<T, adapter::DataError>` |
+| `adapter::PointLayer::new(native_x, native_y)` | `adapter::PointLayerAdapter::new(x, y)?` or `::from_data(source, x, y)?` |
+| `adapter::Error`, `adapter::Result<T>` | Adapter binding returns `std::result::Result<T, adapter::AdapterError>` |
 
 `new` receives the family's direct inputs: foreign variables or matrices admitted
 in its roles. It binds them and retains necessary origin metadata, but does not
@@ -102,10 +104,10 @@ field selectors and directly supplied values. Neither name partitions inputs by
 container type: both consume data. Exact fixed argument lists are in the 25-family
 inventory below; there is no Rust overload by argument count.
 
-Both constructors return `std::result::Result<Self, DataError>` for the
-adapter-owned exact-family DataPlot carrying the real core Plot. They differ in
+Both constructors return `std::result::Result<Self, AdapterError>` for the
+adapter-owned exact-family PlotAdapter carrying the real core Plot. They differ in
 the installed context, not the native rendering model. Independent prepared layers are constructed on the
-actual `DataPointLayer` and `DataBarPointLayer` frontend types. Users need not
+actual `PointLayerAdapter` and `BarPointLayerAdapter` frontend types. Users need not
 write these output types in inferred chains. Name selectors without a context
 produce a binding error; literal titles and style values remain literal.
 
@@ -113,12 +115,19 @@ produce a binding error; literal titles and style values remain literal.
 
 `new` must construct the family frontend itself, not be an unrelated factory
 returning a different type while suppressing Clippy's [`new_ret_no_self`][clippy-new]. One
-candidate is a public exact-family alias of the actual DataPlot, for example
-`type Scatter<'source> = DataPlot<'source, kind::Scatter>`, with family-specific
+candidate is a public exact-family alias of the actual PlotAdapter, for example
+`type Scatter<'source> = PlotAdapter<'source, kind::Scatter>`, with family-specific
 constructors implemented on that specialization. The two constructors then return
-`std::result::Result<Self, DataError>`; the same approach applies to each of the
+`std::result::Result<Self, AdapterError>`; the same approach applies to each of the
 25 families. The exact generic and lifetime representation is not yet validated
 or fixed.
+
+Under that candidate, both `Scatter::new(...)` and `Scatter::from_data(...)`
+return `std::result::Result<Scatter<'source>, AdapterError>`, with the appropriate
+inferred source lifetime. After `?`, both are the same exact-family PlotAdapter,
+not native Plot values or different types for the two entry points. Only
+`from_data` installs a source for subsequent field lookup; direct input borrows
+must not unnecessarily become the PlotAdapter's source lifetime.
 
 The implementation prototype must prove ordinary `Scatter::new(...)` and
 `Scatter::from_data(...)` inference, family-specific methods, native Plot
@@ -130,8 +139,10 @@ to the core, or require users to create a source wrapper. Do not retain the old
 make `new` compile. Report an actual incompatibility before changing the public
 grammar. Strict workspace Clippy applies to the eventual implementation.
 
-Native constructors stay on Plot. Family names, DataPlot and DataError are
-additive and must not shadow any native export. External inputs are resolved by
+Native constructors stay on Plot. Family names, PlotAdapter, PointLayerAdapter,
+BarPointLayerAdapter and AdapterError are root-level additions and must not shadow
+any native export. Do not retain the previous planned names as compatibility
+aliases. External inputs are resolved by
 adapter objects and methods, not by a parallel catalog of public input-wrapper
 types. Ordinary tuples, slices, views and existing native semantic policies are
 used where they express the actual role; explicit methods distinguish genuinely
@@ -143,8 +154,8 @@ core consumer. Adapter-side binding, conversion and forwarding are the selected
 baseline; potential core composition changes are separately identified for review.
 
 Complete native API parity refers to the genuine re-exported native types and
-methods, not identical signatures on the separate DataPlot receiver. In
-particular, do not add `band_bounds` or another DataPlot method solely to accept a
+methods, not identical signatures on the separate PlotAdapter receiver. In
+particular, do not add `band_bounds` or another PlotAdapter method solely to accept a
 preassembled native Bounds. A native Plot retains its original `.band(bounds)`;
 an adapter Line uses `.band(lower, upper)?`. Standard conversion remains
 available when an application deliberately hands off to a native Plot, at which
@@ -171,7 +182,7 @@ application -> lichtung-plot-polars  --+
 Re-exporting a definition does not duplicate it. With that shared package,
 `pp::Plot<K>` and `nd::Plot<K>` are the very same native type, as are Canvas,
 Color, Theme, Output, Error, Result and the public kind/stats modules. The
-DataPlot frontends and input errors are adapter-specific. Applications
+PlotAdapter frontends and adapter errors are adapter-specific. Applications
 normally use crate aliases rather than import both sets into the same unqualified
 names; a duplicate-name import error is not a dependency or type-identity problem.
 
@@ -247,7 +258,7 @@ but does not itself prove two constructor names are necessary.
 | Candidate | Benefit | Cost | Decision |
 | --- | --- | --- | --- |
 | One fallible function binds all inputs, then returns the core Plot immediately | Minimal wrapper; core style methods need no forwarding. | Later `.hue("condition")`, named bounds and facets cannot resolve without another context or a large up-front options object. | Not the selected ordinary interface. |
-| Top-level family constructors plus exact-family DataPlot | Fits existing consuming chains; later bindings retain source and expansion context; preserves family-specific capabilities. | Both adapters maintain configuration forwarding. Source-bound plots retain a lookup borrow after selected values have been copied. Existing native consumers need a conversion. | Selected for `Family::new` and `Family::from_data`; root Plot remains the native re-export. |
+| Top-level family constructors plus exact-family PlotAdapter | Fits existing consuming chains; later bindings retain source and expansion context; preserves family-specific capabilities. | Both adapters maintain configuration forwarding. Source-bound plots retain a lookup borrow after selected values have been copied. Existing native consumers need a conversion. | Selected for `Family::new` and `Family::from_data`; root Plot remains the native re-export. |
 | General Mark/Scale/Stat grammar | Uniform arbitrary layers and reusable mappings. | Requires new composition, inference and type-capability contracts beyond data adaptation. | Not part of this replacement. |
 
 The selected interface is Seaborn/Plotly-like in input handling, not a claim of
@@ -258,7 +269,7 @@ framework crate.
 ## Public Input Grammar
 
 In each package, `Family::from_data(source, ...)` binds the arguments it needs
-and retains a read-only descriptor of the source in its DataPlot. Independent
+and retains a read-only descriptor of the source in its PlotAdapter. Independent
 plots may borrow the same source. `Family::new(...)` binds direct
 inputs without manufacturing an implicit table for later field lookup. Exact
 generic/lifetime spelling is an implementation detail; the resulting family
@@ -289,7 +300,7 @@ Use sealed adapter-local input bounds where Rust needs them; they admit supporte
 foreign shapes and primitive types, not an external scalar/plugin protocol. Do
 not make callers implement traits or build a public project-specific dataframe.
 Transient direct-input lifetimes must not unnecessarily become the completed
-DataPlot's lifetime. A missing Polars source for a string, or ndarray source for
+PlotAdapter's lifetime. A missing Polars source for a string, or ndarray source for
 an index, is an unresolved-binding error, never a literal/broadcast fallback.
 
 Role chooses interpretation: numeric, categorical, Boolean and exact provenance
@@ -317,7 +328,7 @@ let plot = Scatter::from_data(&frame, "concentration", "response")?
 let output = plot.svg("response")?;
 ```
 
-The family constructor returns an exact-family DataPlot retaining the source
+The family constructor returns an exact-family PlotAdapter retaining the source
 context for later bindings. A string is never an expression such as `log(x)` or
 an Altair-style field/type shorthand. Missing columns identify the source name
 and plot role. Literal titles, Color/Theme instructions and display labels are
@@ -534,9 +545,9 @@ required from callers. Null grid cells retain coordinates; they are not removed.
 ### Supplied Bounds And Independent Supplemental Layers
 
 ```rust
-use lichtung_plot_polars::{Color, DataPointLayer, Line};
+use lichtung_plot_polars::{Color, Line, PointLayerAdapter};
 
-let points = DataPointLayer::from_data(&observations, "time", "response")?
+let points = PointLayerAdapter::from_data(&observations, "time", "response")?
     .labels("sample")?
     .color(Color::rgb(90, 90, 90))
     .legend_label("Observed");
@@ -546,7 +557,7 @@ let fitted = Line::from_data(&fit, "time", "estimate")?
     .point_layer(points)
     .title("Supplied fit and observations");
 
-let direct_points = DataPointLayer::new(&observed_time, &observed_response)?
+let direct_points = PointLayerAdapter::new(&observed_time, &observed_response)?
     .labels(&sample_labels)?;
 ```
 
@@ -555,16 +566,16 @@ records; the point layer's labels bind to its own 200 points. A layer never look
 up missing fields in the parent source, inherits parent hue/group/facets, or gains
 an independent SourceRows map. There is no index join between the datasets.
 
-`DataPointLayer::from_data(source, x, y)` and `::new(x, y)` snapshot
-coordinates fallibly and return `std::result::Result<Self, DataError>`. The data
+`PointLayerAdapter::from_data(source, x, y)` and `::new(x, y)` snapshot
+coordinates fallibly and return `std::result::Result<Self, AdapterError>`. The data
 form retains only its own lookup context for later labels. Paint/radius/alpha/text setters preserve
-native semantics. `point_layer(layer)` on a Line DataPlot accepts a native
-PointLayer or a fully bound DataPointLayer through an adapter-local generic Into
-bound and returns Self, not Result. `From<DataPointLayer> for PointLayer` drops
+native semantics. `point_layer(layer)` on a Line PlotAdapter accepts a native
+PointLayer or a fully bound PointLayerAdapter through an adapter-local generic Into
+bound and returns Self, not Result. `From<PointLayerAdapter> for PointLayer` drops
 the local lookup context; it does not change native Plot::point_layer's signature.
 
-`DataBarPointLayer::from_data(source, category, value, color, radius)` and
-`::new(category, value, color, radius)` return `std::result::Result<Self, DataError>`;
+`BarPointLayerAdapter::from_data(source, category, value, color, radius)` and
+`::new(category, value, color, radius)` return `std::result::Result<Self, AdapterError>`;
 an optional `.series(binding)?` resolves only in that layer context. The core still resolves
 its categories/series against prepared parent bar centers, not parent row count.
 Only Bar/HorizontalBar accept it. Ordinary PointLayer remains Line-only and
@@ -574,12 +585,12 @@ layer frontends themselves own these constructors: `PointLayerData` and
 `BarPointLayerData` are not separate factory types or compatibility aliases.
 
 ```rust
-let bars = pp::DataBarPointLayer::from_data(
+let bars = pp::BarPointLayerAdapter::from_data(
     &bar_observations, "category", "value", pp::Color::rgb(90, 90, 90), 4,
 )?
 .series("treatment")?;
 
-let direct_bars = pp::DataBarPointLayer::new(
+let direct_bars = pp::BarPointLayerAdapter::new(
     &categories, &values, pp::Color::rgb(90, 90, 90), 4,
 )?
 .series(&treatments)?;
@@ -596,7 +607,7 @@ DataFrame + column bindings / foreign vectors / matrices
 
 - Keep the two existing adapter packages and dependency direction. Each fully
   re-exports the native public API and adds top-level family constructors and
-  typed DataPlot frontends, not just value converters. Both adapter roots and the
+  typed PlotAdapter frontends, not just value converters. Both adapter roots and the
   standalone core expose the same unchanged native Plot definition.
 - The adapter owns argument interpretation, source lookup, shape/dtype diagnostics
   and binding metadata. Reuse current private conversion code where sound; never
@@ -606,7 +617,7 @@ DataFrame + column bindings / foreign vectors / matrices
   here. Do not add a generic core data-access trait, generic core source parameter,
   reverse optional dependency or external-buffer rendering path without a concrete
   unmet consumer. No such core refactor is needed to begin this replacement.
-- DataPlot wraps the actual core Plot with its existing exact family marker.
+- PlotAdapter wraps the actual core Plot with its existing exact family marker.
   Forward appearance, numerical callbacks, text, guides and terminal methods;
   delegate scientific validation, layout, font policy, capture and publication.
   Do not copy those algorithms or maintain a second scientific configuration model.
@@ -615,15 +626,15 @@ DataFrame + column bindings / foreign vectors / matrices
   lose the binding context or return a different builder halfway through a chain.
   Small package-local forwarding macros are acceptable; a new shared framework
   crate or public universal schema is not the objective.
-- Implement `From<DataPlot<..., K>> for crate::Plot<K>` in the originating
+- Implement `From<PlotAdapter<..., K>> for crate::Plot<K>` in the originating
   adapter, preserving the exact family and moving the already-bound core value.
   The conversion drops the source context and performs no scientific
-  preflight/rendering. Independently bound DataPointLayer and DataBarPointLayer
+  preflight/rendering. Independently bound PointLayerAdapter and BarPointLayerAdapter
   have analogous conversions to their native layer types. All binding failures
   precede these infallible moves; native scientific validation retains its timing.
   Do not add `build`, `into_native`, `as_core` or a parallel adapter Canvas.
 
-On DataPlot, forward core-only methods with their existing names, capability
+On PlotAdapter, forward core-only methods with their existing names, capability
 bounds, consuming shape, callbacks and return behavior. Data-bearing methods
 resolve the foreign inputs listed here; their fallible signatures may differ
 from the original native methods. They do not replace the root native methods
@@ -685,7 +696,7 @@ enough for both when they share the core. Its generic inference also needs a
 compiled witness. It is an optional convenience for review, not a second Canvas
 or a requirement for the family constructors.
 One core-only candidate is an `IntoPlot` trait with an associated exact native
-kind, implemented by native Plot and adapter DataPlot, used by `panel` and
+kind, implemented by native Plot and PlotAdapter, used by `panel` and
 `panel_span`. A standard `Into<Plot<K>>` bound is another candidate. Neither is
 selected or authorized for implementation by this plan: both alter the native
 method signatures and require a compatibility prototype. Review ordinary native
@@ -708,7 +719,7 @@ illustrative examples are in the [compatibility inventory](93_ADAPTER_API_COMPAT
 
 ### Ownership And Failure Timing
 
-Binding operations return standard `Result<_, DataError>` values. Resolve and
+Binding operations return standard `Result<_, AdapterError>` values. Resolve and
 snapshot the variables a constructor/data setter actually binds at that call;
 do not materialize every unused source column, render eagerly or accumulate a
 hidden first-error state to avoid Rust's `?` syntax. Ordinary non-data setters
@@ -757,32 +768,32 @@ do not wrap publication in a new lifecycle or silently retry another input route
 ### Native Errors And Binding Errors
 
 The root Error/Result are actual core re-exports, preserving native variant
-matching and return types. DataError owns structural/lookup/dtype context and
+matching and return types. AdapterError owns structural/lookup/dtype context and
 original upstream/native error sources; adapter bindings return
-`std::result::Result<T, DataError>` without a public result alias. DataError must
+`std::result::Result<T, AdapterError>` without a public result alias. AdapterError must
 provide lossless `From<crate::Error>` independently of context-specific binding
 variants, so a foreign-data workflow can use `?` for both binding and rendering:
 
 ```rust
-use lichtung_plot_polars::{DataError, Output, Scatter};
+use lichtung_plot_polars::{AdapterError, Output, Scatter};
 
-fn render(frame: &polars_core::prelude::DataFrame) -> std::result::Result<Output, DataError> {
+fn render(frame: &polars_core::prelude::DataFrame) -> std::result::Result<Output, AdapterError> {
     Ok(Scatter::from_data(frame, "time", "response")?
         .svg("response")?)
 }
 ```
 
-DataPlot terminal methods keep native Result<Output> behavior, as do the native
+PlotAdapter terminal methods keep native Result<Output> behavior, as do the native
 Canvas and Output. Native-only functions keep returning root `Result<T>` with no
 new adapter wrapping. A function combining two adapters handles their distinct
-DataError types in its own application error enum or a standard boxed error; this
+AdapterError types in its own application error enum or a standard boxed error; this
 does not require importing or directly depending on the core. Do not stringify
 binding errors into native Error::Data, widen the core error for foreign-library
 concerns, or pretend native Result can propagate a binding error without an
-explicit application-side conversion. Do not add a DataResult alias. Moving the
-current adapter error types to the non-conflicting DataError export and adding
-native From support is part of replacement, not behavior already provided by the
-conversion-only packages.
+explicit application-side conversion. Do not add DataResult, AdapterResult or
+another adapter result alias. Moving the current adapter error types to the
+non-conflicting AdapterError export and adding native From support is part of
+replacement, not behavior already provided by the conversion-only packages.
 
 ## Coverage Across The Existing API
 
@@ -791,7 +802,7 @@ arguments of `Family::from_data(source, ...)` and `Family::new(...)`; the latter
 are the same roles without a source. Fields are literal Polars names or ndarray
 indices in a data-bound operation, and direct foreign variables/views in either
 form. Literal references and native style policies stay literal. Both constructors
-return the exact-family frontend in `std::result::Result<Self, DataError>`.
+return the exact-family frontend in `std::result::Result<Self, AdapterError>`.
 The documented external inputs need no native-value construction; `new` does not
 promise arbitrary Rust Vec/slice support by its name. Where a data role naturally
 accepts an already-owned native value such as `NumericValues` or `CategoryValues`,
@@ -828,7 +839,7 @@ silently row-expanded. Composite native inputs remain available through Plot.
 | Waterfall | `category, delta, base` | Literal base and original ordered delta semantics. |
 
 All additional family constructors in this inventory return
-`std::result::Result<Self, DataError>` as well; they bind only the inputs they
+`std::result::Result<Self, AdapterError>` as well; they bind only the inputs they
 receive and leave scientific validation at the native stage. Their names select
 different semantics, not compatibility-only aliases. The `geometry` operations
 reuse `HistogramGeometry` or `RaincloudGeometry`,
@@ -892,7 +903,7 @@ availability from nulls when the native contract requires an explicit status.
 Direct binding methods accept the role's documented Polars/ndarray data; where a
 same-arity method naturally accepts a native `AlphaEncoding` or native status
 iterator, it can forward it without an extra compatibility method. Native Plot's
-original methods and return types remain unchanged. A DataPlot `.facet(native)`
+original methods and return types remain unchanged. A PlotAdapter `.facet(native)`
 forwards the already-existing native FacetSpec method; it is not a second
 data-conversion API. Facet methods bind and snapshot their inputs, construct
 native FacetSpec and retain its clone locally so `.facet_scales(policy)?` can
@@ -1024,9 +1035,9 @@ restrictions. Keep the core's compile-time versus data-dependent distinction.
 1. **Replace Polars' public entry point first.** Re-export the entire native API
    unchanged and implement top-level family whole-frame/name and direct Series/Column paths,
    including explicit-x/many-y and local supplemental layers. Extend that same
-   DataPlot across the constructor/setter inventory, with real grouped/faceted
+   PlotAdapter across the constructor/setter inventory, with real grouped/faceted
    consumers rather than a separate facade for each example. Reuse private dtype
-   converters, keep input/context lifetimes separate, and provide DataError with
+   converters, keep input/context lifetimes separate, and provide AdapterError with
    native-error From support.
 2. **Replace ndarray's public entry point.** Provide the same complete native
    re-exports and top-level family constructors. Direct views, selected table columns,
@@ -1068,7 +1079,7 @@ request one new E2E per row or mechanically parameterize all families/options.
 | Independent layers and bounds | A 30-record supplied line/band and 200-record point layer bind independently; labels resolve in the point source, no parent hue/facet inheritance or global DataFrame-height rule. Sample bars versus supplied estimates remain distinct. |
 | Grid orientation and membership | A non-square strided matrix maps source `(r,c)` to the correct row/column; true-present validity and true-highlight Booleans stay distinct, missing cells keep coordinates, and per-cell exact IDs are not repeated row IDs. Use semantic source/axis relationships, not placement coordinates or SVG goldens. |
 | Lifecycle and callbacks | Independent plots can borrow a source, direct input temporaries expire after binding, a named-source borrow ends at standard conversion or output, and native output replays without reopening sources. Mapped wide-row alpha preserves its declaration and native callback timing when expanded; cell mapping remains independently aligned. |
-| Capabilities and error boundaries | Representative unsupported native/DataPlot methods remain unavailable, native data-dependent restrictions remain preflight errors, root Error/Result retain native identity, and standard `Result<_, DataError>` can propagate binding and original native failures with `?` without stringification. |
+| Capabilities and error boundaries | Representative unsupported native/PlotAdapter methods remain unavailable, native data-dependent restrictions remain preflight errors, root Error/Result retain native identity, and standard `Result<_, AdapterError>` can propagate binding and original native failures with `?` without stringification. |
 
 These examples guide focused unit/module coverage and migration of existing
 public workflows. Prototype the selected `new` type/lifetime shape within the

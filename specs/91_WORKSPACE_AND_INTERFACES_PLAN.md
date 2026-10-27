@@ -166,16 +166,16 @@ retained field lookup source; `from_data` installs the supplied dataset for late
 and can mix field selectors with direct values. Both are data workflows, not a
 division by container type. Do not require a public bind/frontend namespace.
 
-The DataPlot frontend retains native family bounds and owns the real core Plot.
+The PlotAdapter frontend retains native family bounds and owns the real core Plot.
 Each family `new` returns the actual adapter frontend as
-`std::result::Result<Self, DataError>`;
+`std::result::Result<Self, AdapterError>`;
 the feasibility of exact-family type aliases, inference and source lifetimes must
 be prototyped rather than silencing `new_ret_no_self` for an unrelated factory.
 It forwards native configuration deliberately, without claiming zero maintenance
 cost. Source-bound plots keep a lookup borrow; infallible standard `From`/`Into`
 conversion releases it and yields the exact native Plot for current Canvas and
-other concrete consumers. Direct inputs are released after binding. Adapter
-DataError retains lossless native-error conversion for `?`; no additional result
+other concrete consumers. Direct inputs are released after binding. AdapterError
+retains lossless native-error conversion for `?`; no additional result
 alias is introduced, and root Error/Result remain native. The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
 lists every current Plot method, semantic input and core boundary. A native Canvas
 acceptance protocol for `.panel(..., adapted)` is a separately reviewed option,

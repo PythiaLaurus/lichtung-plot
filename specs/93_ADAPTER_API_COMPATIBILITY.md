@@ -5,7 +5,7 @@
 This is the compatibility inventory for the proposed
 [data-source plotting interface](92_DATA_ADAPTERS_PLAN.md), not an implemented
 API. The two current adapter packages still expose conversion-only functions;
-all `Scatter::new`/`from_data`, DataPlot, direct-binding and
+all `Scatter::new`/`from_data`, PlotAdapter, direct-binding and
 adapter-layer examples below are prospective and have not been compiled. The core definitions
 described here are established by the current source. Do not add a direct core
 dependency to examples that are intended to demonstrate adapter-only use.
@@ -13,7 +13,7 @@ dependency to examples that are intended to demonstrate adapter-only use.
 The selected architecture places data lookup, conversion, origin tracking and
 configuration forwarding in the adapters. Both adapters expose 25 top-level
 families with `new` and `from_data`, returning an adapter-owned exact-family
-DataPlot as `std::result::Result<Self, DataError>`. `new` binds direct inputs,
+PlotAdapter as `std::result::Result<Self, AdapterError>`. `new` binds direct inputs,
 including matrices; `from_data` additionally binds a dataset for field lookup. Both are data inputs,
 not competing categories of containers or two renderers. Their exact arguments
 and shape/semantic contracts are listed in
@@ -45,28 +45,28 @@ All associated functions, methods, variants, callbacks and nested public module
 items of these types remain available through the actual re-export. A core-only
 workflow needs only a crate-prefix substitution, without a new `?`, trait import,
 conversion or wrapper. The original `Plot` type remains available even though a
-family constructor's result is a different, adapter-owned DataPlot.
+family constructor's result is a different, adapter-owned PlotAdapter.
 
 ## Adapter Plot Handoff
 
-Each DataPlot owns its actual native `Plot<K>`, with the same exact family marker.
+Each PlotAdapter owns its actual native `Plot<K>`, with the same exact family marker.
 `from_data` additionally retains its own source reference and origin/shape metadata;
 `new` retains required metadata but does not retain direct input views
 after the corresponding binding. Public adapter types have private fields and may
-be named by callers. DataPlot `Clone` preserves native clone behavior, shares or
+be named by callers. PlotAdapter `Clone` preserves native clone behavior, shares or
 clones its read-only context safely, and never changes source membership. Any
 clones retaining the source keep their own live borrow until consumed or dropped.
 
 For Rust's `new` convention and strict Clippy, the family entry point denotes the
 actual exact-family frontend: `new` and `from_data` return
-`std::result::Result<Self, DataError>`, not a distinct factory's unrelated result. An alias such as
-`Scatter<'source> = DataPlot<'source, kind::Scatter>` is a candidate, subject
+`std::result::Result<Self, AdapterError>`, not a distinct factory's unrelated result. An alias such as
+`Scatter<'source> = PlotAdapter<'source, kind::Scatter>` is a candidate, subject
 to a prototype for inference, source lifetimes and the documented direct input
-shapes. `DataPointLayer` and `DataBarPointLayer` likewise own their constructors.
+shapes. `PointLayerAdapter` and `BarPointLayerAdapter` likewise own their constructors.
 Do not keep a second factory or old constructor as an alias; do not suppress
 `new_ret_no_self` merely to retain an unrelated factory return type.
 
-The adapter implements `From<DataPlot<..., K>> for Plot<K>`. Binding methods
+The adapter implements `From<PlotAdapter<..., K>> for Plot<K>`. Binding methods
 materialize the input they attach before returning, so the conversion moves the
 native Plot and releases lookup context without data lookup, rendering or fallible
 scientific preparation. Native preparation may still reject a configured plot.
@@ -93,18 +93,18 @@ retain their existing owned/frozen behavior.
 
 The same conversion serves user functions and collections that explicitly require
 native Plot. Converting consumes the adapter object and ends source-bound chaining;
-it does not change the target family's scientific capabilities. `DataPlot::erase`
+it does not change the target family's scientific capabilities. `PlotAdapter::erase`
 for an exact family delegates to core erasure, releases the context and returns
 the native `Plot<kind::Any>`; that erased value remains ineligible for Canvas
 `panel` and `panel_span`, exactly as in the core. `kind()` is forwarded without
 erasure. Source-independent `.svg`, `.svg_preserve_text`, `.png`, `.png_preview`
-and `.png_with_options` consume DataPlot, delegate to native Plot and return the
+and `.png_with_options` consume PlotAdapter, delegate to native Plot and return the
 native `Result<Output>`; the caller need not request a conversion first.
 
 ## Chainable Data Bindings
 
 The adapter defines local, role-specific input protocols. Fallible data-binding
-methods on the adapter receiver return `std::result::Result<Self, DataError>`.
+methods on the adapter receiver return `std::result::Result<Self, AdapterError>`.
 Their argument lists need not match native methods on `Plot<K>`; those original
 methods and return types remain available through the real re-export. A source
 selector on a plot created by `new` without an appropriate source is an error.
@@ -121,8 +121,8 @@ String field selectors, literal labels and significance targets retain distinct 
 | `heatmap_highlight`, `heatmap_highlight_cells` | Boolean record vector/field, same-shape grid or explicitly expanded values. | Heatmap only; true adds a border, independently of validity. |
 | `estimate_status_boolean`, `estimate_status_categorical`, `estimate_status` | Foreign Boolean/categorical inputs with explicit mapping, or native `EstimateStatus` iterator. | PointInterval, Coefficient and Forest; never infer status from missing numeric values. |
 | `point_alpha`, `line_alpha`, `fill_alpha` and their unit/mapping methods | Direct u8 vectors, foreign fields/views or already-native `AlphaEncoding` in the same one-argument slot; explicit single values, mappings, keys and bins use their semantic operations. | Corresponding `kind::PointAlpha`, `LineAlpha`, `FillAlpha`; retain observation, Single, keyed series/aggregate or bin units as admitted by the core. |
-| DataPointLayer `labels` | Layer-local field/index, direct category vector or native `CategoryValues`. | Labels align with that independent layer, not the parent Plot. |
-| DataBarPointLayer `series` | Layer-local field/index, direct category vector or native `CategoryValues`. | Optional positioned-series identity resolves against the parent bar's prepared cells. |
+| PointLayerAdapter `labels` | Layer-local field/index, direct category vector or native `CategoryValues`. | Labels align with that independent layer, not the parent Plot. |
+| BarPointLayerAdapter `series` | Layer-local field/index, direct category vector or native `CategoryValues`. | Optional positioned-series identity resolves against the parent bar's prepared cells. |
 
 The current exact-family data capabilities are listed here so that accepting
 foreign inputs never accidentally broadens native scientific capabilities:
@@ -177,12 +177,12 @@ from `builder.rs`, `builder/configuration.rs`, `builder/facets.rs`,
 capability restrictions, including compile-time versus preflight distinctions.
 Keep this inventory synchronized with the core when implementation begins.
 
-| Method(s) | DataPlot compatibility |
+| Method(s) | PlotAdapter compatibility |
 | --- | --- |
 | `hue`, `group`, `series`, `source_rows`, `heatmap_highlight`, `estimate_status`, `point_alpha`, `line_alpha`, `fill_alpha` | Use the role-specific direct adapter binding methods above; native receiver remains unchanged. |
 | `facet` | Native FacetSpec can use the existing same-name forwarding method; adapter field/vector workflows use direct `facet_row`, `facet_column`, `facet_grid` and `facet_wrap` methods plus explicit scale/cell/column operations. |
 | `band` | Adapter Line binds `.band(lower, upper)?` directly; native Line retains `.band(Bounds)`. No adapter `band_bounds` method is required. Regression forwards native `RegressionBand` as a separate pure policy, with its original return shape. |
-| `point_layer` | Line accepts native PointLayer or prepared DataPointLayer; Bar/HorizontalBar accept native BarPointLayer or prepared DataBarPointLayer. Adapter method consumes `impl Into<NativeLayer>` and returns Self. Native methods retain exact native arguments. |
+| `point_layer` | Line accepts native PointLayer or prepared PointLayerAdapter; Bar/HorizontalBar accept native BarPointLayer or prepared BarPointLayerAdapter. Adapter method consumes `impl Into<NativeLayer>` and returns Self. Native methods retain exact native arguments. |
 | `significance` | Forward the native `IntoIterator<Item = Significance<P>>` contract and `K: kind::Significance<P>` bound, returning Self. Use native annotations or the data preparation described below. |
 | `title`, `subtitle`, `caption`, `x_label`, `y_label`, `title_alignment`, `subtitle_alignment`, `labels` | Forward the actual native text, layout, replacement and label-policy behavior; strings here are literal text. |
 | `color_label`, `color_label_format`, `heatmap_null_row_annotation`, `estimate_labels`, `significance_mark_style`, `panel_text_annotation` | Forward native typed values with their actual capability bounds. |
@@ -203,9 +203,9 @@ Keep this inventory synchronized with the core when implementation begins.
 | `kind`, `erase`, `clone` | Preserve native kind and clone semantics; erasure returns the native erased Plot as specified above. |
 | `svg`, `svg_preserve_text`, `png`, `png_preview`, `png_with_options` | Delegate the actual native terminal behavior and return native `Result<Output>`. |
 
-Native `PointLayer` and `BarPointLayer` remain fully accessible. DataPointLayer
+Native `PointLayer` and `BarPointLayer` remain fully accessible. PointLayerAdapter
 forwards `color`, `radius`, `alpha`, `legend_label`, `label_text_layout`,
-`get_color`, `get_radius`, `get_alpha`, and adapts `labels`. DataBarPointLayer
+`get_color`, `get_radius`, `get_alpha`, and adapts `labels`. BarPointLayerAdapter
 preserves its native `category_values`, `series_values`, `values`, `color`, and
 `radius` accessors, plus its adapter-bound `series`. Native BarPointLayer has no
 series setter: the adapter must prepare/reconstruct the native layer through its
@@ -223,9 +223,9 @@ other inputs are not data. Do not retain old wrappers, factories or aliases.
 
 | Surface | Direct/default input | Explicit dataset | Result and source context |
 | --- | --- | --- | --- |
-| Each of 25 exact-family frontends | `Family::new(...)` | `Family::from_data(source, ...)` | `std::result::Result<Self, DataError>`; the data form retains its own source for subsequent field bindings. |
-| `DataPointLayer` | `DataPointLayer::new(x, y)` | `DataPointLayer::from_data(source, x, y)` | `std::result::Result<Self, DataError>`; only the data form retains the layer's source for later labels. |
-| `DataBarPointLayer` | `DataBarPointLayer::new(category, value, color, radius)` | `DataBarPointLayer::from_data(source, category, value, color, radius)` | `std::result::Result<Self, DataError>`; only the data form retains the layer's source for later series binding. |
+| Each of 25 exact-family frontends | `Family::new(...)` | `Family::from_data(source, ...)` | `std::result::Result<Self, AdapterError>`; the data form retains its own source for subsequent field bindings. |
+| `PointLayerAdapter` | `PointLayerAdapter::new(x, y)` | `PointLayerAdapter::from_data(source, x, y)` | `std::result::Result<Self, AdapterError>`; only the data form retains the layer's source for later labels. |
+| `BarPointLayerAdapter` | `BarPointLayerAdapter::new(category, value, color, radius)` | `BarPointLayerAdapter::from_data(source, category, value, color, radius)` | `std::result::Result<Self, AdapterError>`; only the data form retains the layer's source for later series binding. |
 | Significance result-table binding | `plot.significance_pairwise(...)` / `significance_attached(...)` | Corresponding `_from_data(source, ...)` methods. | The adapter binds directly and appends native Significance values. Original `plot.significance(native_items)` is preserved. |
 | Alpha keyed / bins | `line_alpha_keyed(...)`, `fill_alpha_bins(...)` and admitted target variants. | Corresponding `_from_data(source, ...)` methods. | Bind keys, alpha values and intervals directly; an independent table is resolved at the call and not retained. |
 | Semantic modes | Family methods such as Heatmap `records`, Bar `estimates`, Line `indexed` and their `_from_data` forms. | The named operation makes grid/record, sample/estimate or omitted-coordinate meaning explicit. | Retain native validation and scientific behavior without public input-wrapper types. |
@@ -303,7 +303,7 @@ continues to interpret its strings as literal target identities.
 For genuinely reusable results, adapter root functions with the same semantic
 operation names and arguments, e.g. `significance_pairwise_from_data(source,
 left, right, marks)`, return `std::result::Result<Vec<Significance<Pairwise>>,
-DataError>`. Attached, direct, single-facet and grid-facet forms return the
+AdapterError>`. Attached, direct, single-facet and grid-facet forms return the
 corresponding native collection. A root function without `_from_data` has no plot
 context and accepts direct inputs, not unresolved selectors. These functions
 are not compatibility aliases or prerequisites for the Plot methods: they let a
@@ -339,19 +339,19 @@ and rejected unsupported family/placement combinations without a test cross-prod
 
 | Source | Target / consumer | Selected baseline | Core change for a shorter spelling? |
 | --- | --- | --- | --- |
-| Fully bound DataPlot | Native `Plot<K>` | Adapter implements infallible `From`; explicit `.into()` in a concrete native context. | No. |
-| DataPlot single-image terminal | Native `Output` | Adapter terminal delegates to the native Plot and returns its `Result`. | No. |
-| DataPlot | Native `Canvas::panel` / `panel_span` | Convert into an exact native Plot first; current arguments are concrete `Plot<K>`. | Yes, if the exact same `.panel(..., adapted)` syntax must work without a conversion. A generic acceptance protocol or new method requires separate review. |
-| DataPlot | Optional adapter-local Canvas extension | A separately reviewed `CanvasDataExt::panel_data`/`panel_span_data` could perform the same `Into` inside an extension trait on the real native Canvas. It needs a trait import and new method names. | No, if those tradeoffs are acceptable; inferred exact-family generics must be prototyped. |
-| DataPlot | User function/collection requiring `Plot<K>` | Explicit conversion at the application boundary. | A core change cannot alter an application-owned concrete signature; the application may choose its own generic bound. |
+| Fully bound PlotAdapter | Native `Plot<K>` | Adapter implements infallible `From`; explicit `.into()` in a concrete native context. | No. |
+| PlotAdapter single-image terminal | Native `Output` | Adapter terminal delegates to the native Plot and returns its `Result`. | No. |
+| PlotAdapter | Native `Canvas::panel` / `panel_span` | Convert into an exact native Plot first; current arguments are concrete `Plot<K>`. | Yes, if the exact same `.panel(..., adapted)` syntax must work without a conversion. A generic acceptance protocol or new method requires separate review. |
+| PlotAdapter | Optional adapter-local Canvas extension | A separately reviewed `CanvasDataExt::panel_data`/`panel_span_data` could perform the same `Into` inside an extension trait on the real native Canvas. It needs a trait import and new method names. | No, if those tradeoffs are acceptable; inferred exact-family generics must be prototyped. |
+| PlotAdapter | User function/collection requiring `Plot<K>` | Explicit conversion at the application boundary. | A core change cannot alter an application-owned concrete signature; the application may choose its own generic bound. |
 | Two bounds / preassembled native Bounds | Adapter Line / native Line | Adapter `.band(lower, upper)?` binds foreign inputs. Native `.band(bounds)` remains unchanged on Plot; convert explicitly if using an already assembled Bounds. No `band_bounds` compatibility method. | No. |
-| DataPointLayer / DataBarPointLayer | Native layer | Binding finishes in the layer's own context; adapter implements `From` to the appropriate native layer. | No. |
-| Prepared adapter layer | Adapter DataPlot `point_layer` | Adapter method accepts `impl Into<NativeLayer>`; already-native layers work via identity conversion. | No. |
+| PointLayerAdapter / BarPointLayerAdapter | Native layer | Binding finishes in the layer's own context; adapter implements `From` to the appropriate native layer. | No. |
+| Prepared adapter layer | PlotAdapter `point_layer` | Adapter method accepts `impl Into<NativeLayer>`; already-native layers work via identity conversion. | No. |
 | Prepared adapter layer | Native Plot `point_layer` | Convert explicitly to the exact native layer. | Yes, only if the unchanged native method must accept the wrapper without explicit conversion. |
-| External fields/vectors | DataPlot `hue`, `facet`, `band`, alpha, status, IDs, highlights | Adapter-local role traits and context-aware fallible binding. | No. |
-| External fields/vectors | Original native Plot `hue` and other concrete-input methods | Prepare native values outside that call, or use an adapter DataPlot. | Yes, if the original native same-name method itself must directly accept foreign values/field names while retaining original use and error behavior. |
+| External fields/vectors | PlotAdapter `hue`, `facet`, `band`, alpha, status, IDs, highlights | Adapter-local role traits and context-aware fallible binding. | No. |
+| External fields/vectors | Original native Plot `hue` and other concrete-input methods | Prepare native values outside that call, or use a PlotAdapter. | Yes, if the original native same-name method itself must directly accept foreign values/field names while retaining original use and error behavior. |
 | Native significance iterator / prepared result table | Adapter or native `significance` | Native items are forwarded directly; the data helper returns the correctly typed native collection. | No. |
-| Adapter binding error | Native `Error` | Keep `DataError` separate; preserve upstream sources and support lossless native-error-to-DataError propagation. | A lossless shared native error representation for arbitrary foreign errors would need a deliberate core error contract change; stringifying is not equivalent. |
+| Adapter binding error | Native `Error` | Keep `AdapterError` separate; preserve upstream sources and support lossless propagation from native errors into AdapterError. | A lossless shared native error representation for arbitrary foreign errors would need a deliberate core error contract change; stringifying is not equivalent. |
 | Native Theme, Color, Significance, Plot, Canvas, Output and other re-exports | Either adapter path | Same definition when both adapters resolve one compatible core. | No. |
 
 An adapter-local Canvas extension would leave the original methods unchanged:
@@ -409,7 +409,7 @@ let original = pp::Plot::scatter(
 
 `measurements` is a numeric ndarray, and `condition` is a separate string-category
 view. A numeric ndarray column is not implicitly interpreted as string hue.
-DataPlot setters accept native values too, e.g. `.hue(native_categories)?`; that
+PlotAdapter setters accept native values too, e.g. `.hue(native_categories)?`; that
 fallible adapter method is separate from the unchanged native `.hue(...) -> Self`.
 Single-image output consumes the adapter Plot directly, and later publications
 reuse the same native Output:
@@ -423,7 +423,7 @@ let output = polars_vectors.svg("scatter.svg")?
 ### Independent fit and observation layer
 
 ```rust
-let observations = pp::DataPointLayer::from_data(&observed, "time", "response")?
+let observations = pp::PointLayerAdapter::from_data(&observed, "time", "response")?
     .labels("sample")?
     .legend_label("Observed");
 
@@ -452,7 +452,7 @@ let output = pp::Canvas::grid(1, 2)?
 ```
 
 `pp::Plot<K>` and `nd::Plot<K>` are identical native types when Cargo resolves
-the same compatible core package. The two DataPlot wrappers remain distinct.
+the same compatible core package. The two PlotAdapter wrappers remain distinct.
 Compatible dependency requirements are part of delivery; incompatible core
 versions or sources may produce distinct types.
 
@@ -469,7 +469,7 @@ Use focused compile consumers and representative semantic integration tests:
   x/many-y, row-index/column-identity wide, grid versus cell heatmaps and mixed
   source/direct inputs.
 - Prototype the actual family type representation so `Family::new` returns
-  `std::result::Result<Self, DataError>` under strict Clippy, with inferred source lifetimes and
+  `std::result::Result<Self, AdapterError>` under strict Clippy, with inferred source lifetimes and
   concrete family methods. Test direct and source-bound layer constructors on
   the real frontend types. No old wrapper/factory aliases or compatibility-only
   `band_bounds` method may remain; exercise direct semantic operations and native
