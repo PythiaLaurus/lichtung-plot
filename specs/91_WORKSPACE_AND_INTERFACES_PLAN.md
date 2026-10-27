@@ -31,7 +31,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) requires complete unchanged native re-exports plus top-level plot families with source/vector constructors, adapter-owned data binding, explicit native conversion, explicit-x/multiple-y, distinct grid/cell heatmaps and local layers; not implemented yet. |
+| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) requires complete unchanged native re-exports plus top-level plot families with `new`/`from_data` constructors, adapter-owned data binding, explicit native conversion, explicit-x/multiple-y, distinct grid/cell heatmaps and local layers; not implemented yet. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -41,7 +41,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
-| Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::from_data` and `Family::from_vectors` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
+| Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy and Polars use the same native-value/rendering route. |
 | Python compatibility | CPython 3.10 is a required minimum, not a version that may be excluded by adopting a moving support-window recommendation. |
@@ -157,12 +157,18 @@ paths, through `pub use lichtung_plot::*` without local root-name shadowing.
 Replacing only `use lichtung_plot::...` with either adapter prefix preserves
 original native signatures and behavior, including Plot, Bounds, closed inputs,
 layers, Error and Result. Foreign-data entry points are additional top-level
-`Scatter::from_data(source, x, y)`, `Scatter::from_vectors(x, y)` and equivalent
+`Scatter::from_data(source, x, y)`, `Scatter::new(x, y)` and equivalent
 family constructors, not native-name replacements or required extension traits.
 Input descriptors use distinct names such as Interval and BarData; native Bounds
-and BarInput remain unchanged. Do not require a public bind/frontend namespace.
+and BarInput remain unchanged. `new` binds direct inputs without a retained field
+lookup source; `from_data` installs the supplied dataset for later field binding
+and can mix field selectors with direct values. Both are data workflows, not a
+division by container type. Do not require a public bind/frontend namespace.
 
 The DataPlot frontend retains native family bounds and owns the real core Plot.
+Each family `new` returns the actual adapter frontend as `DataResult<Self>`;
+the feasibility of exact-family type aliases, inference and source lifetimes must
+be prototyped rather than silencing `new_ret_no_self` for an unrelated factory.
 It forwards native configuration deliberately, without claiming zero maintenance
 cost. Source-bound plots keep a lookup borrow; infallible standard `From`/`Into`
 conversion releases it and yields the exact native Plot for current Canvas and

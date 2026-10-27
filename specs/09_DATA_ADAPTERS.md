@@ -8,7 +8,7 @@ plotting interfaces, not first construct native values themselves. These section
 describe the current code, not the intended replacement or an accepted completion
 of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
 owns the selected replacement design: complete unchanged native API re-exports,
-top-level plot families with `from_data`/`from_vectors`, adapter-owned binding and
+top-level plot families with `new`/`from_data`, adapter-owned binding and
 standard native handoffs, matrix/record heatmaps and local supplemental layers.
 The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md) covers native types,
 all current Plot methods, significance and composition boundaries. These plans

@@ -5,16 +5,18 @@
 This is the compatibility inventory for the proposed
 [data-source plotting interface](92_DATA_ADAPTERS_PLAN.md), not an implemented
 API. The two current adapter packages still expose conversion-only functions;
-all `Scatter::from_*`, DataPlot, descriptor, annotation-data and adapter-layer
-examples below are prospective and have not been compiled. The core definitions
+all `Scatter::new`/`from_data`, DataPlot, descriptor, annotation-data and
+adapter-layer examples below are prospective and have not been compiled. The core definitions
 described here are established by the current source. Do not add a direct core
 dependency to examples that are intended to demonstrate adapter-only use.
 
 The selected architecture places data lookup, conversion, origin tracking and
 configuration forwarding in the adapters. Both adapters expose 25 top-level
-families with `from_data` and `from_vectors`, returning an adapter-owned
-exact-family DataPlot. The two names denote input workflows, not two APIs per
-foreign library. Their exact arguments and shape/semantic contracts are listed in
+families with `new` and `from_data`, returning an adapter-owned exact-family
+DataPlot as `DataResult<Self>`. `new` binds direct inputs, including matrices;
+`from_data` additionally binds a dataset for field lookup. Both are data inputs,
+not competing categories of containers or two renderers. Their exact arguments
+and shape/semantic contracts are listed in
 the [family inventory](92_DATA_ADAPTERS_PLAN.md#coverage-across-the-existing-api).
 Native `Plot` and every other core export remain the original definitions.
 
@@ -49,11 +51,20 @@ family constructor's result is a different, adapter-owned DataPlot.
 
 Each DataPlot owns its actual native `Plot<K>`, with the same exact family marker.
 `from_data` additionally retains its own source reference and origin/shape metadata;
-direct-vector constructors retain required metadata but do not retain input views
+`new` retains required metadata but does not retain direct input views
 after the corresponding binding. Public adapter types have private fields and may
 be named by callers. DataPlot `Clone` preserves native clone behavior, shares or
 clones its read-only context safely, and never changes source membership. Any
 clones retaining the source keep their own live borrow until consumed or dropped.
+
+For Rust's `new` convention and strict Clippy, the family entry point denotes the
+actual exact-family frontend: `new` and `from_data` return `DataResult<Self>`,
+not a distinct factory's unrelated result. An alias such as
+`Scatter<'source> = DataPlot<'source, kind::Scatter>` is a candidate, subject
+to a prototype for inference, source lifetimes and the documented direct input
+shapes. `DataPointLayer` and `DataBarPointLayer` likewise own their constructors.
+Do not keep a second factory or old constructor as an alias; do not suppress
+`new_ret_no_self` merely to retain an unrelated factory return type.
 
 The adapter implements `From<DataPlot<..., K>> for Plot<K>`. Binding methods
 materialize the input they attach before returning, so the conversion moves the
@@ -95,8 +106,8 @@ native `Result<Output>`; the caller need not request a conversion first.
 The adapter defines local, role-specific input protocols. On the adapter receiver,
 the following fallible binding methods return `DataResult<Self>` for both native
 and foreign inputs. The unchanged native methods still have their native return
-types when the receiver is `Plot<K>`. A source selector on `from_vectors` without
-an appropriate source is an error. String field selectors, literal labels and
+types when the receiver is `Plot<K>`. A source selector on a plot created by `new`
+without an appropriate source is an error. String field selectors, literal labels and
 significance target values are interpreted by their distinct argument roles.
 
 | Adapter method | Accepted input / conversion | Native capability and constraints |
@@ -201,6 +212,32 @@ public constructor and getters, or retain prepared components, without accessing
 private fields. Every fallible preparation occurs before an infallible layer
 handoff. Point-layer x/y and labels remain independent of the primary line data.
 
+### Auxiliary Input Constructors
+
+These are distinct contracts, not a blanket requirement to duplicate every
+method. Plain `new` is used for actual adapter-owned object construction; plain
+operation names describe other actions. The `_from_data` spelling identifies an
+explicit dataset argument, not a universal source lifetime or a claim that other
+inputs are not data. The old `from_vectors`/factory spellings are not aliases.
+
+| Surface | Direct/default input | Explicit dataset | Result and source context |
+| --- | --- | --- | --- |
+| Each of 25 exact-family frontends | `Family::new(...)` | `Family::from_data(source, ...)` | `DataResult<Self>`; the data form retains its own source for subsequent field bindings. |
+| `DataPointLayer` | `DataPointLayer::new(x, y)` | `DataPointLayer::from_data(source, x, y)` | `DataResult<Self>`; only the data form retains the layer's own source for later labels. |
+| `DataBarPointLayer` | `DataBarPointLayer::new(category, value, color, radius)` | `DataBarPointLayer::from_data(source, category, value, color, radius)` | `DataResult<Self>`; only the data form retains the layer's own source for later series binding. |
+| `PairwiseAnnotations` / `AttachedAnnotations` | `::prepare(descriptor)` | `::from_data(source, descriptor)` | `DataResult<Vec<Significance<P>>>`; inputs are prepared eagerly and neither result retains a dataset. |
+| `Alpha` keyed / bins | `Alpha::keyed(...)` / `Alpha::bins(...)` | `Alpha::keyed_from_data(source, ...)` / `Alpha::bins_from_data(source, ...)` | The unsuffixed descriptor resolves direct inputs or the owning plot's source at attachment; the `_from_data` form eagerly binds its independent table and retains no foreign table. Symbolic plot targets may still need the parent plot at attachment. |
+| `Interval`, `Facet`, `Grid`, `HeatmapCells`, family input and mark descriptors | Role-specific `new`, `row`, `samples`, `geometry`, etc. | Names/indices are resolved by the owning adapter operation. | A descriptor is not a dataset binding operation; do not add `_from_data` variants mechanically. |
+
+When `new` is used on a plot or layer, direct inputs and their required shape/
+origin metadata are bound without installing a shared lookup source. The actual
+values may have come from a table. When an explicit data context is present,
+source selectors and direct inputs can be mixed. A plain semantic operation such
+as `Alpha::keyed` can itself contain selectors resolved in an existing plot context;
+the lack of a suffix does not universally mean every argument is already materialized.
+The original native Plot/layer constructors, significance types and methods keep
+their unchanged definitions and signatures.
+
 ## Significance And Independent Result Tables
 
 Core `Significance<Attached>` represents a mark at one target;
@@ -226,11 +263,14 @@ let plot = pp::Boxplot::from_data(&observations, "group", "value")?
 
 For caller-computed tabular results, the following additive helper shapes are
 planned for review. `PairwiseAnnotations::from_data(source, descriptor)` and
-`::from_vectors(descriptor)` resolve a `PairwiseData` descriptor and return
+`::prepare(descriptor)` resolve a `PairwiseData` descriptor and return
 `DataResult<Vec<Significance<Pairwise>>>`; `AttachedAnnotations` and
 `AttachedData` do the same for `Attached`. They are adapter-owned names, not
 replacements for native Significance. A prepared result can be passed to native
 or adapter `.significance` directly because it contains the native items.
+`prepare` describes producing a native collection; it does not introduce a new
+annotation wrapper merely to use `new`. Both forms resolve their own inputs eagerly,
+and the resulting collection retains no foreign source for future field lookups.
 
 ```rust
 let comparisons = pp::PairwiseAnnotations::from_data(
@@ -263,19 +303,40 @@ p-value views; a homogeneous numeric ndarray table does not become a string tabl
 For example:
 
 ```rust
-let comparisons = nd::PairwiseAnnotations::from_vectors(
+let comparisons = nd::PairwiseAnnotations::prepare(
     nd::PairwiseData::new(
         nd::AnnotationTarget::category(left.view()),
         nd::AnnotationTarget::category(right.view()),
         nd::AnnotationMarks::p_values(p_values.view()),
     ),
 )?;
-let plot = nd::Boxplot::from_vectors(groups.view(), observations.view())?
+let plot = nd::Boxplot::new(groups.view(), observations.view())?
     .significance(comparisons);
 ```
 
 `AnnotationMarks::native` accepts an actual native-mark sequence or typed ndarray
 view; it does not imply that Polars stores arbitrary Rust enums in a column.
+
+The same direct/result-table distinction applies to attached marks:
+
+```rust
+let attached = pp::AttachedAnnotations::prepare(pp::AttachedData::new(
+    pp::AnnotationTarget::category(&target_series),
+    pp::AnnotationMarks::p_values(&p_value_series),
+))?;
+
+let attached_from_table = pp::AttachedAnnotations::from_data(
+    &test_results,
+    pp::AttachedData::new(
+        pp::AnnotationTarget::category("target"),
+        pp::AnnotationMarks::p_values("adjusted_p"),
+    ),
+)?;
+```
+
+Both variables contain native `Significance<Attached>` values ready for an
+admitted native or adapter Plot. Their independent inputs need not have the same
+length as the observations used to construct that Plot.
 
 The independent result table's row count is its number of annotations, not the
 main plot's observation count. Resolve its fields and preserve supplied order;
@@ -345,9 +406,9 @@ use lichtung_plot_polars as pp;
 let polars_plot = pp::Scatter::from_data(&frame, "time", "response")?
     .hue("condition")?
     .theme(pp::Theme::science());
-let polars_vectors = pp::Scatter::from_vectors(&times, &responses)?
+let polars_vectors = pp::Scatter::new(&times, &responses)?
     .hue(&conditions)?;
-let ndarray_plot = nd::Scatter::from_vectors(time.view(), response.view())?
+let ndarray_plot = nd::Scatter::new(time.view(), response.view())?
     .hue(condition.view())?;
 let ndarray_table = nd::Scatter::from_data(measurements.view(), 0, 1)?
     .hue(condition.view())?;
@@ -374,7 +435,7 @@ let output = polars_vectors.svg("scatter.svg")?
 ### Independent fit and observation layer
 
 ```rust
-let observations = pp::PointLayerData::from_data(&observed, "time", "response")?
+let observations = pp::DataPointLayer::from_data(&observed, "time", "response")?
     .labels("sample")?
     .legend_label("Observed");
 
@@ -419,6 +480,11 @@ Use focused compile consumers and representative semantic integration tests:
   Include histogram/raincloud geometry, bar sample versus estimate modes, explicit
   x/many-y, row-index/column-identity wide, grid versus cell heatmaps and mixed
   source/direct inputs.
+- Prototype the actual family type representation so `Family::new` returns
+  `DataResult<Self>` under strict Clippy, with inferred source lifetimes and
+  concrete family methods. Test direct and source-bound layer constructors on
+  the real frontend types. No old `from_vectors` or separate layer factory alias
+  may remain; distinguish `new` from the annotation `prepare` collection operation.
 - Verify field versus direct vector versus native inputs, explicit `?` timing,
   null/dtype/shape/strides/chunks, all relevant origin units and exact IDs.
   Include the independent line/point-layer and alpha-key contexts.
