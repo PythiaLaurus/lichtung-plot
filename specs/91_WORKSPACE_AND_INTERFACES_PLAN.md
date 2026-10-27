@@ -146,9 +146,9 @@ implementation without presenting it as an accepted public design. The
 foreign data sources plus variable bindings, direct vectors and family-specific
 matrix/wide input. A scalar selector denotes one variable; an ordered selector
 collection in an admitted many-y position denotes multiple variables with the
-explicit x preserved. `RowIndex` and `ColumnIdentity` explicitly request the
-omitted-coordinate/category wide meanings within the same family constructors.
-Grid and record-cell heatmaps are distinct typed inputs. Supplemental layers bind
+explicit x preserved. Explicit indexed/column-oriented family operations select
+omitted-coordinate/category wide meanings without adapter marker types.
+Grid and record-cell heatmaps are distinct operations. Supplemental layers bind
 in their own source context without parent-mapping inheritance. Internal native
 conversion is permitted, not an obligatory user preprocessing step.
 
@@ -159,22 +159,24 @@ original native signatures and behavior, including Plot, Bounds, closed inputs,
 layers, Error and Result. Foreign-data entry points are additional top-level
 `Scatter::from_data(source, x, y)`, `Scatter::new(x, y)` and equivalent
 family constructors, not native-name replacements or required extension traits.
-Input descriptors use distinct names such as Interval and BarData; native Bounds
-and BarInput remain unchanged. `new` binds direct inputs without a retained field
-lookup source; `from_data` installs the supplied dataset for later field binding
+Adapter objects bind external inputs directly, using separate data parameters or
+scientifically explicit methods rather than parallel input-descriptor types;
+native Bounds and BarInput remain unchanged. `new` binds direct inputs without a
+retained field lookup source; `from_data` installs the supplied dataset for later field binding
 and can mix field selectors with direct values. Both are data workflows, not a
 division by container type. Do not require a public bind/frontend namespace.
 
 The DataPlot frontend retains native family bounds and owns the real core Plot.
-Each family `new` returns the actual adapter frontend as `DataResult<Self>`;
+Each family `new` returns the actual adapter frontend as
+`std::result::Result<Self, DataError>`;
 the feasibility of exact-family type aliases, inference and source lifetimes must
 be prototyped rather than silencing `new_ret_no_self` for an unrelated factory.
 It forwards native configuration deliberately, without claiming zero maintenance
 cost. Source-bound plots keep a lookup borrow; infallible standard `From`/`Into`
 conversion releases it and yields the exact native Plot for current Canvas and
-other concrete consumers. Direct inputs are released after binding. DataError/
-DataResult have distinct root names and lossless native-error conversion for `?`;
-Error/Result remain native. The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
+other concrete consumers. Direct inputs are released after binding. Adapter
+DataError retains lossless native-error conversion for `?`; no additional result
+alias is introduced, and root Error/Result remain native. The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
 lists every current Plot method, semantic input and core boundary. A native Canvas
 acceptance protocol for `.panel(..., adapted)` is a separately reviewed option,
 not part of the adapter-only baseline. No core data-access framework, general

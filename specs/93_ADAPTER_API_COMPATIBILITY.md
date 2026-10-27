@@ -5,7 +5,7 @@
 This is the compatibility inventory for the proposed
 [data-source plotting interface](92_DATA_ADAPTERS_PLAN.md), not an implemented
 API. The two current adapter packages still expose conversion-only functions;
-all `Scatter::new`/`from_data`, DataPlot, descriptor, annotation-data and
+all `Scatter::new`/`from_data`, DataPlot, direct-binding and
 adapter-layer examples below are prospective and have not been compiled. The core definitions
 described here are established by the current source. Do not add a direct core
 dependency to examples that are intended to demonstrate adapter-only use.
@@ -13,8 +13,8 @@ dependency to examples that are intended to demonstrate adapter-only use.
 The selected architecture places data lookup, conversion, origin tracking and
 configuration forwarding in the adapters. Both adapters expose 25 top-level
 families with `new` and `from_data`, returning an adapter-owned exact-family
-DataPlot as `DataResult<Self>`. `new` binds direct inputs, including matrices;
-`from_data` additionally binds a dataset for field lookup. Both are data inputs,
+DataPlot as `std::result::Result<Self, DataError>`. `new` binds direct inputs,
+including matrices; `from_data` additionally binds a dataset for field lookup. Both are data inputs,
 not competing categories of containers or two renderers. Their exact arguments
 and shape/semantic contracts are listed in
 the [family inventory](92_DATA_ADAPTERS_PLAN.md#coverage-across-the-existing-api).
@@ -58,8 +58,8 @@ clones its read-only context safely, and never changes source membership. Any
 clones retaining the source keep their own live borrow until consumed or dropped.
 
 For Rust's `new` convention and strict Clippy, the family entry point denotes the
-actual exact-family frontend: `new` and `from_data` return `DataResult<Self>`,
-not a distinct factory's unrelated result. An alias such as
+actual exact-family frontend: `new` and `from_data` return
+`std::result::Result<Self, DataError>`, not a distinct factory's unrelated result. An alias such as
 `Scatter<'source> = DataPlot<'source, kind::Scatter>` is a candidate, subject
 to a prototype for inference, source lifetimes and the documented direct input
 shapes. `DataPointLayer` and `DataBarPointLayer` likewise own their constructors.
@@ -103,24 +103,24 @@ native `Result<Output>`; the caller need not request a conversion first.
 
 ## Chainable Data Bindings
 
-The adapter defines local, role-specific input protocols. On the adapter receiver,
-the following fallible binding methods return `DataResult<Self>` for both native
-and foreign inputs. The unchanged native methods still have their native return
-types when the receiver is `Plot<K>`. A source selector on a plot created by `new`
-without an appropriate source is an error. String field selectors, literal labels and
-significance target values are interpreted by their distinct argument roles.
+The adapter defines local, role-specific input protocols. Fallible data-binding
+methods on the adapter receiver return `std::result::Result<Self, DataError>`.
+Their argument lists need not match native methods on `Plot<K>`; those original
+methods and return types remain available through the real re-export. A source
+selector on a plot created by `new` without an appropriate source is an error.
+String field selectors, literal labels and significance targets retain distinct roles.
 
 | Adapter method | Accepted input / conversion | Native capability and constraints |
 | --- | --- | --- |
 | `hue` | Source field/index, admitted category vector/view or native `CategoryValues`; bind to native category values. | `K: kind::Hue`; categorical identity, not numeric continuous color. |
 | `group` | Same category forms; convert using the graphical-group role. | `K: kind::Group`; does not replace a constructor-owned group where the core lacks this setter. |
 | `series` | Same category forms; convert using the positioned-series role. | `K: kind::Series`; native supplied-geometry restrictions remain. |
-| `source_rows` | Exact integer field/view, per-cell `Cells(...)`, or native `SourceRows`. | `K: kind::SourceRows`; non-null, nonnegative, fitting and unique IDs; never repeat one ID across expanded cells. |
-| `facet` | `Facet::row`, `column`, `grid`, `wrap` with field/vector bindings, or native `FacetSpec`. | `K: kind::Facet`; preserve row/column/wrap distinction, scale policy and native facet restrictions. |
-| Line `band` | `Interval::new(lower, upper)` with independently supplied bindings, or native `Bounds`. | Only exact Line; many-y bounds require matching selected-column collections or matching shapes, with no implicit pair reuse. |
-| `heatmap_highlight` | Boolean record vector/field, same-shape grid, explicit `Cells(...)`, or native `BooleanValues`. | Heatmap only; true adds a border, independently of validity. |
-| `estimate_status` | Explicit `Status::boolean(binding)`, `Status::categorical(binding, mapping)`, or native `EstimateStatus` iterator. | PointInterval, Coefficient and Forest; never infer status from missing numeric values. |
-| `point_alpha`, `line_alpha`, `fill_alpha` | `Alpha` plus `AlphaMap` descriptors, independently prepared adapter alpha, or native `AlphaEncoding`. | Corresponding `kind::PointAlpha`, `LineAlpha`, `FillAlpha`; retain observation, Single, keyed series/aggregate or bin units as admitted by the core. |
+| `source_rows`, `source_rows_cells` | Exact integer field/view or an already native `SourceRows` in the same role; `_cells` explicitly selects expanded slots. | `K: kind::SourceRows`; non-null, nonnegative, fitting and unique IDs; never repeat one ID across expanded cells. |
+| `facet_row`, `facet_column`, `facet_grid`, `facet_wrap`, `facet_scales` | Direct fields/vectors plus native `FacetScales`; applicable cell/column variants in the redesign. | `K: kind::Facet`; preserve row/column/wrap distinction, scale policy and native facet restrictions. Existing `facet(FacetSpec)` can forward unchanged. |
+| Line `band` | `.band(lower, upper)` with independently supplied fields/vectors. | Only exact Line; many-y bounds require matching collections/shapes, with no implicit pair reuse. No `band_bounds` compatibility method. |
+| `heatmap_highlight`, `heatmap_highlight_cells` | Boolean record vector/field, same-shape grid or explicitly expanded values. | Heatmap only; true adds a border, independently of validity. |
+| `estimate_status_boolean`, `estimate_status_categorical`, `estimate_status` | Foreign Boolean/categorical inputs with explicit mapping, or native `EstimateStatus` iterator. | PointInterval, Coefficient and Forest; never infer status from missing numeric values. |
+| `point_alpha`, `line_alpha`, `fill_alpha` and their unit/mapping methods | Direct u8 vectors, foreign fields/views or already-native `AlphaEncoding` in the same one-argument slot; explicit single values, mappings, keys and bins use their semantic operations. | Corresponding `kind::PointAlpha`, `LineAlpha`, `FillAlpha`; retain observation, Single, keyed series/aggregate or bin units as admitted by the core. |
 | DataPointLayer `labels` | Layer-local field/index, direct category vector or native `CategoryValues`. | Labels align with that independent layer, not the parent Plot. |
 | DataBarPointLayer `series` | Layer-local field/index, direct category vector or native `CategoryValues`. | Optional positioned-series identity resolves against the parent bar's prepared cells. |
 
@@ -144,21 +144,21 @@ foreign inputs never accidentally broadens native scientific capabilities:
 | Line `band` / independent PointLayer | Line only; Regression `band` is a different native policy. |
 | BarPointLayer | Bar and HorizontalBar only. |
 
-An already-native input is forwarded unchanged according to native slot semantics;
-the adapter does not silently reinterpret it as a source-row vector or expand it.
-Foreign row, selected-column and `Cells(...)` bindings follow their explicit owning
-operation's origin map. `Into` alone cannot provide the retained source or decide
-whether an input is row-, cell-, observation-, series- or bin-aligned.
+An already-native input accepted by the same adapter method retains its native
+slot semantics; the adapter does not silently reinterpret it as a source-row
+vector or expand it. Foreign row, selected-column and explicitly cell-scoped
+bindings follow their owning operation's origin map. `Into` alone cannot provide
+the retained source or decide whether input is row-, cell-, observation-, series-
+or bin-aligned.
 
-`Interval`, `Facet`, `Alpha`, `AlphaMap`, `Key`, `Status`, `Valid`, `Cells`,
-`Grid`, `HeatmapCells`, `Columns`, `RowIndex`, `ColumnIdentity`, `Axis`,
-`HistogramData`, `RaincloudData`, `BarData`/`BarSampleData` and `CoefficientData`
-are adapter-side descriptors/markers; their definitions do not replace native
-types. A descriptor containing unresolved names, symbolic plot-role identities or
-fallible foreign conversions is resolved by the owning adapter operation. It can
-implement a fallible conversion only when it carries all needed context. An
-already materialized local value can implement `From` into its native counterpart,
-but adding a public wrapper purely to expose that conversion is not required.
+Do not add parallel public Interval, Facet, Alpha/AlphaMap, Key, Status, Axis,
+Valid, Cells, Grid, HeatmapCells, Columns, RowIndex, ColumnIdentity, HistogramData,
+RaincloudData, BarData/BarSampleData or CoefficientData types. Their meaningful
+roles instead use adapter methods, ordinary tuples/views and the native types
+listed above. The 25-family constructor and semantic-mode inventory specifies
+fixed arity and explicit sample/estimate, grid/records and indexed/columns modes.
+The implementation must prototype local trait coherence, `new` inference,
+lifetimes and role-disambiguation; do not guess an input meaning from lengths.
 
 An adapter may define a local input trait for foreign Series/Column/array types;
 it cannot implement the foreign standard `From`/`TryFrom` trait directly between
@@ -179,8 +179,9 @@ Keep this inventory synchronized with the core when implementation begins.
 
 | Method(s) | DataPlot compatibility |
 | --- | --- |
-| `hue`, `group`, `series`, `source_rows`, `facet`, `heatmap_highlight`, `estimate_status`, `point_alpha`, `line_alpha`, `fill_alpha` | Use the role-specific adapter binding contracts above; native receiver remains unchanged. |
-| `band` | Line accepts adapter Interval or native Bounds as a fallible data binding. Regression forwards native `RegressionBand` as a pure policy, with its original return shape. |
+| `hue`, `group`, `series`, `source_rows`, `heatmap_highlight`, `estimate_status`, `point_alpha`, `line_alpha`, `fill_alpha` | Use the role-specific direct adapter binding methods above; native receiver remains unchanged. |
+| `facet` | Native FacetSpec can use the existing same-name forwarding method; adapter field/vector workflows use direct `facet_row`, `facet_column`, `facet_grid` and `facet_wrap` methods plus explicit scale/cell/column operations. |
+| `band` | Adapter Line binds `.band(lower, upper)?` directly; native Line retains `.band(Bounds)`. No adapter `band_bounds` method is required. Regression forwards native `RegressionBand` as a separate pure policy, with its original return shape. |
 | `point_layer` | Line accepts native PointLayer or prepared DataPointLayer; Bar/HorizontalBar accept native BarPointLayer or prepared DataBarPointLayer. Adapter method consumes `impl Into<NativeLayer>` and returns Self. Native methods retain exact native arguments. |
 | `significance` | Forward the native `IntoIterator<Item = Significance<P>>` contract and `K: kind::Significance<P>` bound, returning Self. Use native annotations or the data preparation described below. |
 | `title`, `subtitle`, `caption`, `x_label`, `y_label`, `title_alignment`, `subtitle_alignment`, `labels` | Forward the actual native text, layout, replacement and label-policy behavior; strings here are literal text. |
@@ -215,26 +216,26 @@ handoff. Point-layer x/y and labels remain independent of the primary line data.
 ### Auxiliary Input Constructors
 
 These are distinct contracts, not a blanket requirement to duplicate every
-method. Plain `new` is used for actual adapter-owned object construction; plain
-operation names describe other actions. The `_from_data` spelling identifies an
-explicit dataset argument, not a universal source lifetime or a claim that other
-inputs are not data. The old `from_vectors`/factory spellings are not aliases.
+method. Plain `new` constructs an actual adapter-owned object; plain semantic
+operation names express independent scientific choices. `_from_data` identifies
+an explicit dataset argument, not a universal source lifetime or a claim that
+other inputs are not data. Do not retain old wrappers, factories or aliases.
 
 | Surface | Direct/default input | Explicit dataset | Result and source context |
 | --- | --- | --- | --- |
-| Each of 25 exact-family frontends | `Family::new(...)` | `Family::from_data(source, ...)` | `DataResult<Self>`; the data form retains its own source for subsequent field bindings. |
-| `DataPointLayer` | `DataPointLayer::new(x, y)` | `DataPointLayer::from_data(source, x, y)` | `DataResult<Self>`; only the data form retains the layer's own source for later labels. |
-| `DataBarPointLayer` | `DataBarPointLayer::new(category, value, color, radius)` | `DataBarPointLayer::from_data(source, category, value, color, radius)` | `DataResult<Self>`; only the data form retains the layer's own source for later series binding. |
-| `PairwiseAnnotations` / `AttachedAnnotations` | `::prepare(descriptor)` | `::from_data(source, descriptor)` | `DataResult<Vec<Significance<P>>>`; inputs are prepared eagerly and neither result retains a dataset. |
-| `Alpha` keyed / bins | `Alpha::keyed(...)` / `Alpha::bins(...)` | `Alpha::keyed_from_data(source, ...)` / `Alpha::bins_from_data(source, ...)` | The unsuffixed descriptor resolves direct inputs or the owning plot's source at attachment; the `_from_data` form eagerly binds its independent table and retains no foreign table. Symbolic plot targets may still need the parent plot at attachment. |
-| `Interval`, `Facet`, `Grid`, `HeatmapCells`, family input and mark descriptors | Role-specific `new`, `row`, `samples`, `geometry`, etc. | Names/indices are resolved by the owning adapter operation. | A descriptor is not a dataset binding operation; do not add `_from_data` variants mechanically. |
+| Each of 25 exact-family frontends | `Family::new(...)` | `Family::from_data(source, ...)` | `std::result::Result<Self, DataError>`; the data form retains its own source for subsequent field bindings. |
+| `DataPointLayer` | `DataPointLayer::new(x, y)` | `DataPointLayer::from_data(source, x, y)` | `std::result::Result<Self, DataError>`; only the data form retains the layer's source for later labels. |
+| `DataBarPointLayer` | `DataBarPointLayer::new(category, value, color, radius)` | `DataBarPointLayer::from_data(source, category, value, color, radius)` | `std::result::Result<Self, DataError>`; only the data form retains the layer's source for later series binding. |
+| Significance result-table binding | `plot.significance_pairwise(...)` / `significance_attached(...)` | Corresponding `_from_data(source, ...)` methods. | The adapter binds directly and appends native Significance values. Original `plot.significance(native_items)` is preserved. |
+| Alpha keyed / bins | `line_alpha_keyed(...)`, `fill_alpha_bins(...)` and admitted target variants. | Corresponding `_from_data(source, ...)` methods. | Bind keys, alpha values and intervals directly; an independent table is resolved at the call and not retained. |
+| Semantic modes | Family methods such as Heatmap `records`, Bar `estimates`, Line `indexed` and their `_from_data` forms. | The named operation makes grid/record, sample/estimate or omitted-coordinate meaning explicit. | Retain native validation and scientific behavior without public input-wrapper types. |
 
 When `new` is used on a plot or layer, direct inputs and their required shape/
 origin metadata are bound without installing a shared lookup source. The actual
 values may have come from a table. When an explicit data context is present,
-source selectors and direct inputs can be mixed. A plain semantic operation such
-as `Alpha::keyed` can itself contain selectors resolved in an existing plot context;
-the lack of a suffix does not universally mean every argument is already materialized.
+source selectors and direct inputs can be mixed. An unsuffixed adapter setter can
+resolve a selector in its receiver's existing source; a `_from_data` method instead
+binds the explicit independent source for that operation.
 The original native Plot/layer constructors, significance types and methods keep
 their unchanged definitions and signatures.
 
@@ -261,88 +262,74 @@ let plot = pp::Boxplot::from_data(&observations, "group", "value")?
     .title("Treatment comparison");
 ```
 
-For caller-computed tabular results, the following additive helper shapes are
-planned for review. `PairwiseAnnotations::from_data(source, descriptor)` and
-`::prepare(descriptor)` resolve a `PairwiseData` descriptor and return
-`DataResult<Vec<Significance<Pairwise>>>`; `AttachedAnnotations` and
-`AttachedData` do the same for `Attached`. They are adapter-owned names, not
-replacements for native Significance. A prepared result can be passed to native
-or adapter `.significance` directly because it contains the native items.
-`prepare` describes producing a native collection; it does not introduce a new
-annotation wrapper merely to use `new`. Both forms resolve their own inputs eagerly,
-and the resulting collection retains no foreign source for future field lookups.
+For foreign results, adapter Plot methods bind data directly, without a parallel
+annotation descriptor or factory type:
 
 ```rust
-let comparisons = pp::PairwiseAnnotations::from_data(
-    &test_results,
-    pp::PairwiseData::new(
-        pp::AnnotationTarget::category("left"),
-        pp::AnnotationTarget::category("right"),
-        pp::AnnotationMarks::p_values("adjusted_p"),
-    ),
-)?;
-
 let plot = pp::Boxplot::from_data(&observations, "group", "value")?
-    .significance(comparisons);
+    .significance_pairwise_from_data(&test_results, "left", "right", "adjusted_p")?;
+
+let direct = nd::Boxplot::new(groups.view(), observations.view())?
+    .significance_pairwise(left.view(), right.view(), p_values.view())?;
 ```
 
-`PairwiseData::new(left, right, marks)` accepts two independent target
-descriptors. `AttachedData::new(target, marks)` accepts one. Each target uses
-`AnnotationTarget::category(binding)`, `::category_series(category, series)`,
-or `::native(binding)` for an explicitly typed SignificanceTarget sequence.
-The two pairwise endpoints may have different target shapes, as in the core.
-Each annotation descriptor may add `facet_single(binding)` or
-`facet_grid(row, column)`.
-`AnnotationMarks::p_values(binding)` uses supplied numeric p-values;
-`::native(binding)` accepts an explicitly typed native SignificanceMark sequence;
-`::mapped(binding, explicit_mapping)` maps external categorical values to native
-marks, rejecting missing or unmapped values; `::constant(mark)` is explicit
-broadcast. Dataset selectors and direct vectors follow the adapter's normal role
-grammar. The ndarray direct form can use separate string target views and numeric
+`significance_pairwise(left, right, marks)` and
+`significance_attached(target, marks)` accept direct foreign variables and may
+resolve selectors against the receiver's existing source. Their
+`_from_data(source, ...)` counterparts resolve selectors against that explicit
+independent source, not the parent Plot's source. Pairwise endpoints are independent:
+each target is a category binding, a `(category, series)` pair of bindings, or an explicitly typed
+sequence of native `SignificanceTarget`; the two endpoints may use different
+shapes. Bare numeric mark bindings represent supplied p-values. A typed native
+`SignificanceMark` sequence is forwarded as marks; a scalar native mark explicitly
+broadcasts. `(categorical_binding, mapping)` supplies an explicit mapping to
+native marks, rejecting missing/unmapped values; arbitrary strings are never
+guessed as stars. A typed native target scalar explicitly broadcasts. All
+non-scalar inputs must agree on annotation count, independently of the parent
+plot. A native scalar broadcasts to that count; if all inputs are scalars, they
+form one annotation. Null targets or marks cannot construct native items and fail at binding. Plain
+strings in data roles are selectors, not constant target identities.
+
+`significance_pairwise_in_facet(left, right, marks, facet)` and
+`significance_attached_in_facet(target, marks, facet)` add one facet-level
+binding. Their `_in_grid` counterparts add `facet_row, facet_column`; every
+operation also has an `_from_data(source, ...)` form. Facet bindings are direct
+variables or source selectors as appropriate; an explicit native `FacetCell`
+in the facet argument can represent a constant single or grid target facet.
+Selectors refer to source columns only in these data roles. Native
+`Significance::between("control", "treated", mark)`
+continues to interpret its strings as literal target identities.
+
+For genuinely reusable results, adapter root functions with the same semantic
+operation names and arguments, e.g. `significance_pairwise_from_data(source,
+left, right, marks)`, return `std::result::Result<Vec<Significance<Pairwise>>,
+DataError>`. Attached, direct, single-facet and grid-facet forms return the
+corresponding native collection. A root function without `_from_data` has no plot
+context and accepts direct inputs, not unresolved selectors. These functions
+are not compatibility aliases or prerequisites for the Plot methods: they let a
+caller bind once and reuse the same native items across different plots, including
+native plots. They share binding logic with the methods and retain no foreign source:
+
+```rust
+let comparisons = pp::significance_pairwise_from_data(
+    &test_results, "left", "right", "adjusted_p",
+)?;
+let first = pp::Boxplot::from_data(&observations, "group", "value")?
+    .significance(comparisons.clone());
+let second = native_plot.significance(comparisons);
+```
+
+Both adapter and native `.significance(...)` append, rather than replace, their
+existing annotations. Do not add PairwiseAnnotations, AttachedAnnotations,
+PairwiseData, AttachedData, AnnotationTarget or AnnotationMarks wrapper/factory
+types. An ndarray direct call may use separate string target views and numeric
 p-value views; a homogeneous numeric ndarray table does not become a string table.
-For example:
 
-```rust
-let comparisons = nd::PairwiseAnnotations::prepare(
-    nd::PairwiseData::new(
-        nd::AnnotationTarget::category(left.view()),
-        nd::AnnotationTarget::category(right.view()),
-        nd::AnnotationMarks::p_values(p_values.view()),
-    ),
-)?;
-let plot = nd::Boxplot::new(groups.view(), observations.view())?
-    .significance(comparisons);
-```
-
-`AnnotationMarks::native` accepts an actual native-mark sequence or typed ndarray
-view; it does not imply that Polars stores arbitrary Rust enums in a column.
-
-The same direct/result-table distinction applies to attached marks:
-
-```rust
-let attached = pp::AttachedAnnotations::prepare(pp::AttachedData::new(
-    pp::AnnotationTarget::category(&target_series),
-    pp::AnnotationMarks::p_values(&p_value_series),
-))?;
-
-let attached_from_table = pp::AttachedAnnotations::from_data(
-    &test_results,
-    pp::AttachedData::new(
-        pp::AnnotationTarget::category("target"),
-        pp::AnnotationMarks::p_values("adjusted_p"),
-    ),
-)?;
-```
-
-Both variables contain native `Significance<Attached>` values ready for an
-admitted native or adapter Plot. Their independent inputs need not have the same
-length as the observations used to construct that Plot.
-
-The independent result table's row count is its number of annotations, not the
-main plot's observation count. Resolve its fields and preserve supplied order;
-no parent-source lookup, implicit join, statistical inference, correction or
-automatic star-string interpretation is introduced. Preserve exact facet/target
-and type restrictions. Binding errors are reported when reading the source;
+An independent result table's row count is its number of annotations, not the
+main plot's observation count. Its `_from_data` operation resolves its own fields
+and preserves supplied order; there is no fallback to the parent source, implicit
+join, statistical inference, correction or automatic star-string interpretation.
+Preserve exact facet/target and type restrictions. Binding errors are reported when reading the source;
 native p-value, target and facet validation retains its core preflight timing.
 Representative implementation tests must include attached versus pairwise,
 category/series targets, facet ownership, foreign p-values, native annotations,
@@ -357,6 +344,7 @@ and rejected unsupported family/placement combinations without a test cross-prod
 | DataPlot | Native `Canvas::panel` / `panel_span` | Convert into an exact native Plot first; current arguments are concrete `Plot<K>`. | Yes, if the exact same `.panel(..., adapted)` syntax must work without a conversion. A generic acceptance protocol or new method requires separate review. |
 | DataPlot | Optional adapter-local Canvas extension | A separately reviewed `CanvasDataExt::panel_data`/`panel_span_data` could perform the same `Into` inside an extension trait on the real native Canvas. It needs a trait import and new method names. | No, if those tradeoffs are acceptable; inferred exact-family generics must be prototyped. |
 | DataPlot | User function/collection requiring `Plot<K>` | Explicit conversion at the application boundary. | A core change cannot alter an application-owned concrete signature; the application may choose its own generic bound. |
+| Two bounds / preassembled native Bounds | Adapter Line / native Line | Adapter `.band(lower, upper)?` binds foreign inputs. Native `.band(bounds)` remains unchanged on Plot; convert explicitly if using an already assembled Bounds. No `band_bounds` compatibility method. | No. |
 | DataPointLayer / DataBarPointLayer | Native layer | Binding finishes in the layer's own context; adapter implements `From` to the appropriate native layer. | No. |
 | Prepared adapter layer | Adapter DataPlot `point_layer` | Adapter method accepts `impl Into<NativeLayer>`; already-native layers work via identity conversion. | No. |
 | Prepared adapter layer | Native Plot `point_layer` | Convert explicitly to the exact native layer. | Yes, only if the unchanged native method must accept the wrapper without explicit conversion. |
@@ -440,7 +428,7 @@ let observations = pp::DataPointLayer::from_data(&observed, "time", "response")?
     .legend_label("Observed");
 
 let fit = pp::Line::from_data(&fitted, "time", "estimate")?
-    .band(pp::Interval::new("lower", "upper"))?
+    .band("lower", "upper")?
     .point_layer(observations)
     .title("Fit and observations");
 ```
@@ -481,13 +469,16 @@ Use focused compile consumers and representative semantic integration tests:
   x/many-y, row-index/column-identity wide, grid versus cell heatmaps and mixed
   source/direct inputs.
 - Prototype the actual family type representation so `Family::new` returns
-  `DataResult<Self>` under strict Clippy, with inferred source lifetimes and
+  `std::result::Result<Self, DataError>` under strict Clippy, with inferred source lifetimes and
   concrete family methods. Test direct and source-bound layer constructors on
-  the real frontend types. No old `from_vectors` or separate layer factory alias
-  may remain; distinguish `new` from the annotation `prepare` collection operation.
+  the real frontend types. No old wrapper/factory aliases or compatibility-only
+  `band_bounds` method may remain; exercise direct semantic operations and native
+  result collection reuse.
 - Verify field versus direct vector versus native inputs, explicit `?` timing,
-  null/dtype/shape/strides/chunks, all relevant origin units and exact IDs.
-  Include the independent line/point-layer and alpha-key contexts.
+  null/dtype/shape/strides/chunks, masked tuple coherence in composite roles,
+  all relevant origin units and exact IDs. Include the independent line/point-layer
+  and alpha-key contexts, mapped wide-alpha declarations/callbacks and label/facet
+  replacement through native and adapter methods.
 - Verify native and foreign annotations, attached/pairwise family restrictions,
   category-series and faceted targets, independent result counts, source errors,
   and native validation timing without accidentally performing statistics.
