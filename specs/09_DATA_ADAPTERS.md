@@ -7,17 +7,20 @@ their public design has been rejected: callers should pass foreign data to
 plotting interfaces, not first construct native values themselves. These sections
 describe the current code, not the intended replacement or an accepted completion
 of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
-owns the selected replacement design: complete unchanged native API re-exports
-plus direct root variable/column-collection plotting, vectors, matrix/record
-heatmaps and local supplemental layers. It compares upstream input models and
-records lifecycle/forwarding costs; this replanning change does not implement it.
+owns the selected replacement design: complete unchanged native API re-exports,
+top-level plot families with `from_data`/`from_vectors`, adapter-owned binding and
+standard native handoffs, matrix/record heatmaps and local supplemental layers.
+The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md) covers native types,
+all current Plot methods, significance and composition boundaries. These plans
+compare input models and record lifecycle/forwarding costs; they do not implement
+the replacement.
 
 The replacement requires every public `lichtung_plot::path` to work through
 either adapter with only its crate prefix changed, preserving the native type or
 module and original signatures. Root Plot, Bounds, input/layer types and Error/
-Result must not be shadowed by foreign-input wrappers. The additional data/family
-functions and descriptors such as Interval, BarData and DataError use their own
-root names, not a mandatory public binding namespace. Users need no separate
+Result must not be shadowed by foreign-input wrappers. The additional top-level
+family constructors and descriptors such as Interval, BarData and DataError use
+their own root names, not a mandatory public binding namespace. Users need no separate
 direct renderer dependency, and the two adapters can coexist and re-export
 identical native types from one compatible resolved core.
 Re-exports do not copy definitions; adapter source archives declare the core

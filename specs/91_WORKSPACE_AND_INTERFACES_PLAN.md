@@ -31,7 +31,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) requires complete unchanged native re-exports plus direct root plotting functions for sources/vectors, explicit-x/multiple-y, distinct grid/cell heatmaps and local layers; not implemented yet. |
+| ndarray and Polars adapters | Conversion-only packages exist and passed strict Clippy and joint offline archive verification, but do not satisfy the requested plotting interface. [The redesign](92_DATA_ADAPTERS_PLAN.md) requires complete unchanged native re-exports plus top-level plot families with source/vector constructors, adapter-owned data binding, explicit native conversion, explicit-x/multiple-y, distinct grid/cell heatmaps and local layers; not implemented yet. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -41,7 +41,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
-| Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses direct root data/family functions and non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
+| Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::from_data` and `Family::from_vectors` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy and Polars use the same native-value/rendering route. |
 | Python compatibility | CPython 3.10 is a required minimum, not a version that may be excluded by adopting a moving support-window recommendation. |
@@ -146,8 +146,9 @@ implementation without presenting it as an accepted public design. The
 foreign data sources plus variable bindings, direct vectors and family-specific
 matrix/wide input. A scalar selector denotes one variable; an ordered selector
 collection in an admitted many-y position denotes multiple variables with the
-explicit x preserved. `_wide` is reserved for an omitted coordinate/category.
-Grid and record-cell heatmaps are distinct operations. Supplemental layers bind
+explicit x preserved. `RowIndex` and `ColumnIdentity` explicitly request the
+omitted-coordinate/category wide meanings within the same family constructors.
+Grid and record-cell heatmaps are distinct typed inputs. Supplemental layers bind
 in their own source context without parent-mapping inheritance. Internal native
 conversion is permitted, not an obligatory user preprocessing step.
 
@@ -155,20 +156,23 @@ Each adapter must re-export the entire native public API, including public modul
 paths, through `pub use lichtung_plot::*` without local root-name shadowing.
 Replacing only `use lichtung_plot::...` with either adapter prefix preserves
 original native signatures and behavior, including Plot, Bounds, closed inputs,
-layers, Error and Result. Foreign-data entry points and descriptors are additional
-`data(source)`, `scatter(x, y)` and other root family functions/types, not
-adapter-owned replacements or required extension traits. Input descriptors use
-distinct names such as Interval and BarData; native Bounds and BarInput remain
-unchanged. Do not require users to navigate a public bind/frontend namespace.
+layers, Error and Result. Foreign-data entry points are additional top-level
+`Scatter::from_data(source, x, y)`, `Scatter::from_vectors(x, y)` and equivalent
+family constructors, not native-name replacements or required extension traits.
+Input descriptors use distinct names such as Interval and BarData; native Bounds
+and BarInput remain unchanged. Do not require a public bind/frontend namespace.
 
-The DataPlot frontend retains native family bounds and owns the real core
-Plot. It forwards native configuration deliberately, without claiming zero
-maintenance cost. Source-bound plots keep a lookup borrow; infallible build drops
-that context and returns the exact native Plot for existing Canvas composition.
-Direct inputs are released after binding. DataError/DataResult have distinct root
-names and lossless native-error conversion for `?`; Error/Result remain native.
-No core data-access framework, general Mark/Scale/Stat grammar, adapter Canvas or
-reverse dependency is prescribed.
+The DataPlot frontend retains native family bounds and owns the real core Plot.
+It forwards native configuration deliberately, without claiming zero maintenance
+cost. Source-bound plots keep a lookup borrow; infallible standard `From`/`Into`
+conversion releases it and yields the exact native Plot for current Canvas and
+other concrete consumers. Direct inputs are released after binding. DataError/
+DataResult have distinct root names and lossless native-error conversion for `?`;
+Error/Result remain native. The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
+lists every current Plot method, semantic input and core boundary. A native Canvas
+acceptance protocol for `.panel(..., adapted)` is a separately reviewed option,
+not part of the adapter-only baseline. No core data-access framework, general
+Mark/Scale/Stat grammar, adapter Canvas or reverse dependency is prescribed.
 
 Users need no direct core dependency for either foreign or native workflows through
 an adapter. The two adapters may coexist without depending on each other; both
@@ -360,7 +364,7 @@ than disguise it through packaging or relabeling.
 | Work | Required bounded evidence |
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
-| Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; root source/vector plotting functions, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, input/native errors and owned completion. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
+| Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
 | Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
@@ -397,11 +401,11 @@ package contents or published ref may reintroduce the full Unicode corpus.
 2. **Book/example/gallery foundation.** Establish peer language books and shared
    runnable-source/output conventions using existing capabilities and examples.
 3. **Polars plotting interface replacement.** Deliver complete native re-exports
-   and direct root whole-dataset/name, Series/Column, multi-variable and
+   and top-level family whole-dataset/name, Series/Column, multi-variable and
    local-layer inputs with native capabilities. Migrate callers and peer guides
    to adapter-only renderer imports, removing the public conversion-only surface.
 4. **ndarray plotting interface replacement.** Deliver the same complete native
-   exports and root plotting functions for direct views, selected table columns,
+   exports and top-level family constructors for direct views, selected table columns,
    explicit-x/view2 series and matrix/wide input. Verify shared native types when
    both adapters are used; migrate callers and peer guides with focused evidence,
    removing the old conversion surface.
