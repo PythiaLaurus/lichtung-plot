@@ -1,13 +1,13 @@
 use lichtung_plot::NumericValues;
 use polars_core::prelude::DataFrame;
 
-use crate::{Error, Result};
+use crate::error::{AdapterError as Error, BindingResult as Result};
 
 /// Convert exactly the requested numeric columns in caller order.
 ///
 /// Selectors are literal names, not expressions, regexes or automatic discovery.
 /// Missing/wrong-type columns fail; duplicates are not renamed or silently removed.
-pub fn numeric_columns(frame: &DataFrame, names: &[&str]) -> Result<Vec<NumericValues>> {
+pub(crate) fn numeric_columns(frame: &DataFrame, names: &[&str]) -> Result<Vec<NumericValues>> {
     let mut columns = Vec::new();
     columns
         .try_reserve_exact(names.len())
@@ -21,7 +21,7 @@ pub fn numeric_columns(frame: &DataFrame, names: &[&str]) -> Result<Vec<NumericV
             name: (*name).into(),
             source,
         })?;
-        columns.push(crate::numeric(column)?);
+        columns.push(crate::numeric::numeric(column)?);
     }
     Ok(columns)
 }

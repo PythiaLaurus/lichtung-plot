@@ -1,28 +1,39 @@
-//! Snapshot eager Polars columns as owned lichtung-plot native values.
+//! Plot eager Polars fields or borrowed Series/Column variables directly.
 //!
-//! Logical row order, sliced validity, all chunks and repeated scalar lengths are
-//! preserved. Null stays distinct from present NaN. Numeric primitives normalize
-//! to f64 with ordinary rounding; semantic/nested dtypes are not reinterpreted.
-//! No filtering, aggregation, query execution or foreign buffer retention occurs.
-//! A ScalarColumn may populate Polars' internal full-Series materialization cache.
+//! Family constructors bind immutable native snapshots. `from_data` additionally
+//! borrows a DataFrame for subsequent field-based setters; `new` releases direct
+//! input borrows at each binding. All native lichtung-plot paths are re-exported
+//! unchanged, including [`Plot`], [`Error`] and [`Result`]. An explicit `.into()`
+//! moves a configured [`PlotAdapter`] into its exact-family native Plot and ends
+//! source-bound chaining. Single-image output needs no explicit conversion.
 //!
-//! Pass a DataFrame's `column(name)?` directly. A standalone Series uses Polars'
-//! own `IntoColumn` conversion. The renderer does not depend on this adapter.
+//! Null, present NaN, logical slot order, chunks and scalar-column lengths remain
+//! distinct. There are no implicit joins, query execution or new estimators.
+//! The standalone renderer never depends on Polars or this adapter.
 
 mod boolean;
 mod category;
 mod columns;
 mod error;
+mod frontend;
+mod input;
+mod layers;
 mod numeric;
 mod provenance;
 mod snapshot;
 
-pub use boolean::booleans;
-pub use category::categories;
-pub use columns::numeric_columns;
-pub use error::{Error, Result};
-pub use numeric::numeric;
-pub use provenance::source_rows;
+pub use error::AdapterError;
+pub use frontend::{
+    Bar, Beeswarm, Boxplot, Coefficient, Density, Dumbbell, Forest, Heatmap, Histogram,
+    HorizontalBar, Interaction, Line, LinePath, Marginal, Matrix, PlotAdapter, PointInterval, Qq,
+    Raincloud, Regression, Scatter, StackedBar, StackedHorizontalBar, Trajectory, Violin,
+    Waterfall,
+};
+pub use input::{
+    AxisInput, BooleanInput, CategoryInput, ColumnsInput, NumericInput, SourceRowsInput,
+};
+pub use layers::{BarPointLayerAdapter, PointLayerAdapter};
+pub use lichtung_plot::*;
 
 #[cfg(test)]
 mod tests;

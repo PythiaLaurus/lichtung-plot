@@ -1,6 +1,18 @@
 use polars_core::prelude::Column;
 
-use crate::{Error, Result};
+use crate::error::{AdapterError as Error, BindingResult as Result};
+
+pub(crate) fn allocate<T>(len: usize, role: &'static str) -> Result<Vec<T>> {
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(len)
+        .map_err(|source| Error::Allocation {
+            name: role.into(),
+            channel: role,
+            source,
+        })?;
+    Ok(values)
+}
 
 pub(crate) fn buffer<T>(column: &Column, channel: &'static str) -> Result<Vec<T>> {
     let mut values = Vec::new();

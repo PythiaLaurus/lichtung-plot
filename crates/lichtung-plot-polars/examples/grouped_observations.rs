@@ -1,8 +1,7 @@
 //! Chunked nullable synthetic observations with explicit original sample IDs.
 
 // ANCHOR: example
-use lichtung_plot::{Labels, Plot, Theme};
-use lichtung_plot_polars as pl;
+use lichtung_plot_polars::{kind, Labels, Plot, Scatter, Theme};
 use polars_core::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,18 +73,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .customize()
         .marks(base.marks().clone().points(points)?)
         .build()?;
-    let plot = Plot::scatter(
-        pl::numeric(frame.column("Concentration (µM)")?)?,
-        pl::numeric(frame.column("Response (a.u.)")?)?,
-    )
-    .hue(pl::categories(frame.column("Condition")?)?)
-    .source_rows(pl::source_rows(frame.column("Sample ID")?)?)
-    .theme(theme)
-    .labels(Labels::raw())
-    .size(800, 480)
-    .title("Observational response by condition")
-    .caption("Synthetic illustration · one response missing · no inferred fit or significance");
-    drop(frame); // The native snapshot does not retain the Polars source.
+    let plot = Scatter::from_data(&frame, "Concentration (µM)", "Response (a.u.)")?
+        .hue("Condition")?
+        .source_rows("Sample ID")?
+        .theme(theme)
+        .labels(Labels::raw())
+        .size(800, 480)
+        .title("Observational response by condition")
+        .caption("Synthetic illustration · one response missing · no inferred fit or significance");
+    let plot: Plot<kind::Scatter> = plot.into();
+    drop(frame); // Native handoff ends the adapter's field-lookup borrow.
     plot.svg(directory.join("grouped_observations.svg"))?
         .svg_preserve_text(directory.join("grouped_observations_text.svg"))?;
     // ANCHOR_END: observation-plot

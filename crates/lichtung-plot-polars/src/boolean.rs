@@ -1,7 +1,8 @@
 use lichtung_plot::BooleanValues;
 use polars_core::prelude::{Column, DataType};
 
-use crate::{error, snapshot, Result};
+use crate::error::BindingResult as Result;
+use crate::{error, snapshot};
 
 pub(crate) fn values(column: &Column) -> Result<Vec<Option<bool>>> {
     match column.dtype() {
@@ -22,7 +23,7 @@ pub(crate) fn values(column: &Column) -> Result<Vec<Option<bool>>> {
 }
 
 /// Snapshot true/false/null without numeric or string coercion.
-pub fn booleans(column: &Column) -> Result<BooleanValues> {
+pub(crate) fn booleans(column: &Column) -> Result<BooleanValues> {
     Ok(BooleanValues::nullable(
         column.name().as_str(),
         values(column)?,

@@ -2,18 +2,18 @@
 
 ## Current Implementation And Replacement
 
-The conversion-only packages described below exist and have been verified, but
-their public design has been rejected: callers should pass foreign data to
-plotting interfaces, not first construct native values themselves. These sections
-describe the current code, not the intended replacement or an accepted completion
-of the adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
+The conversion-only public design has been rejected: callers should pass foreign
+data to plotting interfaces, not first construct native values themselves. Polars
+now implements the basic plotting frontend described below; ndarray still exposes
+its existing conversion API. This is partial delivery, not completion of the
+adapter objective. The [plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md)
 owns the selected replacement design: complete unchanged native API re-exports,
 top-level plot families with `new`/`from_data`, adapter-owned binding and
 standard native handoffs, matrix/record heatmaps and local supplemental layers.
 The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md) covers native types,
 all current Plot methods, significance and composition boundaries. These plans
-compare input models and record lifecycle/forwarding costs; they do not implement
-the replacement.
+compare input models, record lifecycle/forwarding costs and identify implemented
+versus remaining capabilities.
 
 The replacement requires every public `lichtung_plot::path` to work through
 either adapter with only its crate prefix changed, preserving the native type or
@@ -26,18 +26,17 @@ namespace. Users need no separate direct renderer dependency, and the two
 adapters can coexist and re-export
 identical native types from one compatible resolved core.
 Re-exports do not copy definitions; adapter source archives declare the core
-dependency rather than embedding its sources. The current conversion exports and
-adapter-owned root errors below do not yet meet this replacement contract.
+dependency rather than embedding its sources. ndarray's current conversion exports
+and adapter-owned root errors do not yet meet this replacement contract.
 
 ## Native Boundary
 
 Data adapters are separate workspace members consuming the deliberate public API
 of `lichtung-plot`. The renderer never depends on an adapter or its foreign data
 framework, including through development dependencies. The core remains the
-default member. The current packages export conversion functions rather than
-plotting entry points. They do not own scientific analysis, another rendering
-path, a runtime or asset provisioning. The restriction against adapter plotting
-frontends is not retained as a requirement for the replacement.
+default member. Polars exports plotting entry points and the complete native API;
+ndarray still exports conversion functions. They do not own scientific analysis,
+another rendering path, a runtime or asset provisioning.
 
 Conversion borrows a foreign input only while constructing existing owned native
 NumericValues, CategoryValues, BooleanValues or SourceRows. No mutable foreign
@@ -138,27 +137,54 @@ or per-family rendering tests. Package README and license texts remain member-lo
 
 ## Polars
 
-`crates/lichtung-plot-polars/src/lib.rs` exports numeric, categories, booleans,
-source_rows and numeric_columns free functions. Single-column entry points accept
-`&polars_core::prelude::Column` and use its source name. DataFrame column lookup
-returns this type; standalone Series inputs use Polars' existing IntoColumn route.
+`crates/lichtung-plot-polars/src/lib.rs` re-exports the complete native API and adds
+PlotAdapter, AdapterError, 25 root family aliases and the two layer adapters.
+`Family::new(...)` binds direct Series/Column references or native values;
+`Family::from_data(&DataFrame, ...)` additionally permits literal field names and
+retains the source for subsequent binding. Their exact-family return type is the
+same. Direct input borrows end after binding; `From<PlotAdapter<K>> for Plot<K>`
+ends source lookup and hands off the already-owned native Plot. No unsafe pointers,
+implicit table or public value-conversion functions are used.
+
+All 25 families currently bind single-variable record roles, preserving native
+sample/estimate, interval, trajectory-axis and supplied-geometry distinctions.
+Heatmap additionally supports numeric rectangles with explicit axis labels, and
+Matrix supports ordered columns and explicit numeric discovery. Native policies,
+text/numeric callbacks, annotations, alpha and status forward with their original
+family capability bounds. Facet fields, Line bounds, source IDs and independent
+layer labels/series bind fallibly in the owning source context. The implementation
+checks structural lengths at binding, without repeating native scientific validation.
+
+Multi-y/indexed/distribution-column modes, expanded row/cell bindings, field-bound
+row labels, foreign status/alpha maps and foreign significance result tables are
+not implemented yet. The full target remains in the shared plan; no fallback or
+legacy conversion catalog substitutes for those pending capabilities.
 The adapter accepts only eager inputs, never LazyFrame or query expressions.
 
-| Entry point / input dtype | Conversion |
+| Input role / dtype | Conversion |
 | --- | --- |
-| numeric: Int8/16/32/64/128, UInt8/16/32/64/128, Float16/32/64 | Ordinary f64 normalization, preserving null and present nonfinite values. |
-| categories: String | Exact present string keys and nulls. No numeric parsing or formatting. |
-| categories: Categorical, Enum | Decode actual string identities, never physical dictionary codes. Rebuild first-observed native levels; unobserved levels are not extra observations, and Enum schema order is not an implicit CategoryOrder. |
-| booleans: Boolean | True/false/null, not implicit numeric or string data. |
-| numeric/categories/booleans: Null | The explicit entry point chooses an all-null destination channel of the same logical length. |
-| source_rows: integer dtypes | Exact checked usize IDs, followed by native uniqueness validation. Null, negative and out-of-range IDs fail by logical slot; floating/string/categorical/Null dtypes are not coerced. |
+| Numeric: Int8/16/32/64/128, UInt8/16/32/64/128, Float16/32/64 | Ordinary f64 normalization, preserving null and present nonfinite values. |
+| Category: String | Exact present string keys and nulls. No numeric parsing or formatting. |
+| Category: Categorical, Enum | Decode actual string identities, never physical dictionary codes. Rebuild first-observed native levels; unobserved levels are not extra observations, and Enum schema order is not an implicit CategoryOrder. |
+| Boolean highlights: Boolean | True/false/null, not implicit numeric or string data. |
+| Numeric/category/Boolean: Null | The explicit role chooses an all-null destination channel of the same logical length; ambiguous trajectory x requires an explicit axis constructor. |
+| Source IDs: integer dtypes | Exact checked usize IDs, followed by native uniqueness validation. Null, negative and out-of-range IDs fail by logical slot; floating/string/categorical/Null dtypes are not coerced. |
 | Temporal, Decimal, binary, nested, object, extension and unknown dtypes | Unsupported implicit interpretation, including zero-length inputs. Explicitly choose units/project upstream; physical storage does not establish scientific meaning. |
 
-`numeric_columns(&DataFrame, names: &[&str])` returns ordered native columns from
-exactly the literal names selected. No regex/expression/discovery, silent omission,
-sorting or deduplication occurs. Missing/wrong-type selections fail with the named
-column's context, without partially mutating the frame or publishing a destination.
-Native consumers retain their own name/minimum-variable constraints.
+Column collections select literal fields in caller order and reject empty/duplicate
+selections. `..` includes all logical columns, failing on unsupported selected
+dtypes rather than silently omitting metadata. `Matrix::numeric_from_data` is the
+separate explicit supported-numeric discovery operation. Grid cell `(r,c)` retains
+its row and column positions in logical row-major expansion, even for null fill;
+display aliases do not merge identities. Missing/wrong-type selections fail at
+binding without partially editing the frame or publishing a destination.
+
+AdapterError retains structured binding context and original upstream/native
+sources, including lossless `From<Error>` for combined `?` workflows. Root Error
+and Result are native re-exports; terminal methods return native Result<Output>.
+There is no public adapter result alias. Layer adapters own independent lookup
+sources and may convert explicitly into native layers; the native Canvas and
+concrete application consumers still require an exact native Plot handoff.
 
 ### Logical Representation
 
@@ -191,7 +217,8 @@ families are not bridged by adapters or compatibility modes.
 
 `examples/grouped_observations.rs` builds a nullable two-chunk response column,
 categorical conditions and explicit integer sample IDs from synthetic observations.
-The frame is dropped before publication to demonstrate native snapshot ownership.
+An explicit native Plot handoff ends field lookup, then the frame is dropped
+before publication to demonstrate snapshot ownership.
 Outlined/preserve-text SVGs reuse one frozen native Output; the same execution
 serves both guide editions. Like the ndarray example, zero arguments use the
 working directory and one optional nonempty directory is created when needed.

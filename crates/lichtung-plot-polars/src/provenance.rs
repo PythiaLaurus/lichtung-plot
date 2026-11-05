@@ -1,7 +1,8 @@
 use lichtung_plot::SourceRows;
 use polars_core::prelude::{Column, DataType};
 
-use crate::{error, snapshot, Error, Result};
+use crate::error::{AdapterError as Error, BindingResult as Result};
+use crate::{error, snapshot};
 
 pub(crate) fn ids(column: &Column) -> Result<Vec<usize>> {
     macro_rules! integer {
@@ -54,6 +55,6 @@ fn collect_ids<T: Copy + TryInto<usize> + std::fmt::Debug>(
 ///
 /// Floating, string, categorical and untyped Null columns are rejected rather
 /// than coerced. Keep IDs aligned explicitly while filtering/reordering upstream.
-pub fn source_rows(column: &Column) -> Result<SourceRows> {
+pub(crate) fn source_rows(column: &Column) -> Result<SourceRows> {
     SourceRows::new(ids(column)?).map_err(|source| error::native(column, "source rows", source))
 }

@@ -2,12 +2,19 @@
 
 ## Status And Objective
 
-This is a replacement design, not an implemented interface. The current
-`lichtung-plot-ndarray` and `lichtung-plot-polars` packages export conversion
-functions. Their public design has been rejected, despite successful conversion
-tests and packaging. The current request authorizes replanning only; do not
-change Rust code, dependencies, examples or guides to pretend this interface
-already exists. Publication, deployment and Git push remain unauthorized.
+Implementation of this replacement is underway. Polars now has complete native
+re-exports, exact-family PlotAdapter constructors for single-variable record
+inputs across all 25 families, rectangular/record heatmaps, Matrix selection,
+native configuration forwarding and independently source-bound layers. Its old
+public conversion catalog has been removed and its shared executable example and
+peer guides use direct plotting. The ndarray package still has the conversion-only
+API and has not yet migrated.
+
+Polars multi-y/indexed/distribution-column modes, expanded row/cell bindings,
+foreign status/alpha mappings and foreign significance result tables remain
+unimplemented. The method/type inventory below remains the full delivery target,
+not a claim that every proposed call already compiles. Implementation is authorized;
+publication, deployment and Git push remain separate decisions.
 
 The objective is to plot foreign data directly. A caller describes the dataset
 and its mapping to plot roles, or supplies vectors/a matrix directly. Constructing
@@ -19,8 +26,9 @@ consumers or as an internal rendering boundary.
 This plan selects top-level plot-family constructors, adapter-owned configured
 plots and adapter-side data conversion. The [complete compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
 maps native types, chainable methods and composition boundaries. Rust snippets
-throughout both plans illustrate the proposed interfaces; they have not been
-compiled and are not claims that those interfaces exist. Implementation must
+throughout both plans illustrate the delivery target; implemented subsets are
+identified above, and proposed workflows outside them are not compiled witnesses.
+Implementation must
 validate their inferred types, trait coherence and lifetimes, and report a concrete
 incompatibility rather than silently replace these workflows with conversion helpers.
 
@@ -1057,7 +1065,7 @@ end. Core-native input constructors remain unchanged; removing adapter conversio
 exports is not authorization to delete the standalone value API. Update the
 current adapter contract after implementation and remove this completed plan.
 
-These are implementation steps after separate direction, not preflight projects.
+These are implementation steps, not preflight projects.
 No dependency upgrade, toolchain change or Python bridge decision is needed for
 the input-interface replacement. Retain the established working package metadata
 and Cargo joint offline archive verification; prior registry publication is not
@@ -1105,8 +1113,8 @@ cargo clippy --locked --offline --workspace --all-targets -- -D warnings
 
 Use required implementation-closure checks when due, not repeated whole-suite
 discovery. Verify actual package archives, executable examples and generated guide
-links. This replanning-only change needs source/reference consistency and diff
-checks, not compilation, benchmarks or execution of the proposed snippets.
+links. Implemented workflows require actual execution and strict Clippy; future
+snippets remain design examples rather than passing compile evidence.
 
 Keep documentation prose single-language and guide content in its language
 directories. README entry documents remain English, with no language-specific

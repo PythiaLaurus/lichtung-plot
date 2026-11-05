@@ -4,9 +4,12 @@
 
 This is the compatibility inventory for the proposed
 [data-source plotting interface](92_DATA_ADAPTERS_PLAN.md), not an implemented
-API. The two current adapter packages still expose conversion-only functions;
-all `Scatter::new`/`from_data`, PlotAdapter, direct-binding and
-adapter-layer examples below are prospective and have not been compiled. The core definitions
+API in full. Polars implements native re-exports, single-variable record-form
+family constructors, grid/record heatmaps, Matrix selection, native configuration
+forwarding and source-bound layer adapters. Its direct/source borrowing and native
+handoff are covered by repository consumers. Expanded wide binding and foreign
+status/alpha/significance mapping remain prospective, as does the ndarray plotting
+frontend. Those examples below are not compiled evidence. Native definitions
 described here are established by the current source. Do not add a direct core
 dependency to examples that are intended to demonstrate adapter-only use.
 

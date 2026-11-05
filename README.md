@@ -38,7 +38,8 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 - [`crates/lichtung-plot-ndarray/`](crates/lichtung-plot-ndarray/): owned native
   values from logical ndarray views, named tables and labeled grids.
 - [`crates/lichtung-plot-polars/`](crates/lichtung-plot-polars/): eager Polars
-  columns and explicitly selected variables converted to native values.
+  field/direct-column plotting frontends and unchanged native renderer exports;
+  advanced binding modes remain under implementation.
 - [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
   assembling the single-page guides and executable gallery; no renderer dependency.
 - [`specs/`](specs/): one root architectural source of truth.

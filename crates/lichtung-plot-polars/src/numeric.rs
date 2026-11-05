@@ -1,7 +1,8 @@
 use lichtung_plot::NumericValues;
 use polars_core::prelude::{Column, DataType};
 
-use crate::{error, snapshot, Result};
+use crate::error::BindingResult as Result;
+use crate::{error, snapshot};
 
 #[allow(
     clippy::cast_precision_loss,
@@ -57,7 +58,7 @@ pub(crate) fn values(column: &Column) -> Result<Vec<Option<f64>>> {
 ///
 /// Supports Float16/32/64 and signed/unsigned 8/16/32/64/128-bit integers, plus
 /// untyped Null. Boolean/string/temporal/decimal/nested dtypes are not coerced.
-pub fn numeric(column: &Column) -> Result<NumericValues> {
+pub(crate) fn numeric(column: &Column) -> Result<NumericValues> {
     Ok(NumericValues::nullable(
         column.name().as_str(),
         values(column)?,

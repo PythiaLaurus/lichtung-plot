@@ -1,7 +1,8 @@
 use lichtung_plot::CategoryValues;
 use polars_core::prelude::{Column, DataType};
 
-use crate::{error, snapshot, Result};
+use crate::error::BindingResult as Result;
+use crate::{error, snapshot};
 
 pub(crate) fn values(column: &Column) -> Result<Vec<Option<String>>> {
     match column.dtype() {
@@ -46,7 +47,7 @@ pub(crate) fn values(column: &Column) -> Result<Vec<Option<String>>> {
 /// Rebuild the native first-observed dictionary. Foreign codes, unobserved levels
 /// and Enum schema order are not plot policies; apply native CategoryOrder
 /// explicitly when needed. No physical integer/stringification fallback exists.
-pub fn categories(column: &Column) -> Result<CategoryValues> {
+pub(crate) fn categories(column: &Column) -> Result<CategoryValues> {
     CategoryValues::nullable(column.name().as_str(), values(column)?)
         .map_err(|source| error::native(column, "categories", source))
 }

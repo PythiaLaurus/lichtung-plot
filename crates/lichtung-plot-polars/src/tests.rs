@@ -2,7 +2,7 @@ use std::error::Error as _;
 
 use polars_core::prelude::*;
 
-use crate::{boolean, category, numeric, provenance, Error};
+use crate::{boolean, category, numeric, provenance, AdapterError as Error};
 
 #[test]
 fn numeric_chunks_and_sliced_validity_preserve_null_nan_and_signed_zero() {
@@ -85,7 +85,7 @@ fn scalar_and_untyped_null_columns_use_logical_length_including_zero() {
     assert!(numeric::values(&null).unwrap().iter().all(Option::is_none));
     assert_eq!(category::values(&null).unwrap(), [None, None, None]);
     assert_eq!(boolean::values(&null).unwrap(), [None, None, None]);
-    assert_eq!(crate::numeric(&null).unwrap().len(), 3);
+    assert_eq!(numeric::numeric(&null).unwrap().len(), 3);
     let empty = Column::new_empty("empty".into(), &DataType::Float64);
     assert!(numeric::values(&empty).unwrap().is_empty());
     let typed_null = Column::new_scalar(
@@ -145,9 +145,9 @@ fn boolean_chunks_keep_nullable_observations_without_coercion() {
         boolean::values(&column).unwrap(),
         [None, Some(false), Some(true)]
     );
-    assert_eq!(crate::booleans(&column).unwrap().len(), 3);
+    assert_eq!(boolean::booleans(&column).unwrap().len(), 3);
     assert!(matches!(
-        crate::numeric(&column),
+        numeric::numeric(&column),
         Err(Error::UnsupportedDtype {
             channel: "numeric",
             ..
@@ -166,28 +166,28 @@ fn provenance_is_exact_and_never_accepts_numeric_coercion() {
     }
     let negative = Column::new("sample".into(), [Some(10_i128), Some(-1), None]);
     assert!(matches!(
-        crate::source_rows(&negative),
+        provenance::source_rows(&negative),
         Err(Error::SourceRow { slot: 1, .. })
     ));
     assert!(matches!(
-        crate::source_rows(&negative.slice(2, 1)),
+        provenance::source_rows(&negative.slice(2, 1)),
         Err(Error::SourceRow { slot: 0, .. })
     ));
     assert!(matches!(
-        crate::source_rows(&Column::new("too wide".into(), [u128::MAX])),
+        provenance::source_rows(&Column::new("too wide".into(), [u128::MAX])),
         Err(Error::SourceRow { slot: 0, .. })
     ));
     assert!(matches!(
-        crate::source_rows(&Column::new("float".into(), [1.0])),
+        provenance::source_rows(&Column::new("float".into(), [1.0])),
         Err(Error::UnsupportedDtype { .. })
     ));
-    let duplicate = crate::source_rows(&Column::new("sample".into(), [4, 4])).unwrap_err();
+    let duplicate = provenance::source_rows(&Column::new("sample".into(), [4, 4])).unwrap_err();
     assert!(duplicate.source().is_some());
     assert!(duplicate.to_string().contains("duplicate 4"));
 }
 
 #[test]
-fn selected_frame_columns_preserve_order_and_fail_without_omitting_errors() {
+fn source_and_direct_bindings_release_borrows_at_native_handoff() {
     let frame = DataFrame::new(
         2,
         vec![
@@ -197,27 +197,52 @@ fn selected_frame_columns_preserve_order_and_fail_without_omitting_errors() {
         ],
     )
     .unwrap();
-    let columns = crate::numeric_columns(&frame, &["b", "a", "b"]).unwrap();
-    assert_eq!(
-        columns
-            .iter()
-            .map(lichtung_plot::NumericValues::name)
-            .collect::<Vec<_>>(),
-        ["b", "a", "b"]
-    );
-    assert!(
-        matches!(crate::numeric_columns(&frame, &["a", "text"]), Err(Error::UnsupportedDtype { name, .. }) if name == "text")
-    );
-    let missing = crate::numeric_columns(&frame, &["not present"]).unwrap_err();
+    let external = Series::new("corrected".into(), [5.0, 7.0]);
+    let plot = crate::Scatter::from_data(&frame, "a", &external)
+        .unwrap()
+        .hue("text")
+        .unwrap()
+        .facet_wrap("text", 2)
+        .unwrap();
+    drop(external); // Only the explicitly installed DataFrame remains borrowed.
+    let native: crate::Plot<crate::kind::Scatter> = plot.into();
+    let matrix = crate::Matrix::from_data(&frame, ["b", "a"]).unwrap();
+    let matrix: crate::Plot<crate::kind::Matrix> = matrix.into();
+    assert!(matches!(
+        crate::Scatter::from_data(&frame, "a", "text"),
+        Err(Error::UnsupportedDtype { channel: "y", .. })
+    ));
+    let missing = crate::Scatter::from_data(&frame, "absent", "b")
+        .err()
+        .unwrap();
+    assert!(matches!(missing, Error::Lookup { role: "x", .. }));
     assert!(missing.source().is_some());
-    assert!(crate::numeric_columns(&frame, &[]).unwrap().is_empty());
+    assert!(matches!(
+        crate::Scatter::new("a", "b"),
+        Err(Error::MissingSource { .. })
+    ));
+    drop(frame);
+    let owned: crate::Scatter<'static> = crate::Scatter::new(
+        &Series::new("x".into(), [0.0, 2.0]),
+        &Series::new("y".into(), [1.0, 3.0]),
+    )
+    .unwrap();
+    let owned: crate::Plot<crate::kind::Scatter> = owned.into();
+    let _canvas = crate::Canvas::grid(1, 3)
+        .unwrap()
+        .panel(0, 0, native)
+        .unwrap()
+        .panel(0, 1, matrix)
+        .unwrap()
+        .panel(0, 2, owned)
+        .unwrap();
 }
 
 #[test]
 fn empty_semantic_dtypes_are_rejected_before_physical_materialization() {
     let date = Column::new_empty("date".into(), &DataType::Date);
     assert!(matches!(
-        crate::numeric(&date),
+        numeric::numeric(&date),
         Err(Error::UnsupportedDtype {
             dtype: DataType::Date,
             ..
@@ -225,12 +250,12 @@ fn empty_semantic_dtypes_are_rejected_before_physical_materialization() {
     ));
     let nested = Column::new_empty("nested".into(), &DataType::List(Box::new(DataType::Int64)));
     assert!(matches!(
-        crate::categories(&nested),
+        category::categories(&nested),
         Err(Error::UnsupportedDtype { .. })
     ));
     let null_id = Column::new_empty("unknown ID".into(), &DataType::Null);
     assert!(matches!(
-        crate::source_rows(&null_id),
+        provenance::source_rows(&null_id),
         Err(Error::UnsupportedDtype { .. })
     ));
 }
