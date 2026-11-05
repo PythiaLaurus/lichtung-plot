@@ -17,7 +17,8 @@ workspace with a nonpublished Rust Book assembly command. The authorized Book,
 example and gallery foundation covers existing Rust capabilities. Both ndarray
 and Polars now expose complete direct plotting frontends and unchanged native
 re-exports, including wide/grid bindings, independent layers and scientific result
-tables. Their final joint delivery checks are in progress. Python bindings remain planned. Package publication,
+tables. Workspace checks, joint offline archives, cross-adapter consumers and
+rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
 Python object mutation/copy semantics are deliberately unresolved. Record the
@@ -31,9 +32,9 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | Implemented: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. The [current contract](09_DATA_ADAPTERS.md) owns the delivered API; final joint archive/guide verification is in progress. |
+| ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
-| Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
+| Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
 
