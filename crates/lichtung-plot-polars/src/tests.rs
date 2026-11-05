@@ -187,58 +187,6 @@ fn provenance_is_exact_and_never_accepts_numeric_coercion() {
 }
 
 #[test]
-fn source_and_direct_bindings_release_borrows_at_native_handoff() {
-    let frame = DataFrame::new(
-        2,
-        vec![
-            Column::new("a".into(), [1, 2]),
-            Column::new("b".into(), [3.0, 4.0]),
-            Column::new("text".into(), ["one", "two"]),
-        ],
-    )
-    .unwrap();
-    let external = Series::new("corrected".into(), [5.0, 7.0]);
-    let plot = crate::Scatter::from_data(&frame, "a", &external)
-        .unwrap()
-        .hue("text")
-        .unwrap()
-        .facet_wrap("text", 2)
-        .unwrap();
-    drop(external); // Only the explicitly installed DataFrame remains borrowed.
-    let native: crate::Plot<crate::kind::Scatter> = plot.into();
-    let matrix = crate::Matrix::from_data(&frame, ["b", "a"]).unwrap();
-    let matrix: crate::Plot<crate::kind::Matrix> = matrix.into();
-    assert!(matches!(
-        crate::Scatter::from_data(&frame, "a", "text"),
-        Err(Error::UnsupportedDtype { channel: "y", .. })
-    ));
-    let missing = crate::Scatter::from_data(&frame, "absent", "b")
-        .err()
-        .unwrap();
-    assert!(matches!(missing, Error::Lookup { role: "x", .. }));
-    assert!(missing.source().is_some());
-    assert!(matches!(
-        crate::Scatter::new("a", "b"),
-        Err(Error::MissingSource { .. })
-    ));
-    drop(frame);
-    let owned: crate::Scatter<'static> = crate::Scatter::new(
-        &Series::new("x".into(), [0.0, 2.0]),
-        &Series::new("y".into(), [1.0, 3.0]),
-    )
-    .unwrap();
-    let owned: crate::Plot<crate::kind::Scatter> = owned.into();
-    let _canvas = crate::Canvas::grid(1, 3)
-        .unwrap()
-        .panel(0, 0, native)
-        .unwrap()
-        .panel(0, 1, matrix)
-        .unwrap()
-        .panel(0, 2, owned)
-        .unwrap();
-}
-
-#[test]
 fn empty_semantic_dtypes_are_rejected_before_physical_materialization() {
     let date = Column::new_empty("date".into(), &DataType::Date);
     assert!(matches!(

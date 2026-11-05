@@ -25,7 +25,7 @@ with `.into()` releases the source context for native Canvas/application consume
 Output methods return native `Result<Output>`; `AdapterError` preserves native
 errors when a combined workflow uses `?`. No public adapter result alias is added.
 
-Record-form single-variable constructors are available for all 25 native families,
+Constructors are available for all 25 native families,
 including supplied bounds, bar sample/estimate modes and native supplied geometry.
 `Heatmap::new(&numeric_frame)` binds a rectangle; `Heatmap::from_data(frame, ["a",
 "b"])` selects columns and `Heatmap::records_from_data(frame, "x", "y", "value")`
@@ -33,11 +33,13 @@ binds categorical cell records. `Matrix` binds ordered numeric variables, with
 explicit `numeric_from_data` discovery. Independent `PointLayerAdapter` and
 `BarPointLayerAdapter` have their own direct/source-bound constructors.
 
-The replacement is still in progress: multi-y/indexed/distribution-column modes,
-expanded row/cell bindings, foreign alpha/status mappings and foreign significance
-result-table binding are not implemented yet. Native alpha, status, significance
-and all native-only workflows remain available. The previous public value-conversion
-functions have been removed, not retained as a second API.
+`Line::from_data(&frame, "time", ["a", "b"])` preserves actual x with ordered
+many-y series. `indexed` methods explicitly choose row position; distribution
+`columns` methods explicitly choose column-category samples. Row, expanded-cell
+and generated-column bindings have explicit scopes. Statuses, exact-byte/native
+alpha mappings, keyed/bin alpha and independent significance result tables bind
+directly. Mapping callbacks materialize once and preserve native declarations.
+The previous public value-conversion functions are not a second API.
 
 Null remains distinct from present NaN. No sorting, dropping, imputation,
 parsing, temporal/Decimal reinterpretation, nested flattening or query execution

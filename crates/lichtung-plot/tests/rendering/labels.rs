@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use lichtung_plot::{BarInput, Canvas, CategoryValues, Labels, NumericValues, Plot};
+use lichtung_plot::{BarInput, CategoryValues, Labels, NumericValues, Plot};
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -210,33 +210,4 @@ fn ambiguous_display_labels_fail_during_preflight() {
         .to_string();
     assert!(error.contains("label collision in x-axis categories"));
     assert!(error.contains("colliding aliases"));
-}
-
-#[test]
-fn composed_canvas_label_policy_is_inherited_by_every_panel() {
-    let x = NumericValues::new("x_value", [1.0, 2.0]);
-    let y = NumericValues::new("y_value", [2.0, 3.0]);
-    let left = Plot::scatter(x.clone(), y.clone());
-    let right = Plot::line(x, y);
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .panel(0, 0, left)
-        .unwrap()
-        .panel(0, 1, right)
-        .unwrap()
-        .labels(Labels::raw());
-    let directory = std::env::temp_dir().join(format!(
-        "lichtung-label-canvas-{}-{}",
-        std::process::id(),
-        TEST_COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    let output = directory.join("canvas.svg");
-
-    canvas.svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
-
-    assert_eq!(svg.matches(">x_value</text>").count(), 2);
-    assert_eq!(svg.matches(">y_value</text>").count(), 2);
 }

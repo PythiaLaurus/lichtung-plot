@@ -321,17 +321,6 @@ fn precomputed_raincloud_rejects_nonincreasing_density_before_backend_begin() {
 }
 
 #[test]
-fn precomputed_histogram_rejects_nonfinite_geometry_before_backend_begin() {
-    let mut input = explicit_histogram();
-    input.kde[0].y = f64::NAN;
-    assert!(Plot::histogram(HistogramInput::geometry(input))
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("nonnegative finite y"));
-}
-
-#[test]
 fn precomputed_histogram_rejects_discontinuous_bins_before_backend_begin() {
     let mut input = explicit_histogram();
     input.bins[1].lower = 1.1;

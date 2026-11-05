@@ -279,8 +279,10 @@ distribution_family!(Raincloud, |category, values| Plot::raincloud(
 impl<K: kind::Marker> PlotAdapter<'_, K> {
     fn install_expansion(&mut self, expansion: Option<Expansion>) {
         if let Some(expansion) = &expansion {
-            self.labels = self.labels.clone().aliases(expansion.aliases.clone());
-            self.plot = self.plot.clone().labels(self.labels.clone());
+            if !expansion.aliases.is_empty() {
+                self.labels = self.labels.clone().aliases(expansion.aliases.clone());
+                self.plot = self.plot.clone().labels(self.labels.clone());
+            }
         }
         self.expansion = expansion;
     }

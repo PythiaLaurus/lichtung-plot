@@ -216,22 +216,33 @@ impl<'source> PlotAdapter<'source, kind::Matrix> {
         source: Option<&'source DataFrame>,
         variables: impl ColumnsInput,
     ) -> BindingResult<Self> {
+        let local = variables.local_identities();
         let columns = variables.bind_columns(source)?;
         let len = columns[0].len();
         let mut values = crate::snapshot::allocate(columns.len(), "matrix")?;
+        let keys = columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                if local {
+                    format!("__lichtung_matrix_{index}")
+                } else {
+                    column.name().to_string()
+                }
+            })
+            .collect::<Vec<_>>();
         for (index, column) in columns.iter().enumerate() {
             length("matrix", column.name().as_str(), len, column.len())?;
             values.push(NumericValues::nullable(
-                format!("__lichtung_matrix_{index}"),
+                keys[index].clone(),
                 crate::numeric::values(column)?,
             ));
         }
         let mut adapter = Self::bound(Plot::matrix(values), source, Some(len));
-        adapter.matrix_keys = Some(
-            (0..columns.len())
-                .map(|index| format!("__lichtung_matrix_{index}"))
-                .collect(),
-        );
+        adapter.matrix_keys = Some(keys);
+        if !local {
+            return Ok(adapter);
+        }
         adapter.column_labels(columns.iter().enumerate().map(|(index, column)| {
             if column.name().is_empty() {
                 format!("Column {}", index + 1)

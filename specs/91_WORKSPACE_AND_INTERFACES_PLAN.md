@@ -14,10 +14,10 @@ The scope covers a workspace migration, new Polars/ndarray adapters, a complete
 Python interface, and replacement of the loose guides with a serious Book-style
 documentation system and gallery. The standalone renderer now lives in a virtual
 workspace with a nonpublished Rust Book assembly command. The authorized Book,
-example and gallery foundation covers existing Rust capabilities. The ndarray
-and Polars conversion packages exist, but their conversion-only public
-design has been rejected. Their plotting-interface replacement is being replanned,
-not implemented by this request. Bindings remain planned. Package publication,
+example and gallery foundation covers existing Rust capabilities. Both ndarray
+and Polars now expose complete direct plotting frontends and unchanged native
+re-exports, including wide/grid bindings, independent layers and scientific result
+tables. Their final joint delivery checks are in progress. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
 Python object mutation/copy semantics are deliberately unresolved. Record the
@@ -31,7 +31,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
-| ndarray and Polars adapters | [Replacement implementation](92_DATA_ADAPTERS_PLAN.md) is in progress: Polars has native re-exports, all 25 single-variable family constructors, source/direct bindings, grid/record heatmaps, Matrix selection, native configuration and local layers. Wide expansion and foreign status/alpha/significance mappings remain; ndarray is still conversion-only. |
+| ndarray and Polars adapters | Implemented: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. The [current contract](09_DATA_ADAPTERS.md) owns the delivered API; final joint archive/guide verification is in progress. |
 | Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
 | Integrated content/package/site closure | Pending the corresponding implementations; actual publication remains separately authorized. |
 
@@ -140,9 +140,7 @@ together so that the package remains self-contained.
 
 ## Data Adapter Contracts
 
-The [current adapter description](09_DATA_ADAPTERS.md) records the conversion-only
-implementation without presenting it as an accepted public design. The
-[plotting-interface redesign](92_DATA_ADAPTERS_PLAN.md) owns the replacement:
+The [current adapter contract](09_DATA_ADAPTERS.md) defines the implemented API:
 foreign data sources plus variable bindings, direct vectors and family-specific
 matrix/wide input. A scalar selector denotes one variable; an ordered selector
 collection in an admitted many-y position denotes multiple variables with the
@@ -167,17 +165,15 @@ and can mix field selectors with direct values. Both are data workflows, not a
 division by container type. Do not require a public bind/frontend namespace.
 
 The PlotAdapter frontend retains native family bounds and owns the real core Plot.
-Each family `new` returns the actual adapter frontend as
-`std::result::Result<Self, AdapterError>`;
-the feasibility of exact-family type aliases, inference and source lifetimes must
-be prototyped rather than silencing `new_ret_no_self` for an unrelated factory.
+Each family alias denotes the actual exact-family frontend and `new` returns
+`std::result::Result<Self, AdapterError>`, not an unrelated factory result.
 It forwards native configuration deliberately, without claiming zero maintenance
 cost. Source-bound plots keep a lookup borrow; infallible standard `From`/`Into`
 conversion releases it and yields the exact native Plot for current Canvas and
 other concrete consumers. Direct inputs are released after binding. AdapterError
 retains lossless native-error conversion for `?`; no additional result
-alias is introduced, and root Error/Result remain native. The [compatibility inventory](93_ADAPTER_API_COMPATIBILITY.md)
-lists every current Plot method, semantic input and core boundary. A native Canvas
+alias is introduced, and root Error/Result remain native. The current contract
+and each adapter's local forwarding inventory own semantic inputs and core boundaries. A native Canvas
 acceptance protocol for `.panel(..., adapted)` is a separately reviewed option,
 not part of the adapter-only baseline. No core data-access framework, general
 Mark/Scale/Stat grammar, adapter Canvas or reverse dependency is prescribed.

@@ -13,6 +13,7 @@ use crate::{
 pub(super) struct Grid {
     x: Vec<String>,
     y: Vec<String>,
+    origins: Vec<String>,
 }
 impl Grid {
     pub(super) fn columns(&self) -> usize {
@@ -39,7 +40,7 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
             if expected != Some((rows, columns)) {
                 return Err(binding(
                     role,
-                    format!("expected cell shape {expected:?}, got ({rows}, {columns})"),
+                    format!("expected cell shape {expected:?}, got ({rows}, {columns}); selected source columns {:?}", self.grid.as_ref().map(|grid| &grid.origins)),
                 ));
             }
         }
@@ -108,7 +109,14 @@ impl<'source> PlotAdapter<'source, kind::Heatmap> {
             NumericValues::nullable("Value", fill),
         );
         let mut adapter = Self::bound(plot, source, Some(cells));
-        adapter.grid = Some(Grid { x: xkeys, y: ykeys });
+        adapter.grid = Some(Grid {
+            x: xkeys,
+            y: ykeys,
+            origins: columns
+                .iter()
+                .map(|column| column.name().to_string())
+                .collect(),
+        });
         let xlabels = columns.iter().enumerate().map(|(index, column)| {
             if column.name().is_empty() {
                 format!("Column {}", index + 1)

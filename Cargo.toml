@@ -12,6 +12,8 @@ publish = ["crates-io"]
 
 [workspace.dependencies]
 lichtung-plot = { path = "crates/lichtung-plot", version = "0.1.0" }
+lichtung-plot-ndarray = { path = "crates/lichtung-plot-ndarray", version = "0.1.0" }
+lichtung-plot-polars = { path = "crates/lichtung-plot-polars", version = "0.1.0" }
 ndarray = { version = "=0.17.2", default-features = false, features = ["std"] }
 polars-core = { version = "=0.55.2", default-features = false, features = ["dtype-i8", "dtype-i16", "dtype-u8", "dtype-u16", "dtype-i128", "dtype-u128", "dtype-f16", "dtype-categorical"] }
 fontdb = "=0.23.0"

@@ -6,5 +6,11 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[dev-dependencies]
+lichtung-plot-ndarray.workspace = true
+lichtung-plot-polars.workspace = true
+ndarray.workspace = true
+polars-core.workspace = true
+
 [lints]
 workspace = true

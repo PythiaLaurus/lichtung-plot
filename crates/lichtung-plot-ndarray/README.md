@@ -1,27 +1,54 @@
 # lichtung-plot-ndarray
 
-Convert logical ndarray views into owned `lichtung-plot` values. The renderer
-does not depend on this adapter. Arrays can be strided, reversed, transposed,
-Fortran ordered or already broadcast; no contiguous copy is required as input.
+Plot logical ndarray views directly, with the complete native renderer API
+re-exported unchanged. The standalone renderer does not depend on this adapter.
+Strided, reversed, transposed, Fortran and broadcast views need no contiguous
+intermediate.
 
-- `numeric`, `categories`, `booleans`: one-dimensional primitive/nullable values.
-- Matching `_with_validity` functions: **true = present**, exact-shape masks.
-- `source_rows`: exact unique integer IDs, with checked `usize` conversion.
-- `numeric_columns`: rows are observations; columns are explicitly named variables.
-- `heatmap_values`: labeled grid cells expanded to native x/y/fill channels.
+```rust
+use lichtung_plot_ndarray as nd;
+use ndarray::array;
 
-Numeric conversion rounds normally to `f64`. Null is not NaN. Nothing is sorted,
-aggregated, imputed or dropped, and no foreign buffer is retained. Category keys
-remain raw strings; apply native category ordering explicitly. Complex/semantic
-dtypes need an explicit caller projection. This package is not yet published.
+fn main() -> Result<(), nd::AdapterError> {
+    let table = array![[0., 1., 4.], [5., 2., 5.], [20., 3., 6.]];
+    let plot = nd::Line::from_data(table.view(), 0, [1, 2])?
+        .column_labels(["Control", "Treated"])?
+        .x_label("Time (h)");
+    let _native: nd::Plot<nd::kind::Line> = plot.into();
+    Ok(())
+}
+```
 
-Run the self-contained synthetic heatmap example from any working directory:
+All 25 families have direct `new` and source-bound `from_data` constructors.
+The latter retains a safe read-only array descriptor for later logical-column
+lookup; `.into()` releases it and moves the owned native plot. Direct vectors and
+matrices are snapshotted immediately and do not become implicit lookup sources.
+
+- One-dimensional views bind variables; `usize` selects a logical source column.
+- Explicit many-y matrices/index collections preserve actual x. `indexed` and
+  column-distribution methods deliberately choose omitted-coordinate meanings.
+- `Heatmap::new(view2)` binds a grid; `records(x, y, fill)` binds explicit cells.
+  `Matrix::new(view2)` instead treats columns as scatter-matrix variables.
+- `(values.view(), present.view())` binds exact-shape validity: **true = present**.
+  Highlights and unique per-cell IDs are separate same-shape inputs.
+- Row/cell/generated-column facets and roles, supplied bounds, bar sample/estimate
+  modes, independent point layers, statuses, native alpha mappings and independent
+  significance results bind directly without public data-role wrappers.
+
+Numeric primitives round normally to f64. Null is not NaN; raw categories remain
+strings and exact IDs never pass through f64. Binding does not sort, drop,
+aggregate, impute or infer statistics. Native families retain their scientific
+policies and errors. Root `Error`/`Result` are native; binding returns standard
+`Result<_, AdapterError>`, with lossless native-error conversion for `?`.
+
+Run the self-contained masked, strided synthetic heatmap:
 
 ```sh
 cargo run --locked --offline -p lichtung-plot-ndarray --example strided_heatmap
 # Optional: -- path/to/output-directory
 ```
 
-See the peer [English](../../docs/en/src/sections/ndarray.md) and
-[Chinese](../../docs/zh-CN/src/sections/ndarray.md) guides in the repository and the
-shared [adapter contract](../../specs/09_DATA_ADAPTERS.md).
+This package is not yet published. See the peer
+[English](../../docs/en/src/sections/ndarray.md) and
+[Chinese](../../docs/zh-CN/src/sections/ndarray.md) guides and the shared
+[adapter contract](../../specs/09_DATA_ADAPTERS.md).

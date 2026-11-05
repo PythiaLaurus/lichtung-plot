@@ -1,6 +1,7 @@
 use ndarray::{ArrayView, Dimension};
 
-use crate::{Error, Result};
+use crate::error::BindingResult as Result;
+use crate::AdapterError as Error;
 
 pub(crate) fn buffer<T>(length: usize, operation: &'static str) -> Result<Vec<T>> {
     let mut values = Vec::new();
@@ -9,6 +10,8 @@ pub(crate) fn buffer<T>(length: usize, operation: &'static str) -> Result<Vec<T>
         .map_err(|source| Error::Allocation { operation, source })?;
     Ok(values)
 }
+
+pub(crate) use buffer as allocate;
 
 pub(crate) fn values<T, U, D: Dimension>(
     view: ArrayView<'_, T, D>,

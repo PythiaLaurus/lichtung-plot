@@ -35,13 +35,15 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 
 - [`crates/lichtung-plot/`](crates/lichtung-plot/): independent renderer, tests,
   fixtures, runnable examples, package README and licenses; the default member.
-- [`crates/lichtung-plot-ndarray/`](crates/lichtung-plot-ndarray/): owned native
-  values from logical ndarray views, named tables and labeled grids.
+- [`crates/lichtung-plot-ndarray/`](crates/lichtung-plot-ndarray/): direct plotting
+  from logical views, selected columns, wide variables and masked grids, with
+  unchanged native renderer exports.
 - [`crates/lichtung-plot-polars/`](crates/lichtung-plot-polars/): eager Polars
   field/direct-column plotting frontends and unchanged native renderer exports;
-  advanced binding modes remain under implementation.
+  wide/grid roles, independent layers and scientific result bindings.
 - [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
-  assembling the single-page guides and executable gallery; no renderer dependency.
+  assembling the single-page guides and executable gallery; adapter interoperability
+  dependencies are test-only.
 - [`specs/`](specs/): one root architectural source of truth.
 - [`docs/`](docs/): peer-language user guides and gallery catalog.
 

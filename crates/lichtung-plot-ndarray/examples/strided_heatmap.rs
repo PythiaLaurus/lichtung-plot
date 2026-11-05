@@ -1,8 +1,8 @@
 //! Synthetic assay response from alternate columns of a noncontiguous view.
 
 // ANCHOR: example
-use lichtung_plot::{CategoryOrder, ColorDomain, ContinuousColorScale, Labels, Plot};
 use lichtung_plot_ndarray as nd;
+use nd::{ColorDomain, ContinuousColorScale, Labels};
 use ndarray::{array, s};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,26 +31,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Cell cycle",
         "DNA repair",
     ];
-    let cells = nd::heatmap_values(
-        "Response (log2 fold change)",
-        measurements.slice(s![.., ..;2]),
-        ("Time after stimulus", &times),
-        ("Response program", &programs),
-    )?;
+    let present = array![
+        [true, true, true, true],
+        [true, true, true, true],
+        [true, false, true, true],
+        [true, true, true, true],
+    ];
+    let highlights = array![
+        [false, false, false, true],
+        [false, false, false, false],
+        [false, false, false, true],
+        [false, false, false, false],
+    ];
+    let cell_ids = array![
+        [101u64, 102, 103, 104],
+        [105, 106, 107, 108],
+        [109, 110, 111, 112],
+        [113, 114, 115, 116]
+    ];
+    let heatmap = nd::Heatmap::new((measurements.slice(s![.., ..;2]), present.view()))?
+        .heatmap_highlight(highlights.view())?
+        .source_rows(cell_ids.view())?;
     // ANCHOR_END: strided-values
     // ANCHOR: strided-plot
-    Plot::heatmap(cells.x, cells.y, cells.fill)
+    heatmap
+        .labels(Labels::raw())
+        .x_labels(times)?
+        .y_labels(programs)?
+        .x_label("Time after stimulus")
+        .y_label("Response program")
+        .color_label("Response (log2 fold change)")
         .continuous_color_scale(ContinuousColorScale::diverging(
             0.0,
             None,
             Some(ColorDomain::exact(-2.0, 2.0)?),
         )?)
-        .x_category_order(CategoryOrder::explicit(times))
-        .y_category_order(CategoryOrder::explicit(programs))
-        .labels(Labels::raw())
         .size(780, 480)
         .title("Response programs from a strided assay matrix")
-        .caption("Synthetic illustration · alternate source columns · no inferred clustering")
+        .caption("Synthetic illustration · alternate source columns · one missing cell · no inferred clustering")
         .svg(directory.join("strided_heatmap.svg"))?
         .svg_preserve_text(directory.join("strided_heatmap_text.svg"))?;
     // ANCHOR_END: strided-plot
