@@ -4,12 +4,47 @@ use polars_core::prelude::DataFrame;
 
 use super::PlotAdapter;
 use crate::error::{binding, length, BindingResult};
-use crate::{kind, AdapterError, BooleanInput, CategoryValues, ColumnsInput, NumericValues, Plot};
+use crate::{
+    kind, AdapterError, BooleanInput, CategoryValues, ColumnInput, ColumnsInput, NumericValues,
+    Plot,
+};
 
 #[derive(Clone)]
 pub(super) struct Grid {
     x: Vec<String>,
     y: Vec<String>,
+}
+impl Grid {
+    pub(super) fn columns(&self) -> usize {
+        self.x.len()
+    }
+}
+
+impl<K: kind::Marker> PlotAdapter<'_, K> {
+    pub(super) fn cell_shape(
+        &self,
+        input: &impl crate::input::sealed::Sealed,
+        role: &'static str,
+    ) -> BindingResult<()> {
+        if let Some((rows, columns)) = input.cell_shape(self.source)? {
+            let expected = self
+                .grid
+                .as_ref()
+                .map(|grid| (grid.y.len(), grid.x.len()))
+                .or_else(|| {
+                    self.expansion
+                        .as_ref()
+                        .map(|wide| (wide.rows, wide.keys.len()))
+                });
+            if expected != Some((rows, columns)) {
+                return Err(binding(
+                    role,
+                    format!("expected cell shape {expected:?}, got ({rows}, {columns})"),
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 fn cell_values(columns: &[Vec<Option<f64>>], rows: usize) -> BindingResult<Vec<Option<f64>>> {
@@ -126,42 +161,36 @@ impl<'source> PlotAdapter<'source, kind::Heatmap> {
         self.axis_labels("y labels", labels)
     }
 
+    /// Bind grid-row display labels without changing positional row identity.
+    pub fn row_labels(self, values: impl ColumnInput) -> std::result::Result<Self, AdapterError> {
+        let column = values.bind_column(self.source, "row labels")?;
+        let values = crate::category::values(&column)?
+            .into_iter()
+            .enumerate()
+            .map(|(slot, value)| {
+                value.ok_or_else(|| binding("row labels", format!("missing label at slot {slot}")))
+            })
+            .collect::<BindingResult<Vec<_>>>()?;
+        self.y_labels(values)
+    }
+
+    /// Bind explicitly flattened cell highlights, independently of source-row scope.
+    pub fn heatmap_highlight_cells(
+        self,
+        values: impl BooleanInput,
+    ) -> std::result::Result<Self, AdapterError> {
+        self.heatmap_highlight(values)
+    }
+
     /// Bind Boolean record highlights; true adds a border, not a validity mask.
     pub fn heatmap_highlight(
         mut self,
         values: impl BooleanInput,
     ) -> std::result::Result<Self, AdapterError> {
+        self.cell_shape(&values, "heatmap highlights")?;
         let values = values.bind_boolean(self.source, "heatmap highlights")?;
         self.aligned("heatmap highlights", values.name(), values.len())?;
         self.plot = self.plot.heatmap_highlight(values);
         Ok(self)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn rectangle_cells_interleave_columns_without_compacting_null_or_signed_zero() {
-        let columns = vec![
-            vec![Some(1.0), Some(4.0)],
-            vec![None, Some(-0.0)],
-            vec![Some(3.0), Some(6.0)],
-        ];
-        let values = super::cell_values(&columns, 2).unwrap();
-        assert_eq!(
-            values
-                .iter()
-                .map(|value| value.map(f64::to_bits))
-                .collect::<Vec<_>>(),
-            [
-                Some(1.0_f64.to_bits()),
-                None,
-                Some(3.0_f64.to_bits()),
-                Some(4.0_f64.to_bits()),
-                Some((-0.0_f64).to_bits()),
-                Some(6.0_f64.to_bits())
-            ]
-        );
-        assert!(super::cell_values(&[vec![], vec![]], 0).unwrap().is_empty());
     }
 }

@@ -10,9 +10,10 @@ public conversion catalog has been removed and its shared executable example and
 peer guides use direct plotting. The ndarray package still has the conversion-only
 API and has not yet migrated.
 
-Polars multi-y/indexed/distribution-column modes, expanded row/cell bindings,
-foreign status/alpha mappings and foreign significance result tables remain
-unimplemented. The method/type inventory below remains the full delivery target,
+Polars also implements multi-y/indexed/distribution-column modes, explicit
+row/cell/generated-column bindings, status and native alpha mappings, and
+independent significance result tables. The ndarray replacement and final
+cross-adapter/documentation/package closure remain. The inventory below remains the full delivery target,
 not a claim that every proposed call already compiles. Implementation is authorized;
 publication, deployment and Git push remain separate decisions.
 

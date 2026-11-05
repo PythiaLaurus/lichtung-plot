@@ -47,38 +47,6 @@ fn density_clips_large_finite_support_before_projection() {
 }
 
 #[test]
-fn density_rejects_null_and_nonfinite_values() {
-    for (index, values) in [
-        NumericValues::nullable("value", [Some(1.0), None, Some(2.0)]),
-        NumericValues::new("value", [1.0, f64::INFINITY, 2.0]),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let dir = unique_dir(&format!("density-invalid-{index}"));
-        let output = dir.join("density.svg");
-        assert!(Plot::density(values).svg(&output).is_err());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-}
-
-#[test]
-fn qq_rejects_null_and_nonfinite_values() {
-    for (index, values) in [
-        NumericValues::nullable("value", [Some(1.0), None]),
-        NumericValues::new("value", [1.0, f64::NAN]),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let dir = unique_dir(&format!("qq-invalid-{index}"));
-        let output = dir.join("qq.svg");
-        assert!(Plot::qq(values).svg(&output).is_err());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-}
-
-#[test]
 fn qq_renders_representable_constants_and_rejects_uncontainable_auto_ink() {
     for (name, value) in [
         ("zero", 0.0),

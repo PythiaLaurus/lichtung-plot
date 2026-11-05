@@ -8,9 +8,14 @@ use crate::{
     SourceRowsInput,
 };
 
+mod alpha;
 mod constructors;
 mod forwarding;
 mod grid;
+mod status;
+#[cfg(test)]
+mod tests;
+mod wide;
 
 /// A configured native plot plus an optional borrowed Polars lookup context.
 ///
@@ -20,11 +25,13 @@ mod grid;
 #[derive(Clone)]
 pub struct PlotAdapter<'source, K: kind::Marker> {
     plot: Plot<K>,
-    source: Option<&'source DataFrame>,
+    pub(crate) source: Option<&'source DataFrame>,
     len: Option<usize>,
     labels: Labels,
     facet: Option<FacetSpec>,
     grid: Option<grid::Grid>,
+    expansion: Option<wide::Expansion>,
+    matrix_keys: Option<Vec<String>>,
 }
 
 macro_rules! families {
@@ -70,6 +77,8 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
             labels: Labels::default(),
             facet: None,
             grid: None,
+            expansion: None,
+            matrix_keys: None,
         }
     }
 
@@ -78,6 +87,23 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
             length(role, name, expected, actual)?;
         }
         Ok(())
+    }
+
+    fn row_copies(&self) -> usize {
+        self.expansion.as_ref().map_or_else(
+            || self.grid.as_ref().map_or(1, grid::Grid::columns),
+            |wide| wide.keys.len(),
+        )
+    }
+
+    fn category_rows(
+        &self,
+        values: impl CategoryInput,
+        role: &'static str,
+    ) -> BindingResult<crate::CategoryValues> {
+        let values = values.bind_category_repeated(self.source, role, self.row_copies())?;
+        self.aligned(role, values.name(), values.len())?;
+        Ok(values)
     }
 
     /// Inspect the native plot family without erasure.
@@ -101,7 +127,9 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::SourceRows,
     {
-        let values = values.bind_source_rows(self.source, "source rows")?;
+        self.cell_shape(&values, "source rows")?;
+        let values =
+            values.bind_source_rows_repeated(self.source, "source rows", self.row_copies())?;
         self.aligned("source rows", "source rows", values.len())?;
         self.plot = self.plot.source_rows(values);
         Ok(self)
@@ -123,8 +151,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::Facet,
     {
-        let values = values.bind_category(self.source, "facet row")?;
-        self.aligned("facet row", values.name(), values.len())?;
+        let values = self.category_rows(values, "facet row")?;
         Ok(self.facet(FacetSpec::row(values)))
     }
 
@@ -133,8 +160,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::Facet,
     {
-        let values = values.bind_category(self.source, "facet column")?;
-        self.aligned("facet column", values.name(), values.len())?;
+        let values = self.category_rows(values, "facet column")?;
         Ok(self.facet(FacetSpec::column(values)))
     }
 
@@ -147,10 +173,8 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::Facet,
     {
-        let row = row.bind_category(self.source, "facet row")?;
-        let column = column.bind_category(self.source, "facet column")?;
-        self.aligned("facet row", row.name(), row.len())?;
-        self.aligned("facet column", column.name(), column.len())?;
+        let row = self.category_rows(row, "facet row")?;
+        let column = self.category_rows(column, "facet column")?;
         length("facet grid", column.name(), row.len(), column.len())?;
         Ok(self.facet(FacetSpec::grid(row, column)?))
     }
@@ -164,8 +188,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::Facet,
     {
-        let values = values.bind_category(self.source, "facet wrap")?;
-        self.aligned("facet wrap", values.name(), values.len())?;
+        let values = self.category_rows(values, "facet wrap")?;
         Ok(self.facet(FacetSpec::wrap(values, columns)?))
     }
 
@@ -187,8 +210,7 @@ macro_rules! category_binding {
         impl<K: kind::$capability> PlotAdapter<'_, K> {
             #[doc = concat!("Bind the native ", stringify!($name), " role from a field or categorical variable.")]
             pub fn $name(mut self, values: impl CategoryInput) -> std::result::Result<Self, AdapterError> {
-                let values = values.bind_category(self.source, stringify!($name))?;
-                self.aligned(stringify!($name), values.name(), values.len())?;
+                let values = self.category_rows(values, stringify!($name))?;
                 self.plot = self.plot.$name(values);
                 Ok(self)
             }

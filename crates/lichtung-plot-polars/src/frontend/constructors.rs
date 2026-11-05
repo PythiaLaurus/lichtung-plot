@@ -1,6 +1,6 @@
 //! Record-form constructors bind each role before calling its native constructor.
 
-use polars_core::prelude::{DataFrame, DataType};
+use polars_core::prelude::DataFrame;
 
 use super::PlotAdapter;
 use crate::error::{length, BindingResult};
@@ -55,10 +55,6 @@ macro_rules! records {
         }
     };
 }
-records!(Scatter, new, from_data, coordinates,
-    (x: NumericInput => bind_numeric, y: NumericInput => bind_numeric), (), Plot::scatter(x, y));
-records!(Line, new, from_data, coordinates,
-    (x: NumericInput => bind_numeric, y: NumericInput => bind_numeric), (), Plot::line(x, y));
 records!(Regression, new, from_data, coordinates,
     (x: NumericInput => bind_numeric, y: NumericInput => bind_numeric), (), Plot::regression(x, y));
 records!(Marginal, new, from_data, coordinates,
@@ -112,12 +108,6 @@ records!(StackedBar, new, from_data, estimates_input,
 records!(StackedHorizontalBar, new, from_data, estimates_input,
     (category: CategoryInput => bind_category, value: NumericInput => bind_numeric, series: CategoryInput => bind_category), (),
     Plot::stacked_horizontal_bar(category, value, series));
-records!(Boxplot, new, from_data, samples_input,
-    (category: CategoryInput => bind_category, value: NumericInput => bind_numeric), (), Plot::boxplot(category, value));
-records!(Violin, new, from_data, samples_input,
-    (category: CategoryInput => bind_category, value: NumericInput => bind_numeric), (), Plot::violin(category, value));
-records!(Raincloud, new, from_data, samples_input,
-    (category: CategoryInput => bind_category, value: NumericInput => bind_numeric), (), Plot::raincloud(RaincloudInput::samples(category, value)));
 records!(Beeswarm, new, from_data, samples_input,
     (category: CategoryInput => bind_category, value: NumericInput => bind_numeric, color: NumericInput => bind_numeric), (),
     Plot::beeswarm(category, value, color));
@@ -176,11 +166,27 @@ impl PlotAdapter<'_, kind::Line> {
     /// Bind independently supplied lower/upper bounds, not a new interval estimator.
     pub fn band(
         mut self,
-        lower: impl NumericInput,
-        upper: impl NumericInput,
+        lower: impl crate::NumericSeriesInput,
+        upper: impl crate::NumericSeriesInput,
     ) -> std::result::Result<Self, AdapterError> {
-        let lower = lower.bind_numeric(self.source, "lower")?;
-        let upper = upper.bind_numeric(self.source, "upper")?;
+        let native_lower = lower.native_slots();
+        let native_upper = upper.native_slots();
+        let (lower, lower_shape) = lower.bind_series(self.source, "lower")?;
+        let (upper, upper_shape) = upper.bind_series(self.source, "upper")?;
+        for (shape, native) in [(&lower_shape, native_lower), (&upper_shape, native_upper)] {
+            match (&self.expansion, shape) {
+                (_, None) if native => {}
+                (None, None) => {}
+                (Some(expansion), Some((rows, columns, _)))
+                    if *rows == expansion.rows && columns.len() == expansion.keys.len() => {}
+                _ => {
+                    return Err(crate::error::binding(
+                        "band",
+                        "bounds must match the line's single-variable or selected-column shape",
+                    ))
+                }
+            }
+        }
         self.aligned("lower", lower.name(), lower.len())?;
         self.aligned("upper", upper.name(), upper.len())?;
         self.plot = self.plot.band(Bounds::new(lower, upper));
@@ -204,37 +210,7 @@ impl<'source> PlotAdapter<'source, kind::Matrix> {
     pub fn numeric_from_data(
         source: &'source DataFrame,
     ) -> std::result::Result<Self, AdapterError> {
-        let names = source
-            .columns()
-            .iter()
-            .filter(|column| {
-                matches!(
-                    column.dtype(),
-                    DataType::Int8
-                        | DataType::Int16
-                        | DataType::Int32
-                        | DataType::Int64
-                        | DataType::Int128
-                        | DataType::UInt8
-                        | DataType::UInt16
-                        | DataType::UInt32
-                        | DataType::UInt64
-                        | DataType::UInt128
-                        | DataType::Float16
-                        | DataType::Float32
-                        | DataType::Float64
-                )
-            })
-            .map(|column| column.name().as_str())
-            .collect::<Vec<_>>();
-        // The same explicit selection path rejects an empty discovered set.
-        let _ = names.as_slice().bind_columns(Some(source))?;
-        let values = crate::columns::numeric_columns(source, &names)?;
-        Ok(Self::bound(
-            Plot::matrix(values),
-            Some(source),
-            Some(source.height()),
-        ))
+        Self::matrix_input(Some(source), super::wide::numeric_names(source).as_slice())
     }
     fn matrix_input(
         source: Option<&'source DataFrame>,
@@ -243,10 +219,25 @@ impl<'source> PlotAdapter<'source, kind::Matrix> {
         let columns = variables.bind_columns(source)?;
         let len = columns[0].len();
         let mut values = crate::snapshot::allocate(columns.len(), "matrix")?;
-        for column in &columns {
+        for (index, column) in columns.iter().enumerate() {
             length("matrix", column.name().as_str(), len, column.len())?;
-            values.push(column.bind_numeric(None, "matrix")?);
+            values.push(NumericValues::nullable(
+                format!("__lichtung_matrix_{index}"),
+                crate::numeric::values(column)?,
+            ));
         }
-        Ok(Self::bound(Plot::matrix(values), source, Some(len)))
+        let mut adapter = Self::bound(Plot::matrix(values), source, Some(len));
+        adapter.matrix_keys = Some(
+            (0..columns.len())
+                .map(|index| format!("__lichtung_matrix_{index}"))
+                .collect(),
+        );
+        adapter.column_labels(columns.iter().enumerate().map(|(index, column)| {
+            if column.name().is_empty() {
+                format!("Column {}", index + 1)
+            } else {
+                column.name().to_string()
+            }
+        }))
     }
 }

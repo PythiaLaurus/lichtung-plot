@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::PlotAdapter;
 use crate::{
-    kind, AlphaEncoding, AxisScale, AxisTick, BarPointLayer, BarSpacing, CategoricalColorScale,
+    kind, AxisScale, AxisTick, BarPointLayer, BarSpacing, CategoricalColorScale,
     CategoryLabelSelection, CategoryOrder, ContinuousColorScale, EstimateStatus, GuideSpec,
     GuideTextRole, HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins,
     HistogramComposite, HistogramStat, InteractionStyle, LegendComposition, LegendPolicy,
@@ -66,9 +66,6 @@ forward!(legend(policy: LegendPolicy) => Legend);
 forward!(legend_composition(composition: LegendComposition) => Legend);
 forward!(raw_overlay(overlay: RawOverlay) => RawOverlay);
 forward!(estimate_status(statuses: impl IntoIterator<Item = EstimateStatus>) => EstimateStatus);
-forward!(point_alpha(encoding: AlphaEncoding) => PointAlpha);
-forward!(line_alpha(encoding: AlphaEncoding) => LineAlpha);
-forward!(fill_alpha(encoding: AlphaEncoding) => FillAlpha);
 forward!(x_tick_text_layout(layout: TextLayout) => XAxisText);
 forward!(y_tick_text_layout(layout: TextLayout) => YAxisText);
 forward!(facet_row_text_layout(layout: TextLayout) => Facet);

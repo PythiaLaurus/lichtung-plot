@@ -7,9 +7,9 @@ This is the compatibility inventory for the proposed
 API in full. Polars implements native re-exports, single-variable record-form
 family constructors, grid/record heatmaps, Matrix selection, native configuration
 forwarding and source-bound layer adapters. Its direct/source borrowing and native
-handoff are covered by repository consumers. Expanded wide binding and foreign
-status/alpha/significance mapping remain prospective, as does the ndarray plotting
-frontend. Those examples below are not compiled evidence. Native definitions
+handoff are covered by repository consumers. Polars also implements expanded wide
+binding and foreign status/alpha/significance mapping. The ndarray plotting
+frontend remains prospective; its examples below are not yet compiled evidence. Native definitions
 described here are established by the current source. Do not add a direct core
 dependency to examples that are intended to demonstrate adapter-only use.
 

@@ -11,17 +11,19 @@
 //! distinct. There are no implicit joins, query execution or new estimators.
 //! The standalone renderer never depends on Polars or this adapter.
 
+mod alpha;
 mod boolean;
 mod category;
-mod columns;
 mod error;
 mod frontend;
 mod input;
 mod layers;
 mod numeric;
 mod provenance;
+mod significance;
 mod snapshot;
 
+pub use alpha::{AlphaInput, AlphaValuesInput};
 pub use error::AdapterError;
 pub use frontend::{
     Bar, Beeswarm, Boxplot, Coefficient, Density, Dumbbell, Forest, Heatmap, Histogram,
@@ -30,10 +32,12 @@ pub use frontend::{
     Waterfall,
 };
 pub use input::{
-    AxisInput, BooleanInput, CategoryInput, ColumnsInput, NumericInput, SourceRowsInput,
+    AxisInput, BooleanInput, CategoryInput, ColumnInput, ColumnsInput, NumericInput,
+    NumericSeriesInput, SourceRowsInput,
 };
 pub use layers::{BarPointLayerAdapter, PointLayerAdapter};
 pub use lichtung_plot::*;
+pub use significance::*;
 
 #[cfg(test)]
 mod tests;
