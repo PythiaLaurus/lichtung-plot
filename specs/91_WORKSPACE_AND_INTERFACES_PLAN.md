@@ -21,10 +21,11 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python object mutation/copy semantics are deliberately unresolved. Record the
-settled scope first; analyze that choice separately and, if source inspection
-cannot settle it, resolve it through analysis and measurements at the beginning
-of the Python-binding work. It must not block the workspace, adapters or Book.
+Python architecture and the four input routes below are settled implementation
+directions, supported by bounded external prototypes, not delivered binding code.
+Object mutation/copy semantics and the required native ownership facilities remain
+unresolved. Complete that decision before expanding the binding surface; it must
+not block the delivered workspace, adapters or Book.
 
 ### Delivery Status
 
@@ -33,7 +34,7 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Not implemented; the binding-time decision gate remains required. |
+| Python lifecycle decision and complete binding | Architecture/input routes settled; bounded PyO3, installed-wheel and pandas experiments completed. No binding implementation; object semantics, ownership facilities and the remaining verification gates are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -44,8 +45,8 @@ of the Python-binding work. It must not block the workspace, adapters or Book.
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
-| Python input | Native Python sequences, NumPy and Polars use the same native-value/rendering route. |
-| Python compatibility | CPython 3.10 is a required minimum, not a version that may be excluded by adopting a moving support-window recommendation. |
+| Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
+| Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
 | Book languages | Chinese and English have equal status, equivalent content and coverage; neither language is the source or reference edition for the other. |
 | Guide navigation | Each language has one main tutorial page with in-page contents; real gallery images appear first and link directly to same-page code explanations. |
@@ -208,6 +209,17 @@ and shipped typing information. [Maturin's project layout][maturin-layout] and
 imports and packaging boundaries. Keep Python glue thin; no Python-side renderer,
 parallel scientific specification or JSON round trip is authorized.
 
+Use one Python-facing entry point per family for direct values and source-bound
+variables, dispatching deliberately on supported argument types and call forms.
+Do not require separate core/NumPy/pandas/Polars plotting namespaces or different
+plot object hierarchies for each data origin. These entry points reuse native
+constructors and the appropriate adapters internally; native value objects remain
+valid direct inputs. A Python plot owns the same core configuration regardless of
+its input route. Source lookup context, where retained, is separate from values
+already snapshotted into the plot; rendering never rereads mutable Python data.
+Exact constructor names/signatures and configuration mutation semantics are not
+selected by this dispatch decision.
+
 Inventory the core exports and actual family capabilities against Python-visible
 constructors, methods, value types and exceptions. Preserve equivalent semantic
 capabilities rather than literally reproducing Rust generics, const qualifiers
@@ -233,23 +245,70 @@ capability inventory. Resolve the object-lifecycle design at its explicit gate.
 
 ### Input Bridges And Compatible Dependencies
 
-Native sequences, NumPy and Polars converge on the same native data contracts.
-[rust-numpy][rust-numpy] offers readonly ndarray views; consume them into owned
-values instead of retaining a mutable Python buffer during detached rendering.
-Do not force a contiguous-only route or introduce a list/JSON fallback that changes
-missingness, dtype meaning or source order.
+The four supported input classes use different boundary conversions, not different
+renderers or scientific semantics:
 
-Python Polars is not a Rust ABI object. Compare the official
-[pyo3-polars bridge][pyo3-polars-types] with the
-[Arrow PyCapsule protocol][arrow-capsules], including compatibility, supported
-types, dependency footprint, reference/release safety and adapter reuse. Select
-one supported route rather than accumulate fallback chains.
+| Python input | Implementation direction |
+| --- | --- |
+| Native sequences and exposed native value objects | Extract role-appropriate values into native inputs, or reuse already-native objects; do not force a NumPy/list/JSON round trip. |
+| NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter, then release the Python-buffer borrow after binding owned native values. |
+| pandas DataFrame/Series | Resolve only selected columns and extract by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
+| Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The concrete Python-to-Rust bridge still needs native runtime verification. |
+
+Preserve the [adapter value contracts](09_DATA_ADAPTERS.md): ordinary numeric f64
+rounding, null distinct from present NaN, exact integer IDs, actual string category
+keys, logical order, names and explicit provenance. Numeric dtype normalization is
+not permission to cast IDs through f64, booleans to 0/1 or arbitrary objects to
+display strings. Empty input retains its logical dtype and shape; unsupported
+semantic dtypes must not become supported merely because they have no rows.
+
+[rust-numpy][rust-numpy] is the NumPy bridge, not a renderer. Admit supported
+strided, reversed, transposed, Fortran and broadcast views without a contiguous-only
+restriction. Consume them into owned values before detached rendering. MaskedArray
+requires deliberate mask handling or explicit rejection; raw ndarray extraction
+can accept the subclass while silently discarding its mask. Adapter validity uses
+true = present, the opposite of NumPy's true = hidden mask convention.
+
+For pandas, use public dtype/array interfaces rather than private storage fields.
+Keep per-column validity independently of numeric payloads; never use
+`np.isnan(values)` as a universal null bitmap. NumPy-backed floating columns have
+no independent null bitmap: preserve their NaNs consistently with the same NumPy
+input. Nullable/Arrow-backed columns retain their actual null information. Do not
+claim to recover None-versus-NaN distinctions already lost by pandas construction.
+Whole-table `to_numpy()` can promote integer IDs to floating point and erase
+heterogeneous column meanings. Only bound columns are converted, and their source
+names must reach native identities/automatic labels rather than disappear into
+generic x/y role names. Do not add implicit index joins, sorting or row compaction,
+or infer x/source IDs from DataFrame.index. Ambiguous selected names fail instead
+of choosing the first matching column; the complete column-label syntax remains
+part of public API design. No Rust pandas adapter crate is prescribed.
+
+PyArrow is a Python Arrow implementation, not the Arrow protocol itself and not
+a required intermediate dependency for all inputs. Ordinary pandas users must not
+need Polars/PyArrow just to plot nullable columns; pandas Arrow-backed storage can
+use its already-required Arrow support. Correctly configured pandas-to-Arrow or
+pandas-to-Polars conversions can preserve the tested values, but their defaults
+can turn ordinary NaNs into nulls. Reject those defaults as an implicit universal
+route, not the libraries as inherently lossy.
+
+Python Polars is not a Rust ABI object. Prefer reuse of the Polars adapter, while
+comparing the official [pyo3-polars bridge][pyo3-polars-types] with direct
+[Arrow PyCapsule][arrow-capsules] import for the native boundary. Published
+pyo3-polars 0.28 uses Polars' SeriesExport FFI, not a PyArrow conversion; capsule
+export likewise does not require the PyArrow Python package. Verify compatibility,
+logical types/schema metadata, dependency footprint, reference/release safety and
+adapter reuse before selecting one route, without fallback chains. Arrow exchange
+does not by itself guarantee zero-copy conversion. A generic PyArrow consumer's
+rejection of Polars' 128-bit formats does not disqualify a polars-arrow importer
+that recognizes them; the actual Rust import still needs testing.
 
 Choose a compatible dependency set, not independently latest package versions.
 Published [pyo3-polars 0.28.0 dependencies][bridge-dependencies] require PyO3 0.29
 and Polars 0.55; [numpy 0.29.0 dependencies][numpy-dependencies] also use PyO3 0.29
-and admit ndarray 0.17. This is a candidate manifest-compatible set, not compiled
-or runtime verification and not a fixed version decision for implementation.
+and admit ndarray 0.17. Start from PyO3 0.29 / rust-numpy 0.29 / ndarray 0.17 as the
+tested minimal-extension baseline. The Polars bridge remains manifest-compatible
+candidate evidence, not compiled/runtime verification. Final exact pins and Python
+dependency bounds belong to the working binding, not speculative workspace edits.
 
 ### Python 3.10 And Distribution Verification
 
@@ -257,6 +316,12 @@ Set CPython 3.10 as the minimum. Do not adopt SPEC 0 as a reason to remove it.
 Actual releases of [PyTorch][torch-release], [TensorFlow][tensorflow-release] and
 [Polars][polars-python-release] declare Python 3.10 support; the interface must
 serve that established machine-learning environment.
+
+Use `abi3-py310` as the initial ordinary-CPython wheel design. A minimal extension
+has run unchanged across the sampled interpreters/NumPy versions below, but that
+does not prove the complete binding or Polars bridge can ship on every target.
+Verify required APIs and actual release targets rather than silently dropping
+3.10 or treating one local Linux wheel as a manylinux/platform certification.
 
 Do not make latest NumPy the universal minimum. Both
 [NumPy 1.26.4][numpy-one-release] and [NumPy 2.2.6][numpy-two-release] provide
@@ -271,6 +336,49 @@ sdist. [Maturin's distribution guidance][maturin-distribution] explicitly treats
 that as a source-completeness check. Metadata, Rust compilation or an editable
 installation alone cannot establish distribution compatibility. Preserve the
 renderer font policy; successful installation does not provision fonts/assets.
+
+### Bounded Prototype Evidence And Its Limits
+
+External temporary prototypes were run on Linux x86_64 on 2026-11-06, without
+adding binding code, dependencies or support scripts to this repository. They
+used actual PyO3 entry points, strict Clippy and optimized builds; these are
+design evidence, not retained automated tests or a delivered Python package.
+
+- A PyO3 0.29.2 / rust-numpy 0.29.0 / ndarray 0.17.2 `cp310-abi3` wheel was
+  installed outside its source tree and invoked on CPython 3.10.19 with NumPy
+  1.26.4 and 2.2.6, and CPython 3.13.11 with NumPy 2.2.6. The loaded native
+  binary was identical. This does not verify sdist completeness or other targets.
+- pandas 2.3.3 on 3.10 and pandas 3.1.1 on 3.13 passed bounded column extraction
+  checks. A small numeric entry point exercised the real ndarray adapter/native
+  handoff, reversed views and independence after source mutation/release. Nullable
+  floats, integer IDs, strings/categories and Boolean boundary rules were checked;
+  not all of their native bindings or all 25 families were implemented. Ordinary
+  pandas inputs also worked with Polars/PyArrow imports disabled.
+- NumPy noncontiguous views and owned snapshots passed. Raw float64 extraction
+  demonstrated the MaskedArray mask-loss hazard. pandas whole-table conversion
+  demonstrated integer-ID rounding, while explicit column validity preserved
+  null versus present NaN where the source retained that distinction.
+- Python Polars 1.41.2 and PyArrow 25.0.1 exercised Arrow production/consumption
+  on 3.10, including nulls, categories and source release. Schema metadata mattered
+  for Enum identity; one stream export consolidated chunks and copied numeric
+  buffers. These were Python consumers, not a tested Rust Polars importer.
+- Ordinary title edits cost roughly 0.14 microseconds with a mutable owner versus
+  0.4 microseconds for a whole-Plot-clone wrapper; a million shared input rows did
+  not increase allocation traffic. With 2048 exact ticks the clone wrapper cost
+  roughly 48-50 microseconds per edit. Retaining equivalent independent branches
+  required equal Rust allocation traffic in both models. These are local workload
+  observations, not universal mutability rankings or performance contracts.
+- PyO3 callbacks demonstrated exclusive-borrow reentry failure, successful reentry
+  after snapshotting/releasing the borrow, and preserved Python exception identity.
+  Same-Output successful publication replay also passed. Numeric/tick callback GC,
+  operation/context/thread rules, fallible reusable Canvas edits and Output reuse
+  after I/O failure remain unverified.
+
+Keep the simple current configuration/data representation as the baseline. Shared
+observation data already works; do not preemptively add persistent collections or
+a broad storage refactor. Conversely, whole-Plot cloning is not configuration-size
+independent. Public lifecycle semantics, any necessary narrow ownership facilities
+and remaining compatibility/distribution checks still require their own decisions.
 
 ## Equal-Status Chinese And English Books
 
@@ -498,23 +606,27 @@ not proof of a universal performance winner or grounds to reduce API coverage.
 
 ### Binding-Time Analysis And Measurement Gate
 
-**Decision: defer the configuration-semantics choice to the beginning of the
-Python-binding work.** Source inspection identifies risks but cannot establish
-actual PyO3/CPython construction latency, allocation behavior or acceptable
-tradeoffs. No benchmark or Python prototype has been executed for this planning
-change. Do not select either model or restructure the core speculatively now.
+**Decision: configuration semantics remain open; the architecture/input decisions
+and bounded prototype evidence above do not select mutable or new-configuration
+returns.** The experiments establish real baseline costs and several ownership
+hazards, but do not complete the fallible Canvas/Output/callback lifecycle gate.
+Resolve the remaining observable semantics and lawful native ownership route
+before expanding the binding surface; do not restructure the core merely because
+a wrapper benchmark exposes a tradeoff.
 
 At that gate:
 
 1. Write concrete alias/variant, edit-failure, composition and repeated-publication
    examples for each candidate. Specify native ownership and Python-reference
    lifetimes, including reentrant/throwing callbacks, before comparing speed.
-2. Build bounded internal comparison prototypes through actual PyO3 entry points,
-   covering Plot, fallible Canvas edits and frozen Output reuse. A Rust Clone
-   microbenchmark alone cannot settle the Python interface. Apply strict Clippy
-   and the existing semantic test ceilings to any retained support/tests.
-3. Compare equivalent workloads: small ordinary configurations; large shared
-   numeric inputs with many scalar edits; growing exact-tick/annotation/alias
+2. Complete the bounded real-PyO3 lifecycle evidence where still missing, especially
+   fallible reusable Canvas edits, Output publication failure and callback ownership.
+   Reuse the established Plot/successful-replay baseline rather than repeat it as
+   a full suite. A Rust Clone microbenchmark alone cannot settle the interface.
+   Apply strict Clippy and the existing semantic ceilings to retained support/tests.
+3. Compare equivalent workloads, using the measured baseline where applicable:
+   small ordinary configurations; large shared numeric inputs with many scalar
+   edits; growing exact-tick/annotation/alias
    content; progressively populated Canvas grids; and retained branches derived
    from a common configuration. Include successful output/semantic checks so that
    reduced content or changed ownership cannot masquerade as an optimization.
