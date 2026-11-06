@@ -21,11 +21,12 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python architecture and the four input routes below are settled implementation
-directions, supported by bounded external prototypes, not delivered binding code.
-Object mutation/copy semantics and the required native ownership facilities remain
-unresolved. Complete that decision before expanding the binding surface; it must
-not block the delivered workspace, adapters or Book.
+Python architecture, the four input routes and the object-lifecycle semantics
+below are settled implementation directions, supported by bounded prototypes and
+explicit API discussion, not delivered binding code. Configuration sharing is a
+preferred implementation direction, not a completed experiment. The required
+native ownership facilities and remaining API details still need design and
+verification before expanding the binding surface.
 
 ### Delivery Status
 
@@ -34,7 +35,7 @@ not block the delivered workspace, adapters or Book.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes settled; bounded PyO3, installed-wheel and pandas experiments completed. No binding implementation; object semantics, ownership facilities and the remaining verification gates are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes and mutable configuration/explicit copy/Canvas snapshot/non-consuming render/frozen Output semantics settled. Bounded experiments completed; no binding implementation. Native ownership facilities, remaining API details and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -46,6 +47,7 @@ not block the delivered workspace, adapters or Book.
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
+| Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
 | Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
 | Book languages | Chinese and English have equal status, equivalent content and coverage; neither language is the source or reference edition for the other. |
@@ -196,8 +198,8 @@ public conversion surface with the working replacement, without aliases or a
 parallel legacy route. Replace Polars first to establish dataset/name bindings,
 then ndarray's vector/table/matrix routes. Validate actual code, review counts
 when changing tests, and verify working packages at delivery, not through a
-pre-implementation audit or compatibility project. Python remains at its own
-decision point below.
+pre-implementation audit or compatibility project. Python retains its own
+implementation and verification gate below.
 
 ## Complete Python Interface
 
@@ -216,9 +218,10 @@ plot object hierarchies for each data origin. These entry points reuse native
 constructors and the appropriate adapters internally; native value objects remain
 valid direct inputs. A Python plot owns the same core configuration regardless of
 its input route. Source lookup context, where retained, is separate from values
-already snapshotted into the plot; rendering never rereads mutable Python data.
-Exact constructor names/signatures and configuration mutation semantics are not
-selected by this dispatch decision.
+already snapshotted into the plot; rendering never reopens foreign containers to
+refresh those values. Callback references have the separate external-state
+semantics below. Exact constructor names/signatures remain an API design task;
+configuration mutation follows the selected lifecycle model.
 
 Inventory the core exports and actual family capabilities against Python-visible
 constructors, methods, value types and exceptions. Preserve equivalent semantic
@@ -239,9 +242,11 @@ Preserve exact-tick precedence, once-per-reached-context materialization and fro
 Output replay. A new terminal render is distinct from another publication of the
 same Output. Configuration edits must not perform rendering as a hidden cost.
 
-No mutable/immutable Python configuration choice, public Clone addition, new
-render entry point or configuration-storage refactor is authorized merely by this
-capability inventory. Resolve the object-lifecycle design at its explicit gate.
+The lifecycle model below selects the Python-visible behavior, not Rust method
+signatures or a new standalone `render()` entry point. Identify and validate the
+smallest deliberate public core ownership facilities needed to implement it;
+neither a blanket Clone addition nor a broad storage refactor follows from the
+capability inventory.
 
 ### Input Bridges And Compatible Dependencies
 
@@ -374,11 +379,12 @@ design evidence, not retained automated tests or a delivered Python package.
   operation/context/thread rules, fallible reusable Canvas edits and Output reuse
   after I/O failure remain unverified.
 
-Keep the simple current configuration/data representation as the baseline. Shared
-observation data already works; do not preemptively add persistent collections or
-a broad storage refactor. Conversely, whole-Plot cloning is not configuration-size
-independent. Public lifecycle semantics, any necessary narrow ownership facilities
-and remaining compatibility/distribution checks still require their own decisions.
+Keep one native configuration/data representation. Shared observation data already
+works, but whole-Plot cloning is not configuration-size independent. The selected
+lifecycle prefers narrowly scoped immutable configuration sharing and separation
+on edit where justified; it does not authorize persistent collections or a broad
+storage refactor. That sharing design, native ownership facilities and remaining
+compatibility/distribution checks have not been validated by these experiments.
 
 ## Equal-Status Chinese And English Books
 
@@ -522,8 +528,9 @@ package contents or published ref may reintroduce the full Unicode corpus.
    explicit-x/view2 series and matrix/wide input. Verify shared native types when
    both adapters are used; migrate callers and peer guides with focused evidence,
    removing the old conversion surface.
-5. **Python lifecycle decision gate.** Resolve the deferred object semantics and
-   necessary public-core ownership facilities before mass-producing bindings.
+5. **Python lifecycle implementation gate.** Implement the selected object
+   semantics through deliberate public-core ownership facilities and verify their
+   failure/sharing/callback behavior before mass-producing bindings.
 6. **Complete Python interface.** Deliver the capability mapping, callbacks, input
    bridges, typing and distribution verification through the same renderer.
 7. **Integrated content and closure.** Complete bilingual content/gallery coverage
@@ -533,125 +540,153 @@ package contents or published ref may reintroduce the full Unicode corpus.
 Commit each completed logical objective before unrelated work. Commit messages
 describe enduring boundaries/behavior, not numbered delivery stages.
 
-## Open Python Object-Lifecycle Decision
+## Selected Python Object Lifecycle
 
-No choice is made here between mutation-and-return-self and new-configuration
-returns. Do not infer a Python decision from Rust's consuming `mut self -> Self`:
-it moves ownership, whereas Python callers can retain aliases. Do not treat either
-design as universally faster or more idiomatic without examining this project.
+The selected public model is mutable configuration with explicit copies,
+insertion-time Canvas snapshots, non-consuming renders and frozen Output reuse.
+This follows the bounded analysis and API discussion, not an assumption that
+Rust's consuming `mut self -> Self` means Python mutation. Both
+[mutation-and-return-self][plotly-updates] and
+[new-configuration returns][altair-properties] have established precedents; the
+choice here is project-specific, not a universal performance or idiom ranking.
 
-### What Source Inspection Establishes
+### Mutable Configuration And Explicit Copies
 
-Both [Plotly's mutation-and-return-self contract][plotly-updates] and
-[Altair's new-configuration methods][altair-properties] have established
-precedents. A choice of configuration semantics is separate from a choice of
-physical storage or rendering schedule. It is not a contest between inevitably
-deep-copying everything and inevitably mutating without copying.
+- Plot and Canvas configuration operations edit the same Python object and return
+  it for chaining. Ordinary assignment creates an alias, not an independent plot.
+- `.copy()` creates a logically independent configuration handle. Later edits do
+  not affect the original; immutable observation data and configuration versions
+  may remain physically shared until separation is needed. Copying neither
+  re-converts foreign inputs nor renders, and need not deep-copy every payload.
+- A mutator called without assigning its return still applies the edit. Do not
+  add per-setter `inplace` switches or parallel mutable/immutable API modes.
+- Failed edits leave the original configuration valid and unchanged; existing
+  snapshots remain valid too. A wrapper must not accidentally become empty after
+  moving its Rust owner into a fallible consuming method.
+- Policy/value objects such as Text and Theme need deliberate, consistent
+  attachment/copy rules, but their exact public mutability is not selected merely
+  by choosing mutable Plot/Canvas owners.
 
-The current native implementation provides the following concrete evidence:
+### Canvas Captures Configuration, Not A Live Child Alias
 
-| Owner | Established fact | Consequence, not a timing claim |
-| --- | --- | --- |
-| `crates/lichtung-plot/src/builder.rs`, `crates/lichtung-plot/src/values.rs` | Plot input and native numeric/category payloads use Arc; Theme attachments are shared too. | A new configuration need not copy all observation buffers or repeat foreign-input conversion. |
-| `crates/lichtung-plot/src/builder.rs`, `crates/lichtung-plot/src/text.rs`, `crates/lichtung-plot/src/layout/panel.rs` | Plot's derived Clone also clones owned text, annotation/layer vectors and exact tick vectors/strings. | Whole-Plot cloning is not constant-cost in total configuration size, even with shared scientific data. |
-| `crates/lichtung-plot/src/canvas.rs`, `crates/lichtung-plot/src/canvas/placement.rs` | Public Canvas is not Clone; its private placements own grid-sized vectors and boxed Plot payloads. | A reusable Python Canvas needs an explicit ownership design; blindly copying placements for every insertion can have quadratic cumulative cost when panel count grows with grid size. |
-| `crates/lichtung-plot/src/labels.rs` | Alias maps already use Arc::make_mut. | Existing copy-on-write is useful, but repeated edits to shared maps can still copy the map; Arc alone is not a complexity guarantee. |
-| `crates/lichtung-plot/src/output.rs` | Output is not Clone and its fallible publication methods consume self. | Both configuration models must address reusable Python Output handles and publication failure without rerendering the frozen scene. |
+Placing a Plot captures its configuration at that call and leaves the external
+Python Plot usable. Later edits to that Plot must not change any existing Canvas
+capture. Each placement preserves native parent ownership, local instructions and
+one scientific producer per owner; it is not a separate Python plotting spec.
 
-Public setters commonly consume `self`; some, such as Canvas placement, return
-`Result<Self>`. On Err the caller does not receive the original Rust owner back.
-A Python mutation wrapper cannot simply move the value out, call such a method,
-and assume it can restore the original on failure. Retaining a candidate copy,
-changing a deliberately public ownership facility, or choosing a different
-documented failure protocol has real consequences. Private in-place helpers are
-not automatically available to a separate binding crate. New-configuration
-returns also need a lawful native ownership route; neither design is free.
+Snapshot semantics do not require an immediate whole-Plot clone. Prefer narrow
+immutable-configuration sharing with separation on later edits, where deliberate
+native facilities make this possible. Inserting a temporary complex plot and
+discarding its external handle should not inherently require an unused independent
+configuration copy. `.copy()` may likewise initially share a configuration version
+while returning a distinct Python owner. This is an implementation preference,
+not an already-tested copy-on-write Canvas or a zero-copy guarantee. If it needs
+disproportionate core refactoring, retain the simple cloning baseline with the
+same public semantics rather than introduce another representation or mode.
 
-Transient and retained versions have different memory behavior. In a linear
-configuration chain, released predecessors need not all remain resident, but
-cumulative allocation/copy traffic can still grow with every edit. Retaining many
-branches retains their actual differing configuration. Conversely, a fair mutable
-comparison must include the snapshots/copies needed to produce those same
-independent branches, not compare branch construction with repeatedly overwriting
-one result.
+A Canvas grid can be created before its Plot contents are decided; empty slots do
+not require placeholder Plot objects or live-reference insertion. Explicit
+replacement/editing of an already occupied panel, and any panel-access handle,
+remain public API design questions. Do not silently change snapshot insertion into
+live linkage to make those operations possible.
 
-Wrapping an entire configuration in Arc and invoking make_mut can still clone
-that whole configuration when shared; see [Arc's documented behavior][arc-cow].
-Fine-grained sharing/persistent collections add indirection, reference-counting,
-equality/dependency and maintenance costs. Do not prescribe them before measuring
-the simple baseline, or claim that shared observation data proves negligible
-configuration overhead. Do not use a guessed Python reference count as proof
-that a caller cannot observe mutation.
+An external Plot remains independently renderable after insertion. That does not
+promise an exact export/crop of its final Canvas panel: parent theme, shared guides
+and composition sizing can affect that panel's result. Such a panel-export API is
+not implied by the selected lifecycle.
 
-### Compare Complete Observable Semantics
+### Rendering Does Not Consume Python Configuration
 
-Evaluate these concerns together, not only setter timing:
+Each Plot/Canvas terminal export preserves its Python configuration owner, performs
+a new render operation and returns a frozen Output on success. The configuration
+remains editable, copyable and renderable again. Rendering/publication failure must
+not invalidate the configuration or an already existing Output.
 
-| Concern | Required comparison |
+Two calls to `p.svg(...)` mean two render operations even without intervening
+setters. There is no implicit last-render reuse based only on configuration
+equality or an edit counter. Reuse is explicit through the returned Output:
+`out = p.svg(first_path)` followed by `out.svg(second_path)` or `out.png(path)`
+publishes the same frozen scene without new layout, statistics or numeric/tick
+callback materialization. Format conversion and I/O can still have real costs.
+Later edits to the configuration do not affect that Output.
+
+This selects non-consuming Python behavior, not a new public `render()` method
+or a Rust signature change. Review the smallest public core facilities needed;
+do not work around consuming methods by duplicating rendering/publication in the
+binding. A terminal operation uses a stable configuration version even if an
+allowed reentrant callback edits the Python owner for a later operation.
+
+### Callback References Are Not Frozen Callback Results
+
+Configuration copies and Canvas captures retain the configured callable and its
+identity; they do not recursively clone or freeze Python globals, closures or
+application objects reachable from it. The same callable can produce different
+labels when external formatting options change, even if no Plot setter runs.
+New render operations may evaluate that callable again. Frozen Output replay
+retains the already-materialized result and must not reevaluate it.
+
+Preserve exact-tick precedence and once-per-reached-context materialization within
+each operation. Complete Python-reference ownership, [GC integration][pyo3-gc],
+exception context/identity, context lifetime and interpreter/thread rules before
+exposing callbacks. Do not hold a mutable PyO3 borrow across a Python callback that
+needs reentrant access; neither immutable sharing nor explicit copies alone solve
+reference cycles, invalid contexts or nested-operation ownership.
+
+### Current Rust Ownership And Implementation Constraints
+
+The existing native API is not yet the selected Python lifecycle:
+
+| Current native fact | Binding implication |
 | --- | --- |
-| Aliases and variants | Whether an edit changes another name for the same Python object; how callers derive independent plots; whether chaining without assignment discards the result. |
-| Exceptions and ownership | Invalid edits, invalid placement, callback failures and output I/O failures; retained handles must not accidentally become empty or refer to half-applied edits. |
-| Composition | Whether inserting a Plot into Canvas captures a native configuration or keeps a live mutable child reference. Preserve parent ownership, local instructions and one scientific producer per owner rather than accidentally changing composition semantics. |
-| Input independence | Both models use owned native snapshots; neither may turn later NumPy/Polars mutation into an unrequested edit of an existing plot. |
-| Rendering and publication | A terminal render uses stable inputs; an already returned Output stays frozen across later configuration edits and subsequent publications. No implicit cross-operation layout cache or early render may hide construction cost. |
-| Callbacks and threads | Python ownership/cycles, callback identity, exceptions, reentrancy and interpreter attachment. [PyO3 runtime borrowing][pyo3-classes] means holding a mutable object borrow across a callback can prevent reentrant access; immutability alone also does not solve [Python reference cycles][pyo3-gc]. |
-| Native boundary and complexity | Whether the design uses only deliberate public core facilities and preserves one representation/validation path, versus introducing a parallel Python specification, duplicated validators or a general builder hierarchy. |
-| User-facing consistency | Naming, typing, documentation and error behavior must consistently express the selected model across Plot, Canvas, Text/Theme policies and Output; these objects need not all have identical mutability, but differences must be deliberate. |
+| Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
+| Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
+| Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
+| Plot/Canvas public terminal methods consume self, while their private scene-rendering functions borrow self. | Non-consuming Python renders need a lawful public route; rendering does not inherently require consuming the configuration. Private helpers are not a binding API. |
+| Output is not Clone and its fallible publishers consume self, returning it only on success. | Reusable Python Output must survive publication failure without rerendering or relying on an unavailable Clone. |
+| Labels already uses Arc::make_mut. | Copy-on-write can still clone the complete shared map; Arc alone is not a complexity guarantee. |
 
-The mutable-configuration model can be attractive for interactive stepwise edits
-and may avoid some candidate copies where ownership permits it. The
-new-configuration model can make reusable templates and independent variants
-clearer and may isolate configuration changes naturally. These are tradeoffs,
-not proof of a universal performance winner or grounds to reduce API coverage.
+Wrapping an entire Plot in Arc does not by itself make the existing Canvas accept
+it, preserve placement-local ownership or recover fallible operations. Separation
+may still clone the entire shared configuration; see [Arc behavior][arc-cow].
+Do not infer sole ownership by guessing Python reference counts or silently
+consume external handles. Keep one native representation/validation path and core
+independence; no persistent collection framework, Python builder hierarchy or
+general storage redesign is authorized by the preference for sharing.
 
-### Binding-Time Analysis And Measurement Gate
+### Remaining API And Implementation Gate
 
-**Decision: configuration semantics remain open; the architecture/input decisions
-and bounded prototype evidence above do not select mutable or new-configuration
-returns.** The experiments establish real baseline costs and several ownership
-hazards, but do not complete the fallible Canvas/Output/callback lifecycle gate.
-Resolve the remaining observable semantics and lawful native ownership route
-before expanding the binding surface; do not restructure the core merely because
-a wrapper benchmark exposes a tradeoff.
+Public lifecycle semantics are selected; their complete native ownership/sharing
+implementation is not. Before expanding the binding surface:
 
-At that gate:
+1. Resolve how users deliberately update occupied Canvas panels, followed by
+   remaining constructor/column-label syntax and policy/value-object attachment
+   rules. These details must not reintroduce live external Plot aliases or select
+   competing lifecycle modes.
+2. Identify the smallest public core facilities for configuration sharing/copy,
+   safe Canvas edits, stable non-consuming renders and failure-safe Output replay.
+   Record justified native API/storage changes before implementing the full binding;
+   migrate affected callers rather than retain compatibility alternatives.
+3. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
+   external edits, retained branches, temporary insertions, fallible Canvas edits,
+   render/I/O failure and callback ownership/reentry. Reuse the existing Plot and
+   successful-replay evidence instead of repeating it as a full suite. Retained
+   support/tests need strict Clippy and the shared semantic test ceilings.
+4. Compare sharing/separation with the simple baseline on equivalent successful
+   workloads where that implementation changes costs: ordinary configurations,
+   shared large numeric inputs, growing tick/annotation/alias content, populated
+   Canvas grids and retained independent branches. Do not reduce content or compare
+   many retained branches with overwriting one result. Shared-state separation
+   costs and whole-Canvas growth need explicit observation, not inferred savings.
+5. Separate input conversion, Python/FFI/configuration, rendering/font discovery
+   and frozen publication. Report absolute time, cumulative allocations and
+   independently observed peak memory on CPython 3.10 and a newer interpreter.
+   Allocation totals are not RSS; no arbitrary universal speedup threshold is
+   required. Select the least complex implementation meeting the agreed semantics.
 
-1. Write concrete alias/variant, edit-failure, composition and repeated-publication
-   examples for each candidate. Specify native ownership and Python-reference
-   lifetimes, including reentrant/throwing callbacks, before comparing speed.
-2. Complete the bounded real-PyO3 lifecycle evidence where still missing, especially
-   fallible reusable Canvas edits, Output publication failure and callback ownership.
-   Reuse the established Plot/successful-replay baseline rather than repeat it as
-   a full suite. A Rust Clone microbenchmark alone cannot settle the interface.
-   Apply strict Clippy and the existing semantic ceilings to retained support/tests.
-3. Compare equivalent workloads, using the measured baseline where applicable:
-   small ordinary configurations; large shared numeric inputs with many scalar
-   edits; growing exact-tick/annotation/alias
-   content; progressively populated Canvas grids; and retained branches derived
-   from a common configuration. Include successful output/semantic checks so that
-   reduced content or changed ownership cannot masquerade as an optimization.
-4. Separate foreign-container conversion, Python/FFI/configuration construction,
-   rendering/font discovery and frozen-output publication. Report absolute timing,
-   scaling with input/configuration size, cumulative allocations and independently
-   observed peak memory; do not substitute allocation totals for peak RSS or hide
-   setter cost in total rendering time. Include required CPython 3.10 and a newer
-   supported interpreter. Do not invent a speedup claim or arbitrary universal
-   percentage threshold without evidence and a real workflow.
-5. Choose the least complex design meeting the agreed observable semantics and
-   measured workflow needs. If that evidence still leaves a product tradeoff,
-   present the concrete results and examples to the user then, rather than ask
-   for another abstract mutable/immutable preference now.
-6. Record the selected single public model and justified native API/storage
-   changes before delivering the full binding surface. Migrate affected callers
-   and remove comparison-only alternatives. Do not introduce modes, per-setter
-   inplace switches or competing representations merely to avoid the decision;
-   an additional product capability would need its own established basis and
-   user confirmation.
-
-This is a required bounded decision gate, not indefinite uncertainty or a renderer
-feature in the deferred inventory. Workspace, adapters and peer-language Book
-infrastructure can proceed independently; Python-specific published examples and
-method/lifecycle contracts must wait for the result.
+This is an implementation-closure gate, not an unresolved mutable/immutable product
+choice or a feature deferred indefinitely. Polars bridge and wheel/sdist
+verification remain separate pending checks. Do not publish Python examples as
+working interfaces before the corresponding binding and ownership facilities exist.
 
 ## Reference Sources
 
