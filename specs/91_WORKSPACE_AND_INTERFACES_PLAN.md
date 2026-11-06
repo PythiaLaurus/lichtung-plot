@@ -35,7 +35,7 @@ verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes and mutable configuration/explicit copy/Canvas snapshot/non-consuming render/frozen Output semantics settled. Bounded experiments completed; no binding implementation. Native ownership facilities, remaining API details and full verification are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes, object lifecycle and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, remaining API details and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -48,6 +48,7 @@ verification before expanding the binding surface.
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
+| Canvas placement | Python uses one panel method with optional keyword-only spans and overwrite=False. Rust keeps strict panel/panel_span and adds explicit set_panel/set_panel_span; region-overwrite ownership/validation belongs to the core, not a Python-only reconstruction. |
 | Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
 | Book languages | Chinese and English have equal status, equivalent content and coverage; neither language is the source or reference edition for the other. |
@@ -585,15 +586,72 @@ disproportionate core refactoring, retain the simple cloning baseline with the
 same public semantics rather than introduce another representation or mode.
 
 A Canvas grid can be created before its Plot contents are decided; empty slots do
-not require placeholder Plot objects or live-reference insertion. Explicit
-replacement/editing of an already occupied panel, and any panel-access handle,
-remain public API design questions. Do not silently change snapshot insertion into
-live linkage to make those operations possible.
+not require placeholder Plot objects or live-reference insertion. Updating occupied
+regions uses the explicit overwrite rules below. An editable panel-access handle
+is not selected by that decision; do not introduce live external Plot linkage to
+make updates possible.
 
 An external Plot remains independently renderable after insertion. That does not
 promise an exact export/crop of its final Canvas panel: parent theme, shared guides
 and composition sizing can affect that panel's result. Such a panel-export API is
 not implied by the selected lifecycle.
+
+### Unified Spans And Explicit Region Overwrite
+
+The selected Python placement signature is:
+
+```text
+panel(row, column, plot, *, row_span=1, column_span=1, overwrite=False)
+```
+
+Single-cell and spanning placement are the same Python operation. Do not add
+Python `panel_span` or `set_panel` variants for those choices. Spans and overwrite
+are keyword-only; callers need not repeatedly pass the ordinary defaults. Both
+successful forms mutate and return the same Canvas and capture the incoming
+Plot's configuration without consuming its Python handle. `overwrite` selects
+occupied-region behavior, not mutable versus immutable configuration semantics.
+
+- With `overwrite=False`, every cell in the requested footprint must be empty;
+  any overlap fails without changing the Canvas.
+- With `overwrite=True`, an empty footprint behaves like ordinary insertion.
+  Otherwise, remove every existing placement whose footprint intersects the new
+  footprint, then place the incoming Plot at the requested row/column/span.
+- Remove each intersecting owner as a whole, even if the new footprint covers
+  only part of it or intersects several different owners. Release all cells of
+  each removed footprint, including cells outside the new region. Do not leave a
+  partially erased Plot, orphaned occupied cells or a stale anchor. Edge-touching
+  footprints without shared cells do not overlap.
+- Validate positive spans, checked extents and grid bounds, and prepare the
+  fallible replacement resources before committing changes. Do not grow the grid
+  implicitly. Failure leaves all prior placements intact, rather than deleting
+  old panels before discovering an invalid replacement.
+
+For example, replacing only cell `(1, 1)` in a two-row layout `A A B / A A C`
+removes the whole 2-by-2 A owner, resulting in `. . B / . X C`. This potentially
+clears cells outside the requested new region and must be documented explicitly;
+it is region overwrite, not same-anchor replacement or an exact-footprint match.
+Existing configuration copies and frozen Outputs remain unaffected. A later
+Canvas export performs a new whole composition render; unchanged grid footprints
+do not guarantee identical pixel dimensions/positions or incremental rendering.
+
+Implement this as a native core Canvas capability, available to Rust consumers and
+through the adapters' unchanged native Canvas re-exports. Preserve the ordinary
+Rust insertion parameter lists and make the uncommon destructive intent explicit:
+
+| Planned Rust method | Footprint | Occupied-region behavior |
+| --- | --- | --- |
+| `panel` | One cell | Reject overlap. |
+| `panel_span` | Explicit row/column spans | Reject overlap. |
+| `set_panel` | One cell | Remove all intersecting owners and insert; also valid on empty space. |
+| `set_panel_span` | Explicit row/column spans | The same region-overwrite rule. |
+
+These are not new aliases or alternative renderers. They express different
+placement intent without forcing Rust callers to repeat an uncommon Boolean
+argument. All routes use one native footprint/ownership validation and mutation
+path, with an internal overlap policy if useful; Python only maps its arguments
+and errors to that capability. Do not maintain a second panel list or simulate
+overwrite by rebuilding Canvas in Python. Receiver/error ownership facilities
+still need the implementation work below; the new Rust setters do not exist yet.
 
 ### Rendering Does Not Consume Python Configuration
 
@@ -640,6 +698,7 @@ The existing native API is not yet the selected Python lifecycle:
 | --- | --- |
 | Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
 | Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
+| Both current panel and panel_span reject overlaps; no native region-overwrite setters exist. | Implement the selected overwrite capability in the core rather than imply it is already available or make it Python-only. |
 | Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
 | Plot/Canvas public terminal methods consume self, while their private scene-rendering functions borrow self. | Non-consuming Python renders need a lawful public route; rendering does not inherently require consuming the configuration. Private helpers are not a binding API. |
 | Output is not Clone and its fallible publishers consume self, returning it only on success. | Reusable Python Output must survive publication failure without rerendering or relying on an unavailable Clone. |
@@ -658,19 +717,24 @@ general storage redesign is authorized by the preference for sharing.
 Public lifecycle semantics are selected; their complete native ownership/sharing
 implementation is not. Before expanding the binding surface:
 
-1. Resolve how users deliberately update occupied Canvas panels, followed by
-   remaining constructor/column-label syntax and policy/value-object attachment
-   rules. These details must not reintroduce live external Plot aliases or select
-   competing lifecycle modes.
+1. Resolve remaining constructor/column-label syntax and policy/value-object
+   attachment rules. Canvas placement/region-overwrite behavior is selected above;
+   do not reopen it as a choice between live aliases or competing lifecycle modes,
+   or assume it requires an editable panel-access handle.
 2. Identify the smallest public core facilities for configuration sharing/copy,
-   safe Canvas edits, stable non-consuming renders and failure-safe Output replay.
-   Record justified native API/storage changes before implementing the full binding;
-   migrate affected callers rather than retain compatibility alternatives.
+   shared strict/region-overwrite Canvas placement, stable non-consuming renders
+   and failure-safe Output replay. Record justified native API/storage changes
+   before implementing the full binding; migrate affected callers rather than
+   retain compatibility alternatives.
 3. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
    external edits, retained branches, temporary insertions, fallible Canvas edits,
-   render/I/O failure and callback ownership/reentry. Reuse the existing Plot and
-   successful-replay evidence instead of repeating it as a full suite. Retained
-   support/tests need strict Clippy and the shared semantic test ceilings.
+   render/I/O failure and callback ownership/reentry. Native placement coverage
+   must include strict rejection, overwrite into empty space, partial/multiple
+   owner overlap, complete old-footprint cleanup and failure atomicity; Python
+   checks the unified argument mapping and lifecycle, not a second placement
+   algorithm. Reuse the existing Plot and successful-replay evidence instead of
+   repeating it as a full suite. Retained support/tests need strict Clippy and the
+   shared semantic test ceilings.
 4. Compare sharing/separation with the simple baseline on equivalent successful
    workloads where that implementation changes costs: ordinary configurations,
    shared large numeric inputs, growing tick/annotation/alias content, populated
