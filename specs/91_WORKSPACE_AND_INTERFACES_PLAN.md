@@ -21,13 +21,14 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python architecture, the four input routes, constructor/binding rules, immutable
-configuration values, text-entry/omission/clear/precedence rules and object-lifecycle
-semantics below are settled implementation directions, supported by bounded
-prototypes and explicit API discussion, not delivered binding code. Configuration
-sharing is a preferred implementation direction, not a completed experiment. The
-required native ownership/text-clear facilities and remaining per-family signatures
-still need design and verification before expanding the binding surface.
+Python architecture, the four input routes, constructor/binding/explicit-selector
+rules, immutable configuration values, text-entry/omission/clear/precedence rules
+and object-lifecycle semantics below are settled implementation directions,
+supported by bounded prototypes and explicit API discussion, not delivered binding
+code. Configuration sharing is a preferred implementation direction, not a
+completed experiment. The required native ownership/text-clear facilities and
+remaining per-family signatures still need design and verification before
+expanding the binding surface.
 
 ### Delivery Status
 
@@ -36,7 +37,7 @@ still need design and verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes, constructor/binding-time snapshots, mutable owners, immutable configuration values, common Text entries with explicit keyword precedence/None clearing, native text-clear direction and unified span/overwrite semantics settled. Bounded experiments completed; no binding, native text-clear or region-overwrite implementation. Native API/ownership details, remaining signatures and full verification are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes, constructors/binding-time snapshots, explicit col/cols selection with direct container indexing retained, mutable owners, immutable configuration values, text keyword/clear rules and unified span/overwrite semantics settled. Bounded experiments completed; no binding/selectors, native text-clear or region-overwrite implementation. Native API/ownership details, remaining signatures and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -49,6 +50,7 @@ still need design and verification before expanding the binding surface.
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
+| Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or explicit positional range. Bare list/tuple variable inputs remain direct data; retain native container indexing/projection inputs. Do not add x_cols/y_cols keywords, columns(...) aliases or schema-dependent selector guessing. |
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
 | Python configuration values | Theme, Text and their nested appearance/layout values expose read-only named attributes and keyword-only copy_with derivation. No direct field assignment, mutable child handles or duplicate getter/per-field-edit API; retain the native nested Theme representation and validation. |
@@ -224,9 +226,10 @@ Do not require separate core/NumPy/pandas/Polars plotting namespaces or differen
 plot object hierarchies for each data origin. These entry points reuse native
 constructors and the appropriate adapters internally; native value objects remain
 valid direct inputs. A Python plot owns the same core configuration regardless of
-its input route. The shared constructor/binding grammar below is selected;
-complete per-family signatures and complex column-label syntax remain API design
-tasks. Configuration mutation follows the selected lifecycle model, and callback
+its input route. The shared constructor/binding grammar and explicit col/cols
+selection forms below are selected; complete per-family signatures, remaining
+label-type admission and slice-boundary rules still need their precise mapping.
+Configuration mutation follows the selected lifecycle model, and callback
 references have the separate external-state semantics below.
 
 Inventory the core exports and actual family capabilities against Python-visible
@@ -276,8 +279,9 @@ scatter(df, x="time", y=adjusted_values)
   their admitted variable roles, including alongside source selectors. A scalar
   string selects an exact field name; a scalar integer selects a zero-based
   logical column in a two-dimensional NumPy source. Neither is a fallback literal
-  or broadcast when source resolution fails. pandas integer/tuple/MultiIndex
-  labels need deliberate remaining syntax, not guessed position-versus-key rules.
+  or broadcast when source resolution fails. Explicit col/cols selectors below
+  disambiguate structured field keys and multi-column selection without changing
+  bare list/tuple inputs into selectors when their contents happen to match keys.
 - Reuse the [adapter input contracts](09_DATA_ADAPTERS.md) for admitted wide/grid
   shapes, ordered selections, origins and alignment units. Bind corresponding
   observations in logical position order; do not join pandas indexes, silently
@@ -304,6 +308,88 @@ remain explicit rather than inferred from omitted arguments or coincident length
 [Seaborn's keyword-only migration][seaborn-keywords] and
 [Plotly Express mixed inputs][plotly-inputs] provide interface precedents, not a
 requirement to adopt either library's data lifetime or scientific defaults.
+
+### Explicit Column Selectors And Direct Container Indexing
+
+The selected Python syntax uses shared, project-owned `col` and `cols` subscription
+entry objects, not separate plotting namespaces or a source/container wrapper.
+They are planned interfaces, not implemented bindings or existing Seaborn/Plotly
+functions. Keep ordinary direct inputs and the container's own indexing available;
+do not add parallel `x_cols`/`y_cols` keywords or a `columns(...)` call-form alias.
+
+```python
+# Planned call forms; ordinary row-count and family-role checks still apply.
+scatter(matrix, x=0, y=[10, 20])  # Direct y values.
+scatter(matrix, x=0, y=(10, 20))  # Direct y values too.
+scatter(matrix, x=0, y=cols[1, 3])  # Select two logical columns.
+scatter(matrix, x=0, y=cols[1:4])  # Select columns 1, 2, 3.
+scatter(df, x="time", y=cols["a", "b"])  # Select two named columns.
+scatter(x=matrix[:, 0], y=matrix[:, 1:4])  # Direct container projection.
+```
+
+- In ordinary data-variable positions, a bare list/tuple is direct data, with or
+  without a source. Do not reinterpret it as column keys, a range, a mask pair or
+  an implicit broadcast because of matching field names, values, length or shape.
+  Explicitly typed policy/closed-input arguments retain their own native grammar.
+- `col[key]` denotes exactly one source field. Use literal DataFrame keys, including
+  admitted pandas integer and complete tuple/MultiIndex labels, rather than guessing
+  positional lookup or formatting a key to a string first. For a two-dimensional
+  NumPy source, the admitted integer key denotes a zero-based logical column.
+  Ordinary string field names and NumPy integer columns retain their shorthand
+  forms such as `y="value"` and `y=1`; col is not mandatory for those common cases.
+- `cols[1, 3]` on a NumPy table explicitly denotes two columns, not the interval
+  between them. `cols[1:4]` denotes a half-open positional range, selecting 1, 2, 3.
+  `cols["a", "b"]` denotes an ordered named selection. `cols` always represents a
+  column collection, including `cols[1]`; never collapse a one-element collection
+  into the single-variable meaning of `col[1]` or bare `1`.
+- Admit a collection only in the family's existing multi-variable/wide/grid roles;
+  selectors do not introduce multi-x/multi-hue support, infer indexed x, select
+  sample/estimate modes or change observation/cell expansion and origin semantics.
+  Share the grammar with subsequent source-bound setters where their roles admit
+  it, rather than implement a separate per-family selector language.
+
+Structured single-column labels must be explicit. For example, these have
+different meanings regardless of the source schema:
+
+```python
+col[("measurement", "value")]       # One field with this complete tuple key.
+cols["measurement", "value"]        # Two fields with separate string keys.
+
+scatter(df, x=col[("time", "seconds")],
+        y=col[("measurement", "value")])
+```
+
+Python passes `col["measurement", "value"]` the same tuple key as the parenthesized
+form; do not split it inside the single-column selector. A collection of complete
+tuple keys can use `cols[("measurement", "a"), ("measurement", "b")]`. A bare tuple
+in a variable position remains direct data even if an identical tuple column label
+exists. Full-key lookup must resolve uniquely: reject missing/ambiguous fields,
+partial MultiIndex matches, duplicate selections, empty selections and invalid
+indices at binding under the applicable adapter rules, never fall back to data.
+
+The chosen examples establish positive half-open NumPy ranges and exact DataFrame
+key collections. Finish precise slice normalization/admission, including boundary,
+step and negative-index rules and any DataFrame positional-range support, before
+implementation; do not silently import pandas label-slice or clipping conventions.
+Remaining admitted label types and native identity/display-name mapping also need
+verification without conflating exact lookup keys with their formatted labels.
+
+These selectors are small immutable lookup descriptions, not data values, foreign
+expressions, callbacks or retained plotting specifications. Creating one does not
+capture/read a source, execute a Polars expression, perform I/O or render. Resolve
+it against the supplied/retained lookup source during the actual binding call,
+then snapshot only the selected variables through the existing input routes. A
+selector without a source is an error. Source mutation can affect a later explicit
+lookup but must never change the selector's classification or prior bound values.
+No new public Rust selector framework or core-to-adapter dependency is required;
+the Rust adapters keep their existing input grammar.
+
+Direct NumPy views/slices, supported Series and other admitted projections remain
+ordinary direct inputs with binding-time snapshot semantics. A direct many-y
+matrix keeps its declared dimensional meaning and does not install an implicit
+parent source. Preserve metadata actually carried by a projection, but do not
+claim that values alone recover its original selected column identities/names or
+that selection, foreign indexing or native binding is universally zero-copy.
 
 ### Binding-Time Snapshots And Retained Lookup Sources
 
@@ -399,8 +485,10 @@ heterogeneous column meanings. Only bound columns are converted, and their sourc
 names must reach native identities/automatic labels rather than disappear into
 generic x/y role names. Do not add implicit index joins, sorting or row compaction,
 or infer x/source IDs from DataFrame.index. Ambiguous selected names fail instead
-of choosing the first matching column; the complete column-label syntax remains
-part of public API design. No Rust pandas adapter crate is prescribed.
+of choosing the first matching column. Exact composite-key selection follows the
+col/cols grammar; remaining label-type admission and key-to-native identity mapping
+require working extraction/typing verification. No Rust pandas adapter crate is
+prescribed.
 
 PyArrow is a Python Arrow implementation, not the Arrow protocol itself and not
 a required intermediate dependency for all inputs. Ordinary pandas users must not
@@ -598,7 +686,7 @@ than disguise it through packaging or relabeling.
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
-| Python | Public capability/type mapping, source-first calls, optional constructor/chained bindings, immutable values and shared Text entries with omission/None/value handling and explicit keyword precedence; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Python | Public capability/type mapping, source-first calls, explicit col/cols versus direct values/projections, optional bindings, immutable values and shared Text entries with omission/None/value handling and keyword precedence; binding-time snapshots versus current-source lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
@@ -1035,13 +1123,14 @@ Public lifecycle semantics are selected; their complete native ownership/sharing
 implementation is not. Before expanding the binding surface:
 
 1. Complete per-family signatures, the inventory of common optional constructor
-   bindings, explicit scientific-mode spelling, complex pandas column-label syntax
-   and the remaining policy-type capability mapping. Finalize native text-clear
-   method names/slot coverage and exact signatures/type stubs for the selected
-   omission/None/value, explicit-default and keyword-precedence rules. Mutable owners,
-   immutable configuration values, shared Text entries, binding-time snapshots and
-   Canvas placement/region-overwrite behavior are selected; do not reopen them as
-   competing lifecycle modes or live aliases, or assume editable panel handles.
+   bindings, explicit scientific-mode spelling, remaining field-key/type admission,
+   slice normalization/boundaries and policy-type capability mapping. col/cols and
+   direct-projection syntax are selected, not a choice between selector guessing
+   and competing *_cols keywords. Finalize native text-clear method names/slot
+   coverage and exact signatures/type stubs for the selected omission/None/value,
+   explicit-default and keyword-precedence rules. Mutable owners, immutable values,
+   shared Text entries, binding-time snapshots and Canvas placement/region-overwrite
+   behavior are selected; do not reopen them as lifecycle modes or live aliases.
 2. Identify the smallest public core facilities for configuration sharing/copy,
    explicit Text/slot clearing, shared strict/region-overwrite Canvas placement,
    stable non-consuming renders and failure-safe Output replay. Record justified
@@ -1055,6 +1144,12 @@ implementation is not. Before expanding the binding surface:
    mutation, and replacement of one binding without refreshing prior roles. Verify
    these boundaries across supported input routes without a family/type option
    cross-product; a stale bridge snapshot must not defeat current-source lookup.
+   Selector coverage must distinguish direct list/tuple data even with matching
+   schema keys, exact composite single keys, ordered discrete versus half-open
+   selections, one-column versus one-element collection meaning, unsupported roles
+   and missing/ambiguous/duplicate/empty/out-of-range/no-source failures. Verify
+   selected and direct-projection value snapshots without assuming identical
+   provenance/display names or requiring a per-family replay matrix.
    Shared value/text checks must cover unchanged originals/aliases after derivation,
    rejection of direct/nested writes, native validation failure, stable explicit
    value attachments, equivalent Text/keyword entry forms, ordinary role inheritance
