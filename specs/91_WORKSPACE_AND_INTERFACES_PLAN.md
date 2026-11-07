@@ -22,15 +22,18 @@ rebuilt peer guides have passed. Python bindings remain planned. Package publica
 site deployment, Git push and history rewriting are not authorized by this work.
 
 Python architecture, the four input routes, constructor/binding/explicit-selector
-rules, one-runtime-entry/overload-signature model, immutable configuration values,
-text-entry/omission/clear/precedence rules and object-lifecycle semantics below are
-settled implementation directions, supported by bounded prototypes and explicit
-API discussion, not delivered binding code. Configuration sharing is a preferred
-implementation direction, not a completed experiment. The
-[Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) now maps all 25
-families and separates draft signatures from decisions requiring confirmation.
-Required native ownership/text-clear facilities, open constructor forms and exact
-stubs still need design and verification before expanding the binding surface.
+rules, one-runtime-entry/overload-signature model, explicit row-position/column-name
+modes and numeric discovery, flat named geometry arguments, immutable configuration
+values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
+below are settled implementation directions, supported by bounded prototypes and
+explicit API discussion, not delivered binding code. Configuration sharing is a
+preferred implementation direction, not a completed experiment. The
+[Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25 families
+and records the selected call forms. The
+[columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
+core/adapter migration. That refactor, native ownership/text-clear facilities,
+exact stubs and remaining label/selector details still need implementation or
+verification before expanding the binding surface.
 
 ### Delivery Status
 
@@ -39,7 +42,8 @@ stubs still need design and verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried as a draft with open mode/discovery/geometry choices. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
+| Columnar distribution geometry prerequisite | Selected, not implemented: flat core Histogram/Raincloud geometry and sample-owned external KDE; direct/multiple-source bindings in each corresponding Rust adapter, with one public representation and migrated callers. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields, grouping/alpha semantics and focused gates. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and remaining label/selector details are open. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -49,11 +53,14 @@ stubs still need design and verification before expanding the binding surface.
 | Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
+| Adapter foreign-container boundary | ndarray accepts its own views/validity/column selections; Polars accepts eager DataFrame/Series/Column and field selections. Preserve existing core-value pass-through and native re-exports. No cross-adapter foreign-container conversion or dependency; Python owns four-source unification. |
 | Python coverage | Equivalent scientific/rendering capabilities across all 25 plot families, composition, themes, text adaptation and numeric/tick callbacks. Translate Rust scientific payload inputs into the four Python data routes, not a literal re-export of data classes. |
 | Python input | Exactly four data-source families: Python native data, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series. Convert internally to core values; do not expose NumericValues/CategoryValues/AxisValues, Bounds, closed source inputs or geometry payload classes as another public data-input route. |
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
 | Python overloads | One runtime callable per family checks explicit scientific keyword combinations and selects native paths. Shipped typing.overload signatures describe distinct legal call forms for editors/type checkers; they do not perform runtime dispatch or validation. |
-| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. The constructor inventory covers all 25 families and identifies pending indexed/column-category, numeric-discovery and supplied-geometry spellings. |
+| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. The inventory covers all 25 families, including selected explicit modes, discovery and named geometry; exact stubs remain to be completed. |
+| Python explicit modes and discovery | by_row_position=True on Scatter/Line generates zero-based row x and excludes explicit x; by_column_name=True on Boxplot/Violin/sample Raincloud makes each column a category and excludes explicit category. numeric_only=True explicitly discovers supported numeric columns in source order for those modes and Matrix, including numeric IDs; it excludes manual y/value/variables. No omission/schema/value-based inference. |
+| Supplied distribution geometry | Flat named Histogram bins/KDE/rug and Raincloud summary/density/point columns, not nested payloads, geometry maps/TypedDict protocols or required wrappers. Keep native sample/geometry exclusivity and complete-geometry restrictions. Bind independent component sources and preserve raw-key membership/original point rows; labels are display text, not scientific keys. |
 | Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or explicit positional range. Bare list/tuple variable inputs remain direct data; retain native container indexing/projection inputs. Do not add x_cols/y_cols keywords, columns(...) aliases or schema-dependent selector guessing. |
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
@@ -204,6 +211,11 @@ declarations, not embedded copies of core sources; joint verification does not
 merge the packages. Distinct core versions/sources can introduce distinct types
 and are not a supported substitute for the shared-core interoperability contract.
 
+Each adapter continues to accept only its corresponding external containers,
+alongside its existing native-value pass-through. Polars does not gain ndarray
+inputs and ndarray does not gain Polars inputs. The binding's four Python data
+routes are not a reason to turn either Rust adapter into a universal converter.
+
 Preserve ordinary f64 rounding, null-versus-NaN distinctions, logical row order,
 category identity and explicit provenance. The core remains independent; adapters
 reuse its scientific and rendering behavior. Migrate callers and remove the old
@@ -213,6 +225,32 @@ then ndarray's vector/table/matrix routes. Validate actual code, review counts
 when changing tests, and verify working packages at delivery, not through a
 pre-implementation audit or compatibility project. Python retains its own
 implementation and verification gate below.
+
+### Planned Columnar Geometry Prerequisite
+
+The current adapter geometry constructors pass through complete native nested
+geometry; source-bound forms retain a lookup source. They do not yet extract the
+selected flat fields. Replace that protocol as specified by the
+[columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md):
+
+- Keep top-level HistogramGeometry/RaincloudGeometry and the closed sample/geometry
+  choice, but flatten all public data fields and remove Dimensions/Group/Bin/Point
+  input types with all repository consumers. Migrate sample-owned precomputed KDE
+  to named x/y columns too; its shared point type cannot be left behind.
+- Add direct/multiple-source column binding in the corresponding Rust adapters.
+  Histogram bins/KDE/rugs and Raincloud summary/density/points each have their own
+  alignment domain. Only the main source remains for later lookup; auxiliary
+  sources are used during the binding call, never fallback setter contexts.
+- Core preparation matches actual category/hue strings, uses summary order for
+  groups and retains relative child order plus original point rows for observation
+  alpha. Keep scientific validation native and do not fill missing components.
+- Preserve scalar scientific dimension metadata separately from authored display
+  labels. Python uses the selected `*_label` text conveniences, not new public
+  `*_dimension`/`*_name` keys, Rust data classes or a second binding-side label store.
+
+Implement and verify this native migration before Python supplied-geometry
+bindings. It is not an extension of accepted Rust foreign-container types or a
+claim that current contracts/code already have the planned API.
 
 ## Complete Python Interface
 
@@ -235,10 +273,10 @@ separately selected interfaces. A Python plot owns the same core configuration
 regardless of its input route. The shared constructor/binding grammar, explicit
 col/cols selection forms and single-runtime-entry/overload-signature model below are
 selected. The [constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) covers each
-family's required channels and optional categorical bindings; its explicitly open
-forms, exact type stubs, remaining label types and slice boundaries still need
-completion. Configuration mutation follows the selected lifecycle model, and
-callback references have the separate external-state semantics below.
+family's required channels, selected alternative forms and optional categorical
+bindings; exact type stubs, remaining label defaults/types and slice boundaries
+still need completion. Configuration mutation follows the selected lifecycle
+model, and callback references have the separate external-state semantics below.
 
 Inventory the core exports and actual family capabilities against Python-visible
 constructors, methods, value types and exceptions. Preserve equivalent semantic
@@ -322,6 +360,18 @@ inputs retain their declared rank; do not flatten them or guess another role.
 [Plotly Express mixed inputs][plotly-inputs] provide interface precedents, not a
 requirement to adopt either library's data lifetime or scientific defaults.
 
+The selected Python mode names are `by_row_position=True` for Scatter/Line and
+`by_column_name=True` for Boxplot/Violin/sample Raincloud. They exclude explicit
+x/category respectively. Row position is zero-based, not a pandas index; column
+names/default display names never replace scientific column identities. Explicit
+`numeric_only=True` discovers supported numeric columns in source order for those
+modes and Matrix, including numeric IDs, and excludes a manual variable collection.
+It does not filter an explicit selection or make `matrix(df)` an implicit discovery
+call. Supplied Histogram/Raincloud instead take complete named geometry fields and
+explicit component sources; no map/TypedDict or runtime geometry wrapper is selected.
+The [constructor plan](92_PYTHON_CONSTRUCTORS_PLAN.md) records the complete fields,
+direct/source-bound examples, label keywords and exclusion rules.
+
 ### Scientific Call Forms And Overload Signatures
 
 Keep one runtime callable per family. Use [typing.overload][python-overload] in
@@ -357,8 +407,8 @@ Bar/HorizontalBar's existing raw-sample, supplied-estimate and supplied-interval
 constructors motivate these distinct call forms. Overloads describe them; one
 runtime family entry routes to them without reimplementing statistics in Python.
 The [constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) records the full family
-mapping and Bar draft combinations, with remaining mode/discovery/geometry choices
-kept explicit. Exact stubs and policy/method signatures still need completion.
+mapping, Bar combinations and selected mode/discovery/geometry forms. Exact stubs,
+remaining label defaults and policy/method signatures still need completion.
 Neither that inventory nor this overload mechanism is delivered binding code.
 
 Use ordinary shared type aliases to keep signatures readable; aliases describe
@@ -482,6 +532,15 @@ after successful owned binding unless independently supplied as the lookup sourc
 Configuration copies can share that external context while keeping their bound
 values/configurations logically independent; copying is not whole-source freezing.
 
+For complete geometry, Histogram main `data` is bins, with explicit `kde_data` and
+`rug_data`; Raincloud main `data` is summary, with `density_data` and `point_data`.
+Resolve each role only in its component context and check that domain's lengths,
+not a global composite row count or DataFrame-index join. Omitted/None auxiliary
+sources require direct inputs there, without falling back to main data. Snapshot
+all bound components during the constructor, retaining only main data for later
+explicit lookups. Auxiliary sources never become implicit setter contexts or need
+to survive successful owned binding; exports do not reread any source.
+
 For example, this planned sequence deliberately binds at two different times:
 
 ```python
@@ -514,7 +573,7 @@ renderers or scientific semantics:
 
 | Python input | Implementation direction |
 | --- | --- |
-| Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Structured supplied geometry needs the explicit schema identified by the constructor inventory. |
+| Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Supplied geometry uses explicit named columns from the constructor plan, not a geometry map or nested input tree. |
 | NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter, then release the Python-buffer borrow after binding owned native values. |
 | pandas DataFrame/Series | Resolve only selected columns and extract by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
 | Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The concrete Python-to-Rust bridge still needs native runtime verification. |
@@ -745,7 +804,8 @@ than disguise it through packaging or relabeling.
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
-| Python | Public capability/type mapping, source-first calls, overload signatures matching runtime scientific-combination checks, explicit col/cols versus direct values/projections, optional bindings, immutable values and shared Text entries with omission/None/value handling and keyword precedence; binding-time snapshots versus current-source lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Columnar geometry prerequisite | Core/adapter fields and removed-type consumers, six independent alignment domains, raw-key grouping and original-point-row alpha, sample-owned supplied KDE, direct/multiple-source inputs and source-release lifetimes. Use the focused [refactor gates](93_COLUMNAR_GEOMETRY_PLAN.md#delivery-and-verification), then API-doc/peer-guide/archive closure. |
+| Python | Public capability/type mapping, source-first calls, overload signatures matching runtime scientific-combination checks, selected row-position/column-name modes and numeric discovery, named geometry columns/component contexts, explicit col/cols versus direct values/projections, optional bindings, immutable values and shared Text entries with omission/None/value handling and keyword precedence; binding-time snapshots versus current-source lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
@@ -789,12 +849,20 @@ package contents or published ref may reintroduce the full Unicode corpus.
    explicit-x/view2 series and matrix/wide input. Verify shared native types when
    both adapters are used; migrate callers and peer guides with focused evidence,
    removing the old conversion surface.
-5. **Python lifecycle implementation gate.** Implement the selected object
+5. **Columnar core geometry and coupled consumers.** Replace both public geometry
+   payloads and sample-owned precomputed KDE, migrating validation/preparation,
+   alpha/labels and all removed-type consumers together. Verify focused native
+   witnesses and strict workspace Clippy before committing this logical change.
+6. **Columnar adapter binding.** Replace geometry payload pass-through with each
+   adapter's direct/multiple-source column inputs and independent KDE helpers.
+   Migrate callers/current contracts/peer guides; verify focused binding/lifetime
+   cases, the shared-native consumer, strict Clippy and docs/package closure.
+7. **Python lifecycle implementation gate.** Implement the selected object
    semantics through deliberate public-core ownership and text-clear facilities;
    verify their failure/sharing/callback behavior before mass-producing bindings.
-6. **Complete Python interface.** Deliver the capability mapping, callbacks, input
+8. **Complete Python interface.** Deliver the capability mapping, callbacks, input
    bridges, typing and distribution verification through the same renderer.
-7. **Integrated content and closure.** Complete bilingual content/gallery coverage
+9. **Integrated content and closure.** Complete bilingual content/gallery coverage
    and explicit workspace/package/site verification. Report unexecuted external
    checks honestly; actual release, deployment and push remain separately gated.
 
@@ -1181,25 +1249,32 @@ general storage redesign is authorized by the preference for sharing.
 Public lifecycle semantics are selected; their complete native ownership/sharing
 implementation is not. Before expanding the binding surface:
 
-1. Resolve the explicit decisions in the
-   [25-family constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md), then complete
-   exact overloads/runtime combination rules, policy/method signatures, remaining
-   field-key admission and slice normalization/boundaries. Preserve the four ordinary
+1. Complete exact overloads/runtime combination rules for the selected
+   [25-family constructor forms](92_PYTHON_CONSTRUCTORS_PLAN.md), policy/method
+   signatures, label defaults/None handling, remaining field-key admission and
+   slice normalization/boundaries. Preserve the four ordinary
    data routes without Rust payload classes and conventional concise type aliases.
    Keep the selected single-runtime-entry/overload model. col/cols and
    direct-projection syntax are selected, not a choice between
-   selector guessing and competing *_cols keywords. Finalize native text-clear
+   selector guessing and competing *_cols keywords. Row-position/column-name modes,
+   numeric discovery and flat named geometry/component contexts are selected too,
+   not open map-versus-wrapper choices. Finalize native text-clear
    method names/slot coverage and exact signatures/type stubs for the selected
    omission/None/value, explicit-default and keyword-precedence rules. Mutable
    owners, immutable values, shared Text entries, binding-time snapshots and Canvas
    placement/region-overwrite behavior are selected; do not reopen them as lifecycle
    modes or live aliases.
-2. Identify the smallest public core facilities for configuration sharing/copy,
+2. Deliver the prerequisite [core/adapter geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md)
+   before Python geometry binding. Keep one native representation, the sample/geometry
+   scientific boundary, independent source domains, raw category/hue keys and
+   original point-row alpha. Verify sample-owned external KDE as well as complete
+   geometry. This does not extend either Rust adapter to the other's containers.
+3. Identify the smallest public core facilities for configuration sharing/copy,
    explicit Text/slot clearing, shared strict/region-overwrite Canvas placement,
    stable non-consuming renders and failure-safe Output replay. Record justified
    native API/storage changes before implementing the full binding; migrate affected
    callers rather than retain compatibility alternatives.
-3. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
+4. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
    external edits, retained branches, temporary insertions, fallible Canvas edits,
    render/I/O failure and callback ownership/reentry. Representative input checks
    must distinguish unchanged-source constructor/chained equivalence, mutation or
@@ -1212,6 +1287,11 @@ implementation is not. Before expanding the binding surface:
    checking, required alternatives, conflicts, incomplete inputs and explicit None.
    Confirm native scientific paths remain distinct without a per-container replay
    matrix; do not rely on stubs as runtime validation.
+   Include explicit mode/excluded-role checks, numeric discovery in source order
+   including numeric IDs versus explicit selections, and complete named geometry
+   with direct/selected inputs, unequal component lengths and auxiliary-source
+   release. An omitted auxiliary source must not read the main lookup context;
+   display-label edits must not change scientific keys or point-alpha alignment.
    Selector coverage must distinguish direct list/tuple data even with matching
    schema keys, exact composite single keys, ordered discrete versus half-open
    selections, one-column versus one-element collection meaning, unsupported roles
@@ -1233,13 +1313,13 @@ implementation is not. Before expanding the binding surface:
    second placement algorithm. Reuse the existing Plot and successful-replay
    evidence instead of repeating it as a full suite. Retained support/tests need
    strict Clippy and the shared semantic test ceilings.
-4. Compare sharing/separation with the simple baseline on equivalent successful
+5. Compare sharing/separation with the simple baseline on equivalent successful
    workloads where that implementation changes costs: ordinary configurations,
    shared large numeric inputs, growing tick/annotation/alias content, populated
    Canvas grids and retained independent branches. Do not reduce content or compare
    many retained branches with overwriting one result. Shared-state separation
    costs and whole-Canvas growth need explicit observation, not inferred savings.
-5. Separate input conversion, Python/FFI/configuration, rendering/font discovery
+6. Separate input conversion, Python/FFI/configuration, rendering/font discovery
    and frozen publication. Report absolute time, cumulative allocations and
    independently observed peak memory on CPython 3.10 and a newer interpreter.
    Allocation totals are not RSS; no arbitrary universal speedup threshold is
