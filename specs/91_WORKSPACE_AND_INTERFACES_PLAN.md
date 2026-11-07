@@ -831,7 +831,7 @@ the renderer and adapters together through Cargo's temporary archive-backed
 registry overlay, using distributable-library metadata rather than excluding the
 core with `publish = false`. A prior registry publication is not required. Missing
 third-party cache data is not a pass or a reason to substitute `--no-verify`. No
-package contents or published ref may reintroduce the full Unicode corpus.
+package contents may reintroduce the full Unicode corpus.
 
 ### Delivery Order
 
@@ -864,7 +864,7 @@ package contents or published ref may reintroduce the full Unicode corpus.
    bridges, typing and distribution verification through the same renderer.
 9. **Integrated content and closure.** Complete bilingual content/gallery coverage
    and explicit workspace/package/site verification. Report unexecuted external
-   checks honestly; actual release, deployment and push remain separately gated.
+   checks honestly; actual release, deployment and push require explicit authorization.
 
 Commit each completed logical objective before unrelated work. Commit messages
 describe enduring boundaries/behavior, not numbered delivery stages.

@@ -257,7 +257,7 @@ and nested timer scopes. Measure command/process RSS independently from retained
 payload or cumulative allocation traffic; neither visits nor requested bytes is
 peak memory. Report actual scope and uncertainty, not unsupported speedup claims.
 
-## Unicode Sources And Publishable History
+## Unicode Sources
 
 Retain runtime tables, focused independently expected default cases, pinned hashes,
 generation provenance and licenses. Full official Unicode conformance corpora
@@ -267,16 +267,6 @@ checks read LICHTUNG_UNICODE16_SOURCE_DIR and verify official 16.0.0 hashes befo
 parsing; missing/mismatched input fails. No automatic download, provisioning or
 dependency-cache lookup. Regeneration checks source/table agreement without
 writing the full corpus back into the tree.
-
-Before any requested push, inspect current refs/server and prove that **every ref
-intended for publication lacks the full corpus in its ancestry**. Forward deletion
-is insufficient. The corpus includes BidiCharacterTest.txt, BidiTest.txt,
-DerivedNormalizationProps.txt, GraphemeBreakTest.txt, LineBreakTest.txt and
-NormalizationTest.txt. Preserve the published base and unrelated work; any needed
-unpublished-suffix rewrite requires guarded ref updates and tree comparisons,
-without a backup ref retaining the unwanted ancestry. A normal push does not
-send unreachable reflog-only objects; this is not a physical-erasure claim.
-Do not clear unrelated recovery history or assume force-push authorization.
 
 Historical execution is not fresh-checkout conformance. State which focused,
 external/ignored, release or package checks actually ran. Do not mark missing
@@ -322,5 +312,4 @@ Use Conventional Commits with mandatory scope and one logical change. Subjects
 and bodies describe enduring behavior/architecture, including documentation
 changes; never temporary planning identifiers or numbered stages. Inspect status,
 diff and recent style, stage only intended files, and commit completed objectives
-before starting unrelated work. Push only when explicitly requested and after
-the corpus-ancestry checks above.
+before starting unrelated work. Push only when explicitly requested.

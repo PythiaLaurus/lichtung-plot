@@ -102,10 +102,6 @@ labels will be removed from the final specifications; commit messages must remai
 understandable without them. This applies to documentation commits as well as
 code commits.
 
-Before any Git push, satisfy the corpus-ancestry publication requirements in
-`specs/90_DEVELOPMENT.md`. Do not publish a ref that retains the full
-Unicode conformance corpus in its ancestry; a forward deletion is insufficient.
-
 After achieving a phased objective, commit the completed work before moving on.
 Do not leave finished work uncommitted unless the user explicitly asks not to
 commit.

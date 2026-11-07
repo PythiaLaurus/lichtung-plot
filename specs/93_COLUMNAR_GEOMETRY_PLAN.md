@@ -340,7 +340,7 @@ Verify API docs, peer guide checks and distributable archives using `just docs`,
 `just book-check` and `just package`; run changed runnable examples. Do not claim
 Python wheel/Polars bridge/lifecycle verification from this Rust refactor. Keep
 commit subjects scoped and about enduring behavior, not numbered plan stages.
-Push/publication remains separately authorized and subject to the ancestry gate.
+Push/publication requires separate authorization.
 
 Reuse and migrate existing tests. Add only distinct contracts within the shared
 800 unit / 300 integration / 80 core-E2E limits, counting semantic scenarios, not
