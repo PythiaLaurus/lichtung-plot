@@ -26,9 +26,11 @@ rules, one-runtime-entry/overload-signature model, immutable configuration value
 text-entry/omission/clear/precedence rules and object-lifecycle semantics below are
 settled implementation directions, supported by bounded prototypes and explicit
 API discussion, not delivered binding code. Configuration sharing is a preferred
-implementation direction, not a completed experiment. The required native
-ownership/text-clear facilities and remaining per-family signatures still need
-design and verification before expanding the binding surface.
+implementation direction, not a completed experiment. The
+[Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) now maps all 25
+families and separates draft signatures from decisions requiring confirmation.
+Required native ownership/text-clear facilities, open constructor forms and exact
+stubs still need design and verification before expanding the binding surface.
 
 ### Delivery Status
 
@@ -37,7 +39,7 @@ design and verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes, constructors/binding-time snapshots, one runtime entry with overload signatures for distinct call forms, explicit col/cols selection with direct container indexing retained, mutable owners, immutable configuration values, text keyword/clear rules and unified span/overwrite semantics settled. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details, remaining signatures and full verification are open. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried as a draft with open mode/discovery/geometry choices. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -47,10 +49,11 @@ design and verification before expanding the binding surface.
 | Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
-| Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
-| Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
+| Python coverage | Equivalent scientific/rendering capabilities across all 25 plot families, composition, themes, text adaptation and numeric/tick callbacks. Translate Rust scientific payload inputs into the four Python data routes, not a literal re-export of data classes. |
+| Python input | Exactly four data-source families: Python native data, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series. Convert internally to core values; do not expose NumericValues/CategoryValues/AxisValues, Bounds, closed source inputs or geometry payload classes as another public data-input route. |
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
 | Python overloads | One runtime callable per family checks explicit scientific keyword combinations and selects native paths. Shipped typing.overload signatures describe distinct legal call forms for editors/type checkers; they do not perform runtime dispatch or validation. |
+| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. The constructor inventory covers all 25 families and identifies pending indexed/column-category, numeric-discovery and supplied-geometry spellings. |
 | Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or explicit positional range. Bare list/tuple variable inputs remain direct data; retain native container indexing/projection inputs. Do not add x_cols/y_cols keywords, columns(...) aliases or schema-dependent selector guessing. |
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
@@ -225,14 +228,17 @@ Use one Python-facing entry point per family for direct values and source-bound
 variables, dispatching deliberately on supported argument types and call forms.
 Do not require separate core/NumPy/pandas/Polars plotting namespaces or different
 plot object hierarchies for each data origin. These entry points reuse native
-constructors and the appropriate adapters internally; native value objects remain
-valid direct inputs. A Python plot owns the same core configuration regardless of
-its input route. The shared constructor/binding grammar, explicit col/cols
-selection forms and single-runtime-entry/overload-signature model below are
-selected; complete per-family signatures, remaining label-type admission and
-slice-boundary rules still need their precise mapping.
-Configuration mutation follows the selected lifecycle model, and callback
-references have the separate external-state semantics below.
+constructors and the appropriate adapters internally. Rust scientific payload
+objects are internal conversion targets, not an additional Python input family
+or obligatory user wrappers. Public Theme/Text and configuration values keep their
+separately selected interfaces. A Python plot owns the same core configuration
+regardless of its input route. The shared constructor/binding grammar, explicit
+col/cols selection forms and single-runtime-entry/overload-signature model below are
+selected. The [constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) covers each
+family's required channels and optional categorical bindings; its explicitly open
+forms, exact type stubs, remaining label types and slice boundaries still need
+completion. Configuration mutation follows the selected lifecycle model, and
+callback references have the separate external-state semantics below.
 
 Inventory the core exports and actual family capabilities against Python-visible
 constructors, methods, value types and exceptions. Preserve equivalent semantic
@@ -277,8 +283,8 @@ scatter(table_array, x=0, y=1)
 scatter(df, x="time", y=adjusted_values)
 ```
 
-- Accept direct supported sequences, arrays, Series and native value objects in
-  their admitted variable roles, including alongside source selectors. A scalar
+- Accept direct supported Python data, arrays and Series in their admitted variable
+  roles, including alongside source selectors. A scalar
   string selects an exact field name; a scalar integer selects a zero-based
   logical column in a two-dimensional NumPy source. Neither is a fallback literal
   or broadcast when source resolution fails. Explicit col/cols selectors below
@@ -300,14 +306,18 @@ scatter(df, x="time", y=adjusted_values)
   they are not promised equivalent if the source changes between calls.
 - Required scientific inputs remain required. Only expose bindings actually
   supported by that exact family; do not introduce an unrestricted keyword bag or
-  duplicate every style/theme/layout setter into every constructor. Inventory the
-  remaining common optional keywords as part of the per-family signatures.
+  duplicate every style/theme/layout setter into every constructor. The constructor
+  inventory drafts the hue/group/series conveniences against actual capabilities;
+  complete their exact stubs without mirroring every remaining method.
 
 Uniformity concerns argument roles and binding behavior, not a universal x/y
-signature or scientific inference. Whole-matrix/sample inputs keep their declared
-family-specific meaning; wide/indexed, sample/estimate and grid/record modes must
-be explicit through named roles or typed scientific options, not guessed from
-values, lengths, dtype, shape or missing required inputs.
+signature or scientific inference. Wide/indexed, sample/estimate and grid/record
+modes remain explicit through named inputs/options, never chosen by coincident
+lengths, missing required roles or matching source keys. This does not prohibit
+type-directed numeric/category adaptation within an already admitted role:
+Trajectory x follows supported dtype/element-type semantics, without an added
+axis-mode argument or automatic numeric-to-category formatting. Explicit matrix
+inputs retain their declared rank; do not flatten them or guess another role.
 [Seaborn's keyword-only migration][seaborn-keywords] and
 [Plotly Express mixed inputs][plotly-inputs] provide interface precedents, not a
 requirement to adopt either library's data lifetime or scientific defaults.
@@ -346,9 +356,16 @@ overloads into a family-by-input-container cross-product.
 Bar/HorizontalBar's existing raw-sample, supplied-estimate and supplied-interval
 constructors motivate these distinct call forms. Overloads describe them; one
 runtime family entry routes to them without reimplementing statistics in Python.
-The complete parameter names/types/defaults, policy combinations and all 25
-families' signatures still need their capability mapping. Selecting this mechanism
-does not claim that the discussed Bar signature drafts or any binding are delivered.
+The [constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) records the full family
+mapping and Bar draft combinations, with remaining mode/discovery/geometry choices
+kept explicit. Exact stubs and policy/method signatures still need completion.
+Neither that inventory nor this overload mechanism is delivered binding code.
+
+Use ordinary shared type aliases to keep signatures readable; aliases describe
+the four supported input families and selectors, not new runtime payload types.
+Union types suffice for simple accepted-type alternatives with otherwise identical
+call forms. Do not multiply overloads merely to distinguish numeric and category
+containers; actual dtype/shape/validity validation remains at runtime.
 
 ### Explicit Column Selectors And Direct Container Indexing
 
@@ -371,7 +388,8 @@ scatter(x=matrix[:, 0], y=matrix[:, 1:4])  # Direct container projection.
 - In ordinary data-variable positions, a bare list/tuple is direct data, with or
   without a source. Do not reinterpret it as column keys, a range, a mask pair or
   an implicit broadcast because of matching field names, values, length or shape.
-  Explicitly typed policy/closed-input arguments retain their own native grammar.
+  Policy and structured-data arguments retain their separately declared grammar;
+  this is not permission to expose Rust closed-input payload classes in Python.
 - `col[key]` denotes exactly one source field. Use literal DataFrame keys, including
   admitted pandas integer and complete tuple/MultiIndex labels, rather than guessing
   positional lookup or formatting a key to a string first. For a two-dimensional
@@ -444,7 +462,7 @@ policy modes.
 
 Snapshot means stable bound values, not a promise of the same physical copy for
 every container. Initial conversion from mutable foreign buffers may copy or
-normalize data. Already-native immutable payloads can be shared by configuration
+normalize data. Internal immutable native payloads can be shared by configuration
 copies and Canvas captures without repeating conversion. Any foreign-buffer
 sharing must establish stable contents and ownership rather than assume that a
 readonly view prevents its external owner from writing. No general zero-copy or
@@ -496,7 +514,7 @@ renderers or scientific semantics:
 
 | Python input | Implementation direction |
 | --- | --- |
-| Native sequences and exposed native value objects | Extract role-appropriate values into native inputs, or reuse already-native objects; do not force a NumPy/list/JSON round trip. |
+| Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Structured supplied geometry needs the explicit schema identified by the constructor inventory. |
 | NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter, then release the Python-buffer borrow after binding owned native values. |
 | pandas DataFrame/Series | Resolve only selected columns and extract by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
 | Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The concrete Python-to-Rust bridge still needs native runtime verification. |
@@ -1163,11 +1181,13 @@ general storage redesign is authorized by the preference for sharing.
 Public lifecycle semantics are selected; their complete native ownership/sharing
 implementation is not. Before expanding the binding surface:
 
-1. Complete per-family overload signatures and runtime keyword-combination rules,
-   the inventory of common optional constructor bindings, explicit scientific-mode
-   spelling, remaining field-key/type admission, slice normalization/boundaries and
-   policy-type capability mapping. Keep the selected single-runtime-entry/overload
-   model. col/cols and direct-projection syntax are selected, not a choice between
+1. Resolve the explicit decisions in the
+   [25-family constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md), then complete
+   exact overloads/runtime combination rules, policy/method signatures, remaining
+   field-key admission and slice normalization/boundaries. Preserve the four ordinary
+   data routes without Rust payload classes and conventional concise type aliases.
+   Keep the selected single-runtime-entry/overload model. col/cols and
+   direct-projection syntax are selected, not a choice between
    selector guessing and competing *_cols keywords. Finalize native text-clear
    method names/slot coverage and exact signatures/type stubs for the selected
    omission/None/value, explicit-default and keyword-precedence rules. Mutable
