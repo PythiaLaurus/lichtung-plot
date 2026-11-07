@@ -21,12 +21,12 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python architecture, the four input routes and the object-lifecycle semantics
-below are settled implementation directions, supported by bounded prototypes and
-explicit API discussion, not delivered binding code. Configuration sharing is a
-preferred implementation direction, not a completed experiment. The required
-native ownership facilities and remaining API details still need design and
-verification before expanding the binding surface.
+Python architecture, the four input routes, constructor/binding rules and
+object-lifecycle semantics below are settled implementation directions, supported
+by bounded prototypes and explicit API discussion, not delivered binding code.
+Configuration sharing is a preferred implementation direction, not a completed
+experiment. The required native ownership facilities and remaining per-family API
+details still need design and verification before expanding the binding surface.
 
 ### Delivery Status
 
@@ -35,7 +35,7 @@ verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes, object lifecycle and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, remaining API details and full verification are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes, source-first keyword-variable construction, optional constructor/chained bindings, binding-time snapshots, object lifecycle and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, per-family API details and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -47,6 +47,8 @@ verification before expanding the binding surface.
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Python coverage | Equivalent access to the complete deliberate Rust public capabilities, including all 25 plot families, native inputs, composition, themes, text adaptation and numeric/tick callbacks. |
 | Python input | Native Python sequences, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series converge on the same native values and renderer, through source-appropriate input routes. |
+| Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
+| Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
 | Canvas placement | Python uses one panel method with optional keyword-only spans and overwrite=False. Rust keeps strict panel/panel_span and adds explicit set_panel/set_panel_span; region-overwrite ownership/validation belongs to the core, not a Python-only reconstruction. |
 | Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
@@ -218,11 +220,10 @@ Do not require separate core/NumPy/pandas/Polars plotting namespaces or differen
 plot object hierarchies for each data origin. These entry points reuse native
 constructors and the appropriate adapters internally; native value objects remain
 valid direct inputs. A Python plot owns the same core configuration regardless of
-its input route. Source lookup context, where retained, is separate from values
-already snapshotted into the plot; rendering never reopens foreign containers to
-refresh those values. Callback references have the separate external-state
-semantics below. Exact constructor names/signatures remain an API design task;
-configuration mutation follows the selected lifecycle model.
+its input route. The shared constructor/binding grammar below is selected;
+complete per-family signatures and complex column-label syntax remain API design
+tasks. Configuration mutation follows the selected lifecycle model, and callback
+references have the separate external-state semantics below.
 
 Inventory the core exports and actual family capabilities against Python-visible
 constructors, methods, value types and exceptions. Preserve equivalent semantic
@@ -248,6 +249,114 @@ signatures or a new standalone `render()` entry point. Identify and validate the
 smallest deliberate public core ownership facilities needed to implement it;
 neither a blanket Clone addition nor a broad storage refactor follows from the
 capability inventory.
+
+### Constructor Grammar And Optional Bindings
+
+For source-plus-variable calls, allow `data` as the first and only positional
+argument, or by keyword. Variable roles are keyword-only. The selected Scatter
+shape is `scatter(data=None, *, x, y, hue=None)`, not its complete eventual
+signature. Do not additionally interpret `scatter(a, b)` as x/y, or guess whether
+the first positional object is a source or x based on its type.
+
+The following examples specify planned call forms, not an implemented package:
+
+```python
+scatter(x=[1, 2], y=[3, 4])
+scatter(df, x="time", y="value", hue="group")
+scatter(data=df, x="time", y="value")
+scatter(table_array, x=0, y=1)
+scatter(df, x="time", y=adjusted_values)
+```
+
+- Accept direct supported sequences, arrays, Series and native value objects in
+  their admitted variable roles, including alongside source selectors. A scalar
+  string selects an exact field name; a scalar integer selects a zero-based
+  logical column in a two-dimensional NumPy source. Neither is a fallback literal
+  or broadcast when source resolution fails. pandas integer/tuple/MultiIndex
+  labels need deliberate remaining syntax, not guessed position-versus-key rules.
+- Reuse the [adapter input contracts](09_DATA_ADAPTERS.md) for admitted wide/grid
+  shapes, ordered selections, origins and alignment units. Bind corresponding
+  observations in logical position order; do not join pandas indexes, silently
+  broadcast/flatten inputs, infer x/IDs from an index or parse field names as
+  expressions. Missing, ambiguous or out-of-range selectors fail at binding.
+- Expose common optional data bindings such as Scatter `hue` both as constructor
+  keywords and chainable setters. They use the same input-resolution/adaptation
+  and native validation path; a setter replaces that role and preserves the
+  original configuration on failure. Keep literal styling separate from variable
+  mapping: a failed hue lookup must not turn its string into a fixed color.
+- Constructor keywords and chained setters bind at their respective call times.
+  With unchanged inputs, `scatter(df, x="time", y="value", hue="group")` and
+  `scatter(df, x="time", y="value").hue("group")` have equivalent data bindings;
+  they are not promised equivalent if the source changes between calls.
+- Required scientific inputs remain required. Only expose bindings actually
+  supported by that exact family; do not introduce an unrestricted keyword bag or
+  duplicate every style/theme/layout setter into every constructor. Inventory the
+  remaining common optional keywords as part of the per-family signatures.
+
+Uniformity concerns argument roles and binding behavior, not a universal x/y
+signature or scientific inference. Whole-matrix/sample inputs keep their declared
+family-specific meaning; wide/indexed, sample/estimate and grid/record modes must
+remain explicit rather than inferred from omitted arguments or coincident lengths.
+[Seaborn's keyword-only migration][seaborn-keywords] and
+[Plotly Express mixed inputs][plotly-inputs] provide interface precedents, not a
+requirement to adopt either library's data lifetime or scientific defaults.
+
+### Binding-Time Snapshots And Retained Lookup Sources
+
+Every admitted input route has the same value-lifetime contract: resolve and save
+the variables bound by each constructor or setter during that call. Subsequent
+external edits to a list, NumPy buffer/view, pandas Series/DataFrame or Polars
+Series/DataFrame must not alter those already-bound values. Preserve the applicable
+dtype, validity, category and identity contracts through the existing input routes;
+do not add container-dependent live behavior or `live=True`/`copy=False` input
+policy modes.
+
+Snapshot means stable bound values, not a promise of the same physical copy for
+every container. Initial conversion from mutable foreign buffers may copy or
+normalize data. Already-native immutable payloads can be shared by configuration
+copies and Canvas captures without repeating conversion. Any foreign-buffer
+sharing must establish stable contents and ownership rather than assume that a
+readonly view prevents its external owner from writing. No general zero-copy or
+constant-cost construction guarantee follows from snapshot semantics.
+
+When `data` supplies a lookup source, retain that supplied Python object for later
+explicit selectors, separately from the already-owned native values. This can
+extend the source's lifetime and retain its memory; it does not deep-copy/freeze
+the complete table or convert unused columns. Mutating that same object can affect
+future explicit bindings, but never refresh prior ones. Reassigning the Python
+name `df` to a different object does not replace the retained source. Resolve later
+lookups against its current contents, not a stale constructor-time native import.
+
+Direct variable inputs do not install an implicit lookup source or infer a parent
+DataFrame from Series metadata/indexes. Their foreign objects need not be retained
+after successful owned binding unless independently supplied as the lookup source.
+Configuration copies can share that external context while keeping their bound
+values/configurations logically independent; copying is not whole-source freezing.
+
+For example, this planned sequence deliberately binds at two different times:
+
+```python
+p = scatter(df, x="time", y="value")  # Save x and y now.
+df["group"] = new_groups
+p.hue("group")                       # Save the current group; keep prior x/y.
+```
+
+By contrast, passing `hue="group"` in the constructor binds x, y and hue during
+that constructor call. After either form completes, further source mutation
+changes none of those bound roles. Repeating `.hue("group")` explicitly replaces
+only hue with a fresh snapshot; it does not reread x/y or other prior bindings.
+Plot/Canvas export and frozen Output publication never reopen foreign inputs to
+refresh them. These rules do not freeze a callback's separately specified external
+state or turn each new render into frozen-Output replay.
+
+Callers must keep source rows consistent across bindings when they want one
+aligned dataset. Reordering/editing a source between calls may combine old
+coordinates with a new mapping; matching lengths cannot prove row identity. Do
+not mask that distinction with hidden index joins or whole-source copies. A
+constructor reads its selected inputs during the call; this is not an atomic
+whole-table snapshot under concurrent source mutation.
+For a new complete dataset, reconstruct the Plot explicitly rather than expect
+automatic refresh or add an unselected general data-rebinding API.
 
 ### Input Bridges And Compatible Dependencies
 
@@ -485,7 +594,7 @@ than disguise it through packaging or relabeling.
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
-| Python | Public capability/type mapping, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Python | Public capability/type mapping, source-first keyword-variable calls and optional constructor/chained bindings; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
@@ -717,10 +826,12 @@ general storage redesign is authorized by the preference for sharing.
 Public lifecycle semantics are selected; their complete native ownership/sharing
 implementation is not. Before expanding the binding surface:
 
-1. Resolve remaining constructor/column-label syntax and policy/value-object
-   attachment rules. Canvas placement/region-overwrite behavior is selected above;
-   do not reopen it as a choice between live aliases or competing lifecycle modes,
-   or assume it requires an editable panel-access handle.
+1. Complete per-family signatures, the inventory of common optional constructor
+   bindings, explicit scientific-mode spelling, complex pandas column-label syntax
+   and policy/value-object attachment rules. Shared constructor/binding/snapshot
+   rules and Canvas placement/region-overwrite behavior are selected above; do not
+   reopen them as competing lifecycle modes or live aliases, or assume an editable
+   panel-access handle is required.
 2. Identify the smallest public core facilities for configuration sharing/copy,
    shared strict/region-overwrite Canvas placement, stable non-consuming renders
    and failure-safe Output replay. Record justified native API/storage changes
@@ -728,13 +839,18 @@ implementation is not. Before expanding the binding surface:
    retain compatibility alternatives.
 3. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
    external edits, retained branches, temporary insertions, fallible Canvas edits,
-   render/I/O failure and callback ownership/reentry. Native placement coverage
-   must include strict rejection, overwrite into empty space, partial/multiple
-   owner overlap, complete old-footprint cleanup and failure atomicity; Python
-   checks the unified argument mapping and lifecycle, not a second placement
-   algorithm. Reuse the existing Plot and successful-replay evidence instead of
-   repeating it as a full suite. Retained support/tests need strict Clippy and the
-   shared semantic test ceilings.
+   render/I/O failure and callback ownership/reentry. Representative input checks
+   must distinguish unchanged-source constructor/chained equivalence, mutation or
+   release after binding, changed-source later lookup, source reassignment versus
+   mutation, and replacement of one binding without refreshing prior roles. Verify
+   these boundaries across supported input routes without a family/type option
+   cross-product; a stale bridge snapshot must not defeat current-source lookup.
+   Native placement coverage must include strict rejection, overwrite into empty
+   space, partial/multiple owner overlap, complete old-footprint cleanup and failure
+   atomicity; Python checks the unified argument mapping and lifecycle, not a
+   second placement algorithm. Reuse the existing Plot and successful-replay
+   evidence instead of repeating it as a full suite. Retained support/tests need
+   strict Clippy and the shared semantic test ceilings.
 4. Compare sharing/separation with the simple baseline on equivalent successful
    workloads where that implementation changes costs: ordinary configurations,
    shared large numeric inputs, growing tick/annotation/alias content, populated
@@ -784,3 +900,5 @@ corresponding implementation begins.
 [altair-properties]: https://github.com/vega/altair/blob/v5.5.0/altair/vegalite/v5/api.py
 [arc-cow]: https://doc.rust-lang.org/std/sync/struct.Arc.html#method.make_mut
 [pyo3-gc]: https://pyo3.rs/v0.29.3/class/protocols.html#garbage-collector-integration
+[seaborn-keywords]: https://seaborn.pydata.org/whatsnew/v0.12.0.html#keyword-only-arguments
+[plotly-inputs]: https://plotly.com/python/px-arguments/
