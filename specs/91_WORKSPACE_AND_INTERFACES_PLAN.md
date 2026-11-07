@@ -21,11 +21,12 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python architecture, the four input routes, constructor/binding rules and
-object-lifecycle semantics below are settled implementation directions, supported
-by bounded prototypes and explicit API discussion, not delivered binding code.
-Configuration sharing is a preferred implementation direction, not a completed
-experiment. The required native ownership facilities and remaining per-family API
+Python architecture, the four input routes, constructor/binding rules,
+immutable configuration-value/text-entry rules and object-lifecycle semantics
+below are settled implementation directions, supported by bounded prototypes and
+explicit API discussion, not delivered binding code. Configuration sharing is a
+preferred implementation direction, not a completed experiment. The required
+native ownership facilities, remaining per-family signatures and omission/clear
 details still need design and verification before expanding the binding surface.
 
 ### Delivery Status
@@ -35,7 +36,7 @@ details still need design and verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes, source-first keyword-variable construction, optional constructor/chained bindings, binding-time snapshots, object lifecycle and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, per-family API details and full verification are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes, constructor/binding-time snapshot rules, mutable Plot/Canvas owners, immutable read-only/copy_with configuration values, common Text keyword entry points and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, remaining signatures/omission rules and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -50,6 +51,8 @@ details still need design and verification before expanding the binding surface.
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
+| Python configuration values | Theme, Text and their nested appearance/layout values expose read-only named attributes and keyword-only copy_with derivation. No direct field assignment, mutable child handles or duplicate getter/per-field-edit API; retain the native nested Theme representation and validation. |
+| Python text entry points | Text constructors accept supported style/layout keywords. Title and other applicable Text-taking slots accept the same common keywords alongside string/Text input, through one native Text-slot path; no separate Title style model. Omission preserves existing local instructions. |
 | Canvas placement | Python uses one panel method with optional keyword-only spans and overwrite=False. Rust keeps strict panel/panel_span and adds explicit set_panel/set_panel_span; region-overwrite ownership/validation belongs to the core, not a Python-only reconstruction. |
 | Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
@@ -594,7 +597,7 @@ than disguise it through packaging or relabeling.
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
-| Python | Public capability/type mapping, source-first keyword-variable calls and optional constructor/chained bindings; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Python | Public capability/type mapping, source-first calls, optional constructor/chained bindings, immutable read-only/copy_with configuration values and shared Text keyword entries; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
@@ -652,11 +655,11 @@ describe enduring boundaries/behavior, not numbered delivery stages.
 
 ## Selected Python Object Lifecycle
 
-The selected public model is mutable configuration with explicit copies,
-insertion-time Canvas snapshots, non-consuming renders and frozen Output reuse.
-This follows the bounded analysis and API discussion, not an assumption that
-Rust's consuming `mut self -> Self` means Python mutation. Both
-[mutation-and-return-self][plotly-updates] and
+The selected public model combines mutable Plot/Canvas owners with explicit
+copies, immutable Theme/Text configuration values, insertion-time Canvas snapshots,
+non-consuming renders and frozen Output reuse. This follows the bounded analysis
+and API discussion, not an assumption that Rust's consuming `mut self -> Self`
+means Python mutation. Both [mutation-and-return-self][plotly-updates] and
 [new-configuration returns][altair-properties] have established precedents; the
 choice here is project-specific, not a universal performance or idiom ranking.
 
@@ -670,12 +673,119 @@ choice here is project-specific, not a universal performance or idiom ranking.
   re-converts foreign inputs nor renders, and need not deep-copy every payload.
 - A mutator called without assigning its return still applies the edit. Do not
   add per-setter `inplace` switches or parallel mutable/immutable API modes.
+- Configure Plot/Canvas through their deliberate methods, not a parallel public
+  attribute-assignment API such as `p.title = ...`. Reject attempts to replace
+  configuration methods this way rather than silently shadowing them.
 - Failed edits leave the original configuration valid and unchanged; existing
   snapshots remain valid too. A wrapper must not accidentally become empty after
   moving its Rust owner into a fallible consuming method.
-- Policy/value objects such as Text and Theme need deliberate, consistent
-  attachment/copy rules, but their exact public mutability is not selected merely
-  by choosing mutable Plot/Canvas owners.
+
+### Immutable Configuration Values And Read-Only Fields
+
+Theme, Text and their nested appearance/layout values are immutable Python values,
+not mutable owners or live editing handles. Read declared fields through named
+attributes and derive edited values with keyword-only `copy_with(...)`:
+
+```python
+# Planned Python interfaces, not implemented bindings.
+title_style = theme.typography.root.title
+size = title_style.font_size
+large_style = title_style.copy_with(font_size=24, color=new_color)
+```
+
+- Unspecified fields retain the source value; supplied fields produce a logically
+  independent result, leaving the original and its aliases unchanged. Chaining
+  `copy_with` calls derives further values and requires retaining the result; it
+  does not mutate the original. Reassigning a variable to the result is valid.
+- Named attributes are read-only. Assignments such as `title_style.font_size = 24`
+  or `theme.typography.root.title.font_size = 24` must raise `AttributeError`.
+  Nested getters and exposed collections must not provide a mutation back door,
+  a mutable parent-linked handle or a detached mutable copy that silently accepts
+  field assignment.
+- Do not duplicate an attribute as `get_font_size()` or an editable
+  `.font_size(24)` method. Ordinary configuration-value updates use `copy_with`,
+  rather than parallel per-field edit aliases, writable properties or modes.
+  Preserve deliberate native factories/closed choices in their capability mapping;
+  this is not permission to expose unchecked fields of every exported type.
+- Constructors accept their supported typed configuration fields directly; users
+  need not construct a default value and then derive each initial field. Both
+  construction and derivation preserve native invariants and validation boundaries.
+  A failed derivation leaves the original valid and does not store a partially
+  valid record, render, discover fonts or reconvert scientific inputs.
+- Copying is logical independence, not recursive deep copying. Unchanged immutable
+  payloads may remain shared; do not promise constant-cost derivation or zero-copy
+  attachment. Attaching an explicit Theme/Text value retains that value's content
+  and instructions, without consuming its Python handle or linking later variants
+  back into existing Plot/Canvas configurations.
+
+Keep the eight-component nested representation from the
+[native Theme contract](03_THEME_SYSTEM.md), not a flattened Python dictionary or
+a separate style schema. For example, `theme.typography.root.title.font_size`
+identifies title typography, while
+`theme.composition.root_title_block.title_subtitle_gap` identifies a composition
+relationship. `copy_with` replaces specified fields/components of a complete value;
+it is not recursive dictionary merging or a string-keyed path-patching language.
+Derive a child value and replace it in its parent when editing a nested component.
+
+[Flutter ThemeData][flutter-theme-copy] and [TextStyle][flutter-text-copy] provide
+precedents for copy-with updates, not a required object graph, null convention or
+reactive UI framework. The existing Rust Theme uses `customize()`/`ThemeBuilder`
+and its component/Text edits consume values. Python can use those public native
+construction facilities without requiring new Rust `copy_with` aliases, exposing
+private setters or storing a Python-side representation. A native construction-only
+working copy is distinct from the completed immutable Theme and must never become
+a retained runtime override or the mandatory Python value-edit workflow.
+
+### Shared Text Constructors And Owner Slots
+
+Text accepts source content and optional supported style/layout inputs at
+construction, as well as `copy_with` derivation afterwards. The selected shape is
+`Text(source, *, style=..., layout=...)`; omission/clear syntax and any additional
+convenience fields are not fixed by this schematic signature.
+
+Title is a semantic Text-taking slot, not a separate Title value class or a second
+style system. Accept common Text configuration keywords directly on `title` and
+the other applicable Text-taking operations, including subtitle/caption and axis
+labels, while continuing to accept a plain string or an already-authored Text:
+
+```python
+p.title("Results", style=title_style, layout=title_layout)
+p.title(Text("Results", style=title_style, layout=title_layout))
+```
+
+These are equivalent entry forms using the same Text preparation/native slot
+update path, not two sets of validation or retained style fields. Keyword handling
+must not mutate an incoming immutable Text. The Plot/Canvas operation still edits
+and returns its owner; creating or deriving a Text does not. Finish the policy for
+overlapping Text-supplied fields and explicit keywords before finalizing signatures.
+
+Preserve the [native text ownership/precedence contract](04_VISUAL_PROPERTY_OWNERSHIP.md):
+
+- Font stack, size, color, weight and line height use a complete local TextTheme
+  when present, otherwise the consuming owner's selected Theme role. An unstyled
+  Text may therefore look different in a title and a caption; attaching it does
+  not eagerly freeze the role's effective appearance or disable Theme inheritance.
+  A supplied local style replaces the complete role, not a sparse field merge.
+- Alignment belongs to the common TextLayout request, not a distinct title-style
+  field. Native title-alignment conveniences edit that same slot request in call
+  order; any Python convenience must target it too. Do not introduce another
+  alignment/style state or change the native owner/Canvas/default precedence.
+- Title/subtitle gaps, title-block clearance and root padding remain composition
+  Theme responsibilities. Do not move them into Text or add unselected title-local
+  gap/margin controls merely because common Text keywords are accepted.
+- Plain content replacement and omitted local instructions preserve the slot's
+  existing style/layout. Present exact style and whole layout replace their
+  respective instructions. A present default TextLayout resets the layout request
+  to owner defaults; it is different from omission. Do not silently turn missing
+  constructor/slot/copy-with keywords into clearing or default reset.
+
+Resolve the Python distinction between omitted arguments, explicit absence/clearing
+and explicit default requests before implementation. Do not automatically copy
+Flutter's null-means-unchanged convention onto Python `None`, or imply that removing
+style from a standalone Text necessarily clears an existing owner's retained style.
+Map any selected clear/reset operation through deliberate native facilities, not
+an extra Python style store. These remaining details do not reopen the immutable
+value/read-only-attribute/copy-with decision.
 
 ### Canvas Captures Configuration, Not A Live Child Alias
 
@@ -806,6 +916,7 @@ The existing native API is not yet the selected Python lifecycle:
 | Current native fact | Binding implication |
 | --- | --- |
 | Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
+| Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
 | Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
 | Both current panel and panel_span reject overlaps; no native region-overwrite setters exist. | Implement the selected overwrite capability in the core rather than imply it is already available or make it Python-only. |
 | Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
@@ -828,10 +939,13 @@ implementation is not. Before expanding the binding surface:
 
 1. Complete per-family signatures, the inventory of common optional constructor
    bindings, explicit scientific-mode spelling, complex pandas column-label syntax
-   and policy/value-object attachment rules. Shared constructor/binding/snapshot
-   rules and Canvas placement/region-overwrite behavior are selected above; do not
-   reopen them as competing lifecycle modes or live aliases, or assume an editable
-   panel-access handle is required.
+   and the remaining policy-type capability mapping. Resolve omission/None/clear/
+   default-reset distinctions and Text-versus-keyword conflict handling for value
+   derivation and text-taking slots. Mutable owners, immutable read-only/copy_with
+   configuration values, shared Text entries, binding-time snapshots and Canvas
+   placement/region-overwrite behavior are selected above; do not reopen them as
+   competing lifecycle modes or live aliases, or assume an editable panel-access
+   handle is required.
 2. Identify the smallest public core facilities for configuration sharing/copy,
    shared strict/region-overwrite Canvas placement, stable non-consuming renders
    and failure-safe Output replay. Record justified native API/storage changes
@@ -845,6 +959,11 @@ implementation is not. Before expanding the binding surface:
    mutation, and replacement of one binding without refreshing prior roles. Verify
    these boundaries across supported input routes without a family/type option
    cross-product; a stale bridge snapshot must not defeat current-source lookup.
+   Shared value/text checks must cover unchanged originals/aliases after derivation,
+   rejection of direct/nested writes, native validation failure, stable explicit
+   value attachments, equivalent Text/keyword entry forms, ordinary role inheritance
+   and content-only replacement retaining prior instructions. Add omission/clear/
+   reset cases once their remaining syntax is selected, not a separate renderer.
    Native placement coverage must include strict rejection, overwrite into empty
    space, partial/multiple owner overlap, complete old-footprint cleanup and failure
    atomicity; Python checks the unified argument mapping and lifecycle, not a
@@ -902,3 +1021,5 @@ corresponding implementation begins.
 [pyo3-gc]: https://pyo3.rs/v0.29.3/class/protocols.html#garbage-collector-integration
 [seaborn-keywords]: https://seaborn.pydata.org/whatsnew/v0.12.0.html#keyword-only-arguments
 [plotly-inputs]: https://plotly.com/python/px-arguments/
+[flutter-theme-copy]: https://api.flutter.dev/flutter/material/ThemeData/copyWith.html
+[flutter-text-copy]: https://api.flutter.dev/flutter/painting/TextStyle/copyWith.html
