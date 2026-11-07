@@ -21,13 +21,13 @@ tables. Workspace checks, joint offline archives, cross-adapter consumers and
 rebuilt peer guides have passed. Python bindings remain planned. Package publication,
 site deployment, Git push and history rewriting are not authorized by this work.
 
-Python architecture, the four input routes, constructor/binding rules,
-immutable configuration-value/text-entry rules and object-lifecycle semantics
-below are settled implementation directions, supported by bounded prototypes and
-explicit API discussion, not delivered binding code. Configuration sharing is a
-preferred implementation direction, not a completed experiment. The required
-native ownership facilities, remaining per-family signatures and omission/clear
-details still need design and verification before expanding the binding surface.
+Python architecture, the four input routes, constructor/binding rules, immutable
+configuration values, text-entry/omission/clear/precedence rules and object-lifecycle
+semantics below are settled implementation directions, supported by bounded
+prototypes and explicit API discussion, not delivered binding code. Configuration
+sharing is a preferred implementation direction, not a completed experiment. The
+required native ownership/text-clear facilities and remaining per-family signatures
+still need design and verification before expanding the binding surface.
 
 ### Delivery Status
 
@@ -36,7 +36,7 @@ details still need design and verification before expanding the binding surface.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Python lifecycle decision and complete binding | Architecture/input routes, constructor/binding-time snapshot rules, mutable Plot/Canvas owners, immutable read-only/copy_with configuration values, common Text keyword entry points and unified span/explicit-overwrite placement semantics settled. Bounded experiments completed; no binding or native region-overwrite implementation. Native ownership facilities, remaining signatures/omission rules and full verification are open. |
+| Python lifecycle decision and complete binding | Architecture/input routes, constructor/binding-time snapshots, mutable owners, immutable configuration values, common Text entries with explicit keyword precedence/None clearing, native text-clear direction and unified span/overwrite semantics settled. Bounded experiments completed; no binding, native text-clear or region-overwrite implementation. Native API/ownership details, remaining signatures and full verification are open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -52,7 +52,8 @@ details still need design and verification before expanding the binding surface.
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
 | Python configuration values | Theme, Text and their nested appearance/layout values expose read-only named attributes and keyword-only copy_with derivation. No direct field assignment, mutable child handles or duplicate getter/per-field-edit API; retain the native nested Theme representation and validation. |
-| Python text entry points | Text constructors accept supported style/layout keywords. Title and other applicable Text-taking slots accept the same common keywords alongside string/Text input, through one native Text-slot path; no separate Title style model. Omission preserves existing local instructions. |
+| Python text entry points | Text constructors and applicable string/Text-taking slots accept common style/layout keywords. Explicit keywords, including None clearing, override incoming Text fields; absent keywords defer to native incoming-field/preserve rules. Use one native Text-slot path, not a separate Title style model. |
+| Text clearing | Add narrow native operations to remove local style/layout from Text values and existing owner slots. Keep ordinary setters and explicit-default request presence unchanged; Python maps explicit None to the native capability, never a second style store or whole-Plot reconstruction. |
 | Canvas placement | Python uses one panel method with optional keyword-only spans and overwrite=False. Rust keeps strict panel/panel_span and adds explicit set_panel/set_panel_span; region-overwrite ownership/validation belongs to the core, not a Python-only reconstruction. |
 | Python compatibility | CPython 3.10 is the required minimum; start with abi3-py310. Actual platform/dependency release support still requires installed-wheel/sdist verification, not a moving support-window recommendation. |
 | Numeric conversion | Ordinary numeric inputs convert to the core's binary64 representation with normal floating-point rounding, following established plotting practice; no new per-value losslessness gate or general strictness switch. |
@@ -597,7 +598,7 @@ than disguise it through packaging or relabeling.
 | --- | --- |
 | Mechanical move | Actual package paths, fixtures/includes, representative public consumers, examples and independent core package verification. |
 | Data adapters | Complete native re-exports without shadowing, adapter-only renderer dependencies and cross-adapter native type identity; top-level family source/vector constructors, explicit-x/multiple-y versus omitted-coordinate wide, grid/cell semantics, independent layers, significance and other typed inputs, input/native errors and standard native handoffs. Preserve nullable/type/order and strided/chunked behavior through representative public workflows, not a separate compatibility project. |
-| Python | Public capability/type mapping, source-first calls, optional constructor/chained bindings, immutable read-only/copy_with configuration values and shared Text keyword entries; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
+| Python | Public capability/type mapping, source-first calls, optional constructor/chained bindings, immutable values and shared Text entries with omission/None/value handling and explicit keyword precedence; mixed inputs, binding-time snapshots versus current-source explicit lookup, lifecycle/error/callback ownership, input bridges and installed-wheel/sdist workflows. |
 | Books/gallery | Peer single-page coverage/anchors/includes, direct image-to-code links, actual example execution, validated rendered HTML and fresh-site assembly without stale-source substitution. |
 
 For code changes use focused tests and strict Clippy, never `cargo check`:
@@ -642,8 +643,8 @@ package contents or published ref may reintroduce the full Unicode corpus.
    both adapters are used; migrate callers and peer guides with focused evidence,
    removing the old conversion surface.
 5. **Python lifecycle implementation gate.** Implement the selected object
-   semantics through deliberate public-core ownership facilities and verify their
-   failure/sharing/callback behavior before mass-producing bindings.
+   semantics through deliberate public-core ownership and text-clear facilities;
+   verify their failure/sharing/callback behavior before mass-producing bindings.
 6. **Complete Python interface.** Deliver the capability mapping, callbacks, input
    bridges, typing and distribution verification through the same renderer.
 7. **Integrated content and closure.** Complete bilingual content/gallery coverage
@@ -740,8 +741,10 @@ a retained runtime override or the mandatory Python value-edit workflow.
 
 Text accepts source content and optional supported style/layout inputs at
 construction, as well as `copy_with` derivation afterwards. The selected shape is
-`Text(source, *, style=..., layout=...)`; omission/clear syntax and any additional
-convenience fields are not fixed by this schematic signature.
+`Text(source, *, style=None, layout=None)`; additional convenience fields and full
+per-type signatures still need their capability mapping. A fresh Text has no old
+instructions to preserve: omitted or None style/layout means no corresponding
+local instruction, not an eagerly materialized default Theme role.
 
 Title is a semantic Text-taking slot, not a separate Title value class or a second
 style system. Accept common Text configuration keywords directly on `title` and
@@ -756,8 +759,8 @@ p.title(Text("Results", style=title_style, layout=title_layout))
 These are equivalent entry forms using the same Text preparation/native slot
 update path, not two sets of validation or retained style fields. Keyword handling
 must not mutate an incoming immutable Text. The Plot/Canvas operation still edits
-and returns its owner; creating or deriving a Text does not. Finish the policy for
-overlapping Text-supplied fields and explicit keywords before finalizing signatures.
+and returns its owner; creating or deriving a Text does not. Explicit keyword
+precedence and clearing follow the selected rules below.
 
 Preserve the [native text ownership/precedence contract](04_VISUAL_PROPERTY_OWNERSHIP.md):
 
@@ -779,13 +782,106 @@ Preserve the [native text ownership/precedence contract](04_VISUAL_PROPERTY_OWNE
   to owner defaults; it is different from omission. Do not silently turn missing
   constructor/slot/copy-with keywords into clearing or default reset.
 
-Resolve the Python distinction between omitted arguments, explicit absence/clearing
-and explicit default requests before implementation. Do not automatically copy
-Flutter's null-means-unchanged convention onto Python `None`, or imply that removing
-style from a standalone Text necessarily clears an existing owner's retained style.
-Map any selected clear/reset operation through deliberate native facilities, not
-an extra Python style store. These remaining details do not reopen the immutable
-value/read-only-attribute/copy-with decision.
+### Omission, Clearing And Explicit Keyword Precedence
+
+For configuration-value derivation and the optional style/layout keywords of
+Text-taking owner operations, distinguish argument presence from its value:
+
+| Argument | Value derivation | Text-taking owner operation |
+| --- | --- | --- |
+| Omitted | Retain that field in the source value. | Apply the incoming Text's present instruction; if it has none, preserve the slot's existing instruction. |
+| Explicit None | Remove the field's optional value where absence is admitted. | Remove the corresponding local slot instruction, even if the incoming Text supplies one. |
+| Concrete value | Replace that field. | Replace the complete corresponding style or layout, overriding the incoming Text. |
+
+None is not a universal reset token. Reject it for nonnullable fields such as font
+size or a required Theme component instead of inventing a default. These rules
+do not redefine data-family bindings or other APIs' separately typed None meanings.
+
+Resolve style and layout independently: explicit keywords, including None, take
+precedence over incoming Text fields, without mutating that Text or merging sparse
+style fields. An absent keyword does not erase a present incoming instruction.
+Resolve all keyword intentions and perform the call's required input/type/conversion
+checks before committing an owner edit, preserving native validation boundaries;
+a keyword/conversion failure leaves the prior configuration intact.
+
+```python
+# Planned interfaces; explicit None clearing is not implemented yet.
+p.title("Changed")                             # Preserve existing instructions.
+p.title("Changed", style=None)                  # Clear only the local style.
+p.title(Text("Changed", style=a), style=b)       # Use complete style b.
+p.title(Text("Changed", style=a), style=None)    # Clear despite incoming style a.
+```
+
+Clearing style means removing its local override, not hiding text, changing its
+content/layout, modifying the Theme or attaching a copy of a default style. The
+owner's effective Theme role then supplies appearance normally, including after a
+later Theme replacement. Clearing layout removes the local request. By contrast,
+`layout=TextLayout()` supplies a present default request: it resets prior layout
+instructions but remains structurally distinct from no request, including in
+native equality/cache inputs. Keep that existing distinction even when both happen
+to render alike. No extra public RESET object is required.
+
+A Text value describes content and optional instructions, not an operation history:
+`plain = styled.copy_with(style=None)` produces a new unstyled Text without changing
+`styled`. Passing `p.title(plain)` still follows native omission/preserve rules;
+only `p.title(plain, style=None)` explicitly clears the owner's retained style.
+Do not add persistent provided/cleared flags to Text to propagate that command.
+
+Use a private unique omission sentinel at the Python argument-binding boundary,
+compared by identity, for schematic update signatures such as
+`title(text, *, style=_UNSET, layout=_UNSET)` and optional `copy_with` fields.
+Callers need not import or pass it. Recognize explicit arguments even when their
+values equal a default or the current value; do not guess presence by equality.
+Preserve omitted/clear/replace intent across PyO3 rather than collapse omitted and
+None into one Option value. This is transient call handling, not another retained
+configuration representation or a new public generic update protocol.
+
+### Native Text-Clear Capability
+
+The core already distinguishes omitted instructions, concrete instructions and
+present default layout requests through Text/TextSlot and their existing presence
+rules. It already resolves Theme inheritance. The missing capability is a public
+operation that removes an existing local override, not a new default-argument or
+style-resolution system.
+
+Add narrow consuming native clear operations while preserving ordinary setting
+signatures and behavior. The proposed naming shape, not final implemented methods,
+is:
+
+```text
+Text::clear_style(self) -> Self
+Text::clear_layout(self) -> Self
+Plot/Canvas::clear_title_style(self) -> Self
+Plot/Canvas::clear_title_layout(self) -> Self
+```
+
+Inventory and consistently cover the actual retained text slots, including root
+title/subtitle/caption and applicable axis/guide titles, through shared core
+Text/TextSlot logic and existing owner/family boundaries, not a method implementation
+per plot family. Final owner-method inventory/names belong to the native API design.
+Adapters expose the resulting native capabilities without another style engine.
+
+- Clear only the requested optional field. Preserve text content, content presence,
+  the other instruction field, scientific data and the Theme. Clearing an already
+  absent field is harmless. Do not render or discover fonts during these edits.
+- Do not reinterpret the incoming None in existing native slot replacement as a
+  clear command: ordinary `.title("Changed")` must continue retaining prior local
+  instructions. Do not force normal Rust setters to take Some-wrapped values or
+  replace explicit clearing with a present default layout/appearance.
+- Keep the mutation and validation authority in the core. Python calls deliberate
+  public facilities, not crate-private helpers, and must not clear by maintaining
+  its own style state or reconstructing a whole Plot/Canvas. A public general
+  `Update<T>` framework is not required; any small private call-intent representation
+  must preserve the same single native storage and behavior.
+- `Text.copy_with(...=None)` operates on an independent native value; owner keywords
+  operate on the intended slot. Neither changes other configuration copies, Canvas
+  captures or frozen Outputs. Preserve the selected Python failure-safe owner
+  lifecycle through the deliberate ownership facilities, not accidental consumption.
+
+Deliver the native capability first with focused contract checks and strict Clippy,
+then map it in the planned Python binding and verify private-sentinel handling,
+explicit keyword precedence and native errors. This does not authorize starting a
+complete binding or a separate prototype merely to update this plan.
 
 ### Canvas Captures Configuration, Not A Live Child Alias
 
@@ -917,6 +1013,7 @@ The existing native API is not yet the selected Python lifecycle:
 | --- | --- |
 | Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
+| TextSlot replacement preserves omitted style/layout and accepts present default-layout reset, but has no public explicit local-clear route. | Reuse that presence/resolution machinery and add narrow value/owner clear facilities; Python omission detection alone cannot clear an existing native override. |
 | Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
 | Both current panel and panel_span reject overlaps; no native region-overwrite setters exist. | Implement the selected overwrite capability in the core rather than imply it is already available or make it Python-only. |
 | Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
@@ -939,18 +1036,17 @@ implementation is not. Before expanding the binding surface:
 
 1. Complete per-family signatures, the inventory of common optional constructor
    bindings, explicit scientific-mode spelling, complex pandas column-label syntax
-   and the remaining policy-type capability mapping. Resolve omission/None/clear/
-   default-reset distinctions and Text-versus-keyword conflict handling for value
-   derivation and text-taking slots. Mutable owners, immutable read-only/copy_with
-   configuration values, shared Text entries, binding-time snapshots and Canvas
-   placement/region-overwrite behavior are selected above; do not reopen them as
-   competing lifecycle modes or live aliases, or assume an editable panel-access
-   handle is required.
+   and the remaining policy-type capability mapping. Finalize native text-clear
+   method names/slot coverage and exact signatures/type stubs for the selected
+   omission/None/value, explicit-default and keyword-precedence rules. Mutable owners,
+   immutable configuration values, shared Text entries, binding-time snapshots and
+   Canvas placement/region-overwrite behavior are selected; do not reopen them as
+   competing lifecycle modes or live aliases, or assume editable panel handles.
 2. Identify the smallest public core facilities for configuration sharing/copy,
-   shared strict/region-overwrite Canvas placement, stable non-consuming renders
-   and failure-safe Output replay. Record justified native API/storage changes
-   before implementing the full binding; migrate affected callers rather than
-   retain compatibility alternatives.
+   explicit Text/slot clearing, shared strict/region-overwrite Canvas placement,
+   stable non-consuming renders and failure-safe Output replay. Record justified
+   native API/storage changes before implementing the full binding; migrate affected
+   callers rather than retain compatibility alternatives.
 3. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
    external edits, retained branches, temporary insertions, fallible Canvas edits,
    render/I/O failure and callback ownership/reentry. Representative input checks
@@ -962,8 +1058,12 @@ implementation is not. Before expanding the binding surface:
    Shared value/text checks must cover unchanged originals/aliases after derivation,
    rejection of direct/nested writes, native validation failure, stable explicit
    value attachments, equivalent Text/keyword entry forms, ordinary role inheritance
-   and content-only replacement retaining prior instructions. Add omission/clear/
-   reset cases once their remaining syntax is selected, not a separate renderer.
+   and content-only replacement retaining prior instructions. Add focused checks for
+   omitted versus explicit None/value arguments, keyword precedence over authored
+   Text, restoration of Theme control, independent/idempotent style/layout clearing,
+   and absence versus present default requests. Reuse existing default-reset tests;
+   verify failed updates and prior copies/captures/Outputs remain unaffected, not a
+   family-by-option replay matrix or a separate renderer.
    Native placement coverage must include strict rejection, overwrite into empty
    space, partial/multiple owner overlap, complete old-footprint cleanup and failure
    atomicity; Python checks the unified argument mapping and lifecycle, not a
