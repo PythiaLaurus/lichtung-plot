@@ -34,22 +34,27 @@ pub(super) fn estimate_data() -> EstimateData {
 }
 
 pub(super) fn render_svg<K: lichtung_plot::kind::Marker>(
-    plot: Plot<K>,
+    plot: impl std::borrow::Borrow<Plot<K>>,
     name: &str,
 ) -> Result<String, lichtung_plot::Error> {
     let directory = tempdir(name);
     let output = directory.join("plot.svg");
     let result = plot
+        .borrow()
         .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();
     result
 }
 
-pub(super) fn render_canvas(canvas: Canvas, name: &str) -> Result<String, lichtung_plot::Error> {
+pub(super) fn render_canvas(
+    canvas: impl std::borrow::Borrow<Canvas>,
+    name: &str,
+) -> Result<String, lichtung_plot::Error> {
     let directory = tempdir(name);
     let output = directory.join("canvas.svg");
     let result = canvas
+        .borrow()
         .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();

@@ -6,10 +6,13 @@ use lichtung_plot::{
 
 const COLORS: [&str; 2] = ["#0072B2", "#D55E00"];
 
-fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
+fn render<K: lichtung_plot::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+    name: &str,
+) -> String {
     let directory = unique_dir(name);
     let path = directory.join("plot.svg");
-    plot.svg_preserve_text(&path).unwrap();
+    plot.borrow().svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

@@ -180,7 +180,7 @@ fn validity_requires_each_logical_dimension_not_just_length() {
     assert!(crate::Heatmap::new(Array2::<f64>::zeros((2, 0)).view()).is_err());
 }
 
-fn render<K: crate::kind::Marker>(plot: crate::Plot<K>, case: &str) -> String {
+fn render<K: crate::kind::Marker>(plot: &crate::Plot<K>, case: &str) -> String {
     let path = std::env::temp_dir().join(format!(
         "lichtung-ndarray-{}-{case}.svg",
         std::process::id()
@@ -239,8 +239,8 @@ fn wide_views_preserve_actual_coordinates_selected_order_bounds_and_mapping_call
         .unwrap(),
     ))
     .labels(crate::Labels::default().aliases([("Column 3", "B"), ("Column 2", "A")]));
-    let expected = render(native, "wide-native");
-    assert_eq!(render(adapted.into(), "wide"), expected);
+    let expected = render(&native, "wide-native");
+    assert_eq!(render(&adapted.into(), "wide"), expected);
     // Direct matrix ordinals must not alias a separately selected source x column.
     let direct = crate::Line::from_data(source.view(), 0, source.slice(s![.., 1..;-1]))
         .unwrap()
@@ -252,7 +252,7 @@ fn wide_views_preserve_actual_coordinates_selected_order_bounds_and_mapping_call
         .unwrap()
         .column_labels(["B", "A"])
         .unwrap();
-    assert_eq!(render(direct.into(), "wide-direct"), expected);
+    assert_eq!(render(&direct.into(), "wide-direct"), expected);
     assert_eq!(calls.get(), 2);
     assert!(crate::Line::from_data(source.view(), 0, [1, 2])
         .unwrap()
@@ -337,7 +337,7 @@ fn independent_layer_labels_and_fit_bounds_use_their_own_source_lengths() {
     drop(fit);
     drop(observed);
     drop(labels);
-    let text = render(native, "independent-layer");
+    let text = render(&native, "independent-layer");
     assert!(text.contains("first") && text.contains("middle") && text.contains("last"));
     let expected = crate::Plot::line(
         crate::NumericValues::new("Column 1", [0., 20.]),
@@ -357,5 +357,5 @@ fn independent_layer_labels_and_fit_bounds_use_their_own_source_lengths() {
         .legend_label("Observed"),
     )
     .markers(false);
-    assert_eq!(text, render(expected, "independent-layer-native"));
+    assert_eq!(text, render(&expected, "independent-layer-native"));
 }

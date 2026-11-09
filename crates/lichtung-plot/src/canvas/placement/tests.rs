@@ -91,7 +91,7 @@ fn region_replacement_removes_whole_owners_and_commits_only_valid_topology() {
         assert_eq!(placements.footprint(0), original.footprint(0));
     }
     let plot = || {
-        Payload::Plot(Box::new(
+        Payload::Plot(Arc::new(
             crate::Plot::scatter(
                 crate::NumericValues::new("x", [0., 1.]),
                 crate::NumericValues::new("y", [1., 2.]),
@@ -135,6 +135,65 @@ fn region_replacement_removes_whole_owners_and_commits_only_valid_topology() {
         .unwrap();
     assert_eq!(placements.anchor(0, 0), Some(0));
     assert_eq!(placements.anchor(1, 1), Some(1));
+}
+
+#[test]
+fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapshots() {
+    let plot = || {
+        crate::Plot::scatter(
+            crate::NumericValues::new("x", [0., 1.]),
+            crate::NumericValues::new("y", [1., 2.]),
+        )
+        .title("captured")
+    };
+    let source = plot();
+    let mut canvas = crate::Canvas::grid(1, 3).unwrap();
+    let unique = Arc::as_ptr(&canvas.placements);
+    canvas
+        .place_panel(0, 0, 1, 1, source.clone(), false)
+        .unwrap();
+    assert_eq!(
+        Arc::as_ptr(&canvas.placements),
+        unique,
+        "unshared insertion does not clone the owner set"
+    );
+    let snapshot = canvas.clone();
+    assert!(Arc::ptr_eq(&canvas.placements, &snapshot.placements));
+    let source = source.title("external later edit");
+    assert_eq!(
+        snapshot.placements.plot(0).unwrap().prose()[0]
+            .unwrap()
+            .as_str(),
+        "captured"
+    );
+    assert_eq!(source.prose()[0].unwrap().as_str(), "external later edit");
+
+    assert!(canvas.place_panel(0, 0, 1, 1, plot(), false).is_err());
+    assert!(canvas.place_panel(0, 1, 0, 1, plot(), true).is_err());
+    assert!(canvas
+        .place_panel(0, 1, 1, usize::MAX, plot(), true)
+        .is_err());
+    assert_eq!(canvas.placements.anchor(0, 0), Some(0));
+    assert_eq!(canvas.placements.anchor(0, 1), None);
+    canvas
+        .place_text_panel(0, 1, TextPanel::new("Independent note", "Body").unwrap())
+        .unwrap();
+    assert!(!Arc::ptr_eq(&canvas.placements, &snapshot.placements));
+    assert!(
+        std::ptr::eq(
+            canvas.placements.plot(0).unwrap(),
+            snapshot.placements.plot(0).unwrap()
+        ),
+        "unchanged native plot payloads remain shared"
+    );
+    assert!(snapshot.placements.text(1).is_none());
+    assert!(canvas
+        .place_text_panel(0, 0, TextPanel::new("Rejected", "Body").unwrap())
+        .is_err());
+    canvas.place_panel(0, 1, 1, 2, source, true).unwrap();
+    assert!(canvas.placements.text(1).is_none());
+    assert_eq!(canvas.placements.anchor(0, 2), Some(1));
+    assert_eq!(snapshot.placements.anchor(0, 2), None);
 }
 
 #[test]

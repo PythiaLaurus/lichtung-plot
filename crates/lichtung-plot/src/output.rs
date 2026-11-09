@@ -3,14 +3,16 @@
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::scene::RenderedScene;
 use crate::{Error, PngCompression, PngOptions, PngSizing};
 
 /// Opaque handle to one scene that has already been rendered.
 ///
-/// Each consuming output method publishes its requested file immediately and
-/// returns the same handle so another format can reuse the exact scene.
+/// Each output method borrows this handle, publishes its requested file immediately
+/// and returns a shared handle to the same frozen scene for chaining. Publication
+/// failure leaves the original handle usable; cloning never renders again.
 ///
 /// Terminal methods complete the final native filename with their conventional
 /// lowercase suffix. A filename already ending in the complete expected suffix
@@ -22,13 +24,16 @@ use crate::{Error, PngCompression, PngOptions, PngSizing};
 /// Suffix completion happens only after format conversion succeeds. The caller
 /// path must have a filename and must not currently identify a directory. Its
 /// parent must already exist.
+#[derive(Clone)]
 pub struct Output {
-    scene: RenderedScene,
+    scene: Arc<RenderedScene>,
 }
 
 impl Output {
-    pub(crate) const fn new(scene: RenderedScene) -> Self {
-        Self { scene }
+    pub(crate) fn new(scene: RenderedScene) -> Self {
+        Self {
+            scene: Arc::new(scene),
+        }
     }
 
     /// Frozen canonical scene width in integral CSS pixels.
@@ -55,7 +60,7 @@ impl Output {
     /// with `.svg`. A complete ASCII case-insensitive match such as `.SVG` is
     /// preserved exactly; otherwise `.svg` is appended without interpreting an
     /// existing extension.
-    pub fn svg(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn svg(&self, path: impl AsRef<Path>) -> Result<Self, Error> {
         #[cfg(test)]
         let timer = crate::orchestrator::measurements::Timer::new(5);
         let bytes = self.scene.svg_with_text_as_paths()?;
@@ -63,25 +68,25 @@ impl Output {
         drop(timer);
         let path = complete_suffix(path.as_ref(), ".svg")?;
         crate::orchestrator::write_atomic(&path, &bytes)?;
-        Ok(self)
+        Ok(self.clone())
     }
 
     /// Publish SVG with selectable and searchable text atomically.
     ///
     /// After borrowing the canonical SVG bytes, the final native filename is
     /// completed with `.svg` using the literal rule documented on [`Output`].
-    pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn svg_preserve_text(&self, path: impl AsRef<Path>) -> Result<Self, Error> {
         let bytes = self.scene.svg_bytes();
         let path = complete_suffix(path.as_ref(), ".svg")?;
         crate::orchestrator::write_atomic(&path, bytes)?;
-        Ok(self)
+        Ok(self.clone())
     }
 
     /// Publish a 300-DPI balanced-compression PNG atomically.
     ///
     /// The final native filename is completed with `.png` by
     /// [`Output::png_with_options`] after rasterization succeeds.
-    pub fn png(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn png(&self, path: impl AsRef<Path>) -> Result<Self, Error> {
         self.png_with_options(path, PngOptions::default())
     }
 
@@ -89,7 +94,7 @@ impl Output {
     ///
     /// The final native filename is completed with `.png` by
     /// [`Output::png_with_options`] after rasterization succeeds.
-    pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub fn png_preview(&self, path: impl AsRef<Path>) -> Result<Self, Error> {
         self.png_with_options(
             path,
             PngOptions {
@@ -106,7 +111,7 @@ impl Output {
     /// preserved exactly; otherwise `.png` is appended without interpreting an
     /// existing extension.
     pub fn png_with_options(
-        self,
+        &self,
         path: impl AsRef<Path>,
         options: PngOptions,
     ) -> Result<Self, Error> {
@@ -117,7 +122,7 @@ impl Output {
         drop(timer);
         let path = complete_suffix(path.as_ref(), ".png")?;
         crate::orchestrator::write_atomic(&path, &bytes)?;
-        Ok(self)
+        Ok(self.clone())
     }
 }
 

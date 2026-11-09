@@ -246,12 +246,15 @@ fn validate_header_overlap(
 /// Canvas owns one root theme, which defaults to [`Theme::publication`]. Plots
 /// without an explicit theme inherit that root. Dimensions are derived from
 /// content unless [`Self::width`], [`Self::max_width`] or [`Self::size`] replaces
-/// the sizing request.
+/// the sizing request. Clones share immutable placements until a placement edit
+/// separates them. Terminal exports borrow the configuration and render a fresh
+/// scene per call.
+#[derive(Clone)]
 pub struct Canvas {
     guide_text_layouts: [Option<crate::TextLayout>; 3],
     rows: usize,
     columns: usize,
-    placements: placement::Placements,
+    placements: Arc<placement::Placements>,
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
     legend_composition: LegendComposition,
@@ -314,7 +317,7 @@ impl Canvas {
             rows,
             guide_text_layouts: [None, None, None],
             columns,
-            placements: placement::Placements::new(rows, columns)?,
+            placements: Arc::new(placement::Placements::new(rows, columns)?),
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
             legend_composition: LegendComposition::Combined,
@@ -373,15 +376,7 @@ impl Canvas {
         column_span: usize,
         plot: Plot<K>,
     ) -> Result<Self, Error> {
-        self.placements.insert(
-            placement::Footprint {
-                row,
-                column,
-                row_span,
-                column_span,
-            },
-            placement::Payload::Plot(Box::new(plot.erase())),
-        )?;
+        self.place_panel(row, column, row_span, column_span, plot, false)?;
         Ok(self)
     }
 
@@ -421,16 +416,39 @@ impl Canvas {
         column_span: usize,
         plot: Plot<K>,
     ) -> Result<Self, Error> {
-        self.placements.replace(
-            placement::Footprint {
-                row,
-                column,
-                row_span,
-                column_span,
-            },
-            placement::Payload::Plot(Box::new(plot.erase())),
-        )?;
+        self.place_panel(row, column, row_span, column_span, plot, true)?;
         Ok(self)
+    }
+
+    /// Place an owned exact-family Plot without consuming this Canvas on error.
+    ///
+    /// `overwrite=false` requires an entirely empty footprint; `true` removes
+    /// complete intersecting owners as documented by [`Self::set_panel_span`].
+    /// Validation/resources precede mutation. Existing Canvas clones are unchanged,
+    /// and an unshared Canvas edits its placements without copying the owner set.
+    /// Consuming placement builders delegate to this same operation.
+    pub fn place_panel<K: crate::kind::ExactFamily>(
+        &mut self,
+        row: usize,
+        column: usize,
+        row_span: usize,
+        column_span: usize,
+        plot: Plot<K>,
+        overwrite: bool,
+    ) -> Result<(), Error> {
+        let footprint = placement::Footprint {
+            row,
+            column,
+            row_span,
+            column_span,
+        };
+        let payload = placement::Payload::Plot(Arc::new(plot.erase()));
+        let placements = Arc::make_mut(&mut self.placements);
+        if overwrite {
+            placements.replace(footprint, payload)
+        } else {
+            placements.insert(footprint, payload)
+        }
     }
 
     pub(crate) fn owner_topology(&self, index: usize) -> Option<[usize; 6]> {
@@ -498,11 +516,22 @@ impl Canvas {
         column: usize,
         panel: TextPanel,
     ) -> Result<Self, Error> {
-        self.placements.insert(
+        self.place_text_panel(row, column, panel)?;
+        Ok(self)
+    }
+
+    /// Insert a strict single-cell TextPanel without consuming the Canvas on error.
+    /// Other configuration copies and occupied placements remain unchanged on failure.
+    pub fn place_text_panel(
+        &mut self,
+        row: usize,
+        column: usize,
+        panel: TextPanel,
+    ) -> Result<(), Error> {
+        Arc::make_mut(&mut self.placements).insert(
             placement::Footprint::cell(row, column),
             placement::Payload::Text(panel),
-        )?;
-        Ok(self)
+        )
     }
 
     /// Set per-panel, shared, or hidden legend behavior.
@@ -786,28 +815,28 @@ impl Canvas {
 
     /// Render once, publish an outlined SVG, and return a reusable output.
     /// The output filename is completed with `.svg` after conversion.
-    pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+    pub fn svg(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.svg(path)
     }
 
     /// Render once, publish SVG with selectable text, and return a reusable output.
     /// The output filename is completed with `.svg` after rendering.
-    pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+    pub fn svg_preserve_text(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.svg_preserve_text(path)
     }
 
     /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
     /// The output filename is completed with `.png` after rasterization.
-    pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+    pub fn png(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.png(path)
     }
 
     /// Render once, publish a balanced source-sized PNG without density metadata.
     /// The output filename is completed with `.png` after rasterization.
-    pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+    pub fn png_preview(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.png_preview(path)
     }
@@ -815,7 +844,7 @@ impl Canvas {
     /// Render once and publish a PNG using the exact caller-provided options.
     /// The output filename is completed with `.png` after rasterization.
     pub fn png_with_options(
-        self,
+        &self,
         path: impl AsRef<Path>,
         options: crate::PngOptions,
     ) -> Result<Output, Error> {

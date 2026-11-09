@@ -1,9 +1,12 @@
 use super::*;
 
-fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
+fn render<K: lichtung_plot::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+    name: &str,
+) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
-    let scene = plot.svg_preserve_text(&output).unwrap();
+    let scene = plot.borrow().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     assert!(svg.contains(&format!(
         "width=\"{}\" height=\"{}\"",

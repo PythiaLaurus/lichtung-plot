@@ -2287,11 +2287,10 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
     for (kind, plot) in plots {
         if *kind == PlotKind::Matrix {
             let mut rejected = Canvas::grid(1, 1).unwrap();
-            rejected
-                .placements
+            Arc::make_mut(&mut rejected.placements)
                 .insert(
                     placement::Footprint::cell(0, 0),
-                    placement::Payload::Plot(Box::new(plot.clone())),
+                    placement::Payload::Plot(Arc::new(plot.clone())),
                 )
                 .unwrap();
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -2308,11 +2307,10 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
         ) {
             continue;
         }
-        canvas
-            .placements
+        Arc::make_mut(&mut canvas.placements)
             .insert(
                 placement::Footprint::cell(index / 2, index % 2),
-                placement::Payload::Plot(Box::new(plot.clone().title(format!("{kind:?}")))),
+                placement::Payload::Plot(Arc::new(plot.clone().title(format!("{kind:?}")))),
             )
             .unwrap();
         index += 1;

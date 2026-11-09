@@ -4,7 +4,7 @@ use polars_core::prelude::*;
 
 use crate::{kind, AlphaEncoding, AlphaValues, CategoryValues, NumericValues, Plot};
 
-fn render<K: kind::Marker>(plot: Plot<K>, case: &str) -> String {
+fn render<K: kind::Marker>(plot: &Plot<K>, case: &str) -> String {
     let path =
         std::env::temp_dir().join(format!("lichtung-polars-{}-{case}.svg", std::process::id()));
     plot.svg_preserve_text(&path).unwrap();
@@ -79,8 +79,8 @@ fn expanded_lines_preserve_actual_x_row_maps_native_alpha_declarations_and_repla
         .unwrap(),
     );
     assert_eq!(
-        render(adapted.into(), "wide"),
-        render(native, "wide-native")
+        render(&adapted.into(), "wide"),
+        render(&native, "wide-native")
     );
     assert_eq!(calls.get(), 2);
 
@@ -94,7 +94,7 @@ fn expanded_lines_preserve_actual_x_row_maps_native_alpha_declarations_and_repla
     ));
     assert!(direct.clone().svg(&path).is_err());
     let renamed = direct.column_labels(["First", "Second"]).unwrap();
-    let text = render(renamed.into(), "renamed");
+    let text = render(&renamed.into(), "renamed");
     assert!(text.contains("First") && text.contains("Second"));
 }
 
@@ -171,7 +171,7 @@ fn rectangular_bindings_validate_dimensions_and_never_repeat_row_ids() {
         ("__lichtung_grid_y_0", "Top"),
         ("__lichtung_grid_y_1", "Bottom"),
     ]));
-    assert_eq!(render(plot.into(), "grid"), render(native, "grid-native"));
+    assert_eq!(render(&plot.into(), "grid"), render(&native, "grid-native"));
 }
 
 #[test]
@@ -192,8 +192,8 @@ fn foreign_status_keeps_null_estimates_pending_until_explicit_native_availabilit
         .estimate_status_boolean("status")
         .unwrap();
     assert_eq!(
-        render(plot.width(600).into(), "status"),
-        render(boolean.width(600).into(), "status-boolean")
+        render(&plot.width(600).into(), "status"),
+        render(&boolean.width(600).into(), "status-boolean")
     );
     assert!(crate::Coefficient::from_data(&frame, "term", "estimate")
         .unwrap()

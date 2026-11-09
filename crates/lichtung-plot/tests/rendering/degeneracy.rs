@@ -1,7 +1,11 @@
 use super::*;
 use lichtung_plot::{Error, HistogramComposite, HistogramGeometry, HistogramInput};
 
-fn assert_collapse<K: lichtung_plot::kind::Marker>(plot: Plot<K>, context: &str) {
+fn assert_collapse<K: lichtung_plot::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+    context: &str,
+) {
+    let plot = plot.borrow();
     let error = plot.preflight().unwrap_err();
     assert!(matches!(error, Error::Render(_)), "{error}");
     let message = error.to_string();
@@ -19,10 +23,12 @@ fn assert_collapse<K: lichtung_plot::kind::Marker>(plot: Plot<K>, context: &str)
     assert_eq!(directory.path().read_dir().unwrap().count(), 0);
 }
 
-fn polygons<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> Vec<Vec<(f64, f64)>> {
+fn polygons<K: lichtung_plot::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+) -> Vec<Vec<(f64, f64)>> {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("plot.svg");
-    plot.svg_preserve_text(&path).unwrap();
+    plot.borrow().svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
     let marks = svg
         .split_once("<g clip-path=\"url(#clip-0)\">")

@@ -241,8 +241,11 @@ fn bar() -> Plot<crate::kind::HorizontalBar> {
     .size(960, 720)
 }
 
-fn publish_plot<K: crate::kind::Marker>(plot: Plot<K>, path: &Path) -> crate::Output {
-    plot.svg(path).unwrap()
+fn publish_plot<K: crate::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+    path: &Path,
+) -> crate::Output {
+    plot.borrow().svg(path).unwrap()
 }
 
 fn caption(paragraphs: bool) -> String {

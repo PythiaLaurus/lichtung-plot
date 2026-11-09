@@ -33,10 +33,10 @@ preferred implementation direction, not a completed experiment. The
 and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
-extraction and native Text/slot clearing are delivered; native reusable-ownership facilities,
-exact stubs and the selected input-boundary contracts still need implementation
-and verification before expanding the binding surface. The three input-boundary
-choices below are settled, not outstanding product decisions.
+extraction, native Text/slot clearing and reusable native ownership facilities are
+delivered. Exact stubs, Python ownership and the selected input-boundary contracts
+still need implementation and verification before expanding the binding surface.
+The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
 
@@ -47,8 +47,9 @@ choices below are settled, not outstanding product decisions.
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Columnar distribution geometry prerequisite | Delivered: flat core Histogram/Raincloud geometry and sample-owned external KDE, direct/multiple-source adapter column extraction, raw-key membership/original-point-row alpha and primary-only retained lookup. Focused core/adapter checks, the cross-adapter consumer, strict Clippy, API/Book checks and all three independently unpacked archives passed. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields and evidence. |
 | Native Text/slot clearing | Delivered: independent style/layout removal on Text, Plot/Canvas retained slots, PointLayer legend labels and NumericExplanation; both adapters forward applicable operations. Presence/default-reset/omission semantics, value independence and current Theme/Canvas inheritance passed focused tests and strict Clippy; peer guides are synchronized. |
-| Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Consuming receiver/error ownership remains for the reusable-lifecycle work. |
-| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs. Native reusable-ownership details and full verification are open. |
+| Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
+| Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Focused placement, render/replay/failure and composed/shared-guide checks plus the cross-adapter consumer passed. Plot export still clones configuration for marker erasure, and internal layout paths still clone temporary Plots; this is not clone-free rendering or Python lifecycle evidence. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs. Actual Python ownership, callback/GC and full distribution verification remain open. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
@@ -1290,8 +1291,9 @@ path, with an internal overlap policy if useful; Python only maps its arguments
 and errors to that capability. Do not maintain a second panel list or simulate
 overwrite by rebuilding Canvas in Python. These native setters now exist and
 passed focused topology/atomicity and composed-rendering witnesses plus their
-public example and strict Clippy. Receiver/error ownership facilities still need
-the implementation work below; this is not yet a failure-safe Python owner.
+public example and strict Clippy. Borrowed native placement now preserves the Canvas
+on error; its Python owner and argument mapping still require implementation and
+verification.
 
 ### Rendering Does Not Consume Python Configuration
 
@@ -1308,11 +1310,11 @@ publishes the same frozen scene without new layout, statistics or numeric/tick
 callback materialization. Format conversion and I/O can still have real costs.
 Later edits to the configuration do not affect that Output.
 
-This selects non-consuming Python behavior, not a new public `render()` method
-or a Rust signature change. Review the smallest public core facilities needed;
-do not work around consuming methods by duplicating rendering/publication in the
-binding. A terminal operation uses a stable configuration version even if an
-allowed reentrant callback edits the Python owner for a later operation.
+This Python lifecycle does not introduce a public `render()` method. The native
+facilities below now provide borrowed terminal exports; the binding must reuse
+them rather than duplicate rendering/publication. A terminal operation uses a
+stable configuration version even if an allowed reentrant callback edits the
+Python owner for a later operation.
 
 ### Callback References Are Not Frozen Callback Results
 
@@ -1332,23 +1334,24 @@ reference cycles, invalid contexts or nested-operation ownership.
 
 ### Current Rust Ownership And Implementation Constraints
 
-The existing native API is not yet the selected Python lifecycle:
+The native facilities below are delivered, but do not by themselves implement the
+selected Python lifecycle:
 
 | Current native fact | Binding implication |
 | --- | --- |
 | Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
 | TextSlot preserves omitted style/layout and present default-layout reset; Text and retained owners now expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
-| Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
+| Canvas placement takes an owned exact-family Plot, erases it and stores it in Arc. Canvas Clone shares immutable placements; a placement edit separates them while unchanged Plot payloads remain shared. | Capture configuration at insertion, not a live external child. Preparing the owned Plot can still clone its text/tick/layer fields; whole-Canvas copying and separation are not constant-cost promises. |
 | Strict panel/panel_span and region-overwrite set_panel/set_panel_span share one native validation/placement path. | Map Python spans/overwrite to these current capabilities; preserve whole-owner removal and atomic resource preparation through reusable ownership. |
-| Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
-| Plot/Canvas public terminal methods consume self, while their private scene-rendering functions borrow self. | Non-consuming Python renders need a lawful public route; rendering does not inherently require consuming the configuration. Private helpers are not a binding API. |
-| Output is not Clone and its fallible publishers consume self, returning it only on success. | Reusable Python Output must survive publication failure without rerendering or relying on an unavailable Clone. |
+| Borrowed place_panel/place_text_panel preserve the Canvas on error. Consuming insertion/replacement builders delegate to these same native mutations. | Use borrowed placement without taking the sole Python owner or cloning the entire growing Canvas per insertion. Failed placement can detach shared storage but does not change logical configuration. |
+| Plot/Canvas and both adapters' terminal exports borrow self. Plot currently clones configuration to enter the consuming marker-erasure path; internal layout also builds temporary Plot copies. | Reuse the public terminal route while fixing a stable configuration version before callbacks. Borrowed receiver semantics do not establish clone-free rendering or Python reentry safety. |
+| Output is Clone and owns Arc<RenderedScene>; borrowed publishers return a shared frozen handle, including for chained publication. | Preserve existing Output handles on conversion/I/O failure without rerendering. Clone/replay does not rematerialize callbacks. |
 | Labels already uses Arc::make_mut. | Copy-on-write can still clone the complete shared map; Arc alone is not a complexity guarantee. |
 
-Wrapping an entire Plot in Arc does not by itself make the existing Canvas accept
-it, preserve placement-local ownership or recover fallible operations. Separation
-may still clone the entire shared configuration; see [Arc behavior][arc-cow].
+Wrapping an external Plot in Arc is not itself Canvas insertion or a placement-local
+snapshot: the native boundary still accepts an owned exact-family Plot. Separation
+may still clone an entire shared configuration; see [Arc behavior][arc-cow].
 Do not infer sole ownership by guessing Python reference counts or silently
 consume external handles. Keep one native representation/validation path and core
 independence; no persistent collection framework, Python builder hierarchy or
@@ -1356,8 +1359,57 @@ general storage redesign is authorized by the preference for sharing.
 
 ### Remaining API And Implementation Gate
 
-Public lifecycle semantics are selected; their complete native ownership/sharing
-implementation is not. Before expanding the binding surface:
+#### Current Native Reusable-Ownership Baseline
+
+The delivered native implementation keeps the existing consuming configuration
+and building forms and one scientific/configuration representation. It does not
+add a Python builder mode or a second panel list:
+
+- Plot and Canvas terminal exports borrow the configuration and still return a
+  newly rendered Output for each call. Existing consuming publication spellings
+  are replaced, not retained as parallel terminal methods.
+- Output owns an Arc of one immutable RenderedScene. Its publishers borrow the
+  handle and return a clone of the same frozen handle, preserving chaining while
+  retaining the original after conversion/I/O failure. They never rerender.
+- Canvas implements Clone, sharing its immutable Placements until an edit;
+  placement payloads share owned native Plots. Headers/range requests may still
+  copy, so neither whole-Canvas copying nor separation is claimed constant-cost.
+- `Canvas::place_panel(&mut self, row, column, row_span, column_span, plot,
+  overwrite)` is the failure-safe borrowed placement capability;
+  `place_text_panel(&mut self, row, column, panel)` provides strict text insertion.
+  Existing panel/panel_span/set_panel/set_panel_span/text_panel consuming builders
+  delegate to these same native mutations. These differ in receiver/error ownership,
+  not data interpretation or representation; there is no compatibility dispatcher.
+  The ordinary Rust builders retain their parameter lists and do not require a
+  repeated Boolean. Python exposes only its already selected single panel method.
+- The borrowed operation validates/prepares before committing the placement state.
+  Independent Canvas copies retain their prior placements; ordinary insertion on
+  an unshared Canvas does not clone the growing owner set. Other fallible builder
+  updates may prepare a native candidate before assigning it to the Python owner.
+- The current baseline uses Plot Clone where native ownership requires an owned
+  exact-family Plot. It shares observations and Theme
+  but can copy authored text/tick/layer vectors. Plot terminal exports also clone
+  before marker erasure, and preparation/layout use temporary Plot copies. These
+  costs are not inherent requirements of borrowing or rendering. A clone-free
+  rendering representation remains a separate design discussion, not a capability
+  delivered by this ownership baseline or a zero-copy/constant-cost promise.
+- The planned binding must retain a stable native configuration version and release
+  its PyO3 borrow before callbacks/rendering. Reentry edits a later version. Actual Python
+  GC, exception/thread/context safety and wheel behavior remain separate real-PyO3
+  verification gates, not consequences of these native signatures.
+
+Native ownership checks cover shared placement separation and captured Plot
+independence, strict/overwrite failure recovery, repeated render operations and
+callback failure, shared Output replay after conversion/I/O failure, composed
+shared guides and the cross-adapter native consumer. The output-target run passed
+its other 21 tests; the new callback lifecycle witness was rerun successfully with
+adequate explicit dimensions instead of weakening complete-function-tick fitting.
+Strict workspace Clippy, formatting, API documentation and peer Book checks passed.
+This is native evidence, not a real-PyO3 ownership/callback result.
+
+Public lifecycle semantics are selected and the native ownership baseline is
+delivered; the complete Python implementation is not. Before expanding the binding
+surface:
 
 1. Complete exact overloads/runtime combination rules for the selected
    [25-family constructor forms](92_PYTHON_CONSTRUCTORS_PLAN.md), policy/method

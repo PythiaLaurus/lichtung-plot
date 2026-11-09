@@ -91,7 +91,10 @@ Sealed capabilities expose only supported configuration. There is no unselected
 plot state. `Plot::erase` is the public transition to `Plot<kind::Any>`; erasure
 retains common configuration, `kind()`, `preflight()` and output, but cannot regain
 family-specific setters. `Canvas::panel` accepts an exact Plot and erases it at
-its heterogeneous storage boundary. Canvas is not Clone.
+its heterogeneous storage boundary. Canvas Clone shares immutable placements;
+edits separate them without live external child aliases. Plot Clone shares native
+values/Theme but may copy text, ticks and layer vectors; no general constant-cost
+configuration-copy claim is made.
 
 There are 25 scientific families. Matrix owns a native variable grid and is not
 Canvas-admissible or generic-facetable. Marginal is Canvas-admissible but not

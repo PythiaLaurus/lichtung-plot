@@ -148,24 +148,24 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
     }
 
     /// Render and publish SVG; return the original native result and reusable Output.
-    pub fn svg(self, path: impl AsRef<Path>) -> crate::Result<Output> {
+    pub fn svg(&self, path: impl AsRef<Path>) -> crate::Result<Output> {
         self.plot.svg(path)
     }
     /// Render and publish SVG retaining selectable text.
-    pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> crate::Result<Output> {
+    pub fn svg_preserve_text(&self, path: impl AsRef<Path>) -> crate::Result<Output> {
         self.plot.svg_preserve_text(path)
     }
     /// Render and publish a 300-DPI PNG.
-    pub fn png(self, path: impl AsRef<Path>) -> crate::Result<Output> {
+    pub fn png(&self, path: impl AsRef<Path>) -> crate::Result<Output> {
         self.plot.png(path)
     }
     /// Render and publish a source-sized PNG.
-    pub fn png_preview(self, path: impl AsRef<Path>) -> crate::Result<Output> {
+    pub fn png_preview(&self, path: impl AsRef<Path>) -> crate::Result<Output> {
         self.plot.png_preview(path)
     }
     /// Render and publish a PNG using caller-owned native sizing/encoding options.
     pub fn png_with_options(
-        self,
+        &self,
         path: impl AsRef<Path>,
         options: PngOptions,
     ) -> crate::Result<Output> {

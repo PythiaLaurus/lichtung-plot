@@ -48,5 +48,10 @@ not imply equal tick-generation or formatting choices. Shared guides retain raw
 identity/paint compatibility and use Canvas composition; conflicting aliases or
 styles fail rather than being merged heuristically. See [themes](#themes).
 
-Configure exact children before insertion. Canvas is not Clone, and Rust's
-consuming methods are ownership transfers, not Python mutation semantics.
+Configure exact children before insertion. Canvas clones share immutable placements
+until an edit separates them; unchanged native Plot payloads remain shared, without
+live child aliases. For borrowed failure-safe edits, use
+`place_panel(row,column,row_span,column_span,plot,overwrite)` or strict
+`place_text_panel(row,column,panel)`. They retain the Canvas after an error and
+avoid copying an unshared growing owner set. The consuming placement builders use
+that same mutation path. Exports borrow configuration and render anew on every call.

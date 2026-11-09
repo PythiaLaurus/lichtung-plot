@@ -5,7 +5,7 @@ use crate::{
     HistogramInput, HistogramKde, HistogramStat, NumericValues, Plot, Raincloud,
 };
 
-fn render<K: kind::Marker>(plot: Plot<K>, case: &str) -> String {
+fn render<K: kind::Marker>(plot: &Plot<K>, case: &str) -> String {
     let path = std::env::temp_dir().join(format!(
         "lichtung-ndarray-geometry-{}-{case}.svg",
         std::process::id()
@@ -88,8 +88,8 @@ fn histogram_geometry_keeps_independent_strides_sources_and_owned_snapshots() {
         .line_alpha_single(180u8)
         .unwrap();
     assert_eq!(
-        render(native, "selected"),
-        render(expected.into(), "direct")
+        render(&native, "selected"),
+        render(&expected.into(), "direct")
     );
 }
 
@@ -147,7 +147,7 @@ fn raincloud_geometry_uses_point_rows_for_alpha_but_only_summary_for_lookup() {
     let native: Plot<kind::Raincloud> = adapted.labels(crate::Labels::raw()).into();
     drop(summary);
     native.preflight().unwrap();
-    let svg = render(native, "interleaved");
+    let svg = render(&native, "interleaved");
     assert!(svg.contains("category") && svg.contains("value") && svg.contains("cohort"));
 }
 
@@ -245,7 +245,7 @@ fn sample_kde_is_independent_and_does_not_replace_samples_stat_or_bins() {
         y: NumericValues::new("y", [0.1, 0.2, 0.1]),
     }));
     assert_eq!(
-        render(adapted, "sample-kde"),
-        render(expected, "sample-native")
+        render(&adapted, "sample-kde"),
+        render(&expected, "sample-native")
     );
 }

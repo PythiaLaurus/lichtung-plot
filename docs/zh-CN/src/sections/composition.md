@@ -39,5 +39,8 @@ Canvas 根默认使用 Publication。未指定主题的子图继承它，显式�
 Shared 图例保留原始身份／画笔兼容要求，使用 Canvas 的组合策略；alias 或样式冲突
 会报错，不作启发式合并，参见[主题](#themes)。
 
-应在插入前配置精确类型的子图。Canvas 不是 Clone，Rust 消费式方法表示所有权转移，
-不代表 Python 原地修改语义。
+应在插入前配置精确类型的子图。Canvas 克隆共享不可变放置数据，编辑时分离；未改变的
+原生 Plot 载荷仍共享，但不会与外部子图形成实时别名。需要借用式、失败安全编辑时，使用
+`place_panel(row,column,row_span,column_span,plot,overwrite)` 或严格的
+`place_text_panel(row,column,panel)`。出错后 Canvas 仍可用，未共享时也不复制不断增长的
+拥有者集合。消费式放置构建器使用同一修改路径，导出借用配置，每次都重新渲染。

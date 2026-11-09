@@ -732,6 +732,14 @@ unchanged. Grid dimensions, headers and declared range groups do not implicitly
 change; their normal preflight checks apply to the new topology. Each new export
 prepares the complete composition, not an incremental scene update.
 
+Canvas Clone shares immutable placements and native Plot payloads; editing a
+placement separates the owner/occupancy storage, without cloning unchanged Plot
+payloads. Borrowed `place_panel(..., overwrite)` and `place_text_panel` preserve
+the Canvas on failure; consuming placement builders delegate to that same path.
+An unshared Canvas mutates its existing owner set. This is configuration sharing,
+not shared prepared operations, live child handles or a promise that all Canvas
+fields/copy-on-write separation cost a constant amount.
+
 Grid hard and preferred requirements cover the complete row/column intervals,
 using the canonical span allocator rather than dividing minima or charging only
 an anchor track. Measure

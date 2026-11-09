@@ -1,6 +1,128 @@
 use super::*;
 
 #[test]
+fn repeated_plot_exports_rerender_but_output_copies_retry_without_callbacks() {
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let fail = Arc::new(AtomicBool::new(false));
+    let callback_calls = calls.clone();
+    let callback_fail = fail.clone();
+    // This witnesses lifecycle/replay, not the minimum fit for complete function ticks.
+    let plot = plot()
+        .size(800, 600)
+        .x_tick_generation(lichtung_plot::TickGeneration::function(move |_| {
+            callback_calls.fetch_add(1, Ordering::SeqCst);
+            if callback_fail.load(Ordering::SeqCst) {
+                return Err(lichtung_plot::Error::Data("caller failure".into()));
+            }
+            Ok(lichtung_plot::TickPositions::Data(vec![1., 2., 3.]))
+        }));
+    let first = directory.path().join("first.svg");
+    let output = plot.svg_preserve_text(&first).unwrap();
+    let materialized = calls.load(Ordering::SeqCst);
+    assert!(materialized > 0);
+    let shared = output.clone();
+    fail.store(true, Ordering::SeqCst);
+    assert!(output
+        .svg_preserve_text(directory.path().join("missing/failed.svg"))
+        .is_err());
+    assert!(output
+        .png_with_options(
+            directory.path().join("invalid.png"),
+            PngOptions {
+                sizing: PngSizing::Scale(0.0),
+                compression: PngCompression::Fast,
+            }
+        )
+        .is_err());
+    shared
+        .svg_preserve_text(directory.path().join("replay.svg"))
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), materialized);
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(directory.path().join("replay.svg")).unwrap()
+    );
+
+    assert!(plot
+        .svg_preserve_text(directory.path().join("callback-error.svg"))
+        .is_err());
+    assert!(calls.load(Ordering::SeqCst) > materialized);
+    fail.store(false, Ordering::SeqCst);
+    let before = calls.load(Ordering::SeqCst);
+    assert!(plot
+        .svg_preserve_text(directory.path().join("missing/new-render.svg"))
+        .is_err());
+    assert!(calls.load(Ordering::SeqCst) > before);
+    let before = calls.load(Ordering::SeqCst);
+    plot.svg_preserve_text(directory.path().join("new-render.svg"))
+        .unwrap();
+    assert!(calls.load(Ordering::SeqCst) > before);
+    let edited = plot.clone().title("Later configuration");
+    edited
+        .svg_preserve_text(directory.path().join("edited.svg"))
+        .unwrap();
+    output
+        .svg_preserve_text(directory.path().join("still-frozen.svg"))
+        .unwrap();
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(directory.path().join("still-frozen.svg")).unwrap()
+    );
+}
+
+#[test]
+fn canvas_exports_and_failed_placements_preserve_configuration_copies_and_frozen_outputs() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut canvas = Canvas::grid(1, 1).unwrap();
+    canvas.place_panel(0, 0, 1, 1, plot(), false).unwrap();
+    let original = canvas.clone();
+    let first = directory.path().join("first.svg");
+    let output = canvas.svg_preserve_text(&first).unwrap();
+    assert!(canvas.place_panel(0, 0, 0, 1, plot(), true).is_err());
+    assert!(canvas.place_panel(0, 0, 1, 1, plot(), false).is_err());
+    assert!(canvas
+        .svg_preserve_text(directory.path().join("missing/failure.svg"))
+        .is_err());
+    canvas
+        .svg_preserve_text(directory.path().join("unchanged.svg"))
+        .unwrap();
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(directory.path().join("unchanged.svg")).unwrap()
+    );
+    canvas
+        .place_panel(0, 0, 1, 1, plot().title("Replacement capture"), true)
+        .unwrap();
+    canvas
+        .svg_preserve_text(directory.path().join("replacement.svg"))
+        .unwrap();
+    original
+        .svg_preserve_text(directory.path().join("original.svg"))
+        .unwrap();
+    assert!(output
+        .svg(directory.path().join("missing/replay.svg"))
+        .is_err());
+    output
+        .svg_preserve_text(directory.path().join("replay.svg"))
+        .unwrap();
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(directory.path().join("original.svg")).unwrap()
+    );
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(directory.path().join("replay.svg")).unwrap()
+    );
+    let changed = std::fs::read_to_string(directory.path().join("replacement.svg")).unwrap();
+    assert!(changed.contains("Replacement capture") && !changed.contains("Selectable scene text"));
+}
+
+#[test]
 fn guide_ellipsis_retains_original_metadata_and_replays_one_selected_view_across_outputs() {
     use lichtung_plot::{
         CategoryValues, GuideTextRole, TextBounds, TextElision, TextEllipsis, TextFailure,

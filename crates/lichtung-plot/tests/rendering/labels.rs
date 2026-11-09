@@ -47,7 +47,7 @@ fn scatter_legend_omits_hues_from_discarded_nonfinite_rows() {
     .unwrap();
 }
 
-fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
+fn render<K: lichtung_plot::kind::Marker>(plot: impl std::borrow::Borrow<Plot<K>>) -> String {
     let directory = std::env::temp_dir().join(format!(
         "lichtung-labels-{}-{}",
         std::process::id(),
@@ -55,7 +55,7 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     ));
     std::fs::create_dir_all(&directory).unwrap();
     let output = directory.join("plot.svg");
-    plot.svg_preserve_text(&output).unwrap();
+    plot.borrow().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

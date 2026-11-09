@@ -396,6 +396,12 @@ The separate data-bearing methods above bind fallibly; root native methods remai
 unchanged. Unsupported target/family setters remain compile-time unavailable;
 native data/unit/geometry/facet restrictions remain native preflight failures.
 
+Terminal exports borrow the frontend/native configuration and perform a fresh
+render per call. The retained source is not reread; conversion into native Plot
+still explicitly ends its lookup lifetime. Native Canvas copies and borrowed
+failure-safe placement, and shared frozen Output handles/publication, remain the
+same native capabilities through the unrestricted re-exports.
+
 The local forwarding inventories include native Text-slot clearing with the same
 family bounds, and PointLayerAdapter forwards legend-label style/layout clearing.
 They do not reconstruct owners or store an adapter-specific appearance override.

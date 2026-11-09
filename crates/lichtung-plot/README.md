@@ -31,7 +31,9 @@ are maintained at the workspace root, not copied into this package.
 
 `Plot` and `Canvas` derive dimensions from their content by default. Explicit
 `width`, `max_width` and `size` requests control the canonical figure dimensions.
-Terminal methods return an opaque frozen `Output`; further SVG or PNG publication
+Terminal methods borrow the configuration and return an opaque frozen `Output`;
+each call renders anew. Output clones share one scene and remain usable after
+publication failure; further SVG or PNG publication
 uses that same scene without repeating scientific preparation, font discovery or
 layout. SVG methods append `.svg` and PNG methods append `.png` unless the final
 filename already has the matching suffix.

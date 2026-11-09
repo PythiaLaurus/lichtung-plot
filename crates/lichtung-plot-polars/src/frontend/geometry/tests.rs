@@ -5,7 +5,7 @@ use crate::{
     HistogramKde, HistogramStat, NumericValues, Plot, Raincloud,
 };
 
-fn render<K: kind::Marker>(plot: Plot<K>, case: &str) -> String {
+fn render<K: kind::Marker>(plot: &Plot<K>, case: &str) -> String {
     let path = std::env::temp_dir().join(format!(
         "lichtung-polars-geometry-{}-{case}.svg",
         std::process::id()
@@ -88,8 +88,8 @@ fn histogram_geometry_snapshots_chunked_components_and_retains_only_bins_lookup(
         .line_alpha_single(180u8)
         .unwrap();
     assert_eq!(
-        render(native, "selected"),
-        render(expected.into(), "direct")
+        render(&native, "selected"),
+        render(&expected.into(), "direct")
     );
 }
 
@@ -185,7 +185,7 @@ fn raincloud_geometry_decodes_independent_keys_and_keeps_original_point_alpha_sc
     let native: Plot<kind::Raincloud> = adapted.labels(crate::Labels::raw()).into();
     drop(summary);
     native.preflight().unwrap();
-    let svg = render(native, "independent-keys");
+    let svg = render(&native, "independent-keys");
     assert!(svg.contains("category") && svg.contains("value") && svg.contains("cohort"));
 }
 
@@ -284,7 +284,7 @@ fn sample_kde_source_is_not_retained_and_stat_samples_bins_are_unchanged() {
         y: NumericValues::new("y", [0.1, 0.2, 0.1]),
     }));
     assert_eq!(
-        render(adapted, "sample-kde"),
-        render(expected, "sample-native")
+        render(&adapted, "sample-kde"),
+        render(&expected, "sample-native")
     );
 }

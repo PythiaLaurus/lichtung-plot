@@ -1,7 +1,7 @@
 //! `lichtung-plot::builder` — the native `Plot` builder API.
 //!
 //! Semantic constructors accept immutable Rust-native values. Configuration is
-//! chained before `.svg(path)` or `.png(path)` consumes the plot.
+//! chained before `.svg(path)` or `.png(path)` borrows the configured plot.
 //!
 //! Significance annotations are caller-owned display inputs. The renderer never
 //! performs hypothesis tests or adjusts p-values.

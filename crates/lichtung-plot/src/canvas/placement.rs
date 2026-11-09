@@ -1,5 +1,7 @@
 //! Canonical payload/footprint owners, with a derived slot-to-anchor lookup.
 
+use std::sync::Arc;
+
 use crate::{Error, Plot, TextPanel};
 
 #[cfg(test)]
@@ -25,7 +27,7 @@ impl Footprint {
 
 #[derive(Clone)]
 pub(super) enum Payload {
-    Plot(Box<Plot>),
+    Plot(Arc<Plot>),
     Text(TextPanel),
 }
 
@@ -137,7 +139,7 @@ impl Placements {
         }
         let anchor = footprint.row * self.columns + footprint.column;
         if let Payload::Plot(plot) = &mut payload {
-            plot.canvas_owner = Some(crate::data::source::source_arc([
+            Arc::make_mut(plot).canvas_owner = Some(crate::data::source::source_arc([
                 self.rows,
                 self.columns,
                 footprint.row,

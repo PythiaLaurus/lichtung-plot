@@ -13,6 +13,13 @@ text and an ordered fallback declaration, without embedding font data. Its viewe
 needs suitable fonts. Both forms come from the same frozen Output; another
 publication does not repeat statistics, font discovery, callbacks or layout.
 
+Plot/Canvas exports borrow their configuration, which stays editable and usable
+after success or failure. Calling an export twice performs two new renders; only
+explicit Output reuse replays a frozen result. Output is cloneable: handles share
+one immutable scene. Publishers borrow the handle and return a shared handle for
+chaining, so conversion or I/O failure does not consume the original. Later
+configuration edits and callback external-state changes do not alter that scene.
+
 PNG rasterizes that outlined scene. `.png` uses 300 DPI/balanced compression with
 physical-density metadata. `.png_preview` uses canonical CSS-pixel dimensions,
 balanced compression and no density metadata. `.png_with_options` selects exact

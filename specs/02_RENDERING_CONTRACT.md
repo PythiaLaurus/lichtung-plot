@@ -2,7 +2,8 @@
 
 Canvas::panel_span owns one positive checked rectangular footprint with its sole
 anchor at the top-left coordinate. Placement rejects empty/overflowing/out-of-grid
-footprints and any Plot/TextPanel overlap in either insertion order. Covered slots
+footprints and, for strict insertion, any Plot/TextPanel overlap in either order.
+Explicit set_panel/set_panel_span replace whole intersecting owners. Covered slots
 are occupied, not repeated payloads. The parent supplies the entire rectangle,
 including intervening track gaps; standalone child requests do not override it.
 Natural, exact-width/content-height and exact-pair roots share this allocation path.
@@ -394,15 +395,19 @@ serialization and reserve canonical scene/SVG/scratch storage before one balance
 final Null validation. Count/capture are not extra Null lifecycles. Preflight uses
 the same preparation/planning/validation path without publishing an artifact.
 
-Terminal Plot/Canvas calls consume the owner, render one canonical scene through
+Terminal Plot/Canvas calls borrow the owner, render one canonical scene through
 one balanced concrete lifecycle, publish one file and return Output. Canvas uses
 one begin/end for all panels. Scientific marks use their panel clip; required
-layout ink remains separately contained. Frozen replay does not measure, shape,
+layout ink remains separately contained. Each call is a new render operation, not
+implicit reuse of an earlier Output, and failure does not consume configuration.
+Frozen replay does not measure, shape,
 format, prepare statistics, reread sources, change domains or choose layout again.
 
-Output publications consume/reuse the exact retained scene. No SVG text mode or
-PNG option is stored. Chained calls are independent same-scene publications, not
-one multi-file transaction. A failed later publication leaves earlier successes.
+Output owns a shared immutable scene. Clone and borrowed publications retain that
+same scene, returning a shared output handle for chaining; conversion/I/O failure
+leaves the original Output usable. No SVG text mode or PNG option is stored.
+Chained calls are independent same-scene publications, not one multi-file
+transaction. A failed later publication leaves earlier successes.
 
 ## Fonts And Determinism
 

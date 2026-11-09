@@ -43,10 +43,13 @@ fn identity_interval_plot(data: &IntervalData, horizontal: bool) -> Plot {
     }
 }
 
-fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(
+    plot: impl std::borrow::Borrow<Plot<K>>,
+    name: &str,
+) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
-    plot.svg_preserve_text(&output).unwrap();
+    plot.borrow().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

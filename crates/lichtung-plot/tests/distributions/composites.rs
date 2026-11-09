@@ -30,12 +30,13 @@ fn histogram_plot(values: &[f64], kde: HistogramKde) -> Plot<lichtung_plot::kind
 }
 
 fn render<K: lichtung_plot::kind::Marker>(
-    plot: Plot<K>,
+    plot: impl std::borrow::Borrow<Plot<K>>,
     name: &str,
 ) -> Result<String, lichtung_plot::Error> {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
+        .borrow()
         .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();
