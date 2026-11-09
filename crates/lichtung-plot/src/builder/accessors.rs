@@ -887,11 +887,11 @@ impl<K: crate::kind::Marker> Plot<K> {
             PlotKind::Qq => Some(("Theoretical normal quantiles", false)),
             PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
                 || x_name,
-                |input| Some((input.dimensions.value.as_str(), true)),
+                |input| Some((input.value_dimension.as_str(), true)),
             ),
             PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
                 || x_name,
-                |input| Some((input.dimensions.category.as_str(), true)),
+                |input| Some((input.category_dimension.as_str(), true)),
             ),
             PlotKind::Matrix => None,
             _ => x_name,
@@ -908,11 +908,11 @@ impl<K: crate::kind::Marker> Plot<K> {
                     HistogramStat::Probability => Some(("Probability", false)),
                     HistogramStat::Density => Some(("Density", false)),
                 },
-                |input| Some((input.dimensions.density.as_str(), true)),
+                |input| Some((input.density_dimension.as_str(), true)),
             ),
             PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
                 || y_name,
-                |input| Some((input.dimensions.value.as_str(), true)),
+                |input| Some((input.value_dimension.as_str(), true)),
             ),
             PlotKind::Density => Some(("Density", false)),
             PlotKind::Matrix => None,
@@ -1008,7 +1008,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn hue_dimension_key(&self) -> Option<&str> {
         self.hue_name().or_else(|| {
             self.raincloud_geometry_input()
-                .and_then(|input| input.dimensions.hue.as_deref())
+                .and_then(|input| input.hue_dimension.as_deref())
         })
     }
 

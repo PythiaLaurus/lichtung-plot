@@ -79,10 +79,7 @@ pub use builder::Plot;
 pub use canvas::{Canvas, CanvasCategoryLabels, TextPanel};
 pub use error::{Error, Result};
 pub use font::canonical::{FontFamily, FontStack, GenericFontFamily};
-pub use geometry::{
-    HistogramBin, HistogramDimensions, HistogramGeometry, HistogramKdePoint, HistogramRug,
-    RaincloudDensityPoint, RaincloudDimensions, RaincloudGeometry, RaincloudGroup, RaincloudPoint,
-};
+pub use geometry::{HistogramGeometry, RaincloudGeometry};
 pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};

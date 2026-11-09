@@ -1,8 +1,5 @@
 use super::*;
-use lichtung_plot::{
-    Error, HistogramBin, HistogramComposite, HistogramDimensions, HistogramGeometry,
-    HistogramInput, HistogramKdePoint, HistogramRug,
-};
+use lichtung_plot::{Error, HistogramComposite, HistogramGeometry, HistogramInput};
 
 fn assert_collapse<K: lichtung_plot::kind::Marker>(plot: Plot<K>, context: &str) {
     let error = plot.preflight().unwrap_err();
@@ -125,31 +122,16 @@ fn bar_spans_reject_cumulative_precision_loss_and_auto_domain_collapse() {
 
 fn histogram_geometry(edge: f64, density: f64) -> HistogramGeometry {
     HistogramGeometry {
-        dimensions: HistogramDimensions {
-            value: "value".into(),
-            density: "density".into(),
-        },
-        bins: vec![
-            HistogramBin {
-                lower: 0.0,
-                upper: edge,
-                density,
-            },
-            HistogramBin {
-                lower: edge,
-                upper: 1.0,
-                density: 1.0,
-            },
-        ],
-        kde: vec![
-            HistogramKdePoint { x: 0.0, y: 0.5 },
-            HistogramKdePoint { x: 1.0, y: 0.5 },
-        ],
-        rugs: vec![HistogramRug {
-            x: 0.75,
-            baseline: 0.0,
-            top: 0.1,
-        }],
+        value_dimension: "value".into(),
+        density_dimension: "density".into(),
+        bin_lower: NumericValues::new("lower", [0.0, edge]),
+        bin_upper: NumericValues::new("upper", [edge, 1.0]),
+        bin_density: NumericValues::new("density", [density, 1.0]),
+        kde_x: NumericValues::new("x", [0.0, 1.0]),
+        kde_y: NumericValues::new("density", [0.5, 0.5]),
+        rug_x: NumericValues::new("x", [0.75]),
+        rug_baseline: NumericValues::new("baseline", [0.0]),
+        rug_top: NumericValues::new("top", [0.1]),
     }
 }
 
@@ -193,7 +175,7 @@ fn histogram_spans_preserve_zero_density_and_reject_collapsed_width_or_positive_
         "histogram polygon height",
     );
     let mut geometry = histogram_geometry(0.5, 0.5);
-    geometry.rugs[0].top = 1e-9;
+    geometry.rug_top = NumericValues::new("top", [1e-9]);
     assert_collapse(
         Plot::histogram(HistogramInput::geometry(geometry)).y_limits(0.0, 1.0),
         "histogram rug interval",
@@ -440,32 +422,22 @@ fn supplied_raincloud_preserves_zero_quartiles_but_not_collapsed_positive_body_o
     let plot = |width, spread: f64| {
         Plot::raincloud(lichtung_plot::RaincloudInput::geometry(
             lichtung_plot::RaincloudGeometry {
-                dimensions: lichtung_plot::RaincloudDimensions {
-                    category: "category".into(),
-                    value: "value".into(),
-                    hue: None,
-                },
-                groups: vec![lichtung_plot::RaincloudGroup {
-                    category: "a".into(),
-                    hue: None,
-                    density: vec![
-                        lichtung_plot::RaincloudDensityPoint {
-                            y: -1.0,
-                            normalized_width: width,
-                        },
-                        lichtung_plot::RaincloudDensityPoint {
-                            y: 1.0,
-                            normalized_width: width,
-                        },
-                    ],
-                    q1: -spread,
-                    median: 0.0,
-                    q3: spread,
-                    points: vec![lichtung_plot::RaincloudPoint {
-                        y: 0.0,
-                        normalized_strip: 0.5,
-                    }],
-                }],
+                category_dimension: "category".into(),
+                value_dimension: "value".into(),
+                hue_dimension: None,
+                category: CategoryValues::new("category", ["a"]).unwrap(),
+                hue: None,
+                q1: NumericValues::new("q1", [-spread]),
+                median: NumericValues::new("median", [0.0]),
+                q3: NumericValues::new("q3", [spread]),
+                density_category: CategoryValues::new("category", ["a"; 2]).unwrap(),
+                density_hue: None,
+                density_y: NumericValues::new("y", [-1.0, 1.0]),
+                normalized_width: NumericValues::new("width", [width; 2]),
+                point_category: CategoryValues::new("category", ["a"]).unwrap(),
+                point_hue: None,
+                point_y: NumericValues::new("y", [0.0]),
+                normalized_strip: NumericValues::new("strip", [0.5]),
             },
         ))
         .y_limits(-1.0, 1.0)

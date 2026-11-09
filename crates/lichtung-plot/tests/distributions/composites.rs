@@ -1,9 +1,8 @@
 use lichtung_plot::{
-    Canvas, CanvasLegendPolicy, CategoricalColorMap, CategoricalColorScale, FacetSpec,
-    HistogramBin, HistogramBins, HistogramComposite, HistogramDimensions, HistogramGeometry,
-    HistogramInput, HistogramKde, HistogramKdePoint, HistogramRug, HistogramStat, Labels,
-    OpaqueColor, Plot, RaincloudDensityPoint, RaincloudDimensions, RaincloudGeometry,
-    RaincloudGroup, RaincloudInput, RaincloudPoint, Significance, SignificanceMark, SourceRows,
+    Canvas, CanvasLegendPolicy, CategoricalColorMap, CategoricalColorScale, CategoryValues,
+    FacetSpec, HistogramBins, HistogramComposite, HistogramGeometry, HistogramInput, HistogramKde,
+    HistogramStat, Labels, NumericValues, OpaqueColor, Plot, RaincloudGeometry, RaincloudInput,
+    Significance, SignificanceMark, SourceRows,
 };
 
 use super::{parse_circle_bounds, parse_polygon_bounds, unique_dir};
@@ -44,90 +43,77 @@ fn render<K: lichtung_plot::kind::Marker>(
 }
 
 fn explicit_raincloud() -> RaincloudGeometry {
+    raincloud_geometry(&["Control"], &["Control"])
+}
+
+fn raincloud_geometry(category: &[&str], hue: &[&str]) -> RaincloudGeometry {
     RaincloudGeometry {
-        dimensions: RaincloudDimensions {
-            category: "category".into(),
-            value: "value".into(),
-            hue: Some("condition".into()),
-        },
-        groups: vec![RaincloudGroup {
-            category: "Control".into(),
-            hue: Some("Control".into()),
-            density: vec![
-                RaincloudDensityPoint {
-                    y: 0.0,
-                    normalized_width: 0.0,
-                },
-                RaincloudDensityPoint {
-                    y: 1.0,
-                    normalized_width: 1.0,
-                },
-                RaincloudDensityPoint {
-                    y: 2.0,
-                    normalized_width: 0.0,
-                },
-            ],
-            q1: 0.5,
-            median: 1.0,
-            q3: 1.5,
-            points: vec![
-                RaincloudPoint {
-                    y: 0.5,
-                    normalized_strip: 0.0,
-                },
-                RaincloudPoint {
-                    y: 1.5,
-                    normalized_strip: 1.0,
-                },
-            ],
-        }],
+        category_dimension: "category".into(),
+        value_dimension: "value".into(),
+        hue_dimension: Some("condition".into()),
+        category: CategoryValues::new("category", category.iter().copied()).unwrap(),
+        hue: Some(CategoryValues::new("condition", hue.iter().copied()).unwrap()),
+        q1: NumericValues::new("q1", vec![0.5; category.len()]),
+        median: NumericValues::new("median", vec![1.0; category.len()]),
+        q3: NumericValues::new("q3", vec![1.5; category.len()]),
+        density_category: CategoryValues::new(
+            "category",
+            category
+                .iter()
+                .flat_map(|value| std::iter::repeat_n(*value, 3)),
+        )
+        .unwrap(),
+        density_hue: Some(
+            CategoryValues::new(
+                "condition",
+                hue.iter().flat_map(|value| std::iter::repeat_n(*value, 3)),
+            )
+            .unwrap(),
+        ),
+        density_y: NumericValues::new("y", category.iter().flat_map(|_| [0.0, 1.0, 2.0])),
+        normalized_width: NumericValues::new(
+            "width",
+            category.iter().flat_map(|_| [0.0, 1.0, 0.0]),
+        ),
+        point_category: CategoryValues::new(
+            "category",
+            category
+                .iter()
+                .flat_map(|value| std::iter::repeat_n(*value, 2)),
+        )
+        .unwrap(),
+        point_hue: Some(
+            CategoryValues::new(
+                "condition",
+                hue.iter().flat_map(|value| std::iter::repeat_n(*value, 2)),
+            )
+            .unwrap(),
+        ),
+        point_y: NumericValues::new("y", category.iter().flat_map(|_| [0.5, 1.5])),
+        normalized_strip: NumericValues::new("strip", category.iter().flat_map(|_| [0.0, 1.0])),
     }
 }
 
 fn explicit_histogram() -> HistogramGeometry {
     HistogramGeometry {
-        dimensions: HistogramDimensions {
-            value: "value".into(),
-            density: "density".into(),
-        },
-        bins: vec![
-            HistogramBin {
-                lower: 0.0,
-                upper: 1.0,
-                density: 0.4,
-            },
-            HistogramBin {
-                lower: 1.0,
-                upper: 2.0,
-                density: 0.4,
-            },
-        ],
-        kde: vec![
-            HistogramKdePoint { x: 0.0, y: 0.1 },
-            HistogramKdePoint { x: 1.0, y: 0.2 },
-            HistogramKdePoint { x: 2.0, y: 0.1 },
-        ],
-        rugs: vec![HistogramRug {
-            x: 1.0,
-            baseline: 0.1,
-            top: 0.2,
-        }],
+        value_dimension: "value".into(),
+        density_dimension: "density".into(),
+        bin_lower: NumericValues::new("lower", [0.0, 1.0]),
+        bin_upper: NumericValues::new("upper", [1.0, 2.0]),
+        bin_density: NumericValues::new("density", [0.4, 0.4]),
+        kde_x: NumericValues::new("x", [0.0, 1.0, 2.0]),
+        kde_y: NumericValues::new("density", [0.1, 0.2, 0.1]),
+        rug_x: NumericValues::new("x", [1.0]),
+        rug_baseline: NumericValues::new("baseline", [0.1]),
+        rug_top: NumericValues::new("top", [0.2]),
     }
 }
 
-fn hued_raincloud_geometry() -> RaincloudGeometry {
-    let mut geometry = explicit_raincloud();
-    geometry.dimensions = RaincloudDimensions {
-        category: "condition".into(),
-        value: "score".into(),
-        hue: Some("treatment".into()),
-    };
-    geometry.groups[0].category = "control".into();
-    geometry.groups[0].hue = Some("control".into());
-    let mut active = geometry.groups[0].clone();
-    active.category = "active".into();
-    active.hue = Some("active".into());
-    geometry.groups.push(active);
+fn hued_raincloud_geometry(categories: &[&str]) -> RaincloudGeometry {
+    let mut geometry = raincloud_geometry(categories, categories);
+    geometry.category_dimension = "condition".into();
+    geometry.value_dimension = "score".into();
+    geometry.hue_dimension = Some("treatment".into());
     geometry
 }
 
@@ -170,26 +156,19 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
     let values = [0.0_f64, 0.5, 1.5, 2.0];
     let sample = histogram_plot(
         &values,
-        HistogramKde::Precomputed(vec![
-            HistogramKdePoint { x: 0.0, y: 0.5 },
-            HistogramKdePoint { x: 2.0, y: 0.5 },
-        ]),
+        HistogramKde::Precomputed {
+            x: NumericValues::new("x", [0.0, 2.0]),
+            y: NumericValues::new("density", [0.5, 0.5]),
+        },
     );
     let rug_top = 0.5 * 0.035;
     let mut supplied = explicit_histogram();
-    supplied.bins.iter_mut().for_each(|bin| bin.density = 0.5);
-    supplied.kde = vec![
-        HistogramKdePoint { x: 0.0, y: 0.5 },
-        HistogramKdePoint { x: 2.0, y: 0.5 },
-    ];
-    supplied.rugs = values
-        .into_iter()
-        .map(|x| HistogramRug {
-            x,
-            baseline: 0.0,
-            top: rug_top,
-        })
-        .collect();
+    supplied.bin_density = NumericValues::new("density", [0.5, 0.5]);
+    supplied.kde_x = NumericValues::new("x", [0.0, 2.0]);
+    supplied.kde_y = NumericValues::new("density", [0.5, 0.5]);
+    supplied.rug_x = NumericValues::new("x", values);
+    supplied.rug_baseline = NumericValues::new("baseline", [0.0; 4]);
+    supplied.rug_top = NumericValues::new("top", [rug_top; 4]);
     let rendered = render(
         Plot::histogram(HistogramInput::geometry(supplied))
             .x_tick_format(format.clone())
@@ -221,8 +200,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
     ))
     .series(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
     .categorical_color_scale(CategoricalColorScale::from_map(colors.clone()));
-    let mut input = hued_raincloud_geometry();
-    input.groups.remove(0);
+    let input = hued_raincloud_geometry(&["active"]);
     let supplied = Plot::raincloud(RaincloudInput::geometry(input))
         .categorical_color_scale(CategoricalColorScale::from_map(colors));
     let canvas = Canvas::grid(1, 2)
@@ -245,9 +223,9 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
 
 #[test]
 fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backend_begin() {
-    let mut input = hued_raincloud_geometry();
-    input.groups[1].category = input.groups[0].category.clone();
-    input.groups[1].hue = input.groups[0].hue.clone();
+    let mut input = hued_raincloud_geometry(&["control", "active"]);
+    input.category = CategoryValues::new("condition", ["control", "control"]).unwrap();
+    input.hue = Some(CategoryValues::new("treatment", ["control", "control"]).unwrap());
     assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
@@ -301,7 +279,7 @@ fn precomputed_raincloud_renders_without_sample_columns_and_maps_strip_coordinat
 #[test]
 fn precomputed_raincloud_rejects_out_of_range_strip_coordinate_before_backend_begin() {
     let mut input = explicit_raincloud();
-    input.groups[0].points[0].normalized_strip = 1.1;
+    input.normalized_strip = NumericValues::new("strip", [1.1, 1.0]);
     assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
@@ -312,7 +290,7 @@ fn precomputed_raincloud_rejects_out_of_range_strip_coordinate_before_backend_be
 #[test]
 fn precomputed_raincloud_rejects_nonincreasing_density_before_backend_begin() {
     let mut input = explicit_raincloud();
-    input.groups[0].density[1].y = 0.0;
+    input.density_y = NumericValues::new("y", [0.0, 0.0, 2.0]);
     assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
@@ -323,7 +301,7 @@ fn precomputed_raincloud_rejects_nonincreasing_density_before_backend_begin() {
 #[test]
 fn precomputed_histogram_rejects_discontinuous_bins_before_backend_begin() {
     let mut input = explicit_histogram();
-    input.bins[1].lower = 1.1;
+    input.bin_lower = NumericValues::new("lower", [0.0, 1.1]);
     assert!(Plot::histogram(HistogramInput::geometry(input))
         .preflight()
         .unwrap_err()
@@ -404,10 +382,10 @@ fn histogram_composite_requires_density_before_backend_begin() {
 fn precomputed_kde_rejects_nonincreasing_points_before_backend_begin() {
     let error = histogram_plot(
         &[0.0, 1.0, 2.0],
-        HistogramKde::Precomputed(vec![
-            HistogramKdePoint { x: 1.0, y: 0.2 },
-            HistogramKdePoint { x: 0.5, y: 0.3 },
-        ]),
+        HistogramKde::Precomputed {
+            x: NumericValues::new("x", [1.0, 0.5]),
+            y: NumericValues::new("density", [0.2, 0.3]),
+        },
     )
     .preflight()
     .unwrap_err();
@@ -418,13 +396,10 @@ fn precomputed_kde_rejects_nonincreasing_points_before_backend_begin() {
 fn precomputed_kde_rejects_nonfinite_coordinates_before_backend_begin() {
     let error = histogram_plot(
         &[0.0, 1.0, 2.0],
-        HistogramKde::Precomputed(vec![
-            HistogramKdePoint {
-                x: f64::NAN,
-                y: 0.2,
-            },
-            HistogramKdePoint { x: 2.0, y: 0.3 },
-        ]),
+        HistogramKde::Precomputed {
+            x: NumericValues::new("x", [f64::NAN, 2.0]),
+            y: NumericValues::new("density", [0.2, 0.3]),
+        },
     )
     .preflight()
     .unwrap_err();
@@ -436,10 +411,10 @@ fn precomputed_kde_rejects_nonfinite_coordinates_before_backend_begin() {
 fn precomputed_kde_rejects_negative_density_before_backend_begin() {
     let error = histogram_plot(
         &[0.0, 1.0, 2.0],
-        HistogramKde::Precomputed(vec![
-            HistogramKdePoint { x: 0.0, y: -0.1 },
-            HistogramKdePoint { x: 2.0, y: 0.3 },
-        ]),
+        HistogramKde::Precomputed {
+            x: NumericValues::new("x", [0.0, 2.0]),
+            y: NumericValues::new("density", [-0.1, 0.3]),
+        },
     )
     .preflight()
     .unwrap_err();

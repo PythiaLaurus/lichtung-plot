@@ -23,9 +23,12 @@ alias 覆盖展示标签。它们都不改变科学身份，完整类别域仍�
 - `BarInput::estimates`、`estimates_with_error_bars` 接收调用者给定的估计及边界，
   不自行赋予置信区间或可信区间含义。
 - `HistogramInput`、`RaincloudInput` 在构造时选择样本或完整给定几何，之后不能混用。
+  给定几何使用平铺具名列：Histogram 的 bins、KDE、rug 各自对齐，Raincloud 的摘要、
+  密度、散点各自对齐。Raincloud 通过原始 category／hue 键匹配摘要组，摘要顺序决定
+  显示顺序；散点透明度对应原始散点行，不按归组后的顺序重新编号。
 - 样本直方图可以保留自己的分箱和 rug，同时通过
-  `HistogramComposite::KdeAndRug(HistogramKde::Precomputed(...))` 添加调用者计算的 KDE；
-  坐标使用具名的 `HistogramKdePoint`。`HistogramStat::Density` 选择展示的统计量。
+  `HistogramComposite::KdeAndRug(HistogramKde::Precomputed { x, y })` 添加调用者计算的 KDE；
+  坐标使用对齐的 `NumericValues` 列。`HistogramStat::Density` 选择展示的统计量。
 
 绘图器可以计算明确约定的展示统计，但不选择假设检验。请将调整后的 p 值作为
 `Significance` 展示数据传入。下面的完整示例构造显式两两比较，本身不进行推断检验：

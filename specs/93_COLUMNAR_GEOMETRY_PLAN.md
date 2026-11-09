@@ -2,8 +2,9 @@
 
 ## Status And Authority
 
-This is a selected refactor direction and implementation plan, not delivered Rust
-or Python behavior. Current scientific and adapter behavior remains defined by the
+The core columnar geometry API and its coupled consumers are delivered. The
+adapter column-binding surfaces remain an implementation plan; no Python binding
+is delivered. Current scientific and adapter behavior remains defined by the
 [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). Update those current contracts with working
 code, not in anticipation of it.
@@ -13,6 +14,12 @@ delivery and lifecycle. The [Python constructor plan](92_PYTHON_CONSTRUCTORS_PLA
 owns Python call forms. This document owns the prerequisite core/adapter changes.
 No binding, new dependency, network access or asset provisioning is authorized by
 recording this plan.
+
+| Objective | Status |
+| --- | --- |
+| Core geometry, sample-owned supplied KDE and coupled consumers | Delivered: flat inputs, six alignment domains, raw-string membership, original point-row alpha, logical equality and removal of nested public types/callers. Focused geometry, distribution, alpha/guide, degeneracy, layout and KDE doctest witnesses plus strict workspace Clippy passed. |
+| Adapter direct/independent-source column inputs | Pending; current frontends still pass through the complete current native geometry. Native re-exports already expose the flat core API. |
+| Integrated adapter docs/Book/archive closure | Pending with the adapter surface; no Python bridge, ownership or distribution verification is implied by the core work. |
 
 ## Selected Scope
 
@@ -43,8 +50,8 @@ Dimensions/Group/Bin/Point payload trees or fixed-string-key maps.
 
 ## Flat Core Inputs
 
-Retain the two top-level geometry names and replace their fields with the following
-planned shape. Reuse existing owned `NumericValues`/`CategoryValues`, including
+The current core retains the two top-level geometry names with the following flat
+shape. It reuses existing owned `NumericValues`/`CategoryValues`, including
 their names, validity and immutable payload sharing; do not add geometry-column
 wrappers or a public selector framework.
 
@@ -105,7 +112,8 @@ design task; this refactor does not silently select new defaults.
 
 ### Remove Nested Public Payload Types
 
-Remove the definitions, re-exports and all repository callers of:
+The definitions, re-exports and repository callers of these public types have been
+removed:
 
 - `HistogramDimensions`, `HistogramBin`, `HistogramKdePoint`, `HistogramRug`.
 - `RaincloudDimensions`, `RaincloudGroup`, `RaincloudDensityPoint`, `RaincloudPoint`.
@@ -115,8 +123,8 @@ API automatically. Do not retain local shadow/compatibility types.
 
 ### Migrate Sample-Owned Precomputed KDE Too
 
-`HistogramKdePoint` also serves the supplied KDE over sample-owned histogram bins
-and rugs. Replace that public point-vector form atomically with:
+The supplied KDE over sample-owned histogram bins and rugs now uses the same
+columnar principle, without its former public point-vector type:
 
 ```rust
 pub enum HistogramKde {
@@ -203,9 +211,8 @@ series/significance; flat input is not a new sample mode.
 
 ### Original Point Rows And Alpha
 
-Current supplied Raincloud preparation numbers points by concatenating nested
-groups. The flat representation must instead retain the original points-domain
-row index through grouping. Observation alpha/guide membership follows that row;
+Supplied Raincloud preparation retains the original points-domain row index
+through grouping. Observation alpha/guide membership follows that row;
 summary line/fill alpha remains keyed by canonical dimensions and group values.
 Reordering summary groups must not reassign point alpha. Histogram bin alpha
 continues to match exact lower/upper intervals, preserving rug duplicates/order.
@@ -290,6 +297,9 @@ without another KDE representation or a native point wrapper requirement.
 Start from the actual source owners:
 
 - [geometry](../crates/lichtung-plot/src/geometry.rs),
+  [Histogram validation](../crates/lichtung-plot/src/geometry/histogram.rs),
+  [Raincloud membership](../crates/lichtung-plot/src/geometry/raincloud.rs),
+  [geometry witnesses](../crates/lichtung-plot/src/geometry/validation_tests.rs),
   [closed inputs](../crates/lichtung-plot/src/input.rs),
   [exports](../crates/lichtung-plot/src/lib.rs),
   [KDE policy](../crates/lichtung-plot/src/spec.rs).
@@ -320,12 +330,12 @@ and ownership facilities exist.
 
 ### Core API And Coupled Consumers
 
-Replace both payloads and KDE together; migrate every directly affected library,
-test, example and document consumer of removed types so all targets still compile.
-The existing adapter pass-through may temporarily accept the new core payload
-until its own signature replacement, without an old/new core representation.
-Run focused core checks and strict workspace Clippy, then commit this logical API
-change before moving to the adapter input surface.
+Delivered together: both flat payloads, supplied KDE, validation/preparation,
+alpha/label consumers and all removed-type library/test/guide callers. The existing
+adapter pass-through accepts the current flat payload until its own signature
+replacement, without an old/new core representation. Focused core checks and
+strict workspace Clippy passed; retain these witnesses while implementing the
+adapter input surface.
 
 ### Both Adapter Input Surfaces
 
@@ -394,4 +404,5 @@ need source/link consistency and `git diff --check`, not Rust builds.
 
 Closure requires no remaining public deleted-type references or old native-payload
 frontend protocol, no compatibility re-exports and no private resurrection of the
-old input model. No implementation or test execution is claimed by this plan.
+old input model. Only the core delivery/evidence recorded above is complete;
+remaining adapter and Python implementation/verification is not claimed.

@@ -2,7 +2,7 @@
 
 use crate::layout::{Layout, PanelBox};
 use crate::significance::SignificancePlan;
-use crate::{HistogramKdePoint, NumericFormat};
+use crate::{NumericFormat, NumericValues};
 
 mod bar;
 mod categorical;
@@ -70,22 +70,46 @@ pub enum HistogramStat {
 }
 
 /// Density-curve source for an opt-in composite over sample-owned histogram input.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum HistogramKde {
     /// Compute a scale-robust Scott-bandwidth Gaussian KDE from the histogram sample.
     Internal,
-    /// Draw caller-computed points with named `x` and `y` coordinates in supplied order.
+    /// Draw caller-computed aligned x/y columns in supplied order.
     ///
     /// ```
-    /// use lichtung_plot::{HistogramKde, HistogramKdePoint};
+    /// use lichtung_plot::{HistogramKde, NumericValues};
     ///
-    /// let kde = HistogramKde::Precomputed(vec![
-    ///     HistogramKdePoint { x: 0.0, y: 0.1 },
-    ///     HistogramKdePoint { x: 1.0, y: 0.2 },
-    /// ]);
+    /// let kde = HistogramKde::Precomputed {
+    ///     x: NumericValues::new("x", [0.0, 1.0]),
+    ///     y: NumericValues::new("density", [0.1, 0.2]),
+    /// };
     /// # let _ = kde;
     /// ```
-    Precomputed(Vec<HistogramKdePoint>),
+    Precomputed {
+        /// Strictly increasing x coordinates within the sample-owned bin support.
+        x: NumericValues,
+        /// Nonnegative densities aligned with x.
+        y: NumericValues,
+    },
+}
+
+impl PartialEq for HistogramKde {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Internal, Self::Internal) => true,
+            (
+                Self::Precomputed { x, y },
+                Self::Precomputed {
+                    x: other_x,
+                    y: other_y,
+                },
+            ) => {
+                crate::geometry::numeric_equal(x, other_x)
+                    && crate::geometry::numeric_equal(y, other_y)
+            }
+            _ => false,
+        }
+    }
 }
 
 /// Optional layers composed on a histogram density axis.

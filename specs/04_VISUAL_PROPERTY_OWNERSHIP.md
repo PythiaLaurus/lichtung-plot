@@ -316,7 +316,8 @@ Every actual consumed unit resolves before fonts, including alpha zero. Unknown
 fields, wrong binding kind/schema, duplicate tuples, length mismatch or missing
 actual key is a Data error. Optional absent components still validate kind/schema
 but produce no actual members or explanation. Supplied Raincloud observations
-follow original group/point order and actual point count, not synthetic Plot rows.
+follow original points-domain row indices and actual point count through grouping,
+not summary display order or synthetic Plot rows.
 
 In the table, R means original observations/records, K keyed actual series or
 aggregates, B exact bins, S Single only. Every admitted target also accepts Theme

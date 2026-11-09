@@ -28,10 +28,14 @@ The complete domain is checked for ambiguous displayed names.
 - `BarInput::estimates` and `estimates_with_error_bars` accept caller-owned
   estimates/bounds without inventing confidence or credible semantics.
 - `HistogramInput` and `RaincloudInput` select samples or complete supplied
-  geometry at construction; these sources cannot be mixed later.
+  geometry at construction; these sources cannot be mixed later. Supplied geometry
+  uses flat named columns: Histogram aligns bins, KDE and rugs independently;
+  Raincloud aligns summary, density and points independently. Its raw category/hue
+  keys name summary groups, whose order controls display, while point alpha follows
+  original point rows rather than regrouped order.
 - A sample histogram can retain its bins/rug while adding a caller-computed KDE
-  through `HistogramComposite::KdeAndRug(HistogramKde::Precomputed(...))` and named
-  `HistogramKdePoint` coordinates. `HistogramStat::Density` changes the displayed statistic.
+  through `HistogramComposite::KdeAndRug(HistogramKde::Precomputed { x, y })`, using
+  aligned `NumericValues` columns. `HistogramStat::Density` changes the displayed statistic.
 
 The renderer may compute documented display statistics, but it does not select
 hypothesis tests. Supply adjusted p-values as `Significance` display data. The

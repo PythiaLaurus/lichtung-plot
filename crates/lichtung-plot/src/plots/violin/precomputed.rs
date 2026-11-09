@@ -6,12 +6,13 @@ use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::geometry::{category_value, finite};
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::{CategoryColors, ResolvedTheme};
-use crate::{Plot, RaincloudGroup};
+use crate::Plot;
 
 #[derive(Debug)]
 pub(crate) struct PreparedRaincloud {
@@ -86,11 +87,10 @@ pub(crate) fn intrinsic_body_minimum(
         &point,
         prepared.groups.iter().flat_map(|group| {
             group
-                .geometry
                 .points
                 .iter()
                 .zip(&group.alphas)
-                .map(|(point, &alpha)| (0.0, point.y, alpha))
+                .map(|(point, &alpha)| (0.0, point.0, alpha))
         }),
     )?;
     let point_numeric = point.map_or(0.0, |ink| ink.dimensions().1);
@@ -141,26 +141,19 @@ impl PreparedRaincloud {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let dimensions = &chart
-            .raincloud_geometry_input()
-            .ok_or_else(|| {
-                Error::Render("supplied Raincloud alpha guide has no dimensions".into())
-            })?
-            .dimensions;
+        let input = chart.raincloud_geometry_input().ok_or_else(|| {
+            Error::Render("supplied Raincloud alpha guide has no dimensions".into())
+        })?;
         let fill = theme.marks.get_fills().get_bodies().get_violin_body();
         let point = chart
             .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
         for group in &self.groups {
-            let category = (
-                dimensions.category.as_str(),
-                group.geometry.category.as_str(),
-            );
-            let unit =
-                if let Some(hue) = dimensions.hue.as_deref().zip(group.geometry.hue.as_deref()) {
-                    AlphaUnit::keyed(&[category, hue])?
-                } else {
-                    AlphaUnit::keyed(&[category])?
-                };
+            let category = (input.category_dimension.as_str(), group.category.as_str());
+            let unit = if let Some(hue) = input.hue_dimension.as_deref().zip(group.hue.as_deref()) {
+                AlphaUnit::keyed(&[category, hue])?
+            } else {
+                AlphaUnit::keyed(&[category])?
+            };
             guide.fill(
                 AlphaGlyphRole::Fill,
                 AlphaUnitKind::Aggregate,
@@ -226,7 +219,13 @@ impl PreparedRaincloud {
 
 #[derive(Debug)]
 struct PreparedRaincloudGroup {
-    geometry: RaincloudGroup,
+    category: String,
+    hue: Option<String>,
+    density: Vec<(f64, f64)>,
+    q1: f64,
+    median: f64,
+    q3: f64,
+    points: Vec<(f64, f64)>,
     alphas: Vec<ObservationAlpha>,
     line_alpha: Option<ResolvedAlpha>,
     fill_alpha: Option<ResolvedAlpha>,
@@ -241,12 +240,13 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
     let input = chart
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
-    let range = input.validate()?;
+    let membership = input.membership()?;
+    let range = membership.range;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let mut fields = Vec::new();
     crate::data::source::reserve_source(&mut fields, 2)?;
-    fields.push(input.dimensions.category.as_str());
-    fields.extend(input.dimensions.hue.as_deref());
+    fields.push(input.category_dimension.as_str());
+    fields.extend(input.hue_dimension.as_deref());
     let line_alpha = chart.prepare_scoped_alpha(
         AlphaTarget::Line,
         AlphaUnitKind::Aggregate,
@@ -259,61 +259,73 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
         &fields,
         chart.data(),
     )?;
-    let categories = crate::data::source::collect_source(
-        input
-            .groups
-            .iter()
-            .map(|group| crate::data::source::copy_source_string(&group.category)),
-    )?;
+    let categories = crate::data::source::collect_source((0..input.category.len()).map(|row| {
+        crate::data::source::copy_source_string(category_value(
+            &input.category,
+            row,
+            "raincloud category",
+        )?)
+    }))?;
     let mut hues = Vec::new();
-    let mut original_slot = 0_usize;
-    let groups = crate::data::source::collect_source(input.groups.iter().map(|group| {
-        if let Some(hue) = &group.hue {
-            #[cfg(test)]
-            HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
-            if !hues.iter().any(|level| level == hue) {
-                crate::data::source::reserve_source(&mut hues, 1)?;
-                hues.push(crate::data::source::copy_source_string(hue)?);
-            }
-        }
-        let alphas = crate::data::source::collect_source(group.points.iter().map(|_| {
-            let slot = original_slot;
-            original_slot = original_slot.checked_add(1).ok_or_else(|| {
-                Error::Data("supplied raincloud alpha point count overflow".into())
-            })?;
-            Ok(ObservationAlpha {
-                slot,
-                source_row: slot,
-                value: alpha.observation(slot, slot)?,
-            })
-        }))?;
-        Ok(PreparedRaincloudGroup {
-            alphas,
-            line_alpha: line_alpha.aggregate(
-                (&input.dimensions.category, &group.category),
-                input.dimensions.hue.as_deref().zip(group.hue.as_deref()),
-            )?,
-            fill_alpha: fill_alpha.aggregate(
-                (&input.dimensions.category, &group.category),
-                input.dimensions.hue.as_deref().zip(group.hue.as_deref()),
-            )?,
-            geometry: RaincloudGroup {
-                category: crate::data::source::copy_source_string(&group.category)?,
-                hue: group
+    let groups =
+        crate::data::source::collect_source(membership.groups.into_iter().enumerate().map(
+            |(row, rows)| {
+                let category = &categories[row];
+                let hue = input
                     .hue
                     .as_ref()
-                    .map(|hue| crate::data::source::copy_source_string(hue))
-                    .transpose()?,
-                density: crate::data::source::collect_source(
-                    group.density.iter().copied().map(Ok),
-                )?,
-                q1: group.q1,
-                median: group.median,
-                q3: group.q3,
-                points: crate::data::source::collect_source(group.points.iter().copied().map(Ok))?,
+                    .map(|hue| category_value(hue, row, "raincloud hue"))
+                    .transpose()?;
+                if let Some(hue) = hue {
+                    #[cfg(test)]
+                    HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
+                    if !hues.iter().any(|level| level == hue) {
+                        crate::data::source::reserve_source(&mut hues, 1)?;
+                        hues.push(crate::data::source::copy_source_string(hue)?);
+                    }
+                }
+                let alphas =
+                    crate::data::source::collect_source(rows.points.iter().map(|&slot| {
+                        Ok(ObservationAlpha {
+                            slot,
+                            source_row: slot,
+                            value: alpha.observation(slot, slot)?,
+                        })
+                    }))?;
+                Ok(PreparedRaincloudGroup {
+                    alphas,
+                    line_alpha: line_alpha.aggregate(
+                        (&input.category_dimension, category),
+                        input.hue_dimension.as_deref().zip(hue),
+                    )?,
+                    fill_alpha: fill_alpha.aggregate(
+                        (&input.category_dimension, category),
+                        input.hue_dimension.as_deref().zip(hue),
+                    )?,
+                    category: crate::data::source::copy_source_string(category)?,
+                    hue: hue
+                        .map(crate::data::source::copy_source_string)
+                        .transpose()?,
+                    density: crate::data::source::collect_source(rows.density.iter().map(
+                        |&row| {
+                            Ok((
+                                finite(&input.density_y, row, "raincloud density y")?,
+                                finite(&input.normalized_width, row, "raincloud width")?,
+                            ))
+                        },
+                    ))?,
+                    q1: finite(&input.q1, row, "raincloud q1")?,
+                    median: finite(&input.median, row, "raincloud median")?,
+                    q3: finite(&input.q3, row, "raincloud q3")?,
+                    points: crate::data::source::collect_source(rows.points.iter().map(|&row| {
+                        Ok((
+                            finite(&input.point_y, row, "raincloud point y")?,
+                            finite(&input.normalized_strip, row, "raincloud strip")?,
+                        ))
+                    }))?,
+                })
             },
-        })
-    }))?;
+        ))?;
     Ok(PreparedRaincloud {
         range,
         categories,
@@ -336,23 +348,11 @@ pub(super) fn measure_marks(
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (index, group) in input.groups.iter().enumerate() {
-        let color = colors.color(
-            group
-                .geometry
-                .hue
-                .as_deref()
-                .unwrap_or(&group.geometry.category),
-        )?;
+        let color = colors.color(group.hue.as_deref().unwrap_or(&group.category))?;
         project_cloud_and_summary(&layout, group, color, index, theme, &mut payload)?;
     }
     for (index, group) in input.groups.iter().enumerate() {
-        let color = colors.color(
-            group
-                .geometry
-                .hue
-                .as_deref()
-                .unwrap_or(&group.geometry.category),
-        )?;
+        let color = colors.color(group.hue.as_deref().unwrap_or(&group.category))?;
         project_strip(
             &layout,
             group,
@@ -378,7 +378,7 @@ fn project_cloud_and_summary(
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
 ) -> Result<(), Error> {
-    let group = &prepared.geometry;
+    let group = prepared;
     let center = index as f64 + 0.5;
     let width = 0.8;
     let baseline = center - width * 0.10;
@@ -387,14 +387,14 @@ fn project_cloud_and_summary(
     let mut projected_left = f64::INFINITY;
     crate::data::source::reserve_source(&mut cloud, group.density.len() + 2)?;
     for point in &group.density {
-        let offset = point.normalized_width * width * 0.40;
-        let (x, y) = layout.projection.project(baseline - offset, point.y);
+        let offset = point.1 * width * 0.40;
+        let (x, y) = layout.projection.project(baseline - offset, point.0);
         left = left.min(baseline - offset);
         projected_left = projected_left.min(x);
         cloud.push(Point2D::new(x, y));
     }
-    let support_low = group.density[0].y;
-    let support_high = group.density[group.density.len() - 1].y;
+    let support_low = group.density[0].0;
+    let support_high = group.density[group.density.len() - 1].0;
     let (baseline_high_x, baseline_high_y) = layout.projection.project(baseline, support_high);
     let (baseline_low_x, baseline_low_y) = layout.projection.project(baseline, support_low);
     layout.projection.validate_span(
@@ -485,7 +485,7 @@ fn project_strip(
 
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    let group = &prepared.geometry;
+    let group = prepared;
     crate::alpha::marks::require_aligned_points(group.points.len(), prepared.alphas.len())?;
     let center = index as f64 + 0.5;
     let width = 0.8;
@@ -498,7 +498,7 @@ fn project_strip(
             .points
             .iter()
             .zip(&prepared.alphas)
-            .map(|(point, &alpha)| (0.0, point.y, alpha)),
+            .map(|(point, &alpha)| (0.0, point.0, alpha)),
     )?
     .map(|ink| ink.bounds);
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
@@ -521,8 +521,8 @@ fn project_strip(
         ).into());
     }
     let points = crate::data::source::collect_source(group.points.iter().map(|point| {
-        let x = strip_min + point.normalized_strip * (strip_max - strip_min);
-        let (_, y) = layout.projection.project(center, point.y);
+        let x = strip_min + point.1 * (strip_max - strip_min);
+        let (_, y) = layout.projection.project(center, point.0);
         Ok(Point2D::new(x, y))
     }))?;
     Ok(payload.scatter(points, style, prepared.alphas.iter().copied())?)

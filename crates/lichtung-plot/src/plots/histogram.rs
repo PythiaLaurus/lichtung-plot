@@ -11,7 +11,8 @@ use crate::alpha::{
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
-use crate::{Error, HistogramKdePoint};
+use crate::geometry::finite;
+use crate::{Error, NumericValues};
 
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{
@@ -24,6 +25,26 @@ const MAX_AUTO_BINS: usize = 512;
 const MAX_EXPLICIT_BINS: usize = 1_000_000;
 const KDE_GRID_POINTS: usize = 128;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Bin {
+    lower: f64,
+    upper: f64,
+    density: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct KdePoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct RugSegment {
+    x: f64,
+    baseline: f64,
+    top: f64,
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedHistogramInputs {
     pub(crate) panels: Vec<(Option<String>, HistogramSemantics)>,
@@ -33,11 +54,11 @@ pub(crate) struct PreparedHistogramInputs {
 pub(crate) struct HistogramSemantics {
     pub(crate) ranges: [(f64, f64); 2],
     source_ranges: [(f64, f64); 2],
-    bins: Vec<crate::HistogramBin>,
+    bins: Vec<Bin>,
     bin_alphas: Vec<Option<ResolvedAlpha>>,
-    curve: Option<Vec<HistogramKdePoint>>,
+    curve: Option<Vec<KdePoint>>,
     curve_alpha: Option<ResolvedAlpha>,
-    rugs: Vec<crate::HistogramRug>,
+    rugs: Vec<RugSegment>,
 }
 
 pub(crate) fn intrinsic_body_minimum(
@@ -168,11 +189,9 @@ impl HistogramSemantics {
             let range = input.validate()?;
             (
                 range,
-                crate::data::source::collect_source(input.bins.iter().copied().map(Ok))?,
-                Some(crate::data::source::collect_source(
-                    input.kde.iter().copied().map(Ok),
-                )?),
-                crate::data::source::collect_source(input.rugs.iter().copied().map(Ok))?,
+                supplied_bins(input)?,
+                Some(supplied_curve(&input.kde_x, &input.kde_y)?),
+                supplied_rugs(input)?,
             )
         } else {
             if let Some(hue) = chart.hue_col() {
@@ -191,7 +210,7 @@ impl HistogramSemantics {
             let curve = prepare_density_curve(chart.histogram_composite_spec(), &values, range)?;
             let bins = crate::data::source::collect_source(
                 prepared.heights.iter().enumerate().map(|(i, height)| {
-                    Ok(crate::HistogramBin {
+                    Ok(Bin {
                         lower: prepared.edges[i],
                         upper: prepared.edges[i + 1],
                         density: *height,
@@ -223,7 +242,7 @@ impl HistogramSemantics {
                     ));
                 }
                 crate::data::source::collect_source(values.iter().map(|x| {
-                    Ok(crate::HistogramRug {
+                    Ok(RugSegment {
                         x: *x,
                         baseline: 0.0,
                         top,
@@ -490,7 +509,7 @@ fn prepare_density_curve(
     composite: &HistogramComposite,
     values: &[f64],
     x_range: (f64, f64),
-) -> Result<Option<Vec<HistogramKdePoint>>, Error> {
+) -> Result<Option<Vec<KdePoint>>, Error> {
     let HistogramComposite::KdeAndRug(kde) = composite else {
         return Ok(None);
     };
@@ -512,17 +531,13 @@ fn prepare_density_curve(
             curve.extend(
                 grid.into_iter()
                     .zip(densities)
-                    .map(|(x, y)| HistogramKdePoint { x, y }),
+                    .map(|(x, y)| KdePoint { x, y }),
             );
             curve
         }
-        HistogramKde::Precomputed(points) => {
-            validate_precomputed_kde(points, x_range)?;
-            let mut curve = Vec::new();
-            crate::data::source::reserve_source(&mut curve, points.len())?;
-
-            curve.extend_from_slice(points);
-            curve
+        HistogramKde::Precomputed { x, y } => {
+            crate::geometry::validate_kde(x, y, x_range)?;
+            supplied_curve(x, y)?
         }
     };
     Ok(Some(curve))
@@ -532,41 +547,33 @@ fn histogram_grid_coordinate(range: (f64, f64), index: usize) -> f64 {
     range.0 + (range.1 - range.0) * index as f64 / (KDE_GRID_POINTS - 1) as f64
 }
 
-fn validate_precomputed_kde(
-    points: &[HistogramKdePoint],
-    x_range: (f64, f64),
-) -> Result<(), Error> {
-    if points.len() < 2 {
-        return Err(Error::Data(
-            "histogram KDE: a precomputed curve requires at least two points".into(),
-        ));
-    }
-    for (index, point) in points.iter().enumerate() {
-        if !point.x.is_finite() || !point.y.is_finite() || point.y < 0.0 {
-            return Err(Error::Data(format!(
-                "histogram KDE: precomputed point {index} must contain finite x and nonnegative finite density"
-            )));
-        }
-        if !(x_range.0..=x_range.1).contains(&point.x) {
-            return Err(Error::Data(format!(
-                "histogram KDE: precomputed x {} at point {index} lies outside histogram bin range {}..{}",
-                point.x,
-                x_range.0, x_range.1
-            )));
-        }
-        if index > 0 && point.x <= points[index - 1].x {
-            return Err(Error::Data(format!(
-                "histogram KDE: precomputed x values must be strictly increasing; point {index} is {}",
-                point.x
-            )));
-        }
-    }
-    if !points.iter().any(|point| point.y > 0.0) {
-        return Err(Error::Data(
-            "histogram KDE: a precomputed density curve must contain a positive density".into(),
-        ));
-    }
-    Ok(())
+fn supplied_curve(x: &NumericValues, y: &NumericValues) -> Result<Vec<KdePoint>, Error> {
+    crate::data::source::collect_source((0..x.len()).map(|row| {
+        Ok(KdePoint {
+            x: finite(x, row, "histogram KDE finite x")?,
+            y: finite(y, row, "histogram KDE density")?,
+        })
+    }))
+}
+
+fn supplied_bins(input: &crate::HistogramGeometry) -> Result<Vec<Bin>, Error> {
+    crate::data::source::collect_source((0..input.bin_lower.len()).map(|row| {
+        Ok(Bin {
+            lower: finite(&input.bin_lower, row, "histogram bin lower")?,
+            upper: finite(&input.bin_upper, row, "histogram bin upper")?,
+            density: finite(&input.bin_density, row, "histogram bin density")?,
+        })
+    }))
+}
+
+fn supplied_rugs(input: &crate::HistogramGeometry) -> Result<Vec<RugSegment>, Error> {
+    crate::data::source::collect_source((0..input.rug_x.len()).map(|row| {
+        Ok(RugSegment {
+            x: finite(&input.rug_x, row, "histogram rug x")?,
+            baseline: finite(&input.rug_baseline, row, "histogram rug baseline")?,
+            top: finite(&input.rug_top, row, "histogram rug top")?,
+        })
+    }))
 }
 
 fn prepare_histogram(

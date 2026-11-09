@@ -90,6 +90,14 @@ HistogramInput and RaincloudInput select samples or complete supplied geometry
 at construction. Supplied geometry is self-contained and rejects sample-only
 facets/source-row channels at preflight. Supplied KDE over sample-owned Histogram
 bins/rugs remains an explicitly selected composite, not a second whole input.
+Both public geometries use flat named columns: bins/KDE/rugs and
+summary/density/points are independent alignment domains, never implicitly joined
+or filled. Raincloud summary order determines group order; child membership uses
+raw category/hue strings, retaining within-group input order and original point
+rows for observation alpha. Nullable columns preserve validity, but complete
+supplied geometry requires present finite values. Sample-owned supplied KDE also
+uses aligned NumericValues x/y columns. Private prepared mark/group records are
+operation results, not public nested scientific inputs.
 Scientific zero, missing, finite-filtering and availability policies belong to
 each closed family input; appearance cannot substitute another source policy.
 

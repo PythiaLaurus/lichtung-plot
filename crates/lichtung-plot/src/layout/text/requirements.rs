@@ -1561,7 +1561,7 @@ fn automatic_category_labels(
             return plot
                 .resolve_label_domain(
                     "x-axis categories",
-                    input.groups.iter().map(|group| group.category.as_str()),
+                    (0..input.category.len()).filter_map(|row| input.category.get(row).flatten()),
                 )
                 .map(Some);
         }

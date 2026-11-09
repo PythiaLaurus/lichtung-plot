@@ -9,7 +9,8 @@ snapshots and object lifecycle remain in the
 behavior remains defined by the [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). The selected
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) owns the prerequisite
-core/adapter migration, not an already implemented API.
+core/adapter migration and its native delivery status; the Python calls here remain
+planned, not implemented bindings.
 
 The inventory covers all 25 existing families, their primary input alternatives
 and a bounded set of optional categorical bindings. Row-position/column-name modes,

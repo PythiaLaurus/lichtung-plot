@@ -470,39 +470,23 @@ mod tests {
                 .erase(),
         ];
         let supplied = Plot::raincloud(crate::RaincloudInput::geometry(crate::RaincloudGeometry {
-            dimensions: crate::RaincloudDimensions {
-                category: "category".into(),
-                value: "value".into(),
-                hue: None,
-            },
-            groups: ["a", "b"]
-                .into_iter()
-                .map(|category| crate::RaincloudGroup {
-                    category: category.into(),
-                    hue: None,
-                    density: vec![
-                        crate::RaincloudDensityPoint {
-                            y: 0.0,
-                            normalized_width: 0.0,
-                        },
-                        crate::RaincloudDensityPoint {
-                            y: 3.0,
-                            normalized_width: 1.0,
-                        },
-                        crate::RaincloudDensityPoint {
-                            y: 6.0,
-                            normalized_width: 0.0,
-                        },
-                    ],
-                    q1: 1.0,
-                    median: 3.0,
-                    q3: 5.0,
-                    points: vec![crate::RaincloudPoint {
-                        y: 3.0,
-                        normalized_strip: 0.5,
-                    }],
-                })
-                .collect(),
+            category_dimension: "category".into(),
+            value_dimension: "value".into(),
+            hue_dimension: None,
+            category: CategoryValues::new("category", ["a", "b"]).unwrap(),
+            hue: None,
+            q1: NumericValues::new("q1", [1.0; 2]),
+            median: NumericValues::new("median", [3.0; 2]),
+            q3: NumericValues::new("q3", [5.0; 2]),
+            density_category: CategoryValues::new("category", ["a", "a", "a", "b", "b", "b"])
+                .unwrap(),
+            density_hue: None,
+            density_y: NumericValues::new("y", [0.0, 3.0, 6.0, 0.0, 3.0, 6.0]),
+            normalized_width: NumericValues::new("width", [0.0, 1.0, 0.0, 0.0, 1.0, 0.0]),
+            point_category: CategoryValues::new("category", ["a", "b"]).unwrap(),
+            point_hue: None,
+            point_y: NumericValues::new("y", [3.0; 2]),
+            normalized_strip: NumericValues::new("strip", [0.5; 2]),
         }))
         .size(1600, 900)
         .erase();

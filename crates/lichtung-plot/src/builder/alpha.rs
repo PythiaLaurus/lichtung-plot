@@ -192,11 +192,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             facets.extend(facet.values().map(crate::CategoryValues::name));
         }
         let original_len = if let Some(geometry) = self.raincloud_geometry_input() {
-            geometry.groups.iter().try_fold(0_usize, |count, group| {
-                count.checked_add(group.points.len()).ok_or_else(|| {
-                    crate::Error::Data("supplied raincloud alpha point count overflow".into())
-                })
-            })?
+            geometry.point_y.len()
         } else {
             self.row_count()
         };
