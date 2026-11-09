@@ -721,6 +721,17 @@ Grid. Validate the whole footprint before insertion, rejecting overlap with any
 Plot/TextPanel owner in either insertion order, including covered nonanchors.
 TextPanels remain single-cell participants on that same occupancy path.
 
+`set_panel` / `set_panel_span` explicitly replace a region. Validate positive spans,
+checked bounds and fallible replacement resources before changing any owner. Remove
+every Plot/TextPanel whose footprint shares a cell with the incoming rectangle,
+including whole footprints whose anchors lie outside it; free their cells outside
+the new rectangle too. Edge-touching without shared cells is not overlap. Empty
+regions admit insertion. Strict and replacement forms use one native placement
+path and anchor/occupancy representation; failed validation/resources leave it
+unchanged. Grid dimensions, headers and declared range groups do not implicitly
+change; their normal preflight checks apply to the new topology. Each new export
+prepares the complete composition, not an incremental scene update.
+
 Grid hard and preferred requirements cover the complete row/column intervals,
 using the canonical span allocator rather than dividing minima or charging only
 an anchor track. Measure

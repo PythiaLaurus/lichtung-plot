@@ -47,7 +47,8 @@ choices below are settled, not outstanding product decisions.
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Columnar distribution geometry prerequisite | Delivered: flat core Histogram/Raincloud geometry and sample-owned external KDE, direct/multiple-source adapter column extraction, raw-key membership/original-point-row alpha and primary-only retained lookup. Focused core/adapter checks, the cross-adapter consumer, strict Clippy, API/Book checks and all three independently unpacked archives passed. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields and evidence. |
 | Native Text/slot clearing | Delivered: independent style/layout removal on Text, Plot/Canvas retained slots, PointLayer legend labels and NumericExplanation; both adapters forward applicable operations. Presence/default-reset/omission semantics, value independence and current Theme/Canvas inheritance passed focused tests and strict Clippy; peer guides are synchronized. |
-| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs or region-overwrite implementation. Native reusable-ownership details and full verification are open. |
+| Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Consuming receiver/error ownership remains for the reusable-lifecycle work. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs. Native reusable-ownership details and full verification are open. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
@@ -1275,7 +1276,7 @@ Implement this as a native core Canvas capability, available to Rust consumers a
 through the adapters' unchanged native Canvas re-exports. Preserve the ordinary
 Rust insertion parameter lists and make the uncommon destructive intent explicit:
 
-| Planned Rust method | Footprint | Occupied-region behavior |
+| Current Rust method | Footprint | Occupied-region behavior |
 | --- | --- | --- |
 | `panel` | One cell | Reject overlap. |
 | `panel_span` | Explicit row/column spans | Reject overlap. |
@@ -1287,8 +1288,10 @@ placement intent without forcing Rust callers to repeat an uncommon Boolean
 argument. All routes use one native footprint/ownership validation and mutation
 path, with an internal overlap policy if useful; Python only maps its arguments
 and errors to that capability. Do not maintain a second panel list or simulate
-overwrite by rebuilding Canvas in Python. Receiver/error ownership facilities
-still need the implementation work below; the new Rust setters do not exist yet.
+overwrite by rebuilding Canvas in Python. These native setters now exist and
+passed focused topology/atomicity and composed-rendering witnesses plus their
+public example and strict Clippy. Receiver/error ownership facilities still need
+the implementation work below; this is not yet a failure-safe Python owner.
 
 ### Rendering Does Not Consume Python Configuration
 
@@ -1337,7 +1340,7 @@ The existing native API is not yet the selected Python lifecycle:
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
 | TextSlot preserves omitted style/layout and present default-layout reset; Text and retained owners now expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
 | Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
-| Both current panel and panel_span reject overlaps; no native region-overwrite setters exist. | Implement the selected overwrite capability in the core rather than imply it is already available or make it Python-only. |
+| Strict panel/panel_span and region-overwrite set_panel/set_panel_span share one native validation/placement path. | Map Python spans/overwrite to these current capabilities; preserve whole-owner removal and atomic resource preparation through reusable ownership. |
 | Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
 | Plot/Canvas public terminal methods consume self, while their private scene-rendering functions borrow self. | Non-consuming Python renders need a lawful public route; rendering does not inherently require consuming the configuration. Private helpers are not a binding API. |
 | Output is not Clone and its fallible publishers consume self, returning it only on success. | Reusable Python Output must survive publication failure without rerendering or relying on an unavailable Clone. |

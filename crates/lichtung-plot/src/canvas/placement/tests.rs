@@ -48,6 +48,96 @@ fn complete_footprints_are_atomic_occupied_and_owned_only_at_their_anchor() {
 }
 
 #[test]
+fn region_replacement_removes_whole_owners_and_commits_only_valid_topology() {
+    let mut placements = Placements::new(2, 3).unwrap();
+    let text = |name| Payload::Text(TextPanel::new(name, "Body").unwrap());
+    placements
+        .insert(
+            Footprint {
+                row: 0,
+                column: 0,
+                row_span: 2,
+                column_span: 2,
+            },
+            text("A"),
+        )
+        .unwrap();
+    placements.insert(Footprint::cell(0, 2), text("B")).unwrap();
+    placements.insert(Footprint::cell(1, 2), text("C")).unwrap();
+    let original = placements.clone();
+    for invalid in [
+        Footprint {
+            row: 1,
+            column: 1,
+            row_span: 2,
+            column_span: 1,
+        },
+        Footprint {
+            row: 1,
+            column: 1,
+            row_span: 0,
+            column_span: 1,
+        },
+        Footprint {
+            row: 1,
+            column: usize::MAX,
+            row_span: 1,
+            column_span: 2,
+        },
+    ] {
+        assert!(placements.replace(invalid, text("invalid")).is_err());
+        assert_eq!(placements.occupancy, original.occupancy);
+        assert_eq!(placements.text(0), original.text(0));
+        assert_eq!(placements.footprint(0), original.footprint(0));
+    }
+    let plot = || {
+        Payload::Plot(Box::new(
+            crate::Plot::scatter(
+                crate::NumericValues::new("x", [0., 1.]),
+                crate::NumericValues::new("y", [1., 2.]),
+            )
+            .erase(),
+        ))
+    };
+    placements.replace(Footprint::cell(1, 1), plot()).unwrap();
+    assert_eq!(
+        placements.occupancy,
+        [None, None, Some(2), None, Some(4), Some(5)]
+    );
+    assert_eq!(
+        placements.plot(4).unwrap().canvas_owner.as_deref(),
+        Some(&[2, 3, 1, 1, 1, 1])
+    );
+    assert!(placements.text(0).is_none());
+    assert_eq!(placements.text(2).unwrap().title(), "B");
+    assert_eq!(placements.text(5).unwrap().title(), "C");
+    assert_eq!(original.text(0).unwrap().title(), "A");
+
+    placements
+        .replace(
+            Footprint {
+                row: 0,
+                column: 1,
+                row_span: 2,
+                column_span: 2,
+            },
+            plot(),
+        )
+        .unwrap();
+    assert_eq!(
+        placements.occupancy,
+        [None, Some(1), Some(1), None, Some(1), Some(1)]
+    );
+    assert_eq!(placements.plots().flatten().count(), 1);
+    assert_eq!(placements.texts().flatten().count(), 0);
+    placements
+        .insert(Footprint::cell(0, 0), text("edge neighbor"))
+        .unwrap();
+    assert_eq!(placements.anchor(0, 0), Some(0));
+    assert_eq!(placements.anchor(1, 1), Some(1));
+}
+
+#[test]
 fn span_bands_require_anchor_ranges_and_matching_vertical_intervals_before_fonts() {
     let bar = || {
         crate::Plot::horizontal_bar(

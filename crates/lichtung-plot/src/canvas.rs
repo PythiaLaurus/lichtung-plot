@@ -385,6 +385,54 @@ impl Canvas {
         Ok(self)
     }
 
+    /// Place a chart in one cell, removing every intersecting placement in full.
+    /// Cells outside this new footprint are freed if their old owner intersects it.
+    /// Use [`Self::panel`] instead to reject all overlap.
+    ///
+    /// ```
+    /// use lichtung_plot::{Canvas, NumericValues, Plot};
+    /// let plot = || Plot::scatter(NumericValues::new("x", [0., 1.]), NumericValues::new("y", [1., 2.]));
+    /// let canvas = Canvas::grid(2, 3)?.panel_span(0, 0, 2, 2, plot())?
+    ///     .set_panel(1, 1, plot())?.panel(0, 0, plot())?;
+    /// # let _ = canvas;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    pub fn set_panel<K: crate::kind::ExactFamily>(
+        self,
+        row: usize,
+        column: usize,
+        plot: Plot<K>,
+    ) -> Result<Self, Error> {
+        self.set_panel_span(row, column, 1, 1, plot)
+    }
+
+    /// Replace an occupied region with one chart, removing whole intersecting
+    /// Plot or TextPanel owners, even when their anchors lie outside the region.
+    /// Edge-touching owners remain intact. Empty space permits ordinary insertion.
+    ///
+    /// Footprint validation and fallible placement resources precede any removal.
+    /// Grid dimensions, headers and explicit range-group requests are unchanged;
+    /// their normal preflight checks apply to the resulting topology.
+    pub fn set_panel_span<K: crate::kind::ExactFamily>(
+        mut self,
+        row: usize,
+        column: usize,
+        row_span: usize,
+        column_span: usize,
+        plot: Plot<K>,
+    ) -> Result<Self, Error> {
+        self.placements.replace(
+            placement::Footprint {
+                row,
+                column,
+                row_span,
+                column_span,
+            },
+            placement::Payload::Plot(Box::new(plot.erase())),
+        )?;
+        Ok(self)
+    }
+
     pub(crate) fn owner_topology(&self, index: usize) -> Option<[usize; 6]> {
         let owner = self.placements.footprint(index)?;
         Some([

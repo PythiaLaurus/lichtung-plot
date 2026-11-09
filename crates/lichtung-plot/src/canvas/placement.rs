@@ -35,6 +35,12 @@ struct Owner {
     payload: Payload,
 }
 
+#[derive(Clone, Copy)]
+enum Overlap {
+    Reject,
+    Replace,
+}
+
 #[derive(Clone)]
 pub(super) struct Placements {
     rows: usize,
@@ -91,7 +97,20 @@ impl Placements {
         self.occupancy[row * self.columns + column]
     }
 
-    pub fn insert(&mut self, footprint: Footprint, mut payload: Payload) -> Result<(), Error> {
+    pub fn insert(&mut self, footprint: Footprint, payload: Payload) -> Result<(), Error> {
+        self.place(footprint, payload, Overlap::Reject)
+    }
+
+    pub fn replace(&mut self, footprint: Footprint, payload: Payload) -> Result<(), Error> {
+        self.place(footprint, payload, Overlap::Replace)
+    }
+
+    fn place(
+        &mut self,
+        footprint: Footprint,
+        mut payload: Payload,
+        overlap: Overlap,
+    ) -> Result<(), Error> {
         let row_end = footprint
             .row
             .checked_add(footprint.row_span)
@@ -105,12 +124,14 @@ impl Placements {
                 "Canvas footprint is empty, overflowing or outside its declared grid".into(),
             ));
         };
-        for row in footprint.row..row_end {
-            for column in footprint.column..column_end {
-                if self.occupancy[row * self.columns + column].is_some() {
-                    return Err(Error::Data(format!(
-                        "Canvas footprint overlaps occupied cell ({row}, {column})"
-                    )));
+        if matches!(overlap, Overlap::Reject) {
+            for row in footprint.row..row_end {
+                for column in footprint.column..column_end {
+                    if self.occupancy[row * self.columns + column].is_some() {
+                        return Err(Error::Data(format!(
+                            "Canvas footprint overlaps occupied cell ({row}, {column})"
+                        )));
+                    }
                 }
             }
         }
@@ -125,6 +146,17 @@ impl Placements {
                 footprint.column_span,
             ])?);
         }
+        // All validation and fallible resources precede mutation. Removing a
+        // whole owner clears repeated occupancy hits without a second index.
+        if matches!(overlap, Overlap::Replace) {
+            for row in footprint.row..row_end {
+                for column in footprint.column..column_end {
+                    if let Some(owner) = self.occupancy[row * self.columns + column] {
+                        self.remove(owner);
+                    }
+                }
+            }
+        }
         self.owners[anchor] = Some(Owner { footprint, payload });
         for row in footprint.row..row_end {
             for column in footprint.column..column_end {
@@ -132,5 +164,17 @@ impl Placements {
             }
         }
         Ok(())
+    }
+
+    fn remove(&mut self, anchor: usize) {
+        let owner = self.owners[anchor]
+            .take()
+            .expect("occupied slot has an owner");
+        let footprint = owner.footprint;
+        for row in footprint.row..footprint.row + footprint.row_span {
+            for column in footprint.column..footprint.column + footprint.column_span {
+                self.occupancy[row * self.columns + column] = None;
+            }
+        }
     }
 }

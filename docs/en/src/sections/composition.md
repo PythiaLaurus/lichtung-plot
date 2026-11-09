@@ -13,7 +13,16 @@ Canvas::grid creates declared row-major topology. `panel` consumes an exact Plot
 and erases its marker at heterogeneous storage, without weakening validation.
 `panel_span(row,column,row_span,column_span,plot)` owns one positive rectangle,
 anchored at its top-left. Covered slots are occupied, not additional producers.
-Plot/TextPanel overlaps fail in either insertion order; range groups name anchors.
+Strict insertion rejects Plot/TextPanel overlap in either order; range groups name anchors.
+
+`set_panel(row,column,plot)` and `set_panel_span(...)` explicitly overwrite a
+region. Every intersecting Plot/TextPanel is removed as a whole, even if only a
+covered nonanchor cell overlaps; all of its old cells become free, including those
+outside the new rectangle. For example, replacing cell `(1,1)` in `A A B / A A C`
+leaves `. . B / . X C`. Touching edges without shared cells do not overlap.
+Spans/bounds and replacement resources are validated before removal. The grid,
+headers and range-group requests are not silently rewritten; normal preflight
+checks apply to the resulting topology. Later export renders the whole composition.
 
 ```rust
 {{#include ../../../../crates/lichtung-plot/examples/11_canvas_spans.rs:example}}
