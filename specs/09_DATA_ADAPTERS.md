@@ -396,6 +396,10 @@ The separate data-bearing methods above bind fallibly; root native methods remai
 unchanged. Unsupported target/family setters remain compile-time unavailable;
 native data/unit/geometry/facet restrictions remain native preflight failures.
 
+The local forwarding inventories include native Text-slot clearing with the same
+family bounds, and PointLayerAdapter forwards legend-label style/layout clearing.
+They do not reconstruct owners or store an adapter-specific appearance override.
+
 Binding returns standard `Result<_, AdapterError>`, without a public result alias.
 AdapterError retains structural/lookup/dtype/shape/slot context and original native
 or upstream sources, with lossless From<native Error> for combined `?` workflows.

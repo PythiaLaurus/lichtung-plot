@@ -67,6 +67,14 @@ impl Text {
         self
     }
 
+    /// Remove local appearance without changing content or layout.
+    /// The receiving owner's Theme role supplies appearance when this value is used.
+    #[must_use]
+    pub fn clear_style(mut self) -> Self {
+        self.style = None;
+        self
+    }
+
     /// Inspect local appearance presence.
     #[must_use]
     pub const fn get_style(&self) -> Option<&crate::TextTheme> {
@@ -77,6 +85,14 @@ impl Text {
     #[must_use]
     pub fn layout(mut self, layout: TextLayout) -> Self {
         self.layout = Some(layout);
+        self
+    }
+
+    /// Remove the local layout request, rather than attach a present default.
+    /// Passing this value to an existing slot still follows omission/preserve rules.
+    #[must_use]
+    pub fn clear_layout(mut self) -> Self {
+        self.layout = None;
         self
     }
 
@@ -158,6 +174,12 @@ impl TextSlot {
     }
     pub(crate) fn edit_layout(&mut self, layout: TextLayout) {
         self.text.layout = Some(layout);
+    }
+    pub(crate) fn clear_style(&mut self) {
+        self.text.style = None;
+    }
+    pub(crate) fn clear_layout(&mut self) {
+        self.text.layout = None;
     }
     pub(crate) fn resolve_source(&self, source: String) -> crate::Result<Text> {
         if self.present {
@@ -557,6 +579,65 @@ mod tests {
             panel,
             TextPanel::new(reset, "body").unwrap(),
             "request reset participates in identity"
+        );
+    }
+
+    #[test]
+    fn clearing_instructions_preserves_content_presence_and_does_not_encode_a_slot_command() {
+        use super::{Text, TextAlignment, TextLayout, TextSlot};
+        let before = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let style = crate::Theme::publication()
+            .typography()
+            .get_root()
+            .get_title()
+            .clone();
+        let styled = Text::new("source")
+            .style(style.clone())
+            .alignment(TextAlignment::End);
+        let plain = styled.clone().clear_style().clear_layout();
+        assert_eq!(plain, Text::new("source"));
+        assert_ne!(plain, Text::new("source").layout(TextLayout::default()));
+        assert_eq!(styled.get_style(), Some(&style));
+        assert_eq!(styled.alignment_request(), Some(TextAlignment::End));
+
+        let mut slot = TextSlot::EMPTY;
+        slot.edit_style(style.clone());
+        slot.edit_layout(TextLayout::default());
+        slot.clear_style();
+        slot.clear_layout();
+        assert!(slot.content().is_none());
+        assert_eq!(
+            slot.resolve_source("automatic".into()).unwrap(),
+            Text::new("automatic")
+        );
+        slot.replace(styled.clone());
+        slot.replace(plain);
+        assert_eq!(
+            slot.content(),
+            Some(&styled),
+            "an unstyled value is omission, not a clearing command"
+        );
+        let retained = slot.clone();
+        slot.clear_style();
+        assert_eq!(slot.content().unwrap().get_layout(), styled.get_layout());
+        slot.clear_layout();
+        slot.clear_style();
+        slot.replace(Text::new("changed"));
+        assert_eq!(slot.content(), Some(&Text::new("changed")));
+        assert_eq!(retained.content(), Some(&styled));
+
+        let layer =
+            crate::PointLayer::new(NumericValues::new("x", [0.]), NumericValues::new("y", [1.]))
+                .legend_label(styled.clone());
+        let cleared = layer
+            .clone()
+            .clear_legend_label_style()
+            .clear_legend_label_layout();
+        assert_eq!(cleared.legend_content(), Some(&Text::new("source")));
+        assert_eq!(layer.legend_content(), Some(&styled));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            before
         );
     }
 

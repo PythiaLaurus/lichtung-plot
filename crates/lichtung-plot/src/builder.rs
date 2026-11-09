@@ -14,6 +14,7 @@ mod alpha;
 mod configuration;
 mod facets;
 mod layout;
+mod text_clear;
 mod text_layout;
 
 use crate::input::{AxisValues, PlotInput};

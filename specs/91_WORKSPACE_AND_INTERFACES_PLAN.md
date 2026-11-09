@@ -33,7 +33,7 @@ preferred implementation direction, not a completed experiment. The
 and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
-extraction are delivered; native ownership/text-clear facilities,
+extraction and native Text/slot clearing are delivered; native reusable-ownership facilities,
 exact stubs and the selected input-boundary contracts still need implementation
 and verification before expanding the binding surface. The three input-boundary
 choices below are settled, not outstanding product decisions.
@@ -46,7 +46,8 @@ choices below are settled, not outstanding product decisions.
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Columnar distribution geometry prerequisite | Delivered: flat core Histogram/Raincloud geometry and sample-owned external KDE, direct/multiple-source adapter column extraction, raw-key membership/original-point-row alpha and primary-only retained lookup. Focused core/adapter checks, the cross-adapter consumer, strict Clippy, API/Book checks and all three independently unpacked archives passed. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields and evidence. |
-| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
+| Native Text/slot clearing | Delivered: independent style/layout removal on Text, Plot/Canvas retained slots, PointLayer legend labels and NumericExplanation; both adapters forward applicable operations. Presence/default-reset/omission semantics, value independence and current Theme/Canvas inheritance passed focused tests and strict Clippy; peer guides are synchronized. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs or region-overwrite implementation. Native reusable-ownership details and full verification are open. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
@@ -1158,15 +1159,13 @@ configuration representation or a new public generic update protocol.
 
 ### Native Text-Clear Capability
 
-The core already distinguishes omitted instructions, concrete instructions and
-present default layout requests through Text/TextSlot and their existing presence
-rules. It already resolves Theme inheritance. The missing capability is a public
-operation that removes an existing local override, not a new default-argument or
-style-resolution system.
+The core distinguishes omitted instructions, concrete instructions and present
+default layout requests through Text/TextSlot and their existing presence rules.
+It now exposes explicit local-clear operations through that same storage and Theme
+resolution, without a new default-argument or style-resolution system.
 
-Add narrow consuming native clear operations while preserving ordinary setting
-signatures and behavior. The proposed naming shape, not final implemented methods,
-is:
+The delivered consuming native clear operations preserve ordinary setting
+signatures and behavior:
 
 ```text
 Text::clear_style(self) -> Self
@@ -1175,11 +1174,13 @@ Plot/Canvas::clear_title_style(self) -> Self
 Plot/Canvas::clear_title_layout(self) -> Self
 ```
 
-Inventory and consistently cover the actual retained text slots, including root
-title/subtitle/caption and applicable axis/guide titles, through shared core
-Text/TextSlot logic and existing owner/family boundaries, not a method implementation
-per plot family. Final owner-method inventory/names belong to the native API design.
-Adapters expose the resulting native capabilities without another style engine.
+Plot/Canvas title/subtitle/caption and Plot x/y-label slots have paired
+`clear_*_style` / `clear_*_layout` methods. Plot color-label methods retain the
+ContinuousColor capability bound. PointLayer has corresponding legend-label
+methods, while NumericExplanation has `clear_style` / `clear_layout`. All use shared
+TextSlot removal, not a per-family implementation. Both adapters forward applicable
+owner/layer methods without another style engine. Constructor-owned immutable Text
+values remain editable through ordinary native value construction/clearing.
 
 - Clear only the requested optional field. Preserve text content, content presence,
   the other instruction field, scientific data and the Theme. Clearing an already
@@ -1198,10 +1199,11 @@ Adapters expose the resulting native capabilities without another style engine.
   captures or frozen Outputs. Preserve the selected Python failure-safe owner
   lifecycle through the deliberate ownership facilities, not accidental consumption.
 
-Deliver the native capability first with focused contract checks and strict Clippy,
-then map it in the planned Python binding and verify private-sentinel handling,
-explicit keyword precedence and native errors. This does not authorize starting a
-complete binding or a separate prototype merely to update this plan.
+Native clearing passed focused value/slot/numeric-explanation tests, a composed
+current-Theme/parent-alignment inheritance witness, strict workspace Clippy and
+peer Book checks. Python private-sentinel handling, explicit keyword precedence
+and failure-safe owners still need binding implementation and verification; native
+clear evidence does not establish those Python behaviors.
 
 ### Canvas Captures Configuration, Not A Live Child Alias
 
@@ -1333,7 +1335,7 @@ The existing native API is not yet the selected Python lifecycle:
 | --- | --- |
 | Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
-| TextSlot replacement preserves omitted style/layout and accepts present default-layout reset, but has no public explicit local-clear route. | Reuse that presence/resolution machinery and add narrow value/owner clear facilities; Python omission detection alone cannot clear an existing native override. |
+| TextSlot preserves omitted style/layout and present default-layout reset; Text and retained owners now expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
 | Canvas placement takes Plot by value and owns a boxed erased Plot, without an automatic Clone. Public Canvas is not Clone. | Rust insertion moves ownership; it is neither a borrowed child nor the proposed shared-configuration facility. Preserve Python handles through a deliberate native design. |
 | Both current panel and panel_span reject overlaps; no native region-overwrite setters exist. | Implement the selected overwrite capability in the core rather than imply it is already available or make it Python-only. |
 | Canvas insertion consumes self and may return Err without returning either owner. | Do not take the sole Python-visible owner and assume error recovery can restore it. Avoid cloning an entire growing Canvas on every insertion. |
@@ -1365,8 +1367,8 @@ implementation is not. Before expanding the binding surface:
    direct-projection syntax are selected, not a choice between
    selector guessing and competing *_cols keywords. Row-position/column-name modes,
    numeric discovery and flat named geometry/component contexts are selected too,
-   not open map-versus-wrapper choices. Finalize native text-clear
-   method names/slot coverage and exact signatures/type stubs for the selected
+    not open map-versus-wrapper choices. Map delivered native text-clear
+    methods into exact signatures/type stubs for the selected
    omission/None/value, explicit-default and keyword-precedence rules. Mutable
    owners, immutable values, shared Text entries, binding-time snapshots and Canvas
    placement/region-overwrite behavior are selected; do not reopen them as lifecycle

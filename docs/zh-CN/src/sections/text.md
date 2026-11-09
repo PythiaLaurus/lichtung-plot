@@ -46,6 +46,14 @@ Canvas 将 Plot 与 TextPanel 组合起来。保留文字的发布与图库中�
 默认值。标题、副标题、说明、轴标题、色标标题、Canvas 表头、TextPanel 标题／正文及
 面板注释都使用这一模型。
 
+`Text::clear_style()`／`clear_layout()` 只移除该值的对应局部指令。清除拥有者已保留的
+指令，应使用 Plot／Canvas 的 `clear_title_style()`／`clear_title_layout()`，或对应的
+副标题／图注、Plot x／y／色标标题、PointLayer 图例标签方法。NumericExplanation 也有
+独立的 `clear_style()`／`clear_layout()`。内容及另一项指令不变；样式恢复使用有效的
+Theme 角色，之后更换 Theme 仍正常继承。无布局请求仍不同于显式的
+`TextLayout::default()`。无样式 Text 不携带清除命令，普通替换依旧保留省略的指令。
+这些编辑不触发渲染。
+
 手写空白和换行保持原样，包括空行；CRLF 视为一次换行。显式空的说明文字占一个空文本行。
 制表符和不支持的控制符会失败。精确 AxisTick 的空标签则抑制文字但保留刻度。
 自动名称通过 `Labels` 的易读化、原样保留或别名映射策略展示，不改变原始身份。

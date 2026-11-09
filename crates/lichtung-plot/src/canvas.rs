@@ -25,6 +25,7 @@ mod dependencies;
 mod placement;
 mod plot_text;
 mod sizing;
+mod text_clear;
 mod text_panel;
 mod tracks;
 

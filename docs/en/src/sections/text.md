@@ -49,6 +49,16 @@ style or layout replaces that entire instruction. An explicit default layout
 resets to owner defaults. Titles, subtitles, captions, axis titles, color-guide
 titles, Canvas headers, TextPanel title/body and panel notes share this model.
 
+`Text::clear_style()` / `clear_layout()` remove only that value's optional local
+instruction. To remove a retained owner instruction, use `clear_title_style()` /
+`clear_title_layout()` on Plot/Canvas, or the corresponding subtitle/caption,
+Plot x/y/color-label or PointLayer legend-label methods. NumericExplanation also
+has independent `clear_style()` / `clear_layout()`. Content and the other field
+remain unchanged; style returns to the effective Theme, even after a later Theme
+edit. Absent layout is still distinct from a present `TextLayout::default()`.
+An unstyled Text does not carry a clearing command into an existing slot: ordinary
+replacement still preserves omitted instructions. These edits never render.
+
 Authored whitespace and newlines are preserved, including blank lines; CRLF is one
 break. Empty authored prose occupies one empty line. Tabs and unsupported controls
 fail. Exact AxisTick empty labels instead suppress text while retaining the tick.

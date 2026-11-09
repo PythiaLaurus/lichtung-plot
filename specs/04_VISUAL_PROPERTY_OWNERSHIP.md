@@ -63,6 +63,24 @@ respective instructions. A present default layout resets the previous request.
 Convenience alignment edits update the same request in call order, even before
 content is present. Full source/style/request-presence equality owns cache reuse.
 
+`Text::clear_style` and `clear_layout` independently remove the corresponding
+optional instruction from a value. Plot and Canvas provide `clear_title_style` /
+`clear_title_layout`, corresponding subtitle/caption operations, and Plot provides
+x/y-label operations plus color-label operations under ContinuousColor. PointLayer
+provides `clear_legend_label_style` / `clear_legend_label_layout` and
+NumericExplanation provides `clear_style` / `clear_layout`. All retained slots use
+the same TextSlot removal logic, preserving source, content presence, the other
+instruction, Theme and scientific configuration. No edit renders or discovers
+fonts; clearing an absent instruction is harmless.
+
+Removing local style restores the effective consuming Theme role, including after
+a later Theme replacement. Removing layout restores owner/parent inheritance and
+remains distinct from attaching a present default request. An unstyled Text is a
+value, not a persistent clearing command: `.title(styled.clear_style())` still
+preserves an existing slot style if the incoming value omits it. Clear the owner
+slot explicitly when that is intended. No generic update flags or parallel style
+state survive in Text or its owners.
+
 X and Y titles resolve independent local complete styles over the same axis-title
 Theme role before font preparation. Their selected sizes own the corresponding
 title gaps and edge padding. Physical line alignment defaults to Center inside

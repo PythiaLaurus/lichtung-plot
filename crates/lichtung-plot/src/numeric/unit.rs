@@ -102,6 +102,18 @@ impl NumericExplanation {
         Arc::make_mut(&mut self.0).edit_layout(value);
         self
     }
+    /// Remove the local appearance while preserving authored/generated content and layout.
+    #[must_use]
+    pub fn clear_style(mut self) -> Self {
+        Arc::make_mut(&mut self.0).clear_style();
+        self
+    }
+    /// Remove the local layout request while preserving content and appearance.
+    #[must_use]
+    pub fn clear_layout(mut self) -> Self {
+        Arc::make_mut(&mut self.0).clear_layout();
+        self
+    }
     fn resolve(&self, generated: String) -> Result<Option<Text>> {
         let text = self.0.resolve_source(generated)?;
         if self.0.content().is_none() && text.as_str().is_empty() {
@@ -368,14 +380,15 @@ mod tests {
             .clone()
             .font_size(19.0)
             .unwrap();
+        let explanation = NumericExplanation::automatic()
+            .style(style.clone())
+            .layout(TextLayout::default().alignment(crate::TextAlignment::End));
+        let cleared = explanation.clone().clear_style().clear_layout();
+        assert_eq!(cleared.resolve("kg".into()).unwrap(), Some(Text::new("kg")));
         let format = NumericFormat::default()
             .unit(Some(NumericUnit::new("kg", NumericUnitPlacement::Shared)))
             .unwrap()
-            .explanation(
-                NumericExplanation::automatic()
-                    .style(style.clone())
-                    .layout(TextLayout::default().alignment(crate::TextAlignment::End)),
-            );
+            .explanation(explanation);
         let text = format
             .format_set(&[1.0, 2.0], false, true)
             .unwrap()

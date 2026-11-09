@@ -378,6 +378,20 @@ impl PointLayer {
         self
     }
 
+    /// Remove only the local legend-label appearance, retaining its identity/layout.
+    #[must_use]
+    pub fn clear_legend_label_style(mut self) -> Self {
+        self.legend_label.clear_style();
+        self
+    }
+
+    /// Remove only the local legend-label layout, retaining its identity/appearance.
+    #[must_use]
+    pub fn clear_legend_label_layout(mut self) -> Self {
+        self.legend_label.clear_layout();
+        self
+    }
+
     pub(crate) const fn x_values(&self) -> &NumericValues {
         &self.x
     }

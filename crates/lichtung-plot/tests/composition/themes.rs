@@ -44,6 +44,103 @@ fn explicit_plot_theme_completely_replaces_only_its_inherited_root() {
 }
 
 #[test]
+fn cleared_local_text_inherits_current_theme_and_canvas_alignment_without_affecting_copies() {
+    use lichtung_plot::{Color, Text, TextAlignment};
+    let local = Theme::publication()
+        .typography()
+        .get_root()
+        .get_title()
+        .clone()
+        .font_size(31.0)
+        .unwrap()
+        .color(Color::rgb(113, 31, 59))
+        .unwrap();
+    let original = scatter().title(
+        Text::new("Retained title")
+            .style(local.clone())
+            .alignment(TextAlignment::End),
+    );
+    let cleared = original
+        .clone()
+        .clear_title_style()
+        .clear_title_layout()
+        .title("Cleared title")
+        .theme(Theme::science())
+        .x_label(Text::new("Cleared axis").style(local.clone()))
+        .clear_x_label_style();
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .title(
+                Text::new("Root title")
+                    .style(local)
+                    .alignment(TextAlignment::End),
+            )
+            .clear_title_style()
+            .clear_title_layout()
+            .theme(Theme::nature())
+            .panel_title_alignment(TextAlignment::Start)
+            .panel(0, 0, original.clone())
+            .unwrap()
+            .panel(0, 1, cleared)
+            .unwrap(),
+        "cleared-text-inheritance",
+    )
+    .unwrap();
+    let retained = text_line(&svg, "Retained title");
+    assert_eq!(attribute(retained, "font-size"), "31");
+    assert_eq!(attribute(retained, "fill"), "#711F3B");
+    let cleared = text_line(&svg, "Cleared title");
+    assert_eq!(
+        attribute(cleared, "font-size"),
+        Theme::science()
+            .typography()
+            .get_root()
+            .get_title()
+            .get_font_size()
+            .to_string()
+    );
+    assert_ne!(attribute(cleared, "fill"), "#711F3B");
+    assert_eq!(
+        attribute(text_line(&svg, "Root title"), "font-size"),
+        Theme::nature()
+            .typography()
+            .get_root()
+            .get_title()
+            .get_font_size()
+            .to_string()
+    );
+    assert_ne!(
+        attribute(text_line(&svg, "Cleared axis"), "fill"),
+        "#711F3B"
+    );
+    let inherited = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .title("Root title")
+            .theme(Theme::nature())
+            .panel_title_alignment(TextAlignment::Start)
+            .panel(0, 0, original)
+            .unwrap()
+            .panel(
+                0,
+                1,
+                scatter()
+                    .title("Cleared title")
+                    .theme(Theme::science())
+                    .x_label("Cleared axis"),
+            )
+            .unwrap(),
+        "cleared-text-inheritance-native",
+    )
+    .unwrap();
+    assert_eq!(
+        svg, inherited,
+        "clearing restores the complete native inheritance path, including parent alignment"
+    );
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "a real composed scene constructs all eight theme components and distinguishes root-owned text roles"

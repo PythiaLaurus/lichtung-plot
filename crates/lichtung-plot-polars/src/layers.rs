@@ -81,6 +81,18 @@ impl<'source> PointLayerAdapter<'source> {
         self.layer = self.layer.legend_label(label);
         self
     }
+    /// Remove the legend label's local style through the native slot operation.
+    #[must_use]
+    pub fn clear_legend_label_style(mut self) -> Self {
+        self.layer = self.layer.clear_legend_label_style();
+        self
+    }
+    /// Remove the legend label's local layout through the native slot operation.
+    #[must_use]
+    pub fn clear_legend_label_layout(mut self) -> Self {
+        self.layer = self.layer.clear_legend_label_layout();
+        self
+    }
     /// Replace the layer's column-backed label layout.
     #[must_use]
     pub fn label_text_layout(mut self, layout: TextLayout) -> Self {
