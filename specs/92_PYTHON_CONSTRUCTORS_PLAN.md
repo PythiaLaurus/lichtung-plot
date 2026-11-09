@@ -14,8 +14,10 @@ core/adapter migration, not an already implemented API.
 The inventory covers all 25 existing families, their primary input alternatives
 and a bounded set of optional categorical bindings. Row-position/column-name modes,
 explicit numeric discovery and flat named geometry inputs are selected below.
-Exact annotated overloads, remaining label defaults and method signatures still
-need completion; recording a selected direction does not deliver a binding.
+Signed positional selection, complete hashable pandas column keys and MaskedArray
+support are selected too. Exact annotated overloads, native label mappings and
+method signatures remain implementation work; recording these decisions does not
+deliver a binding.
 
 ## Shared Public Surface
 
@@ -34,6 +36,9 @@ need completion; recording a selected direction does not deliver a binding.
   indices and explicit single-column selectors resolve one variable. `cols[...]`
   resolves an ordered collection only where the table admits multiple variables.
   Bare list/tuple data never becomes a field selection by matching its contents.
+- Support MaskedArray within the NumPy route, preserving data and mask through
+  native validity. It is not another input family, a mandatory wrapper or a request
+  to fill/compact missing data; ordinary ndarray inputs remain unchanged.
 - Use ordinary concise type aliases and meaningful `typing.overload` declarations
   in eventual stubs. Aliases describe the supported Python containers/selectors;
   they are not runtime data wrappers. Do not put an exhaustive NumPy scalar-width
@@ -59,6 +64,38 @@ row expands to `scatter(data=None, *, x, y, hue=None)`, not a positional x/y cal
 Each pattern lists the required roles for that form; optional endpoint pairs and
 alternative forms are stated explicitly. This is a parameter inventory, not the
 final annotated `.pyi` text.
+
+## Selected Python Input Boundaries
+
+These three input contracts are settled, not outstanding constructor choices.
+Their full rules and implementation ownership are in the parent plan:
+
+- **Signed positional selection with strict bounds.** Support negative NumPy
+  indices and positive/negative nonzero slice steps. `cols[start:stop:step]` is
+  positional on NumPy, pandas and eager Polars tables; pandas `col[-1]` remains
+  literal label lookup, not last-column lookup. Preserve order and reject explicit
+  out-of-bounds endpoints rather than clip. Empty/duplicate selections, zero steps
+  and Boolean positions fail; one-element collections remain collections. See
+  [positional indices and slices](91_WORKSPACE_AND_INTERFACES_PLAN.md#positional-indices-and-slices).
+- **Complete pandas column labels.** Accept legal hashable complete labels that
+  resolve uniquely, including float, Timestamp and custom hashable keys, rather
+  than a scalar-type allowlist. Do not execute query/callable/partial-match forms
+  or collapse integer 1 and string "1" through stringification. Original lookup
+  keys, native identity and display text stay distinct; no user key wrapper or
+  column renaming is required. Label type does not determine a bound column's
+  scientific dtype. See [exact pandas column keys](91_WORKSPACE_AND_INTERFACES_PLAN.md#exact-pandas-column-keys).
+- **MaskedArray validity.** Recognize the NumPy subclass before raw ndarray
+  extraction, invert mask semantics into native validity and snapshot both data
+  and mask at binding. Preserve shape, aligned slots and unmasked NaN separately
+  from null; never compress, fill or silently discard the mask. Native dtype,
+  dimension and present-value restrictions still apply. See
+  [NumPy MaskedArray](91_WORKSPACE_AND_INTERFACES_PLAN.md#numpy-maskedarray).
+
+The Rust/PyO3 boundary implements this Python argument/key/mask adaptation and
+reuses existing native scientific validation and the corresponding adapters.
+No Python-side scientific model, general Rust selector framework, strictness
+switch or new required data class follows from these decisions. Normalization,
+private identity bookkeeping and focused verification are implementation tasks.
 
 ## Inventory Of All 25 Families
 
@@ -352,7 +389,8 @@ keys do not introduce a sample `.hue(...)` setter. The display keywords are
   available at construction, with later owner text methods for edits. They do not
   change scientific dimensions, raw group keys or diagnostic column names. No
   public Python `*_dimension`/`*_name` parameters or binding-side label store are
-  added. Complete exact label-default/None types under the shared text contract.
+  added. Complete the signature mapping under the existing native/shared text
+  contract, without inventing binding-only label reset/hiding semantics.
 - Preserve existing complete-geometry minima, limits and scientific validation.
   No missing component is computed. The core still rejects sample-only facets/
   source IDs and supplied-Raincloud series/significance at its existing boundary.
@@ -366,13 +404,17 @@ Rust point class or a hidden lookup against the samples source.
 
 ## Remaining Work Outside This Constructor Inventory
 
-Selector negative indices/steps/bounds, callback parameters/ownership, exception
-mapping, full policy/method signatures and distribution verification remain in
-the parent plan. In particular, Bootstrap sampling-unit data, independent layers,
+Implement and verify the selected selector bounds, pandas key identities and
+MaskedArray validity under the parent plan; these are no longer open admission
+choices. Callback adapters/ownership, exception translation, full policy/method
+signatures and distribution verification also remain implementation work there.
+In particular, Bootstrap sampling-unit data, independent layers,
 status mappings, alpha mappings and supplied-KDE data must also accept ordinary
 inputs rather than require Rust payload objects. Do not silently make an unbound
 selector inside a policy read the main Plot source; specify its binding context
-and snapshot call when that method inventory is completed.
+and snapshot call when that method inventory is completed. Per-API mapping connects
+Python calls to the existing Rust behavior; it is not another round of scientific
+API decisions or a request to reimplement that behavior in Python.
 
 Do not treat the table as a completed installed-stub or native-ownership gate.
 Verify representative valid/invalid overload calls against actual runtime

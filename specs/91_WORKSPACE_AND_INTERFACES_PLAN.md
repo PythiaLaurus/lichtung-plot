@@ -23,7 +23,8 @@ site deployment, Git push and history rewriting are not authorized by this work.
 
 Python architecture, the four input routes, constructor/binding/explicit-selector
 rules, one-runtime-entry/overload-signature model, explicit row-position/column-name
-modes and numeric discovery, flat named geometry arguments, immutable configuration
+modes and numeric discovery, flat named geometry arguments, strict signed positional
+selection, exact pandas column keys, MaskedArray validity, immutable configuration
 values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion, not delivered binding code. Configuration sharing is a
@@ -32,8 +33,9 @@ preferred implementation direction, not a completed experiment. The
 and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. That refactor, native ownership/text-clear facilities,
-exact stubs and remaining label/selector details still need implementation or
-verification before expanding the binding surface.
+exact stubs and the selected input-boundary contracts still need implementation
+and verification before expanding the binding surface. The three input-boundary
+choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
 
@@ -43,7 +45,8 @@ verification before expanding the binding surface.
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Columnar distribution geometry prerequisite | Selected, not implemented: flat core Histogram/Raincloud geometry and sample-owned external KDE; direct/multiple-source bindings in each corresponding Rust adapter, with one public representation and migrated callers. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields, grouping/alpha semantics and focused gates. |
-| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and remaining label/selector details are open. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
+| Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
+| Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
 
 ## Confirmed Scope And Constraints
@@ -61,7 +64,9 @@ verification before expanding the binding surface.
 | Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. The inventory covers all 25 families, including selected explicit modes, discovery and named geometry; exact stubs remain to be completed. |
 | Python explicit modes and discovery | by_row_position=True on Scatter/Line generates zero-based row x and excludes explicit x; by_column_name=True on Boxplot/Violin/sample Raincloud makes each column a category and excludes explicit category. numeric_only=True explicitly discovers supported numeric columns in source order for those modes and Matrix, including numeric IDs; it excludes manual y/value/variables. No omission/schema/value-based inference. |
 | Supplied distribution geometry | Flat named Histogram bins/KDE/rug and Raincloud summary/density/point columns, not nested payloads, geometry maps/TypedDict protocols or required wrappers. Keep native sample/geometry exclusivity and complete-geometry restrictions. Bind independent component sources and preserve raw-key membership/original point rows; labels are display text, not scientific keys. |
-| Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or explicit positional range. Bare list/tuple variable inputs remain direct data; retain native container indexing/projection inputs. Do not add x_cols/y_cols keywords, columns(...) aliases or schema-dependent selector guessing. |
+| Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or signed-step positional slice. Slices address logical column positions on NumPy, pandas and eager Polars tables; explicit out-of-bounds endpoints fail rather than clip. NumPy positional keys support negative indices, while pandas integer keys remain literal labels. Bare list/tuple inputs remain direct data; retain native projections, without parallel selector aliases or schema guessing. |
+| Python pandas column keys | Accept legal hashable complete labels that resolve to exactly one actual column, not a scalar-type allowlist. Keep original lookup keys, collision-free native identity and display text distinct; no partial matching, query execution or str(key)-based identity. Column-label admission does not broaden supported data dtypes. |
+| Python MaskedArray | Support within the NumPy route by snapshotting bound data and mask into existing native validity. Preserve aligned slots, shape, logical order and unmasked NaN; no compression, filling or silent mask loss. Native roles still decide whether missing values are applicable. |
 | Python data ownership | All supported inputs use binding-time snapshots of the variables actually bound, not a frozen whole source. Retain the supplied source object only for later explicit lookups; rendering never refreshes existing bindings. |
 | Python lifecycle | Mutable Plot/Canvas configuration, explicit configuration copies, insertion-time Canvas snapshots, non-consuming terminal renders and explicit frozen-Output reuse; sharing/copy-on-write is an implementation preference, not a second public mode. |
 | Python configuration values | Theme, Text and their nested appearance/layout values expose read-only named attributes and keyword-only copy_with derivation. No direct field assignment, mutable child handles or duplicate getter/per-field-edit API; retain the native nested Theme representation and validation. |
@@ -274,8 +279,9 @@ regardless of its input route. The shared constructor/binding grammar, explicit
 col/cols selection forms and single-runtime-entry/overload-signature model below are
 selected. The [constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) covers each
 family's required channels, selected alternative forms and optional categorical
-bindings; exact type stubs, remaining label defaults/types and slice boundaries
-still need completion. Configuration mutation follows the selected lifecycle
+bindings. Signed positional selection, pandas key admission and MaskedArray
+handling are selected below; exact type stubs and native capability mapping still
+need completion. Configuration mutation follows the selected lifecycle
 model, and callback references have the separate external-state semantics below.
 
 Inventory the core exports and actual family capabilities against Python-visible
@@ -440,10 +446,11 @@ scatter(x=matrix[:, 0], y=matrix[:, 1:4])  # Direct container projection.
   an implicit broadcast because of matching field names, values, length or shape.
   Policy and structured-data arguments retain their separately declared grammar;
   this is not permission to expose Rust closed-input payload classes in Python.
-- `col[key]` denotes exactly one source field. Use literal DataFrame keys, including
-  admitted pandas integer and complete tuple/MultiIndex labels, rather than guessing
-  positional lookup or formatting a key to a string first. For a two-dimensional
-  NumPy source, the admitted integer key denotes a zero-based logical column.
+- `col[key]` denotes exactly one source field. Use literal DataFrame keys rather
+  than guessing positional lookup or formatting a key to a string first. For a
+  two-dimensional NumPy source, an integer key denotes a logical column; negative
+  indices count from the end. A pandas integer key remains a literal label, including negative
+  labels; eager Polars single-column lookup retains literal string names.
   Ordinary string field names and NumPy integer columns retain their shorthand
   forms such as `y="value"` and `y=1`; col is not mandatory for those common cases.
 - `cols[1, 3]` on a NumPy table explicitly denotes two columns, not the interval
@@ -476,12 +483,82 @@ exists. Full-key lookup must resolve uniquely: reject missing/ambiguous fields,
 partial MultiIndex matches, duplicate selections, empty selections and invalid
 indices at binding under the applicable adapter rules, never fall back to data.
 
-The chosen examples establish positive half-open NumPy ranges and exact DataFrame
-key collections. Finish precise slice normalization/admission, including boundary,
-step and negative-index rules and any DataFrame positional-range support, before
-implementation; do not silently import pandas label-slice or clipping conventions.
-Remaining admitted label types and native identity/display-name mapping also need
-verification without conflating exact lookup keys with their formatted labels.
+#### Positional Indices And Slices
+
+The selected grammar supports negative positional indices and positive/negative
+slice steps. A `cols[start:stop:step]` slice always addresses logical column
+positions on a supported two-dimensional NumPy source or pandas/eager Polars
+DataFrame, never label ranges. Resolve it at binding against the current source
+column count and preserve the resulting order. Thus pandas `col[-1]` looks up the
+literal label -1, while `cols[-1:]` selects its last column as a collection.
+
+- Positional integers use [Python's integer-index protocol][python-index], including
+  supported NumPy integers, but reject Boolean positions/endpoints/steps. Do not
+  apply that restriction to an actual Boolean pandas column label.
+- With n columns, a single/discrete NumPy index must lie in `[-n, n)`; normalize a
+  negative index by adding n. Check duplicates by resolved column, so `cols[0, -5]`
+  is a duplicate selection on a five-column NumPy source.
+- Slices are start-inclusive and stop-exclusive. Omitted step means 1; any nonzero
+  integer step is admitted. Omitted endpoints follow the direction: forward defaults
+  to 0/n, reverse defaults to n-1/the boundary before column zero.
+- Normalize explicit negative endpoints relative to n without silently clipping.
+  Forward normalized endpoints must lie in `[0, n]`, reverse endpoints in
+  `[-1, n-1]`; these include the direction-appropriate exclusive boundary. Keep an
+  omitted reverse stop distinct from an explicitly supplied -1, which refers to
+  the last column before stop exclusion.
+- Reject zero steps, out-of-bounds explicit endpoints, empty results and duplicate
+  resolved columns. A one-column result remains a collection. Do not turn a string
+  endpoint into a pandas label slice, or add expression/Boolean-mask selection.
+
+For a five-column table these planned selections mean:
+
+```python
+cols[1:4]       # Positions 1, 2, 3, on any supported table source.
+cols[-3:]       # Positions 2, 3, 4.
+cols[::2]       # Positions 0, 2, 4.
+cols[::-1]      # Positions 4, 3, 2, 1, 0.
+cols[3:5]      # Positions 3, 4; the forward exclusive boundary is valid.
+cols[3:8]      # Error: do not silently clip to positions 3, 4.
+cols[-1:-1:-1] # Error: empty, not the meaning of cols[::-1].
+cols["a":"d"]  # Error: no label-range query.
+```
+
+Strict selector bounds deliberately differ from
+[Python's ordinary slice clipping][python-sequence-slices]. Container projections
+such as `array[:, 3:8]` and `df.iloc[:, 3:8]` retain their container's clipping/indexing
+rules and are ordinary direct data. Do not add a strictness flag or modify the
+Rust adapters' public
+selection grammar; the Rust/PyO3 boundary resolves the Python description into
+the existing applicable selected-column inputs.
+
+#### Exact pandas Column Keys
+
+Accept legal hashable complete pandas column labels that resolve uniquely,
+including floats, Timestamp labels and custom hashable objects as well as strings,
+integers and tuples. Use a concise Hashable-based key type where appropriate, not
+a growing scalar-type union or required runtime key wrapper. This is label lookup,
+not permission to accept unsupported temporal/object column data in scientific
+roles.
+
+`col[key]` means exactly one complete actual column label. Do not execute a callable
+key, parse an expression, accept partial MultiIndex/date matches or use Interval
+containment queries. A legal callable used as an actual label is a literal lookup
+key, not an operation to invoke. Missing/ambiguous keys fail;
+[pandas lookup helpers][pandas-index-get-loc] returning a slice/mask or otherwise
+admitting partial queries are not by themselves proof of exact unique lookup.
+Normal pandas label equivalence applies; do not invent a type-identity comparison
+that splits keys naming the same column.
+
+Retain the original key for lookup. Preserve distinct actual columns such as the
+integer label 1 and string label "1" without collapsing them through `str(key)` or
+`repr(key)`. Formatting for display is permitted, but formatted text never becomes
+the scientific identity. Internal native identities must remain collision-free
+and consistent across applicable later bindings; display aliases/column-label
+edits do not change them. Existing native display-collision validation still
+applies. Encoding and lookup bookkeeping are private binding implementation work,
+not a second scientific model, another user decision or a reason to require column
+renaming. Users may still make complex pandas selections explicitly and pass the
+result as direct data.
 
 These selectors are small immutable lookup descriptions, not data values, foreign
 expressions, callbacks or retained plotting specifications. Creating one does not
@@ -574,8 +651,8 @@ renderers or scientific semantics:
 | Python input | Implementation direction |
 | --- | --- |
 | Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Supplied geometry uses explicit named columns from the constructor plan, not a geometry map or nested input tree. |
-| NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter, then release the Python-buffer borrow after binding owned native values. |
-| pandas DataFrame/Series | Resolve only selected columns and extract by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
+| NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter; recognize MaskedArray first and carry its mask into native validity. Release foreign borrows after binding owned values. |
+| pandas DataFrame/Series | Resolve exact unique original column keys, preserve identity separately from display, and extract only bound columns by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
 | Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The concrete Python-to-Rust bridge still needs native runtime verification. |
 
 Preserve the [adapter value contracts](09_DATA_ADAPTERS.md): ordinary numeric f64
@@ -587,10 +664,38 @@ semantic dtypes must not become supported merely because they have no rows.
 
 [rust-numpy][rust-numpy] is the NumPy bridge, not a renderer. Admit supported
 strided, reversed, transposed, Fortran and broadcast views without a contiguous-only
-restriction. Consume them into owned values before detached rendering. MaskedArray
-requires deliberate mask handling or explicit rejection; raw ndarray extraction
-can accept the subclass while silently discarding its mask. Adapter validity uses
-true = present, the opposite of NumPy's true = hidden mask convention.
+restriction. Consume them into owned values before detached rendering.
+
+#### NumPy MaskedArray
+
+[NumPy MaskedArray][numpy-masked-arrays] support is selected as part of the NumPy
+input route, not a fifth source family, optional support mode or new project-owned
+wrapper. Recognize it before ordinary rust-numpy extraction: ndarray extraction
+can accept the subclass while silently discarding its mask.
+
+- Bind data and mask together at the actual constructor/setter call. Preserve
+  logical shape, aligned slots, order and source-row correspondence, including
+  strided/reversed views and data/mask buffers with different strides. Convert
+  only the variables used by this binding, not the entire masked table.
+- NumPy `mask=True` means missing; native `validity=True` means present. Invert the
+  mask into the existing ndarray/native validity route. Handle nomask/all-valid,
+  partial and all-masked inputs without changing their declared shape or dtype.
+- Never use `.compressed()`, `.filled()`, fill_value, row deletion or implicit
+  imputation. A masked underlying value is not a present observation; an unmasked
+  NaN remains present NaN, distinct from null.
+- Keep normal dtype/rank restrictions even when every entry is masked. Supporting
+  MaskedArray does not make structured/object/temporal data implicitly applicable,
+  or infer the meaning of an otherwise ambiguous all-missing axis input.
+- Missing-data applicability remains native: sample/coordinate consumers apply
+  their existing aligned rules, while roles requiring present values, including
+  IDs, alpha bytes and complete supplied geometry, retain their existing failures.
+  Do not implement another missing-data/scientific policy in Python.
+- Save stable owned bound values/validity. Later data or mask mutation cannot
+  refresh them; retaining a main masked lookup source only permits a later explicit
+  binding to take a fresh snapshot. Ordinary ndarray users need not supply a mask
+  or change their existing input form.
+
+#### DataFrame Extraction And Bridges
 
 For pandas, use public dtype/array interfaces rather than private storage fields.
 Keep per-column validity independently of numeric payloads; never use
@@ -604,9 +709,10 @@ names must reach native identities/automatic labels rather than disappear into
 generic x/y role names. Do not add implicit index joins, sorting or row compaction,
 or infer x/source IDs from DataFrame.index. Ambiguous selected names fail instead
 of choosing the first matching column. Exact composite-key selection follows the
-col/cols grammar; remaining label-type admission and key-to-native identity mapping
-require working extraction/typing verification. No Rust pandas adapter crate is
-prescribed.
+selected col/cols key contract, without a label-type whitelist or stringification
+of lookup keys. Implement and verify the original-key/native-identity/display
+mapping through the existing native label policy, not a second label store. No
+Rust pandas adapter crate is prescribed.
 
 PyArrow is a Python Arrow implementation, not the Arrow protocol itself and not
 a required intermediate dependency for all inputs. Ordinary pandas users must not
@@ -1251,9 +1357,11 @@ implementation is not. Before expanding the binding surface:
 
 1. Complete exact overloads/runtime combination rules for the selected
    [25-family constructor forms](92_PYTHON_CONSTRUCTORS_PLAN.md), policy/method
-   signatures, label defaults/None handling, remaining field-key admission and
-   slice normalization/boundaries. Preserve the four ordinary
-   data routes without Rust payload classes and conventional concise type aliases.
+   signatures and native label/text mappings. Implement the selected signed-index/
+   strict-slice rules, complete hashable pandas keys and MaskedArray validity;
+   these are settled contracts, not remaining product choices. Preserve the four
+   ordinary data routes without Rust payload classes and use conventional concise
+   type aliases.
    Keep the selected single-runtime-entry/overload model. col/cols and
    direct-projection syntax are selected, not a choice between
    selector guessing and competing *_cols keywords. Row-position/column-name modes,
@@ -1298,6 +1406,16 @@ implementation is not. Before expanding the binding surface:
    and missing/ambiguous/duplicate/empty/out-of-range/no-source failures. Verify
    selected and direct-projection value snapshots without assuming identical
    provenance/display names or requiring a per-family replay matrix.
+   Add bounded boundary witnesses for signed steps/open endpoints, omitted reverse
+   stop versus explicit -1, strict non-clipping bounds, duplicate normalized indices
+   and pandas integer labels versus positional slices. Verify complete float/
+   Timestamp/custom hashable keys, rejection of partial/query matches and distinct
+   integer/string keys with equal display text. MaskedArray witnesses must preserve
+   independent data/mask strides, null versus unmasked NaN, row alignment and stable
+   snapshots after either buffer changes; include native present-only failures.
+   Key encoding, mask conversion and the per-API Rust/PyO3 mapping are implementation
+   tasks. Reuse native scientific/default/callback behavior; do not reopen them as
+   Python product choices or implement another Python-side scientific model.
    Shared value/text checks must cover unchanged originals/aliases after derivation,
    rejection of direct/nested writes, native validation failure, stable explicit
    value attachments, equivalent Text/keyword entry forms, ordinary role inheritance
@@ -1342,6 +1460,10 @@ corresponding implementation begins.
 [maturin-layout]: https://www.maturin.rs/project_layout.html
 [python-layout]: https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
 [python-overload]: https://docs.python.org/3.10/library/typing.html#typing.overload
+[python-index]: https://docs.python.org/3.10/reference/datamodel.html#object.__index__
+[python-sequence-slices]: https://docs.python.org/3.10/library/stdtypes.html#common-sequence-operations
+[pandas-index-get-loc]: https://pandas.pydata.org/docs/reference/api/pandas.Index.get_loc.html
+[numpy-masked-arrays]: https://numpy.org/doc/1.26/reference/maskedarray.generic.html
 [pyo3-classes]: https://pyo3.rs/v0.29.3/class.html
 [pyo3-parallelism]: https://pyo3.rs/v0.29.3/parallelism.html
 [rust-numpy]: https://github.com/PyO3/rust-numpy/tree/v0.29.0
