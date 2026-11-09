@@ -26,12 +26,20 @@ Output methods return native `Result<Output>`; `AdapterError` preserves native
 errors when a combined workflow uses `?`. No public adapter result alias is added.
 
 Constructors are available for all 25 native families,
-including supplied bounds, bar sample/estimate modes and native supplied geometry.
+including supplied bounds, bar sample/estimate modes and flat supplied geometry.
 `Heatmap::new(&numeric_frame)` binds a rectangle; `Heatmap::from_data(frame, ["a",
 "b"])` selects columns and `Heatmap::records_from_data(frame, "x", "y", "value")`
 binds categorical cell records. `Matrix` binds ordered numeric variables, with
 explicit `numeric_from_data` discovery. Independent `PointLayerAdapter` and
 `BarPointLayerAdapter` have their own direct/source-bound constructors.
+
+Histogram/Raincloud `geometry` binds complete flat columns, with
+`geometry_with_hue` for hued Rainclouds. Source forms prefix bins/summary plus
+two optional independent component DataFrames. Each domain aligns independently;
+only the primary source remains for subsequent lookup. Sample Histogram
+`composite_precomputed_kde(x, y)` and its independent-source form configure KDE+rug
+without changing samples, bins or stat. Dictionary keys match decoded raw strings,
+and supplied Raincloud point alpha follows original point rows, not summary order.
 
 `Line::from_data(&frame, "time", ["a", "b"])` preserves actual x with ordered
 many-y series. `indexed` methods explicitly choose row position; distribution

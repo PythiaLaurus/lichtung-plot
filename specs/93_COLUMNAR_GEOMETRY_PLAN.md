@@ -2,9 +2,9 @@
 
 ## Status And Authority
 
-The core columnar geometry API and its coupled consumers are delivered. The
-adapter column-binding surfaces remain an implementation plan; no Python binding
-is delivered. Current scientific and adapter behavior remains defined by the
+The core columnar geometry API, coupled consumers and both adapters' column-binding
+surfaces are delivered. No Python binding is delivered. Current scientific and
+adapter behavior remains defined by the
 [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). Update those current contracts with working
 code, not in anticipation of it.
@@ -18,8 +18,8 @@ recording this plan.
 | Objective | Status |
 | --- | --- |
 | Core geometry, sample-owned supplied KDE and coupled consumers | Delivered: flat inputs, six alignment domains, raw-string membership, original point-row alpha, logical equality and removal of nested public types/callers. Focused geometry, distribution, alpha/guide, degeneracy, layout and KDE doctest witnesses plus strict workspace Clippy passed. |
-| Adapter direct/independent-source column inputs | Pending; current frontends still pass through the complete current native geometry. Native re-exports already expose the flat core API. |
-| Integrated adapter docs/Book/archive closure | Pending with the adapter surface; no Python bridge, ownership or distribution verification is implied by the core work. |
+| Adapter direct/independent-source column inputs | Delivered: complete Histogram/Raincloud flat forms, explicit hued Raincloud forms, separate domain contexts/lengths, independent sample KDE, primary-only lookup retention and point-domain alpha length. Both adapters' focused geometry/KDE/lifetime tests and neighboring wide-alpha tests plus the shared-native consumer and strict workspace Clippy passed. |
+| Integrated adapter docs/Book/archive closure | API docs, peer Book checks and all three independently unpacked Cargo archives passed. A stale same-version local-registry compiler cache was isolated before the successful archive rerun. No Python bridge, lifecycle or distribution verification is implied by the native work. |
 
 ## Selected Scope
 
@@ -223,8 +223,9 @@ rows and nonmatching dictionary codes; do not repin whole-scene goldens.
 
 ## Adapter Binding Design
 
-Replace the current `geometry(native_geometry)` and
-`geometry_from_data(source, native_geometry)` frontend pass-through signatures.
+The former `geometry(native_geometry)` and
+`geometry_from_data(source, native_geometry)` frontend pass-through signatures are
+removed in favor of the column bindings below.
 Rust consumers needing core construction still have the re-exported Plot API;
 they do not need another native-payload frontend route.
 
@@ -234,7 +235,7 @@ they do not need another native-payload frontend route.
 | Raincloud without hue | `geometry` | `geometry_from_data` |
 | Raincloud with hue | `geometry_with_hue` | `geometry_with_hue_from_data` |
 
-These are planned method spellings. Numeric/category parameters use the existing
+These are the current method spellings. Numeric/category parameters use the existing
 NumericInput/CategoryInput protocols in domain order, followed by literal scalar
 dimension metadata. Do not introduce nested descriptor arguments, mandatory
 native-value preprocessing or a bind namespace. The two Raincloud forms avoid
@@ -275,7 +276,7 @@ globally or replace typed parameters with an unrestricted argument bag.
 
 ### Ordinary Inputs For Sample-Owned KDE
 
-Plan `composite_precomputed_kde(x, y)` for direct columns and
+Use `composite_precomputed_kde(x, y)` for direct columns and
 `composite_precomputed_kde_from_data(kde_source, x, y)` for an explicit independent
 source. These configure the existing KDE+rug composite only: do not alter stat,
 bins, samples or the main lookup source. Bind/snapshot the KDE at that call and
@@ -332,17 +333,20 @@ and ownership facilities exist.
 
 Delivered together: both flat payloads, supplied KDE, validation/preparation,
 alpha/label consumers and all removed-type library/test/guide callers. The existing
-adapter pass-through accepts the current flat payload until its own signature
-replacement, without an old/new core representation. Focused core checks and
-strict workspace Clippy passed; retain these witnesses while implementing the
-adapter input surface.
+adapter pass-through has also been replaced, without an old/new representation.
+Focused core checks and strict workspace Clippy passed; retain these witnesses
+through subsequent binding work.
 
 ### Both Adapter Input Surfaces
 
-Replace native-payload frontend signatures, implement direct/multiple-source
-bindings and independent KDE inputs, and migrate their callers/guides/current
-adapter contract together. Run focused adapter checks, the existing cross-adapter
-consumer and strict workspace Clippy, then commit this logical change.
+Delivered: native-payload frontend signatures replaced by direct/multiple-source
+bindings and independent KDE inputs; peer guides and the current adapter contract
+describe the same API. Both adapters' four focused geometry/KDE tests passed,
+including stride/validity, chunked columns, independent dictionary keys, auxiliary
+borrow release, native handoff, source isolation and original-point alpha scope.
+The existing cross-adapter consumer, one affected wide-alpha neighbor per adapter
+and strict workspace Clippy passed. Geometry shape/lookup failures remain adapter
+errors; missing scientific geometry remains a native preflight error.
 
 ### Integrated Closure
 
@@ -386,10 +390,11 @@ cargo test --locked --offline -p lichtung-plot --lib sparse_collective_families_
 cargo test --locked --offline -p lichtung-plot-book --test native_adapters
 ```
 
-Add bounded filters for each adapter's new geometry/KDE tests once they exist;
-there are no current flat-geometry adapter tests to claim as passing. Extend to
-sample composite/rug neighbors only when their changed preparation path requires
-it. These commands are a future verification plan, not execution evidence.
+The adapter geometry/KDE witnesses are selected with
+`--lib frontend::geometry::tests` on each adapter. These eight tests and the
+shared-native consumer have passed; the two Raincloud witnesses were rerun after
+making their intended raw-label policy explicit. Extend to other sample
+composite/rug neighbors only when a changed preparation path requires it.
 
 Compiler validation is always:
 
@@ -404,5 +409,5 @@ need source/link consistency and `git diff --check`, not Rust builds.
 
 Closure requires no remaining public deleted-type references or old native-payload
 frontend protocol, no compatibility re-exports and no private resurrection of the
-old input model. Only the core delivery/evidence recorded above is complete;
-remaining adapter and Python implementation/verification is not claimed.
+old input model. Core and adapter delivery/evidence are recorded above; no Python
+implementation or verification is claimed.

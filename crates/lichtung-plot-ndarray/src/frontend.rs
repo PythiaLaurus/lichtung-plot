@@ -10,6 +10,7 @@ use crate::{
 mod alpha;
 mod constructors;
 mod forwarding;
+mod geometry;
 mod grid;
 mod status;
 mod wide;
@@ -30,6 +31,7 @@ pub struct PlotAdapter<'source, K: kind::Marker> {
     plot: Plot<K>,
     pub(crate) source: Context<'source>,
     len: Option<usize>,
+    geometry_points: Option<usize>,
     labels: Labels,
     facet: Option<FacetSpec>,
     grid: Option<grid::Grid>,
@@ -77,6 +79,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
             plot,
             source,
             len,
+            geometry_points: None,
             labels: Labels::default(),
             facet: None,
             grid: None,
@@ -95,6 +98,9 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
             || self.grid.as_ref().map_or(1, grid::Grid::columns),
             |wide| wide.keys.len(),
         )
+    }
+    fn alpha_len(&self) -> Option<usize> {
+        self.geometry_points.or(self.len)
     }
     fn category_rows(
         &self,

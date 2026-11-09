@@ -54,6 +54,23 @@ repeat by source row. `_cells` methods explicitly bind expanded slots, and
 select the generated dimension. Scope is never guessed from matching lengths.
 Many-y Line bounds require matching collections/matrices; one pair is not reused.
 
+Complete Histogram `geometry` binds bins (lower/upper/density), KDE (x/y) and rug
+(x/baseline/top), then scientific value/density dimension names. Raincloud binds
+summary (category/q1/median/q3), density (category/y/width) and points
+(category/y/strip), then category/value dimensions; `geometry_with_hue` adds hue
+after each domain's category and a final hue dimension. These are ordinary views,
+validity pairs, native columns or selectors, not nested geometry wrappers.
+`geometry_from_data` / `geometry_with_hue_from_data` prefix the bins/summary source
+and optional independent density-or-KDE and points-or-rug sources as
+`Option<&dyn ArraySource>`. Each domain aligns independently and only the main
+source remains for later selectors; None never falls back to another source.
+Raw-string membership, summary display order and original point-row alpha remain
+native. Scientific dimension keys are not display-label overrides.
+
+Sample Histogram `composite_precomputed_kde(x, y)` snapshots direct columns;
+`composite_precomputed_kde_from_data(source, x, y)` snapshots an independent table.
+Neither changes samples, bins, stat or main source; select Density explicitly.
+
 `estimate_status_boolean` and `estimate_status_categorical` explicitly choose
 availability. Alpha accepts exact non-null u8 variables, explicit Single values
 (`64u8`, distinct from selector `0usize`), native mappings and keyed/bin units.

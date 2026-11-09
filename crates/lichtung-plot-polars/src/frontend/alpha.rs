@@ -48,7 +48,8 @@ macro_rules! alpha_target {
                 mut self,
                 input: impl AlphaInput,
             ) -> std::result::Result<Self, AdapterError> {
-                let encoding = input.bind_alpha(self.source, self.len, self.row_copies())?;
+                let encoding =
+                    input.bind_alpha(self.source, self.alpha_len(), self.row_copies())?;
                 self.plot = self.plot.$base(encoding);
                 Ok(self)
             }
@@ -57,7 +58,7 @@ macro_rules! alpha_target {
                 mut self,
                 input: impl AlphaInput,
             ) -> std::result::Result<Self, AdapterError> {
-                let encoding = input.bind_alpha(self.source, self.len, 1)?;
+                let encoding = input.bind_alpha(self.source, self.alpha_len(), 1)?;
                 self.plot = self.plot.$base(encoding);
                 Ok(self)
             }
@@ -76,7 +77,8 @@ macro_rules! alpha_target {
                 input: impl NumericInput,
                 mapper: impl FnOnce(NumericValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = self.mapped_numeric(input, mapper, self.row_copies(), self.len)?;
+                let values =
+                    self.mapped_numeric(input, mapper, self.row_copies(), self.alpha_len())?;
                 self.plot = self.plot.$base(AlphaEncoding::observations(values));
                 Ok(self)
             }
@@ -86,7 +88,8 @@ macro_rules! alpha_target {
                 input: impl CategoryInput,
                 mapper: impl FnOnce(CategoryValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = self.mapped_categories(input, mapper, self.row_copies(), self.len)?;
+                let values =
+                    self.mapped_categories(input, mapper, self.row_copies(), self.alpha_len())?;
                 self.plot = self.plot.$base(AlphaEncoding::observations(values));
                 Ok(self)
             }
@@ -96,7 +99,7 @@ macro_rules! alpha_target {
                 input: impl NumericInput,
                 mapper: impl FnOnce(NumericValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = self.mapped_numeric(input, mapper, 1, self.len)?;
+                let values = self.mapped_numeric(input, mapper, 1, self.alpha_len())?;
                 self.plot = self.plot.$base(AlphaEncoding::observations(values));
                 Ok(self)
             }
@@ -106,7 +109,7 @@ macro_rules! alpha_target {
                 input: impl CategoryInput,
                 mapper: impl FnOnce(CategoryValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = self.mapped_categories(input, mapper, 1, self.len)?;
+                let values = self.mapped_categories(input, mapper, 1, self.alpha_len())?;
                 self.plot = self.plot.$base(AlphaEncoding::observations(values));
                 Ok(self)
             }

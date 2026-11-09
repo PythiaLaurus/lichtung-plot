@@ -53,9 +53,27 @@ parses strings or executes LazyFrame/IO. Error sources retain Polars/native erro
 invalid ID diagnostics name logical slots, not guessed original IDs.
 
 All 25 families support direct/source bindings, supplied intervals, distinct bar
-sample/estimate modes and native supplied geometry. Independent `PointLayerAdapter`
+sample/estimate modes and flat supplied geometry. Independent `PointLayerAdapter`
 and `BarPointLayerAdapter` use their own sources and counts: a fitted line/band
 never inherits observation-layer labels, hue or facets.
+
+Complete Histogram `geometry` takes bins (lower/upper/density), KDE (x/y), rug
+(x/baseline/top), then value/density dimension names. Raincloud takes summary
+(category/q1/median/q3), density (category/y/width), points (category/y/strip), then
+category/value dimensions. `geometry_with_hue` adds hue after each category and a
+final hue dimension. Pass ordinary Series/Column variables directly;
+`geometry_from_data` / `geometry_with_hue_from_data` prefix bins/summary plus
+optional independent KDE/density and rug/points frames. Each column may be a field
+selector or direct variable; each domain has its own length. None never falls back
+to another frame, and only the main frame remains for later lookup. Raw decoded
+keys match across independent dictionaries; summary order controls groups, while
+point alpha follows original point rows. Scientific dimensions are distinct from
+display-title overrides.
+
+Sample Histogram `composite_precomputed_kde(x, y)` binds direct KDE columns;
+`composite_precomputed_kde_from_data(frame, x, y)` uses an independent frame and
+releases it after snapshotting. Samples, bins, stat and main lookup are unchanged;
+select Density explicitly.
 
 | Explicit operation | Meaning |
 | --- | --- |

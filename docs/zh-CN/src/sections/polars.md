@@ -46,9 +46,23 @@ Plot 以释放该上下文，再于发布前释放数据框，复用冻结的输
 填补、聚合、解析字符串，也不执行延迟查询或输入输出操作。错误链保留 Polars／原生来源；
 无效行标识的诊断使用逻辑槽位，不猜测原始标识。
 
-25 个图族均支持直接／源绑定、显式区间、独立的柱图样本／估计模式和原生预供几何。
+25 个图族均支持直接／源绑定、显式区间、独立的柱图样本／估计模式和平铺预供几何。
 独立 `PointLayerAdapter` 和 `BarPointLayerAdapter` 使用自己的源与数量，拟合线／区间
 不会继承观测层的标签、着色或分面。
+
+完整 Histogram 的 `geometry` 依次接受 bins（lower／upper／density）、KDE（x／y）、
+rug（x／baseline／top），最后传 value／density 维度名。Raincloud 依次接受摘要
+（category／q1／median／q3）、密度（category／y／width）、散点（category／y／strip），
+最后传 category／value 维度名；`geometry_with_hue` 在各 category 后加入 hue，末尾加
+hue 维度名。各列可直接传普通 Series／Column；`geometry_from_data`／
+`geometry_with_hue_from_data` 在数据参数前传 bins／summary 主表，再传独立可选的
+KDE／density 与 rug／points 表。每列可混用字段选择器和直接变量，各域长度独立；None
+不回退到其他表，只有主表供后续查找。独立字典按解码后的原始键匹配，摘要顺序控制分组，
+散点透明度则对应原始散点行；科学维度键与显示标题覆盖相互独立。
+
+样本 Histogram 的 `composite_precomputed_kde(x, y)` 绑定直接 KDE 列，
+`composite_precomputed_kde_from_data(frame, x, y)` 使用独立表并在快照后释放借用。
+样本、分箱、统计量和主表查找均保持不变，仍须显式选择 Density。
 
 | 显式操作 | 语义 |
 | --- | --- |

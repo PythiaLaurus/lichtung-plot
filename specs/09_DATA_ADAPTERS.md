@@ -68,7 +68,7 @@ from lengths or a similar upstream plotting signature.
 | Family | Arguments | Additional meaning/modes |
 | --- | --- | --- |
 | Scatter | x, y-or-ys | Actual numeric coordinates; explicit indexed modes. |
-| Histogram | samples | Native samples; geometry accepts native HistogramGeometry. |
+| Histogram | samples | Native samples; geometry binds complete flat bins/KDE/rug columns. |
 | Density | value | Native sample density. |
 | Qq | value | Native sample/reference policies. |
 | PointInterval | category, estimate, lower, upper | Required supplied bounds; explicit status is separate. |
@@ -86,7 +86,7 @@ from lengths or a similar upstream plotting signature.
 | StackedHorizontalBar | category, value, series | Same stack semantics and exact native family. |
 | Boxplot | category, value-or-values | Native samples and positioned-series expansion; explicit columns modes. |
 | Violin | category, value-or-values | Native sample/density policies and columns modes. |
-| Raincloud | category, value-or-values | Samples/columns; geometry accepts native RaincloudGeometry. |
+| Raincloud | category, value-or-values | Samples/columns; geometry binds complete flat summary/density/point columns. |
 | Regression | x, y | Existing native OLS and RegressionBand policy. |
 | Marginal | x, y | Native composed views and restrictions. |
 | Matrix | variables / selected columns | Scatter-matrix columns; explicit numeric discovery, no generic facets. |
@@ -97,14 +97,56 @@ Bar/HorizontalBar `with_error_bar(category, samples, policy)` takes native
 `impl Into<ErrorBar>`. `estimates(category, estimate)` uses supplied values without
 generating intervals; `estimates_with_error_bars(category, estimate, lower, upper)`
 uses supplied endpoints. There is no post-construction input/error-bar replay
-setter. Histogram/Raincloud `geometry` and `geometry_from_data` preserve native
-geometry order and preflight restrictions, including unsupported faceting and
-supplied Raincloud series/significance combinations.
+setter. Histogram/Raincloud geometry constructors preserve native geometry order
+and preflight restrictions, including unsupported faceting and supplied Raincloud
+series/significance combinations.
 
 Native closed inputs remain directly available through root Plot. Adapter Line
 binds `.band(lower, upper)?`; native Line still takes `.band(Bounds)`. There is no
 `band_bounds` compatibility method. Regression's same-name setter remains its
 different native RegressionBand policy.
+
+### Complete Columnar Distribution Geometry
+
+Histogram `geometry` takes bin_lower/bin_upper/bin_density, kde_x/kde_y and
+rug_x/rug_baseline/rug_top, followed by literal value_dimension/density_dimension
+strings. Raincloud `geometry` takes category/q1/median/q3,
+density_category/density_y/normalized_width and
+point_category/point_y/normalized_strip, followed by category_dimension/value_dimension.
+`geometry_with_hue` adds hue immediately after category in each of the three
+domains and a final hue_dimension. These are complete forms, not optional generic
+hue arguments requiring an uninferrable None. Every data role uses the ordinary
+NumericInput/CategoryInput protocol, including native per-column values.
+
+The corresponding `geometry_from_data` / `geometry_with_hue_from_data` signatures
+prefix a main source and two optional independent auxiliary sources. Histogram's
+main is bins, then KDE/rug sources; Raincloud's main is summary, then density/points
+sources. Polars retains `&'source DataFrame`; ndarray retains
+`impl ArraySource + 'source`. Auxiliary parameters are `Option<&DataFrame>` or
+`Option<&dyn ArraySource>` and their borrows end at the call. None means direct
+columns in that domain; a selector without its own source fails, never falling
+back to another domain's source. Direct values and selectors may be mixed.
+
+Each domain is equal-length independently; domains may have different lengths.
+Binding snapshots only used columns and performs structural length checks. The
+core owns scientific completeness, finite/null/support validation, raw-string
+membership and group order. It never joins indexes, fills missing components,
+sorts child records or compares independently encoded dictionary codes. Scientific
+dimension strings stay distinct from authored display titles and bound column
+names. Root Plot still accepts the native flat geometry payloads; the frontend
+does not add another native-payload constructor route.
+
+Only the main source remains for subsequent selectors, including alpha; setters
+never switch to a component source by target. Supplied Raincloud observation alpha
+aligns with the original points-domain rows, not summary length/display order.
+Summary-keyed alpha, Histogram bin alpha and Single have their own native units
+and are not constrained to points or one global geometry-row count.
+
+Sample Histogram `composite_precomputed_kde(x, y)` snapshots direct KDE columns;
+`composite_precomputed_kde_from_data(kde_source, x, y)` binds an independent source
+without retaining it. Neither changes samples, bins, stat or main lookup context.
+The caller still selects Density explicitly. Ordinary `.composite(...)` retains
+native Internal/HistogramOnly policies, with only one native precomputed x/y form.
 
 ## Foreign Input Grammar
 

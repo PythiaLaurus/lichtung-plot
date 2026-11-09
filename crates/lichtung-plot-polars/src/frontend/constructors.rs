@@ -6,8 +6,8 @@ use super::PlotAdapter;
 use crate::error::{length, BindingResult};
 use crate::{
     kind, AdapterError, AxisInput, AxisValues, BarInput, Bounds, CategoryInput, CategoryValues,
-    CoefficientInput, ColumnsInput, DumbbellEndpoints, ErrorBar, HistogramGeometry, HistogramInput,
-    NumericInput, NumericValues, Plot, RaincloudGeometry, RaincloudInput,
+    CoefficientInput, ColumnsInput, DumbbellEndpoints, ErrorBar, HistogramInput, NumericInput,
+    NumericValues, Plot,
 };
 
 trait Slots {
@@ -133,34 +133,6 @@ macro_rules! bar_modes {
 }
 bar_modes!(Bar, bar);
 bar_modes!(HorizontalBar, horizontal_bar);
-
-macro_rules! geometry {
-    ($family:ident, $input:ident, $geometry:ty, $native:ident) => {
-        impl<'source> PlotAdapter<'source, kind::$family> {
-            /// Bind complete caller-computed native geometry without installing a source.
-            pub fn geometry(geometry: $geometry) -> std::result::Result<Self, AdapterError> {
-                Ok(Self::bound(
-                    Plot::$native($input::geometry(geometry)),
-                    None,
-                    None,
-                ))
-            }
-            /// Bind complete geometry and retain a source for subsequent admitted bindings.
-            pub fn geometry_from_data(
-                source: &'source DataFrame,
-                geometry: $geometry,
-            ) -> std::result::Result<Self, AdapterError> {
-                Ok(Self::bound(
-                    Plot::$native($input::geometry(geometry)),
-                    Some(source),
-                    None,
-                ))
-            }
-        }
-    };
-}
-geometry!(Histogram, HistogramInput, HistogramGeometry, histogram);
-geometry!(Raincloud, RaincloudInput, RaincloudGeometry, raincloud);
 
 impl PlotAdapter<'_, kind::Line> {
     /// Bind independently supplied lower/upper bounds, not a new interval estimator.

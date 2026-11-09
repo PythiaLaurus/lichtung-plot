@@ -32,8 +32,8 @@ preferred implementation direction, not a completed experiment. The
 [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25 families
 and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
-core/adapter migration. Its flat core inputs and coupled consumers are delivered;
-adapter column extraction, native ownership/text-clear facilities,
+core/adapter migration. Its flat core inputs, coupled consumers and adapter column
+extraction are delivered; native ownership/text-clear facilities,
 exact stubs and the selected input-boundary contracts still need implementation
 and verification before expanding the binding surface. The three input-boundary
 choices below are settled, not outstanding product decisions.
@@ -45,7 +45,7 @@ choices below are settled, not outstanding product decisions.
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
-| Columnar distribution geometry prerequisite | Core delivered: flat Histogram/Raincloud geometry and sample-owned external KDE, migrated consumers, raw-key membership/original-point-row alpha, focused checks and strict Clippy. Direct/multiple-source column extraction in each corresponding Rust adapter remains pending. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields, delivery status and remaining gates. |
+| Columnar distribution geometry prerequisite | Delivered: flat core Histogram/Raincloud geometry and sample-owned external KDE, direct/multiple-source adapter column extraction, raw-key membership/original-point-row alpha and primary-only retained lookup. Focused core/adapter checks, the cross-adapter consumer, strict Clippy, API/Book checks and all three independently unpacked archives passed. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields and evidence. |
 | Python lifecycle decision and complete binding | Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics settled. All 25 constructors inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments completed; no binding/selectors/stubs, native text-clear or region-overwrite implementation. Native API/ownership details and full verification are open. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
@@ -232,18 +232,17 @@ when changing tests, and verify working packages at delivery, not through a
 pre-implementation audit or compatibility project. Python retains its own
 implementation and verification gate below.
 
-### Planned Columnar Geometry Prerequisite
+### Columnar Geometry Prerequisite
 
-The current adapter geometry constructors pass through complete native flat
-geometry; source-bound forms retain a lookup source. They do not yet extract the
-selected flat fields. Replace that protocol as specified by the
+The adapters now bind complete geometry through ordinary direct/selected columns,
+replacing their former native-payload frontend protocol as specified by the
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md):
 
 - The core now keeps top-level HistogramGeometry/RaincloudGeometry and the closed
   sample/geometry choice with flat public fields. Nested Dimensions/Group/Bin/Point
   types and their callers are removed; sample-owned precomputed KDE uses named x/y
   columns too, with no retained public point-type route.
-- Add direct/multiple-source column binding in the corresponding Rust adapters.
+- Both corresponding Rust adapters provide direct/multiple-source column binding.
   Histogram bins/KDE/rugs and Raincloud summary/density/points each have their own
   alignment domain. Only the main source remains for later lookup; auxiliary
   sources are used during the binding call, never fallback setter contexts.
@@ -254,9 +253,8 @@ selected flat fields. Replace that protocol as specified by the
   labels. Python uses the selected `*_label` text conveniences, not new public
   `*_dimension`/`*_name` keys, Rust data classes or a second binding-side label store.
 
-Implement and verify this native migration before Python supplied-geometry
-bindings. It is not an extension of accepted Rust foreign-container types or a
-claim that current contracts/code already have the planned API.
+This native migration precedes Python supplied-geometry bindings. It is not an
+extension of accepted Rust foreign-container types or evidence of a Python bridge.
 
 ## Complete Python Interface
 
@@ -1373,9 +1371,9 @@ implementation is not. Before expanding the binding surface:
    owners, immutable values, shared Text entries, binding-time snapshots and Canvas
    placement/region-overwrite behavior are selected; do not reopen them as lifecycle
    modes or live aliases.
-2. Finish the adapter input surface of the prerequisite
-   [geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) before Python geometry binding;
-   the flat core and coupled consumers are delivered. Keep one native representation, the sample/geometry
+2. Preserve the delivered native input surface of the prerequisite
+   [geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) during Python geometry binding.
+   Keep one native representation, the sample/geometry
    scientific boundary, independent source domains, raw category/hue keys and
    original point-row alpha. Verify sample-owned external KDE as well as complete
    geometry. This does not extend either Rust adapter to the other's containers.

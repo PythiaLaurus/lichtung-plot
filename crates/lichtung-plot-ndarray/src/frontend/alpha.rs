@@ -44,8 +44,11 @@ macro_rules! alpha_target {
                 mut self,
                 input: impl AlphaInput,
             ) -> std::result::Result<Self, AdapterError> {
-                let encoding =
-                    input.bind_alpha(self.source.as_deref(), self.len, self.row_copies())?;
+                let encoding = input.bind_alpha(
+                    self.source.as_deref(),
+                    self.alpha_len(),
+                    self.row_copies(),
+                )?;
                 self.plot = self.plot.$base(encoding);
                 Ok(self)
             }
@@ -54,7 +57,7 @@ macro_rules! alpha_target {
                 mut self,
                 input: impl AlphaInput,
             ) -> std::result::Result<Self, AdapterError> {
-                let encoding = input.bind_alpha(self.source.as_deref(), self.len, 1)?;
+                let encoding = input.bind_alpha(self.source.as_deref(), self.alpha_len(), 1)?;
                 self.plot = self.plot.$base(encoding);
                 Ok(self)
             }
@@ -78,7 +81,7 @@ macro_rules! alpha_target {
                     input,
                     mapper,
                     self.row_copies(),
-                    self.len,
+                    self.alpha_len(),
                 )?;
                 self.$base(AlphaEncoding::observations(values))
             }
@@ -93,7 +96,7 @@ macro_rules! alpha_target {
                     input,
                     mapper,
                     self.row_copies(),
-                    self.len,
+                    self.alpha_len(),
                 )?;
                 self.$base(AlphaEncoding::observations(values))
             }
@@ -103,7 +106,8 @@ macro_rules! alpha_target {
                 input: impl NumericInput,
                 mapper: impl FnOnce(NumericValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = mapped_numeric(self.source.as_deref(), input, mapper, 1, self.len)?;
+                let values =
+                    mapped_numeric(self.source.as_deref(), input, mapper, 1, self.alpha_len())?;
                 self.$base(AlphaEncoding::observations(values))
             }
             /// Map explicitly expanded categorical slots without row repetition.
@@ -112,7 +116,8 @@ macro_rules! alpha_target {
                 input: impl CategoryInput,
                 mapper: impl FnOnce(CategoryValues) -> crate::Result<AlphaValues>,
             ) -> std::result::Result<Self, AdapterError> {
-                let values = mapped_categories(self.source.as_deref(), input, mapper, 1, self.len)?;
+                let values =
+                    mapped_categories(self.source.as_deref(), input, mapper, 1, self.alpha_len())?;
                 self.$base(AlphaEncoding::observations(values))
             }
             /// Explicitly broadcast a u8 literal or exactly one bound alpha value.

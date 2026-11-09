@@ -398,8 +398,8 @@ keys do not introduce a sample `.hue(...)` setter. The display keywords are
   Adapters do not duplicate this scientific validation.
 
 Sample-owned Histogram with a supplied KDE remains a distinct composite option,
-not this complete-geometry mode. The prerequisite plan replaces its shared public
-KDE point vector with named x/y columns too. Final Python method signatures must
+not this complete-geometry mode. The native prerequisite now uses named x/y
+columns, with direct/independent-source adapter helpers. Final Python method signatures must
 bind ordinary data at an explicit direct/independent-source call, without a public
 Rust point class or a hidden lookup against the samples source.
 

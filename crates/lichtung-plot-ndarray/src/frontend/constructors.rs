@@ -2,8 +2,8 @@ use super::{context, Context, PlotAdapter};
 use crate::error::{length, BindingResult};
 use crate::{
     kind, AdapterError, ArraySource, AxisInput, AxisValues, BarInput, Bounds, CategoryInput,
-    CategoryValues, CoefficientInput, ColumnsInput, DumbbellEndpoints, ErrorBar, HistogramGeometry,
-    HistogramInput, NumericInput, NumericValues, Plot, RaincloudGeometry, RaincloudInput,
+    CategoryValues, CoefficientInput, ColumnsInput, DumbbellEndpoints, ErrorBar, HistogramInput,
+    NumericInput, NumericValues, Plot,
 };
 
 trait Slots {
@@ -75,34 +75,6 @@ macro_rules! bar_modes {
 }
 bar_modes!(Bar, bar);
 bar_modes!(HorizontalBar, horizontal_bar);
-macro_rules! geometry {
-    ($family:ident,$input:ident,$geometry:ty,$native:ident) => {
-        impl<'source> PlotAdapter<'source, kind::$family> {
-            /// Own caller-computed native geometry without installing an array source.
-            pub fn geometry(geometry: $geometry) -> std::result::Result<Self, AdapterError> {
-                Ok(Self::bound(
-                    Plot::$native($input::geometry(geometry)),
-                    None,
-                    None,
-                ))
-            }
-            /// Own native geometry and retain a source for later admitted bindings.
-            pub fn geometry_from_data(
-                source: impl ArraySource + 'source,
-                geometry: $geometry,
-            ) -> std::result::Result<Self, AdapterError> {
-                Ok(Self::bound(
-                    Plot::$native($input::geometry(geometry)),
-                    context(source)?,
-                    None,
-                ))
-            }
-        }
-    };
-}
-geometry!(Histogram, HistogramInput, HistogramGeometry, histogram);
-geometry!(Raincloud, RaincloudInput, RaincloudGeometry, raincloud);
-
 impl PlotAdapter<'_, kind::Line> {
     /// Bind bounds with exactly the line's single-variable or selected-column shape.
     pub fn band(

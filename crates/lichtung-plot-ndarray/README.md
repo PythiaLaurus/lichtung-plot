@@ -34,6 +34,12 @@ matrices are snapshotted immediately and do not become implicit lookup sources.
 - Row/cell/generated-column facets and roles, supplied bounds, bar sample/estimate
   modes, independent point layers, statuses, native alpha mappings and independent
   significance results bind directly without public data-role wrappers.
+- Histogram/Raincloud `geometry` binds complete flat columns, with
+  `geometry_with_hue` for hued Rainclouds. Source forms prefix bins/summary plus
+  two optional independent component sources (`Option<&dyn ArraySource>`).
+  Each domain aligns independently; only the primary source remains for lookup.
+  Sample Histogram `composite_precomputed_kde(x, y)` and its independent-source
+  form configure KDE+rug without changing samples, bins or stat.
 
 Numeric primitives round normally to f64. Null is not NaN; raw categories remain
 strings and exact IDs never pass through f64. Binding does not sort, drop,

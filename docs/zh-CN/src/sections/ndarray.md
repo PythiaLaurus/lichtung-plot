@@ -47,6 +47,20 @@
 `hue_columns`、`group_columns`、`series_columns` 和列维度分面方法选择生成维度。
 绝不按长度猜作用域。多 y 的 Line 上下界必须是匹配的列集合／矩阵，不能复用一对界限。
 
+完整 Histogram 的 `geometry` 依次绑定 bins（lower／upper／density）、KDE（x／y）、
+rug（x／baseline／top），最后传科学 value／density 维度名。Raincloud 依次绑定摘要
+（category／q1／median／q3）、密度（category／y／width）、散点（category／y／strip），
+最后传 category／value 维度名；`geometry_with_hue` 在各域 category 后加入 hue，末尾加
+hue 维度名。各列仍是普通视图、有效性对、原生列或选择器，无需嵌套几何包装。
+`geometry_from_data`／`geometry_with_hue_from_data` 在数据参数前传 bins／summary 主源，
+再传独立的 density 或 KDE、points 或 rug 可选源，类型为 `Option<&dyn ArraySource>`。
+各域独立对齐，仅主源供后续选择器查找，None 不回退到其他源。原始字符串匹配、摘要显示
+顺序和原始散点行透明度仍由核心负责，科学维度键不等于显示标签覆盖。
+
+样本 Histogram 的 `composite_precomputed_kde(x, y)` 快照直接列，
+`composite_precomputed_kde_from_data(source, x, y)` 快照独立表；两者都不修改样本、
+分箱、统计量或主源，仍须显式选择 Density。
+
 `estimate_status_boolean` 和 `estimate_status_categorical` 显式指定可估计性。
 透明度接受非空精确 `u8` 变量、显式单值（`64u8` 与选择器 `0usize` 不同）、原生映射及
 键控／分箱单位。数值／分类 `_map` 回调接收适配器准备的原生值；行映射只在展开前物化一次，
