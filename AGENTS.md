@@ -15,6 +15,8 @@ Avoid unnecessary jargon, repetition, and verbosity.
 Always present local file and directory paths as inline code,
 never as hyperlinks or clickable file references.
 
+Main-agent plan/build modes and mode switches do not affect subagents; never message subagents because of them.
+
 ## Architecture
 
 `lichtung-plot` is a standalone scientific renderer. It must not depend on other `lichtung-*` crates. Adapters and bindings depend on its public API, never the reverse. Core-only consumers must not compile adapter or binding dependencies.
