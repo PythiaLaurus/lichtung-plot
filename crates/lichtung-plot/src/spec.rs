@@ -163,7 +163,7 @@ impl PanelTextAnnotation {
         text: impl Into<crate::Text>,
     ) -> Result<Self, crate::Error> {
         let text = text.into();
-        crate::text::validate_for(text.as_str(), "panel text")?;
+        text.required_source("panel text")?;
         Ok(Self { position, text })
     }
 
@@ -257,10 +257,9 @@ impl HeatmapNullRowAnnotation {
             text: text.into(),
         };
         validate_heatmap_annotation_label(&annotation.row_label, "row label")?;
-        crate::text::validate_for(
-            annotation.text.as_str(),
-            "heatmap fully-null row annotation text",
-        )?;
+        annotation
+            .text
+            .required_source("heatmap fully-null row annotation text")?;
         Ok(annotation)
     }
 
@@ -397,8 +396,10 @@ impl WaterfallLabels {
             base: base.into(),
             terminal: terminal.into(),
         };
-        crate::text::validate_for(labels.base.as_str(), "waterfall base label")?;
-        crate::text::validate_for(labels.terminal.as_str(), "waterfall terminal label")?;
+        labels.base.required_source("waterfall base label")?;
+        labels
+            .terminal
+            .required_source("waterfall terminal label")?;
         Ok(labels)
     }
 

@@ -8,13 +8,13 @@ macro_rules! clear_slot {
             #[doc = concat!("Remove the local `", stringify!($field), "` appearance override; retain content/layout and inherit the effective Theme role.")]
             #[must_use]
             pub fn $style(mut self) -> Self $(where K: crate::kind::$bound)? {
-                self.$field.clear_style();
+                self.$field.edit_clear_style();
                 self
             }
             #[doc = concat!("Remove the local `", stringify!($field), "` layout request; retain content/style and restore owner inheritance.")]
             #[must_use]
             pub fn $layout(mut self) -> Self $(where K: crate::kind::$bound)? {
-                self.$field.clear_layout();
+                self.$field.edit_clear_layout();
                 self
             }
         }

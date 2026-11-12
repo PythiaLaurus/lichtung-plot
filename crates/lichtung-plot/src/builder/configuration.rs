@@ -63,7 +63,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::ContinuousColor,
     {
-        self.color_label.replace(label.into());
+        self.color_label
+            .replace_from(label.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -138,7 +140,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// instruction; an explicit default layout resets it to owner defaults.
     #[must_use]
     pub fn title(mut self, title: impl Into<crate::Text>) -> Self {
-        self.title.replace(title.into());
+        self.title
+            .replace_from(title.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -146,7 +150,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn subtitle(mut self, subtitle: impl Into<crate::Text>) -> Self {
-        self.subtitle.replace(subtitle.into());
+        self.subtitle
+            .replace_from(subtitle.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -187,7 +193,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn caption(mut self, caption: impl Into<crate::Text>) -> Self {
-        self.caption.replace(caption.into());
+        self.caption
+            .replace_from(caption.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -196,7 +204,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// follows [`Self::title`], preserving prior instructions when omitted.
     #[must_use]
     pub fn x_label(mut self, label: impl Into<crate::Text>) -> Self {
-        self.x_label.replace(label.into());
+        self.x_label
+            .replace_from(label.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -205,7 +215,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn y_label(mut self, label: impl Into<crate::Text>) -> Self {
-        self.y_label.replace(label.into());
+        self.y_label
+            .replace_from(label.into())
+            .expect("public Text always has a source");
         self
     }
 

@@ -184,7 +184,7 @@ pub struct PointLayer {
     x: NumericValues,
     y: NumericValues,
     labels: Option<CategoryValues>,
-    legend_label: crate::text::TextSlot,
+    legend_label: crate::Text,
     color: Option<Color>,
     radius: Option<u32>,
     alpha: Option<u8>,
@@ -305,7 +305,7 @@ impl PointLayer {
             label_layout: None,
             y,
             labels: None,
-            legend_label: crate::text::TextSlot::EMPTY,
+            legend_label: crate::Text::UNSET,
             color: None,
             radius: None,
             alpha: None,
@@ -374,21 +374,23 @@ impl PointLayer {
     /// identities require equal complete displayed Text and mark keys.
     #[must_use]
     pub fn legend_label(mut self, label: impl Into<crate::Text>) -> Self {
-        self.legend_label.replace(label.into());
+        self.legend_label
+            .replace_from(label.into())
+            .expect("public Text always has a source");
         self
     }
 
     /// Remove only the local legend-label appearance, retaining its identity/layout.
     #[must_use]
     pub fn clear_legend_label_style(mut self) -> Self {
-        self.legend_label.clear_style();
+        self.legend_label.edit_clear_style();
         self
     }
 
     /// Remove only the local legend-label layout, retaining its identity/appearance.
     #[must_use]
     pub fn clear_legend_label_layout(mut self) -> Self {
-        self.legend_label.clear_layout();
+        self.legend_label.edit_clear_layout();
         self
     }
 
@@ -405,7 +407,7 @@ impl PointLayer {
     }
 
     pub(crate) const fn legend_content(&self) -> Option<&crate::Text> {
-        self.legend_label.content()
+        self.legend_label.provided()
     }
 
     pub(crate) fn point_style(

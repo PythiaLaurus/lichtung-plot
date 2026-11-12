@@ -470,14 +470,14 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Heatmap colorbar title, if explicitly configured.
     #[must_use]
     pub(crate) fn color_label_text(&self) -> Option<&str> {
-        self.color_label.source()
+        self.color_label.provided().map(crate::Text::as_str)
     }
 
-    pub(crate) fn copy_color_title(&self) -> Result<crate::text::TextSlot, Error> {
+    pub(crate) fn copy_color_title(&self) -> Result<crate::Text, Error> {
         self.color_label.try_copy()
     }
 
-    pub(crate) fn same_color_title(&self, title: &crate::text::TextSlot) -> bool {
+    pub(crate) fn same_color_title(&self, title: &crate::Text) -> bool {
         self.color_label == *title
     }
 
@@ -751,30 +751,30 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// The chart title, if any.
     #[must_use]
     pub(crate) fn title_text(&self) -> Option<&str> {
-        self.title.source()
+        self.title.provided().map(crate::Text::as_str)
     }
 
     /// The chart subtitle, if any.
     #[must_use]
     pub(crate) fn subtitle_text(&self) -> Option<&str> {
-        self.subtitle.source()
+        self.subtitle.provided().map(crate::Text::as_str)
     }
 
     /// The chart caption, if any.
     #[must_use]
     pub(crate) fn caption_text(&self) -> Option<&str> {
-        self.caption.source()
+        self.caption.provided().map(crate::Text::as_str)
     }
 
     pub(crate) fn prose(&self) -> [Option<&crate::Text>; 3] {
-        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::content)
+        [&self.title, &self.subtitle, &self.caption].map(crate::Text::provided)
     }
 
     pub(crate) fn prose_alignments(&self) -> [Option<crate::TextAlignment>; 3] {
-        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::alignment_request)
+        [&self.title, &self.subtitle, &self.caption].map(crate::Text::alignment_request)
     }
 
-    pub(crate) fn copy_prose(&self) -> Result<[crate::text::TextSlot; 3], Error> {
+    pub(crate) fn copy_prose(&self) -> Result<[crate::Text; 3], Error> {
         Ok([
             self.title.try_copy()?,
             self.subtitle.try_copy()?,
@@ -782,7 +782,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         ])
     }
 
-    pub(crate) fn same_prose(&self, prose: &[crate::text::TextSlot; 3]) -> bool {
+    pub(crate) fn same_prose(&self, prose: &[crate::Text; 3]) -> bool {
         [&self.title, &self.subtitle, &self.caption]
             .into_iter()
             .zip(prose)
@@ -794,8 +794,14 @@ impl<K: crate::kind::Marker> Plot<K> {
             (self.title_text(), "plot title"),
             (self.subtitle_text(), "plot subtitle"),
             (self.caption_text(), "plot caption"),
-            (self.x_label.source(), "x-axis title"),
-            (self.y_label.source(), "y-axis title"),
+            (
+                self.x_label.provided().map(crate::Text::as_str),
+                "x-axis title",
+            ),
+            (
+                self.y_label.provided().map(crate::Text::as_str),
+                "y-axis title",
+            ),
             (self.color_label_text(), "color guide title"),
         ] {
             if let Some(source) = source {
@@ -817,11 +823,11 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.labels.resolve_domain(domain, raw_labels)
     }
 
-    pub(crate) fn copy_axis_titles(&self) -> Result<[crate::text::TextSlot; 2], Error> {
+    pub(crate) fn copy_axis_titles(&self) -> Result<[crate::Text; 2], Error> {
         Ok([self.x_label.try_copy()?, self.y_label.try_copy()?])
     }
 
-    pub(crate) fn same_axis_titles(&self, titles: &[crate::text::TextSlot; 2]) -> bool {
+    pub(crate) fn same_axis_titles(&self, titles: &[crate::Text; 2]) -> bool {
         self.x_label == titles[0] && self.y_label == titles[1]
     }
 
@@ -838,10 +844,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         for ((target, source), authored) in labels
             .iter_mut()
             .zip(self.axis_label_sources(self.kind))
-            .zip([self.x_label.content(), self.y_label.content()])
+            .zip([self.x_label.provided(), self.y_label.provided()])
         {
             *target = if let Some(text) = authored {
-                crate::text::validate_for(text.as_str(), "axis title")?;
+                text.required_source("axis title")?;
                 Some(text.try_copy()?)
             } else {
                 source
@@ -926,8 +932,8 @@ impl<K: crate::kind::Marker> Plot<K> {
 
         policy: Option<&crate::Labels>,
     ) -> Result<crate::Text, Error> {
-        if let Some(label) = self.color_label.content() {
-            crate::text::validate_for(label.as_str(), "color guide title")?;
+        if let Some(label) = self.color_label.provided() {
+            label.required_source("color guide title")?;
             label.try_copy()
         } else if let Some(values) = self.color_values() {
             policy

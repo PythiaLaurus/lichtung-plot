@@ -189,8 +189,8 @@ impl TextPanel {
     pub fn new(title: impl Into<crate::Text>, body: impl Into<crate::Text>) -> Result<Self, Error> {
         let title = title.into();
         let body = body.into();
-        crate::text::validate_for(title.as_str(), "text panel title")?;
-        crate::text::validate_for(body.as_str(), "text panel body")?;
+        title.required_source("text panel title")?;
+        body.required_source("text panel body")?;
         Ok(Self { title, body })
     }
 
@@ -220,7 +220,7 @@ fn canvas_header(
             start.saturating_add(span)
         )));
     }
-    crate::text::validate_for(text.as_str(), &format!("canvas {role} header"))?;
+    text.required_source(&format!("canvas {role} header"))?;
     Ok(CanvasHeader { start, span, text })
 }
 
@@ -259,12 +259,12 @@ pub struct Canvas {
     legend_policy: CanvasLegendPolicy,
     legend_composition: LegendComposition,
     root_size: crate::layout::RootRequest,
-    title: crate::text::TextSlot,
-    subtitle: crate::text::TextSlot,
+    title: crate::Text,
+    subtitle: crate::Text,
     // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
     pub(crate) panel_title_alignment: Option<crate::TextAlignment>,
     pub(crate) panel_subtitle_alignment: Option<crate::TextAlignment>,
-    caption: crate::text::TextSlot,
+    caption: crate::Text,
     labels: Option<Labels>,
     category_labels: CanvasCategoryLabels,
     column_headers: Vec<CanvasHeader>,
@@ -322,11 +322,11 @@ impl Canvas {
             legend_policy: CanvasLegendPolicy::PerPlot,
             legend_composition: LegendComposition::Combined,
             root_size: crate::layout::RootRequest::Natural,
-            title: crate::text::TextSlot::EMPTY,
-            subtitle: crate::text::TextSlot::EMPTY,
+            title: crate::Text::UNSET,
+            subtitle: crate::Text::UNSET,
             panel_title_alignment: None,
             panel_subtitle_alignment: None,
-            caption: crate::text::TextSlot::EMPTY,
+            caption: crate::Text::UNSET,
             labels: None,
             category_labels: CanvasCategoryLabels::EveryPlot,
             column_headers: Vec::new(),
@@ -722,7 +722,9 @@ impl Canvas {
     /// an explicit default layout restores owner defaults.
     #[must_use]
     pub fn title(mut self, title: impl Into<crate::Text>) -> Self {
-        self.title.replace(title.into());
+        self.title
+            .replace_from(title.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -730,7 +732,9 @@ impl Canvas {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn subtitle(mut self, subtitle: impl Into<crate::Text>) -> Self {
-        self.subtitle.replace(subtitle.into());
+        self.subtitle
+            .replace_from(subtitle.into())
+            .expect("public Text always has a source");
         self
     }
 
@@ -738,16 +742,18 @@ impl Canvas {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn caption(mut self, caption: impl Into<crate::Text>) -> Self {
-        self.caption.replace(caption.into());
+        self.caption
+            .replace_from(caption.into())
+            .expect("public Text always has a source");
         self
     }
 
     fn prose(&self) -> [Option<&crate::Text>; 3] {
-        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::content)
+        [&self.title, &self.subtitle, &self.caption].map(crate::Text::provided)
     }
 
     fn prose_alignments(&self) -> [Option<crate::TextAlignment>; 3] {
-        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::alignment_request)
+        [&self.title, &self.subtitle, &self.caption].map(crate::Text::alignment_request)
     }
 
     /// Apply one reusable automatic-label policy to every configured panel.
@@ -857,9 +863,9 @@ impl Canvas {
             self.category_bands()?;
         }
         for source in [
-            self.title.source(),
-            self.subtitle.source(),
-            self.caption.source(),
+            self.title.provided().map(crate::Text::as_str),
+            self.subtitle.provided().map(crate::Text::as_str),
+            self.caption.provided().map(crate::Text::as_str),
         ]
         .into_iter()
         .flatten()
@@ -1676,19 +1682,19 @@ impl Canvas {
         let mut requirements = Vec::new();
         for (source, role, address_role, appearance) in [
             (
-                self.title.content(),
+                self.title.provided(),
                 crate::layout::PreparedTextRole::Title,
                 crate::layout::AddressRole::RootTitle,
                 &themes.root().typography.root.title,
             ),
             (
-                self.subtitle.content(),
+                self.subtitle.provided(),
                 crate::layout::PreparedTextRole::Subtitle,
                 crate::layout::AddressRole::RootSubtitle,
                 &themes.root().typography.root.subtitle,
             ),
             (
-                self.caption.content(),
+                self.caption.provided(),
                 crate::layout::PreparedTextRole::Caption,
                 crate::layout::AddressRole::RootCaption,
                 &themes.root().typography.root.caption,

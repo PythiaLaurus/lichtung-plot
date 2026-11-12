@@ -61,7 +61,10 @@ Prose and x/y-title content and instructions share one Text slot. Plain replacem
 retains earlier style/layout; present exact appearance and whole layout replace their
 respective instructions. A present default layout resets the previous request.
 Convenience alignment edits update the same request in call order, even before
-content is present. Full source/style/request-presence equality owns cache reuse.
+content is present. Text itself retains an optional shared source: absence is not an
+explicit empty string, and no independent presence flag or slot wrapper is retained.
+Full source/style/request-presence equality owns cache reuse, not source allocation
+identity. Copies share immutable source bytes while retaining complete instructions.
 
 `Text::clear_style` and `clear_layout` independently remove the corresponding
 optional instruction from a value. Plot and Canvas provide `clear_title_style` /
@@ -69,7 +72,7 @@ optional instruction from a value. Plot and Canvas provide `clear_title_style` /
 x/y-label operations plus color-label operations under ContinuousColor. PointLayer
 provides `clear_legend_label_style` / `clear_legend_label_layout` and
 NumericExplanation provides `clear_style` / `clear_layout`. All retained slots use
-the same TextSlot removal logic, preserving source, content presence, the other
+the same Text removal logic, preserving source, content presence, the other
 instruction, Theme and scientific configuration. No edit renders or discovers
 fonts; clearing an absent instruction is harmless.
 

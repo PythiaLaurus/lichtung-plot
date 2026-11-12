@@ -69,25 +69,26 @@ impl NumericUnit {
 
 /// Instructions for one common explanation, retaining normal Text replacement.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NumericExplanation(Arc<crate::text::TextSlot>);
+pub struct NumericExplanation(Arc<Text>);
 
 impl NumericExplanation {
     pub(super) fn replace_callback(&self, current: Option<Text>, incoming: Text) -> Result<Text> {
         let mut slot = self.0.try_copy()?;
         if let Some(current) = current {
-            slot.replace(current);
+            slot.replace_from(current)?;
         }
-        slot.replace(incoming);
+        slot.replace_from(incoming)?;
         slot.resolve_source(String::new())
     }
     /// Generate content from the selected factor and shared unit.
     pub fn automatic() -> Self {
-        Self(Arc::new(crate::text::TextSlot::EMPTY))
+        Self(Arc::new(Text::UNSET))
     }
     /// Replace generated content with authored Text in the same slot.
     pub fn text(value: impl Into<Text>) -> Self {
-        let mut slot = crate::text::TextSlot::EMPTY;
-        slot.replace(value.into());
+        let mut slot = Text::UNSET;
+        slot.replace_from(value.into())
+            .expect("public Text always has a source");
         Self(Arc::new(slot))
     }
     /// Select the complete local appearance, without changing content.
@@ -105,21 +106,21 @@ impl NumericExplanation {
     /// Remove the local appearance while preserving authored/generated content and layout.
     #[must_use]
     pub fn clear_style(mut self) -> Self {
-        Arc::make_mut(&mut self.0).clear_style();
+        Arc::make_mut(&mut self.0).edit_clear_style();
         self
     }
     /// Remove the local layout request while preserving content and appearance.
     #[must_use]
     pub fn clear_layout(mut self) -> Self {
-        Arc::make_mut(&mut self.0).clear_layout();
+        Arc::make_mut(&mut self.0).edit_clear_layout();
         self
     }
     fn resolve(&self, generated: String) -> Result<Option<Text>> {
         let text = self.0.resolve_source(generated)?;
-        if self.0.content().is_none() && text.as_str().is_empty() {
+        if !self.0.is_provided() && text.as_str().is_empty() {
             return Ok(None);
         }
-        crate::text::validate_for(text.as_str(), "numeric explanation")?;
+        text.required_source("numeric explanation")?;
         Ok(Some(text))
     }
 }
@@ -383,6 +384,28 @@ mod tests {
         let explanation = NumericExplanation::automatic()
             .style(style.clone())
             .layout(TextLayout::default().alignment(crate::TextAlignment::End));
+        assert_eq!(
+            NumericExplanation::automatic()
+                .resolve(String::new())
+                .unwrap(),
+            None
+        );
+        assert_eq!(explanation.resolve(String::new()).unwrap(), None);
+        assert_eq!(
+            NumericExplanation::text("").resolve(String::new()).unwrap(),
+            Some(Text::new(""))
+        );
+        assert_eq!(
+            explanation
+                .replace_callback(
+                    Some(Text::new("current").layout(TextLayout::default())),
+                    Text::new("callback"),
+                )
+                .unwrap(),
+            Text::new("callback")
+                .style(style.clone())
+                .layout(TextLayout::default()),
+        );
         let cleared = explanation.clone().clear_style().clear_layout();
         assert_eq!(cleared.resolve("kg".into()).unwrap(), Some(Text::new("kg")));
         let format = NumericFormat::default()

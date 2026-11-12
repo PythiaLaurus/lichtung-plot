@@ -752,7 +752,7 @@ impl PreparedLine {
                 legend: layer
                     .legend_content()
                     .map(|text| {
-                        crate::text::validate_for(text.as_str(), "point layer legend label")?;
+                        text.required_source("point layer legend label")?;
                         text.try_copy()
                     })
                     .transpose()?,

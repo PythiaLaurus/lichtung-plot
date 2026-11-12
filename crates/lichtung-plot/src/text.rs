@@ -18,6 +18,7 @@ pub use roles::GuideTextRole;
 ///
 /// Plain strings carry no local instructions. Content validation happens
 /// at the receiving constructor or preflight, without rewriting the source.
+/// Clones share immutable source bytes and retain complete local instructions.
 ///
 /// ```
 /// use lichtung_plot::{NumericValues, PanelCorner, PanelTextAnnotation, Plot, Text, TextAlignment, TextLayout, TextPanel, Theme};
@@ -38,7 +39,7 @@ pub use roles::GuideTextRole;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Text {
-    source: String,
+    source: Option<std::sync::Arc<String>>,
     style: Option<crate::TextTheme>,
     layout: Option<TextLayout>,
 }
@@ -48,7 +49,7 @@ impl Text {
     #[must_use]
     pub fn new(source: impl Into<String>) -> Self {
         Self {
-            source: source.into(),
+            source: Some(std::sync::Arc::new(source.into())),
             style: None,
             layout: None,
         }
@@ -57,7 +58,7 @@ impl Text {
     /// Borrow the original source.
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.source
+        self.source.as_ref().map_or("", |source| source.as_str())
     }
 
     /// Replace the complete exact appearance.
@@ -71,7 +72,7 @@ impl Text {
     /// The receiving owner's Theme role supplies appearance when this value is used.
     #[must_use]
     pub fn clear_style(mut self) -> Self {
-        self.style = None;
+        self.edit_clear_style();
         self
     }
 
@@ -92,7 +93,7 @@ impl Text {
     /// Passing this value to an existing slot still follows omission/preserve rules.
     #[must_use]
     pub fn clear_layout(mut self) -> Self {
-        self.layout = None;
+        self.edit_clear_layout();
         self
     }
 
@@ -109,7 +110,7 @@ impl Text {
         self
     }
 
-    const fn edit_alignment(&mut self, alignment: TextAlignment) {
+    pub(crate) const fn edit_alignment(&mut self, alignment: TextAlignment) {
         if self.layout.is_none() {
             // The replaced value is known None. Forget only that empty value so
             // this existing const edit does not require const Arc destruction.
@@ -128,12 +129,20 @@ impl Text {
     }
 
     pub(crate) fn try_copy(&self) -> crate::Result<Self> {
-        self.try_copy_with_source(crate::data::source::copy_source_string(&self.source)?)
+        Ok(Self {
+            source: self.source.clone(),
+            style: self
+                .style
+                .as_ref()
+                .map(crate::TextTheme::try_copy)
+                .transpose()?,
+            layout: self.layout.clone(),
+        })
     }
 
     pub(crate) fn try_copy_with_source(&self, source: String) -> crate::Result<Self> {
         Ok(Self {
-            source,
+            source: Some(adopt_text_source_checked(source)?),
             style: self
                 .style
                 .as_ref()
@@ -160,87 +169,79 @@ impl Text {
     }
 }
 
-/// An optional authored owner can retain instructions before it receives content.
-/// Its one Text request remains authoritative when later content replaces source.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TextSlot {
-    text: Text,
-    present: bool,
-}
+impl Text {
+    pub(crate) const UNSET: Self = Self {
+        source: None,
+        style: None,
+        layout: None,
+    };
 
-impl TextSlot {
+    pub(crate) const fn is_provided(&self) -> bool {
+        self.source.is_some()
+    }
+
+    pub(crate) const fn provided(&self) -> Option<&Self> {
+        if self.is_provided() {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn required_source(&self, role: &str) -> crate::Result<&str> {
+        let source = self.source.as_ref().ok_or_else(|| {
+            crate::Error::Render(format!("{role}: required text source is unset"))
+        })?;
+        validate_for(source, role)?;
+        Ok(source)
+    }
+
     pub(crate) fn edit_style(&mut self, style: crate::TextTheme) {
-        self.text.style = Some(style);
+        self.style = Some(style);
     }
     pub(crate) fn edit_layout(&mut self, layout: TextLayout) {
-        self.text.layout = Some(layout);
+        self.layout = Some(layout);
     }
-    pub(crate) fn clear_style(&mut self) {
-        self.text.style = None;
+    pub(crate) fn edit_clear_style(&mut self) {
+        self.style = None;
     }
-    pub(crate) fn clear_layout(&mut self) {
-        self.text.layout = None;
+    pub(crate) fn edit_clear_layout(&mut self) {
+        self.layout = None;
     }
     pub(crate) fn resolve_source(&self, source: String) -> crate::Result<Text> {
-        if self.present {
-            self.text.try_copy()
+        if self.is_provided() {
+            self.try_copy()
         } else {
-            self.text.try_copy_with_source(source)
+            self.try_copy_with_source(source)
         }
     }
     pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> crate::Result<()> {
-        round.observe_count(usize::from(self.present))?;
-        round.observe_authored_text(&self.text)
+        round.observe_count(usize::from(self.is_provided()))?;
+        round.observe_authored_text(self)
     }
-    pub(crate) const EMPTY: Self = Self {
-        text: Text {
-            source: String::new(),
-            style: None,
-            layout: None,
-        },
-        present: false,
-    };
 
-    pub(crate) fn replace(&mut self, incoming: Text) {
-        self.text.source = incoming.source;
+    pub(crate) fn replace_from(&mut self, incoming: Text) -> crate::Result<()> {
+        if !incoming.is_provided() {
+            return Err(crate::Error::Render(
+                "text replacement: required text source is unset".into(),
+            ));
+        }
+        self.source = incoming.source;
         if incoming.style.is_some() {
-            self.text.style = incoming.style;
+            self.style = incoming.style;
         }
         if incoming.layout.is_some() {
-            self.text.layout = incoming.layout;
+            self.layout = incoming.layout;
         }
-        self.present = true;
+        Ok(())
     }
+}
 
-    pub(crate) const fn edit_alignment(&mut self, alignment: TextAlignment) {
-        self.text.edit_alignment(alignment);
-    }
-
-    pub(crate) const fn alignment_request(&self) -> Option<TextAlignment> {
-        self.text.alignment_request()
-    }
-
-    pub(crate) const fn content(&self) -> Option<&Text> {
-        if self.present {
-            Some(&self.text)
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn source(&self) -> Option<&str> {
-        self.content().map(Text::as_str)
-    }
-
-    pub(crate) fn try_copy(&self) -> crate::Result<Self> {
-        Ok(Self {
-            text: self.text.try_copy()?,
-            present: self.present,
-        })
-    }
+fn adopt_text_source_checked(source: String) -> crate::Result<std::sync::Arc<String>> {
+    crate::data::source::source_arc(source)
 }
 
 impl From<String> for Text {
@@ -496,32 +497,34 @@ mod tests {
 
     #[test]
     fn content_replacement_retains_instructions_until_a_whole_request_replaces_them() {
-        use super::{Text, TextAlignment, TextLayout, TextSlot};
-        const BEFORE_CONTENT: TextSlot = {
-            let mut slot = TextSlot::EMPTY;
+        use super::{Text, TextAlignment, TextLayout};
+        const BEFORE_CONTENT: Text = {
+            let mut slot = Text::UNSET;
             slot.edit_alignment(TextAlignment::End);
             slot
         };
         let mut slot = BEFORE_CONTENT;
-        assert!(slot.content().is_none());
+        assert!(slot.provided().is_none());
         let style = crate::Theme::publication()
             .typography()
             .get_root()
             .get_title()
             .clone();
-        slot.replace(Text::new("first").style(style.clone()));
-        slot.replace(Text::new("replacement"));
+        slot.replace_from(Text::new("first").style(style.clone()))
+            .unwrap();
+        slot.replace_from(Text::new("replacement")).unwrap();
         assert_eq!(
-            slot.content(),
+            slot.provided(),
             Some(
                 &Text::new("replacement")
                     .style(style.clone())
                     .alignment(TextAlignment::End)
             )
         );
-        slot.replace(Text::new("reset").layout(TextLayout::default()));
+        slot.replace_from(Text::new("reset").layout(TextLayout::default()))
+            .unwrap();
         assert_eq!(
-            slot.content(),
+            slot.provided(),
             Some(
                 &Text::new("reset")
                     .style(style.clone())
@@ -530,7 +533,7 @@ mod tests {
         );
         slot.edit_alignment(TextAlignment::Start);
         assert_eq!(
-            slot.content(),
+            slot.provided(),
             Some(
                 &Text::new("reset")
                     .style(style)
@@ -584,7 +587,7 @@ mod tests {
 
     #[test]
     fn clearing_instructions_preserves_content_presence_and_does_not_encode_a_slot_command() {
-        use super::{Text, TextAlignment, TextLayout, TextSlot};
+        use super::{Text, TextAlignment, TextLayout};
         let before = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let style = crate::Theme::publication()
             .typography()
@@ -600,31 +603,31 @@ mod tests {
         assert_eq!(styled.get_style(), Some(&style));
         assert_eq!(styled.alignment_request(), Some(TextAlignment::End));
 
-        let mut slot = TextSlot::EMPTY;
+        let mut slot = Text::UNSET;
         slot.edit_style(style.clone());
         slot.edit_layout(TextLayout::default());
-        slot.clear_style();
-        slot.clear_layout();
-        assert!(slot.content().is_none());
+        slot.edit_clear_style();
+        slot.edit_clear_layout();
+        assert!(slot.provided().is_none());
         assert_eq!(
             slot.resolve_source("automatic".into()).unwrap(),
             Text::new("automatic")
         );
-        slot.replace(styled.clone());
-        slot.replace(plain);
+        slot.replace_from(styled.clone()).unwrap();
+        slot.replace_from(plain).unwrap();
         assert_eq!(
-            slot.content(),
+            slot.provided(),
             Some(&styled),
             "an unstyled value is omission, not a clearing command"
         );
         let retained = slot.clone();
-        slot.clear_style();
-        assert_eq!(slot.content().unwrap().get_layout(), styled.get_layout());
-        slot.clear_layout();
-        slot.clear_style();
-        slot.replace(Text::new("changed"));
-        assert_eq!(slot.content(), Some(&Text::new("changed")));
-        assert_eq!(retained.content(), Some(&styled));
+        slot.edit_clear_style();
+        assert_eq!(slot.get_layout(), styled.get_layout());
+        slot.edit_clear_layout();
+        slot.edit_clear_style();
+        slot.replace_from(Text::new("changed")).unwrap();
+        assert_eq!(slot.provided(), Some(&Text::new("changed")));
+        assert_eq!(retained.provided(), Some(&styled));
 
         let layer =
             crate::PointLayer::new(NumericValues::new("x", [0.]), NumericValues::new("y", [1.]))
@@ -639,6 +642,64 @@ mod tests {
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             before
         );
+    }
+
+    #[test]
+    fn source_sharing_keeps_unset_and_explicit_empty_distinct() {
+        use super::Text;
+        use std::sync::Arc;
+
+        let unset = Text::UNSET.try_copy().unwrap();
+        let empty = Text::new("");
+        assert!(!unset.is_provided());
+        assert!(empty.is_provided());
+        assert_ne!(unset, empty);
+        assert_eq!(unset.as_str(), empty.as_str());
+        assert_eq!(
+            unset.resolve_source("automatic".into()).unwrap().as_str(),
+            "automatic"
+        );
+        assert_eq!(empty.resolve_source("automatic".into()).unwrap(), empty);
+
+        let mut source = String::with_capacity(128);
+        source.push_str("verbatim\r\nsource ");
+        let (pointer, capacity) = (source.as_ptr(), source.capacity());
+        let mut text = Text::new(source);
+        let retained = text.try_copy().unwrap();
+        assert_eq!(text.as_str().as_ptr(), pointer);
+        assert_eq!(text.source.as_ref().unwrap().capacity(), capacity);
+        assert!(Arc::ptr_eq(
+            text.source.as_ref().unwrap(),
+            retained.source.as_ref().unwrap()
+        ));
+        assert_eq!(retained, Text::from("verbatim\r\nsource "));
+        text.replace_from(Text::from("replacement")).unwrap();
+        assert_eq!(retained.as_str(), "verbatim\r\nsource ");
+        assert_eq!(text.as_str(), "replacement");
+    }
+
+    #[test]
+    fn required_reception_rejects_unset_before_mutating_instructions() {
+        use super::{Text, TextAlignment};
+
+        let mut text = Text::new("retained").alignment(TextAlignment::End);
+        let previous = text.clone();
+        assert!(matches!(
+            text.replace_from(Text::UNSET),
+            Err(crate::Error::Render(_))
+        ));
+        assert_eq!(text, previous);
+        assert!(matches!(
+            Text::UNSET.required_source("required"),
+            Err(crate::Error::Render(_))
+        ));
+        assert_eq!(Text::new("").required_source("required").unwrap(), "");
+        assert!(matches!(
+            Text::new("invalid\tcontrol").required_source("required"),
+            Err(crate::Error::Data(_))
+        ));
+        assert!(TextPanel::new(Text::UNSET, "body").is_err());
+        assert!(PanelTextAnnotation::new(PanelCorner::TopLeft, Text::UNSET).is_err());
     }
 
     #[test]

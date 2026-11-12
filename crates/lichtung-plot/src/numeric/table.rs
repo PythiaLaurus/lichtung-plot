@@ -87,7 +87,7 @@ impl NumericFormat {
             result.labels = labels;
             result.precision = precision;
             if let Some(explanation) = explanation {
-                crate::text::validate_for(explanation.as_str(), "numeric function explanation")?;
+                explanation.required_source("numeric function explanation")?;
                 result.explanation = Some(
                     self.units
                         .explanation

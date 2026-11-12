@@ -118,7 +118,7 @@ impl ConsumedGuideDependency {
 /// distinct from the descriptor actually drawn by a routed/Shared owner.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopedGuideInputs {
-    color_title: crate::text::TextSlot,
+    color_title: crate::Text,
     composition: LegendComposition,
     use_kind: GuideUse,
     contribution_prepared: bool,

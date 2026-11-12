@@ -25,8 +25,8 @@ pub(super) struct HeightMeasurements(std::cell::RefCell<Vec<Option<HeightMeasure
 struct HeightInputs {
     text_layouts: crate::text::roles::TextRoles,
     output_dimensions: Option<(u32, u32)>,
-    prose: [crate::text::TextSlot; 3],
-    axis_titles: [crate::text::TextSlot; 2],
+    prose: [crate::Text; 3],
+    axis_titles: [crate::Text; 2],
     width: i64,
     ranges: [[u64; 2]; 2],
     provenance: [crate::layout::RangeProvenance; 2],

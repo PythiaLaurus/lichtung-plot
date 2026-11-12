@@ -1162,7 +1162,7 @@ configuration representation or a new public generic update protocol.
 ### Native Text-Clear Capability
 
 The core distinguishes omitted instructions, concrete instructions and present
-default layout requests through Text/TextSlot and their existing presence rules.
+default layout requests through Text and its existing presence rules.
 It now exposes explicit local-clear operations through that same storage and Theme
 resolution, without a new default-argument or style-resolution system.
 
@@ -1180,8 +1180,8 @@ Plot/Canvas title/subtitle/caption and Plot x/y-label slots have paired
 `clear_*_style` / `clear_*_layout` methods. Plot color-label methods retain the
 ContinuousColor capability bound. PointLayer has corresponding legend-label
 methods, while NumericExplanation has `clear_style` / `clear_layout`. All use shared
-TextSlot removal, not a per-family implementation. Both adapters forward applicable
-owner/layer methods without another style engine. Constructor-owned immutable Text
+Text instruction removal, not a per-family implementation. Both adapters forward
+applicable owner/layer methods without another style engine. Constructor-owned immutable Text
 values remain editable through ordinary native value construction/clearing.
 
 - Clear only the requested optional field. Preserve text content, content presence,
@@ -1339,9 +1339,9 @@ selected Python lifecycle:
 
 | Current native fact | Binding implication |
 | --- | --- |
-| Plot observation data and attached Theme use Arc, but Plot Clone also copies owned text, ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
+| Plot observation data, attached Theme and Text source bytes use Arc, but Plot Clone still copies ticks and layer/annotation vectors. | Share existing immutable payloads; do not claim whole-configuration clones or separation are constant-cost. |
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
-| TextSlot preserves omitted style/layout and present default-layout reset; Text and retained owners now expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
+| Text preserves content absence, omitted style/layout and present default-layout reset without a separate slot wrapper; Text and retained owners expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
 | Canvas placement takes an owned exact-family Plot, erases it and stores it in Arc. Canvas Clone shares immutable placements; a placement edit separates them while unchanged Plot payloads remain shared. | Capture configuration at insertion, not a live external child. Preparing the owned Plot can still clone its text/tick/layer fields; whole-Canvas copying and separation are not constant-cost promises. |
 | Strict panel/panel_span and region-overwrite set_panel/set_panel_span share one native validation/placement path. | Map Python spans/overwrite to these current capabilities; preserve whole-owner removal and atomic resource preparation through reusable ownership. |
 | Borrowed place_panel/place_text_panel preserve the Canvas on error. Consuming insertion/replacement builders delegate to these same native mutations. | Use borrowed placement without taking the sole Python owner or cloning the entire growing Canvas per insertion. Failed placement can detach shared storage but does not change logical configuration. |

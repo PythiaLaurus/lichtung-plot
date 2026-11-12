@@ -24,7 +24,7 @@ struct PreparedPlotInputs {
 }
 
 struct CachedRootFrame {
-    prose: [crate::text::TextSlot; 3],
+    prose: [crate::Text; 3],
     dimensions: (u32, u32),
     minimum: [u64; 2],
     frame: std::sync::Arc<crate::layout::RootFramePlan>,
