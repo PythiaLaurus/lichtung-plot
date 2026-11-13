@@ -462,13 +462,15 @@ pub(crate) fn prepare_reference_plot(
     source: &Plot,
     panel: &mut PlotRegistrationBuild<'_>,
     x_limits: Option<(f64, f64)>,
-    labels: Option<&crate::Labels>,
+    override_labels: bool,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
     let mut family = match panel.family.take().expect("prepared reference family") {
         PreparedFamily::Beeswarm(mut marks) => {
-            if labels.is_some() {
-                marks.color_label = source.description().prepare_color_label(labels)?;
+            if override_labels {
+                marks.color_label = source
+                    .description()
+                    .prepare_color_label(Some(&panel.policy.labels))?;
             }
             PreparedFamily::Beeswarm(marks)
         }
@@ -480,8 +482,10 @@ pub(crate) fn prepare_reference_plot(
             )?)
         }
         PreparedFamily::Heatmap(mut marks) => {
-            if labels.is_some() {
-                marks.color_label = source.description().prepare_color_label(labels)?;
+            if override_labels {
+                marks.color_label = source
+                    .description()
+                    .prepare_color_label(Some(&panel.policy.labels))?;
             }
             PreparedFamily::Heatmap(marks)
         }
@@ -491,7 +495,7 @@ pub(crate) fn prepare_reference_plot(
     route.validate(source.description())?;
     let config = ReferenceAxisConfig {
         x_limits,
-        labels,
+        labels: Some(&panel.policy.labels),
         ..ReferenceAxisConfig::default()
     };
     let axes = prepare(
@@ -578,7 +582,7 @@ pub(crate) fn prepare_plot<'src>(
     ) && !source.description().has_facets()
     {
         prepare_plot_registration(&mut registry.panels[0], source, owner, resources)?;
-        prepare_reference_plot(source, &mut registry.panels[0], None, None, resources)?;
+        prepare_reference_plot(source, &mut registry.panels[0], None, false, resources)?;
         return PreparedInteriorInputs::from_registry(
             registry,
             InteriorRoute::classify(source.kind()),
@@ -1161,7 +1165,10 @@ pub(crate) fn prepare_scatter_plot(
         &panel.scope.id,
         None,
         panel.family.as_ref(),
-        None,
+        Some(ReferenceAxisConfig {
+            labels: Some(&panel.policy.labels),
+            ..ReferenceAxisConfig::default()
+        }),
         panel.axes.take(),
     )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
@@ -1182,7 +1189,10 @@ pub(crate) fn prepare_line_plot(
         &panel.scope.id,
         None,
         panel.family.as_ref(),
-        None,
+        Some(ReferenceAxisConfig {
+            labels: Some(&panel.policy.labels),
+            ..ReferenceAxisConfig::default()
+        }),
         panel.axes.take(),
     )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(

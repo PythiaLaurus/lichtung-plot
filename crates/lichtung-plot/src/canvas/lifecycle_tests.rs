@@ -1,6 +1,87 @@
 use super::*;
 
 #[test]
+fn effective_label_policy_is_borrowed_without_rewriting_authored_child_labels() {
+    let labels = Labels::raw()
+        .alias("raw_x", "Canvas X")
+        .alias("raw_y", "Canvas Y")
+        .alias("raw_series", "Canvas series")
+        .alias("raw_group", "Canvas member")
+        .alias("raw_confidence", "Canvas confidence")
+        .alias("raw_low", "Canvas low")
+        .alias("raw_high", "Canvas high")
+        .alias("raw_value", "Canvas value");
+    let child = Labels::raw()
+        .alias("raw_x", "Child X")
+        .alias("raw_value", "Child value");
+    let scatter = Plot::scatter(
+        crate::NumericValues::new("raw_x", [0.0, 1.0]),
+        crate::NumericValues::new("raw_y", [1.0, 2.0]),
+    )
+    .hue(crate::CategoryValues::new("raw_series", ["raw_group"; 2]).unwrap())
+    .labels(child.clone())
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::categorical(
+                crate::CategoryValues::new("raw_confidence", ["raw_low", "raw_high"]).unwrap(),
+                |value| if value == "raw_low" { 64 } else { 255 },
+            )
+            .unwrap(),
+        ),
+    );
+    let heatmap = Plot::heatmap(
+        crate::CategoryValues::new("raw_x", ["first", "second"]).unwrap(),
+        crate::CategoryValues::new("raw_y", ["row"; 2]).unwrap(),
+        crate::NumericValues::new("raw_value", [1.0, 2.0]),
+    )
+    .labels(child);
+    let canvas = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1200, 600)
+        .legend_policy(CanvasLegendPolicy::PerPlot)
+        .labels(labels)
+        .panel(0, 0, scatter)
+        .unwrap()
+        .panel(0, 1, heatmap)
+        .unwrap();
+    let root = canvas
+        .build_preflight_plan(|prepared, _| {
+            for input in prepared.interiors.iter().flatten() {
+                let registered = &input.plots[0];
+                assert_eq!(
+                    registered.policy.labels.resolve("raw_x").unwrap(),
+                    "Canvas X"
+                );
+                assert_eq!(
+                    registered.source.labels_policy().resolve("raw_x").unwrap(),
+                    "Child X"
+                );
+            }
+        })
+        .unwrap();
+    let text = root.plan().retained_text();
+    for expected in [
+        "Canvas X",
+        "Canvas Y",
+        "Canvas series",
+        "Canvas member",
+        "Canvas confidence (observation point alpha)",
+        "Canvas low",
+        "Canvas high",
+        "Canvas value",
+    ] {
+        assert!(
+            text.iter().any(|(_, plan)| plan.source == expected),
+            "{expected}"
+        );
+    }
+    assert!(!text
+        .iter()
+        .any(|(_, plan)| plan.source.starts_with("Child ")));
+}
+
+#[test]
 fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
     let source = |group| {
         Plot::interaction(

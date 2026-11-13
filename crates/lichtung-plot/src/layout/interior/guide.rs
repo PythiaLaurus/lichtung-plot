@@ -554,12 +554,12 @@ impl PreparedInteriorInputs<'_> {
                 let continuous = Self::continuous_source(&scoped, theme, registered)?;
                 PreparedGuide::prepare(
                     &scoped,
+                    &registered.policy,
                     theme,
                     &contributor,
                     keys,
                     continuous,
-                    alpha.sections(&scoped)?,
-                    registered.policy.guide_composition,
+                    alpha.sections(&registered.policy.labels)?,
                 )?
             };
             panels.push(ScopedGuide {

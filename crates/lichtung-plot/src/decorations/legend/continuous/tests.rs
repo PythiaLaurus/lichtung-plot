@@ -51,12 +51,12 @@ fn prepared(
     .erase();
     PreparedGuide::prepare(
         &plot,
+        &crate::orchestrator::registration::PlotScopePolicy::for_source(plot.description(), None),
         theme,
         &crate::layout::ComponentAddress::root(),
         Vec::new(),
         Some(Arc::new(descriptor.clone())),
         Vec::new(),
-        crate::LegendComposition::Combined,
     )
     .unwrap()
     .unwrap()

@@ -849,6 +849,10 @@ impl PlotDescription {
         self.payload.labels.resolve(raw)
     }
 
+    pub(crate) fn labels_policy(&self) -> &crate::Labels {
+        &self.payload.labels
+    }
+
     pub(crate) fn resolve_axis_label_domain<'b>(
         &self,
         domain: &str,

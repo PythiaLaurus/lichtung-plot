@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::{Error, Plot, RegressionBand, Result};
+use crate::{Error, RegressionBand, Result};
 
 pub(super) fn shared_text(source: &str) -> Result<Arc<str>> {
     let bytes = std::alloc::Layout::array::<u8>(source.len())
@@ -44,13 +44,13 @@ pub(crate) enum PrimaryTitleIdentity {
 }
 
 impl PrimaryTitleIdentity {
-    pub(crate) fn resolved_text(&self, plot: &Plot) -> Result<String> {
+    pub(crate) fn resolved_text(&self, labels: &crate::Labels) -> Result<String> {
         match self {
-            Self::Field(field) => plot.description().resolve_label(field.as_str()),
+            Self::Field(field) => labels.resolve(field.as_str()),
             Self::Pair { group, hue } => join(
-                plot.description().resolve_label(group.as_str())?,
+                labels.resolve(group.as_str())?,
                 " × ",
-                &plot.description().resolve_label(hue.as_str())?,
+                &labels.resolve(hue.as_str())?,
             ),
             Self::Series => crate::data::source::copy_source_string("series"),
             Self::BarSign => crate::data::source::copy_source_string("Change"),
@@ -147,20 +147,20 @@ impl GuideEntryIdentity {
 
     pub(crate) fn resolved_label(
         &self,
-        plot: &Plot,
+        labels: &crate::Labels,
         layer_context: Option<super::source::LayerLabelContext>,
     ) -> Result<String> {
         let literal = crate::data::source::copy_source_string;
         match self {
-            Self::Category { value, .. } => plot.description().resolve_label(value.as_str()),
+            Self::Category { value, .. } => labels.resolve(value.as_str()),
             Self::Pair {
                 group_value,
                 hue_value,
                 ..
             } => join(
-                plot.description().resolve_label(group_value.as_str())?,
+                labels.resolve(group_value.as_str())?,
                 ", ",
-                &plot.description().resolve_label(hue_value.as_str())?,
+                &labels.resolve(hue_value.as_str())?,
             ),
             Self::BarSign { decreasing } => literal(if *decreasing {
                 "Decreasing"
@@ -172,7 +172,7 @@ impl GuideEntryIdentity {
             Self::RegressionFit { band } => literal(band.legend_label()),
             Self::SupplementalLayer { label } => match layer_context {
                 Some(super::source::LayerLabelContext::Categorical) => {
-                    plot.description().resolve_label(label.as_str())
+                    labels.resolve(label.as_str())
                 }
                 Some(super::source::LayerLabelContext::LiteralSeries) => literal(label.as_str()),
                 None => Err(Error::Render(

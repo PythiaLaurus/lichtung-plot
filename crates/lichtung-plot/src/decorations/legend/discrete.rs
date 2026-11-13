@@ -131,7 +131,10 @@ impl PreparedGuide {
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
+        let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
+        for registered in &mut inputs.plots {
+            registered.policy.guide_composition = composition;
+        }
         let data = inputs.plots[0].data(&operation)?;
         let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
@@ -179,16 +182,16 @@ impl PreparedGuide {
                     &inputs.plots[0],
                     &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
                 )?
-                .sections(plot)?
+                .sections(&inputs.plots[0].policy.labels)?
         };
         Self::prepare(
             plot,
+            &inputs.plots[0].policy,
             theme,
             &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
             keys,
             continuous,
             alpha,
-            composition,
         )
     }
 

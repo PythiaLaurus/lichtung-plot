@@ -22,11 +22,11 @@ struct Section {
 }
 
 impl GuideSectionIdentity {
-    fn title(&self, plot: &Plot) -> Result<Arc<crate::Text>> {
+    fn title(&self, labels: &crate::Labels) -> Result<Arc<crate::Text>> {
         let source = match self {
-            Self::Combined(primary) => primary.resolved_text(plot),
+            Self::Combined(primary) => primary.resolved_text(labels),
             Self::GroupStyle(field) | Self::Joint(field) | Self::HueColor(field) => {
-                plot.description().resolve_label(field.as_str())
+                labels.resolve(field.as_str())
             }
             Self::Literal(LiteralDomain::BarSign) => {
                 crate::data::source::copy_source_string("Change")
@@ -107,13 +107,15 @@ impl PreparedGuide {
     /// occurrence records survive preparation; no complete-pair adapter remains.
     pub(crate) fn prepare(
         plot: &Plot,
+        policy: &crate::orchestrator::registration::PlotScopePolicy,
         theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &ComponentAddress,
         keys: Vec<GuideSourceKey>,
         continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
         alpha: Vec<PreparedGuideSection>,
-        composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
+        let composition = policy.guide_composition;
+        let labels = &policy.labels;
         if (keys.is_empty() && continuous.is_none() && alpha.is_empty())
             || plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
         {
@@ -159,7 +161,7 @@ impl PreparedGuide {
             if let Some(primary) = &primary {
                 insert_source(
                     &mut sections,
-                    plot,
+                    labels,
                     primary.clone(),
                     source.identity,
                     source.key,
@@ -169,7 +171,7 @@ impl PreparedGuide {
             } else {
                 separate_source(
                     &mut sections,
-                    plot,
+                    labels,
                     theme,
                     source.identity,
                     source.key,
@@ -309,7 +311,7 @@ fn merge_combined(
 
 fn insert_source(
     sections: &mut Vec<Section>,
-    plot: &Plot,
+    labels: &crate::Labels,
     section: GuideSectionIdentity,
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
@@ -318,11 +320,11 @@ fn insert_source(
 ) -> Result<()> {
     let existing = sections.iter().find(|current| current.identity == section);
     let title = existing.map_or_else(
-        || section.title(plot),
+        || section.title(labels),
         |current| Ok(Arc::clone(&current.title)),
     )?;
     let label = if let Some(text) = authored {
-        let resolved = identity.resolved_label(plot, source.mapping.layer_label_context)?;
+        let resolved = identity.resolved_label(labels, source.mapping.layer_label_context)?;
         crate::data::source::source_arc(text.try_copy_with_source(resolved)?)?
     } else {
         existing
@@ -335,7 +337,7 @@ fn insert_source(
             .map_or_else(
                 || {
                     crate::data::source::source_arc(crate::Text::from(
-                        identity.resolved_label(plot, source.mapping.layer_label_context)?,
+                        identity.resolved_label(labels, source.mapping.layer_label_context)?,
                     ))
                 },
                 |entry| Ok(Arc::clone(&entry.display_label)),
@@ -392,7 +394,7 @@ fn insert(
 
 fn separate_source(
     sections: &mut Vec<Section>,
-    plot: &Plot,
+    labels: &crate::Labels,
     theme: &crate::text::TextRequestContext<'_, '_>,
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
@@ -414,23 +416,23 @@ fn separate_source(
             let mut group_source = source.clone();
             group_source.projection = Projection::GroupStyle;
             group_source.group_neutral_rgb = Some(neutral);
-            insert_source(sections, plot, GuideSectionIdentity::GroupStyle(group.clone()),
+            insert_source(sections, labels, GuideSectionIdentity::GroupStyle(group.clone()),
                 GuideEntryIdentity::Category { field: group, value: group_value }, group_key, group_source, None)?;
             let hue_key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
-            return insert_source(sections, plot, GuideSectionIdentity::HueColor(hue.clone()),
+            return insert_source(sections, labels, GuideSectionIdentity::HueColor(hue.clone()),
                 GuideEntryIdentity::Category { field: hue, value: hue_value }, hue_key, source, None);
         }
         GuideEncoding::HueOnly { field } | GuideEncoding::RowHue { field } => {
             let key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
-            return insert_source(sections, plot, GuideSectionIdentity::HueColor(field), identity, key, source, None);
+            return insert_source(sections, labels, GuideSectionIdentity::HueColor(field), identity, key, source, None);
         }
         GuideEncoding::Joint { field } => GuideSectionIdentity::Joint(field),
         GuideEncoding::Literal(domain) => GuideSectionIdentity::Literal(domain),
         GuideEncoding::SupplementalLayer => GuideSectionIdentity::SupplementalSeries,
     };
-    insert_source(sections, plot, section, identity, key, source, authored)
+    insert_source(sections, labels, section, identity, key, source, authored)
 }
 
 fn finish(

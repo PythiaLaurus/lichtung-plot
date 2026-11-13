@@ -1,6 +1,7 @@
 //! Occurrence policy is separate from authored intent and prepared axis storage.
 
 pub(crate) struct PlotScopePolicy {
+    pub(crate) labels: crate::Labels,
     pub(crate) significance_indices: Vec<usize>,
     pub(crate) axis_text: AxisTextVisibility,
     pub(crate) gutter_owner: GutterOwner,
@@ -41,6 +42,7 @@ impl PlotScopePolicy {
         facet: Option<&crate::FacetCell>,
     ) -> Self {
         Self {
+            labels: source.labels_policy().clone(),
             significance_indices: source
                 .significance_annotations()
                 .iter()

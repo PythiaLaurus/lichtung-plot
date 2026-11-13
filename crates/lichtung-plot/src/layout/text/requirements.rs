@@ -776,7 +776,11 @@ impl PreparedTextRequirement {
             prepared_stage.as_deref_mut(),
         )?;
         if kind != PlotKind::Matrix {
-            let [x_title, y_title] = plot.description().prepare_axis_labels(None)?;
+            let [x_title, y_title] = plot.description().prepare_axis_labels(
+                interiors
+                    .and_then(|inputs| inputs.plots.first())
+                    .map(|registered| &registered.policy.labels),
+            )?;
             if let Some(interiors) = interiors {
                 for registered in &interiors.plots {
                     registered

@@ -276,7 +276,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 &source,
                 &mut registry.panels[id.slot],
                 None,
-                None,
+                false,
                 &operation,
             )
             .unwrap();

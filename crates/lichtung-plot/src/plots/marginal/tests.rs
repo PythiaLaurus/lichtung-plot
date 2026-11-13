@@ -110,7 +110,7 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
                 &source,
                 panel,
                 Some(shared),
-                None,
+                false,
                 &operation,
             )?;
             let axes = panel.axes.as_ref().unwrap();

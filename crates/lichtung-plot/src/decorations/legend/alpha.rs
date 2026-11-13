@@ -149,7 +149,7 @@ pub(crate) struct PreparedAlphaInputs {
 }
 
 impl PreparedAlphaInputs {
-    pub(crate) fn sections(&self, plot: &Plot) -> Result<Vec<PreparedGuideSection>> {
+    pub(crate) fn sections(&self, labels: &crate::Labels) -> Result<Vec<PreparedGuideSection>> {
         let mut sections = Vec::new();
         reserve_source(&mut sections, self.sources.len())?;
         for source in self.sources.iter() {
@@ -157,7 +157,7 @@ impl PreparedAlphaInputs {
             if values.semantics() == AlphaSemantics::Undeclared {
                 continue;
             }
-            sections.push(alpha_section(plot, source, values)?);
+            sections.push(alpha_section(labels, source, values)?);
         }
         Ok(sections)
     }
@@ -514,7 +514,7 @@ impl<'a> AlphaGuideBuilder<'a> {
 }
 
 fn alpha_section(
-    plot: &Plot,
+    labels: &crate::Labels,
     source: &AlphaGuideSource,
     values: &AlphaValues,
 ) -> Result<PreparedGuideSection> {
@@ -531,7 +531,7 @@ fn alpha_section(
         .key;
     let entries = collect_source(examples.into_iter().map(|example| {
         let label = if values.semantics() == AlphaSemantics::Categorical {
-            plot.description().resolve_label(example.label)?
+            labels.resolve(example.label)?
         } else {
             copy_source_string(example.label)?
         };
@@ -562,7 +562,7 @@ fn alpha_section(
         target: source.target,
         unit: source.unit,
     };
-    let title = title(plot, values.name(), source.target, source.unit)?;
+    let title = title(labels, values.name(), source.target, source.unit)?;
     Ok(PreparedGuideSection {
         identity: GuideSectionIdentity::Alpha(identity),
         display_title: crate::data::source::source_arc(crate::Text::from(title))?,
@@ -596,7 +596,12 @@ fn sample_key(prototype: &ResolvedGuideKey, target: AlphaTarget, alpha: u8) -> R
     key
 }
 
-fn title(plot: &Plot, source: &str, target: AlphaTarget, unit: AlphaUnitKind) -> Result<String> {
+fn title(
+    labels: &crate::Labels,
+    source: &str,
+    target: AlphaTarget,
+    unit: AlphaUnitKind,
+) -> Result<String> {
     let target = match target {
         AlphaTarget::Point => "point",
         AlphaTarget::Line => "line",
@@ -609,7 +614,7 @@ fn title(plot: &Plot, source: &str, target: AlphaTarget, unit: AlphaUnitKind) ->
         AlphaUnitKind::Bin => "bin",
         AlphaUnitKind::Single => "single",
     };
-    let mut title = plot.description().resolve_label(source)?;
+    let mut title = labels.resolve(source)?;
     let extra = unit
         .len()
         .checked_add(target.len())

@@ -1114,9 +1114,6 @@ impl Canvas {
             let Some(source) = plot else { continue };
             let mut plot = self.cell_visibility(source.clone());
             let mut groups = None;
-            if let Some(labels) = &self.labels {
-                plot = plot.labels(labels.clone());
-            }
             if let Some((_, levels)) = hue_groups.and_then(|groups| {
                 groups.iter().find(|(field, _)| {
                     Some(field.as_str()) == plot.description().categorical_color_field()
@@ -1338,6 +1335,9 @@ impl Canvas {
             }
             let id = registry.reserve(source.description(), scope, &resources)?;
             let panel = &mut registry.panels[id.slot];
+            if let Some(labels) = &self.labels {
+                panel.policy.labels.clone_from(labels);
+            }
             panel.policy.gutter_owner = crate::orchestrator::registration::GutterOwner::Composition;
             panel.policy.axis_text.tick_labels[1] = self.category_labels
                 != CanvasCategoryLabels::FirstColumnPerRow
@@ -1427,11 +1427,7 @@ impl Canvas {
                 panel
                     .scope
                     .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
-                let mut plot = plot.clone();
-                if let Some(labels) = &self.labels {
-                    plot = plot.labels(labels.clone());
-                }
-                let mut plot = plot.with_render_scope(scope);
+                let mut plot = plot.clone().with_render_scope(scope);
                 if let Some(Some(range)) = shared_x.get(index) {
                     let kind = plot.kind();
                     plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
@@ -1454,7 +1450,7 @@ impl Canvas {
                     plot,
                     panel,
                     shared_x.get(index).copied().flatten(),
-                    self.labels.as_ref(),
+                    self.labels.is_some(),
                     &resources,
                 )?;
             }
@@ -1926,10 +1922,7 @@ impl Canvas {
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
 
-            let mut plot = plot.clone();
-            if let Some(labels) = &self.labels {
-                plot = plot.labels(labels.clone());
-            }
+            let plot = plot.clone();
             let mut plot = self.cell_visibility(plot);
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 plot = plot.with_suppressed_legend();
@@ -2197,9 +2190,6 @@ impl Canvas {
             crate::data::source::reserve_source_string(&mut scope, 32)?;
             write!(scope, "panel-{index}").expect("admitted scope");
             let mut plot = source.clone();
-            if let Some(labels) = &self.labels {
-                plot = plot.labels(labels.clone());
-            }
             plot = plot.with_render_scope(scope);
             if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
                 plot = inputs.attach(plot)?;
