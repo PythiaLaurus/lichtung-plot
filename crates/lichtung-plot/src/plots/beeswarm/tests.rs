@@ -167,23 +167,19 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 None,
             )
             .unwrap();
-            let row_source = crate::data::source::RowSourceContext::new(
-                source.description(),
-                &scope,
-                &operation,
+            let mut registry = crate::orchestrator::registration::PlotRegistryBuilder::new(
+                operation.root_identity(),
             );
+            let id = registry.reserve(source.description(), scope, &operation)?;
+            let panel = &registry.panels[id.slot];
+            let scope = &panel.scope;
+            let row_source = &panel.row_source;
             let mut prepared = prepare(
                 &source,
-                crate::data::PlotData::checked(
-                    source.description(),
-                    &scope,
-                    &row_source,
-                    &operation,
-                )
-                .unwrap(),
+                registry.data(&id, &operation)?,
                 selection.clone(),
                 scope
-                    .numeric_binding(source.description(), &row_source, &operation)
+                    .numeric_binding(source.description(), row_source, &operation)
                     .unwrap(),
             )
             .unwrap();
@@ -202,7 +198,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 exact: false,
                 format: Some(std::sync::Arc::new(format.clone())),
                 numeric: scope
-                    .numeric_binding(source.description(), &row_source, &operation)
+                    .numeric_binding(source.description(), row_source, &operation)
                     .unwrap(),
                 raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
             };
@@ -218,7 +214,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 exact: true,
                 format: Some(std::sync::Arc::new(format)),
                 numeric: scope
-                    .numeric_binding(source.description(), &row_source, &operation)
+                    .numeric_binding(source.description(), row_source, &operation)
                     .unwrap(),
                 raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
             };
@@ -257,15 +253,21 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                         && stop.color == color.as_rgb()));
             }
             let expected = prepared.colors.clone();
-            let inputs = crate::plots::shared_x::prepare_reference_plot(
-                &source,
+            registry.panels[id.slot].family = Some(
                 crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
-                scope,
+            );
+            crate::plots::shared_x::prepare_reference_plot(
+                &source,
+                &mut registry.panels[id.slot],
                 None,
                 None,
                 &operation,
             )
             .unwrap();
+            let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                registry,
+                crate::layout::interior::InteriorRoute::classify(source.kind()),
+            )?;
             inputs.prepare_discrete_guides(
                 &source,
                 &theme,

@@ -1,7 +1,9 @@
 use crate::data::PlotData;
 use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 use crate::layout::{AxisSpec, AxisTick};
-use crate::orchestrator::registration::{PreparedFamily, RowSelection, Scope};
+use crate::orchestrator::registration::{
+    PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily, RowSelection, Scope,
+};
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
 
@@ -270,16 +272,14 @@ struct ReferenceAxisConfig<'a> {
     labels: Option<&'a crate::Labels>,
 }
 
-pub(crate) fn prepare_reference_plot<'src>(
-    source: &'src Plot,
-
-    family: PreparedFamily,
-    scope: Scope,
+pub(crate) fn prepare_reference_plot(
+    source: &Plot,
+    panel: &mut PlotRegistrationBuild<'_>,
     x_limits: Option<(f64, f64)>,
     labels: Option<&crate::Labels>,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs<'src>, Error> {
-    let mut family = match family {
+) -> Result<(), Error> {
+    let mut family = match panel.family.take().expect("prepared reference family") {
         PreparedFamily::Beeswarm(mut marks) => {
             if labels.is_some() {
                 marks.color_label = source.description().prepare_color_label(labels)?;
@@ -305,13 +305,13 @@ pub(crate) fn prepare_reference_plot<'src>(
         ..ReferenceAxisConfig::default()
     };
     let mut axes = prepare(source, None, Some(&family), Some(config))?;
-    axes.bind_numeric(source, resources, &scope)?;
+    axes.bind_numeric(source, resources, &panel.scope)?;
     if let PreparedFamily::Waterfall(marks) = &mut family {
-        let row_source =
-            crate::data::source::RowSourceContext::new(source.description(), &scope, resources);
         marks.prepare_totals(
             crate::plots::waterfall::WaterfallTotalsPrepare {
-                numeric: scope.numeric_binding(source.description(), &row_source, resources)?,
+                numeric: panel
+                    .scope
+                    .numeric_binding(panel.source, &panel.row_source, resources)?,
                 axes: &axes,
                 format: source.description().total_format_spec(),
             },
@@ -325,27 +325,9 @@ pub(crate) fn prepare_reference_plot<'src>(
         source.description(),
         axes.ranges,
     )?;
-    let scope_name = || {
-        scope
-            .render_name
-            .as_deref()
-            .map(crate::data::source::copy_source_string)
-            .transpose()
-    };
-    let mut retained = Vec::new();
-    crate::data::source::reserve_source(&mut retained, 1)?;
-    retained.push((scope_name()?, axes));
-    let mut families = Vec::new();
-    crate::data::source::reserve_source(&mut families, 1)?;
-    families.push((scope_name()?, family));
-    PreparedInteriorInputs::from_panels(
-        source.description(),
-        route,
-        retained,
-        families,
-        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        resources,
-    )
+    panel.axes = Some(axes);
+    panel.family = Some(family);
+    Ok(())
 }
 
 #[expect(
@@ -357,13 +339,11 @@ pub(crate) fn prepare_plot<'src>(
     resources: &crate::font::canonical::OperationContext,
     owner: Option<&crate::theme::Theme>,
 ) -> Result<PreparedInteriorInputs<'src>, Error> {
-    let mut retained = Vec::new();
-    let mut families = Vec::new();
-    let mut scopes = Vec::new();
+    let mut registry = PlotRegistryBuilder::new(resources.root_identity());
     let source_rows = source.description().configured_source_rows()?;
-    let source_scope = (!source.description().has_facets())
+    let source_id = (!source.description().has_facets())
         .then(|| {
-            Scope::new(
+            let scope = Scope::new(
                 source,
                 resources,
                 0,
@@ -373,16 +353,13 @@ pub(crate) fn prepare_plot<'src>(
                     .axis_scope()
                     .map(crate::data::source::copy_source_string)
                     .transpose()?,
-            )
+            )?;
+            registry.reserve(source.description(), scope, resources)
         })
         .transpose()?;
-    let row_source = source_scope.as_ref().map(|scope| {
-        crate::data::source::RowSourceContext::new(source.description(), scope, resources)
-    });
-    let source_data = source_scope
+    let source_data = source_id
         .as_ref()
-        .zip(row_source.as_ref())
-        .map(|(scope, rows)| PlotData::checked(source.description(), scope, rows, resources))
+        .map(|id| registry.data(id, resources))
         .transpose()?;
     if matches!(
         source.kind(),
@@ -408,37 +385,32 @@ pub(crate) fn prepare_plot<'src>(
             | PlotKind::Interaction
     ) && !source.description().has_facets()
     {
-        return prepare_reference_plot(
+        let panel = &registry.panels[0];
+        let family = PreparedFamily::new(
             source,
-            PreparedFamily::new(
-                source,
-                source_data.expect("single plot data"),
-                owner,
-                source_scope
-                    .as_ref()
-                    .expect("single plot scope")
-                    .numeric_binding(
-                        source.description(),
-                        row_source.as_ref().expect("single plot rows"),
-                        resources,
-                    )?,
-            )?,
-            source_scope.expect("single plot scope"),
-            None,
-            None,
-            resources,
+            source_data.expect("single plot data"),
+            owner,
+            panel
+                .scope
+                .numeric_binding(panel.source, &panel.row_source, resources)?,
+        )?;
+        registry.panels[0].family = Some(family);
+        prepare_reference_plot(source, &mut registry.panels[0], None, None, resources)?;
+        return PreparedInteriorInputs::from_registry(
+            registry,
+            InteriorRoute::classify(source.kind()),
         );
     }
     if source.kind() == PlotKind::Scatter && !source.description().has_facets() {
-        return prepare_scatter_plot(
-            source,
+        let marks = crate::plots::scatter::PreparedScatter::new(
             source.description(),
-            crate::plots::scatter::PreparedScatter::new(
-                source.description(),
-                source_data.expect("single plot data"),
-            )?,
-            source_scope.expect("single plot scope"),
-            resources,
+            source_data.expect("single plot data"),
+        )?;
+        registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
+        prepare_scatter_plot(source, &mut registry.panels[0], resources)?;
+        return PreparedInteriorInputs::from_registry(
+            registry,
+            InteriorRoute::classify(source.kind()),
         );
     }
     if matches!(
@@ -446,29 +418,32 @@ pub(crate) fn prepare_plot<'src>(
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
     ) && !source.description().has_facets()
     {
-        return prepare_line_plot(
+        let marks = crate::plots::line::PreparedLine::new(
             source,
-            source.description(),
-            crate::plots::line::PreparedLine::new(
-                source,
-                source_data.expect("single plot data"),
-                None,
-            )?,
-            source_scope.expect("single plot scope"),
-            resources,
+            source_data.expect("single plot data"),
+            None,
+        )?;
+        registry.panels[0].family = Some(PreparedFamily::Line {
+            kind: source.kind(),
+            marks,
+        });
+        prepare_line_plot(source, &mut registry.panels[0], resources)?;
+        return PreparedInteriorInputs::from_registry(
+            registry,
+            InteriorRoute::classify(source.kind()),
         );
     }
     if source.description().has_facets() {
-        let panels = crate::orchestrator::text_census_panels(source, resources)?;
+        crate::orchestrator::prepare_facet_scopes(source, &mut registry, resources)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| crate::data::observed_source_collectives(source.description(), "interaction"))
             .transpose()?;
-        let mut estimate_panels = if matches!(
+        if matches!(
             source.kind(),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
         ) {
-            crate::data::source::collect_source(panels.iter().map(|panel| {
-                crate::plots::interval_estimate::PreparedEstimate::new(
+            for panel in &mut registry.panels {
+                let marks = crate::plots::interval_estimate::PreparedEstimate::new(
                     source,
                     panel.data(resources)?,
                     panel.significance_annotations(),
@@ -477,18 +452,22 @@ pub(crate) fn prepare_plot<'src>(
                         &panel.row_source,
                         resources,
                     )?,
-                )
-                .map(Some)
-            }))?
-        } else {
-            Vec::new()
-        };
+                )?;
+                panel.family = Some(PreparedFamily::Estimate {
+                    kind: source.kind(),
+                    marks,
+                });
+            }
+        }
         let mut estimate_fallback: Option<(f64, f64)> = None;
         if matches!(
             source.description().facet_scales_spec(),
             FacetScales::Fixed | FacetScales::FreeY
         ) {
-            for marks in estimate_panels.iter().flatten() {
+            for panel in &registry.panels {
+                let Some(PreparedFamily::Estimate { marks, .. }) = &panel.family else {
+                    continue;
+                };
                 if let Some(range) = marks.range {
                     estimate_fallback = Some(
                         estimate_fallback
@@ -571,180 +550,127 @@ pub(crate) fn prepare_plot<'src>(
                 )?)
             })
             .transpose()?;
-        crate::data::source::reserve_source(&mut retained, panels.len())?;
-        for (index, panel) in panels.into_iter().enumerate() {
+        for panel in &mut registry.panels {
+            let prepared = panel.family.take();
             let data = panel.data(resources)?;
             let facet = crate::data::FacetAxisSources {
                 hues: hues.as_deref(),
                 groups: groups.as_deref(),
                 conditions: conditions.as_deref(),
             };
-            let marks = if source.kind() == PlotKind::Scatter {
-                Some(crate::plots::scatter::PreparedScatter::new(
-                    source.description(),
-                    data,
-                )?)
-            } else {
-                None
-            };
-            let paths = if matches!(
-                source.kind(),
-                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
-            ) {
-                Some(crate::plots::line::PreparedLine::new(
-                    source,
-                    data,
-                    facet.conditions,
-                )?)
-            } else {
-                None
-            };
-            let bins = (source.kind() == PlotKind::Histogram)
-                .then(|| {
-                    crate::plots::histogram::HistogramSemantics::new(
+            let family = match source.kind() {
+                PlotKind::Scatter => PreparedFamily::Scatter(
+                    crate::plots::scatter::PreparedScatter::new(source.description(), data)?,
+                ),
+                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                    PreparedFamily::Line {
+                        kind: source.kind(),
+                        marks: crate::plots::line::PreparedLine::new(
+                            source,
+                            data,
+                            facet.conditions,
+                        )?,
+                    }
+                }
+                PlotKind::Histogram => {
+                    PreparedFamily::Histogram(crate::plots::histogram::HistogramSemantics::new(
                         source.description(),
                         data,
                         owner,
-                    )
-                })
-                .transpose()?;
-            let curves = (source.kind() == PlotKind::Density)
-                .then(|| crate::plots::density::PreparedDensity::new(source, data))
-                .transpose()?;
-            let quantiles = (source.kind() == PlotKind::Qq)
-                .then(|| crate::plots::qq::PreparedQq::new(source.description(), data))
-                .transpose()?;
-            let fit = (source.kind() == PlotKind::Regression)
-                .then(|| {
-                    crate::plots::regression::PreparedRegression::new(source.description(), data)
-                })
-                .transpose()?;
-            let pairs = (source.kind() == PlotKind::Dumbbell)
-                .then(|| crate::plots::dumbbell::prepare(source.description(), data))
-                .transpose()?;
-            let estimates = estimate_panels.get_mut(index).and_then(Option::take);
-            let heatmap_marks = (source.kind() == PlotKind::Heatmap)
-                .then(|| {
-                    crate::plots::heatmap::prepare(
-                        source,
-                        data,
-                        continuous_selection(source, owner)?,
-                        panel.scope.numeric_binding(
-                            source.description(),
-                            &panel.row_source,
-                            resources,
-                        )?,
-                    )
-                })
-                .transpose()?;
-            let beeswarm_marks = (source.kind() == PlotKind::Beeswarm)
-                .then(|| {
-                    crate::plots::beeswarm::prepare(
-                        source,
-                        data,
-                        continuous_selection(source, owner)?,
-                        panel.scope.numeric_binding(
-                            source.description(),
-                            &panel.row_source,
-                            resources,
-                        )?,
-                    )
-                })
-                .transpose()?;
-            let waterfall_marks = (source.kind() == PlotKind::Waterfall)
-                .then(|| crate::plots::waterfall::prepare(source, data))
-                .transpose()?;
-            let interaction_marks = (source.kind() == PlotKind::Interaction)
-                .then(|| {
-                    crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())
-                })
-                .transpose()?;
-            let distribution_marks = matches!(
-                source.kind(),
-                PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
-            )
-            .then(|| {
-                crate::plots::categorical_distribution::PreparedDistribution::new(
+                    )?)
+                }
+                PlotKind::Density => PreparedFamily::Density(
+                    crate::plots::density::PreparedDensity::new(source, data)?,
+                ),
+                PlotKind::Qq => PreparedFamily::Qq(crate::plots::qq::PreparedQq::new(
+                    source.description(),
+                    data,
+                )?),
+                PlotKind::Regression => PreparedFamily::Regression(
+                    crate::plots::regression::PreparedRegression::new(source.description(), data)?,
+                ),
+                PlotKind::Dumbbell => PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
+                    source.description(),
+                    data,
+                )?),
+                PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+                    prepared.expect("prepared facet estimates")
+                }
+                PlotKind::Heatmap => PreparedFamily::Heatmap(crate::plots::heatmap::prepare(
                     source,
                     data,
-                    Some(facet),
-                )
-            })
-            .transpose()?;
-            let bar_marks = matches!(
-                source.kind(),
+                    continuous_selection(source, owner)?,
+                    panel.scope.numeric_binding(
+                        source.description(),
+                        &panel.row_source,
+                        resources,
+                    )?,
+                )?),
+                PlotKind::Beeswarm => PreparedFamily::Beeswarm(crate::plots::beeswarm::prepare(
+                    source,
+                    data,
+                    continuous_selection(source, owner)?,
+                    panel.scope.numeric_binding(
+                        source.description(),
+                        &panel.row_source,
+                        resources,
+                    )?,
+                )?),
+                PlotKind::Waterfall => {
+                    PreparedFamily::Waterfall(crate::plots::waterfall::prepare(source, data)?)
+                }
+                PlotKind::Interaction => PreparedFamily::Interaction(
+                    crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())?,
+                ),
+                PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+                    PreparedFamily::Distribution {
+                        kind: source.kind(),
+                        marks: crate::plots::categorical_distribution::PreparedDistribution::new(
+                            source,
+                            data,
+                            Some(facet),
+                        )?,
+                    }
+                }
                 PlotKind::Bar
-                    | PlotKind::HorizontalBar
-                    | PlotKind::StackedBar
-                    | PlotKind::StackedHorizontalBar
-            )
-            .then(|| {
-                crate::plots::bar_data::prepare_scoped(
-                    source,
-                    data,
-                    crate::plots::bar_data::mode(source),
-                    Some(facet),
-                    panel.significance_annotations(),
-                )
-            })
-            .transpose()?;
-            let family = waterfall_marks
-                .map(PreparedFamily::Waterfall)
-                .or_else(|| beeswarm_marks.map(PreparedFamily::Beeswarm))
-                .or_else(|| heatmap_marks.map(PreparedFamily::Heatmap))
-                .or_else(|| interaction_marks.map(PreparedFamily::Interaction))
-                .or_else(|| {
-                    distribution_marks.map(|marks| PreparedFamily::Distribution {
-                        kind: source.kind(),
-                        marks,
-                    })
-                })
-                .or_else(|| {
-                    bar_marks.map(|marks| PreparedFamily::Bars {
-                        kind: source.kind(),
-                        mode: crate::plots::bar_data::mode(source),
-                        marks,
-                    })
-                })
-                .or_else(|| {
-                    estimates.map(|marks| PreparedFamily::Estimate {
-                        kind: source.kind(),
-                        marks,
-                    })
-                })
-                .or_else(|| pairs.map(PreparedFamily::Dumbbell))
-                .or_else(|| quantiles.map(PreparedFamily::Qq))
-                .or_else(|| fit.map(PreparedFamily::Regression))
-                .or_else(|| bins.map(PreparedFamily::Histogram))
-                .or_else(|| curves.map(PreparedFamily::Density))
-                .or_else(|| {
-                    paths.map(|marks| PreparedFamily::Line {
-                        kind: source.kind(),
-                        marks,
-                    })
-                })
-                .or_else(|| marks.map(PreparedFamily::Scatter));
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar => PreparedFamily::Bars {
+                    kind: source.kind(),
+                    mode: crate::plots::bar_data::mode(source),
+                    marks: crate::plots::bar_data::prepare_scoped(
+                        source,
+                        data,
+                        crate::plots::bar_data::mode(source),
+                        Some(facet),
+                        panel.significance_annotations(),
+                    )?,
+                },
+                PlotKind::Matrix | PlotKind::Marginal => {
+                    panel.axes = Some(prepare(
+                        source,
+                        Some(facet),
+                        None,
+                        Some(ReferenceAxisConfig {
+                            estimate_fallback,
+                            ..ReferenceAxisConfig::default()
+                        }),
+                    )?);
+                    continue;
+                }
+            };
             let mut axes = prepare(
                 source,
                 Some(facet),
-                family.as_ref(),
+                Some(&family),
                 Some(ReferenceAxisConfig {
                     estimate_fallback,
                     ..ReferenceAxisConfig::default()
                 }),
             )?;
-            let scope = panel.render_scope();
             axes.bind_numeric(source, resources, &panel.scope)?;
-            if let Some(family) = family {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(scope)?),
-                    family,
-                ));
-            }
-            retained.push((Some(crate::data::source::copy_source_string(scope)?), axes));
-            crate::data::source::reserve_source(&mut scopes, 1)?;
-            scopes.push(panel.scope);
+            panel.family = Some(family);
+            panel.axes = Some(axes);
         }
         for (side, fixed) in [
             matches!(
@@ -762,36 +688,32 @@ pub(crate) fn prepare_plot<'src>(
             if !fixed {
                 continue;
             }
-            reconcile_facet_axis(&mut retained, side)?;
+            reconcile_facet_axis(&mut registry.panels, side)?;
         }
-        for (((_, family), (_, axes)), scope) in families.iter_mut().zip(&retained).zip(&scopes) {
-            if let PreparedFamily::Waterfall(marks) = family {
-                let row_source = crate::data::source::RowSourceContext::new(
-                    source.description(),
-                    scope,
-                    resources,
-                );
+        for panel in &mut registry.panels {
+            if let Some(PreparedFamily::Waterfall(marks)) = &mut panel.family {
                 marks.prepare_totals(
                     crate::plots::waterfall::WaterfallTotalsPrepare {
-                        numeric: scope.numeric_binding(
-                            source.description(),
-                            &row_source,
+                        numeric: panel.scope.numeric_binding(
+                            panel.source,
+                            &panel.row_source,
                             resources,
                         )?,
-                        axes,
+                        axes: panel.axes.as_ref().expect("prepared facet axes"),
                         format: source.description().total_format_spec(),
                     },
                     false,
                 )?;
             }
         }
-        for ((_, family), (_, axes)) in families.iter().zip(&retained) {
-            let PreparedFamily::Qq(quantiles) = family else {
+        for panel in &registry.panels {
+            let Some(PreparedFamily::Qq(quantiles)) = &panel.family else {
                 continue;
             };
-            quantiles.validate_ranges(axes.ranges)?;
+            quantiles.validate_ranges(panel.axes.as_ref().expect("prepared facet axes").ranges)?;
         }
-        for (_, axes) in &retained {
+        for panel in &registry.panels {
+            let axes = panel.axes.as_ref().expect("prepared facet axes");
             if matches!(
                 source.kind(),
                 PlotKind::Bar
@@ -817,40 +739,13 @@ pub(crate) fn prepare_plot<'src>(
     } else if source.kind() == PlotKind::Matrix {
         let marks =
             crate::plots::matrix::prepare_axes(source, source_data.expect("single plot data"))?;
-        crate::data::source::reserve_source(&mut families, 1)?;
-        families.push((
-            source
-                .axis_scope()
-                .map(crate::data::source::copy_source_string)
-                .transpose()?,
-            PreparedFamily::Matrix(marks),
-        ));
-        scopes.push(source_scope.expect("single plot scope"));
+        registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
     } else {
         let mut axes = prepare(source, None, None, None)?;
-        axes.bind_numeric(
-            source,
-            resources,
-            source_scope.as_ref().expect("single plot scope"),
-        )?;
-        crate::data::source::reserve_source(&mut retained, 1)?;
-        retained.push((
-            source
-                .axis_scope()
-                .map(crate::data::source::copy_source_string)
-                .transpose()?,
-            axes,
-        ));
-        scopes.push(source_scope.expect("single plot scope"));
+        axes.bind_numeric(source, resources, &registry.panels[0].scope)?;
+        registry.panels[0].axes = Some(axes);
     }
-    PreparedInteriorInputs::from_panels(
-        source.description(),
-        InteriorRoute::classify(source.kind()),
-        retained,
-        families,
-        scopes,
-        resources,
-    )
+    PreparedInteriorInputs::from_registry(registry, InteriorRoute::classify(source.kind()))
 }
 
 fn facet_source_strings(
@@ -876,95 +771,48 @@ fn facet_source_strings(
 }
 
 /// Complete one already prepared Scatter component after root range coordination.
-pub(crate) fn prepare_scatter_plot<'src>(
+pub(crate) fn prepare_scatter_plot(
     source: &Plot,
-    registered_source: &'src crate::builder::PlotDescription,
-
-    marks: crate::plots::scatter::PreparedScatter,
-    scope: Scope,
+    panel: &mut PlotRegistrationBuild<'_>,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs<'src>, Error> {
+) -> Result<(), Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
-    let family = PreparedFamily::Scatter(marks);
-    let mut axes = prepare(source, None, Some(&family), None)?;
-    axes.bind_numeric(source, resources, &scope)?;
+    let mut axes = prepare(source, None, panel.family.as_ref(), None)?;
+    axes.bind_numeric(source, resources, &panel.scope)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges,
     )?;
-    let scope_name = || {
-        scope
-            .render_name
-            .as_deref()
-            .map(crate::data::source::copy_source_string)
-            .transpose()
-    };
-    let mut retained_axes = Vec::new();
-    crate::data::source::reserve_source(&mut retained_axes, 1)?;
-    retained_axes.push((scope_name()?, axes));
-    let mut panels = Vec::new();
-    crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((scope_name()?, family));
-    PreparedInteriorInputs::from_panels(
-        registered_source,
-        InteriorRoute::classify(PlotKind::Scatter),
-        retained_axes,
-        panels,
-        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        resources,
-    )
+    panel.axes = Some(axes);
+    Ok(())
 }
 
 /// Complete one retained line component after the parent's range coordination.
-pub(crate) fn prepare_line_plot<'src>(
+pub(crate) fn prepare_line_plot(
     source: &Plot,
-    registered_source: &'src crate::builder::PlotDescription,
-
-    marks: crate::plots::line::PreparedLine,
-    scope: Scope,
+    panel: &mut PlotRegistrationBuild<'_>,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs<'src>, Error> {
-    let family = PreparedFamily::Line {
-        kind: source.kind(),
-        marks,
-    };
-    let mut axes = prepare(source, None, Some(&family), None)?;
-    axes.bind_numeric(source, resources, &scope)?;
+) -> Result<(), Error> {
+    let mut axes = prepare(source, None, panel.family.as_ref(), None)?;
+    axes.bind_numeric(source, resources, &panel.scope)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges,
     )?;
-    let scope_name = || {
-        scope
-            .render_name
-            .as_deref()
-            .map(crate::data::source::copy_source_string)
-            .transpose()
-    };
-    let mut retained_axes = Vec::new();
-    crate::data::source::reserve_source(&mut retained_axes, 1)?;
-    retained_axes.push((scope_name()?, axes));
-    let mut panels = Vec::new();
-    crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((scope_name()?, family));
-    PreparedInteriorInputs::from_panels(
-        registered_source,
-        InteriorRoute::classify(source.kind()),
-        retained_axes,
-        panels,
-        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        resources,
-    )
+    panel.axes = Some(axes);
+    Ok(())
 }
 
 fn reconcile_facet_axis(
-    retained: &mut [(Option<String>, PreparedAxes)],
+    retained: &mut [PlotRegistrationBuild<'_>],
     side: usize,
 ) -> Result<(), Error> {
-    let Some((_, first)) = retained.first() else {
+    let Some(first) = retained.first() else {
         return Ok(());
     };
-    for (_, axes) in retained.iter() {
+    let first = first.axes.as_ref().expect("prepared facet axes");
+    for panel in retained.iter() {
+        let axes = panel.axes.as_ref().expect("prepared facet axes");
         if axes.categories[side] != first.categories[side] {
             return Err(Error::Render(format!("fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data", if side == 0 { "x" } else { "y" })));
         }
@@ -983,7 +831,8 @@ fn reconcile_facet_axis(
                 },
             )
         }
-        for (_, axes) in &*retained {
+        for panel in &*retained {
+            let axes = panel.axes.as_ref().expect("prepared facet axes");
             if presentation(axes, side) != presentation(first, side) {
                 return Err(Error::Data(
                     "fixed facet numeric axes require identical numeric formats and operand contexts"
@@ -993,13 +842,14 @@ fn reconcile_facet_axis(
         }
         let union = retained
             .iter()
-            .map(|(_, axes)| axes.ranges[side])
+            .map(|panel| panel.axes.as_ref().expect("prepared facet axes").ranges[side])
             .fold((f64::INFINITY, f64::NEG_INFINITY), |a, b| {
                 (a.0.min(b.0), a.1.max(b.1))
             });
         validate_range(union)?;
 
-        for (_, axes) in retained {
+        for panel in retained {
+            let axes = panel.axes.as_mut().expect("prepared facet axes");
             axes.ranges[side] = union;
             if axes.specs[side].provenance != crate::layout::RangeProvenance::Configured {
                 axes.specs[side].provenance = crate::layout::RangeProvenance::Shared;

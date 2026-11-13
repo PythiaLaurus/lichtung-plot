@@ -1162,9 +1162,8 @@ impl Canvas {
     fn prepare_shared_x(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
-        scatter: &[Option<crate::plots::scatter::PreparedScatter>],
-        line: &[Option<crate::plots::line::PreparedLine>],
-        reference: &[Option<crate::orchestrator::registration::PreparedFamily>],
+        registry: &crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+        slots: &[Option<crate::orchestrator::registration::PlotOccurrenceId>],
     ) -> Result<Vec<Option<(f64, f64)>>, Error> {
         let mut ranges = Vec::new();
         if self.x_range_groups.is_empty() {
@@ -1180,12 +1179,26 @@ impl Canvas {
                     .placements
                     .plot(index)
                     .expect("validated shared x member");
-                let range = if let Some(marks) = &reference[index] {
+                let family = slots[index]
+                    .as_ref()
+                    .and_then(|id| registry.panels[id.slot].family.as_ref());
+                let range = if let Some(marks) = family.filter(|family| {
+                    !matches!(
+                        family,
+                        crate::orchestrator::registration::PreparedFamily::Scatter(_)
+                            | crate::orchestrator::registration::PreparedFamily::Line { .. }
+                    )
+                }) {
                     marks.x_range(plot)?
                 } else if plot.kind() == PlotKind::Scatter {
                     crate::layout::continuous_auto_range(
-                        scatter[index]
-                            .as_ref()
+                        family
+                            .and_then(|family| match family {
+                                crate::orchestrator::registration::PreparedFamily::Scatter(
+                                    marks,
+                                ) => Some(marks),
+                                _ => None,
+                            })
                             .ok_or_else(|| {
                                 Error::Render(
                                     "shared Scatter range requires root-prepared inputs".into(),
@@ -1198,9 +1211,17 @@ impl Canvas {
                     plot.kind(),
                     PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
                 ) {
-                    let marks = line[index].as_ref().ok_or_else(|| {
-                        Error::Render("shared line range requires root-prepared inputs".into())
-                    })?;
+                    let marks = family
+                        .and_then(|family| match family {
+                            crate::orchestrator::registration::PreparedFamily::Line {
+                                marks,
+                                ..
+                            } => Some(marks),
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            Error::Render("shared line range requires root-prepared inputs".into())
+                        })?;
                     if marks.conditions.is_some() {
                         return Err(Error::Data(
                             "canvas x-range group has a categorical x axis".into(),
@@ -1263,23 +1284,15 @@ impl Canvas {
             "Canvas interior inputs",
         )?;
         let resources = stage.operation();
-        let mut scatter = Vec::new();
-        stage.reserve_prepared(
-            &mut scatter,
-            self.placements.len(),
-            "Canvas Scatter semantics",
-        )?;
-        let mut line = Vec::new();
-        stage.reserve_prepared(&mut line, self.placements.len(), "Canvas line semantics")?;
-        let mut reference = Vec::new();
-        let mut scopes = Vec::new();
-        crate::data::source::reserve_source(&mut scopes, self.placements.len())?;
-        stage.reserve_prepared(
-            &mut reference,
-            self.placements.len(),
-            "Canvas distribution/reference semantics",
-        )?;
+        let mut registry =
+            crate::orchestrator::registration::PlotRegistryBuilder::new(resources.root_identity());
+        let mut slots = Vec::new();
+        stage.reserve_prepared(&mut slots, self.placements.len(), "Canvas plot occurrences")?;
         for (index, plot) in self.placements.plots().enumerate() {
+            let Some(source) = plot else {
+                slots.push(None);
+                continue;
+            };
             let suppressed = plot
                 .filter(|plot| {
                     matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
@@ -1294,205 +1307,106 @@ impl Canvas {
             } else {
                 plot
             };
-            let scope = plot
-                .map(|plot| {
-                    crate::orchestrator::registration::Scope::new(
-                        plot,
-                        &resources,
-                        index,
-                        crate::orchestrator::registration::RowSelection::Full,
-                        None,
-                        plot.axis_scope()
-                            .map(crate::data::source::copy_source_string)
-                            .transpose()?,
-                    )
-                })
-                .transpose()?;
-            let row_source = plot.zip(scope.as_ref()).map(|(plot, scope)| {
-                crate::data::source::RowSourceContext::new(plot.description(), scope, &resources)
-            });
-            reference.push(
-                match plot.filter(|plot| {
-                    matches!(
-                        plot.kind(),
-                        PlotKind::Histogram
-                            | PlotKind::Density
-                            | PlotKind::Qq
-                            | PlotKind::Regression
-                            | PlotKind::Dumbbell
-                            | PlotKind::PointInterval
-                            | PlotKind::Coefficient
-                            | PlotKind::Forest
-                            | PlotKind::Bar
-                            | PlotKind::HorizontalBar
-                            | PlotKind::StackedBar
-                            | PlotKind::StackedHorizontalBar
-                            | PlotKind::Boxplot
-                            | PlotKind::Violin
-                            | PlotKind::Raincloud
-                            | PlotKind::Interaction
-                            | PlotKind::Heatmap
-                            | PlotKind::Beeswarm
-                            | PlotKind::Waterfall
-                            | PlotKind::Marginal
-                    )
-                }) {
-                    Some(plot) => {
-                        plot.description().configured_source_rows()?;
-                        let scope = scope.as_ref().expect("Canvas plot scope");
-                        let row_source = row_source.as_ref().expect("Canvas plot rows");
-                        let data = crate::data::PlotData::checked(
-                            plot.description(),
-                            scope,
-                            row_source,
-                            &resources,
-                        )?;
-                        Some(crate::orchestrator::registration::PreparedFamily::new(
-                            plot,
-                            data,
-                            themes
-                                .and_then(|themes| themes.plot(index))
-                                .map(|theme| &**theme),
-                            scope.numeric_binding(plot.description(), row_source, &resources)?,
-                        )?)
-                    }
-                    None => None,
-                },
-            );
-            line.push(
-                match plot.filter(|plot| {
-                    matches!(
-                        plot.kind(),
-                        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
-                    )
-                }) {
-                    Some(plot) => {
-                        plot.description().configured_source_rows()?;
-                        let data = crate::data::PlotData::checked(
-                            plot.description(),
-                            scope.as_ref().expect("Canvas plot scope"),
-                            row_source.as_ref().expect("Canvas plot rows"),
-                            &resources,
-                        )?;
-                        Some(crate::plots::line::PreparedLine::new(plot, data, None)?)
-                    }
-                    None => None,
-                },
-            );
-            scatter.push(match plot.filter(|plot| plot.kind() == PlotKind::Scatter) {
-                Some(plot) => {
+            let plot = plot.expect("configured Canvas source");
+            let scope = crate::orchestrator::registration::Scope::new(
+                plot,
+                &resources,
+                index,
+                crate::orchestrator::registration::RowSelection::Full,
+                None,
+                plot.axis_scope()
+                    .map(crate::data::source::copy_source_string)
+                    .transpose()?,
+            )?;
+            if plot.kind() == PlotKind::Matrix {
+                slots.push(None);
+                continue;
+            }
+            let id = registry.reserve(source.description(), scope, &resources)?;
+            let panel = &mut registry.panels[id.slot];
+            let family = match plot.kind() {
+                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
-                    let data = crate::data::PlotData::checked(
-                        plot.description(),
-                        scope.as_ref().expect("Canvas plot scope"),
-                        row_source.as_ref().expect("Canvas plot rows"),
-                        &resources,
-                    )?;
-                    Some(crate::plots::scatter::PreparedScatter::new(
-                        plot.description(),
-                        data,
-                    )?)
+                    let marks =
+                        crate::plots::line::PreparedLine::new(plot, panel.data(&resources)?, None)?;
+                    crate::orchestrator::registration::PreparedFamily::Line {
+                        kind: plot.kind(),
+                        marks,
+                    }
                 }
-                None => None,
-            });
-            scopes.push(scope);
-        }
-        let shared_x = self.prepare_shared_x(stage, &scatter, &line, &reference)?;
-        for (index, plot) in self.placements.plots().enumerate() {
-            interiors.push(
-                match plot.filter(|plot| {
-                    matches!(
-                        plot.kind(),
-                        PlotKind::Scatter
-                            | PlotKind::Histogram
-                            | PlotKind::Density
-                            | PlotKind::Qq
-                            | PlotKind::Regression
-                            | PlotKind::Dumbbell
-                            | PlotKind::PointInterval
-                            | PlotKind::Coefficient
-                            | PlotKind::Forest
-                            | PlotKind::Bar
-                            | PlotKind::HorizontalBar
-                            | PlotKind::StackedBar
-                            | PlotKind::StackedHorizontalBar
-                            | PlotKind::Boxplot
-                            | PlotKind::Violin
-                            | PlotKind::Raincloud
-                            | PlotKind::Interaction
-                            | PlotKind::Heatmap
-                            | PlotKind::Beeswarm
-                            | PlotKind::Waterfall
-                            | PlotKind::Marginal
-                            | PlotKind::Line
-                            | PlotKind::Trajectory
-                            | PlotKind::LinePath
+                PlotKind::Scatter => {
+                    plot.description().configured_source_rows()?;
+                    crate::orchestrator::registration::PreparedFamily::Scatter(
+                        crate::plots::scatter::PreparedScatter::new(
+                            plot.description(),
+                            panel.data(&resources)?,
+                        )?,
                     )
-                }) {
-                    Some(plot) if reference[index].is_some() => {
-                        let scope_bytes = 6 + index
-                            .checked_ilog10()
-                            .map_or(1, |digits| digits as usize + 1);
-                        let mut scope = String::new();
-                        crate::data::source::reserve_source_string(&mut scope, scope_bytes)?;
-                        std::fmt::Write::write_fmt(&mut scope, format_args!("panel-{index}"))
-                            .map_err(|error| Error::Render(format!("Canvas scope: {error}")))?;
-                        let mut registered_scope = scopes[index].take().expect("Canvas plot scope");
-                        registered_scope.set_render_name(scope)?;
-                        Some(crate::plots::shared_x::prepare_reference_plot(
-                            plot,
-                            reference[index]
-                                .take()
-                                .expect("prepared reference component"),
-                            registered_scope,
-                            shared_x.get(index).copied().flatten(),
-                            self.labels.as_ref(),
-                            &resources,
-                        )?)
-                    }
-                    Some(plot) => {
-                        let mut scope = String::new();
-                        crate::data::source::reserve_source_string(&mut scope, 32)?;
-                        write!(scope, "panel-{index}").expect("admitted scope");
-                        let mut registered_scope = scopes[index].take().expect("Canvas plot scope");
-                        registered_scope
-                            .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
-                        let mut plot = plot.clone();
-                        if let Some(labels) = &self.labels {
-                            plot = plot.labels(labels.clone());
-                        }
-                        let mut plot = plot.with_render_scope(scope);
-                        if let Some(Some(range)) = shared_x.get(index) {
-                            let kind = plot.kind();
-                            plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
-                        }
-                        Some(if plot.kind() == PlotKind::Scatter {
-                            crate::plots::shared_x::prepare_scatter_plot(
-                                &plot,
-                                self.placements
-                                    .plot(index)
-                                    .expect("Canvas source")
-                                    .description(),
-                                scatter[index].take().expect("prepared Scatter component"),
-                                registered_scope,
-                                &resources,
-                            )?
-                        } else {
-                            crate::plots::shared_x::prepare_line_plot(
-                                &plot,
-                                self.placements
-                                    .plot(index)
-                                    .expect("Canvas source")
-                                    .description(),
-                                line[index].take().expect("prepared line component"),
-                                registered_scope,
-                                &resources,
-                            )?
-                        })
-                    }
-                    None => None,
-                },
-            );
+                }
+                _ => {
+                    plot.description().configured_source_rows()?;
+                    crate::orchestrator::registration::PreparedFamily::new(
+                        plot,
+                        panel.data(&resources)?,
+                        themes
+                            .and_then(|themes| themes.plot(index))
+                            .map(|theme| &**theme),
+                        panel
+                            .scope
+                            .numeric_binding(panel.source, &panel.row_source, &resources)?,
+                    )?
+                }
+            };
+            panel.family = Some(family);
+            slots.push(Some(id));
+        }
+        let shared_x = self.prepare_shared_x(stage, &registry, &slots)?;
+        for (index, plot) in self.placements.plots().enumerate() {
+            let Some(id) = &slots[index] else { continue };
+            let plot = plot.expect("Canvas producer source");
+            let panel = &mut registry.panels[id.slot];
+            if let Some(
+                crate::orchestrator::registration::PreparedFamily::Scatter(_)
+                | crate::orchestrator::registration::PreparedFamily::Line { .. },
+            ) = &panel.family
+            {
+                let mut scope = String::new();
+                crate::data::source::reserve_source_string(&mut scope, 32)?;
+                write!(scope, "panel-{index}").expect("admitted scope");
+                panel
+                    .scope
+                    .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
+                let mut plot = plot.clone();
+                if let Some(labels) = &self.labels {
+                    plot = plot.labels(labels.clone());
+                }
+                let mut plot = plot.with_render_scope(scope);
+                if let Some(Some(range)) = shared_x.get(index) {
+                    let kind = plot.kind();
+                    plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
+                }
+                if plot.kind() == PlotKind::Scatter {
+                    crate::plots::shared_x::prepare_scatter_plot(&plot, panel, &resources)?;
+                } else {
+                    crate::plots::shared_x::prepare_line_plot(&plot, panel, &resources)?;
+                }
+            } else {
+                let scope_bytes = 6 + index
+                    .checked_ilog10()
+                    .map_or(1, |digits| digits as usize + 1);
+                let mut scope = String::new();
+                crate::data::source::reserve_source_string(&mut scope, scope_bytes)?;
+                std::fmt::Write::write_fmt(&mut scope, format_args!("panel-{index}"))
+                    .map_err(|error| Error::Render(format!("Canvas scope: {error}")))?;
+                panel.scope.set_render_name(scope)?;
+                crate::plots::shared_x::prepare_reference_plot(
+                    plot,
+                    panel,
+                    shared_x.get(index).copied().flatten(),
+                    self.labels.as_ref(),
+                    &resources,
+                )?;
+            }
         }
         for group in &self.x_range_groups {
             if !group.iter().any(|&index| {
@@ -1503,28 +1417,16 @@ impl Canvas {
                 continue;
             }
             for &index in group {
-                let Some(inputs) = interiors[index].as_mut() else {
-                    continue;
-                };
-                if !inputs.plots.iter().any(|registered| {
-                    matches!(
-                        &registered.family,
-                        crate::orchestrator::registration::PreparedFamily::Waterfall(_)
-                    )
-                }) {
-                    continue;
-                }
-                for registered in &mut inputs.plots {
+                let Some(id) = &slots[index] else { continue };
+                let registered = &mut registry.panels[id.slot];
+                if let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
+                    &mut registered.family
+                {
                     let numeric = registered.scope.numeric_binding(
                         registered.source,
                         &registered.row_source,
                         &resources,
                     )?;
-                    let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
-                        &mut registered.family
-                    else {
-                        continue;
-                    };
                     let axes = registered.axes.as_ref().ok_or_else(|| {
                         Error::Render("Waterfall total window scope missing".into())
                     })?;
@@ -1539,6 +1441,21 @@ impl Canvas {
                     )?;
                 }
             }
+        }
+        let mut completed = registry.finish()?.into_iter();
+        for slot in slots {
+            interiors.push(if slot.is_some() {
+                let registered = completed.next().expect("prepared Canvas occurrence");
+                let route =
+                    crate::layout::interior::InteriorRoute::classify(registered.source.kind());
+                Some(crate::layout::interior::PreparedInteriorInputs {
+                    plots: crate::data::source::collect_source(std::iter::once(Ok(registered)))?,
+                    route,
+                    discrete_guides: std::sync::OnceLock::new(),
+                })
+            } else {
+                None
+            });
         }
         Ok((interiors, shared_x))
     }

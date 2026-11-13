@@ -10,7 +10,7 @@ use crate::spec::{PlotKind, PlotRenderContext, PlotRenderResult};
 mod artifacts;
 mod backend;
 mod facets;
-pub(crate) use facets::text_census_panels;
+pub(crate) use facets::prepare_facet_scopes;
 pub(crate) mod layers;
 mod lifecycle;
 #[cfg(test)]

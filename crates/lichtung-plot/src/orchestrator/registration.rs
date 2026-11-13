@@ -139,6 +139,28 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) axes: Option<crate::plots::shared_x::PreparedAxes>,
 }
 
+impl<'src> PlotRegistrationBuild<'src> {
+    pub(crate) fn data<'v>(
+        &'v self,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::data::PlotData<'src, 'v>, Error> {
+        crate::data::PlotData::checked(self.source, &self.scope, &self.row_source, operation)
+    }
+
+    pub(crate) fn significance_annotations(
+        &self,
+    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
+        self.source
+            .significance_annotations()
+            .iter()
+            .filter(|annotation| {
+                annotation
+                    .facet_cell()
+                    .is_some_and(|cell| Some(cell) == self.scope.numeric_owner.facet.as_ref())
+            })
+    }
+}
+
 pub(crate) struct PlotRegistryBuilder<'src> {
     identity: RootIdentity,
     pub(crate) panels: Vec<PlotRegistrationBuild<'src>>,
@@ -155,16 +177,17 @@ impl<'src> PlotRegistryBuilder<'src> {
     pub(crate) fn reserve(
         &mut self,
         source: &'src PlotDescription,
-        scope: Scope,
+        mut scope: Scope,
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<PlotOccurrenceId, Error> {
-        let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
-        row_source.check(source, &scope, operation)?;
         if scope.id.root != self.identity {
             return Err(Error::Render(
                 "row source belongs to a different source or operation".into(),
             ));
         }
+        scope.id.slot = self.panels.len();
+        let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
+        row_source.check(source, &scope, operation)?;
         let id = scope.id.clone();
         crate::data::source::reserve_source(&mut self.panels, 1)?;
         self.panels.push(PlotRegistrationBuild {
@@ -175,6 +198,21 @@ impl<'src> PlotRegistryBuilder<'src> {
             axes: None,
         });
         Ok(id)
+    }
+
+    pub(crate) fn data<'v>(
+        &'v self,
+        id: &PlotOccurrenceId,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::data::PlotData<'src, 'v>, Error> {
+        let panel = self
+            .panels
+            .get(id.slot)
+            .filter(|panel| panel.scope.id == *id)
+            .ok_or_else(|| {
+                Error::Render("row source belongs to a different source or operation".into())
+            })?;
+        panel.data(operation)
     }
 
     pub(crate) fn finish(self) -> Result<Vec<PlotRegistration<'src>>, Error> {

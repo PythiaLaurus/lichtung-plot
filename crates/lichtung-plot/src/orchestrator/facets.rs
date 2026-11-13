@@ -3,7 +3,7 @@
 use crate::Error;
 use std::fmt::Write;
 
-use crate::builder::{Plot, PlotDescription};
+use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
@@ -87,48 +87,11 @@ pub(crate) fn text_census_labels(
     Ok(())
 }
 
-pub(crate) struct FacetTextCensusPanel<'src> {
-    source: &'src PlotDescription,
-    pub(crate) scope: super::registration::Scope,
-    pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
-}
-
-impl<'src> FacetTextCensusPanel<'src> {
-    pub(crate) fn data<'op>(
-        &'op self,
-        operation: &'op crate::font::canonical::OperationContext,
-    ) -> Result<crate::data::PlotData<'src, 'op>, Error> {
-        crate::data::PlotData::checked(self.source, &self.scope, &self.row_source, operation)
-    }
-
-    pub(crate) fn render_scope(&self) -> &str {
-        self.scope
-            .render_name
-            .as_deref()
-            .expect("facet render name")
-    }
-    pub(crate) fn numeric_cell(&self) -> Option<&crate::FacetCell> {
-        self.scope.numeric_owner.facet.as_ref()
-    }
-
-    pub(crate) fn significance_annotations(
-        &self,
-    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
-        self.source
-            .significance_annotations()
-            .iter()
-            .filter(|annotation| {
-                annotation
-                    .facet_cell()
-                    .is_some_and(|cell| Some(cell) == self.numeric_cell())
-            })
-    }
-}
-
-pub(crate) fn text_census_panels<'src>(
+pub(crate) fn prepare_facet_scopes<'src>(
     plot: &'src Plot,
+    builder: &mut super::registration::PlotRegistryBuilder<'src>,
     operation: &crate::font::canonical::OperationContext,
-) -> Result<Vec<FacetTextCensusPanel<'src>>, Error> {
+) -> Result<(), Error> {
     let source = plot.description();
     if !source.significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
@@ -141,7 +104,7 @@ pub(crate) fn text_census_panels<'src>(
     let selectors = data::facet_selectors(source)?;
     let panels = data::extract_panels(source, &selectors, None)?;
     data::validate_significance_facet_anchors(source, &panels)?;
-    crate::data::source::collect_source(panels.into_iter().enumerate().map(|(slot, panel)| {
+    for (slot, panel) in panels.into_iter().enumerate() {
         let cell = match panel.cell.as_slice() {
             [one] => Some(crate::FacetCell::single(
                 crate::data::source::copy_source_string(&one.level)?,
@@ -166,13 +129,9 @@ pub(crate) fn text_census_panels<'src>(
             cell.as_ref(),
             Some(render_name),
         )?;
-        let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
-        Ok(FacetTextCensusPanel {
-            source,
-            scope,
-            row_source,
-        })
-    }))
+        builder.reserve(source, scope, operation)?;
+    }
+    Ok(())
 }
 
 pub(super) struct PreparedFacetGuide {

@@ -123,30 +123,10 @@ pub(crate) struct PreparedInteriorInputs<'src> {
 }
 
 impl<'src> PreparedInteriorInputs<'src> {
-    pub(crate) fn from_panels(
-        source: &'src crate::builder::PlotDescription,
+    pub(crate) fn from_registry(
+        registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
         route: InteriorRoute,
-        axes: Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>,
-        families: Vec<(
-            Option<String>,
-            crate::orchestrator::registration::PreparedFamily,
-        )>,
-        scopes: Vec<crate::orchestrator::registration::Scope>,
-        operation: &crate::font::canonical::OperationContext,
     ) -> Result<Self, Error> {
-        let mut registry =
-            crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
-        let mut axes = axes.into_iter();
-        let mut families = families.into_iter();
-        for scope in scopes {
-            registry.reserve(source, scope, operation)?;
-            let panel = registry
-                .panels
-                .last_mut()
-                .expect("reserved plot occurrence");
-            panel.axes = axes.next().map(|(_, axes)| axes);
-            panel.family = families.next().map(|(_, family)| family);
-        }
         Ok(Self {
             plots: registry.finish()?,
             route,
