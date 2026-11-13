@@ -230,11 +230,23 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Interaction(marks))
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+            let (marks, categories) =
+                crate::plots::categorical_distribution::PreparedDistribution::new(
+                    source, data, None,
+                )?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, categories.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [slots, marks.range()].map(Some),
+                [Some(categories), None],
+            )?);
             Ok(PreparedFamily::Distribution {
                 kind: source.kind(),
-                marks: crate::plots::categorical_distribution::PreparedDistribution::new(
-                    source, data, None,
-                )?,
+                marks,
             })
         }
         PlotKind::Bar
@@ -351,7 +363,14 @@ impl PreparedFamily {
                     .raw
                     .len() as f64,
             ),
-            Self::Distribution { marks, .. } => (0.0, marks.categories().len() as f64),
+            Self::Distribution { .. } => (
+                0.0,
+                axes.expect("prepared distribution axes")
+                    .categories(0)
+                    .expect("prepared distribution categories")
+                    .raw
+                    .len() as f64,
+            ),
             Self::Bars { kind, marks, .. } => {
                 if matches!(
                     kind,
@@ -853,13 +872,25 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Interaction(marks)
                 }
                 PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-                    PreparedFamily::Distribution {
-                        kind: source.kind(),
-                        marks: crate::plots::categorical_distribution::PreparedDistribution::new(
+                    let (marks, categories) =
+                        crate::plots::categorical_distribution::PreparedDistribution::new(
                             source,
                             data,
                             Some(facet),
-                        )?,
+                        )?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, categories.len() as f64);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        [slots, marks.range()].map(Some),
+                        [Some(categories), None],
+                    )?);
+                    PreparedFamily::Distribution {
+                        kind: source.kind(),
+                        marks,
                     }
                 }
                 PlotKind::Bar
@@ -1280,12 +1311,8 @@ fn prepare(
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             let marks = marks!(reference, PreparedFamily::Distribution { marks, .. } => marks, "categorical distribution axes require retained semantics");
-            let levels = crate::data::source::collect_source(
-                marks
-                    .categories()
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?;
+            let levels = prepared_axes.as_mut().expect("prepared distribution axes").sources_mut()[0]
+                .categories.take().expect("prepared distribution categories").raw;
             let values = marks.range();
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);

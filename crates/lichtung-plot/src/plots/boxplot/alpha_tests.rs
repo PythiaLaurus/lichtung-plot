@@ -41,7 +41,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     )
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let (prepared, _) = crate::data::with_source_data_for_test(
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,

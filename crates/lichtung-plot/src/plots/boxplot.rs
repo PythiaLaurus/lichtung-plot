@@ -65,7 +65,13 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     };
     let sample = &prepared.sample;
-    if sample.x_levels.is_empty() || prepared.stats.len() != sample.groups.len() {
+    let x_levels = &registered
+        .expect("prepared Boxplot occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
+    if x_levels.is_empty() || prepared.stats.len() != sample.groups.len() {
         return Err(Error::Render(
             "Boxplot summary and populated groups differ".into(),
         ));
@@ -112,7 +118,7 @@ pub(crate) fn intrinsic_body_minimum(
         numeric = numeric.max(summary).max(out_y);
         if stat.x_index != group.x_index
             || stat.group_index != group.group_index
-            || group.x_index >= sample.x_levels.len()
+            || group.x_index >= x_levels.len()
         {
             return Err(Error::Render(
                 "Boxplot summary is outside its prepared category slot".into(),
@@ -163,7 +169,7 @@ pub(crate) fn intrinsic_body_minimum(
             numeric = numeric.max(ink.dimensions().1);
         }
     }
-    let count = u32::try_from(sample.x_levels.len())
+    let count = u32::try_from(x_levels.len())
         .map_err(|_| Error::Render("Boxplot category count exceeds coordinate range".into()))?;
     let category_span = pitch * f64::from(count);
     if !category_span.is_finite() {
@@ -185,8 +191,9 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<PreparedBoxplot, Error> {
-    let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;
+) -> Result<(PreparedBoxplot, Vec<String>), Error> {
+    let (sample, categories) =
+        crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;
 
     // Display stats per group: Q1, median, Q3, lower whisker, upper whisker.
     let stats = crate::data::source::collect_source(sample.groups.iter().map(
@@ -233,11 +240,14 @@ pub(crate) fn prepare(
             .fold(max.max(stat.hi_whisker), f64::max)
     });
 
-    Ok(PreparedBoxplot {
-        sample,
-        stats,
-        range: (y_min, y_max),
-    })
+    Ok((
+        PreparedBoxplot {
+            sample,
+            stats,
+            range: (y_min, y_max),
+        },
+        categories,
+    ))
 }
 
 impl PreparedBoxplot {
@@ -323,7 +333,13 @@ pub(crate) fn measure_marks(
     let data = context.data;
     let sample = &prepared.sample;
     let stats = &prepared.stats;
-    let x_levels = &sample.x_levels;
+    let x_levels = &context
+        .registered
+        .expect("prepared Boxplot occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
     let group_levels = &sample.group_levels;
     let group_active = !group_levels.is_empty();
     let base_y_range = layout.projection.y_range();
@@ -347,7 +363,7 @@ pub(crate) fn measure_marks(
     let panel = context.panel;
     let colors = {
         let retained = categorical_distribution::retained(context.prepared_family())?;
-        retained.resolved_colors(chart, theme, data)?
+        retained.resolved_colors(chart, x_levels, theme, data)?
     };
     let significance = if group_levels.is_empty() {
         crate::significance::plan(

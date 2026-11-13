@@ -106,7 +106,13 @@ pub(crate) fn categorical_preference(
             let marks = family!("distribution preference lacks preparation", "Distribution", F::Distribution { marks, .. } => marks);
             (
                 crate::layout::AxisSide::Bottom,
-                marks.categories().len(),
+                registered
+                    .expect("prepared distribution occurrence")
+                    .axes
+                    .categories(0)
+                    .expect("prepared distribution categories")
+                    .raw
+                    .len(),
                 marks.primary_mark_count(),
             )
         }

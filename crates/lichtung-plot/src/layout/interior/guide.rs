@@ -245,8 +245,8 @@ impl PreparedInteriorInputs<'_> {
         if let Some(global) = global_hues {
             include_keys(&mut keys, global.iter().map(String::as_str))?;
         }
-        for family in self.plots.iter().map(|registered| &registered.family) {
-            match family {
+        for registered in &self.plots {
+            match &registered.family {
                 F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
                 F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
                 F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
@@ -255,7 +255,11 @@ impl PreparedInteriorInputs<'_> {
                 }
                 F::Distribution { marks, .. } => {
                     let domain = if marks.hue_levels().is_empty() {
-                        marks.categories()
+                        &registered
+                            .axes
+                            .categories(0)
+                            .expect("prepared distribution categories")
+                            .raw
                     } else {
                         marks.hue_levels()
                     };
@@ -314,7 +318,16 @@ impl PreparedInteriorInputs<'_> {
                     F::Distribution { marks, .. } => Some(marks),
                     _ => None,
                 })?;
-                marks.guide_entries(chart, theme, data)
+                marks.guide_entries(
+                    chart,
+                    &registered
+                        .axes
+                        .categories(0)
+                        .expect("prepared distribution categories")
+                        .raw,
+                    theme,
+                    data,
+                )
             }
             PlotKind::Density => {
                 let marks = Self::family(registered, kind, |family| match family {

@@ -17,7 +17,6 @@ use crate::Plot;
 #[derive(Debug)]
 pub(crate) struct PreparedRaincloud {
     pub(crate) range: (f64, f64),
-    pub(crate) categories: Vec<String>,
     groups: Vec<PreparedRaincloudGroup>,
     hues: Vec<String>,
 }
@@ -36,7 +35,13 @@ pub(crate) fn intrinsic_body_minimum(
             "supplied Raincloud intrinsic requires retained groups".into(),
         ));
     };
-    if prepared.groups.is_empty() || prepared.groups.len() != prepared.categories.len() {
+    let categories = &registered
+        .expect("prepared supplied Raincloud occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
+    if prepared.groups.is_empty() || prepared.groups.len() != categories.len() {
         return Err(Error::Render(
             "supplied Raincloud groups and category slots differ".into(),
         ));
@@ -114,7 +119,7 @@ pub(crate) fn intrinsic_body_minimum(
         pitch = pitch.max((-ink.left).max(0.0) / (0.5 - 0.06 * width));
         pitch = pitch.max(ink.right.max(0.0) / (0.5 - 0.10 * width));
     }
-    let category_count = u32::try_from(prepared.categories.len()).map_err(|_| {
+    let category_count = u32::try_from(categories.len()).map_err(|_| {
         Error::Render("supplied Raincloud category count exceeds spatial range".into())
     })?;
     let category_span = pitch * f64::from(category_count);
@@ -246,7 +251,9 @@ thread_local! {
     static HUE_LOOKUP_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub(crate) fn prepare(chart: &crate::builder::PlotDescription) -> Result<PreparedRaincloud, Error> {
+pub(crate) fn prepare(
+    chart: &crate::builder::PlotDescription,
+) -> Result<(PreparedRaincloud, Vec<String>), Error> {
     let input = chart
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
@@ -328,12 +335,14 @@ pub(crate) fn prepare(chart: &crate::builder::PlotDescription) -> Result<Prepare
                 })
             },
         ))?;
-    Ok(PreparedRaincloud {
-        range,
+    Ok((
+        PreparedRaincloud {
+            range,
+            groups,
+            hues,
+        },
         categories,
-        groups,
-        hues,
-    })
+    ))
 }
 
 pub(super) fn measure_marks(
@@ -345,8 +354,15 @@ pub(super) fn measure_marks(
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
     let data = context.data;
+    let categories = &context
+        .registered
+        .expect("prepared supplied Raincloud occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
     let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
-        .resolved_colors(chart, theme, data)?;
+        .resolved_colors(chart, categories, theme, data)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (index, group) in input.groups.iter().enumerate() {

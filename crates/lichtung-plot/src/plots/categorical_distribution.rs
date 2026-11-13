@@ -58,6 +58,7 @@ impl PreparedDistribution {
     pub(crate) fn resolved_colors(
         &self,
         chart: &Plot,
+        categories: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
@@ -65,7 +66,7 @@ impl PreparedDistribution {
         let keys = if !self.hue_levels().is_empty() {
             chart.global_hue_levels().unwrap_or(self.hue_levels())
         } else if !chart.description().has_facets() || matches!(self, Self::Supplied(_)) {
-            self.categories()
+            categories
         } else {
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
@@ -111,10 +112,11 @@ impl PreparedDistribution {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
+        categories: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, theme, data)?;
+        let colors = self.resolved_colors(chart, categories, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
 
@@ -195,27 +197,29 @@ impl PreparedDistribution {
         chart: &Plot,
         data: PlotData<'_, '_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, Vec<String>), Error> {
         data.validate_row_source()?;
-        let prepared = match chart.kind() {
-            PlotKind::Boxplot => Ok(Self::Boxplot(crate::plots::boxplot::prepare(
-                chart, data, facet,
-            )?)),
-            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => {
-                Ok(Self::Supplied(crate::plots::violin::precomputed::prepare(
-                    chart.description(),
-                )?))
+        let (prepared, categories) = match chart.kind() {
+            PlotKind::Boxplot => {
+                let (marks, categories) = crate::plots::boxplot::prepare(chart, data, facet)?;
+                Ok((Self::Boxplot(marks), categories))
             }
-            PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Violin(
-                crate::plots::violin::prepare(chart, data, facet)?,
-            )),
+            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => {
+                let (marks, categories) =
+                    crate::plots::violin::precomputed::prepare(chart.description())?;
+                Ok((Self::Supplied(marks), categories))
+            }
+            PlotKind::Violin | PlotKind::Raincloud => {
+                let (marks, categories) = crate::plots::violin::prepare(chart, data, facet)?;
+                Ok((Self::Violin(marks), categories))
+            }
             _ => Err(Error::Render(
                 "categorical distribution preparation requires its family".into(),
             )),
         }?;
         if let Some(exact) = chart.description().categorical_map_spec() {
             let keys = if prepared.hue_levels().is_empty() {
-                prepared.categories()
+                &categories
             } else {
                 prepared.hue_levels()
             };
@@ -227,15 +231,7 @@ impl PreparedDistribution {
                 }
             }
         }
-        Ok(prepared)
-    }
-
-    pub(crate) fn categories(&self) -> &[String] {
-        match self {
-            Self::Boxplot(marks) => &marks.sample.x_levels,
-            Self::Violin(marks) => &marks.sample.x_levels,
-            Self::Supplied(marks) => &marks.categories,
-        }
+        Ok((prepared, categories))
     }
 
     pub(crate) const fn range(&self) -> (f64, f64) {
@@ -371,7 +367,16 @@ impl DistributionPayload {
                     .into());
             }
             if chart.user_y_limits().is_none() {
-                let categories = categorical_distribution_count(context.prepared_family())?;
+                let categories = categorical_distribution_count(
+                    context.prepared_family(),
+                    &context
+                        .registered
+                        .expect("prepared distribution occurrence")
+                        .axes
+                        .categories(0)
+                        .expect("prepared distribution categories")
+                        .raw,
+                )?;
                 self.domain_expansions =
                     crate::layout::interior::automatic_absolute_ink_expansions(
                         [
@@ -398,8 +403,10 @@ impl DistributionPayload {
 
 fn categorical_distribution_count(
     family: Option<crate::orchestrator::registration::FamilyRef<'_>>,
+    categories: &[String],
 ) -> Result<u32, Error> {
-    u32::try_from(retained(family)?.categories().len()).map_err(|_| {
+    retained(family)?;
+    u32::try_from(categories.len()).map_err(|_| {
         Error::Render("categorical distribution count exceeds coordinate range".into())
     })
 }

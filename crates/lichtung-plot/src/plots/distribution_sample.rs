@@ -26,7 +26,6 @@ pub(crate) struct DistributionGroup {
 
 #[derive(Debug)]
 pub(crate) struct DistributionSample {
-    pub(crate) x_levels: Vec<String>,
     pub(crate) group_levels: Vec<String>,
     pub(crate) hue_levels: Vec<String>,
     pub(crate) groups: Vec<DistributionGroup>,
@@ -55,7 +54,7 @@ pub(crate) fn prepare_scoped(
     data: PlotData<'_, '_>,
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<DistributionSample, Error> {
+) -> Result<(DistributionSample, Vec<String>), Error> {
     let alpha =
         chart
             .description()
@@ -188,12 +187,14 @@ pub(crate) fn prepare_scoped(
         group.line_alpha = line_alpha.aggregate(key, series)?;
         group.fill_alpha = fill_alpha.aggregate(key, series)?;
     }
-    Ok(DistributionSample {
+    Ok((
+        DistributionSample {
+            group_levels,
+            hue_levels,
+            groups,
+        },
         x_levels,
-        group_levels,
-        hue_levels,
-        groups,
-    })
+    ))
 }
 
 #[expect(

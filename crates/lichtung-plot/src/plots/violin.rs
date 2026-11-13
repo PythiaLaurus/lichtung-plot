@@ -176,7 +176,13 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     };
     let sample = &prepared.sample;
-    if sample.x_levels.is_empty()
+    let x_levels = &registered
+        .expect("prepared sampled distribution occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
+    if x_levels.is_empty()
         || sample.groups.is_empty()
         || sample.groups.len() != prepared.densities.len()
     {
@@ -267,7 +273,7 @@ pub(crate) fn intrinsic_body_minimum(
         if !raincloud {
             numeric = numeric.max(summary_ink.map_or(0.0, |ink| ink.top - ink.bottom));
         }
-        if group.x_index >= sample.x_levels.len()
+        if group.x_index >= x_levels.len()
             || (grouped && group.group_index >= sample.group_levels.len())
         {
             return Err(Error::Render(
@@ -319,7 +325,7 @@ pub(crate) fn intrinsic_body_minimum(
             }
         }
     }
-    let count = u32::try_from(sample.x_levels.len()).map_err(|_| {
+    let count = u32::try_from(x_levels.len()).map_err(|_| {
         Error::Render("sampled distribution category count exceeds spatial range".into())
     })?;
     let categorical = pitch * f64::from(count);
@@ -342,13 +348,14 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<PreparedViolin, Error> {
+) -> Result<(PreparedViolin, Vec<String>), Error> {
     let family = if chart.kind() == crate::PlotKind::Violin {
         "violin"
     } else {
         "raincloud"
     };
-    let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, family, facet)?;
+    let (sample, categories) =
+        crate::plots::distribution_sample::prepare_scoped(chart, data, family, facet)?;
     if chart.kind() == crate::PlotKind::Raincloud {
         let mut source_rows = Vec::new();
         for group in &sample.groups {
@@ -424,12 +431,15 @@ pub(crate) fn prepare(
             maximum: if maximum <= 0.0 { 1.0 } else { maximum },
         })
     }))?;
-    Ok(PreparedViolin {
-        sample,
-        support_range,
-        grid,
-        densities,
-    })
+    Ok((
+        PreparedViolin {
+            sample,
+            support_range,
+            grid,
+            densities,
+        },
+        categories,
+    ))
 }
 
 pub(crate) fn measure_marks(
@@ -453,7 +463,13 @@ pub(crate) fn measure_marks(
     theme.text.prepared_font_environment()?;
     let data = context.data;
     let sample = &prepared.sample;
-    let x_levels = &sample.x_levels;
+    let x_levels = &context
+        .registered
+        .expect("prepared sampled distribution occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared distribution categories")
+        .raw;
     let group_levels = &sample.group_levels;
     let support_range = prepared.support_range;
     let base_display_range = layout.projection.y_range();
@@ -461,7 +477,7 @@ pub(crate) fn measure_marks(
         crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.description().raw_overlay_spec();
     let panel = context.panel;
-    let colors = retained.resolved_colors(chart, theme, data)?;
+    let colors = retained.resolved_colors(chart, x_levels, theme, data)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
