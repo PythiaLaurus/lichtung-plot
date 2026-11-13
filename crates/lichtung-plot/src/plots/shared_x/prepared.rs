@@ -2,8 +2,8 @@ use crate::data::PlotData;
 use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 use crate::layout::AxisTick;
 use crate::orchestrator::registration::{
-    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, PreparedAxisSource,
-    PreparedCategorySource,
+    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, MarginalStrip, PreparedAxes,
+    PreparedAxesOwner, PreparedAxisSource, PreparedCategorySource,
 };
 use crate::orchestrator::registration::{
     PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily, RowSelection, Scope,
@@ -24,66 +24,12 @@ fn continuous_selection(
     )
 }
 
-/// Scientific coordinates and raw category sources. Post-font summaries are
-/// initialized by the owning root before allocating its panel, never by preparation.
-#[derive(Debug)]
-pub(crate) struct PreparedAxes {
-    pub(crate) sources: [crate::orchestrator::registration::PreparedAxisSource; 2],
-}
-
-impl PreparedAxes {
-    pub(crate) fn axis<'a>(
-        &'a self,
-        source: &'a crate::builder::PlotDescription,
-        side: usize,
-    ) -> crate::orchestrator::registration::BaseAxisRef<'a> {
-        use crate::orchestrator::registration::{AxisIntentRef, AxisSlot, BaseAxisRef};
-        let axis = &self.sources[side];
-        let AxisSlot::Pair(side) = axis.witness.slot;
-        BaseAxisRef {
-            source: axis,
-            intent: AxisIntentRef::Authored(match side {
-                crate::layout::AxisSide::Bottom => source.x_axis_spec(),
-                crate::layout::AxisSide::Left => source.y_axis_spec(),
-            }),
-        }
-    }
-
-    pub(crate) fn ranges(&self) -> [(f64, f64); 2] {
-        self.sources
-            .each_ref()
-            .map(|source| source.base_seed.expect("prepared axis display seed").pair())
-    }
-
-    pub(crate) fn logarithmic(&self) -> bool {
-        matches!(
-            self.sources[0].witness.space,
-            crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
-        )
-    }
-
-    pub(crate) fn categories(
-        &self,
-        side: usize,
-    ) -> Option<&crate::orchestrator::registration::PreparedCategorySource> {
-        self.sources[side].categories.as_ref()
-    }
-
-    pub(crate) fn label(&self, side: usize) -> Option<&crate::Text> {
-        self.sources[side]
-            .label
-            .get()
-            .and_then(crate::Text::provided)
-    }
-
-    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<crate::Text>, Error> {
-        self.label(side).map(crate::Text::try_copy).transpose()
-    }
-}
-
 impl crate::orchestrator::registration::BaseAxisRef<'_> {
     pub(crate) fn empty_numeric_source(self, raw: Option<(f64, f64)>) -> Result<bool, Error> {
-        let generation = &self.authored().generation;
+        let generation = &self
+            .authored()
+            .expect("coordinate authored intent")
+            .generation;
         if generation
             .exact_parameters()
             .is_some_and(|(count, _, _)| count == 0)
@@ -118,7 +64,11 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
         numeric: crate::numeric::source::NumericBinding<'_>,
         windows: [Option<&(f64, f64)>; 2],
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
-        let crate::orchestrator::registration::AxisSlot::Pair(axis_side) = self.source.witness.slot;
+        let (AxisSlot::Pair(axis_side) | AxisSlot::MarginalCentral(axis_side)) =
+            self.source.witness.slot
+        else {
+            unreachable!("numeric coordinate source")
+        };
         let side = usize::from(axis_side == crate::layout::AxisSide::Left);
         if self.exact_ticks().is_some()
             || self.source.categories.is_some()
@@ -769,9 +719,13 @@ pub(crate) fn prepare_plot<'src>(
             )?;
         }
     } else if source.kind() == PlotKind::Matrix {
-        let marks =
-            crate::plots::matrix::prepare_axes(source, source_data.expect("single plot data"))?;
+        let (marks, axes) = crate::plots::matrix::prepare_axes(
+            source,
+            source_data.expect("single plot data"),
+            &registry.panels[0].scope.id,
+        )?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
+        registry.panels[0].axes = Some(axes);
     } else {
         let axes = prepare(source, &registry.panels[0].scope.id, None, None, None)?;
         registry.panels[0].axes = Some(axes);
@@ -863,7 +817,7 @@ fn reconcile_facet_axis(
     }
     if first.categories(side).is_none() {
         fn presentation<'a>(
-            axes: &'a PreparedAxes,
+            axes: &'a PreparedAxesOwner,
             source: &'a crate::builder::PlotDescription,
             side: usize,
         ) -> (bool, Option<&'a crate::numeric::format::NumericFormat>) {
@@ -872,7 +826,11 @@ fn reconcile_facet_axis(
                 if axes.axis(source, side).exact_ticks().is_some() {
                     None
                 } else {
-                    axes.axis(source, side).authored().format.as_deref()
+                    axes.axis(source, side)
+                        .authored()
+                        .expect("coordinate authored intent")
+                        .format
+                        .as_deref()
                 },
             )
         }
@@ -895,12 +853,13 @@ fn reconcile_facet_axis(
 
         for panel in retained {
             let axes = panel.axes.as_mut().expect("prepared facet axes");
-            axes.sources[side].base_seed = Some(crate::orchestrator::registration::DisplayExtent {
-                lower: union.0,
-                upper: union.1,
-            });
-            if axes.sources[side].base_provenance != crate::layout::RangeProvenance::Configured {
-                axes.sources[side].base_provenance = crate::layout::RangeProvenance::Shared;
+            axes.sources_mut()[side].base_seed =
+                Some(crate::orchestrator::registration::DisplayExtent {
+                    lower: union.0,
+                    upper: union.1,
+                });
+            if axes.sources()[side].base_provenance != crate::layout::RangeProvenance::Configured {
+                axes.sources_mut()[side].base_provenance = crate::layout::RangeProvenance::Shared;
             }
         }
     }
@@ -928,7 +887,7 @@ fn prepare(
     facet: Option<crate::data::FacetAxisSources<'_>>,
     family: Option<&PreparedFamily>,
     reference_config: Option<ReferenceAxisConfig<'_>>,
-) -> Result<PreparedAxes, Error> {
+) -> Result<PreparedAxesOwner, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
 
     #[cfg(test)]
@@ -1304,11 +1263,18 @@ fn prepare(
         let source = PreparedAxisSource {
             witness: AxisSourceWitness {
                 plot_id: plot_id.clone(),
-                slot: AxisSlot::Pair(if side == 0 {
-                    crate::layout::AxisSide::Bottom
-                } else {
-                    crate::layout::AxisSide::Left
-                }),
+                slot: {
+                    let side = if side == 0 {
+                        crate::layout::AxisSide::Bottom
+                    } else {
+                        crate::layout::AxisSide::Left
+                    };
+                    if chart.kind() == PlotKind::Marginal {
+                        AxisSlot::MarginalCentral(side)
+                    } else {
+                        AxisSlot::Pair(side)
+                    }
+                },
                 space: if categories.is_some() {
                     AxisSpace::Categorical
                 } else {
@@ -1340,5 +1306,29 @@ fn prepare(
         }
         source
     });
-    Ok(PreparedAxes { sources })
+    Ok(if chart.kind() == PlotKind::Marginal {
+        PreparedAxesOwner::Marginal {
+            central: sources,
+            strip_density: [MarginalStrip::Top, MarginalStrip::Right].map(|strip| {
+                PreparedAxisSource {
+                    witness: AxisSourceWitness {
+                        plot_id: plot_id.clone(),
+                        slot: AxisSlot::MarginalStripDensity(strip),
+                        space: AxisSpace::Continuous(AxisScale::Linear),
+                    },
+                    range_policy: crate::layout::RangePolicy::ContinuousNice,
+                    base_seed: Some(DisplayExtent {
+                        lower: 0.0,
+                        upper: 1.0,
+                    }),
+                    base_provenance: crate::layout::RangeProvenance::Automatic,
+                    categories: None,
+                    projected_exact_positions: None,
+                    label: std::sync::OnceLock::from(crate::Text::UNSET),
+                }
+            }),
+        }
+    } else {
+        PreparedAxesOwner::Pair(PreparedAxes { sources })
+    })
 }

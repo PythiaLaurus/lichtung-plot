@@ -31,7 +31,7 @@ impl Intrinsics {
         intrinsic: &'a crate::orchestrator::root::PlotIntrinsics,
         input: &crate::orchestrator::root::PlotIntrinsicInputs<'_, '_>,
     ) -> Result<&'a Self, Error> {
-        let axes = input.registered.axes.as_ref().ok_or_else(|| {
+        let axes = input.registered.axes.coordinate().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
         let theme = &input.request;
@@ -54,8 +54,20 @@ impl Intrinsics {
             axes.axis(input.registered.source, 0),
             axes.axis(input.registered.source, 1),
         ];
-        if summary.formats != pair.map(|axis| axis.authored().format.clone())
-            || summary.category_labels != pair.map(|axis| axis.authored().category_labels.clone())
+        if summary.formats
+            != pair.map(|axis| {
+                axis.authored()
+                    .expect("coordinate authored intent")
+                    .format
+                    .clone()
+            })
+            || summary.category_labels
+                != pair.map(|axis| {
+                    axis.authored()
+                        .expect("coordinate authored intent")
+                        .category_labels
+                        .clone()
+                })
             || summary.base_ranges != axes.ranges().map(|(lo, hi)| (lo.to_bits(), hi.to_bits()))
             || summary.logarithmic != axes.logarithmic()
         {
@@ -89,7 +101,7 @@ impl Intrinsics {
         reason = "one traversal owns title, category and formatted terminal intrinsics"
     )]
     fn analyze(
-        axes: &crate::plots::shared_x::PreparedAxes,
+        axes: &crate::orchestrator::registration::PreparedAxesOwner,
         input: &crate::orchestrator::root::PlotIntrinsicInputs<'_, '_>,
     ) -> Result<Self, Error> {
         let theme = &input.request;
@@ -151,7 +163,10 @@ impl Intrinsics {
                     continue;
                 }
                 let span = crate::layout::category_label_span(
-                    &pair[side].authored().category_labels,
+                    &pair[side]
+                        .authored()
+                        .expect("coordinate authored intent")
+                        .category_labels,
                     labels.len(),
                     |index| {
                         let label = &labels[index].label;
@@ -224,8 +239,18 @@ impl Intrinsics {
         Ok(Self {
             standard,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
-            formats: pair.map(|axis| axis.authored().format.clone()),
-            category_labels: pair.map(|axis| axis.authored().category_labels.clone()),
+            formats: pair.map(|axis| {
+                axis.authored()
+                    .expect("coordinate authored intent")
+                    .format
+                    .clone()
+            }),
+            category_labels: pair.map(|axis| {
+                axis.authored()
+                    .expect("coordinate authored intent")
+                    .category_labels
+                    .clone()
+            }),
             base_ranges: axes.ranges().map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
             logarithmic: axes.logarithmic(),
             minimum_body,
@@ -299,7 +324,7 @@ impl InteriorRoute {
         self.validate(plot.description())?;
         let inputs = context
             .registered
-            .and_then(|registered| registered.axes.as_ref())
+            .and_then(|registered| registered.axes.coordinate())
             .ok_or_else(|| {
                 Error::Render("native coordinate panel requires root-prepared axes".into())
             })?;
@@ -453,7 +478,11 @@ impl InteriorRoute {
                     label: inputs.copy_label(side)?,
                     ticks: ticks.ticks,
                     tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
-                    category_labels: base.authored().category_labels.clone(),
+                    category_labels: base
+                        .authored()
+                        .expect("coordinate authored intent")
+                        .category_labels
+                        .clone(),
                     explicit_ticks: base.exact_ticks().is_some(),
                     assigned_tick_width: None,
                     assigned_cells: None,
@@ -716,7 +745,10 @@ mod intrinsic_tests {
                         .unwrap()
                         .to_bits()
                     );
-                    assert_eq!(inputs.plots[0].axes.as_ref().unwrap().ranges()[0], range);
+                    assert_eq!(
+                        inputs.plots[0].axes.coordinate().unwrap().ranges()[0],
+                        range
+                    );
                     let widest_probe = theme
                         .measure_text(
                             "0.5",

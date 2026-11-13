@@ -180,7 +180,7 @@ impl<'src> PreparedInteriorInputs<'src> {
     ) -> Result<(), Error> {
         self.route.validate(plot.description())?;
         for registered in &self.plots {
-            let Some(axes) = &registered.axes else {
+            let Some(axes) = registered.axes.coordinate() else {
                 continue;
             };
             let scope = &registered.scope.render_name;

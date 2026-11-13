@@ -1434,7 +1434,7 @@ fn push_plot_axis_ticks(
     let alphabet = None;
     if let Some(interiors) = interiors {
         for (index, registered) in interiors.plots.iter().enumerate() {
-            let Some(axes) = &registered.axes else {
+            let Some(axes) = registered.axes.coordinate() else {
                 continue;
             };
             if plot.axis_scope().is_some()
@@ -1482,7 +1482,9 @@ fn push_plot_axis_ticks(
                 push_axis_ticks(
                     requirements,
                     &address,
-                    axes.axis(registered.source, side).authored(),
+                    axes.axis(registered.source, side)
+                        .authored()
+                        .expect("coordinate authored intent"),
                     categories,
                     alphabet,
                     theme.tick_text_appearance(if side == 0 {
@@ -2876,7 +2878,7 @@ mod tests {
                     let minimum = crate::plots::heatmap::heatmap_minima(
                         inputs.intrinsic(&inputs.plots[0]),
                         marks,
-                        inputs.plots[0].axes.as_ref().unwrap(),
+                        inputs.plots[0].axes.coordinate().unwrap(),
                         inputs.plots[0].source,
                         &theme,
                         None,

@@ -4,8 +4,8 @@ use crate::{builder::PlotDescription, Error};
 
 mod axes;
 pub(crate) use axes::{
-    AxisIntentRef, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent,
-    ExactTicksRef, PreparedAxisSource, PreparedCategorySource,
+    AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent, ExactTicksRef,
+    MarginalStrip, PreparedAxes, PreparedAxesOwner, PreparedAxisSource, PreparedCategorySource,
 };
 
 #[derive(Debug, Clone)]
@@ -106,7 +106,7 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) source: &'src PlotDescription,
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
-    pub(crate) axes: Option<crate::plots::shared_x::PreparedAxes>,
+    pub(crate) axes: PreparedAxesOwner,
     pub(crate) family: PreparedFamily,
 }
 
@@ -150,7 +150,7 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
     pub(crate) family: Option<PreparedFamily>,
-    pub(crate) axes: Option<crate::plots::shared_x::PreparedAxes>,
+    pub(crate) axes: Option<PreparedAxesOwner>,
 }
 
 impl<'src> PlotRegistrationBuild<'src> {
@@ -231,14 +231,15 @@ impl<'src> PlotRegistryBuilder<'src> {
 
     pub(crate) fn finish(self) -> Result<Vec<PlotRegistration<'src>>, Error> {
         crate::data::source::collect_source(self.panels.into_iter().map(|panel| {
+            let family = panel
+                .family
+                .ok_or_else(|| Error::Render("prepared family is missing".into()))?;
             Ok(PlotRegistration {
                 source: panel.source,
                 scope: panel.scope,
                 row_source: panel.row_source,
-                axes: panel.axes,
-                family: panel
-                    .family
-                    .ok_or_else(|| Error::Render("prepared family is missing".into()))?,
+                axes: panel.axes.expect("completed occurrence axes"),
+                family,
             })
         }))
     }

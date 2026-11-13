@@ -369,12 +369,12 @@ mod tests {
                     axes: [
                         registered
                             .axes
-                            .as_ref()
+                            .coordinate()
                             .unwrap()
                             .axis(limited.description(), 0),
                         registered
                             .axes
-                            .as_ref()
+                            .coordinate()
                             .unwrap()
                             .axis(limited.description(), 1),
                     ],

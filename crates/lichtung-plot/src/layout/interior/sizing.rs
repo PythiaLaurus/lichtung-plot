@@ -222,7 +222,7 @@ pub(crate) fn body_preference(
                 )?
                 .width();
             let count = registered
-                .and_then(|registered| registered.axes.as_ref())
+                .and_then(|registered| registered.axes.coordinate())
                 .and_then(|axes| axes.categories(1))
                 .map_or(0, |categories| categories.raw.len());
             let count = u32::try_from(count).map_err(|_| {
@@ -249,7 +249,7 @@ fn axis_title_style<'a>(
     side: usize,
 ) -> &'a crate::TextTheme {
     registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .and_then(|axes| axes.label(side))
         .map_or(&theme.typography.axes.axis_title, |text| {
             text.appearance(&theme.typography.axes.axis_title).theme
@@ -292,7 +292,7 @@ pub(crate) fn horizontal_gutter_preference(
         Ok(())
     };
     if let Some(axes) = registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .filter(|_| plot.y_tick_labels_visible())
     {
         let base = axes.axis(registered.expect("prepared axis occurrence").source, 1);
@@ -300,6 +300,7 @@ pub(crate) fn horizontal_gutter_preference(
             let labels = &categories.ticks;
             let eligible = crate::data::source::collect_source(
                 base.authored()
+                    .expect("coordinate authored intent")
                     .category_labels
                     .indices(labels.len())
                     .map(Ok),
@@ -313,7 +314,11 @@ pub(crate) fn horizontal_gutter_preference(
                 }
                 include_label(&labels[index].label)?;
             }
-        } else if let Some(ticks) = &base.authored().exact_ticks {
+        } else if let Some(ticks) = &base
+            .authored()
+            .expect("coordinate authored intent")
+            .exact_ticks
+        {
             let eligible = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
             for (index, tick) in ticks.iter().enumerate() {
                 if !theme

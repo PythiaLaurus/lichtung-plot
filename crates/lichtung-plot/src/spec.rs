@@ -656,7 +656,7 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     // Parent-owned perpendicular capacity; axis feedback must not shrink it a
     // second time merely because the assigned mark panel became narrower.
     pub(crate) axis_label_width: f64,
-    prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
+    prepared_axes: Option<&'a crate::orchestrator::registration::PreparedAxesOwner>,
     prepared_limits: [Option<(f64, f64)>; 2],
     prepared_kind: Option<PlotKind>,
     prepared_family: Option<crate::orchestrator::registration::FamilyRef<'a>>,
@@ -761,7 +761,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
         self.prepared_axes = self
             .registered
-            .and_then(|registered| registered.axes.as_ref());
+            .and_then(|registered| registered.axes.coordinate());
         self.prepared_family = self.registered.map(|registered| registered.family.as_ref());
         self.prepared_kind = Some(self.prepared_family.map_or(
             plot.kind(),

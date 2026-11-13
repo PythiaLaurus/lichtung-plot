@@ -103,7 +103,7 @@ fn source<'a>(plot: &Plot, context: PlotRenderContext<'a, '_>) -> Result<Option<
             }
             let axes = context
                 .registered
-                .and_then(|registered| registered.axes.as_ref())
+                .and_then(|registered| registered.axes.coordinate())
                 .ok_or_else(|| Error::Render("total explanation lacks prepared axes".into()))?;
             let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges()[0]))?;
             let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges()[1]))?;
@@ -154,7 +154,7 @@ pub(crate) fn axis_preferences(
     let mut preferred = [0.0_f64; 2];
     // The axis owner later measures the actual selected set. Intrinsic probes
     // include common explanations without inventing scientific tick positions.
-    if let Some(axes) = registered.and_then(|registered| registered.axes.as_ref()) {
+    if let Some(axes) = registered.and_then(|registered| registered.axes.coordinate()) {
         for (side, preferred) in preferred.iter_mut().enumerate() {
             let base = axes.axis(registered.expect("prepared axis occurrence").source, side);
             if base.exact_ticks().is_some() || axes.categories(side).is_some() {

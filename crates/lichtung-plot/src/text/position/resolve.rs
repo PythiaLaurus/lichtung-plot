@@ -43,7 +43,7 @@ pub(crate) fn resolve(
             )),
             Coordinate::Data(value) => {
                 if let DataValue::Category(raw) = &value.0 {
-                    let axes = registered.axes.as_ref().ok_or_else(|| {
+                    let axes = registered.axes.coordinate().ok_or_else(|| {
                         Error::Render("data text reference requires actual axes".into())
                     })?;
                     let index = axes
@@ -111,7 +111,7 @@ pub(crate) fn data(
 ) -> Result<f64> {
     let axes = registered
         .axes
-        .as_ref()
+        .coordinate()
         .ok_or_else(|| Error::Render("data text reference requires prepared actual axes".into()))?;
     let categories = axes.categories(side);
     match &coordinate.0 {

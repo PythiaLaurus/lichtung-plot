@@ -31,6 +31,10 @@ use crate::alpha::{
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
 use crate::layout::{self, Layout, PixelRect};
+use crate::orchestrator::registration::{
+    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, PlotOccurrenceId, PreparedAxesOwner,
+    PreparedAxisSource,
+};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
@@ -55,8 +59,6 @@ struct HueGroup {
 
 #[derive(Debug)]
 pub(crate) struct PreparedMatrixAxes {
-    ranges: Vec<(f64, f64)>,
-    labels: Vec<String>,
     groups: Vec<HueGroup>,
     hues: Vec<String>,
     diagonals: Vec<MatrixDensity>,
@@ -66,6 +68,7 @@ impl PreparedMatrixAxes {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
+        axes: &PreparedAxesOwner,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -77,7 +80,7 @@ impl PreparedMatrixAxes {
         );
         let fill = theme.marks.get_fills().get_densities().get_matrix_density();
         for group in &self.groups {
-            if self.labels.len() > 1 {
+            if axes.matrix().expect("native Matrix axes").0.len() > 1 {
                 for &alpha in &group.alphas {
                     guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
                 }
@@ -183,7 +186,13 @@ pub(crate) fn intrinsic_body_minimum(
         .ok_or_else(|| {
             Error::Render("matrix intrinsic requires prepared variable domains".into())
         })?;
-    let n = prepared.labels.len();
+    let variables = registered
+        .expect("prepared Matrix occurrence")
+        .axes
+        .matrix()
+        .expect("native Matrix axes")
+        .0;
+    let n = variables.len();
     let (out_x, out_y) = prepared.density_ink(theme)?;
     let mut cell = (
         (2.0 * out_x).max(1.0 / 1024.0),
@@ -195,7 +204,12 @@ pub(crate) fn intrinsic_body_minimum(
     cell.1 = cell.1.max(point.1);
     let mut width = 0.0;
     let mut height = 0.0;
-    for label in &prepared.labels {
+    for source in variables {
+        let label = source
+            .label
+            .get()
+            .expect("prepared variable label")
+            .as_str();
         let column = crate::layout::fit::intrinsic_widths(
             theme,
             label,
@@ -235,8 +249,19 @@ pub(crate) fn natural_body_preference(
 
     let point = marks.point_dimensions(chart, theme)?;
     let ink = marks.density_ink(theme)?;
-    let mut side = theme.composition_grid_gap()? * marks.labels.len().saturating_sub(1) as f64;
-    for label in &marks.labels {
+    let variables = registered
+        .expect("prepared Matrix occurrence")
+        .axes
+        .matrix()
+        .expect("native Matrix axes")
+        .0;
+    let mut side = theme.composition_grid_gap()? * variables.len().saturating_sub(1) as f64;
+    for source in variables {
+        let label = source
+            .label
+            .get()
+            .expect("prepared variable label")
+            .as_str();
         let width = layout::fit::intrinsic_widths(
             theme,
             label,
@@ -286,7 +311,6 @@ impl PreparedMatrixAxes {
 struct MatrixDensity {
     positions: Vec<f64>,
     densities: Vec<Vec<f64>>,
-    maximum: f64,
 }
 
 const KDE_POINTS: usize = 60;
@@ -414,7 +438,8 @@ impl MatrixPayload {
 pub(crate) fn prepare_axes(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
-) -> Result<PreparedMatrixAxes, Error> {
+    plot_id: &PlotOccurrenceId,
+) -> Result<(PreparedMatrixAxes, PreparedAxesOwner), Error> {
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
@@ -455,18 +480,52 @@ pub(crate) fn prepare_axes(
             chart.description().hue_name(),
         )?);
     }
-    let diagonals = crate::data::source::collect_source(
-        cols.iter()
-            .enumerate()
-            .map(|(index, column)| prepare_density(chart, &groups, index, column, ranges[index])),
-    )?;
-    Ok(PreparedMatrixAxes {
-        ranges,
-        labels,
-        groups,
-        hues,
-        diagonals,
-    })
+    let axis_source = |slot, (lower, upper), label| PreparedAxisSource {
+        witness: AxisSourceWitness {
+            plot_id: plot_id.clone(),
+            slot,
+            space: AxisSpace::Continuous(crate::AxisScale::Linear),
+        },
+        range_policy: layout::RangePolicy::ContinuousNice,
+        base_seed: Some(DisplayExtent { lower, upper }),
+        base_provenance: layout::RangeProvenance::Automatic,
+        categories: None,
+        projected_exact_positions: None,
+        label: std::sync::OnceLock::from(label),
+    };
+    let mut diagonal_density = Vec::new();
+    crate::data::source::reserve_source(&mut diagonal_density, cols.len())?;
+    let diagonals =
+        crate::data::source::collect_source(cols.iter().enumerate().map(|(index, column)| {
+            let (density, maximum) = prepare_density(chart, &groups, index, column, ranges[index])?;
+            diagonal_density.push(axis_source(
+                AxisSlot::MatrixDiagonalDensity(index),
+                (0.0, maximum),
+                crate::Text::UNSET,
+            ));
+            Ok(density)
+        }))?;
+    let variables =
+        crate::data::source::collect_source(ranges.into_iter().zip(labels).enumerate().map(
+            |(index, (range, label))| {
+                Ok(axis_source(
+                    AxisSlot::MatrixVariable(index),
+                    range,
+                    crate::Text::from(label),
+                ))
+            },
+        ))?;
+    Ok((
+        PreparedMatrixAxes {
+            groups,
+            hues,
+            diagonals,
+        },
+        PreparedAxesOwner::Matrix {
+            variables,
+            diagonal_density,
+        },
+    ))
 }
 
 pub(crate) fn measure(
@@ -483,8 +542,9 @@ pub(crate) fn measure(
             _ => None,
         })
         .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
-    let n = prepared.labels.len();
-    let display_cols = &prepared.labels;
+    let registered = context.registered.expect("prepared Matrix occurrence");
+    let (variables, diagonal_density) = registered.axes.matrix().expect("native Matrix axes");
+    let n = variables.len();
 
     let groups = &prepared.groups;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
@@ -528,7 +588,12 @@ pub(crate) fn measure(
     let gap = theme.composition_grid_gap()?;
     let ink = prepared.density_ink(theme)?;
     let point = prepared.point_dimensions(chart, theme)?;
-    let specs = crate::data::source::collect_source(display_cols.iter().map(|label| {
+    let specs = crate::data::source::collect_source(variables.iter().map(|source| {
+        let label = source
+            .label
+            .get()
+            .expect("prepared variable label")
+            .as_str();
         let hard = layout::fit::intrinsic_widths(
             theme,
             label,
@@ -592,8 +657,13 @@ pub(crate) fn measure(
     // canonical range wherever it appears, not one range as x and another
     // as y. The range includes the diagonal KDE evaluation extent so the
     // diagonal and off-diagonal cells stay visually aligned.
-    let prepared_ranges =
-        crate::data::source::collect_source(prepared.ranges.iter().copied().map(Ok))?;
+    let prepared_ranges = crate::data::source::collect_source(variables.iter().map(|source| {
+        Ok(registered
+            .axes
+            .axis_at(registered.source, source.witness.slot)
+            .extent()
+            .pair())
+    }))?;
 
     // --- Styles ---
     let frame_style = theme
@@ -716,7 +786,13 @@ pub(crate) fn measure(
                     &axis_theme,
                     &scope,
                 )?,
-                (row == n - 1).then_some(display_cols[col].as_str()),
+                (row == n - 1).then_some(
+                    variables[col]
+                        .label
+                        .get()
+                        .expect("prepared variable label")
+                        .as_str(),
+                ),
                 1,
             )?;
             let y_axis = axis(
@@ -728,7 +804,13 @@ pub(crate) fn measure(
                     &axis_theme,
                     &scope,
                 )?,
-                (col == 0).then_some(display_cols[row].as_str()),
+                (col == 0).then_some(
+                    variables[row]
+                        .label
+                        .get()
+                        .expect("prepared variable label")
+                        .as_str(),
+                ),
                 0,
             )?;
             let cell_layout = Layout {
@@ -798,6 +880,11 @@ pub(crate) fn measure(
                     &group_colors,
                     groups,
                     &prepared.diagonals[row],
+                    registered
+                        .axes
+                        .axis_at(registered.source, diagonal_density[row].witness.slot)
+                        .extent()
+                        .pair(),
                     &cell_layout.projection,
                 )?;
             } else {
@@ -1055,7 +1142,7 @@ fn prepare_density(
     col_idx: usize,
     column: &str,
     range: (f64, f64),
-) -> Result<MatrixDensity, Error> {
+) -> Result<(MatrixDensity, f64), Error> {
     let (d_lo, d_hi) = range;
     let grid_pts = crate::data::source::collect_source(
         (0..KDE_POINTS).map(|i| Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))),
@@ -1111,11 +1198,13 @@ fn prepare_density(
         )));
     }
 
-    Ok(MatrixDensity {
-        positions: grid_pts,
-        densities: densities_per_group,
-        maximum: d_max,
-    })
+    Ok((
+        MatrixDensity {
+            positions: grid_pts,
+            densities: densities_per_group,
+        },
+        d_max,
+    ))
 }
 
 /// Project root-prepared KDE curves into admitted cell operands.
@@ -1125,12 +1214,13 @@ fn select_diagonal_kde(
     group_colors: &[(u8, u8, u8)],
     groups: &[HueGroup],
     density: &MatrixDensity,
+    amplitude: (f64, f64),
     projection: &layout::Projection,
 ) -> Result<(), Error> {
     let panel = projection.panel_box();
     let projection = layout::Projection::new(
         projection.x_range(),
-        (0.0, density.maximum),
+        amplitude,
         (
             panel.x0,
             panel.x1,

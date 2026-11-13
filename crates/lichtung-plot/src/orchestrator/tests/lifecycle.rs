@@ -807,7 +807,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             "{kind:?}"
         );
         if kind != PlotKind::Matrix {
-            let axes = prepared.plots[0].axes.as_ref().unwrap();
+            let axes = prepared.plots[0].axes.coordinate().unwrap();
             for side in 0..2 {
                 if axes.categories(side).is_some() {
                     continue;

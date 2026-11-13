@@ -238,7 +238,7 @@ impl Plot {
     ) -> Result<(), Error> {
         if crate::layout::interior::InteriorRoute::classify(self.kind()).is_coordinate()
             && registered
-                .and_then(|registered| registered.axes.as_ref())
+                .and_then(|registered| registered.axes.coordinate())
                 .is_none()
         {
             return Err(Error::Render(

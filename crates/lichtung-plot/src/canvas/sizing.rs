@@ -102,7 +102,7 @@ impl HeightInputs {
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<Self, Error> {
         let axes = registered
-            .and_then(|registered| registered.axes.as_ref())
+            .and_then(|registered| registered.axes.coordinate())
             .ok_or_else(|| {
                 Error::Render("height measurement requires prepared cell axes".into())
             })?;

@@ -595,12 +595,12 @@ pub(crate) fn measure(
             crate::layout::PixelRect::new(central_x0, central_x1, central_y0, central_y1),
             context
                 .registered
-                .and_then(|registered| registered.axes.as_ref())
+                .and_then(|registered| registered.axes.coordinate())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                 .copy_label(0)?,
             context
                 .registered
-                .and_then(|registered| registered.axes.as_ref())
+                .and_then(|registered| registered.axes.coordinate())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                 .copy_label(1)?,
             &layout::display_axis_spec(chart.description().x_axis_spec(), (x_low, x_high)),
@@ -692,13 +692,41 @@ pub(crate) fn measure(
         )?,
         measure_linked_panel(
             top_panel,
-            [ranges[0], (0.0, 1.0)],
+            [
+                ranges[0],
+                context
+                    .registered
+                    .expect("prepared Marginal occurrence")
+                    .axes
+                    .axis_at(
+                        context.registered.unwrap().source,
+                        crate::orchestrator::registration::AxisSlot::MarginalStripDensity(
+                            crate::orchestrator::registration::MarginalStrip::Top,
+                        ),
+                    )
+                    .extent()
+                    .pair(),
+            ],
             layout::AddressRole::MarginalTop,
             context,
         )?,
         measure_linked_panel(
             right_panel,
-            [(0.0, 1.0), ranges[1]],
+            [
+                context
+                    .registered
+                    .expect("prepared Marginal occurrence")
+                    .axes
+                    .axis_at(
+                        context.registered.unwrap().source,
+                        crate::orchestrator::registration::AxisSlot::MarginalStripDensity(
+                            crate::orchestrator::registration::MarginalStrip::Right,
+                        ),
+                    )
+                    .extent()
+                    .pair(),
+                ranges[1],
+            ],
             layout::AddressRole::MarginalRight,
             context,
         )?,

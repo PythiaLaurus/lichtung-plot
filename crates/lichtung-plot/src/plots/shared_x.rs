@@ -2,7 +2,7 @@
 
 mod prepared;
 pub(crate) use prepared::{
-    prepare_line_plot, prepare_plot, prepare_reference_plot, prepare_scatter_plot, PreparedAxes,
+    prepare_line_plot, prepare_plot, prepare_reference_plot, prepare_scatter_plot,
 };
 
 #[cfg(test)]

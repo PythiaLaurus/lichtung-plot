@@ -24,14 +24,19 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     .hide_point_outline()
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let prepare = |source: &Plot, rows| {
+        use crate::orchestrator::registration::{PlotRegistryBuilder, Scope};
+        let scope = Scope::new(source, &operation, 0, rows, None, None)?;
+        let mut registry = PlotRegistryBuilder::new(operation.root_identity());
+        let id = registry.reserve(source.description(), scope, &operation)?;
+        prepare_axes(source, registry.data(&id, &operation)?, &id)
+    };
+    let (prepared, _) = prepare(
         &source,
-        &operation,
         crate::orchestrator::registration::RowSelection::Selected {
             input_slots: vec![2, 0, 1],
             diagnostic_rows: vec![300, 100, 200],
         },
-        |data| prepare_axes(&source, data).unwrap(),
     )
     .unwrap();
     assert_eq!(
@@ -42,11 +47,9 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             .collect::<Vec<_>>(),
         [(2, 300, 0), (0, 100, 0), (1, 200, 128)]
     );
-    let before = crate::data::with_source_data_for_test(
+    let (before, before_axes) = prepare(
         &source,
-        &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| prepare_axes(&source, data).unwrap(),
     )
     .unwrap();
     let control = source
@@ -59,19 +62,37 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             AlphaTarget::Fill,
             AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
         );
-    let after = crate::data::with_source_data_for_test(
+    let (after, after_axes) = prepare(
         &control,
-        &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| prepare_axes(&control, data).unwrap(),
     )
     .unwrap();
-    assert_eq!(before.ranges, after.ranges);
+    let (before_variables, before_density) = before_axes.matrix().unwrap();
+    let (after_variables, after_density) = after_axes.matrix().unwrap();
+    assert_eq!(
+        before_variables
+            .iter()
+            .map(|source| source.base_seed.unwrap().pair())
+            .collect::<Vec<_>>(),
+        after_variables
+            .iter()
+            .map(|source| source.base_seed.unwrap().pair())
+            .collect::<Vec<_>>()
+    );
     for (before, after) in before.diagonals.iter().zip(&after.diagonals) {
         assert_eq!(before.positions, after.positions);
         assert_eq!(before.densities, after.densities);
-        assert_eq!(before.maximum.to_bits(), after.maximum.to_bits());
     }
+    assert_eq!(
+        before_density
+            .iter()
+            .map(|source| source.base_seed.unwrap().upper.to_bits())
+            .collect::<Vec<_>>(),
+        after_density
+            .iter()
+            .map(|source| source.base_seed.unwrap().upper.to_bits())
+            .collect::<Vec<_>>()
+    );
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let primary = theme
         .marks

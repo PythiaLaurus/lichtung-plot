@@ -552,7 +552,7 @@ impl PreparedInteriorInputs<'_> {
                     _ => None,
                 })
                 .ok_or_else(|| Error::Render("Matrix alpha guide is missing actual groups".into()))?
-                .alpha_guide(chart, theme, &mut guide)?,
+                .alpha_guide(chart, &registered.axes, theme, &mut guide)?,
         }
         guide.finish()
     }

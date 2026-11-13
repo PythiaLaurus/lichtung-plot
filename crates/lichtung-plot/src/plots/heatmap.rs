@@ -559,15 +559,19 @@ impl HeatmapIntrinsicCache {
     fn matches_inputs(
         &self,
         prepared: &HeatmapData,
-        axes: &crate::plots::shared_x::PreparedAxes,
+        axes: &crate::orchestrator::registration::PreparedAxesOwner,
         source: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> bool {
         self.color_scale.same(&prepared.color.scale)
             && self.layouts == theme.text_layouts
             && self.category_labels
-                == [axes.axis(source, 0), axes.axis(source, 1)]
-                    .map(|axis| axis.authored().category_labels.clone())
+                == [axes.axis(source, 0), axes.axis(source, 1)].map(|axis| {
+                    axis.authored()
+                        .expect("coordinate authored intent")
+                        .category_labels
+                        .clone()
+                })
             && self.titles.each_ref().map(Option::as_ref) == [axes.label(0), axes.label(1)]
             && self.null_rows == prepared.null_row_annotations
             && self
@@ -593,7 +597,7 @@ impl HeatmapIntrinsicCache {
         minimum: (f64, f64),
         without_y_labels: (f64, f64),
         prepared: &HeatmapData,
-        axes: &crate::plots::shared_x::PreparedAxes,
+        axes: &crate::orchestrator::registration::PreparedAxesOwner,
         source: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
@@ -615,8 +619,12 @@ impl HeatmapIntrinsicCache {
             contrast_light: text(&theme.typography.annotations.contrast.light)?,
             contrast_dark: text(&theme.typography.annotations.contrast.dark)?,
             tick_label: text(&theme.typography.axes.tick_label)?,
-            category_labels: [axes.axis(source, 0), axes.axis(source, 1)]
-                .map(|axis| axis.authored().category_labels.clone()),
+            category_labels: [axes.axis(source, 0), axes.axis(source, 1)].map(|axis| {
+                axis.authored()
+                    .expect("coordinate authored intent")
+                    .category_labels
+                    .clone()
+            }),
             axis_title: text(&theme.typography.axes.axis_title)?,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             null_rows: crate::data::source::collect_source(
@@ -647,7 +655,7 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let axes = registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
     let (minimum, without_y_labels) = heatmap_minima(
         intrinsic,
@@ -687,7 +695,7 @@ pub(crate) fn natural_body_height(
 ) -> Result<f64, Error> {
     let marks = retained_in(chart, registered)?;
     let axes = registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
     theme.text.prepared_font_environment()?;
     let labels = axes
@@ -700,6 +708,7 @@ pub(crate) fn natural_body_height(
         &axes
             .axis(registered.expect("prepared Heatmap occurrence").source, 0)
             .authored()
+            .expect("coordinate authored intent")
             .category_labels,
         PixelRect::new(0.0, width, 0.0, 1.0),
         theme,
@@ -891,7 +900,7 @@ fn column_label_hard(
 pub(crate) fn heatmap_minima(
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     prepared: &HeatmapData,
-    axes: &crate::plots::shared_x::PreparedAxes,
+    axes: &crate::orchestrator::registration::PreparedAxesOwner,
     source: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     diagnostic_scope: Option<&str>,
@@ -932,6 +941,7 @@ pub(crate) fn heatmap_minima(
     for (index, label) in x_labels.iter().enumerate().filter(|(index, _)| {
         axes.axis(source, 0)
             .authored()
+            .expect("coordinate authored intent")
             .category_labels
             .includes(*index, x_labels.len())
     }) {
@@ -943,6 +953,7 @@ pub(crate) fn heatmap_minima(
     for (index, label) in y_labels.iter().enumerate().filter(|(index, _)| {
         axes.axis(source, 1)
             .authored()
+            .expect("coordinate authored intent")
             .category_labels
             .includes(*index, y_labels.len())
     }) {
@@ -1326,7 +1337,7 @@ pub(crate) fn measure(
         ))?;
         let axes = context
             .registered
-            .and_then(|registered| registered.axes.as_ref())
+            .and_then(|registered| registered.axes.coordinate())
             .ok_or_else(|| Error::Render("Heatmap requires prepared native axes".into()))?;
         let mut layout = Layout {
             projection: crate::layout::Projection::new(
@@ -1347,6 +1358,7 @@ pub(crate) fn measure(
                         0,
                     )
                     .authored()
+                    .expect("coordinate authored intent")
                     .category_labels
                     .clone(),
                 explicit_ticks: false,
@@ -1368,6 +1380,7 @@ pub(crate) fn measure(
                         1,
                     )
                     .authored()
+                    .expect("coordinate authored intent")
                     .category_labels
                     .clone(),
                 explicit_ticks: false,

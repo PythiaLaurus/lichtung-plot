@@ -226,7 +226,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
                     .collect::<Vec<_>>(),
                 inputs.plots[0]
                     .axes
-                    .as_ref()
+                    .coordinate()
                     .unwrap()
                     .categories(0)
                     .unwrap()
@@ -314,7 +314,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                 );
                 let fault = if inputs.plots[0]
                     .axes
-                    .as_ref()
+                    .coordinate()
                     .unwrap()
                     .categories(1)
                     .is_none()

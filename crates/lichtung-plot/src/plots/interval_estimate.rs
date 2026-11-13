@@ -1347,7 +1347,10 @@ pub(crate) fn log_tick_plan(
     let raw = windows[0].copied();
     crate::layout::NumericTickPlan::measure_selected_source(
         range,
-        axis.authored().generation.clone(),
+        axis.authored()
+            .expect("coordinate authored intent")
+            .generation
+            .clone(),
         true,
         &projection,
         crate::layout::AxisSide::Bottom,

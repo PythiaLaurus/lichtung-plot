@@ -352,7 +352,7 @@ pub(crate) fn natural_body_height(
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     };
     let axes = registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
     let range = chart
         .description()
@@ -418,7 +418,7 @@ pub(crate) fn measure(
     };
     let axes = context
         .registered
-        .and_then(|registered| registered.axes.as_ref())
+        .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("Beeswarm axes require preparation".into()))?;
     let range = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(prepared.x_data))?;
     let projection = crate::layout::Projection::new(
@@ -473,7 +473,12 @@ pub(crate) fn measure(
         })
     {
         let mut heights = crate::data::source::collect_source(labels.iter().map(|_| Ok(0.0)))?;
-        for index in pair[1].authored().category_labels.indices(labels.len()) {
+        for index in pair[1]
+            .authored()
+            .expect("coordinate authored intent")
+            .category_labels
+            .indices(labels.len())
+        {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 &labels[index].label,
@@ -490,7 +495,10 @@ pub(crate) fn measure(
             }
         }
         let span = crate::layout::category_label_span(
-            &pair[1].authored().category_labels,
+            &pair[1]
+                .authored()
+                .expect("coordinate authored intent")
+                .category_labels,
             labels.len(),
             |index| Ok(heights[index]),
         )?;
@@ -530,7 +538,11 @@ pub(crate) fn measure(
             label: axes.copy_label(0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
-            category_labels: pair[0].authored().category_labels.clone(),
+            category_labels: pair[0]
+                .authored()
+                .expect("coordinate authored intent")
+                .category_labels
+                .clone(),
             source: x.source,
             numeric: x.numeric,
             explicit_ticks: pair[0].exact_ticks().is_some(),
@@ -541,7 +553,11 @@ pub(crate) fn measure(
             label: axes.copy_label(1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
-            category_labels: pair[1].authored().category_labels.clone(),
+            category_labels: pair[1]
+                .authored()
+                .expect("coordinate authored intent")
+                .category_labels
+                .clone(),
             source: crate::layout::TickSource::SUPPLIED,
             numeric: None,
             explicit_ticks: false,

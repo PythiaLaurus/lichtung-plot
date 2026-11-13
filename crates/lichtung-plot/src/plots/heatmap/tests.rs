@@ -167,7 +167,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             let plan = &cell.text.as_ref().unwrap().plan;
             assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
             let marks = retained_in(chart, inputs.plots.first()).unwrap();
-            let axes = inputs.plots[0].axes.as_ref().unwrap();
+            let axes = inputs.plots[0].axes.coordinate().unwrap();
             let intrinsic = inputs.intrinsic(&inputs.plots[0]);
             let original =
                 heatmap_minima(intrinsic, marks, axes, inputs.plots[0].source, theme, None)
