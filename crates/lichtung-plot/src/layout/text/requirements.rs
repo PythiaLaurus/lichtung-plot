@@ -2788,10 +2788,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one operation carries selected contrast text from census to the actual Heatmap intrinsic"
-    )]
     fn unavailable_unselected_heatmap_contrast_face_never_enters_font_preparation() {
         for (value, light_selected) in [(0.0, false), (1.0, true)] {
             let plot = crate::Plot::heatmap(
@@ -2870,18 +2866,9 @@ mod tests {
                         presence,
                         stage,
                     )?;
-                    let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-                        &inputs.plots[0].family
-                    else {
-                        panic!("prepared Heatmap")
-                    };
                     let minimum = crate::plots::heatmap::heatmap_minima(
                         inputs.intrinsic(&inputs.plots[0]),
-                        marks,
-                        inputs.plots[0].axes.coordinate().unwrap(),
-                        inputs.plots[0].source,
-                        &theme,
-                        None,
+                        &plot.intrinsic_inputs(inputs.plots.first(), &theme, &stage.operation())?,
                     )?
                     .0;
                     assert!(

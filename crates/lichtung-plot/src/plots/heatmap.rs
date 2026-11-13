@@ -652,18 +652,16 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let axes = registered
+    registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
+    retained_in(chart, registered)?;
     let (minimum, without_y_labels) = heatmap_minima(
         intrinsic,
-        retained_in(chart, registered)?,
-        axes,
-        registered.expect("prepared Heatmap occurrence").source,
-        theme,
-        chart.axis_scope(),
+        &chart.intrinsic_inputs(registered, theme, operation)?,
     )?;
     if chart.y_tick_labels_visible() {
         Ok(minimum)
@@ -676,10 +674,11 @@ pub(crate) fn natural_body_preference(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = retained_in(chart, registered)?;
-    let hard = intrinsic_body_minimum(chart, registered, intrinsic, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
         hard.0.max(pitch * marks.x_levels.len() as f64),
@@ -899,12 +898,21 @@ fn column_label_hard(
 )]
 pub(crate) fn heatmap_minima(
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
-    prepared: &HeatmapData,
-    axes: &crate::orchestrator::registration::PreparedAxesOwner,
-    source: &crate::builder::PlotDescription,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    diagnostic_scope: Option<&str>,
+    input: &crate::orchestrator::root::PlotIntrinsicInputs<'_, '_>,
 ) -> Result<((f64, f64), (f64, f64)), Error> {
+    let theme = &input.request;
+    let axes = input
+        .registered
+        .axes
+        .coordinate()
+        .expect("prepared Heatmap axes");
+    let source = input.registered.source;
+    let crate::orchestrator::registration::PreparedFamily::Heatmap(prepared) =
+        &input.registered.family
+    else {
+        unreachable!("prepared Heatmap intrinsic family")
+    };
+    let diagnostic_scope = input.diagnostic_scope;
     theme.text.prepared_font_environment()?;
     let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
         unreachable!("Heatmap intrinsic slot")
@@ -1146,7 +1154,13 @@ pub(crate) fn measure(
     let prepared = retained_in(chart, context.registered)?;
     let theme = context.theme;
 
-    let minimum = intrinsic_body_minimum(chart, context.registered, context.intrinsic(), theme)?;
+    let minimum = intrinsic_body_minimum(
+        chart,
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        theme,
+    )?;
     let (body, colorbar) = if chart.continuous_guide_suppressed()
         || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {

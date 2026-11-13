@@ -89,6 +89,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
                 chart,
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),
+                &operation,
                 resolved,
             )
             .unwrap();
@@ -169,10 +170,14 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             let marks = retained_in(chart, inputs.plots.first()).unwrap();
             let axes = inputs.plots[0].axes.coordinate().unwrap();
             let intrinsic = inputs.intrinsic(&inputs.plots[0]);
-            let original =
-                heatmap_minima(intrinsic, marks, axes, inputs.plots[0].source, theme, None)
-                    .unwrap()
-                    .0;
+            let original = heatmap_minima(
+                intrinsic,
+                &chart
+                    .intrinsic_inputs(inputs.plots.first(), theme, &operation)
+                    .unwrap(),
+            )
+            .unwrap()
+            .0;
             let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
                 panic!("Heatmap slot")
             };
@@ -248,10 +253,14 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 inputs.plots[0].source,
                 &theme
             ));
-            let edited =
-                heatmap_minima(intrinsic, marks, axes, inputs.plots[0].source, &theme, None)
-                    .unwrap()
-                    .0;
+            let edited = heatmap_minima(
+                intrinsic,
+                &chart
+                    .intrinsic_inputs(inputs.plots.first(), &theme, &operation)
+                    .unwrap(),
+            )
+            .unwrap()
+            .0;
             assert_eq!(value.get().unwrap().minimum, original);
             assert!(!value.get().unwrap().matches_inputs(
                 marks,

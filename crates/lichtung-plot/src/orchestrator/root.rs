@@ -44,6 +44,27 @@ pub(crate) fn coordinate_intrinsic<'a>(
     crate::layout::interior::coordinate::Intrinsics::prepare(slot, input)
 }
 
+pub(crate) fn prepare_plot_intrinsics(
+    slot: &PlotIntrinsics,
+    input: &PlotIntrinsicInputs<'_, '_>,
+) -> Result<(), crate::Error> {
+    let kind = input.registered.source.kind();
+    if crate::layout::interior::InteriorRoute::classify(kind).is_coordinate() {
+        coordinate_intrinsic(slot, input)?;
+    } else if kind == crate::PlotKind::Heatmap {
+        if !matches!(
+            input.registered.family,
+            crate::orchestrator::registration::PreparedFamily::Heatmap(_)
+        ) {
+            return Err(crate::Error::Render(
+                "prepared heatmap intrinsic scope missing".into(),
+            ));
+        }
+        crate::plots::heatmap::heatmap_minima(slot, input)?;
+    }
+    Ok(())
+}
+
 impl crate::Plot {
     pub(crate) fn intrinsic_inputs<'v, 'src>(
         &'v self,

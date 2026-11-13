@@ -180,39 +180,21 @@ impl<'src> PreparedInteriorInputs<'src> {
     ) -> Result<(), Error> {
         self.route.validate(plot.description())?;
         for registered in &self.plots {
-            let Some(axes) = registered.axes.coordinate() else {
+            if registered.axes.coordinate().is_none() {
                 continue;
-            };
+            }
             let scope = &registered.scope.render_name;
             let intrinsic = self.intrinsic(registered);
-            if self.route.is_coordinate() {
-                crate::orchestrator::root::coordinate_intrinsic(
-                    intrinsic,
-                    &crate::orchestrator::root::PlotIntrinsicInputs {
-                        registered,
-                        request: *theme,
-                        operation,
-                        diagnostic_scope: scope.as_deref(),
-                        y_visible: plot.y_tick_labels_visible(),
-                    },
-                )?;
-            } else if self.route.kind() == PlotKind::Heatmap {
-                let prepared = match &registered.family {
-                    crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
-                        Some(marks)
-                    }
-                    _ => None,
-                }
-                .ok_or_else(|| Error::Render("prepared heatmap intrinsic scope missing".into()))?;
-                crate::plots::heatmap::heatmap_minima(
-                    intrinsic,
-                    prepared,
-                    axes,
-                    registered.source,
-                    theme,
-                    scope.as_deref(),
-                )?;
-            }
+            crate::orchestrator::root::prepare_plot_intrinsics(
+                intrinsic,
+                &crate::orchestrator::root::PlotIntrinsicInputs {
+                    registered,
+                    request: *theme,
+                    operation,
+                    diagnostic_scope: scope.as_deref(),
+                    y_visible: plot.y_tick_labels_visible(),
+                },
+            )?;
         }
         Ok(())
     }
@@ -296,7 +278,7 @@ impl Plot {
                 self, registered, theme,
             )?),
             PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(
-                self, registered, intrinsic, theme,
+                self, registered, intrinsic, operation, theme,
             )?),
             PlotKind::Beeswarm => Some(crate::plots::beeswarm::intrinsic_body_minimum(
                 self, registered, intrinsic, operation, theme,

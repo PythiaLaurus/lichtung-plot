@@ -209,7 +209,9 @@ pub(crate) fn body_preference(
             crate::plots::matrix::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Heatmap) => {
-            crate::plots::heatmap::natural_body_preference(plot, registered, intrinsic, theme)
+            crate::plots::heatmap::natural_body_preference(
+                plot, registered, intrinsic, operation, theme,
+            )
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Beeswarm | SpecializedGrid::Waterfall) => {
             let ch = theme
