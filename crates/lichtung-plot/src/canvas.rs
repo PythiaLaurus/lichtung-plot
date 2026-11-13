@@ -1196,20 +1196,23 @@ impl Canvas {
                 }) {
                     marks.x_range(plot, registered.and_then(|panel| panel.axes.as_ref()))?
                 } else if plot.kind() == PlotKind::Scatter {
+                    family
+                        .and_then(|family| match family {
+                            crate::orchestrator::registration::PreparedFamily::Scatter(marks) => {
+                                Some(marks)
+                            }
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "shared Scatter range requires root-prepared inputs".into(),
+                            )
+                        })?;
                     crate::layout::continuous_auto_range(
-                        family
-                            .and_then(|family| match family {
-                                crate::orchestrator::registration::PreparedFamily::Scatter(
-                                    marks,
-                                ) => Some(marks),
-                                _ => None,
-                            })
-                            .ok_or_else(|| {
-                                Error::Render(
-                                    "shared Scatter range requires root-prepared inputs".into(),
-                                )
-                            })?
-                            .ranges[0],
+                        registered
+                            .and_then(|panel| panel.axes.as_ref())
+                            .expect("prepared Scatter axes")
+                            .ranges()[0],
                         plot.description().x_axis_spec(),
                     )?
                 } else if matches!(
@@ -1345,12 +1348,12 @@ impl Canvas {
                 }
                 PlotKind::Scatter => {
                     plot.description().configured_source_rows()?;
-                    crate::orchestrator::registration::PreparedFamily::Scatter(
-                        crate::plots::scatter::PreparedScatter::new(
-                            plot.description(),
-                            panel.data(&resources)?,
-                        )?,
-                    )
+                    let (marks, ranges) = crate::plots::scatter::PreparedScatter::new(
+                        plot.description(),
+                        panel.data(&resources)?,
+                    )?;
+                    panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(panel, ranges)?);
+                    crate::orchestrator::registration::PreparedFamily::Scatter(marks)
                 }
                 _ => {
                     plot.description().configured_source_rows()?;

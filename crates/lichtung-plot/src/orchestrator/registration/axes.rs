@@ -194,6 +194,56 @@ pub(crate) struct PreparedCategorySource {
     pub(crate) ticks: Vec<AxisTick>,
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "source construction preserves the fallible producer boundary without adding early validation"
+)]
+pub(crate) fn prepare_axis_source(
+    build: &super::PlotRegistrationBuild<'_>,
+    slot: AxisSlot,
+    seed: Option<DisplayExtent>,
+    range_policy: RangePolicy,
+    categories: Option<PreparedCategorySource>,
+    label: Option<Text>,
+) -> Result<PreparedAxisSource, Error> {
+    let provenance = match slot {
+        AxisSlot::Pair(side) | AxisSlot::MarginalCentral(side) => match side {
+            AxisSide::Bottom => build.source.x_axis_spec().provenance,
+            AxisSide::Left => build.source.y_axis_spec().provenance,
+        },
+        _ => RangeProvenance::Automatic,
+    };
+    let source = PreparedAxisSource {
+        witness: AxisSourceWitness {
+            plot_id: build.scope.id.clone(),
+            slot,
+            space: if categories.is_some() {
+                AxisSpace::Categorical
+            } else {
+                AxisSpace::Continuous(
+                    if matches!(slot, AxisSlot::Pair(AxisSide::Bottom))
+                        && build.source.kind() == crate::PlotKind::Forest
+                    {
+                        build.source.axis_scale_spec()
+                    } else {
+                        AxisScale::Linear
+                    },
+                )
+            },
+        },
+        range_policy,
+        base_seed: seed,
+        base_provenance: provenance,
+        categories,
+        projected_exact_positions: None,
+        label: std::sync::OnceLock::new(),
+    };
+    if let Some(label) = label {
+        let _ = source.label.set(label);
+    }
+    Ok(source)
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum AxisIntentRef<'a> {
     Authored(&'a AxisSpec),

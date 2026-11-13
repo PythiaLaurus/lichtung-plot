@@ -26,7 +26,6 @@ const BAND_POINTS: usize = 40;
 
 #[derive(Debug)]
 pub(crate) struct PreparedRegression {
-    pub(crate) ranges: [(f64, f64); 2],
     mark_ranges: [(f64, f64); 2],
     points: Vec<(f64, f64)>,
     alphas: Vec<ObservationAlpha>,
@@ -206,7 +205,7 @@ impl PreparedRegression {
     pub(crate) fn new(
         chart: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, [(f64, f64); 2]), Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         let line_alpha = chart
@@ -274,20 +273,22 @@ impl PreparedRegression {
 
         let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec())?;
         let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
-        Ok(Self {
-            ranges: [x_range, y_range],
-            mark_ranges,
-            points,
-            alphas,
-            line_alpha,
-            fill_alpha: if band_values.is_some() {
-                fill_alpha.single()?
-            } else {
-                None
+        Ok((
+            Self {
+                mark_ranges,
+                points,
+                alphas,
+                line_alpha,
+                fill_alpha: if band_values.is_some() {
+                    fill_alpha.single()?
+                } else {
+                    None
+                },
+                fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
+                band_values,
             },
-            fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
-            band_values,
-        })
+            [x_range, y_range],
+        ))
     }
 }
 
@@ -540,14 +541,14 @@ mod style_tests {
                 .unwrap(),
             );
         let operation = crate::font::canonical::OperationContext::new();
-        let prepared = crate::data::with_source_data_for_test(
+        let (prepared, _) = crate::data::with_source_data_for_test(
             &source,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
             |data| PreparedRegression::new(source.description(), data).unwrap(),
         )
         .unwrap();
-        let baseline = crate::data::with_source_data_for_test(
+        let (baseline, _) = crate::data::with_source_data_for_test(
             &base,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,

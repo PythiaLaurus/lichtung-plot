@@ -4,8 +4,9 @@ use crate::{builder::PlotDescription, Error};
 
 mod axes;
 pub(crate) use axes::{
-    AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent, ExactTicksRef,
-    MarginalStrip, PreparedAxes, PreparedAxesOwner, PreparedAxisSource, PreparedCategorySource,
+    prepare_axis_source, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent,
+    ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner, PreparedAxisSource,
+    PreparedCategorySource,
 };
 
 #[derive(Debug, Clone)]

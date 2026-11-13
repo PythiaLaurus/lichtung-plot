@@ -28,7 +28,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     .legend(crate::LegendPolicy::Hidden)
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let (prepared, ranges) = crate::data::with_source_data_for_test(
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,
@@ -44,7 +44,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
             .collect::<Vec<_>>(),
         [(0, 100), (2, 300), (3, 400)]
     );
-    assert_eq!(prepared.ranges, [(1.0, 1.0); 2]);
+    assert_eq!(ranges, [(1.0, 1.0); 2]);
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);

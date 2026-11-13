@@ -10,6 +10,36 @@ use crate::orchestrator::registration::{
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
 
+/// Build-only seeds are consumed by the original policy and parent passes
+/// before registration publication; no range helper or formatter runs here.
+pub(crate) fn prepare_pair_axes(
+    build: &PlotRegistrationBuild<'_>,
+    ranges: [(f64, f64); 2],
+) -> Result<PreparedAxesOwner, Error> {
+    let policies = crate::layout::range_policies(build.source.kind());
+    let [x, y] = ranges.map(|(lower, upper)| Some(DisplayExtent { lower, upper }));
+    Ok(PreparedAxesOwner::Pair(PreparedAxes {
+        sources: [
+            crate::orchestrator::registration::prepare_axis_source(
+                build,
+                AxisSlot::Pair(crate::layout::AxisSide::Bottom),
+                x,
+                policies[0],
+                None,
+                None,
+            )?,
+            crate::orchestrator::registration::prepare_axis_source(
+                build,
+                AxisSlot::Pair(crate::layout::AxisSide::Left),
+                y,
+                policies[1],
+                None,
+                None,
+            )?,
+        ],
+    }))
+}
+
 fn continuous_selection(
     source: &Plot,
     owner: Option<&crate::theme::Theme>,
@@ -167,9 +197,15 @@ pub(crate) fn prepare_plot_registration(
             source.description(),
             data,
         )?)),
-        PlotKind::Histogram => Ok(PreparedFamily::Histogram(
-            crate::plots::histogram::HistogramSemantics::new(source.description(), data, owner)?,
-        )),
+        PlotKind::Histogram => {
+            let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
+                source.description(),
+                data,
+                owner,
+            )?;
+            panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+            Ok(PreparedFamily::Histogram(marks))
+        }
         PlotKind::Density => Ok(PreparedFamily::Density(
             crate::plots::density::PreparedDensity::new(source, data)?,
         )),
@@ -177,9 +213,12 @@ pub(crate) fn prepare_plot_registration(
             source.description(),
             data,
         )?)),
-        PlotKind::Regression => Ok(PreparedFamily::Regression(
-            crate::plots::regression::PreparedRegression::new(source.description(), data)?,
-        )),
+        PlotKind::Regression => {
+            let (marks, ranges) =
+                crate::plots::regression::PreparedRegression::new(source.description(), data)?;
+            panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+            Ok(PreparedFamily::Regression(marks))
+        }
         _ => Err(Error::Render(
             "shared semantics require an extracted reference or paired-endpoint family".into(),
         )),
@@ -230,10 +269,10 @@ impl PreparedFamily {
                 marks.range,
                 source.description().x_axis_spec(),
             )?,
-            Self::Histogram(marks) => marks.ranges[0],
+            Self::Histogram(_) => axes.expect("prepared Histogram axes").ranges()[0],
             Self::Density(marks) => marks.ranges(source.description())?[0],
             Self::Qq(marks) => marks.ranges(source.description())?[0],
-            Self::Regression(marks) => marks.ranges[0],
+            Self::Regression(_) => axes.expect("prepared Regression axes").ranges()[0],
             Self::Scatter(_) | Self::Line { .. } | Self::Matrix(_) => {
                 return Err(Error::Render(
                     "shared semantics require an extracted reference or paired-endpoint family"
@@ -382,10 +421,11 @@ pub(crate) fn prepare_plot<'src>(
         .map(|id| registry.data(id, resources))
         .transpose()?;
     if source.kind() == PlotKind::Scatter && !source.description().has_facets() {
-        let marks = crate::plots::scatter::PreparedScatter::new(
+        let (marks, ranges) = crate::plots::scatter::PreparedScatter::new(
             source.description(),
             source_data.expect("single plot data"),
         )?;
+        registry.panels[0].axes = Some(prepare_pair_axes(&registry.panels[0], ranges)?);
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
         prepare_scatter_plot(source, &mut registry.panels[0])?;
         return PreparedInteriorInputs::from_registry(
@@ -539,9 +579,12 @@ pub(crate) fn prepare_plot<'src>(
                 conditions: conditions.as_deref(),
             };
             let family = match source.kind() {
-                PlotKind::Scatter => PreparedFamily::Scatter(
-                    crate::plots::scatter::PreparedScatter::new(source.description(), data)?,
-                ),
+                PlotKind::Scatter => {
+                    let (marks, ranges) =
+                        crate::plots::scatter::PreparedScatter::new(source.description(), data)?;
+                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    PreparedFamily::Scatter(marks)
+                }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     PreparedFamily::Line {
                         kind: source.kind(),
@@ -553,11 +596,13 @@ pub(crate) fn prepare_plot<'src>(
                     }
                 }
                 PlotKind::Histogram => {
-                    PreparedFamily::Histogram(crate::plots::histogram::HistogramSemantics::new(
+                    let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
                         source.description(),
                         data,
                         owner,
-                    )?)
+                    )?;
+                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    PreparedFamily::Histogram(marks)
                 }
                 PlotKind::Density => PreparedFamily::Density(
                     crate::plots::density::PreparedDensity::new(source, data)?,
@@ -566,9 +611,14 @@ pub(crate) fn prepare_plot<'src>(
                     source.description(),
                     data,
                 )?),
-                PlotKind::Regression => PreparedFamily::Regression(
-                    crate::plots::regression::PreparedRegression::new(source.description(), data)?,
-                ),
+                PlotKind::Regression => {
+                    let (marks, ranges) = crate::plots::regression::PreparedRegression::new(
+                        source.description(),
+                        data,
+                    )?;
+                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    PreparedFamily::Regression(marks)
+                }
                 PlotKind::Dumbbell => PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
                     source.description(),
                     data,
@@ -932,7 +982,8 @@ fn prepare(
     let mut categories: [Option<Vec<String>>; 2] = [None, None];
     let mut ranges = match chart.kind() {
         PlotKind::Regression => {
-            let ranges = marks!(family, PreparedFamily::Regression(marks) => marks, "Regression axes require prepared semantics").ranges;
+            marks!(family, PreparedFamily::Regression(marks) => marks, "Regression axes require prepared semantics");
+            let ranges = prepared_axes.as_ref().expect("prepared Regression axes").ranges();
             [
                 chart
                     .description()
@@ -947,14 +998,16 @@ fn prepare(
             ]
         }
         PlotKind::Scatter => {
-            let ranges = marks!(family, PreparedFamily::Scatter(marks) => marks, "Scatter axis inputs require prepared semantics").ranges;
+            marks!(family, PreparedFamily::Scatter(marks) => marks, "Scatter axis inputs require prepared semantics");
+            let ranges = prepared_axes.as_ref().expect("prepared Scatter axes").ranges();
             [
                 crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec())?,
                 crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?,
             ]
         }
         PlotKind::Histogram => {
-            let ranges = marks!(family, PreparedFamily::Histogram(marks) => marks, "Histogram axes require prepared semantics").ranges;
+            marks!(family, PreparedFamily::Histogram(marks) => marks, "Histogram axes require prepared semantics");
+            let ranges = prepared_axes.as_ref().expect("prepared Histogram axes").ranges();
             [
                 chart
                     .description()

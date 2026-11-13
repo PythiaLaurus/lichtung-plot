@@ -33,7 +33,6 @@ thread_local! {
 
 #[derive(Debug)]
 pub(crate) struct PreparedScatter {
-    pub(crate) ranges: [(f64, f64); 2],
     groups: Vec<ScatterGroup>,
 }
 
@@ -155,7 +154,7 @@ impl PreparedScatter {
     pub(crate) fn new(
         chart: &crate::builder::PlotDescription,
         data: crate::data::PlotData<'_, '_>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, [(f64, f64); 2]), Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         #[cfg(test)]
@@ -232,7 +231,7 @@ impl PreparedScatter {
                 }
             }
         }
-        Ok(Self { ranges, groups })
+        Ok((Self { groups }, ranges))
     }
 
     fn resolved_colors(

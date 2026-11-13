@@ -47,7 +47,6 @@ struct RugSegment {
 
 #[derive(Debug)]
 pub(crate) struct HistogramSemantics {
-    pub(crate) ranges: [(f64, f64); 2],
     source_ranges: [(f64, f64); 2],
     bins: Vec<Bin>,
     bin_alphas: Vec<Option<ResolvedAlpha>>,
@@ -166,11 +165,15 @@ impl HistogramSemantics {
         self.bins.len() as u128
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "preserve the original bin, KDE, rug and seed production order"
+    )]
     pub(crate) fn new(
         source: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
         owner: Option<&crate::theme::Theme>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, [(f64, f64); 2]), Error> {
         data.validate_row_source()?;
         let curve_alpha = source
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
@@ -261,18 +264,21 @@ impl HistogramSemantics {
             .chain(curve.iter().flatten().map(|p| p.y))
             .chain(rugs.iter().map(|r| r.top))
             .fold(0.0_f64, f64::max);
-        Ok(Self {
-            ranges: [
-                source.x_axis_spec().limits.unwrap_or(range),
-                crate::layout::anchored_auto_range((0.0, maximum), source.y_axis_spec(), 0.0)?,
-            ],
-            source_ranges: [range, (0.0, maximum)],
-            bins,
-            bin_alphas,
-            curve,
-            curve_alpha,
-            rugs,
-        })
+        let ranges = [
+            source.x_axis_spec().limits.unwrap_or(range),
+            crate::layout::anchored_auto_range((0.0, maximum), source.y_axis_spec(), 0.0)?,
+        ];
+        Ok((
+            Self {
+                source_ranges: [range, (0.0, maximum)],
+                bins,
+                bin_alphas,
+                curve,
+                curve_alpha,
+                rugs,
+            },
+            ranges,
+        ))
     }
 }
 
@@ -1007,14 +1013,14 @@ mod tests {
         let marks = original.marks().clone().extents(extents).unwrap();
         let edited = original.customize().marks(marks).build().unwrap();
         let operation = crate::font::canonical::OperationContext::new();
-        let before = crate::data::with_source_data_for_test(
+        let (before, _) = crate::data::with_source_data_for_test(
             &source,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
             |data| HistogramSemantics::new(source.description(), data, Some(&original)).unwrap(),
         )
         .unwrap();
-        let after = crate::data::with_source_data_for_test(
+        let (after, _) = crate::data::with_source_data_for_test(
             &source,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
@@ -1063,7 +1069,7 @@ mod tests {
                 )
                 .unwrap(),
             );
-        let prepared = crate::data::with_source_data_for_test(
+        let (prepared, _) = crate::data::with_source_data_for_test(
             &mapped,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
