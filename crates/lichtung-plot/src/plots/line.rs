@@ -49,8 +49,7 @@ struct LinePoint {
 #[derive(Debug)]
 struct PointLayer {
     points: Vec<(f64, f64)>,
-    labels: Option<Vec<String>>,
-    legend: Option<crate::Text>,
+    source_index: usize,
 }
 
 #[derive(Debug)]
@@ -399,24 +398,21 @@ impl PreparedLine {
                 );
             }
         }
-        for (index, layer) in self.layers.iter().enumerate() {
-            if let Some(label) = &layer.legend {
+        for layer in &self.layers {
+            let index = layer.source_index;
+            let source = &chart.description().point_layers()[index];
+            if let Some(label) = source.legend_content() {
                 crate::data::source::reserve_source(&mut entries, 1)?;
-                let style = chart.description().point_layers()[index].point_style(
+                let style = source.point_style(
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.get_points().get_supplemental(),
                 );
                 let key = GuideSourceKey::supplemental(label, LayerLabelContext::for_plot(chart))?;
-                entries.push(
-                    if chart.description().point_layers()[index]
-                        .get_color()
-                        .is_some()
-                    {
-                        key.with_exact_point(style, PointRole::Supplemental)
-                    } else {
-                        key.with_point(style, PointRole::Supplemental)
-                    },
-                );
+                entries.push(if source.get_color().is_some() {
+                    key.with_exact_point(style, PointRole::Supplemental)
+                } else {
+                    key.with_point(style, PointRole::Supplemental)
+                });
             }
         }
         Ok(entries)
@@ -735,37 +731,27 @@ impl PreparedLine {
                     crate::data::strict_numeric_value(y, row, context)?,
                 ))
             }))?;
-            let labels = layer
-                .label_values()
-                .map(|values| {
-                    crate::data::source::collect_source((0..values.len()).map(|row| {
-                        match values.get(row) {
-                            Some(Some(label)) => crate::data::source::copy_source_string(label),
-                            _ => Err(Error::Data(format!(
-                                "{context}: label contains null at source row {row}"
-                            ))),
-                        }
-                    }))
-                })
-                .transpose()?;
-            if labels
-                .as_ref()
-                .is_some_and(|labels| labels.len() != points.len())
-            {
+            let labels = layer.label_values();
+            if let Some(values) = labels {
+                for row in 0..values.len() {
+                    if values.get(row).flatten().is_none() {
+                        return Err(Error::Data(format!(
+                            "{context}: label contains null at source row {row}"
+                        )));
+                    }
+                }
+            }
+            if labels.is_some_and(|labels| labels.len() != points.len()) {
                 return Err(Error::Data(
                     "line point layer: labels must align one-to-one with x and y".into(),
                 ));
             }
+            if let Some(text) = layer.legend_content() {
+                text.required_source("point layer legend label")?;
+            }
             layers.push(PointLayer {
                 points,
-                labels,
-                legend: layer
-                    .legend_content()
-                    .map(|text| {
-                        text.required_source("point layer legend label")?;
-                        text.try_copy()
-                    })
-                    .transpose()?,
+                source_index: index,
             });
         }
         let mut ranges = [(f64::INFINITY, f64::NEG_INFINITY); 2];
@@ -1041,8 +1027,10 @@ fn project(
     }
     crate::data::source::reserve_source(&mut payload.layers, prepared.layers.len())?;
     let mut label_source: Option<[(f64, f64); 2]> = None;
-    for (index, layer) in prepared.layers.iter().enumerate() {
-        let style = chart.description().point_layers()[index].point_style(
+    for layer in &prepared.layers {
+        let index = layer.source_index;
+        let source = &chart.description().point_layers()[index];
+        let style = source.point_style(
             accent.color(prepared.primary_accent_slots + index)?,
             theme.marks.get_points().get_supplemental(),
         );
@@ -1051,12 +1039,10 @@ fn project(
         )?;
         let mut text = Vec::new();
         let mut label_indices = Vec::new();
-        if let Some(labels) = &layer.labels {
-            let appearance = chart.description().point_layers()[index]
-                .label_appearance(&theme.typography.annotations.point_layer_label)?;
-            let label_layout = chart.description().point_layers()[index]
-                .label_layout
-                .as_ref();
+        if let Some(labels) = source.label_values() {
+            let appearance =
+                source.label_appearance(&theme.typography.annotations.point_layer_label)?;
+            let label_layout = source.label_layout.as_ref();
             crate::data::source::reserve_source(&mut text, labels.len())?;
             crate::data::source::reserve_source(&mut label_indices, labels.len())?;
             let x_range = layout.projection.x_range();
@@ -1085,6 +1071,12 @@ fn project(
                             .get_font_size(),
                     )?
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
+            let labels = (0..labels.len()).map(|row| {
+                labels
+                    .get(row)
+                    .flatten()
+                    .expect("prepared point layer label")
+            });
             for (source_index, ((&(x, y), point), label)) in
                 layer.points.iter().zip(&points).zip(labels).enumerate()
             {

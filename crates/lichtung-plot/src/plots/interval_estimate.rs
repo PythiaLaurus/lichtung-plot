@@ -23,8 +23,6 @@ pub(crate) struct PreparedEstimate {
     adjacent: Vec<Option<(String, bool)>>,
     reference: Option<f64>,
     pub(crate) range: Option<(f64, f64)>,
-    family: &'static str,
-    point_interval: bool,
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
@@ -172,7 +170,7 @@ impl PreparedEstimate {
         let stroke = self.interval_ink(theme)?;
         numeric = numeric.max(stroke);
         pitch = pitch.max(stroke);
-        if self.point_interval && stroke > 0.0 {
+        if chart.kind() == crate::PlotKind::PointInterval && stroke > 0.0 {
             pitch = pitch.max(
                 2.0 * f64::from(
                     theme
@@ -327,23 +325,29 @@ impl PreparedEstimate {
             adjacent: Vec::new(),
             reference: chart.description().zero_line_visible().then_some(0.0),
             range,
-            family: "point_interval",
-            point_interval: true,
             value_presentation: None,
         })
     }
 
-    pub(crate) fn x_range(&self) -> Result<(f64, f64), Error> {
+    pub(crate) fn x_range(&self, kind: crate::PlotKind) -> Result<(f64, f64), Error> {
         self.range.ok_or_else(|| {
             Error::Data(format!(
                 "{}: all rows are not_estimable; set explicit x-axis limits",
-                self.family
+                family(kind)
             ))
         })
     }
 }
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
+
+const fn family(kind: crate::PlotKind) -> &'static str {
+    match kind {
+        crate::PlotKind::PointInterval => "point_interval",
+        crate::PlotKind::Forest => "forest",
+        _ => "coefficient",
+    }
+}
 
 struct AdjacentTextPlan {
     plan: ResolvedTextPlan,
@@ -971,8 +975,6 @@ fn prepare_model<'a>(
         adjacent,
         reference: Some(transformed_reference),
         range,
-        family,
-        point_interval: false,
         value_presentation,
     })
 }
@@ -1011,7 +1013,8 @@ fn project(
     let theme = context.theme;
     let labels = &prepared.labels;
     let estimates = &prepared.estimates;
-    let family = prepared.family;
+    let family = family(chart.kind());
+    let point_interval = chart.kind() == crate::PlotKind::PointInterval;
     let row_count = labels.len() as f64;
     let x_range = layout.projection.x_range();
     let reference_line_x = prepared
@@ -1020,7 +1023,7 @@ fn project(
         .map(|value| layout.projection.project(value, 0.0).0);
     let significance =
         theme.effective_significance(chart.description().significance_mark_style_override())?;
-    let reference_style = if prepared.point_interval {
+    let reference_style = if point_interval {
         theme
             .marks
             .get_strokes()
@@ -1134,7 +1137,7 @@ fn project(
         )?;
     let reference = prepared
         .reference
-        .filter(|_| !prepared.point_interval || reference_line_x.is_some())
+        .filter(|_| !point_interval || reference_line_x.is_some())
         .map(|value| {
             let (x, y0) = layout.projection.project(value, 0.0);
             let (_, y1) = layout.projection.project(value, row_count);
@@ -1176,7 +1179,7 @@ fn project(
         };
         if let Some(tuple) = estimates[index] {
             if let Some((lower, upper)) = tuple.lower.zip(tuple.upper) {
-                let (visible_lower, visible_upper) = if prepared.point_interval {
+                let (visible_lower, visible_upper) = if point_interval {
                     (lower.max(x_range.0), upper.min(x_range.1))
                 } else {
                     (lower, upper)
@@ -1188,7 +1191,7 @@ fn project(
                         crate::layout::AxisSide::Bottom,
                         (visible_lower, visible_upper),
                         (left, right),
-                        if prepared.point_interval {
+                        if point_interval {
                             visible_lower < visible_upper
                         } else {
                             tuple.nonzero_interval
@@ -1197,7 +1200,7 @@ fn project(
                     )?;
                     row.interval = Some([Point2D::new(left, py), Point2D::new(right, py)]);
                 }
-                if prepared.point_interval {
+                if point_interval {
                     for (index, bound) in [lower, upper].into_iter().enumerate() {
                         if bound >= x_range.0 && bound <= x_range.1 {
                             let (x, py) = layout.projection.project(bound, y);
@@ -1213,9 +1216,7 @@ fn project(
                     }
                 }
             }
-            if !prepared.point_interval
-                || (tuple.estimate >= x_range.0 && tuple.estimate <= x_range.1)
-            {
+            if !point_interval || (tuple.estimate >= x_range.0 && tuple.estimate <= x_range.1) {
                 let (x, py) = layout.projection.project(tuple.estimate, y);
                 row.point = Some(Point2D::new(x, py));
             }

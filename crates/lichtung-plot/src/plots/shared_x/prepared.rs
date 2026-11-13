@@ -238,7 +238,7 @@ impl PreparedFamily {
                     (0.0, marks.categories.len() as f64)
                 }
             }
-            Self::Estimate { marks, .. } => marks.x_range()?,
+            Self::Estimate { kind, marks } => marks.x_range(*kind)?,
             Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
                 marks.range,
                 source.description().x_axis_spec(),
@@ -1074,7 +1074,7 @@ fn prepare(
             let range = marks
                 .range
                 .or(config.estimate_fallback)
-                .map_or_else(|| marks.x_range(), Ok)?;
+                .map_or_else(|| marks.x_range(chart.kind()), Ok)?;
             [range, (0.0, marks.labels.len() as f64)]
         }
         PlotKind::Interaction => {
