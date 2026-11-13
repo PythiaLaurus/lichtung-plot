@@ -45,6 +45,7 @@ fn scoped_annotation_indices_locate_sources_without_renumbering_filtered_occurre
                 .with_render_scope(registered.scope.render_name.clone().unwrap());
             let result = plot
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     crate::spec::PlotRenderContext::new(
                         registered.data(operation).unwrap(),
                         crate::layout::PixelRect::new(50.0, 750.0, 50.0, 550.0),

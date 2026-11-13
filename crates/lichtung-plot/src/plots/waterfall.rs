@@ -238,6 +238,7 @@ mod geometry_tests {
                 let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
                     chart
                         .measure_selected_interior(
+                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
                             PlotRenderContext::new(
                                 inputs.plots[0].data(&operation).unwrap(),
                                 panel,

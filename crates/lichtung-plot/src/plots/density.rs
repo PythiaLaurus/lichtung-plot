@@ -1009,6 +1009,7 @@ mod tests {
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                     let selected = chart
                         .measure_selected_interior(
+                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
                             PlotRenderContext::new(
                                 registered.data(operation).unwrap(),
                                 crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
@@ -1189,6 +1190,7 @@ mod tests {
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                     let selected = chart
                         .measure_selected_interior(
+                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
                             PlotRenderContext::new(
                                 registered.data(&operation).unwrap(),
                                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),

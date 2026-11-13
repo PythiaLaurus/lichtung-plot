@@ -3,7 +3,7 @@ use crate::alpha::{AlphaEncoding, AlphaValues};
 
 #[test]
 fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_outlines() {
-    let source = Plot::scatter(
+    let configured = Plot::scatter(
         crate::NumericValues::new("x", [1.0, f64::NAN, 1.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 2.0, 1.0, 1.0]),
     )
@@ -25,8 +25,8 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     )
     .x_limits(0.0, 2.0)
     .y_limits(0.0, 2.0)
-    .legend(crate::LegendPolicy::Hidden)
-    .erase();
+    .legend(crate::LegendPolicy::Hidden);
+    let source = configured.clone().erase();
     let operation = crate::font::canonical::OperationContext::new();
     let (prepared, ranges) = crate::data::with_source_data_for_test(
         &source,
@@ -65,6 +65,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
             assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
@@ -100,10 +101,13 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
                 .all(|(_, style)| style.outline == outline));
             let first = payload.groups[0].0[0];
             assert!(payload.groups.iter().all(|(points, _)| points[0] == first));
-            let visible = source
+            let visible = configured
                 .clone()
-                .with_legend_position(crate::LegendPosition::OutsideRight)
-                .labels(crate::Labels::raw());
+                .legend(crate::LegendPolicy::Visible(
+                    crate::LegendPosition::OutsideRight,
+                ))
+                .labels(crate::Labels::raw())
+                .erase();
             let descriptor = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
                 &visible,
                 theme,

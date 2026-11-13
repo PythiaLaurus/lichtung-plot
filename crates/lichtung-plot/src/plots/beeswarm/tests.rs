@@ -42,6 +42,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let selected = chart
                     .measure_selected_interior(
+                        crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
                         PlotRenderContext::new(
                             inputs.plots[0].data(&operation).unwrap(),
                             PixelRect::new(20.0, 700.0, 20.0, 420.0),
@@ -320,6 +321,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             let operation = text.prepared_font_environment()?.operation();
             let measured = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation)?,
                         PixelRect::new(0.0, 700.0, 0.0, 400.0),

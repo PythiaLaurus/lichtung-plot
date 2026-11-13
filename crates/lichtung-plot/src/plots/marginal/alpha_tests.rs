@@ -88,6 +88,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         PixelRect::new(20.0, 800.0, 20.0, 620.0),

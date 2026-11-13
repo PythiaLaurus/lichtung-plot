@@ -102,6 +102,7 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     crate::spec::PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),

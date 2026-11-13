@@ -411,6 +411,8 @@ pub(crate) fn measure(
                 chart.description(),
                 context.registered,
             ) != crate::decorations::legend::discrete::scoped::GuideUse::Local
+            || context.guides.use_kind
+                != crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
             (context.panel, None)
         } else {

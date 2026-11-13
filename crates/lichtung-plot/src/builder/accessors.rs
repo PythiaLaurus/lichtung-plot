@@ -1223,16 +1223,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.description.kind
     }
 
-    pub(crate) fn with_legend_position(mut self, position: LegendPosition) -> Self {
-        self.description.payload_mut().legend_policy = LegendPolicy::Visible(position);
-        self
-    }
-
-    pub(crate) fn with_suppressed_legend(mut self) -> Self {
-        self.description.payload_mut().legend_policy = LegendPolicy::Hidden;
-        self
-    }
-
     pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
         self.description.payload_mut().axes[1].window =
             Some(crate::layout::RawWindow::from_pair(limits));

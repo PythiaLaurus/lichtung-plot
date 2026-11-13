@@ -407,6 +407,7 @@ pub(crate) fn plan_panel_with_context(
             plot,
             kind,
             role,
+            position,
             context,
             discrete_guide,
             round,
@@ -417,7 +418,7 @@ pub(crate) fn plan_panel_with_context(
     }
     let initial_scope = FitScope::new(address, 0);
     let (discovered, discovery) =
-        match measure_geometry(plot, kind, context.with_fit_scope(&initial_scope))? {
+        match measure_geometry(plot, kind, role, context.with_fit_scope(&initial_scope))? {
             FitOutcome::Measured(value) => value,
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         };
@@ -430,6 +431,7 @@ pub(crate) fn plan_panel_with_context(
             plot,
             kind,
             role,
+            position,
             context,
             discrete_guide,
             round,
@@ -570,11 +572,11 @@ pub(crate) fn plan_panel_with_context(
             round.observe_count(edge as usize)?;
             round.observe_count(usize::from(compact))?;
 
-            let trial_plot = plot.clone().with_legend_position(edge);
             let outcome = plan_panel_attempt(
-                &trial_plot,
+                plot,
                 kind,
                 role,
+                edge,
                 trial_context,
                 discrete_guide,
                 round,
@@ -820,6 +822,7 @@ fn plan_panel_attempt(
     plot: &Plot,
     kind: PlotKind,
     role: LegendRole,
+    position: LegendPosition,
     context: PlotRenderContext<'_, '_>,
     discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
@@ -842,9 +845,6 @@ fn plan_panel_attempt(
     let legend_default = kind.legend_default(plot.user_y_limits().is_some());
 
     let mut planning_plot = plot.clone();
-    if role == LegendRole::Suppressed {
-        planning_plot = planning_plot.with_suppressed_legend();
-    }
     let planned_x_limits = round
         .feedback_domain(address, FeedbackKind::AutomaticDomainX)
         .map(|range| {
@@ -877,11 +877,7 @@ fn plan_panel_attempt(
         {
             *gutter += ink;
         }
-        let frame = AssignedGuideFrame::new(
-            planning_plot.description().legend_position_spec(),
-            minimum,
-            guide.metrics.outside_gap,
-        );
+        let frame = AssignedGuideFrame::new(position, minimum, guide.metrics.outside_gap);
         match frame.assign_fit(
             cell,
             Some((guide.compute_box_width(), guide.compute_box_height())),
@@ -916,6 +912,7 @@ fn plan_panel_attempt(
         match measure_geometry(
             &planning_plot,
             kind,
+            role,
             context
                 .with_panel(discovery_panel)
                 .with_axis_label_width(width),
@@ -954,7 +951,7 @@ fn plan_panel_attempt(
         None
     };
     let frame = AssignedGuideFrame::new(
-        planning_plot.description().legend_position_spec(),
+        position,
         minimum,
         legend
             .as_ref()
@@ -981,6 +978,7 @@ fn plan_panel_attempt(
         match measure_geometry(
             &planning_plot,
             kind,
+            role,
             context.with_panel(panel_box).with_axis_label_width(
                 (panel_box.width() + assigned_gutters[0] + assigned_gutters[1] - minimum.0)
                     .max(0.0),
@@ -990,7 +988,6 @@ fn plan_panel_attempt(
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
     };
-    let position = planning_plot.description().legend_position_spec();
     let panel_axes = &result.axes;
     let chrome = if let Some(axes) = &panel_axes {
         Some(axes.geometry_snapshot()?)
@@ -1211,7 +1208,7 @@ fn plan_panel_attempt(
                 }
             } else {
                 let preferred_edge = clearance_edge(
-                    planning_plot.description().legend_position_spec(),
+                    position,
                     legend.bounds,
                     result.layout.projection.panel_box(),
                 );
@@ -1665,9 +1662,21 @@ fn plan_panel_attempt(
 fn measure_geometry(
     plot: &Plot,
     kind: PlotKind,
+    role: LegendRole,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometrySnapshot)>, Error> {
+    use crate::decorations::legend::discrete::scoped::GuideUse;
     use crate::layout::fit::{self, FitOutcome};
+    let guide_use =
+        if crate::orchestrator::registration::legend_policy(plot.description(), context.registered)
+            == LegendPolicy::Hidden
+        {
+            GuideUse::Hidden
+        } else if role == LegendRole::Suppressed {
+            GuideUse::SharedSuppressed
+        } else {
+            GuideUse::Local
+        };
     match kind {
         PlotKind::Scatter
         | PlotKind::Line
@@ -1693,27 +1702,31 @@ fn measure_geometry(
         | PlotKind::Beeswarm
         | PlotKind::Waterfall
         | PlotKind::Marginal
-        | PlotKind::Matrix => match fit::outcome(plot.measure_selected_interior(context))? {
-            FitOutcome::Measured(result) => {
-                let mut geometry = GeometrySnapshot::new();
-                geometry.append(
-                    &result
-                        .marks
-                        .as_ref()
-                        .ok_or_else(|| Error::Render("selected mark plan missing".into()))?
-                        .geometry,
-                )?;
-                geometry.append(
-                    &result
-                        .annotations
-                        .as_ref()
-                        .ok_or_else(|| Error::Render("selected annotation plan missing".into()))?
-                        .geometry,
-                )?;
-                Ok(FitOutcome::Measured((result, geometry)))
+        | PlotKind::Matrix => {
+            match fit::outcome(plot.measure_selected_interior(guide_use, context))? {
+                FitOutcome::Measured(result) => {
+                    let mut geometry = GeometrySnapshot::new();
+                    geometry.append(
+                        &result
+                            .marks
+                            .as_ref()
+                            .ok_or_else(|| Error::Render("selected mark plan missing".into()))?
+                            .geometry,
+                    )?;
+                    geometry.append(
+                        &result
+                            .annotations
+                            .as_ref()
+                            .ok_or_else(|| {
+                                Error::Render("selected annotation plan missing".into())
+                            })?
+                            .geometry,
+                    )?;
+                    Ok(FitOutcome::Measured((result, geometry)))
+                }
+                FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
             }
-            FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
-        },
+        }
     }
 }
 

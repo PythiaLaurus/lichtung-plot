@@ -898,9 +898,13 @@ mod tests {
                 let mut scales =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 scales.plots[0].policy.facet_scales = Some(FacetScales::Free);
-                Ok((operation, inputs, hidden, collectives, scales))
+                let mut guide =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                guide.plots[0].policy.discrete_guide_use = GuideUse::Hidden;
+                guide.plots[0].policy.continuous_guide_use = GuideUse::Hidden;
+                Ok((operation, inputs, hidden, collectives, scales, guide))
             },
-            |(operation, inputs, hidden, collectives, scales), assigned, round| {
+            |(operation, inputs, hidden, collectives, scales, guide), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -934,6 +938,11 @@ mod tests {
                             PlotRenderContext::new(registered.data(operation)?, panel, &theme)
                                 .with_registration(registered, collectives.intrinsic(registered));
                         assert!(!key.matches(&source, coordinated, &owner, round)?);
+                        let registered = &guide.plots[0];
+                        let hidden_guide =
+                            PlotRenderContext::new(registered.data(operation)?, panel, &theme)
+                                .with_registration(registered, guide.intrinsic(registered));
+                        assert!(!key.matches(&source, hidden_guide, &owner, round)?);
                         assert!(!key.matches(
                             &source,
                             context.with_axis_label_width(context.axis_label_width + 1.0),
@@ -963,7 +972,6 @@ mod tests {
                             source
                                 .clone()
                                 .with_global_hue_levels(vec!["new hue".into()]),
-                            source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(
                                 crate::Text::new("x").layout(crate::TextLayout::default()),

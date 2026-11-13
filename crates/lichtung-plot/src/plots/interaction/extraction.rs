@@ -87,6 +87,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),

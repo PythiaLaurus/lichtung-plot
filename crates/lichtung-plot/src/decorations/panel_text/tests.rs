@@ -269,6 +269,7 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
             let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);
             let result = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     crate::spec::PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         panel,

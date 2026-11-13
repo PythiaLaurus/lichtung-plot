@@ -598,6 +598,7 @@ mod style_tests {
                 let minimum = intrinsic_body_minimum(chart, Some(registered), request).unwrap();
                 let selected = chart
                     .measure_selected_interior(
+                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
                         PlotRenderContext::new(
                             registered.data(&operation).unwrap(),
                             crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),

@@ -51,6 +51,7 @@ fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_f
             let registered = &inputs.plots[0];
             let error = plot
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         registered.data(operation).unwrap(),
                         PixelRect::new(0.0, 800.0, 0.0, 600.0),

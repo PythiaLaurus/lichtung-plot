@@ -71,6 +71,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
                 .operation();
             let result = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         PixelRect::new(0.0, 500.0, 0.0, 200.0),
@@ -159,6 +160,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let transparent = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
                         .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )

@@ -1222,6 +1222,7 @@ mod tests {
                         .with_render_scope(registered.scope.render_name.as_deref().unwrap());
                     let selected = chart
                         .measure_selected_interior(
+                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
                             PlotRenderContext::new(
                                 registered.data(&operation).unwrap(),
                                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),

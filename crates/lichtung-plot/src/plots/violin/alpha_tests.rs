@@ -73,6 +73,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),

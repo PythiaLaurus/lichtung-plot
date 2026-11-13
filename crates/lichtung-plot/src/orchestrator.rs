@@ -229,7 +229,13 @@ impl Plot {
             | PlotKind::Beeswarm
             | PlotKind::Waterfall
             | PlotKind::Marginal
-            | PlotKind::Matrix => self.measure_selected_interior(context),
+            | PlotKind::Matrix => self.measure_selected_interior(
+                crate::orchestrator::registration::discrete_guide_use(
+                    self.description(),
+                    context.registered,
+                ),
+                context,
+            ),
         }
     }
 
@@ -251,9 +257,15 @@ impl Plot {
 
     pub(crate) fn measure_selected_interior(
         &self,
+        guide_use: crate::decorations::legend::discrete::scoped::GuideUse,
         context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         use crate::layout::interior::{InteriorRoute as R, SpecializedGrid as G};
+        let guides = crate::decorations::legend::discrete::scoped::GuideConsumption {
+            use_kind: guide_use,
+            ..*context.guides
+        };
+        let context = context.with_guides(&guides);
         self.validate_interior_preparation(context.registered)?;
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));

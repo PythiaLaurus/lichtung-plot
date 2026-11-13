@@ -1568,8 +1568,10 @@ mod retained_legend_tests {
         )
         .hue(crate::CategoryValues::new("group", ["first", "first", "second", "second"]).unwrap())
         .size(800, 600)
-        .erase()
-        .with_legend_position(crate::LegendPosition::OutsideRight);
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ))
+        .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);

@@ -109,7 +109,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     let chart = chart.clone();
     let operation = theme.text.prepared_font_environment().unwrap().operation();
     let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
+        .measure_selected_interior(crate::decorations::legend::discrete::scoped::GuideUse::Local, PlotRenderContext::new(
             inputs.plots[0].data(&operation).unwrap(),
             PixelRect::new(20.0, 800.0, 20.0, 620.0),
             theme,

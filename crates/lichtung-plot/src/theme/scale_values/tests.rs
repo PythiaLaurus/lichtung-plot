@@ -286,6 +286,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let selected = chart
                 .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
                     crate::spec::PlotRenderContext::new(
                         inputs.plots[0].data(&operation).unwrap(),
                         crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
