@@ -70,19 +70,7 @@ impl AxisSemanticInputs {
 
 impl crate::Plot {
     pub(crate) fn axis_semantic_inputs(&self, domains: [AxisDomain; 2]) -> [AxisSemanticInputs; 2] {
-        let policies = match self.kind() {
-            PlotKind::Bar | PlotKind::StackedBar | PlotKind::Density => {
-                [RangePolicy::ContinuousNice, RangePolicy::AnchoredZero]
-            }
-            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
-                [RangePolicy::AnchoredZero, RangePolicy::CategorySlots]
-            }
-            PlotKind::Histogram => [RangePolicy::HistogramEdges, RangePolicy::AnchoredZero],
-            PlotKind::Qq => [RangePolicy::QqFinite; 2],
-            PlotKind::PointInterval => [RangePolicy::PointIntervalFinite; 2],
-            PlotKind::Marginal => [RangePolicy::MarginalSupport; 2],
-            _ => [RangePolicy::ContinuousNice; 2],
-        };
+        let policies = range_policies(self.kind());
         std::array::from_fn(|index| {
             let mut inputs = AxisSemanticInputs::new(
                 if index == 0 {
@@ -106,6 +94,22 @@ impl crate::Plot {
                 .clone_from(&self.description().text_layouts().ticks[index]);
             inputs
         })
+    }
+}
+
+pub(crate) fn range_policies(kind: PlotKind) -> [RangePolicy; 2] {
+    match kind {
+        PlotKind::Bar | PlotKind::StackedBar | PlotKind::Density => {
+            [RangePolicy::ContinuousNice, RangePolicy::AnchoredZero]
+        }
+        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
+            [RangePolicy::AnchoredZero, RangePolicy::CategorySlots]
+        }
+        PlotKind::Histogram => [RangePolicy::HistogramEdges, RangePolicy::AnchoredZero],
+        PlotKind::Qq => [RangePolicy::QqFinite; 2],
+        PlotKind::PointInterval => [RangePolicy::PointIntervalFinite; 2],
+        PlotKind::Marginal => [RangePolicy::MarginalSupport; 2],
+        _ => [RangePolicy::ContinuousNice; 2],
     }
 }
 

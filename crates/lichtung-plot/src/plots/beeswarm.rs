@@ -358,7 +358,7 @@ pub(crate) fn natural_body_height(
         .description()
         .x_axis_spec()
         .limits
-        .unwrap_or(axes.ranges[0]);
+        .unwrap_or(axes.ranges()[0]);
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(
@@ -426,18 +426,21 @@ pub(crate) fn measure(
         (0.0, prepared.levels.len() as f64),
         panel.as_tuple(),
     );
-    let x = axes.specs[0].layout_ticks(
+    let source = context
+        .registered
+        .expect("prepared Beeswarm occurrence")
+        .source;
+    let pair = [axes.axis(source, 0), axes.axis(source, 1)];
+    let x = pair[0].layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
-        Some(
-            context
-                .registered
-                .expect("prepared Beeswarm occurrence")
-                .axis_numeric_binding(context.data.source_resources())?,
-        ),
+        context
+            .registered
+            .expect("prepared Beeswarm occurrence")
+            .axis_numeric_binding(context.data.source_resources())?,
         context
             .registered
             .expect("prepared Beeswarm occurrence")
@@ -452,9 +455,10 @@ pub(crate) fn measure(
         &projection,
         radius,
     )?;
-    let labels = axes.display_categories[1]
-        .as_ref()
+    let labels = &axes
+        .categories(1)
         .ok_or_else(|| Error::Render("Beeswarm category labels missing".into()))?;
+    let labels = &labels.ticks;
     let mut hard_pitch = packed.hard_pitch;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
@@ -469,10 +473,10 @@ pub(crate) fn measure(
         })
     {
         let mut heights = crate::data::source::collect_source(labels.iter().map(|_| Ok(0.0)))?;
-        for index in axes.specs[1].category_labels.indices(labels.len()) {
+        for index in pair[1].authored().category_labels.indices(labels.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                &labels[index],
+                &labels[index].label,
                 tick_appearance,
                 width,
                 PhysicalTextAlignment::End,
@@ -486,7 +490,7 @@ pub(crate) fn measure(
             }
         }
         let span = crate::layout::category_label_span(
-            &axes.specs[1].category_labels,
+            &pair[1].authored().category_labels,
             labels.len(),
             |index| Ok(heights[index]),
         )?;
@@ -517,7 +521,7 @@ pub(crate) fn measure(
             let middle = f64::midpoint(band.0, band.1);
             Ok(crate::layout::AxisTick::new(
                 (middle - panel.y0) / panel.height() * prepared.levels.len() as f64,
-                crate::data::source::copy_source_string(label)?,
+                crate::data::source::copy_source_string(&label.label)?,
             ))
         }))?;
     let layout = Layout {
@@ -526,10 +530,10 @@ pub(crate) fn measure(
             label: axes.copy_label(0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
-            category_labels: axes.specs[0].category_labels.clone(),
+            category_labels: pair[0].authored().category_labels.clone(),
             source: x.source,
             numeric: x.numeric,
-            explicit_ticks: axes.specs[0].exact_ticks.is_some(),
+            explicit_ticks: pair[0].exact_ticks().is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
         },
@@ -537,7 +541,7 @@ pub(crate) fn measure(
             label: axes.copy_label(1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
-            category_labels: axes.specs[1].category_labels.clone(),
+            category_labels: pair[1].authored().category_labels.clone(),
             source: crate::layout::TickSource::SUPPLIED,
             numeric: None,
             explicit_ticks: false,

@@ -50,20 +50,22 @@ impl Intrinsics {
                     .into(),
             ));
         }
-        if summary.formats != axes.specs.each_ref().map(|spec| spec.format.clone())
-            || summary.category_labels
-                != axes
-                    .specs
-                    .each_ref()
-                    .map(|spec| spec.category_labels.clone())
-            || summary.base_ranges != axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits()))
-            || summary.logarithmic != axes.logarithmic
+        let pair = [
+            axes.axis(input.registered.source, 0),
+            axes.axis(input.registered.source, 1),
+        ];
+        if summary.formats != pair.map(|axis| axis.authored().format.clone())
+            || summary.category_labels != pair.map(|axis| axis.authored().category_labels.clone())
+            || summary.base_ranges != axes.ranges().map(|(lo, hi)| (lo.to_bits(), hi.to_bits()))
+            || summary.logarithmic != axes.logarithmic()
         {
             return Err(Error::Render(
                 "prepared panel intrinsic numeric context changed".into(),
             ));
         }
-        if summary.titles != axes.labels || !summary.standard.matches(theme)? {
+        if summary.titles.each_ref().map(Option::as_ref) != [axes.label(0), axes.label(1)]
+            || !summary.standard.matches(theme)?
+        {
             return Err(Error::Render(
                 "prepared panel intrinsic typography changed".into(),
             ));
@@ -94,6 +96,10 @@ impl Intrinsics {
         let diagnostic_scope = input.diagnostic_scope;
         let y_labels_visible = input.y_visible;
         let windows = input.registered.raw_windows();
+        let pair = [
+            axes.axis(input.registered.source, 0),
+            axes.axis(input.registered.source, 1),
+        ];
         #[cfg(not(test))]
         let _ = diagnostic_scope;
         #[cfg(test)]
@@ -108,7 +114,7 @@ impl Intrinsics {
         );
         let mut without_y_categories = minimum_body.1;
         for side in 0..2 {
-            if let Some(label) = &axes.labels[side] {
+            if let Some(label) = axes.label(side) {
                 let (hard, _) = fit::intrinsic_widths(
                     theme,
                     label.as_str(),
@@ -139,15 +145,16 @@ impl Intrinsics {
             {
                 continue;
             }
-            if let Some(labels) = &axes.display_categories[side] {
+            if let Some(categories) = axes.categories(side) {
+                let labels = &categories.ticks;
                 if side == 1 && !y_labels_visible {
                     continue;
                 }
                 let span = crate::layout::category_label_span(
-                    &axes.specs[side].category_labels,
+                    &pair[side].authored().category_labels,
                     labels.len(),
                     |index| {
-                        let label = &labels[index];
+                        let label = &labels[index].label;
                         let parallel = if side == 0 {
                             fit::intrinsic_widths(
                                 theme,
@@ -177,15 +184,14 @@ impl Intrinsics {
                 } else {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
-            } else if axes.specs[side].exact_ticks.is_none()
-                && !axes.empty_numeric_source(side, windows[side].copied())?
+            } else if pair[side].exact_ticks().is_none()
+                && !pair[side].empty_numeric_source(windows[side].copied())?
             {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.
-                let value = f64::midpoint(axes.ranges[side].0, axes.ranges[side].1);
-                let power = axes.logarithmic && side == 0;
-                let label = if let Some(probe) = axes.numeric_probe(
-                    side,
+                let value = f64::midpoint(axes.ranges()[side].0, axes.ranges()[side].1);
+                let power = axes.logarithmic() && side == 0;
+                let label = if let Some(probe) = pair[side].numeric_probe(
                     input.registered.axis_numeric_binding(input.operation)?,
                     windows,
                 )? {
@@ -218,13 +224,10 @@ impl Intrinsics {
         Ok(Self {
             standard,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
-            formats: axes.specs.each_ref().map(|spec| spec.format.clone()),
-            category_labels: axes
-                .specs
-                .each_ref()
-                .map(|spec| spec.category_labels.clone()),
-            base_ranges: axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
-            logarithmic: axes.logarithmic,
+            formats: pair.map(|axis| axis.authored().format.clone()),
+            category_labels: pair.map(|axis| axis.authored().category_labels.clone()),
+            base_ranges: axes.ranges().map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
+            logarithmic: axes.logarithmic(),
             minimum_body,
             without_y_categories,
             y_labels_analyzed: y_labels_visible,
@@ -302,9 +305,9 @@ impl InteriorRoute {
             })?;
         let valid = match self {
             Self::StandardCoordinate(family) => {
-                !inputs.logarithmic
-                    && inputs.categories[1].is_none()
-                    && (inputs.categories[0].is_none() || family == StandardCoordinate::Trajectory)
+                !inputs.logarithmic()
+                    && inputs.categories(1).is_none()
+                    && (inputs.categories(0).is_none() || family == StandardCoordinate::Trajectory)
             }
             Self::OneCategoricalAxis(family) => {
                 // The prepared source owns orientation and midpoint order. New
@@ -323,10 +326,10 @@ impl InteriorRoute {
                     | OneCategoricalAxis::HorizontalBar
                     | OneCategoricalAxis::StackedHorizontalBar => 1,
                 };
-                inputs.categories[category_side].is_some()
-                    && inputs.categories[1 - category_side].is_none()
-                    && (!inputs.logarithmic
-                        || (family == OneCategoricalAxis::Forest && inputs.categories[0].is_none()))
+                inputs.categories(category_side).is_some()
+                    && inputs.categories(1 - category_side).is_none()
+                    && (!inputs.logarithmic()
+                        || (family == OneCategoricalAxis::Forest && inputs.categories(0).is_none()))
             }
             Self::SpecializedGrid(_) => false,
         };
@@ -357,21 +360,19 @@ impl InteriorRoute {
         }
         let [x_range, y_range] = [AxisSide::Bottom, AxisSide::Left].map(|side| {
             let index = usize::from(side == AxisSide::Left);
-            if inputs.categories[index].is_some() {
-                Ok(inputs.ranges[index])
+            if inputs.categories(index).is_some() {
+                Ok(inputs.ranges()[index])
             } else {
                 context.axis_range(side, || unreachable!("prepared native axes"))
             }
         });
         let projection = Projection::new(x_range?, y_range?, panel.as_tuple()).with_categories(
-            inputs
-                .categories
-                .each_ref()
-                .map(|ticks| ticks.as_ref().map(Vec::len)),
+            [inputs.categories(0), inputs.categories(1)]
+                .map(|categories| categories.map(|categories| categories.raw.len())),
         );
 
         let mut keys = [None, None];
-        let domains = inputs.categories.each_ref().map(|categories| {
+        let domains = [inputs.categories(0), inputs.categories(1)].map(|categories| {
             if categories.is_some() {
                 AxisDomain::Categorical
             } else {
@@ -381,38 +382,40 @@ impl InteriorRoute {
         let mut axes = fit::collect(
             "native coordinate axes",
             (0..2).map(|side| {
-                let supplied = if let Some(categories) = &inputs.categories[side] {
-                    let display = inputs.display_categories[side].as_ref().ok_or_else(|| {
-                        Error::Render("native category display source is missing".into())
-                    })?;
-                    if display.len() != categories.len() {
+                let base = inputs.axis(
+                    context
+                        .registered
+                        .expect("prepared coordinate occurrence")
+                        .source,
+                    side,
+                );
+                let supplied = if let Some(categories) = inputs.categories(side) {
+                    let display = &categories.ticks;
+                    if display.len() != categories.raw.len() {
                         return Err(Error::Render(
                             "native category sources are not aligned".into(),
                         )
                         .into());
                     }
-                    keys[side] =
-                        Some(crate::data::source::collect_source(categories.iter().map(
-                            |tick| crate::data::source::copy_source_string(&tick.label),
-                        ))?);
-                    crate::data::source::collect_source(categories.iter().zip(display).map(
-                        |(tick, label)| {
-                            Ok(crate::layout::AxisTick {
-                                position: tick.position,
-                                label: crate::data::source::copy_source_string(label)?,
-                            })
-                        },
-                    ))?
+                    keys[side] = Some(crate::data::source::collect_source(
+                        categories
+                            .raw
+                            .iter()
+                            .map(|label| crate::data::source::copy_source_string(label)),
+                    )?);
+                    crate::data::source::collect_source(display.iter().map(|tick| {
+                        Ok(crate::layout::AxisTick {
+                            position: tick.position,
+                            label: crate::data::source::copy_source_string(&tick.label)?,
+                        })
+                    }))?
                 } else {
                     Vec::new()
                 };
-                let ticks = if side == 0
-                    && inputs.logarithmic
-                    && inputs.specs[side].exact_ticks.is_none()
-                {
+                let ticks = if side == 0 && inputs.logarithmic() && base.exact_ticks().is_none() {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
-                        &inputs.specs[side],
+                        base,
                         panel,
                         context.theme,
                         context.fit_scope(),
@@ -426,7 +429,7 @@ impl InteriorRoute {
                             .raw_windows(),
                     )?
                 } else {
-                    inputs.specs[side].layout_ticks(
+                    base.layout_ticks(
                         supplied,
                         &projection,
                         if side == 0 {
@@ -436,12 +439,10 @@ impl InteriorRoute {
                         },
                         context.theme,
                         context.fit_scope(),
-                        Some(
-                            context
-                                .registered
-                                .expect("prepared coordinate occurrence")
-                                .axis_numeric_binding(context.data.source_resources())?,
-                        ),
+                        context
+                            .registered
+                            .expect("prepared coordinate occurrence")
+                            .axis_numeric_binding(context.data.source_resources())?,
                         context
                             .registered
                             .expect("prepared coordinate occurrence")
@@ -452,8 +453,8 @@ impl InteriorRoute {
                     label: inputs.copy_label(side)?,
                     ticks: ticks.ticks,
                     tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
-                    category_labels: inputs.specs[side].category_labels.clone(),
-                    explicit_ticks: inputs.specs[side].exact_ticks.is_some(),
+                    category_labels: base.authored().category_labels.clone(),
+                    explicit_ticks: base.exact_ticks().is_some(),
                     assigned_tick_width: None,
                     assigned_cells: None,
                     source: ticks.source,
@@ -471,7 +472,13 @@ impl InteriorRoute {
         let frozen = layout.measure_axes_with_inputs(
             context.theme,
             context.fit_scope(),
-            plot.axis_semantic_inputs(domains),
+            std::array::from_fn(|side| {
+                let mut input = inputs.axis(plot.description(), side).semantic_inputs();
+                input
+                    .text_layout
+                    .clone_from(&plot.description().text_layouts().ticks[side]);
+                input
+            }),
             || CoordinateLayoutInputs::new(context.theme),
         )?;
         let mut result = match self {
@@ -709,7 +716,7 @@ mod intrinsic_tests {
                         .unwrap()
                         .to_bits()
                     );
-                    assert_eq!(inputs.plots[0].axes.as_ref().unwrap().ranges[0], range);
+                    assert_eq!(inputs.plots[0].axes.as_ref().unwrap().ranges()[0], range);
                     let widest_probe = theme
                         .measure_text(
                             "0.5",

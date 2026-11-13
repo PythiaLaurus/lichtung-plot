@@ -49,8 +49,8 @@ impl PreparedWaterfall {
         can_expand: bool,
     ) -> Result<()> {
         let axes = input.axes;
-        let x = axes.specs[0].limits.unwrap_or(axes.ranges[0]);
-        let y = axes.specs[1].limits.unwrap_or(axes.ranges[1]);
+        let x = axes[0].extent().pair();
+        let y = axes[1].extent().pair();
         let projection = crate::layout::Projection::new(x, y, (0.0, 1.0, 0.0, 1.0));
         let initial = self.eligibility(&projection)?;
         let row_position = self.source_y()?;
@@ -136,11 +136,11 @@ impl PreparedWaterfall {
                         })
                     }),
             )?;
-            let range = axes.specs[0].limits.unwrap_or(axes.ranges[0]);
+            let range = axes[0].extent().pair();
             let domain = crate::numeric::context::DomainInfo::axis(
                 range,
                 crate::AxisScale::Linear,
-                axes.specs[0].provenance,
+                axes[0].provenance(),
                 Some(range),
             );
             let mut info = input.numeric.context(
@@ -150,7 +150,7 @@ impl PreparedWaterfall {
                 Some(domain),
             )?;
             info.window = Some(std::array::from_fn(|index| {
-                let (a, b) = axes.specs[index].limits.unwrap_or(axes.ranges[index]);
+                let (a, b) = axes[index].extent().pair();
                 (a.to_bits(), b.to_bits())
             }));
             let Some(set) = format.materialize(input.numeric.operation, info, false)? else {
@@ -366,7 +366,18 @@ mod tests {
                     numeric: scope
                         .numeric_binding(limited.description(), row_source, &operation)
                         .unwrap(),
-                    axes: registered.axes.as_ref().unwrap(),
+                    axes: [
+                        registered
+                            .axes
+                            .as_ref()
+                            .unwrap()
+                            .axis(limited.description(), 0),
+                        registered
+                            .axes
+                            .as_ref()
+                            .unwrap()
+                            .axis(limited.description(), 1),
+                    ],
                     format: limited.description().total_format_spec(),
                 },
                 true,

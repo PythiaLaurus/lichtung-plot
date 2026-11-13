@@ -238,51 +238,83 @@ impl AxisSpec {
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
         raw_windows: [Option<&(f64, f64)>; 2],
     ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        );
-        let (range, axis) = match side {
-            AxisSide::Bottom => (projection.x_range(), "x-axis"),
-            AxisSide::Left => (projection.y_range(), "y-axis"),
-        };
-        if let Some(ticks) = &self.exact_ticks {
-            Axis::validate_ticks(ticks, range, axis)?;
+        layout_axis_ticks(
+            self.exact_ticks.as_deref().map(|raw| {
+                crate::orchestrator::registration::ExactTicksRef {
+                    raw,
+                    projected: None,
+                }
+            }),
+            &self.generation,
+            supplied,
+            projection,
+            side,
+            theme,
+            scope,
+            || self.numeric_request(binding, raw_windows),
+        )
+    }
+}
 
-            let mut retained = Vec::new();
-            crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;
-            for tick in ticks {
-                let mut label = String::new();
-                label
-                    .try_reserve_exact(tick.label.len())
-                    .map_err(|error| Error::Render(error.to_string()))?;
-                label.push_str(&tick.label);
-                retained.push(AxisTick::new(tick.position, label));
-            }
-            return Ok(NumericTickPlan {
-                ticks: retained,
-                source: TickSource::EXACT,
-                numeric: None,
-            });
+#[expect(
+    clippy::too_many_arguments,
+    reason = "raw and prepared exact positions share the original tick selection program"
+)]
+pub(crate) fn layout_axis_ticks<'a>(
+    exact: Option<crate::orchestrator::registration::ExactTicksRef<'_>>,
+    generation: &crate::TickGeneration,
+    supplied: Vec<AxisTick>,
+    projection: &Projection,
+    side: AxisSide,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+    scope: &crate::layout::fit::FitScope,
+    numeric: impl FnOnce() -> Result<Option<crate::numeric::source::AxisRequest<'a>>, Error>,
+) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisSourcePreparation,
+    );
+    let (range, axis) = match side {
+        AxisSide::Bottom => (projection.x_range(), "x-axis"),
+        AxisSide::Left => (projection.y_range(), "y-axis"),
+    };
+    if let Some(ticks) = exact {
+        Axis::validate_exact_ticks(&ticks, range, axis)?;
+
+        let mut retained = Vec::new();
+        crate::render::backend::reserve_text_records(&mut retained, ticks.raw.len())?;
+        for index in 0..ticks.raw.len() {
+            let (position, source) = ticks.tick(index)?;
+            let mut label = String::new();
+            label
+                .try_reserve_exact(source.len())
+                .map_err(|error| Error::Render(error.to_string()))?;
+            label.push_str(source);
+            retained.push(AxisTick::new(position, label));
         }
-        if supplied.is_empty() {
-            super::numeric_tick_plan(
-                range,
-                self.generation.clone(),
-                false,
-                projection,
-                side,
-                theme,
-                self.numeric_request(binding, raw_windows)?.as_ref(),
-                scope,
-            )
-        } else {
-            Ok(NumericTickPlan {
-                ticks: supplied,
-                source: TickSource::SUPPLIED,
-                numeric: None,
-            })
-        }
+        return Ok(NumericTickPlan {
+            ticks: retained,
+            source: TickSource::EXACT,
+            numeric: None,
+        });
+    }
+    if supplied.is_empty() {
+        super::numeric_tick_plan(
+            range,
+            generation.clone(),
+            false,
+            projection,
+            side,
+            theme,
+            numeric()?.as_ref(),
+            scope,
+        )
+    } else {
+        Ok(NumericTickPlan {
+            ticks: supplied,
+            source: TickSource::SUPPLIED,
+            numeric: None,
+        })
     }
 }
 

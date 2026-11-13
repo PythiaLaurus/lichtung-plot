@@ -224,11 +224,15 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
                     .iter()
                     .map(|tick| tick.label.as_str())
                     .collect::<Vec<_>>(),
-                inputs.plots[0].axes.as_ref().unwrap().display_categories[0]
+                inputs.plots[0]
+                    .axes
                     .as_ref()
                     .unwrap()
+                    .categories(0)
+                    .unwrap()
+                    .ticks
                     .iter()
-                    .map(String::as_str)
+                    .map(|tick| tick.label.as_str())
                     .collect::<Vec<_>>()
             );
             assert_eq!(
@@ -277,7 +281,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "one real operation injects the original prepared-axis fault after science and checks downstream fit before projection"
+    reason = "one real operation injects exact intent after science and checks downstream fit before mark projection"
 )]
 fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks() {
     for source in all_sources() {
@@ -290,6 +294,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
         } else {
             source
         };
+        let fault_source = std::sync::OnceLock::new();
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
@@ -301,14 +306,33 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             |stage| {
                 let operation = stage.operation();
                 let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None)?;
-                let axes = inputs.plots[0].axes.as_mut().unwrap();
-                axes.specs[0].exact_ticks =
-                    Some(vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))]);
-                if axes.categories[1].is_none() {
-                    axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
-                }
+                // Exact text now belongs to authored intent. Rebind this real
+                // occurrence at the original post-science injection point.
+                let fault = source.clone().with_test_axis_ticks(
+                    0,
+                    vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))],
+                );
+                let fault = if inputs.plots[0]
+                    .axes
+                    .as_ref()
+                    .unwrap()
+                    .categories(1)
+                    .is_none()
+                {
+                    fault.with_test_axis_ticks(1, vec![crate::layout::AxisTick::new(2.0, "")])
+                } else {
+                    fault
+                };
+                let fault = fault_source.get_or_init(|| fault);
+                let registered = &mut inputs.plots[0];
+                registered.source = fault.description();
+                registered.row_source = crate::data::source::RowSourceContext::new(
+                    registered.source,
+                    &registered.scope,
+                    &operation,
+                );
                 inputs.prepare_discrete_guides(
-                    &source,
+                    fault,
                     &theme,
                     &operation,
                     &crate::layout::ComponentAddress::root(),
@@ -316,8 +340,8 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &source,
-                    source.kind(),
+                    fault,
+                    fault.kind(),
                     &theme,
                     &crate::layout::ComponentAddress::root(),
                     true,
@@ -338,7 +362,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             |inputs, assigned, _| {
                 let (width, height) = assigned.assigned_size()?.dimensions()?;
                 let plot = inputs
-                    .attach(source.clone())?
+                    .attach(fault_source.get().unwrap().clone())?
                     .with_canvas_size(width, height);
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let scope = fit::FitScope::new(

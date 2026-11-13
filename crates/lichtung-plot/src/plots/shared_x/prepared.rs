@@ -1,6 +1,10 @@
 use crate::data::PlotData;
 use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
-use crate::layout::{AxisSpec, AxisTick};
+use crate::layout::AxisTick;
+use crate::orchestrator::registration::{
+    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, PreparedAxisSource,
+    PreparedCategorySource,
+};
 use crate::orchestrator::registration::{
     PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily, RowSelection, Scope,
 };
@@ -24,29 +28,73 @@ fn continuous_selection(
 /// initialized by the owning root before allocating its panel, never by preparation.
 #[derive(Debug)]
 pub(crate) struct PreparedAxes {
-    pub(crate) ranges: [(f64, f64); 2],
-    pub(crate) categories: [Option<Vec<AxisTick>>; 2],
-    pub(crate) display_categories: [Option<Vec<String>>; 2],
-    pub(crate) labels: [Option<crate::Text>; 2],
-    pub(crate) specs: [AxisSpec; 2],
-    pub(crate) logarithmic: bool,
+    pub(crate) sources: [crate::orchestrator::registration::PreparedAxisSource; 2],
 }
 
 impl PreparedAxes {
-    pub(crate) fn empty_numeric_source(
+    pub(crate) fn axis<'a>(
+        &'a self,
+        source: &'a crate::builder::PlotDescription,
+        side: usize,
+    ) -> crate::orchestrator::registration::BaseAxisRef<'a> {
+        use crate::orchestrator::registration::{AxisIntentRef, AxisSlot, BaseAxisRef};
+        let axis = &self.sources[side];
+        let AxisSlot::Pair(side) = axis.witness.slot;
+        BaseAxisRef {
+            source: axis,
+            intent: AxisIntentRef::Authored(match side {
+                crate::layout::AxisSide::Bottom => source.x_axis_spec(),
+                crate::layout::AxisSide::Left => source.y_axis_spec(),
+            }),
+        }
+    }
+
+    pub(crate) fn ranges(&self) -> [(f64, f64); 2] {
+        self.sources
+            .each_ref()
+            .map(|source| source.base_seed.expect("prepared axis display seed").pair())
+    }
+
+    pub(crate) fn logarithmic(&self) -> bool {
+        matches!(
+            self.sources[0].witness.space,
+            crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
+        )
+    }
+
+    pub(crate) fn categories(
         &self,
         side: usize,
-        raw: Option<(f64, f64)>,
-    ) -> Result<bool, Error> {
-        let generation = &self.specs[side].generation;
+    ) -> Option<&crate::orchestrator::registration::PreparedCategorySource> {
+        self.sources[side].categories.as_ref()
+    }
+
+    pub(crate) fn label(&self, side: usize) -> Option<&crate::Text> {
+        self.sources[side]
+            .label
+            .get()
+            .and_then(crate::Text::provided)
+    }
+
+    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<crate::Text>, Error> {
+        self.label(side).map(crate::Text::try_copy).transpose()
+    }
+}
+
+impl crate::orchestrator::registration::BaseAxisRef<'_> {
+    pub(crate) fn empty_numeric_source(self, raw: Option<(f64, f64)>) -> Result<bool, Error> {
+        let generation = &self.authored().generation;
         if generation
             .exact_parameters()
             .is_some_and(|(count, _, _)| count == 0)
         {
             return Ok(true);
         }
-        let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
-        let log = self.logarithmic && side == 0;
+        let range = self.extent().pair();
+        let log = matches!(
+            self.source.witness.space,
+            crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
+        );
         let maximum = generation.get_maximum_count().unwrap_or(usize::MAX);
         if let Some((anchor, ratio, requirement)) = generation.multiplicative_parameters() {
             let count =
@@ -66,26 +114,30 @@ impl PreparedAxes {
     }
 
     pub(crate) fn numeric_probe(
-        &self,
-        side: usize,
+        self,
         numeric: crate::numeric::source::NumericBinding<'_>,
         windows: [Option<&(f64, f64)>; 2],
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
-        if self.specs[side].exact_ticks.is_some()
-            || self.categories[side].is_some()
-            || self.empty_numeric_source(side, windows[side].copied())?
+        let crate::orchestrator::registration::AxisSlot::Pair(axis_side) = self.source.witness.slot;
+        let side = usize::from(axis_side == crate::layout::AxisSide::Left);
+        if self.exact_ticks().is_some()
+            || self.source.categories.is_some()
+            || self.empty_numeric_source(windows[side].copied())?
         {
             return Ok(None);
         }
-        let Some(request) = self.specs[side].numeric_request(Some(numeric), windows)? else {
+        let Some(request) = self.numeric_request(numeric, windows)? else {
             return Ok(None);
         };
-        let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
+        let range = self.extent().pair();
+        let logarithmic = matches!(
+            self.source.witness.space,
+            crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
+        );
         request.materialize(
-            &[range.0, f64::midpoint(range.0, range.1), range.1].map(|value| {
-                crate::numeric::operand::Operand::number(value, self.logarithmic && side == 0)
-            }),
-            self.logarithmic && side == 0,
+            &[range.0, f64::midpoint(range.0, range.1), range.1]
+                .map(|value| crate::numeric::operand::Operand::number(value, logarithmic)),
+            logarithmic,
             if side == 0 {
                 crate::layout::AxisSide::Bottom
             } else {
@@ -94,12 +146,6 @@ impl PreparedAxes {
             range,
             crate::NumericPurpose::IntrinsicProbe,
         )
-    }
-    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<crate::Text>, Error> {
-        self.labels[side]
-            .as_ref()
-            .map(crate::Text::try_copy)
-            .transpose()
     }
 }
 
@@ -278,25 +324,25 @@ pub(crate) fn prepare_reference_plot(
         labels,
         ..ReferenceAxisConfig::default()
     };
-    let axes = prepare(source, None, Some(&family), Some(config))?;
+    let axes = prepare(source, &panel.scope.id, None, Some(&family), Some(config))?;
     if let PreparedFamily::Waterfall(marks) = &mut family {
         marks.prepare_totals(
             crate::plots::waterfall::WaterfallTotalsPrepare {
                 numeric: panel
                     .scope
                     .numeric_binding(panel.source, &panel.row_source, resources)?,
-                axes: &axes,
+                axes: [axes.axis(panel.source, 0), axes.axis(panel.source, 1)],
                 format: source.description().total_format_spec(),
             },
             false,
         )?;
     }
     if let PreparedFamily::Qq(quantiles) = &family {
-        quantiles.validate_ranges(axes.ranges)?;
+        quantiles.validate_ranges(axes.ranges())?;
     }
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
-        axes.ranges,
+        axes.ranges(),
     )?;
     panel.axes = Some(axes);
     panel.family = Some(family);
@@ -622,6 +668,7 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::Matrix | PlotKind::Marginal => {
                     panel.axes = Some(prepare(
                         source,
+                        &panel.scope.id,
                         Some(facet),
                         None,
                         Some(ReferenceAxisConfig {
@@ -634,6 +681,7 @@ pub(crate) fn prepare_plot<'src>(
             };
             let axes = prepare(
                 source,
+                &panel.scope.id,
                 Some(facet),
                 Some(&family),
                 Some(ReferenceAxisConfig {
@@ -671,7 +719,18 @@ pub(crate) fn prepare_plot<'src>(
                             &panel.row_source,
                             resources,
                         )?,
-                        axes: panel.axes.as_ref().expect("prepared facet axes"),
+                        axes: [
+                            panel
+                                .axes
+                                .as_ref()
+                                .expect("prepared facet axes")
+                                .axis(panel.source, 0),
+                            panel
+                                .axes
+                                .as_ref()
+                                .expect("prepared facet axes")
+                                .axis(panel.source, 1),
+                        ],
                         format: source.description().total_format_spec(),
                     },
                     false,
@@ -682,7 +741,8 @@ pub(crate) fn prepare_plot<'src>(
             let Some(PreparedFamily::Qq(quantiles)) = &panel.family else {
                 continue;
             };
-            quantiles.validate_ranges(panel.axes.as_ref().expect("prepared facet axes").ranges)?;
+            quantiles
+                .validate_ranges(panel.axes.as_ref().expect("prepared facet axes").ranges())?;
         }
         for panel in &registry.panels {
             let axes = panel.axes.as_ref().expect("prepared facet axes");
@@ -694,10 +754,10 @@ pub(crate) fn prepare_plot<'src>(
                     | PlotKind::StackedHorizontalBar
             ) {
                 for side in 0..2 {
-                    if let Some(ticks) = &axes.specs[side].exact_ticks {
-                        crate::layout::Axis::validate_ticks(
-                            ticks,
-                            axes.ranges[side],
+                    if let Some(ticks) = axes.axis(panel.source, side).exact_ticks() {
+                        crate::layout::Axis::validate_exact_ticks(
+                            &ticks,
+                            axes.ranges()[side],
                             if side == 0 { "x-axis" } else { "y-axis" },
                         )?;
                     }
@@ -705,7 +765,7 @@ pub(crate) fn prepare_plot<'src>(
             }
             crate::orchestrator::layers::GuideSnapshot::validate_sources(
                 source.description(),
-                axes.ranges,
+                axes.ranges(),
             )?;
         }
     } else if source.kind() == PlotKind::Matrix {
@@ -713,7 +773,7 @@ pub(crate) fn prepare_plot<'src>(
             crate::plots::matrix::prepare_axes(source, source_data.expect("single plot data"))?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
     } else {
-        let axes = prepare(source, None, None, None)?;
+        let axes = prepare(source, &registry.panels[0].scope.id, None, None, None)?;
         registry.panels[0].axes = Some(axes);
     }
     PreparedInteriorInputs::from_registry(registry, InteriorRoute::classify(source.kind()))
@@ -747,10 +807,10 @@ pub(crate) fn prepare_scatter_plot(
     panel: &mut PlotRegistrationBuild<'_>,
 ) -> Result<(), Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
-    let axes = prepare(source, None, panel.family.as_ref(), None)?;
+    let axes = prepare(source, &panel.scope.id, None, panel.family.as_ref(), None)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
-        axes.ranges,
+        axes.ranges(),
     )?;
     panel.axes = Some(axes);
     Ok(())
@@ -761,15 +821,19 @@ pub(crate) fn prepare_line_plot(
     source: &Plot,
     panel: &mut PlotRegistrationBuild<'_>,
 ) -> Result<(), Error> {
-    let axes = prepare(source, None, panel.family.as_ref(), None)?;
+    let axes = prepare(source, &panel.scope.id, None, panel.family.as_ref(), None)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
-        axes.ranges,
+        axes.ranges(),
     )?;
     panel.axes = Some(axes);
     Ok(())
 }
 
+#[expect(
+    clippy::float_cmp,
+    reason = "fixed categories preserve the original derived raw AxisTick equality, including signed zero"
+)]
 fn reconcile_facet_axis(
     retained: &mut [PlotRegistrationBuild<'_>],
     side: usize,
@@ -777,30 +841,44 @@ fn reconcile_facet_axis(
     let Some(first) = retained.first() else {
         return Ok(());
     };
+    let first_source = first.source;
     let first = first.axes.as_ref().expect("prepared facet axes");
     for panel in retained.iter() {
         let axes = panel.axes.as_ref().expect("prepared facet axes");
-        if axes.categories[side] != first.categories[side] {
+        let same = match (axes.categories(side), first.categories(side)) {
+            (None, None) => true,
+            (Some(a), Some(b)) => {
+                a.raw == b.raw
+                    && a.ticks.len() == b.ticks.len()
+                    && a.ticks
+                        .iter()
+                        .zip(&b.ticks)
+                        .all(|(a, b)| a.position == b.position)
+            }
+            _ => false,
+        };
+        if !same {
             return Err(Error::Render(format!("fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data", if side == 0 { "x" } else { "y" })));
         }
     }
-    if first.categories[side].is_none() {
-        fn presentation(
-            axes: &PreparedAxes,
+    if first.categories(side).is_none() {
+        fn presentation<'a>(
+            axes: &'a PreparedAxes,
+            source: &'a crate::builder::PlotDescription,
             side: usize,
-        ) -> (bool, Option<&crate::numeric::format::NumericFormat>) {
+        ) -> (bool, Option<&'a crate::numeric::format::NumericFormat>) {
             (
-                axes.logarithmic && side == 0,
-                if axes.specs[side].exact_ticks.is_some() {
+                axes.logarithmic() && side == 0,
+                if axes.axis(source, side).exact_ticks().is_some() {
                     None
                 } else {
-                    axes.specs[side].format.as_deref()
+                    axes.axis(source, side).authored().format.as_deref()
                 },
             )
         }
         for panel in &*retained {
             let axes = panel.axes.as_ref().expect("prepared facet axes");
-            if presentation(axes, side) != presentation(first, side) {
+            if presentation(axes, panel.source, side) != presentation(first, first_source, side) {
                 return Err(Error::Data(
                     "fixed facet numeric axes require identical numeric formats and operand contexts"
                         .into(),
@@ -809,7 +887,7 @@ fn reconcile_facet_axis(
         }
         let union = retained
             .iter()
-            .map(|panel| panel.axes.as_ref().expect("prepared facet axes").ranges[side])
+            .map(|panel| panel.axes.as_ref().expect("prepared facet axes").ranges()[side])
             .fold((f64::INFINITY, f64::NEG_INFINITY), |a, b| {
                 (a.0.min(b.0), a.1.max(b.1))
             });
@@ -817,9 +895,12 @@ fn reconcile_facet_axis(
 
         for panel in retained {
             let axes = panel.axes.as_mut().expect("prepared facet axes");
-            axes.ranges[side] = union;
-            if axes.specs[side].provenance != crate::layout::RangeProvenance::Configured {
-                axes.specs[side].provenance = crate::layout::RangeProvenance::Shared;
+            axes.sources[side].base_seed = Some(crate::orchestrator::registration::DisplayExtent {
+                lower: union.0,
+                upper: union.1,
+            });
+            if axes.sources[side].base_provenance != crate::layout::RangeProvenance::Configured {
+                axes.sources[side].base_provenance = crate::layout::RangeProvenance::Shared;
             }
         }
     }
@@ -842,6 +923,7 @@ fn validate_range(range: (f64, f64)) -> Result<(), Error> {
 )]
 fn prepare(
     chart: &Plot,
+    plot_id: &crate::orchestrator::registration::PlotOccurrenceId,
 
     facet: Option<crate::data::FacetAxisSources<'_>>,
     family: Option<&PreparedFamily>,
@@ -1109,51 +1191,23 @@ fn prepare(
     }
     let logarithmic = chart.kind() == PlotKind::Forest
         && chart.description().axis_scale_spec() == AxisScale::Log10;
-    let mut specs = [AxisSpec::default(), AxisSpec::default()];
-    for (side, source) in [
+    let specs = [
         chart.description().x_axis_spec(),
         chart.description().y_axis_spec(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        specs[side] = AxisSpec {
-            provenance: source.provenance,
-            limits: if side == 0 {
-                x_limits.or(source.limits)
-            } else {
-                source.limits
-            },
-            generation: source.generation.clone(),
-            category_labels: source.category_labels.clone(),
-            format: source.format.clone(),
-            exact_ticks: if logarithmic && side == 0 {
-                chart.description().projected_explicit_x_ticks()?
-            } else {
-                source
-                    .exact_ticks
-                    .as_ref()
-                    .map(|ticks| {
-                        crate::data::source::collect_source(ticks.iter().map(|tick| {
-                            Ok(AxisTick::new(
-                                tick.position,
-                                crate::data::source::copy_source_string(&tick.label)?,
-                            ))
-                        }))
-                    })
-                    .transpose()?
-            },
-        };
+    ];
+    let mut provenance = specs.map(|spec| spec.provenance);
+    if x_limits.is_some() && provenance[0] != crate::layout::RangeProvenance::Configured {
+        provenance[0] = crate::layout::RangeProvenance::Shared;
     }
-    if x_limits.is_some() && specs[0].provenance != crate::layout::RangeProvenance::Configured {
-        specs[0].provenance = crate::layout::RangeProvenance::Shared;
-    }
-    if logarithmic {
-        // Both explicit and parent-coordinated domains are already transformed.
-        specs[0].limits = specs[0].limits.map(|_| ranges[0]);
-    }
-    let mut ticks = [None, None];
-    let mut display_categories = [None, None];
+    let mut projected_exact_positions = [
+        if logarithmic {
+            chart.description().projected_explicit_x_ticks()?
+        } else {
+            None
+        },
+        None,
+    ];
+    let mut prepared_categories = [None, None];
     for side in 0..2 {
         validate_range(ranges[side])?;
         if categories[side].is_none() && !specs[side].category_labels.is_all() {
@@ -1180,13 +1234,13 @@ fn prepare(
                 "y-axis categories"
             };
             let raw_labels = levels.iter().map(String::as_str);
-            display_categories[side] = Some(if let Some(policy) = labels {
+            let display = if let Some(policy) = labels {
                 policy.resolve_domain(domain, raw_labels)?
             } else {
                 chart
                     .description()
                     .resolve_axis_label_domain(domain, raw_labels)?
-            });
+            };
             let reverse = side == 1
                 && matches!(
                     chart.kind(),
@@ -1199,7 +1253,7 @@ fn prepare(
             let count = levels.len() as f64;
             let mut retained = Vec::new();
             crate::data::source::reserve_source(&mut retained, levels.len())?;
-            for (index, label) in levels.into_iter().enumerate() {
+            for (index, label) in display.into_iter().enumerate() {
                 retained.push(AxisTick::new(
                     if reverse {
                         count - index as f64 - 0.5
@@ -1209,7 +1263,10 @@ fn prepare(
                     label,
                 ));
             }
-            ticks[side] = Some(retained);
+            prepared_categories[side] = Some(PreparedCategorySource {
+                raw: levels,
+                ticks: retained,
+            });
         }
         let spec = &specs[side];
         if let Some(exact) = &spec.exact_ticks {
@@ -1225,24 +1282,63 @@ fn prepare(
                 continue;
             }
 
-            crate::layout::Axis::validate_ticks(
-                exact,
+            crate::layout::Axis::validate_exact_ticks(
+                &crate::orchestrator::registration::ExactTicksRef {
+                    raw: exact,
+                    projected: projected_exact_positions[side].as_deref(),
+                },
                 ranges[side],
                 if side == 0 { "x-axis" } else { "y-axis" },
             )?;
         }
     }
-    let labels = if facet.is_some() {
+    let mut labels = if facet.is_some() {
         [None, None]
     } else {
         chart.description().prepare_axis_labels(labels)?
     };
-    Ok(PreparedAxes {
-        ranges,
-        categories: ticks,
-        display_categories,
-        labels,
-        specs,
-        logarithmic,
-    })
+    let policies = crate::layout::range_policies(chart.kind());
+    let sources = std::array::from_fn(|side| {
+        let range = ranges[side];
+        let categories = prepared_categories[side].take();
+        let source = PreparedAxisSource {
+            witness: AxisSourceWitness {
+                plot_id: plot_id.clone(),
+                slot: AxisSlot::Pair(if side == 0 {
+                    crate::layout::AxisSide::Bottom
+                } else {
+                    crate::layout::AxisSide::Left
+                }),
+                space: if categories.is_some() {
+                    AxisSpace::Categorical
+                } else {
+                    AxisSpace::Continuous(if logarithmic && side == 0 {
+                        AxisScale::Log10
+                    } else {
+                        AxisScale::Linear
+                    })
+                },
+            },
+            range_policy: if categories.is_some() {
+                crate::layout::RangePolicy::CategorySlots
+            } else {
+                policies[side]
+            },
+            base_seed: Some(DisplayExtent {
+                lower: range.0,
+                upper: range.1,
+            }),
+            base_provenance: provenance[side],
+            categories,
+            projected_exact_positions: projected_exact_positions[side].take(),
+            label: std::sync::OnceLock::new(),
+        };
+        if facet.is_none() {
+            let _ = source
+                .label
+                .set(labels[side].take().unwrap_or(crate::Text::UNSET));
+        }
+        source
+    });
+    Ok(PreparedAxes { sources })
 }

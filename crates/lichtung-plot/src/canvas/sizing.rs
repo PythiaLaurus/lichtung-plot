@@ -110,11 +110,11 @@ impl HeightInputs {
             plot.description()
                 .x_axis_spec()
                 .limits
-                .unwrap_or(axes.ranges[0]),
+                .unwrap_or(axes.ranges()[0]),
             plot.description()
                 .y_axis_spec()
                 .limits
-                .unwrap_or(axes.ranges[1]),
+                .unwrap_or(axes.ranges()[1]),
         ]
         .map(|range| [range.0.to_bits(), range.1.to_bits()]);
         let child =

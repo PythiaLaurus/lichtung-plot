@@ -214,9 +214,10 @@ fn track_pixels(quanta: i64) -> f64 {
 }
 
 /// Column maxima precede assigned-width cell text and row requirements.
-fn assigned_columns(
+fn assigned_columns<'a>(
     prepared: &HeatmapData,
-    labels: &[String],
+    label_count: usize,
+    label: impl Fn(usize) -> &'a str,
     selection: &crate::CategoryLabelSelection,
     panel: PixelRect,
     theme: &crate::text::TextRequestContext<'_, '_>,
@@ -232,12 +233,12 @@ fn assigned_columns(
         0.0
     } else {
         crate::layout::category_label_span(selection, count, |index| {
-            column_label_hard(prepared, &labels[index], theme)
+            column_label_hard(prepared, label(index), theme)
         })? / count as f64
     };
-    let mut hard = crate::data::source::collect_source(labels.iter().map(|label| {
+    let mut hard = crate::data::source::collect_source((0..label_count).map(|index| {
         let text = if selection.is_all() {
-            column_label_hard(prepared, label, theme)?
+            column_label_hard(prepared, label(index), theme)?
         } else {
             label_pitch
         };
@@ -559,16 +560,15 @@ impl HeatmapIntrinsicCache {
         &self,
         prepared: &HeatmapData,
         axes: &crate::plots::shared_x::PreparedAxes,
+        source: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> bool {
         self.color_scale.same(&prepared.color.scale)
             && self.layouts == theme.text_layouts
             && self.category_labels
-                == axes
-                    .specs
-                    .each_ref()
-                    .map(|spec| spec.category_labels.clone())
-            && self.titles == axes.labels
+                == [axes.axis(source, 0), axes.axis(source, 1)]
+                    .map(|axis| axis.authored().category_labels.clone())
+            && self.titles.each_ref().map(Option::as_ref) == [axes.label(0), axes.label(1)]
             && self.null_rows == prepared.null_row_annotations
             && self
                 .contrast_light
@@ -594,6 +594,7 @@ impl HeatmapIntrinsicCache {
         without_y_labels: (f64, f64),
         prepared: &HeatmapData,
         axes: &crate::plots::shared_x::PreparedAxes,
+        source: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         let color_scale = prepared.color.scale.clone();
@@ -614,10 +615,8 @@ impl HeatmapIntrinsicCache {
             contrast_light: text(&theme.typography.annotations.contrast.light)?,
             contrast_dark: text(&theme.typography.annotations.contrast.dark)?,
             tick_label: text(&theme.typography.axes.tick_label)?,
-            category_labels: axes
-                .specs
-                .each_ref()
-                .map(|spec| spec.category_labels.clone()),
+            category_labels: [axes.axis(source, 0), axes.axis(source, 1)]
+                .map(|axis| axis.authored().category_labels.clone()),
             axis_title: text(&theme.typography.axes.axis_title)?,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             null_rows: crate::data::source::collect_source(
@@ -654,6 +653,7 @@ pub(crate) fn intrinsic_body_minimum(
         intrinsic,
         retained_in(chart, registered)?,
         axes,
+        registered.expect("prepared Heatmap occurrence").source,
         theme,
         chart.axis_scope(),
     )?;
@@ -690,13 +690,17 @@ pub(crate) fn natural_body_height(
         .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
     theme.text.prepared_font_environment()?;
-    let labels = axes.display_categories[0]
-        .as_ref()
+    let labels = axes
+        .categories(0)
         .ok_or_else(|| Error::Render("natural Heatmap columns missing".into()))?;
     let columns = assigned_columns(
         marks,
-        labels,
-        &axes.specs[0].category_labels,
+        labels.ticks.len(),
+        |index| &labels.ticks[index].label,
+        &axes
+            .axis(registered.expect("prepared Heatmap occurrence").source, 0)
+            .authored()
+            .category_labels,
         PixelRect::new(0.0, width, 0.0, 1.0),
         theme,
         &crate::layout::fit::FitScope::root(),
@@ -888,6 +892,7 @@ pub(crate) fn heatmap_minima(
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
+    source: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     diagnostic_scope: Option<&str>,
 ) -> Result<((f64, f64), (f64, f64)), Error> {
@@ -899,7 +904,7 @@ pub(crate) fn heatmap_minima(
     let _ = diagnostic_scope;
 
     if let Some(cached) = value.get() {
-        if cached.matches_inputs(prepared, axes, theme) {
+        if cached.matches_inputs(prepared, axes, source, theme) {
             return Ok((cached.minimum, cached.without_y_labels));
         }
     }
@@ -917,23 +922,27 @@ pub(crate) fn heatmap_minima(
     let mut row_hard = crate::data::source::collect_source(
         (0..prepared.y_levels.len()).map(|_| Ok(cell.1 / prepared.y_levels.len() as f64)),
     )?;
-    let x_labels = axes.display_categories[0]
-        .as_ref()
+    let x_labels = &axes
+        .categories(0)
         .ok_or_else(|| Error::Render("Heatmap x intrinsic labels missing".into()))?;
-    let y_labels = axes.display_categories[1]
-        .as_ref()
+    let y_labels = &axes
+        .categories(1)
         .ok_or_else(|| Error::Render("Heatmap y intrinsic labels missing".into()))?;
+    let (x_labels, y_labels) = (&x_labels.ticks, &y_labels.ticks);
     for (index, label) in x_labels.iter().enumerate().filter(|(index, _)| {
-        axes.specs[0]
+        axes.axis(source, 0)
+            .authored()
             .category_labels
             .includes(*index, x_labels.len())
     }) {
-        column_hard[index] = column_hard[index].max(column_label_hard(prepared, label, theme)?);
+        column_hard[index] =
+            column_hard[index].max(column_label_hard(prepared, &label.label, theme)?);
     }
     let mut y_label_hard =
         crate::data::source::collect_source((0..y_labels.len()).map(|_| Ok(0.0_f64)))?;
     for (index, label) in y_labels.iter().enumerate().filter(|(index, _)| {
-        axes.specs[1]
+        axes.axis(source, 1)
+            .authored()
             .category_labels
             .includes(*index, y_labels.len())
     }) {
@@ -947,7 +956,7 @@ pub(crate) fn heatmap_minima(
             continue;
         }
         let plan = theme.measure_appearance_text(
-            label,
+            &label.label,
             theme.tick_text_appearance(crate::layout::AxisSide::Left),
             PhysicalTextAlignment::End,
             "Heatmap row intrinsic",
@@ -1069,7 +1078,7 @@ pub(crate) fn heatmap_minima(
         .sum::<f64>()
         .max(cell.1);
     let mut without_y_labels = (minimum.0, without_y_height);
-    for (side, title) in axes.labels.iter().enumerate() {
+    for (side, title) in [axes.label(0), axes.label(1)].into_iter().enumerate() {
         let Some(title) = title else { continue };
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
@@ -1087,7 +1096,8 @@ pub(crate) fn heatmap_minima(
         }
     }
     if value.get().is_none() {
-        let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, axes, theme)?;
+        let cache =
+            HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, axes, source, theme)?;
         let _ = value.set(cache);
     }
     Ok((minimum, without_y_labels))
@@ -1157,14 +1167,14 @@ pub(crate) fn measure(
                 .prepared_category_labels(0)
                 .ok_or_else(|| Error::Render("heatmap x labels require prepared axes".into()))?
                 .iter()
-                .map(|label| crate::data::source::copy_source_string(label)),
+                .map(|tick| crate::data::source::copy_source_string(&tick.label)),
         )?;
         let y_labels = crate::data::source::collect_source(
             context
                 .prepared_category_labels(1)
                 .ok_or_else(|| Error::Render("heatmap y labels require prepared axes".into()))?
                 .iter()
-                .map(|label| crate::data::source::copy_source_string(label)),
+                .map(|tick| crate::data::source::copy_source_string(&tick.label)),
         )?;
         let wrap_labels = theme.text_layouts.ticks[1].as_ref().is_none_or(|layout| {
             layout.instructions().wrapping != Some(crate::TextWrapping::NoSoftWrap)
@@ -1233,7 +1243,8 @@ pub(crate) fn measure(
         let y_count = prepared.y_levels.len();
         let assigned = assigned_columns(
             prepared,
-            &x_labels,
+            x_labels.len(),
+            |index| &x_labels[index],
             &chart.description().x_axis_spec().category_labels,
             panel,
             theme,
@@ -1327,7 +1338,17 @@ pub(crate) fn measure(
                 label: axes.copy_label(0)?,
                 ticks: x_ticks,
                 tick_labels_visible: true,
-                category_labels: axes.specs[0].category_labels.clone(),
+                category_labels: axes
+                    .axis(
+                        context
+                            .registered
+                            .expect("prepared Heatmap occurrence")
+                            .source,
+                        0,
+                    )
+                    .authored()
+                    .category_labels
+                    .clone(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,
@@ -1338,7 +1359,17 @@ pub(crate) fn measure(
                 label: axes.copy_label(1)?,
                 ticks: y_ticks,
                 tick_labels_visible: chart.y_tick_labels_visible(),
-                category_labels: axes.specs[1].category_labels.clone(),
+                category_labels: axes
+                    .axis(
+                        context
+                            .registered
+                            .expect("prepared Heatmap occurrence")
+                            .source,
+                        1,
+                    )
+                    .authored()
+                    .category_labels
+                    .clone(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,

@@ -46,9 +46,9 @@ pub(crate) fn resolve(
                     let axes = registered.axes.as_ref().ok_or_else(|| {
                         Error::Render("data text reference requires actual axes".into())
                     })?;
-                    let index = axes.categories[side]
-                        .as_ref()
-                        .and_then(|ticks| ticks.iter().position(|tick| &tick.label == raw))
+                    let index = axes
+                        .categories(side)
+                        .and_then(|categories| categories.raw.iter().position(|label| label == raw))
                         .ok_or_else(|| {
                             Error::Data(format!(
                                 "annotation category {raw:?} is absent from the actual axis"
@@ -113,7 +113,7 @@ pub(crate) fn data(
         .axes
         .as_ref()
         .ok_or_else(|| Error::Render("data text reference requires prepared actual axes".into()))?;
-    let categories = axes.categories[side].as_deref();
+    let categories = axes.categories(side);
     match &coordinate.0 {
         DataValue::Numeric(value) => {
             if categories.is_some() {
@@ -122,7 +122,7 @@ pub(crate) fn data(
                 ));
             }
             let value = value.get();
-            if side == 0 && axes.logarithmic {
+            if side == 0 && axes.logarithmic() {
                 if value <= 0.0 {
                     return Err(Error::Render(
                         "nonpositive annotation reference cannot be projected on Log10".into(),
@@ -134,8 +134,13 @@ pub(crate) fn data(
             }
         }
         DataValue::Category(raw) => categories
-            .and_then(|ticks| ticks.iter().find(|tick| &tick.label == raw))
-            .map(|tick| tick.position)
+            .and_then(|categories| {
+                categories
+                    .raw
+                    .iter()
+                    .position(|label| label == raw)
+                    .map(|index| categories.ticks[index].position)
+            })
             .ok_or_else(|| {
                 Error::Data(format!(
                     "annotation category {raw:?} is absent from the actual axis"

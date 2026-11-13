@@ -754,7 +754,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     ) -> Result<(f64, f64), Error> {
         let index = usize::from(side == crate::layout::AxisSide::Left);
         self.prepared_axes.map_or_else(prepare, |axes| {
-            Ok(self.prepared_limits[index].unwrap_or(axes.ranges[index]))
+            Ok(self.prepared_limits[index].unwrap_or(axes.ranges()[index]))
         })
     }
 
@@ -882,16 +882,22 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
                 .into_iter()
                 .enumerate()
             {
-                if let Some(categories) = &axes.categories[side] {
-                    *ticks = crate::data::source::collect_source(categories.iter().map(|tick| {
-                        Ok(crate::layout::AxisTick::new(
-                            tick.position,
-                            crate::data::source::copy_source_string(&tick.label)?,
-                        ))
-                    }))?;
-                    *range = axes.ranges[side];
+                if let Some(categories) = axes.categories(side) {
+                    *ticks = crate::data::source::collect_source(
+                        categories
+                            .raw
+                            .iter()
+                            .zip(&categories.ticks)
+                            .map(|(label, tick)| {
+                                Ok(crate::layout::AxisTick::new(
+                                    tick.position,
+                                    crate::data::source::copy_source_string(label)?,
+                                ))
+                            }),
+                    )?;
+                    *range = axes.ranges()[side];
                 } else {
-                    *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
+                    *range = self.prepared_limits[side].unwrap_or(axes.ranges()[side]);
                 }
                 specs[side].limits = Some(*range);
             }
@@ -918,8 +924,11 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         )
     }
 
-    pub(crate) fn prepared_category_labels(self, side: usize) -> Option<&'a [String]> {
-        self.prepared_axes?.display_categories[side].as_deref()
+    pub(crate) fn prepared_category_labels(
+        self,
+        side: usize,
+    ) -> Option<&'a [crate::layout::AxisTick]> {
+        Some(&self.prepared_axes?.categories(side)?.ticks)
     }
 }
 

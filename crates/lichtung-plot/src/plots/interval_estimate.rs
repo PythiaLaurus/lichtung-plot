@@ -1335,7 +1335,7 @@ fn project(
 
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
-    spec: &crate::layout::AxisSpec,
+    axis: crate::orchestrator::registration::BaseAxisRef<'_>,
     panel: crate::layout::PixelRect,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
@@ -1343,11 +1343,11 @@ pub(crate) fn log_tick_plan(
     windows: [Option<&(f64, f64)>; 2],
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
-    let format = spec.numeric_request(Some(numeric), windows)?;
+    let format = axis.numeric_request(numeric, windows)?;
     let raw = windows[0].copied();
     crate::layout::NumericTickPlan::measure_selected_source(
         range,
-        spec.generation.clone(),
+        axis.authored().generation.clone(),
         true,
         &projection,
         crate::layout::AxisSide::Bottom,

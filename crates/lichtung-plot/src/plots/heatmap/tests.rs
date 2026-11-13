@@ -169,9 +169,10 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             let marks = retained_in(chart, inputs.plots.first()).unwrap();
             let axes = inputs.plots[0].axes.as_ref().unwrap();
             let intrinsic = inputs.intrinsic(&inputs.plots[0]);
-            let original = heatmap_minima(intrinsic, marks, axes, theme, None)
-                .unwrap()
-                .0;
+            let original =
+                heatmap_minima(intrinsic, marks, axes, inputs.plots[0].source, theme, None)
+                    .unwrap()
+                    .0;
             let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
                 panic!("Heatmap slot")
             };
@@ -194,10 +195,12 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 panic!("prepared Heatmap")
             };
             assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
-            assert!(!value
-                .get()
-                .unwrap()
-                .matches_inputs(same_paint_marks, axes, theme));
+            assert!(!value.get().unwrap().matches_inputs(
+                same_paint_marks,
+                axes,
+                inputs.plots[0].source,
+                theme
+            ));
             let changed_source = source(
                 policy
                     .try_copy()
@@ -223,10 +226,12 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 panic!("prepared Heatmap")
             };
             assert_eq!(marks.value_labels, changed_marks.value_labels);
-            assert!(!value
-                .get()
-                .unwrap()
-                .matches_inputs(changed_marks, axes, theme));
+            assert!(!value.get().unwrap().matches_inputs(
+                changed_marks,
+                axes,
+                inputs.plots[0].source,
+                theme
+            ));
             let padding = theme
                 .annotations
                 .get_cells()
@@ -237,12 +242,23 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 .unwrap();
             appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
             let theme = crate::text::TextRequestContext::new(&appearance, theme.text);
-            assert!(!value.get().unwrap().matches_inputs(marks, axes, &theme));
-            let edited = heatmap_minima(intrinsic, marks, axes, &theme, None)
-                .unwrap()
-                .0;
+            assert!(!value.get().unwrap().matches_inputs(
+                marks,
+                axes,
+                inputs.plots[0].source,
+                &theme
+            ));
+            let edited =
+                heatmap_minima(intrinsic, marks, axes, inputs.plots[0].source, &theme, None)
+                    .unwrap()
+                    .0;
             assert_eq!(value.get().unwrap().minimum, original);
-            assert!(!value.get().unwrap().matches_inputs(marks, axes, &theme));
+            assert!(!value.get().unwrap().matches_inputs(
+                marks,
+                axes,
+                inputs.plots[0].source,
+                &theme
+            ));
             let required = (plan.width() + 11.0, plan.height() + 22.0);
             assert!(edited.0 >= original.0 && edited.1 >= original.1);
             assert!(edited.0 >= required.0 && edited.1 >= required.1);

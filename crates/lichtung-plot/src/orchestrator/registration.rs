@@ -2,6 +2,12 @@
 
 use crate::{builder::PlotDescription, Error};
 
+mod axes;
+pub(crate) use axes::{
+    AxisIntentRef, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent,
+    ExactTicksRef, PreparedAxisSource, PreparedCategorySource,
+};
+
 #[derive(Debug, Clone)]
 pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);
 

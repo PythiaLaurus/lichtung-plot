@@ -105,8 +105,8 @@ fn source<'a>(plot: &Plot, context: PlotRenderContext<'a, '_>) -> Result<Option<
                 .registered
                 .and_then(|registered| registered.axes.as_ref())
                 .ok_or_else(|| Error::Render("total explanation lacks prepared axes".into()))?;
-            let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges[0]))?;
-            let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges[1]))?;
+            let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges()[0]))?;
+            let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges()[1]))?;
             let PreparedFamily::Waterfall(marks) =
                 panel(context.registered, plot.axis_scope(), "Waterfall")?
             else {
@@ -156,12 +156,12 @@ pub(crate) fn axis_preferences(
     // include common explanations without inventing scientific tick positions.
     if let Some(axes) = registered.and_then(|registered| registered.axes.as_ref()) {
         for (side, preferred) in preferred.iter_mut().enumerate() {
-            if axes.specs[side].exact_ticks.is_some() || axes.categories[side].is_some() {
+            let base = axes.axis(registered.expect("prepared axis occurrence").source, side);
+            if base.exact_ticks().is_some() || axes.categories(side).is_some() {
                 continue;
             }
             let registered = registered.expect("prepared axis occurrence");
-            if let Some(set) = axes.numeric_probe(
-                side,
+            if let Some(set) = base.numeric_probe(
                 registered.axis_numeric_binding(operation)?,
                 registered.raw_windows(),
             )? {

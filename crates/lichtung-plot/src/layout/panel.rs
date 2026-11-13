@@ -27,13 +27,14 @@
 mod axis_frame_grid;
 mod cells;
 mod geometry;
+pub(crate) use geometry::layout_axis_ticks;
 mod projection;
 mod range_ticks;
 mod semantics;
 mod sources;
-#[cfg(test)]
-use semantics::RangePolicy;
-pub(crate) use semantics::{AxisSemanticInputs, CoordinateLayoutInputs, RangeProvenance};
+pub(crate) use semantics::{
+    range_policies, AxisSemanticInputs, CoordinateLayoutInputs, RangePolicy, RangeProvenance,
+};
 pub(crate) use sources::format_guide_label;
 pub(crate) use sources::format_label;
 pub(crate) use sources::interval::fixed_is_empty as fixed_interval_is_empty;

@@ -1469,20 +1469,20 @@ fn push_plot_axis_ticks(
                     },
                     0,
                 )?;
-                let categories = axes.display_categories[side]
-                    .as_ref()
-                    .map(|labels| {
-                        crate::data::source::collect_source(
-                            labels
-                                .iter()
-                                .map(|label| crate::data::source::copy_source_string(label)),
-                        )
-                    })
-                    .transpose()?;
+                let categories =
+                    axes.categories(side)
+                        .map(|labels| {
+                            crate::data::source::collect_source(
+                                labels.ticks.iter().map(|tick| {
+                                    crate::data::source::copy_source_string(&tick.label)
+                                }),
+                            )
+                        })
+                        .transpose()?;
                 push_axis_ticks(
                     requirements,
                     &address,
-                    &axes.specs[side],
+                    axes.axis(registered.source, side).authored(),
                     categories,
                     alphabet,
                     theme.tick_text_appearance(if side == 0 {
@@ -2877,6 +2877,7 @@ mod tests {
                         inputs.intrinsic(&inputs.plots[0]),
                         marks,
                         inputs.plots[0].axes.as_ref().unwrap(),
+                        inputs.plots[0].source,
                         &theme,
                         None,
                     )?

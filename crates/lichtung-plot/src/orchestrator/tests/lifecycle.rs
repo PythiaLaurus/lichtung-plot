@@ -809,14 +809,14 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         if kind != PlotKind::Matrix {
             let axes = prepared.plots[0].axes.as_ref().unwrap();
             for side in 0..2 {
-                if axes.categories[side].is_some() {
+                if axes.categories(side).is_some() {
                     continue;
                 }
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
                 let invalid = plot.clone().with_test_axis_ticks(
                     side,
                     vec![crate::AxisTick::new(
-                        axes.ranges[side].1.next_up(),
+                        axes.ranges()[side].1.next_up(),
                         "outside",
                     )],
                 );

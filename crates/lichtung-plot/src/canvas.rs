@@ -1444,7 +1444,7 @@ impl Canvas {
                     marks.prepare_totals(
                         crate::plots::waterfall::WaterfallTotalsPrepare {
                             numeric,
-                            axes,
+                            axes: [axes.axis(source, 0), axes.axis(source, 1)],
                             format: source.total_format_spec(),
                         },
                         true,

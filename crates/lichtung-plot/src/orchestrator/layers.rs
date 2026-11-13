@@ -11,7 +11,7 @@ use crate::GuideSpec;
 use crate::Plot;
 
 impl PlotDescription {
-    pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<AxisTick>>, Error> {
+    pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<f64>>, Error> {
         self.explicit_x_ticks()
             .map(|ticks| projected_x_ticks(self, ticks))
             .transpose()
@@ -146,7 +146,7 @@ impl GuideSnapshot {
     }
 }
 
-fn projected_x_ticks(chart: &PlotDescription, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
+fn projected_x_ticks(chart: &PlotDescription, ticks: &[AxisTick]) -> Result<Vec<f64>, Error> {
     crate::data::source::collect_source(ticks
         .iter()
         .enumerate()
@@ -164,7 +164,7 @@ fn projected_x_ticks(chart: &PlotDescription, ticks: &[AxisTick]) -> Result<Vec<
                 super::measurements::count(super::measurements::Counter::ForestRawTickProjection);
                 crate::numeric::log10(tick.position)?
             };
-            Ok(AxisTick::new(position, crate::data::source::copy_source_string(&tick.label)?))
+            Ok(position)
         }))
 }
 
@@ -190,9 +190,14 @@ fn projected_exact_ticks_validate_positions_and_preserve_labels() {
     );
 
     let ticks = [AxisTick::new(0.1, "lower"), AxisTick::new(10.0, "upper")];
+    let positions = projected_x_ticks(chart.description(), &ticks).unwrap();
+    let exact = crate::orchestrator::registration::ExactTicksRef {
+        raw: &ticks,
+        projected: Some(&positions),
+    };
     assert_eq!(
-        projected_x_ticks(chart.description(), &ticks).unwrap(),
-        [AxisTick::new(-1.0, "lower"), AxisTick::new(1.0, "upper")]
+        [exact.tick(0).unwrap(), exact.tick(1).unwrap()],
+        [(-1.0, "lower"), (1.0, "upper")]
     );
 }
 

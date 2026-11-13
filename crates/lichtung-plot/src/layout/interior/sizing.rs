@@ -223,8 +223,8 @@ pub(crate) fn body_preference(
                 .width();
             let count = registered
                 .and_then(|registered| registered.axes.as_ref())
-                .and_then(|axes| axes.categories[1].as_ref())
-                .map_or(0, Vec::len);
+                .and_then(|axes| axes.categories(1))
+                .map_or(0, |categories| categories.raw.len());
             let count = u32::try_from(count).map_err(|_| {
                 Error::Render("specialized category preference count overflow".into())
             })?;
@@ -250,7 +250,7 @@ fn axis_title_style<'a>(
 ) -> &'a crate::TextTheme {
     registered
         .and_then(|registered| registered.axes.as_ref())
-        .and_then(|axes| axes.labels[side].as_ref())
+        .and_then(|axes| axes.label(side))
         .map_or(&theme.typography.axes.axis_title, |text| {
             text.appearance(&theme.typography.axes.axis_title).theme
         })
@@ -258,6 +258,10 @@ fn axis_title_style<'a>(
 
 /// Intrinsic horizontal axis/chrome preference before a root chooses its width.
 /// Actual selected-source gutters subsequently replace this estimate via feedback.
+#[expect(
+    clippy::too_many_lines,
+    reason = "category, exact and numeric gutter sources retain their distinct original admission order"
+)]
 pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
@@ -291,9 +295,14 @@ pub(crate) fn horizontal_gutter_preference(
         .and_then(|registered| registered.axes.as_ref())
         .filter(|_| plot.y_tick_labels_visible())
     {
-        if let Some(labels) = &axes.display_categories[1] {
+        let base = axes.axis(registered.expect("prepared axis occurrence").source, 1);
+        if let Some(categories) = axes.categories(1) {
+            let labels = &categories.ticks;
             let eligible = crate::data::source::collect_source(
-                axes.specs[1].category_labels.indices(labels.len()).map(Ok),
+                base.authored()
+                    .category_labels
+                    .indices(labels.len())
+                    .map(Ok),
             )?;
             for &index in &eligible {
                 if !theme
@@ -302,9 +311,9 @@ pub(crate) fn horizontal_gutter_preference(
                 {
                     continue;
                 }
-                include_label(&labels[index])?;
+                include_label(&labels[index].label)?;
             }
-        } else if let Some(ticks) = &axes.specs[1].exact_ticks {
+        } else if let Some(ticks) = &base.authored().exact_ticks {
             let eligible = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
             for (index, tick) in ticks.iter().enumerate() {
                 if !theme
@@ -315,8 +324,7 @@ pub(crate) fn horizontal_gutter_preference(
                 }
                 include_label(&tick.label)?;
             }
-        } else if let Some(probe) = axes.numeric_probe(
-            1,
+        } else if let Some(probe) = base.numeric_probe(
             registered
                 .expect("prepared axis occurrence")
                 .axis_numeric_binding(operation)?,
@@ -325,14 +333,13 @@ pub(crate) fn horizontal_gutter_preference(
             for label in &probe.labels {
                 include_label(label)?;
             }
-        } else if !axes.empty_numeric_source(
-            1,
+        } else if !base.empty_numeric_source(
             registered.expect("prepared axis occurrence").raw_windows()[1].copied(),
         )? {
             for value in [
-                axes.ranges[1].0,
-                f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
-                axes.ranges[1].1,
+                axes.ranges()[1].0,
+                f64::midpoint(axes.ranges()[1].0, axes.ranges()[1].1),
+                axes.ranges()[1].1,
             ] {
                 include_label(&crate::layout::format_guide_label(value, 0)?)?;
             }

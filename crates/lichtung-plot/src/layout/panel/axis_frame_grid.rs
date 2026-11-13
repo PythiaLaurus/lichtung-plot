@@ -521,28 +521,51 @@ impl Axis {
         range: Option<(f64, f64)>,
         axis: &str,
     ) -> Result<(), Error> {
-        if ticks.is_empty() {
+        Self::validate_exact_tick_source(
+            &crate::orchestrator::registration::ExactTicksRef {
+                raw: ticks,
+                projected: None,
+            },
+            range,
+            axis,
+        )
+    }
+
+    pub(crate) fn validate_exact_ticks(
+        ticks: &crate::orchestrator::registration::ExactTicksRef<'_>,
+        range: (f64, f64),
+        axis: &str,
+    ) -> Result<(), Error> {
+        Self::validate_exact_tick_source(ticks, Some(range), axis)
+    }
+
+    fn validate_exact_tick_source(
+        ticks: &crate::orchestrator::registration::ExactTicksRef<'_>,
+        range: Option<(f64, f64)>,
+        axis: &str,
+    ) -> Result<(), Error> {
+        if ticks.raw.is_empty() {
             return Err(Error::Data(format!(
                 "{axis} explicit numeric ticks must not be empty"
             )));
         }
-        for (index, tick) in ticks.iter().enumerate() {
-            crate::text::validate_for(&tick.label, axis)?;
-            if !tick.position.is_finite() {
+        for index in 0..ticks.raw.len() {
+            let (position, label) = ticks.tick(index)?;
+            crate::text::validate_for(label, axis)?;
+            if !position.is_finite() {
                 return Err(Error::Data(format!(
-                    "{axis} explicit tick {index} position must be finite; got {}",
-                    tick.position
+                    "{axis} explicit tick {index} position must be finite; got {position}"
                 )));
             }
             if let Some(range) = range {
-                if tick.position < range.0 || tick.position > range.1 {
+                if position < range.0 || position > range.1 {
                     return Err(Error::Data(format!(
                         "{axis} explicit tick {index} position {} is outside resolved range {}..{}",
-                        tick.position, range.0, range.1
+                        position, range.0, range.1
                     )));
                 }
             }
-            if index > 0 && ticks[index - 1].position >= tick.position {
+            if index > 0 && ticks.tick(index - 1)?.0 >= position {
                 return Err(Error::Data(format!(
                     "{axis} explicit tick positions must be strictly ascending"
                 )));

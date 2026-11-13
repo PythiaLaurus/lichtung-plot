@@ -208,6 +208,7 @@ impl<'src> PreparedInteriorInputs<'src> {
                     intrinsic,
                     prepared,
                     axes,
+                    registered.source,
                     theme,
                     scope.as_deref(),
                 )?;

@@ -31,7 +31,7 @@ pub(crate) struct PreparedWaterfall {
 
 pub(crate) struct WaterfallTotalsPrepare<'v> {
     pub(crate) numeric: crate::numeric::source::NumericBinding<'v>,
-    pub(crate) axes: &'v crate::plots::shared_x::PreparedAxes,
+    pub(crate) axes: [crate::orchestrator::registration::BaseAxisRef<'v>; 2],
     pub(crate) format: Option<&'v std::sync::Arc<crate::numeric::format::NumericFormat>>,
 }
 
@@ -529,12 +529,12 @@ pub(crate) fn intrinsic_body_minimum(
             .description()
             .x_axis_spec()
             .limits
-            .unwrap_or(input.ranges[0]),
+            .unwrap_or(input.ranges()[0]),
         chart
             .description()
             .y_axis_spec()
             .limits
-            .unwrap_or(input.ranges[1]),
+            .unwrap_or(input.ranges()[1]),
         (0.0, 1.0, 0.0, 1.0),
     );
     let totals = &prepared.selected_totals(&projection)?.totals;
@@ -609,7 +609,7 @@ pub(crate) fn natural_body_height(
         .description()
         .x_axis_spec()
         .limits
-        .unwrap_or(axes.ranges[0]);
+        .unwrap_or(axes.ranges()[0]);
     let panel = PixelRect::new(0.0, width, 0.0, 1.0);
     let projection = crate::layout::Projection::new(
         range,
@@ -617,7 +617,7 @@ pub(crate) fn natural_body_height(
             .description()
             .y_axis_spec()
             .limits
-            .unwrap_or(axes.ranges[1]),
+            .unwrap_or(axes.ranges()[1]),
         panel.as_tuple(),
     );
     let registered_owner = registered.expect("prepared Waterfall occurrence");
@@ -787,9 +787,15 @@ pub(crate) fn measure(
         .registered
         .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("Waterfall native axes missing".into()))?;
-    let display = axes.display_categories[1]
-        .as_ref()
+    let source = context
+        .registered
+        .expect("prepared Waterfall occurrence")
+        .source;
+    let pair = [axes.axis(source, 0), axes.axis(source, 1)];
+    let display = &axes
+        .categories(1)
         .ok_or_else(|| Error::Render("Waterfall category display missing".into()))?;
+    let display = &display.ticks;
     let mut pitch = mark_minimum.1 / labels.len() as f64;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
@@ -804,10 +810,10 @@ pub(crate) fn measure(
         })
     {
         let mut heights = crate::data::source::collect_source(display.iter().map(|_| Ok(0.0)))?;
-        for index in axes.specs[1].category_labels.indices(display.len()) {
+        for index in pair[1].authored().category_labels.indices(display.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                &display[index],
+                &display[index].label,
                 theme.tick_text_appearance(crate::layout::AxisSide::Left),
                 width,
                 PhysicalTextAlignment::End,
@@ -819,7 +825,7 @@ pub(crate) fn measure(
             heights[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
         }
         let span = crate::layout::category_label_span(
-            &axes.specs[1].category_labels,
+            &pair[1].authored().category_labels,
             display.len(),
             |index| Ok(heights[index]),
         )?;
@@ -846,18 +852,16 @@ pub(crate) fn measure(
     )?;
     let projection =
         crate::layout::Projection::new(x_range, (0.0, labels.len() as f64), mark_panel.as_tuple());
-    let x = axes.specs[0].layout_ticks(
+    let x = pair[0].layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
-        Some(
-            context
-                .registered
-                .expect("prepared Waterfall occurrence")
-                .axis_numeric_binding(context.data.source_resources())?,
-        ),
+        context
+            .registered
+            .expect("prepared Waterfall occurrence")
+            .axis_numeric_binding(context.data.source_resources())?,
         context
             .registered
             .expect("prepared Waterfall occurrence")
@@ -868,7 +872,7 @@ pub(crate) fn measure(
             Ok(AxisTick::new(
                 (f64::midpoint(band.0, band.1) - mark_panel.y0) / mark_panel.height()
                     * labels.len() as f64,
-                crate::data::source::copy_source_string(label)?,
+                crate::data::source::copy_source_string(&label.label)?,
             ))
         }))?;
     let layout = crate::layout::Layout {
@@ -877,10 +881,10 @@ pub(crate) fn measure(
             label: axes.copy_label(0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
-            category_labels: axes.specs[0].category_labels.clone(),
+            category_labels: pair[0].authored().category_labels.clone(),
             source: x.source,
             numeric: x.numeric,
-            explicit_ticks: axes.specs[0].exact_ticks.is_some(),
+            explicit_ticks: pair[0].exact_ticks().is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
         },
@@ -888,7 +892,7 @@ pub(crate) fn measure(
             label: axes.copy_label(1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
-            category_labels: axes.specs[1].category_labels.clone(),
+            category_labels: pair[1].authored().category_labels.clone(),
             source: crate::layout::TickSource::SUPPLIED,
             numeric: None,
             explicit_ticks: false,
