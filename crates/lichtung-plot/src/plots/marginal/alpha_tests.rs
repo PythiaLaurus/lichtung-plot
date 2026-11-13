@@ -28,13 +28,15 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     .hide_point_outline()
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
-        &source,
-        &operation,
-        crate::orchestrator::registration::RowSelection::Full,
-        |data| finish(prepare(&source, data).unwrap(), None).unwrap(),
-    )
-    .unwrap();
+    let prepare_source = |source: &Plot| {
+        use crate::orchestrator::registration::{PlotRegistryBuilder, RowSelection, Scope};
+        let scope = Scope::new(source, &operation, 0, RowSelection::Full, None, None)?;
+        let mut registry = PlotRegistryBuilder::new(operation.root_identity());
+        let id = registry.reserve(source.description(), scope, &operation)?;
+        let (marks, mut axes) = prepare(source, registry.data(&id, &operation)?, &id)?;
+        Ok::<_, Error>((finish(marks, &mut axes, None)?, axes))
+    };
+    let (prepared, prepared_axes) = prepare_source(&source).unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 6);
     assert_eq!(
         prepared
@@ -62,14 +64,8 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
             AlphaTarget::Fill,
             AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
         );
-    let control = crate::data::with_source_data_for_test(
-        &control,
-        &operation,
-        crate::orchestrator::registration::RowSelection::Full,
-        |data| finish(prepare(&control, data).unwrap(), None).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(prepared.ranges, control.ranges);
+    let (control, control_axes) = prepare_source(&control).unwrap();
+    assert_eq!(prepared_axes.ranges(), control_axes.ranges());
     assert_eq!(prepared.curves.x_densities, control.curves.x_densities);
     assert_eq!(prepared.curves.y_densities, control.curves.y_densities);
     let mut theme = crate::Theme::publication().resolve().unwrap();

@@ -1185,9 +1185,8 @@ impl Canvas {
                     .placements
                     .plot(index)
                     .expect("validated shared x member");
-                let family = slots[index]
-                    .as_ref()
-                    .and_then(|id| registry.panels[id.slot].family.as_ref());
+                let registered = slots[index].as_ref().map(|id| &registry.panels[id.slot]);
+                let family = registered.and_then(|panel| panel.family.as_ref());
                 let range = if let Some(marks) = family.filter(|family| {
                     !matches!(
                         family,
@@ -1195,7 +1194,7 @@ impl Canvas {
                             | crate::orchestrator::registration::PreparedFamily::Line { .. }
                     )
                 }) {
-                    marks.x_range(plot)?
+                    marks.x_range(plot, registered.and_then(|panel| panel.axes.as_ref()))?
                 } else if plot.kind() == PlotKind::Scatter {
                     crate::layout::continuous_auto_range(
                         family
@@ -1355,16 +1354,15 @@ impl Canvas {
                 }
                 _ => {
                     plot.description().configured_source_rows()?;
-                    crate::orchestrator::registration::PreparedFamily::new(
+                    crate::plots::shared_x::prepare_plot_registration(
+                        panel,
                         plot,
-                        panel.data(&resources)?,
                         themes
                             .and_then(|themes| themes.plot(index))
                             .map(|theme| &**theme),
-                        panel
-                            .scope
-                            .numeric_binding(panel.source, &panel.row_source, &resources)?,
-                    )?
+                        &resources,
+                    )?;
+                    panel.family.take().expect("prepared reference family")
                 }
             };
             panel.family = Some(family);

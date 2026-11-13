@@ -1,9 +1,8 @@
-use crate::data::PlotData;
 use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 use crate::layout::AxisTick;
 use crate::orchestrator::registration::{
-    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, MarginalStrip, PreparedAxes,
-    PreparedAxesOwner, PreparedAxisSource, PreparedCategorySource,
+    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, PreparedAxes, PreparedAxesOwner,
+    PreparedAxisSource, PreparedCategorySource,
 };
 use crate::orchestrator::registration::{
     PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily, RowSelection, Scope,
@@ -99,96 +98,106 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
     }
 }
 
-impl PreparedFamily {
-    pub(crate) fn new(
-        source: &Plot,
-        data: PlotData<'_, '_>,
-        owner: Option<&crate::theme::Theme>,
-        numeric: crate::numeric::source::NumericBinding<'_>,
-    ) -> Result<Self, Error> {
-        match source.kind() {
-            PlotKind::Waterfall => Ok(Self::Waterfall(crate::plots::waterfall::prepare(
-                source, data,
-            )?)),
-            PlotKind::Beeswarm => Ok(Self::Beeswarm(crate::plots::beeswarm::prepare(
-                source,
-                data,
-                continuous_selection(source, owner)?,
-                numeric,
-            )?)),
-            PlotKind::Marginal => Ok(Self::Marginal(crate::plots::marginal::prepare(
-                source, data,
-            )?)),
-            PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(
-                source,
-                data,
-                continuous_selection(source, owner)?,
-                numeric,
-            )?)),
-            PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
-                source, data, None,
-            )?)),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Distribution {
+pub(crate) fn prepare_plot_registration(
+    panel: &mut PlotRegistrationBuild<'_>,
+    source: &Plot,
+    owner: Option<&crate::theme::Theme>,
+    operation: &crate::font::canonical::OperationContext,
+) -> Result<(), Error> {
+    let data = panel.data(operation)?;
+    let numeric = panel
+        .scope
+        .numeric_binding(panel.source, &panel.row_source, operation)?;
+    let family = match source.kind() {
+        PlotKind::Waterfall => Ok(PreparedFamily::Waterfall(crate::plots::waterfall::prepare(
+            source, data,
+        )?)),
+        PlotKind::Beeswarm => Ok(PreparedFamily::Beeswarm(crate::plots::beeswarm::prepare(
+            source,
+            data,
+            continuous_selection(source, owner)?,
+            numeric,
+        )?)),
+        PlotKind::Marginal => {
+            let (marks, axes) = crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
+            panel.axes = Some(axes);
+            Ok(PreparedFamily::Marginal(marks))
+        }
+        PlotKind::Heatmap => Ok(PreparedFamily::Heatmap(crate::plots::heatmap::prepare(
+            source,
+            data,
+            continuous_selection(source, owner)?,
+            numeric,
+        )?)),
+        PlotKind::Interaction => Ok(PreparedFamily::Interaction(
+            crate::plots::interaction::prepare(source, data, None)?,
+        )),
+        PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+            Ok(PreparedFamily::Distribution {
                 kind: source.kind(),
                 marks: crate::plots::categorical_distribution::PreparedDistribution::new(
                     source, data, None,
                 )?,
-            }),
-            PlotKind::Bar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar => Ok(Self::Bars {
+            })
+        }
+        PlotKind::Bar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedBar
+        | PlotKind::StackedHorizontalBar => Ok(PreparedFamily::Bars {
+            kind: source.kind(),
+            mode: crate::plots::bar_data::mode(source),
+            marks: crate::plots::bar_data::prepare(
+                source,
+                data,
+                crate::plots::bar_data::mode(source),
+            )?,
+        }),
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            Ok(PreparedFamily::Estimate {
                 kind: source.kind(),
-                mode: crate::plots::bar_data::mode(source),
-                marks: crate::plots::bar_data::prepare(
+                marks: crate::plots::interval_estimate::PreparedEstimate::new(
                     source,
                     data,
-                    crate::plots::bar_data::mode(source),
+                    source.description().significance_annotations(),
+                    numeric,
                 )?,
-            }),
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
-                Ok(Self::Estimate {
-                    kind: source.kind(),
-                    marks: crate::plots::interval_estimate::PreparedEstimate::new(
-                        source,
-                        data,
-                        source.description().significance_annotations(),
-                        numeric,
-                    )?,
-                })
-            }
-            PlotKind::Dumbbell => Ok(Self::Dumbbell(crate::plots::dumbbell::prepare(
-                source.description(),
-                data,
-            )?)),
-            PlotKind::Histogram => Ok(Self::Histogram(
-                crate::plots::histogram::HistogramSemantics::new(
-                    source.description(),
-                    data,
-                    owner,
-                )?,
-            )),
-            PlotKind::Density => Ok(Self::Density(crate::plots::density::PreparedDensity::new(
-                source, data,
-            )?)),
-            PlotKind::Qq => Ok(Self::Qq(crate::plots::qq::PreparedQq::new(
-                source.description(),
-                data,
-            )?)),
-            PlotKind::Regression => Ok(Self::Regression(
-                crate::plots::regression::PreparedRegression::new(source.description(), data)?,
-            )),
-            _ => Err(Error::Render(
-                "shared semantics require an extracted reference or paired-endpoint family".into(),
-            )),
+            })
         }
-    }
+        PlotKind::Dumbbell => Ok(PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
+            source.description(),
+            data,
+        )?)),
+        PlotKind::Histogram => Ok(PreparedFamily::Histogram(
+            crate::plots::histogram::HistogramSemantics::new(source.description(), data, owner)?,
+        )),
+        PlotKind::Density => Ok(PreparedFamily::Density(
+            crate::plots::density::PreparedDensity::new(source, data)?,
+        )),
+        PlotKind::Qq => Ok(PreparedFamily::Qq(crate::plots::qq::PreparedQq::new(
+            source.description(),
+            data,
+        )?)),
+        PlotKind::Regression => Ok(PreparedFamily::Regression(
+            crate::plots::regression::PreparedRegression::new(source.description(), data)?,
+        )),
+        _ => Err(Error::Render(
+            "shared semantics require an extracted reference or paired-endpoint family".into(),
+        )),
+    }?;
+    panel.family = Some(family);
+    Ok(())
+}
 
+impl PreparedFamily {
     #[expect(
         clippy::cast_precision_loss,
         reason = "category counts are admitted source rows"
     )]
-    pub(crate) fn x_range(&self, source: &Plot) -> Result<(f64, f64), Error> {
+    pub(crate) fn x_range(
+        &self,
+        source: &Plot,
+        axes: Option<&PreparedAxesOwner>,
+    ) -> Result<(f64, f64), Error> {
         Ok(match self {
             Self::Waterfall(marks) => crate::layout::continuous_auto_range(
                 marks.range,
@@ -198,7 +207,7 @@ impl PreparedFamily {
                 marks.x_data,
                 source.description().x_axis_spec(),
             )?,
-            Self::Marginal(marks) => marks.ranges[0],
+            Self::Marginal(_) => axes.expect("prepared Marginal axes").ranges()[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
             Self::Distribution { marks, .. } => (0.0, marks.categories().len() as f64),
@@ -257,7 +266,11 @@ pub(crate) fn prepare_reference_plot(
             PreparedFamily::Beeswarm(marks)
         }
         PreparedFamily::Marginal(marks) => {
-            PreparedFamily::Marginal(crate::plots::marginal::finish(marks, x_limits)?)
+            PreparedFamily::Marginal(crate::plots::marginal::finish(
+                marks,
+                panel.axes.as_mut().expect("prepared Marginal axes"),
+                x_limits,
+            )?)
         }
         PreparedFamily::Heatmap(mut marks) => {
             if labels.is_some() {
@@ -274,7 +287,14 @@ pub(crate) fn prepare_reference_plot(
         labels,
         ..ReferenceAxisConfig::default()
     };
-    let axes = prepare(source, &panel.scope.id, None, Some(&family), Some(config))?;
+    let axes = prepare(
+        source,
+        &panel.scope.id,
+        None,
+        Some(&family),
+        Some(config),
+        panel.axes.take(),
+    )?;
     if let PreparedFamily::Waterfall(marks) = &mut family {
         marks.prepare_totals(
             crate::plots::waterfall::WaterfallTotalsPrepare {
@@ -326,10 +346,6 @@ pub(crate) fn prepare_plot<'src>(
             registry.reserve(source.description(), scope, resources)
         })
         .transpose()?;
-    let source_data = source_id
-        .as_ref()
-        .map(|id| registry.data(id, resources))
-        .transpose()?;
     if matches!(
         source.kind(),
         PlotKind::Histogram
@@ -354,22 +370,17 @@ pub(crate) fn prepare_plot<'src>(
             | PlotKind::Interaction
     ) && !source.description().has_facets()
     {
-        let panel = &registry.panels[0];
-        let family = PreparedFamily::new(
-            source,
-            source_data.expect("single plot data"),
-            owner,
-            panel
-                .scope
-                .numeric_binding(panel.source, &panel.row_source, resources)?,
-        )?;
-        registry.panels[0].family = Some(family);
+        prepare_plot_registration(&mut registry.panels[0], source, owner, resources)?;
         prepare_reference_plot(source, &mut registry.panels[0], None, None, resources)?;
         return PreparedInteriorInputs::from_registry(
             registry,
             InteriorRoute::classify(source.kind()),
         );
     }
+    let source_data = source_id
+        .as_ref()
+        .map(|id| registry.data(id, resources))
+        .transpose()?;
     if source.kind() == PlotKind::Scatter && !source.description().has_facets() {
         let marks = crate::plots::scatter::PreparedScatter::new(
             source.description(),
@@ -625,6 +636,7 @@ pub(crate) fn prepare_plot<'src>(
                             estimate_fallback,
                             ..ReferenceAxisConfig::default()
                         }),
+                        panel.axes.take(),
                     )?);
                     continue;
                 }
@@ -638,6 +650,7 @@ pub(crate) fn prepare_plot<'src>(
                     estimate_fallback,
                     ..ReferenceAxisConfig::default()
                 }),
+                panel.axes.take(),
             )?;
             panel.family = Some(family);
             panel.axes = Some(axes);
@@ -727,7 +740,7 @@ pub(crate) fn prepare_plot<'src>(
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
         registry.panels[0].axes = Some(axes);
     } else {
-        let axes = prepare(source, &registry.panels[0].scope.id, None, None, None)?;
+        let axes = prepare(source, &registry.panels[0].scope.id, None, None, None, None)?;
         registry.panels[0].axes = Some(axes);
     }
     PreparedInteriorInputs::from_registry(registry, InteriorRoute::classify(source.kind()))
@@ -761,7 +774,14 @@ pub(crate) fn prepare_scatter_plot(
     panel: &mut PlotRegistrationBuild<'_>,
 ) -> Result<(), Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
-    let axes = prepare(source, &panel.scope.id, None, panel.family.as_ref(), None)?;
+    let axes = prepare(
+        source,
+        &panel.scope.id,
+        None,
+        panel.family.as_ref(),
+        None,
+        panel.axes.take(),
+    )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges(),
@@ -775,7 +795,14 @@ pub(crate) fn prepare_line_plot(
     source: &Plot,
     panel: &mut PlotRegistrationBuild<'_>,
 ) -> Result<(), Error> {
-    let axes = prepare(source, &panel.scope.id, None, panel.family.as_ref(), None)?;
+    let axes = prepare(
+        source,
+        &panel.scope.id,
+        None,
+        panel.family.as_ref(),
+        None,
+        panel.axes.take(),
+    )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges(),
@@ -887,6 +914,7 @@ fn prepare(
     facet: Option<crate::data::FacetAxisSources<'_>>,
     family: Option<&PreparedFamily>,
     reference_config: Option<ReferenceAxisConfig<'_>>,
+    prepared_axes: Option<PreparedAxesOwner>,
 ) -> Result<PreparedAxesOwner, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
 
@@ -969,7 +997,8 @@ fn prepare(
             ]
         }
         PlotKind::Marginal => {
-            marks!(reference, PreparedFamily::Marginal(marks) => marks, "marginal axes require retained semantics").ranges
+            marks!(reference, PreparedFamily::Marginal(marks) => marks, "marginal axes require retained semantics");
+            prepared_axes.as_ref().expect("prepared Marginal axes").ranges()
         }
         PlotKind::Bar
         | PlotKind::StackedBar
@@ -1257,78 +1286,55 @@ fn prepare(
         chart.description().prepare_axis_labels(labels)?
     };
     let policies = crate::layout::range_policies(chart.kind());
-    let sources = std::array::from_fn(|side| {
-        let range = ranges[side];
-        let categories = prepared_categories[side].take();
-        let source = PreparedAxisSource {
-            witness: AxisSourceWitness {
-                plot_id: plot_id.clone(),
-                slot: {
-                    let side = if side == 0 {
+    let mut axes = prepared_axes.unwrap_or_else(|| {
+        PreparedAxesOwner::Pair(PreparedAxes {
+            sources: std::array::from_fn(|side| PreparedAxisSource {
+                witness: AxisSourceWitness {
+                    plot_id: plot_id.clone(),
+                    slot: AxisSlot::Pair(if side == 0 {
                         crate::layout::AxisSide::Bottom
                     } else {
                         crate::layout::AxisSide::Left
-                    };
-                    if chart.kind() == PlotKind::Marginal {
-                        AxisSlot::MarginalCentral(side)
-                    } else {
-                        AxisSlot::Pair(side)
-                    }
+                    }),
+                    space: AxisSpace::Continuous(AxisScale::Linear),
                 },
-                space: if categories.is_some() {
-                    AxisSpace::Categorical
-                } else {
-                    AxisSpace::Continuous(if logarithmic && side == 0 {
-                        AxisScale::Log10
-                    } else {
-                        AxisScale::Linear
-                    })
-                },
-            },
-            range_policy: if categories.is_some() {
-                crate::layout::RangePolicy::CategorySlots
-            } else {
-                policies[side]
-            },
-            base_seed: Some(DisplayExtent {
-                lower: range.0,
-                upper: range.1,
+                range_policy: policies[side],
+                base_seed: None,
+                base_provenance: provenance[side],
+                categories: None,
+                projected_exact_positions: None,
+                label: std::sync::OnceLock::new(),
             }),
-            base_provenance: provenance[side],
-            categories,
-            projected_exact_positions: projected_exact_positions[side].take(),
-            label: std::sync::OnceLock::new(),
+        })
+    });
+    for (side, source) in axes.sources_mut().iter_mut().enumerate() {
+        let categories = prepared_categories[side].take();
+        source.witness.space = if categories.is_some() {
+            AxisSpace::Categorical
+        } else {
+            AxisSpace::Continuous(if logarithmic && side == 0 {
+                AxisScale::Log10
+            } else {
+                AxisScale::Linear
+            })
         };
+        source.range_policy = if categories.is_some() {
+            crate::layout::RangePolicy::CategorySlots
+        } else {
+            policies[side]
+        };
+        source.base_seed = Some(DisplayExtent {
+            lower: ranges[side].0,
+            upper: ranges[side].1,
+        });
+        source.base_provenance = provenance[side];
+        source.categories = categories;
+        source.projected_exact_positions = projected_exact_positions[side].take();
         if facet.is_none() {
             let _ = source
                 .label
                 .set(labels[side].take().unwrap_or(crate::Text::UNSET));
         }
-        source
-    });
-    Ok(if chart.kind() == PlotKind::Marginal {
-        PreparedAxesOwner::Marginal {
-            central: sources,
-            strip_density: [MarginalStrip::Top, MarginalStrip::Right].map(|strip| {
-                PreparedAxisSource {
-                    witness: AxisSourceWitness {
-                        plot_id: plot_id.clone(),
-                        slot: AxisSlot::MarginalStripDensity(strip),
-                        space: AxisSpace::Continuous(AxisScale::Linear),
-                    },
-                    range_policy: crate::layout::RangePolicy::ContinuousNice,
-                    base_seed: Some(DisplayExtent {
-                        lower: 0.0,
-                        upper: 1.0,
-                    }),
-                    base_provenance: crate::layout::RangeProvenance::Automatic,
-                    categories: None,
-                    projected_exact_positions: None,
-                    label: std::sync::OnceLock::from(crate::Text::UNSET),
-                }
-            }),
-        }
-    } else {
-        PreparedAxesOwner::Pair(PreparedAxes { sources })
-    })
+    }
+    Ok(axes)
 }

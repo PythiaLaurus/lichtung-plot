@@ -29,6 +29,10 @@ use crate::alpha::{
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::{self, AxisSpec, PixelRect};
+use crate::orchestrator::registration::{
+    AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, MarginalStrip, PlotOccurrenceId,
+    PreparedAxesOwner, PreparedAxisSource,
+};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde, kde_support_range, strict_scott_bandwidth};
@@ -58,7 +62,6 @@ struct HueGroup {
 pub(crate) struct PreparedMarginal {
     groups: Vec<HueGroup>,
     hues: Vec<String>,
-    pub(crate) ranges: [(f64, f64); 2],
     curves: MarginalCurves,
 }
 
@@ -502,6 +505,8 @@ pub(crate) fn measure(
         })
         .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
+    let registered = context.registered.expect("prepared Marginal occurrence");
+    let base_ranges = registered.axes.ranges();
     theme.text.prepared_font_environment()?;
     let data = context.data;
 
@@ -578,9 +583,8 @@ pub(crate) fn measure(
     let (right_x0, right_x1) = columns[1];
 
     // --- Data ranges ---
-    let (x_low, x_high) =
-        context.axis_range(layout::AxisSide::Bottom, || Ok(prepared.ranges[0]))?;
-    let (y_low, y_high) = context.axis_range(layout::AxisSide::Left, || Ok(prepared.ranges[1]))?;
+    let (x_low, x_high) = context.axis_range(layout::AxisSide::Bottom, || Ok(base_ranges[0]))?;
+    let (y_low, y_high) = context.axis_range(layout::AxisSide::Left, || Ok(base_ranges[1]))?;
     let ranges = [(x_low, x_high), (y_low, y_high)];
     // Automatic clearance expands the projection around the retained density
     // source. Regenerating endpoints on each expanded boundary would recreate
@@ -877,9 +881,9 @@ pub(crate) fn measure(
             }
             let requests = crate::layout::interior::automatic_absolute_ink_expansions(
                 if side == 0 {
-                    [prepared.ranges[0], (0.0, 1.0)]
+                    [base_ranges[0], (0.0, 1.0)]
                 } else {
-                    [(0.0, 1.0), prepared.ranges[1]]
+                    [(0.0, 1.0), base_ranges[1]]
                 },
                 &panel.projection,
                 bounds,
@@ -932,7 +936,8 @@ pub(crate) fn measure(
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
-) -> Result<PreparedMarginal, Error> {
+    plot_id: &PlotOccurrenceId,
+) -> Result<(PreparedMarginal, PreparedAxesOwner), Error> {
     let (mut groups, hues) = build_groups(chart, data)?;
     let fill_alpha = chart.description().prepare_collective_alpha(
         AlphaTarget::Fill,
@@ -953,22 +958,76 @@ pub(crate) fn prepare(
         }
     }
     let ranges = ranges_from_groups(chart, &groups)?;
-    Ok(PreparedMarginal {
-        groups,
-        hues,
-        ranges,
-        curves: MarginalCurves::default(),
-    })
+    let axis_source = |slot, range, range_policy, base_provenance, label| PreparedAxisSource {
+        witness: AxisSourceWitness {
+            plot_id: plot_id.clone(),
+            slot,
+            space: AxisSpace::Continuous(crate::AxisScale::Linear),
+        },
+        range_policy,
+        base_seed: Some(range),
+        base_provenance,
+        categories: None,
+        projected_exact_positions: None,
+        label,
+    };
+    let central = std::array::from_fn(|side| {
+        axis_source(
+            AxisSlot::MarginalCentral(if side == 0 {
+                layout::AxisSide::Bottom
+            } else {
+                layout::AxisSide::Left
+            }),
+            DisplayExtent {
+                lower: ranges[side].0,
+                upper: ranges[side].1,
+            },
+            layout::RangePolicy::MarginalSupport,
+            if side == 0 {
+                chart.description().x_axis_spec().provenance
+            } else {
+                chart.description().y_axis_spec().provenance
+            },
+            std::sync::OnceLock::new(),
+        )
+    });
+    let strip_density = [MarginalStrip::Top, MarginalStrip::Right].map(|strip| {
+        axis_source(
+            AxisSlot::MarginalStripDensity(strip),
+            DisplayExtent {
+                lower: 0.0,
+                upper: 1.0,
+            },
+            layout::RangePolicy::ContinuousNice,
+            layout::RangeProvenance::Automatic,
+            std::sync::OnceLock::from(crate::Text::UNSET),
+        )
+    });
+    Ok((
+        PreparedMarginal {
+            groups,
+            hues,
+            curves: MarginalCurves::default(),
+        },
+        PreparedAxesOwner::Marginal {
+            central,
+            strip_density,
+        },
+    ))
 }
 
 pub(crate) fn finish(
     mut prepared: PreparedMarginal,
+    axes: &mut PreparedAxesOwner,
     x_limits: Option<(f64, f64)>,
 ) -> Result<PreparedMarginal, Error> {
     if let Some(limits) = x_limits {
-        prepared.ranges[0] = limits;
+        axes.sources_mut()[0].base_seed = Some(DisplayExtent {
+            lower: limits.0,
+            upper: limits.1,
+        });
     }
-    prepared.curves = render_curves(&prepared.groups, prepared.ranges)?;
+    prepared.curves = render_curves(&prepared.groups, axes.ranges())?;
     Ok(prepared)
 }
 
@@ -1265,3 +1324,6 @@ fn kde_visible_support_range<'a>(
 
 #[cfg(test)]
 mod alpha_tests;
+
+#[cfg(test)]
+mod tests;
