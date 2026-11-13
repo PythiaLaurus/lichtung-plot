@@ -247,7 +247,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
     .y_limits(-1.0, 3.0)
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let (prepared, _, _) = crate::data::with_source_data_for_test(
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,

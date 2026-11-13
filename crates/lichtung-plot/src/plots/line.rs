@@ -19,9 +19,7 @@ mod tests;
 
 #[derive(Debug)]
 pub(crate) struct PreparedLine {
-    pub(crate) ranges: [(f64, f64); 2],
     mark_ranges: [(f64, f64); 2],
-    pub(crate) conditions: Option<Vec<String>>,
     groups: Vec<LineGroup>,
     hues: Vec<String>,
     layers: Vec<PointLayer>,
@@ -419,12 +417,16 @@ impl PreparedLine {
         Ok(entries)
     }
 
+    #[expect(
+        clippy::type_complexity,
+        reason = "the original seeds and optional category source move directly to the registration without a second retained record"
+    )]
     pub(crate) fn new(
         chart: &Plot,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
-    ) -> Result<Self, Error> {
-        let mut prepared = Self::prepare_scientific(chart, data, conditions)?;
+    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
+        let (mut prepared, ranges, conditions) = Self::prepare_scientific(chart, data, conditions)?;
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
                 && chart.description().line_path_style_spec() == LinePathStyle::Hue);
@@ -456,19 +458,20 @@ impl PreparedLine {
                 group.fill_alpha = alpha.collective(chart.description(), identity)?;
             }
         }
-        Ok(prepared)
+        Ok((prepared, ranges, conditions))
     }
 
     #[expect(
         clippy::too_many_lines,
         clippy::float_cmp,
+        clippy::type_complexity,
         reason = "one normalization preserves family order; duplicate scientific coordinates compare exactly including signed zero"
     )]
     fn prepare_scientific(
         chart: &Plot,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
         data.validate_row_source()?;
         let alpha = chart.description().prepare_alpha(
             AlphaTarget::Point,
@@ -778,15 +781,17 @@ impl PreparedLine {
         ranges[1] =
             crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?;
         let primary_accent_slots = usize::from(chart.description().hue_col().is_none());
-        Ok(Self {
+        Ok((
+            Self {
+                mark_ranges,
+                groups,
+                hues,
+                layers,
+                primary_accent_slots,
+            },
             ranges,
-            mark_ranges,
             conditions,
-            groups,
-            hues,
-            layers,
-            primary_accent_slots,
-        })
+        ))
     }
 }
 
@@ -817,7 +822,20 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    project(chart, prepared, layout, theme, data, context.fit_scope())
+    project(
+        chart,
+        prepared,
+        context
+            .registered
+            .expect("prepared line occurrence")
+            .axes
+            .categories(0)
+            .is_some(),
+        layout,
+        theme,
+        data,
+        context.fit_scope(),
+    )
 }
 
 #[expect(
@@ -827,6 +845,7 @@ pub(crate) fn measure_marks(
 fn project(
     chart: &Plot,
     prepared: &PreparedLine,
+    categorical_x: bool,
     layout: crate::layout::Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_, '_>,
@@ -1153,7 +1172,7 @@ fn project(
             .reduce(crate::render::geometry::GeometryBox::union),
     ) {
         let automatic = [
-            chart.user_x_limits().is_none() && prepared.conditions.is_none(),
+            chart.user_x_limits().is_none() && !categorical_x,
             chart.user_y_limits().is_none(),
         ];
         let additional = crate::layout::interior::automatic_absolute_ink_expansions(
@@ -1209,7 +1228,7 @@ fn project(
             &layout.projection,
             bounds,
             [
-                chart.user_x_limits().is_none() && prepared.conditions.is_none(),
+                chart.user_x_limits().is_none() && !categorical_x,
                 chart.user_y_limits().is_none(),
             ],
             scope,
@@ -1221,7 +1240,7 @@ fn project(
     }
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
         .with_axis_domains(
-            if prepared.conditions.is_some() {
+            if categorical_x {
                 AxisDomain::Categorical
             } else {
                 AxisDomain::Continuous

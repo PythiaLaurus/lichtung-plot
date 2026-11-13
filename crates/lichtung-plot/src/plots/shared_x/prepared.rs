@@ -15,25 +15,40 @@ use crate::{Error, Plot};
 pub(crate) fn prepare_pair_axes(
     build: &PlotRegistrationBuild<'_>,
     ranges: [(f64, f64); 2],
+    categories: [Option<Vec<String>>; 2],
 ) -> Result<PreparedAxesOwner, Error> {
     let policies = crate::layout::range_policies(build.source.kind());
     let [x, y] = ranges.map(|(lower, upper)| Some(DisplayExtent { lower, upper }));
+    let [x_categories, y_categories] = categories.map(|raw| {
+        raw.map(|raw| PreparedCategorySource {
+            raw,
+            ticks: Vec::new(),
+        })
+    });
     Ok(PreparedAxesOwner::Pair(PreparedAxes {
         sources: [
             crate::orchestrator::registration::prepare_axis_source(
                 build,
                 AxisSlot::Pair(crate::layout::AxisSide::Bottom),
                 x,
-                policies[0],
-                None,
+                if x_categories.is_some() {
+                    crate::layout::RangePolicy::CategorySlots
+                } else {
+                    policies[0]
+                },
+                x_categories,
                 None,
             )?,
             crate::orchestrator::registration::prepare_axis_source(
                 build,
                 AxisSlot::Pair(crate::layout::AxisSide::Left),
                 y,
-                policies[1],
-                None,
+                if y_categories.is_some() {
+                    crate::layout::RangePolicy::CategorySlots
+                } else {
+                    policies[1]
+                },
+                y_categories,
                 None,
             )?,
         ],
@@ -203,7 +218,7 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 owner,
             )?;
-            panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+            panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
             Ok(PreparedFamily::Histogram(marks))
         }
         PlotKind::Density => Ok(PreparedFamily::Density(
@@ -216,7 +231,7 @@ pub(crate) fn prepare_plot_registration(
         PlotKind::Regression => {
             let (marks, ranges) =
                 crate::plots::regression::PreparedRegression::new(source.description(), data)?;
-            panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+            panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
             Ok(PreparedFamily::Regression(marks))
         }
         _ => Err(Error::Render(
@@ -425,7 +440,11 @@ pub(crate) fn prepare_plot<'src>(
             source.description(),
             source_data.expect("single plot data"),
         )?;
-        registry.panels[0].axes = Some(prepare_pair_axes(&registry.panels[0], ranges)?);
+        registry.panels[0].axes = Some(prepare_pair_axes(
+            &registry.panels[0],
+            ranges,
+            [None, None],
+        )?);
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
         prepare_scatter_plot(source, &mut registry.panels[0])?;
         return PreparedInteriorInputs::from_registry(
@@ -438,11 +457,16 @@ pub(crate) fn prepare_plot<'src>(
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
     ) && !source.description().has_facets()
     {
-        let marks = crate::plots::line::PreparedLine::new(
+        let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
             source,
             source_data.expect("single plot data"),
             None,
         )?;
+        registry.panels[0].axes = Some(prepare_pair_axes(
+            &registry.panels[0],
+            ranges,
+            [conditions, None],
+        )?);
         registry.panels[0].family = Some(PreparedFamily::Line {
             kind: source.kind(),
             marks,
@@ -582,17 +606,16 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::Scatter => {
                     let (marks, ranges) =
                         crate::plots::scatter::PreparedScatter::new(source.description(), data)?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
                     PreparedFamily::Scatter(marks)
                 }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                    let (marks, ranges, conditions) =
+                        crate::plots::line::PreparedLine::new(source, data, facet.conditions)?;
+                    panel.axes = Some(prepare_pair_axes(panel, ranges, [conditions, None])?);
                     PreparedFamily::Line {
                         kind: source.kind(),
-                        marks: crate::plots::line::PreparedLine::new(
-                            source,
-                            data,
-                            facet.conditions,
-                        )?,
+                        marks,
                     }
                 }
                 PlotKind::Histogram => {
@@ -601,7 +624,7 @@ pub(crate) fn prepare_plot<'src>(
                         data,
                         owner,
                     )?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
                     PreparedFamily::Histogram(marks)
                 }
                 PlotKind::Density => PreparedFamily::Density(
@@ -616,7 +639,7 @@ pub(crate) fn prepare_plot<'src>(
                         source.description(),
                         data,
                     )?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges)?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
                     PreparedFamily::Regression(marks)
                 }
                 PlotKind::Dumbbell => PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
@@ -964,7 +987,7 @@ fn prepare(
     facet: Option<crate::data::FacetAxisSources<'_>>,
     family: Option<&PreparedFamily>,
     reference_config: Option<ReferenceAxisConfig<'_>>,
-    prepared_axes: Option<PreparedAxesOwner>,
+    mut prepared_axes: Option<PreparedAxesOwner>,
 ) -> Result<PreparedAxesOwner, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
 
@@ -1024,29 +1047,21 @@ fn prepare(
         PlotKind::Density => marks!(family, PreparedFamily::Density(marks) => marks, "Density axes require prepared semantics").ranges(chart.description())?,
         PlotKind::Qq => marks!(family, PreparedFamily::Qq(marks) => marks, "Qq axes require prepared semantics").ranges(chart.description())?,
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let line = marks!(family, PreparedFamily::Line { marks, .. } => marks, "line axis inputs require prepared semantics");
-            categories[0] = line
-                .conditions
-                .as_ref()
-                .map(|levels| {
-                    crate::data::source::collect_source(
-                        levels
-                            .iter()
-                            .map(|label| crate::data::source::copy_source_string(label)),
-                    )
-                })
-                .transpose()?;
+            marks!(family, PreparedFamily::Line { marks, .. } => marks, "line axis inputs require prepared semantics");
+            let axes = prepared_axes.as_mut().expect("prepared line axes");
+            categories[0] = axes.sources_mut()[0].categories.take().map(|categories| categories.raw);
+            let ranges = axes.ranges();
             [
                 chart
                     .description()
                     .x_axis_spec()
                     .limits
-                    .unwrap_or(line.ranges[0]),
+                    .unwrap_or(ranges[0]),
                 chart
                     .description()
                     .y_axis_spec()
                     .limits
-                    .unwrap_or(line.ranges[1]),
+                    .unwrap_or(ranges[1]),
             ]
         }
         PlotKind::Marginal => {

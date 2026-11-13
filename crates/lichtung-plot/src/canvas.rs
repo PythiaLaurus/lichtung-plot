@@ -1219,7 +1219,7 @@ impl Canvas {
                     plot.kind(),
                     PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
                 ) {
-                    let marks = family
+                    family
                         .and_then(|family| match family {
                             crate::orchestrator::registration::PreparedFamily::Line {
                                 marks,
@@ -1230,12 +1230,15 @@ impl Canvas {
                         .ok_or_else(|| {
                             Error::Render("shared line range requires root-prepared inputs".into())
                         })?;
-                    if marks.conditions.is_some() {
+                    let axes = registered
+                        .and_then(|panel| panel.axes.as_ref())
+                        .expect("prepared line axes");
+                    if axes.categories(0).is_some() {
                         return Err(Error::Data(
                             "canvas x-range group has a categorical x axis".into(),
                         ));
                     }
-                    marks.ranges[0]
+                    axes.ranges()[0]
                 } else {
                     return Err(Error::Data(
                         "canvas x-range group requires a continuous single x axis".into(),
@@ -1339,8 +1342,13 @@ impl Canvas {
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
-                    let marks =
+                    let (marks, ranges, conditions) =
                         crate::plots::line::PreparedLine::new(plot, panel.data(&resources)?, None)?;
+                    panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
+                        panel,
+                        ranges,
+                        [conditions, None],
+                    )?);
                     crate::orchestrator::registration::PreparedFamily::Line {
                         kind: plot.kind(),
                         marks,
@@ -1352,7 +1360,11 @@ impl Canvas {
                         plot.description(),
                         panel.data(&resources)?,
                     )?;
-                    panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(panel, ranges)?);
+                    panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
+                        panel,
+                        ranges,
+                        [None, None],
+                    )?);
                     crate::orchestrator::registration::PreparedFamily::Scatter(marks)
                 }
                 _ => {
