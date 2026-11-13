@@ -543,7 +543,7 @@ pub(crate) fn measure(
     let layout = Layout {
         projection,
         x_axis: crate::layout::Axis {
-            label: axes.copy_label(0)?,
+            label: axes.copy_label(context.registered.expect("prepared Beeswarm occurrence"), 0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
             category_labels: pair[0]
@@ -558,7 +558,7 @@ pub(crate) fn measure(
             assigned_cells: None,
         },
         y_axis: crate::layout::Axis {
-            label: axes.copy_label(1)?,
+            label: axes.copy_label(context.registered.expect("prepared Beeswarm occurrence"), 1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
             category_labels: pair[1]

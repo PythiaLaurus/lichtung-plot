@@ -155,13 +155,42 @@ impl PreparedAxesOwner {
         self.sources()[side].categories.as_ref()
     }
 
-    pub(crate) fn label(&self, side: usize) -> Option<&Text> {
-        self.sources()[side].label.get().and_then(Text::provided)
+    pub(crate) fn label(
+        &self,
+        registered: &super::PlotRegistration<'_>,
+        side: usize,
+    ) -> Option<&Text> {
+        axis_label(registered, &self.sources()[side], side)
     }
 
-    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<Text>, Error> {
-        self.label(side).map(Text::try_copy).transpose()
+    pub(crate) fn copy_label(
+        &self,
+        registered: &super::PlotRegistration<'_>,
+        side: usize,
+    ) -> Result<Option<Text>, Error> {
+        self.label(registered, side).map(Text::try_copy).transpose()
     }
+
+    pub(crate) fn retain_axis_labels(&self, labels: [Option<&Text>; 2]) -> Result<(), Error> {
+        for (source, label) in self.sources().iter().zip(labels) {
+            if source.label.get().is_none() {
+                let label = label.map_or(Ok(Text::UNSET), Text::try_copy)?;
+                let _ = source.label.set(label);
+            }
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn axis_label<'v>(
+    registered: &super::PlotRegistration<'_>,
+    source: &'v PreparedAxisSource,
+    side: usize,
+) -> Option<&'v Text> {
+    if !registered.policy.axis_text.titles[side] {
+        return None;
+    }
+    source.label.get().and_then(Text::provided)
 }
 
 #[derive(Debug, Clone, Copy)]

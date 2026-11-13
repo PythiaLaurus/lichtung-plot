@@ -601,12 +601,12 @@ pub(crate) fn measure(
                 .registered
                 .and_then(|registered| registered.axes.coordinate())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                .copy_label(0)?,
+                .copy_label(registered, 0)?,
             context
                 .registered
                 .and_then(|registered| registered.axes.coordinate())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                .copy_label(1)?,
+                .copy_label(registered, 1)?,
             &layout::display_axis_spec(chart.description().x_axis_spec(), (x_low, x_high)),
             &layout::display_axis_spec(chart.description().y_axis_spec(), (y_low, y_high)),
             theme,

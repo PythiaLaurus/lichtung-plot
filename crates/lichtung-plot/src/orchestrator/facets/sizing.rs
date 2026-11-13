@@ -88,6 +88,11 @@ pub(in crate::orchestrator) fn natural_size(
     let selectors = data::facet_selectors(source.description())?;
     let panels = data::extract_panels(source.description(), &selectors, None)?;
     let labels = source.description().prepare_axis_labels(None)?;
+    for registered in &inputs.plots {
+        registered
+            .axes
+            .retain_axis_labels(labels.each_ref().map(Option::as_ref))?;
+    }
     let base = data::base_plot(source, source.kind())?;
     let mut minima = Vec::new();
     crate::data::source::reserve_source(&mut minima, panels.len())?;

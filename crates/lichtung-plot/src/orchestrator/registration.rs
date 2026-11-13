@@ -3,11 +3,13 @@
 use crate::{builder::PlotDescription, Error};
 
 mod axes;
+mod policy;
 pub(crate) use axes::{
-    prepare_axis_source, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent,
-    ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner, PreparedAxisSource,
-    PreparedCategorySource,
+    axis_label, prepare_axis_source, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef,
+    DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
+    PreparedAxisSource, PreparedCategorySource,
 };
+pub(crate) use policy::PlotScopePolicy;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);
@@ -107,6 +109,7 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) source: &'src PlotDescription,
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
+    pub(crate) policy: PlotScopePolicy,
     pub(crate) axes: PreparedAxesOwner,
     pub(crate) family: PreparedFamily,
 }
@@ -150,6 +153,7 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) source: &'src PlotDescription,
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
+    pub(crate) policy: PlotScopePolicy,
     pub(crate) family: Option<PreparedFamily>,
     pub(crate) axes: Option<PreparedAxesOwner>,
 }
@@ -209,6 +213,7 @@ impl<'src> PlotRegistryBuilder<'src> {
             source,
             scope,
             row_source,
+            policy: PlotScopePolicy::for_source(source),
             family: None,
             axes: None,
         });
@@ -239,6 +244,7 @@ impl<'src> PlotRegistryBuilder<'src> {
                 source: panel.source,
                 scope: panel.scope,
                 row_source: panel.row_source,
+                policy: panel.policy,
                 axes: panel.axes.expect("completed occurrence axes"),
                 family,
             })

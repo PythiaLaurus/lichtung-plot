@@ -75,7 +75,11 @@ impl Intrinsics {
                 "prepared panel intrinsic numeric context changed".into(),
             ));
         }
-        if summary.titles.each_ref().map(Option::as_ref) != [axes.label(0), axes.label(1)]
+        if summary.titles.each_ref().map(Option::as_ref)
+            != [
+                axes.label(input.registered, 0),
+                axes.label(input.registered, 1),
+            ]
             || !summary.standard.matches(theme)?
         {
             return Err(Error::Render(
@@ -126,7 +130,7 @@ impl Intrinsics {
         );
         let mut without_y_categories = minimum_body.1;
         for side in 0..2 {
-            if let Some(label) = axes.label(side) {
+            if let Some(label) = axes.label(input.registered, side) {
                 let (hard, _) = fit::intrinsic_widths(
                     theme,
                     label.as_str(),
@@ -238,7 +242,10 @@ impl Intrinsics {
         }
         Ok(Self {
             standard,
-            titles: [axes.copy_label(0)?, axes.copy_label(1)?],
+            titles: [
+                axes.copy_label(input.registered, 0)?,
+                axes.copy_label(input.registered, 1)?,
+            ],
             formats: pair.map(|axis| {
                 axis.authored()
                     .expect("coordinate authored intent")
@@ -475,7 +482,10 @@ impl InteriorRoute {
                     )?
                 };
                 Ok(Axis {
-                    label: inputs.copy_label(side)?,
+                    label: inputs.copy_label(
+                        context.registered.expect("prepared coordinate occurrence"),
+                        side,
+                    )?,
                     ticks: ticks.ticks,
                     tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
                     category_labels: base

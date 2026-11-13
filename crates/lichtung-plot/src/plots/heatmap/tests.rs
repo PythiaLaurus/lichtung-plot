@@ -203,7 +203,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             assert!(!value.get().unwrap().matches_inputs(
                 same_paint_marks,
                 axes,
-                inputs.plots[0].source,
+                &inputs.plots[0],
                 theme
             ));
             let changed_source = source(
@@ -234,7 +234,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             assert!(!value.get().unwrap().matches_inputs(
                 changed_marks,
                 axes,
-                inputs.plots[0].source,
+                &inputs.plots[0],
                 theme
             ));
             let padding = theme
@@ -247,12 +247,10 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 .unwrap();
             appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
             let theme = crate::text::TextRequestContext::new(&appearance, theme.text);
-            assert!(!value.get().unwrap().matches_inputs(
-                marks,
-                axes,
-                inputs.plots[0].source,
-                &theme
-            ));
+            assert!(!value
+                .get()
+                .unwrap()
+                .matches_inputs(marks, axes, &inputs.plots[0], &theme));
             let edited = heatmap_minima(
                 intrinsic,
                 &chart
@@ -262,12 +260,10 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .unwrap()
             .0;
             assert_eq!(value.get().unwrap().minimum, original);
-            assert!(!value.get().unwrap().matches_inputs(
-                marks,
-                axes,
-                inputs.plots[0].source,
-                &theme
-            ));
+            assert!(!value
+                .get()
+                .unwrap()
+                .matches_inputs(marks, axes, &inputs.plots[0], &theme));
             let required = (plan.width() + 11.0, plan.height() + 22.0);
             assert!(edited.0 >= original.0 && edited.1 >= original.1);
             assert!(edited.0 >= required.0 && edited.1 >= required.1);

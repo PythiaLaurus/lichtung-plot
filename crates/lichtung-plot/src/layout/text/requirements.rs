@@ -777,6 +777,13 @@ impl PreparedTextRequirement {
         )?;
         if kind != PlotKind::Matrix {
             let [x_title, y_title] = plot.description().prepare_axis_labels(None)?;
+            if let Some(interiors) = interiors {
+                for registered in &interiors.plots {
+                    registered
+                        .axes
+                        .retain_axis_labels([x_title.as_ref(), y_title.as_ref()])?;
+                }
+            }
             let x_axis = prepared_address_child(
                 base,
                 AddressRole::AxisBottom,

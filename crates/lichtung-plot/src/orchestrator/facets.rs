@@ -197,6 +197,12 @@ impl FacetPlan {
         let selectors = data::facet_selectors(source.description())?;
         let [horizontal_axis_label, vertical_axis_label] =
             source.description().prepare_axis_labels(None)?;
+        for registered in &inputs.plots {
+            registered.axes.retain_axis_labels([
+                horizontal_axis_label.as_ref(),
+                vertical_axis_label.as_ref(),
+            ])?;
+        }
         let mut canvas_layout = planning::canvas_layout(
             source,
             theme,
@@ -1085,6 +1091,11 @@ mod feedback_tests {
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
                 )?;
+                assert!(inputs.plots.iter().all(|registered| registered
+                    .axes
+                    .sources()
+                    .iter()
+                    .all(|source| source.label.get().is_none())));
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
@@ -1117,6 +1128,16 @@ mod feedback_tests {
             },
             |(inputs, guide, operation), assigned, round| {
                 let source = inputs.attach(source.clone())?;
+                assert!(inputs
+                    .plots
+                    .iter()
+                    .all(
+                        |registered| (0..2).all(|side| registered.axes.sources()[side]
+                            .label
+                            .get()
+                            .is_some()
+                            && registered.axes.label(registered, side).is_none())
+                    ));
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     FacetPlan::new(

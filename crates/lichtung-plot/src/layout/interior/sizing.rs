@@ -252,7 +252,13 @@ fn axis_title_style<'a>(
 ) -> &'a crate::TextTheme {
     registered
         .and_then(|registered| registered.axes.coordinate())
-        .and_then(|axes| axes.label(side))
+        .and_then(|axes| {
+            crate::orchestrator::registration::axis_label(
+                registered.expect("prepared axis occurrence"),
+                &axes.sources()[side],
+                side,
+            )
+        })
         .map_or(&theme.typography.axes.axis_title, |text| {
             text.appearance(&theme.typography.axes.axis_title).theme
         })
