@@ -257,13 +257,12 @@ pub(super) fn base_plot(
                         column.name()
                     )));
                 };
-                let levels = stable_levels(crate::data::strict_source_normalized_strings(
+                let _ = stable_levels(crate::data::strict_source_normalized_strings(
                     values,
                     source_rows,
                     "trajectory",
                     "condition",
                 )?);
-                base_plot = base_plot.with_global_line_condition_levels(levels);
             }
         }
     }

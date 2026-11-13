@@ -150,6 +150,20 @@ pub(crate) fn collective_pairs<'v>(
         .map(Vec::as_slice)
 }
 
+pub(crate) fn line_condition_levels<'v>(
+    registered: Option<&'v PlotRegistration<'_>>,
+) -> Option<&'v [String]> {
+    let registered = registered?;
+    (registered.source.kind() == crate::PlotKind::Trajectory && registered.source.has_facets())
+        .then(|| {
+            registered
+                .axes
+                .categories(0)
+                .map(|categories| categories.raw.as_slice())
+        })
+        .flatten()
+}
+
 impl std::fmt::Debug for PlotRegistration<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

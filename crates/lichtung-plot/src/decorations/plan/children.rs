@@ -932,7 +932,7 @@ mod tests {
                                 round
                             )?);
                         }
-                        for plot in vec![
+                        for plot in [
                             source.clone().with_planned_x_limits((-1.0, 2.0)),
                             source.clone().with_planned_y_limits((-1.0, 2.0)),
                             source.clone().with_resolved_facet_ranges(
@@ -946,9 +946,6 @@ mod tests {
                             source
                                 .clone()
                                 .with_global_group_levels(vec!["new group".into()]),
-                            source
-                                .clone()
-                                .with_global_line_condition_levels(vec!["new condition".into()]),
                             source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(

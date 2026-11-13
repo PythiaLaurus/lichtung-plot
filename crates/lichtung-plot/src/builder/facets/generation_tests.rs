@@ -12,6 +12,53 @@ fn plot() -> Plot<crate::kind::Scatter> {
 }
 
 #[test]
+fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_identity() {
+    let source = Plot::trajectory(
+        crate::CategoryValues::new(
+            "condition",
+            [
+                " after  visit ",
+                "before visit",
+                "last visit",
+                "before  visit",
+                "after visit",
+                "last visit",
+            ],
+        )
+        .unwrap(),
+        crate::NumericValues::new("value", [2.0, 1.0, 3.0, 4.0, 5.0, 6.0]),
+        crate::CategoryValues::new("group", ["g"; 6]).unwrap(),
+    )
+    .facet(FacetSpec::column(
+        crate::CategoryValues::new("panel", ["a", "a", "a", "b", "b", "b"]).unwrap(),
+    ))
+    .erase();
+    let operation = crate::font::canonical::OperationContext::new();
+    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+    let plot = source
+        .clone()
+        .without_facets()
+        .with_render_scope(inputs.plots[0].scope.render_name.clone().unwrap());
+    let registered = &inputs.plots[0];
+    let retained = plot
+        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), Some(registered), None)
+        .unwrap();
+    assert_eq!(
+        retained.global_line_condition_levels.as_deref().unwrap(),
+        ["after visit", "before visit", "last visit"]
+    );
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(registered), None));
+    inputs.plots[0].axes.sources_mut()[0]
+        .categories
+        .as_mut()
+        .unwrap()
+        .raw
+        .swap(0, 1);
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[0]), None));
+    assert!(crate::orchestrator::registration::line_condition_levels(None).is_none());
+}
+
+#[test]
 fn generation_cloning_and_composed_identity_include_both_axes() {
     let mut plot = plot()
         .x_tick_generation(TickGeneration::additive(2.0).unwrap())

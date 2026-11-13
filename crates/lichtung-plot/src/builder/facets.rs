@@ -170,7 +170,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 other.global_collective_pairs.as_deref(),
             )
             && same_values(
-                self.global_line_condition_levels.as_deref(),
+                crate::orchestrator::registration::line_condition_levels(registered),
                 other.global_line_condition_levels.as_deref(),
             )
             && registered.map_or(
@@ -241,9 +241,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
         let mut levels = [None, None, None];
         for (target, source) in levels.iter_mut().zip([
-            &self.global_hue_levels,
-            &self.global_group_levels,
-            &self.global_line_condition_levels,
+            self.global_hue_levels.as_deref(),
+            self.global_group_levels.as_deref(),
+            crate::orchestrator::registration::line_condition_levels(registered),
         ]) {
             if let Some(source) = source {
                 let mut retained = Vec::new();
@@ -325,15 +325,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn global_group_levels(&self) -> Option<&[String]> {
         self.global_group_levels.as_deref()
-    }
-
-    pub(crate) fn with_global_line_condition_levels(mut self, levels: Vec<String>) -> Self {
-        self.global_line_condition_levels = Some(levels);
-        self
-    }
-
-    pub(crate) fn global_line_condition_levels(&self) -> Option<&[String]> {
-        self.global_line_condition_levels.as_deref()
     }
 
     pub(crate) fn with_render_scope(mut self, scope: impl Into<String>) -> Self {

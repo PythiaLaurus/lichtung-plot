@@ -539,16 +539,15 @@ impl PreparedLine {
             (crate::data::strict_finite_f64(data, x_col, family)?, None)
         } else if kind == PlotKind::Trajectory {
             let labels = crate::data::strict_normalized_strings(data, x_col, family, "condition")?;
-            let levels =
-                if let Some(levels) = conditions.or_else(|| chart.global_line_condition_levels()) {
-                    crate::data::source::collect_source(
-                        levels
-                            .iter()
-                            .map(|label| crate::data::source::copy_source_string(label)),
-                    )?
-                } else {
-                    crate::data::source::source_levels(&labels)?
-                };
+            let levels = if let Some(levels) = conditions {
+                crate::data::source::collect_source(
+                    levels
+                        .iter()
+                        .map(|label| crate::data::source::copy_source_string(label)),
+                )?
+            } else {
+                crate::data::source::source_levels(&labels)?
+            };
             let positions = crate::data::source::collect_source(labels.iter().map(|label| {
                 let index = crate::data::source::source_position(&levels, |level| level == label)
                     .ok_or_else(|| {
