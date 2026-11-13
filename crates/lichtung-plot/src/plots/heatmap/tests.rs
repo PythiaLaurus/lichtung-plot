@@ -167,7 +167,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             assert_eq!(cell.fill.color.get_alpha(), 0);
             let plan = &cell.text.as_ref().unwrap().plan;
             assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
-            let marks = retained_in(chart, inputs.plots.first()).unwrap();
+            let (marks, levels) = retained_in(chart, inputs.plots.first()).unwrap();
             let axes = inputs.plots[0].axes.coordinate().unwrap();
             let intrinsic = inputs.intrinsic(&inputs.plots[0]);
             let original = heatmap_minima(
@@ -277,6 +277,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             };
             check_annotation_tracks(
                 marks,
+                levels,
                 &annotations,
                 &[0.0, required.0],
                 &[required.1, 0.0],
@@ -286,6 +287,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .unwrap();
             assert!(check_annotation_tracks(
                 marks,
+                levels,
                 &annotations,
                 &[0.0, required.0 - 1.0 / 1024.0],
                 &[required.1, 0.0],
@@ -344,7 +346,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     .unwrap();
     let row_source =
         crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
-    let prepared = prepare(
+    let (prepared, _) = prepare(
         &source,
         crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
             .unwrap(),

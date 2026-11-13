@@ -26,8 +26,6 @@ mod tests;
 const MAX_CELLS: usize = 1_000_000;
 #[derive(Debug, PartialEq)]
 pub(crate) struct HeatmapData {
-    pub(crate) x_levels: Vec<String>,
-    pub(crate) y_levels: Vec<String>,
     cells: Vec<Option<f64>>,
     fills: Vec<Option<OpaqueColor>>,
     fill_binding: AlphaEncoding,
@@ -214,8 +212,13 @@ fn track_pixels(quanta: i64) -> f64 {
 }
 
 /// Column maxima precede assigned-width cell text and row requirements.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the original column fit borrows its category topology from the owning axes"
+)]
 fn assigned_columns<'a>(
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     label_count: usize,
     label: impl Fn(usize) -> &'a str,
     selection: &crate::CategoryLabelSelection,
@@ -227,8 +230,8 @@ fn assigned_columns<'a>(
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::{GridRequirement, TrackSpec};
 
-    let count = prepared.x_levels.len();
-    let cell = intrinsic_cell_ink(prepared, theme)?;
+    let count = levels[0].len();
+    let cell = intrinsic_cell_ink(prepared, levels, theme)?;
     let label_pitch = if selection.is_all() {
         0.0
     } else {
@@ -321,6 +324,7 @@ fn assigned_columns<'a>(
 )]
 fn assigned_rows(
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     annotations: &AnnotationPlans,
     columns: &[f64],
     labels: &[String],
@@ -335,14 +339,14 @@ fn assigned_rows(
     let panel = context.panel;
     let theme = context.theme;
 
-    let count = prepared.y_levels.len();
-    let width = prepared.x_levels.len();
+    let count = levels[1].len();
+    let width = levels[0].len();
     if labels.len() != count {
         return Err(
             Error::Render("Heatmap prepared row label count differs from tracks".into()).into(),
         );
     }
-    let ink = intrinsic_cell_ink(prepared, theme)?;
+    let ink = intrinsic_cell_ink(prepared, levels, theme)?;
     let mut hard =
         crate::data::source::collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
     let mut label_heights = crate::data::source::collect_source((0..count).map(|_| Ok(0.0)))?;
@@ -467,7 +471,7 @@ fn assigned_rows(
 fn retained_in<'v>(
     chart: &Plot,
     registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
-) -> Result<&'v HeatmapData, Error> {
+) -> Result<(&'v HeatmapData, [&'v [String]; 2]), Error> {
     if registered.is_none() {
         return Err(Error::Render(
             "heatmap requires root-prepared semantics".into(),
@@ -476,7 +480,18 @@ fn retained_in<'v>(
     match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Heatmap")?
         .as_ref()
     {
-        crate::orchestrator::registration::FamilyRef::Heatmap(marks) => Ok(marks),
+        crate::orchestrator::registration::FamilyRef::Heatmap(marks) => Ok((
+            marks,
+            [0, 1].map(|side| {
+                registered
+                    .expect("prepared Heatmap occurrence")
+                    .axes
+                    .categories(side)
+                    .expect("prepared Heatmap categories")
+                    .raw
+                    .as_slice()
+            }),
+        )),
         _ => Err(Error::Render(
             "heatmap requires root-prepared semantics".into(),
         )),
@@ -677,12 +692,12 @@ pub(crate) fn natural_body_preference(
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let marks = retained_in(chart, registered)?;
+    let (_, levels) = retained_in(chart, registered)?;
     let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
-        hard.0.max(pitch * marks.x_levels.len() as f64),
-        hard.1.max(pitch * marks.y_levels.len() as f64),
+        hard.0.max(pitch * levels[0].len() as f64),
+        hard.1.max(pitch * levels[1].len() as f64),
     ))
 }
 
@@ -692,7 +707,7 @@ pub(crate) fn natural_body_height(
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    let marks = retained_in(chart, registered)?;
+    let (marks, levels) = retained_in(chart, registered)?;
     let axes = registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
@@ -702,6 +717,7 @@ pub(crate) fn natural_body_height(
         .ok_or_else(|| Error::Render("natural Heatmap columns missing".into()))?;
     let columns = assigned_columns(
         marks,
+        levels,
         labels.ticks.len(),
         |index| &labels.ticks[index].label,
         &axes
@@ -717,6 +733,7 @@ pub(crate) fn natural_body_height(
     let annotations = measure_annotations(
         chart,
         marks,
+        levels,
         &columns,
         theme,
         &crate::layout::fit::FitScope::root(),
@@ -726,16 +743,15 @@ pub(crate) fn natural_body_height(
         .windows(2)
         .map(|edge| edge[1] - edge[0])
         .fold(2.0 * theme.typography.axes.tick_label.font_size, f64::max);
-    let mut heights =
-        crate::data::source::collect_source(marks.y_levels.iter().map(|_| Ok(preferred)))?;
+    let mut heights = crate::data::source::collect_source(levels[1].iter().map(|_| Ok(preferred)))?;
     for (index, plan) in annotations.values.iter().enumerate() {
         if let Some(plan) = plan {
             let padding = theme
                 .annotations
                 .get_cells()
                 .value_padding(plan.style.font_size)?;
-            heights[index / marks.x_levels.len()] =
-                heights[index / marks.x_levels.len()].max(if plan.lines.is_empty() {
+            heights[index / levels[0].len()] =
+                heights[index / levels[0].len()].max(if plan.lines.is_empty() {
                     0.0
                 } else {
                     padding.height(plan.occupied_size().1)?
@@ -758,9 +774,10 @@ pub(crate) fn natural_body_height(
 
 fn intrinsic_cell_ink(
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let (columns, rows) = (prepared.x_levels.len(), prepared.y_levels.len());
+    let (columns, rows) = (levels[0].len(), levels[1].len());
     let slots = columns.checked_mul(rows).ok_or_else(|| {
         Error::Render("heatmap declared cell topology exceeds spatial capacity".into())
     })?;
@@ -931,13 +948,19 @@ pub(crate) fn heatmap_minima(
         diagnostic_scope,
     );
     let mut minimum = (1.0_f64 / 1024.0, 1.0_f64 / 1024.0);
-    let cell = intrinsic_cell_ink(prepared, theme)?;
-    let columns = prepared.x_levels.len();
+    let levels = [0, 1].map(|side| {
+        axes.categories(side)
+            .expect("prepared Heatmap categories")
+            .raw
+            .as_slice()
+    });
+    let cell = intrinsic_cell_ink(prepared, levels, theme)?;
+    let columns = levels[0].len();
     let base_column = (cell.0 / columns as f64).max(1.0 / 1024.0);
     let mut column_hard =
         crate::data::source::collect_source((0..columns).map(|_| Ok(base_column)))?;
     let mut row_hard = crate::data::source::collect_source(
-        (0..prepared.y_levels.len()).map(|_| Ok(cell.1 / prepared.y_levels.len() as f64)),
+        (0..levels[1].len()).map(|_| Ok(cell.1 / levels[1].len() as f64)),
     )?;
     let x_labels = &axes
         .categories(0)
@@ -1151,7 +1174,7 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained_in(chart, context.registered)?;
+    let (prepared, levels) = retained_in(chart, context.registered)?;
     let theme = context.theme;
 
     let minimum = intrinsic_body_minimum(
@@ -1264,10 +1287,11 @@ pub(crate) fn measure(
         ).into());
         }
 
-        let x_count = prepared.x_levels.len();
-        let y_count = prepared.y_levels.len();
+        let x_count = levels[0].len();
+        let y_count = levels[1].len();
         let assigned = assigned_columns(
             prepared,
+            levels,
             x_labels.len(),
             |index| &x_labels[index],
             &chart.description().x_axis_spec().category_labels,
@@ -1277,10 +1301,17 @@ pub(crate) fn measure(
         )?;
         columns = Some(assigned);
         let column_edges = columns.as_ref().expect("assigned Heatmap columns");
-        let mut measured =
-            measure_annotations(chart, prepared, column_edges, theme, context.fit_scope())?;
+        let mut measured = measure_annotations(
+            chart,
+            prepared,
+            levels,
+            column_edges,
+            theme,
+            context.fit_scope(),
+        )?;
         let assigned = assigned_rows(
             prepared,
+            levels,
             &measured,
             column_edges,
             &y_labels,
@@ -1326,6 +1357,7 @@ pub(crate) fn measure(
         )?;
         check_annotation_tracks(
             prepared,
+            levels,
             &measured,
             column_edges,
             &assigned,
@@ -1335,13 +1367,12 @@ pub(crate) fn measure(
         annotations = Some(measured);
         rows = Some(assigned);
         let row_edges = rows.as_ref().expect("assigned Heatmap rows");
-        let x_ticks = crate::data::source::collect_source(
-            prepared.x_levels.iter().enumerate().map(|(index, _)| {
+        let x_ticks =
+            crate::data::source::collect_source(levels[0].iter().enumerate().map(|(index, _)| {
                 let middle = f64::midpoint(column_edges[index], column_edges[index + 1]);
                 let x = (middle - panel.x0) / panel.width() * x_count as f64;
                 Ok(AxisTick::new(x, ""))
-            }),
-        )?;
+            }))?;
         let y_ticks = crate::data::source::collect_source(y_labels.into_iter().enumerate().map(
             |(index, label)| {
                 let middle = f64::midpoint(row_edges[index], row_edges[index + 1]);
@@ -1429,7 +1460,7 @@ pub(crate) fn measure(
     let mut payload = HeatmapPayload {
         clip: panel,
         cross_style: theme.marks.get_cells().get_missing_cross().backend_style(),
-        cells: select_cells(prepared, columns, rows, theme, &annotations)?,
+        cells: select_cells(prepared, levels, columns, rows, theme, &annotations)?,
         colorbar: colorbar
             .as_ref()
             .map(|guide| guide::select(guide, panel, theme))
@@ -1441,14 +1472,12 @@ pub(crate) fn measure(
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
         .with_resolved_axis_keys(
             crate::data::source::collect_source(
-                prepared
-                    .x_levels
+                levels[0]
                     .iter()
                     .map(|s| crate::data::source::copy_source_string(s)),
             )?,
             crate::data::source::collect_source(
-                prepared
-                    .y_levels
+                levels[1]
                     .iter()
                     .map(|s| crate::data::source::copy_source_string(s)),
             )?,
@@ -1527,7 +1556,7 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_, '_>,
     selection: ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
-) -> Result<HeatmapData, Error> {
+) -> Result<(HeatmapData, [Vec<String>; 2]), Error> {
     validate_options(chart)?;
     let alpha =
         chart
@@ -1776,8 +1805,6 @@ pub(crate) fn prepare(
         value_presentation,
         colorbar_values,
         color_format,
-        x_levels,
-        y_levels,
         cells,
         fills: resolved_fills,
         fill_binding: chart
@@ -1793,7 +1820,7 @@ pub(crate) fn prepare(
         colorbar_stops: Vec::new(),
     };
     prepared.colorbar_stops = prepared.color.guide_stops(&prepared.guide_samples()?)?;
-    Ok(prepared)
+    Ok((prepared, [x_levels, y_levels]))
 }
 
 fn validate_options(chart: &Plot) -> Result<(), Error> {
@@ -2155,13 +2182,14 @@ impl HeatmapPayload {
 
 fn select_cells(
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     columns: &[f64],
     rows: &[f64],
     theme: &crate::text::TextRequestContext<'_, '_>,
     annotations: &AnnotationPlans,
 ) -> Result<Vec<CellPayload>, Error> {
-    let x_count = prepared.x_levels.len();
-    let y_count = prepared.y_levels.len();
+    let x_count = levels[0].len();
+    let y_count = levels[1].len();
     let mut cross_width = None;
     let mut cells = Vec::new();
     crate::data::source::reserve_source(&mut cells, prepared.cells.len())?;
@@ -2310,6 +2338,7 @@ struct AnnotationPlans {
 fn measure_annotations(
     chart: &Plot,
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     columns: &[f64],
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
@@ -2343,7 +2372,7 @@ fn measure_annotations(
         )?;
         for (index, value) in prepared.cells.iter().enumerate() {
             let Some(_) = value else { continue };
-            let column = index % prepared.x_levels.len();
+            let column = index % levels[0].len();
             let cell_width = columns[column + 1] - columns[column];
             let source = prepared.value_labels[index]
                 .as_deref()
@@ -2467,6 +2496,7 @@ fn measure_annotations(
 
 fn check_annotation_tracks(
     prepared: &HeatmapData,
+    levels: [&[String]; 2],
     annotations: &AnnotationPlans,
     columns: &[f64],
     rows: &[f64],
@@ -2477,7 +2507,7 @@ fn check_annotation_tracks(
     use crate::layout::AddressRole;
 
     let mut miss = None;
-    let count = prepared.x_levels.len();
+    let count = levels[0].len();
     for (index, plan) in annotations.values.iter().enumerate() {
         let Some(plan) = plan else { continue };
         let col = index % count;

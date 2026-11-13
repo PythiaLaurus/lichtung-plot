@@ -185,12 +185,21 @@ pub(crate) fn prepare_plot_registration(
             panel.axes = Some(axes);
             Ok(PreparedFamily::Marginal(marks))
         }
-        PlotKind::Heatmap => Ok(PreparedFamily::Heatmap(crate::plots::heatmap::prepare(
-            source,
-            data,
-            continuous_selection(source, owner)?,
-            numeric,
-        )?)),
+        PlotKind::Heatmap => {
+            let (marks, levels) = crate::plots::heatmap::prepare(
+                source,
+                data,
+                continuous_selection(source, owner)?,
+                numeric,
+            )?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let ranges = levels.each_ref().map(|levels| (0.0, levels.len() as f64));
+            panel.axes = Some(prepare_pair_axes(panel, ranges, levels.map(Some))?);
+            Ok(PreparedFamily::Heatmap(marks))
+        }
         PlotKind::Interaction => Ok(PreparedFamily::Interaction(
             crate::plots::interaction::prepare(source, data, None)?,
         )),
@@ -279,7 +288,14 @@ impl PreparedFamily {
                 source.description().x_axis_spec(),
             )?,
             Self::Marginal(_) => axes.expect("prepared Marginal axes").ranges()[0],
-            Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
+            Self::Heatmap(_) => (
+                0.0,
+                axes.expect("prepared Heatmap axes")
+                    .categories(0)
+                    .expect("prepared Heatmap categories")
+                    .raw
+                    .len() as f64,
+            ),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
             Self::Distribution { marks, .. } => (0.0, marks.categories().len() as f64),
             Self::Bars { kind, marks, .. } => {
@@ -666,16 +682,25 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
                     prepared.expect("prepared facet estimates")
                 }
-                PlotKind::Heatmap => PreparedFamily::Heatmap(crate::plots::heatmap::prepare(
-                    source,
-                    data,
-                    continuous_selection(source, owner)?,
-                    panel.scope.numeric_binding(
-                        source.description(),
-                        &panel.row_source,
-                        resources,
-                    )?,
-                )?),
+                PlotKind::Heatmap => {
+                    let (marks, levels) = crate::plots::heatmap::prepare(
+                        source,
+                        data,
+                        continuous_selection(source, owner)?,
+                        panel.scope.numeric_binding(
+                            source.description(),
+                            &panel.row_source,
+                            resources,
+                        )?,
+                    )?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let ranges = levels.each_ref().map(|levels| (0.0, levels.len() as f64));
+                    panel.axes = Some(prepare_pair_axes(panel, ranges, levels.map(Some))?);
+                    PreparedFamily::Heatmap(marks)
+                }
                 PlotKind::Beeswarm => {
                     let (marks, levels) = crate::plots::beeswarm::prepare(
                         source,
@@ -1239,19 +1264,9 @@ fn prepare(
             ]
         }
         PlotKind::Heatmap => {
-            let marks = marks!(reference, PreparedFamily::Heatmap(marks) => marks, "heatmap axes require retained semantics");
-            let x = crate::data::source::collect_source(
-                marks
-                    .x_levels
-                    .iter()
-                    .map(|s| crate::data::source::copy_source_string(s)),
-            )?;
-            let y = crate::data::source::collect_source(
-                marks
-                    .y_levels
-                    .iter()
-                    .map(|s| crate::data::source::copy_source_string(s)),
-            )?;
+            marks!(reference, PreparedFamily::Heatmap(marks) => marks, "heatmap axes require retained semantics");
+            let [x, y] = prepared_axes.as_mut().expect("prepared Heatmap axes").sources_mut().each_mut()
+                .map(|source| source.categories.take().expect("prepared Heatmap categories").raw);
             let ranges = [(0.0, x.len() as f64), (0.0, y.len() as f64)];
             categories = [Some(x), Some(y)];
             ranges
