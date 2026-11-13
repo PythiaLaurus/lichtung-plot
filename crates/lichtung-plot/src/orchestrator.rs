@@ -16,6 +16,7 @@ mod lifecycle;
 #[cfg(test)]
 pub(crate) mod measurements;
 mod output;
+pub(crate) mod registration;
 mod validation;
 
 #[cfg(test)]

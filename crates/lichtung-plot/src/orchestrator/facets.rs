@@ -25,8 +25,8 @@ pub(crate) fn text_census_labels(
     source: &Plot,
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
 ) -> Result<(), Error> {
-    let selectors = data::facet_selectors(source, source.data())?;
-    for panel in data::extract_panels(source, &selectors, None, source.data())? {
+    let selectors = data::facet_selectors(source.description())?;
+    for panel in data::extract_panels(source.description(), &selectors, None)? {
         if source
             .description()
             .text_layouts()
@@ -95,7 +95,8 @@ pub(crate) struct FacetTextCensusPanel<'a> {
 
 impl FacetTextCensusPanel<'_> {
     pub(crate) fn data(&self) -> crate::data::PlotData<'_> {
-        crate::data::PlotData::with_rows(self.plot, &self.panel.rows, &self.panel.source_rows)
+        let (rows, diagnostic_rows) = self.panel.rows.selected();
+        crate::data::PlotData::with_rows(self.plot, rows, diagnostic_rows)
             .with_numeric_facet(self.cell.as_ref())
     }
 
@@ -126,10 +127,7 @@ impl FacetTextCensusPanel<'_> {
     }
 }
 
-pub(crate) fn text_census_panels<'a>(
-    source: &'a Plot,
-    source_data: crate::data::PlotData<'_>,
-) -> Result<Vec<FacetTextCensusPanel<'a>>, Error> {
+pub(crate) fn text_census_panels(source: &Plot) -> Result<Vec<FacetTextCensusPanel<'_>>, Error> {
     if !source.description().significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
@@ -138,8 +136,8 @@ pub(crate) fn text_census_panels<'a>(
             source.kind()
         )));
     }
-    let selectors = data::facet_selectors(source, source_data)?;
-    let panels = data::extract_panels(source, &selectors, None, source_data)?;
+    let selectors = data::facet_selectors(source.description())?;
+    let panels = data::extract_panels(source.description(), &selectors, None)?;
     data::validate_significance_facet_anchors(source, &panels)?;
     crate::data::source::collect_source(panels.into_iter().map(|panel| {
         let cell = match panel.cell.as_slice() {
@@ -224,7 +222,7 @@ impl FacetPlan {
             .into());
         }
 
-        let selectors = data::facet_selectors(source, source.data())?;
+        let selectors = data::facet_selectors(source.description())?;
         let [horizontal_axis_label, vertical_axis_label] =
             source.description().prepare_axis_labels(None)?;
         let mut canvas_layout = planning::canvas_layout(
@@ -246,7 +244,7 @@ impl FacetPlan {
                     .map(|level| crate::data::source::copy_source_string(level)),
             )?);
         }
-        let mut panels = data::extract_panels(source, &selectors, None, data)?;
+        let mut panels = data::extract_panels(source.description(), &selectors, None)?;
         data::validate_significance_facet_anchors(source, &panels)?;
         let mut minima = Vec::new();
         crate::data::source::reserve_source(&mut minima, panels.len())?;

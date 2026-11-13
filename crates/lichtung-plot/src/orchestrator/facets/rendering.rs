@@ -466,8 +466,10 @@ mod tests {
                 variable: "Group".into(),
                 level: "First\nSecond".into(),
             }],
-            rows: vec![0, 1],
-            source_rows: vec![0, 1],
+            rows: crate::orchestrator::registration::RowSelection::Selected {
+                input_slots: vec![0, 1],
+                diagnostic_rows: vec![0, 1],
+            },
             panel: grid,
         };
         let strips = plan_facet_strip(&plot, &facet, &theme).unwrap();

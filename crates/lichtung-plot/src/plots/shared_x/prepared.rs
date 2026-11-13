@@ -624,7 +624,7 @@ pub(crate) fn prepare_plot(
             ))
         .then(|| source_data.bind_row_source())
         .transpose()?;
-        let panels = crate::orchestrator::text_census_panels(source, source_data)?;
+        let panels = crate::orchestrator::text_census_panels(source)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| {
                 crate::data::observed_collectives(

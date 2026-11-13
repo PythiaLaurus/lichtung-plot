@@ -354,8 +354,9 @@ pub(super) fn native_parent(
             dependencies: dependency.as_slice(),
             ..SUPPRESSED_GUIDES
         };
+        let (rows, diagnostic_rows) = facet.rows.selected();
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            crate::data::PlotData::with_rows(&panel_plot, rows, diagnostic_rows),
             cell,
             theme,
         )

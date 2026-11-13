@@ -645,8 +645,10 @@ mod tests {
             row: 0,
             column: index,
             cell: Vec::new(),
-            rows: vec![index],
-            source_rows: vec![index],
+            rows: crate::orchestrator::registration::RowSelection::Selected {
+                input_slots: vec![index],
+                diagnostic_rows: vec![index],
+            },
             panel: PixelRect::new(0.0, 1.0, 0.0, 1.0),
         });
         let gutters = [

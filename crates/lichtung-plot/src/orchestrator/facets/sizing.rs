@@ -85,8 +85,8 @@ pub(in crate::orchestrator) fn natural_size(
     let resources = theme.text.prepared_font_environment()?.operation();
 
     let data = source.data().with_operation(&resources);
-    let selectors = data::facet_selectors(source, data)?;
-    let panels = data::extract_panels(source, &selectors, None, data)?;
+    let selectors = data::facet_selectors(source.description())?;
+    let panels = data::extract_panels(source.description(), &selectors, None)?;
     let labels = source.description().prepare_axis_labels(None)?;
     let base = data::base_plot(source, source.kind())?;
     let mut minima = Vec::new();

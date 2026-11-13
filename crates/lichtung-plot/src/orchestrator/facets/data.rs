@@ -2,8 +2,9 @@
 
 use crate::Error;
 
-use crate::builder::Plot;
+use crate::builder::{Plot, PlotDescription};
 use crate::layout::PixelRect;
+use crate::orchestrator::registration::{select_rows, RowSelection};
 use crate::spec::PlotKind;
 
 pub(super) struct FacetSelector {
@@ -26,8 +27,7 @@ pub(super) struct FacetPanel {
     pub(super) row: usize,
     pub(super) column: usize,
     pub(super) cell: FacetCell,
-    pub(super) rows: Vec<usize>,
-    pub(super) source_rows: Vec<usize>,
+    pub(super) rows: RowSelection,
     pub(super) panel: PixelRect,
 }
 
@@ -69,38 +69,46 @@ impl FacetPanel {
     clippy::too_many_lines,
     reason = "one admitted selector owner preserves wrapped and crossed facet ordering"
 )]
-pub(super) fn facet_selectors(
-    plot: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<FacetSelectors, Error> {
-    let data = if let Some(rows) = plot.description().configured_source_rows()? {
-        data.map_source_rows(rows)
-    } else {
-        data
+pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, Error> {
+    let rows = plot.configured_source_rows()?;
+    let column = |key: &str| {
+        plot.data_column(key)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
     };
-    let (row_column, column_column, wrap_column, wrap_columns) = plot.description().facet_columns();
+    let strings = |key: &str| {
+        let column = column(key)?;
+        let crate::data::DataColumn::Category(values) = column else {
+            return Err(Error::Data(format!(
+                "facet: value {:?} must be categorical",
+                column.name()
+            )));
+        };
+        crate::data::strict_source_strings(values, rows, "facet")
+    };
+    let (row_column, column_column, wrap_column, wrap_columns) = plot.facet_columns();
     let mut variable_names = Vec::new();
     crate::data::source::reserve_source(&mut variable_names, 3)?;
     for column in [row_column, column_column, wrap_column]
         .into_iter()
         .flatten()
     {
-        variable_names.push(data.column(column)?.name());
+        variable_names.push(
+            plot.data_column(column)
+                .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?
+                .name(),
+        );
     }
-    plot.description()
-        .resolve_axis_label_domain("facet variables", variable_names.iter().copied())?;
+    plot.resolve_axis_label_domain("facet variables", variable_names.iter().copied())?;
     let cells = if let Some(wrap) = wrap_column {
-        let levels =
-            crate::data::source::source_levels(&crate::data::strict_strings(data, wrap, "facet")?)?;
-        plot.description()
-            .resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str))?;
+        let levels = crate::data::source::source_levels(&strings(wrap)?)?;
+        plot.resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str))?;
         let columns = wrap_columns.unwrap_or(1);
         if columns == 0 {
             return Err(Error::Data(
                 "wrapped facets require at least one column".into(),
             ));
         }
-        let variable = data.column(wrap)?.name();
+        let variable = column(wrap)?.name();
         crate::data::source::collect_source(levels.into_iter().enumerate().map(
             |(index, level)| {
                 Ok((
@@ -117,28 +125,20 @@ pub(super) fn facet_selectors(
     } else {
         let row_levels = row_column.map_or_else(
             || crate::data::source::collect_source(std::iter::once(Ok(String::new()))),
-            |column| {
-                crate::data::source::source_levels(&crate::data::strict_strings(
-                    data, column, "facet",
-                )?)
-            },
+            |column| crate::data::source::source_levels(&strings(column)?),
         )?;
         let column_levels = column_column.map_or_else(
             || crate::data::source::collect_source(std::iter::once(Ok(String::new()))),
-            |column| {
-                crate::data::source::source_levels(&crate::data::strict_strings(
-                    data, column, "facet",
-                )?)
-            },
+            |column| crate::data::source::source_levels(&strings(column)?),
         )?;
         if row_column.is_some() {
-            plot.description().resolve_axis_label_domain(
+            plot.resolve_axis_label_domain(
                 "facet levels for \"__facet_row\"",
                 row_levels.iter().map(String::as_str),
             )?;
         }
         if column_column.is_some() {
-            plot.description().resolve_axis_label_domain(
+            plot.resolve_axis_label_domain(
                 "facet levels for \"__facet_column\"",
                 column_levels.iter().map(String::as_str),
             )?;
@@ -160,7 +160,11 @@ pub(super) fn facet_selectors(
                     cell.push(FacetSelector {
                         column,
                         variable: crate::data::source::copy_source_string(
-                            data.column(column)?.name(),
+                            plot.data_column(column)
+                                .ok_or_else(|| {
+                                    Error::Data(format!("unknown semantic value {column:?}"))
+                                })?
+                                .name(),
                         )?,
                         level: crate::data::source::copy_source_string(row_level)?,
                     });
@@ -169,7 +173,11 @@ pub(super) fn facet_selectors(
                     cell.push(FacetSelector {
                         column,
                         variable: crate::data::source::copy_source_string(
-                            data.column(column)?.name(),
+                            plot.data_column(column)
+                                .ok_or_else(|| {
+                                    Error::Data(format!("unknown semantic value {column:?}"))
+                                })?
+                                .name(),
                         )?,
                         level: crate::data::source::copy_source_string(column_level)?,
                     });
@@ -268,27 +276,29 @@ pub(super) fn base_plot(source: &Plot, kind: PlotKind) -> Result<Plot, Error> {
     reason = "row index addresses every selector column, not the outer column vector"
 )]
 pub(super) fn extract_panels(
-    plot: &Plot,
+    plot: &PlotDescription,
     selectors: &FacetSelectors,
     provisional: Option<&[PixelRect]>,
-    mapped_data: crate::data::PlotData<'_>,
 ) -> Result<Vec<FacetPanel>, Error> {
-    let configured_source_rows = plot.description().configured_source_rows()?;
-    let mapped_data = if let Some(rows) = configured_source_rows {
-        mapped_data.map_source_rows(rows)
-    } else {
-        mapped_data
-    };
+    let configured_source_rows = plot.configured_source_rows()?;
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, selectors.cells.len())?;
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
-        let columns_data =
-            crate::data::source::collect_source(cell.iter().map(|selector| {
-                crate::data::strict_strings(mapped_data, selector.column, "facet")
-            }))?;
+        let columns_data = crate::data::source::collect_source(cell.iter().map(|selector| {
+            let column = plot.data_column(selector.column).ok_or_else(|| {
+                Error::Data(format!("unknown semantic value {:?}", selector.column))
+            })?;
+            let crate::data::DataColumn::Category(values) = column else {
+                return Err(Error::Data(format!(
+                    "facet: value {:?} must be categorical",
+                    column.name()
+                )));
+            };
+            crate::data::strict_source_strings(values, configured_source_rows, "facet")
+        }))?;
         let mut source_indices = Vec::new();
-        crate::data::source::reserve_source(&mut source_indices, plot.description().row_count())?;
-        for index in 0..plot.description().row_count() {
+        crate::data::source::reserve_source(&mut source_indices, plot.row_count())?;
+        for index in 0..plot.row_count() {
             let mut matches = true;
             for (selector_index, selector) in cell.iter().enumerate() {
                 if columns_data[selector_index][index] != selector.level {
@@ -303,12 +313,7 @@ pub(super) fn extract_panels(
         if source_indices.is_empty() {
             continue;
         }
-        let source_rows =
-            crate::data::source::collect_source(source_indices.iter().map(|index| {
-                Ok(configured_source_rows
-                    .as_ref()
-                    .map_or(*index, |rows| rows.as_slice()[*index]))
-            }))?;
+        let rows = select_rows(plot, source_indices)?;
         let panel = provisional.map_or(PixelRect::new(0.0, 1.0, 0.0, 1.0), |boxes| {
             boxes[*row * selectors.columns + *column]
         });
@@ -323,8 +328,7 @@ pub(super) fn extract_panels(
                     level: crate::data::source::copy_source_string(&selector.level)?,
                 })
             }))?,
-            rows: source_indices,
-            source_rows,
+            rows,
             panel,
         });
     }
@@ -371,4 +375,60 @@ pub(super) fn stable_levels(values: Vec<String>) -> Vec<String> {
         }
     }
     levels
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_facet_extraction_preserves_sparse_slots_and_selected_diagnostic_rows() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+            crate::NumericValues::new("y", [3.0, 2.0, 1.0, 0.0]),
+        )
+        .source_rows(crate::SourceRows::new([91, 700, 9001, 32]).unwrap())
+        .facet(
+            crate::FacetSpec::grid(
+                crate::CategoryValues::new("row", ["B", "A", "B", "A"]).unwrap(),
+                crate::CategoryValues::new("column", ["C", "D", "C", "D"]).unwrap(),
+            )
+            .unwrap(),
+        );
+        let selectors = facet_selectors(source.description()).unwrap();
+        assert_eq!(
+            (selectors.rows, selectors.columns, selectors.cells.len()),
+            (2, 2, 4)
+        );
+        let panels = extract_panels(source.description(), &selectors, None).unwrap();
+        assert_eq!(panels.len(), 2);
+        assert_eq!(
+            (panels[0].panel_index, panels[0].row, panels[0].column),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            (panels[1].panel_index, panels[1].row, panels[1].column),
+            (3, 1, 1)
+        );
+        assert_eq!(panels[0].rows.selected(), (&[0, 2][..], &[91, 9001][..]));
+        assert_eq!(panels[1].rows.selected(), (&[1, 3][..], &[700, 32][..]));
+        assert_eq!(panels[0].render_scope().unwrap(), "facet row=B, column=C");
+    }
+
+    #[test]
+    fn source_facet_selector_retains_mapped_strict_read_errors() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 0.0]),
+        )
+        .source_rows(crate::SourceRows::new([90, 7001]).unwrap())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::nullable("facet", [Some("first"), None]).unwrap(),
+        ));
+        let error = facet_selectors(source.description()).err().unwrap();
+        assert_eq!(
+            error.to_string(),
+            "data error: facet: value \"facet\" contains null at source row 7001"
+        );
+    }
 }

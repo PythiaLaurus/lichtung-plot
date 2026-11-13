@@ -113,8 +113,9 @@ fn preflight_panels(
             .clone()
             .with_render_scope(facet.render_scope()?)
             .with_significance_subset(facet.significance_selectors());
+        let (rows, diagnostic_rows) = facet.rows.selected();
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows)
+            crate::data::PlotData::with_rows(&panel_plot, rows, diagnostic_rows)
                 .with_operation(&resources),
             facet.panel,
             theme,
