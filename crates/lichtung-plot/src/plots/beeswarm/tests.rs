@@ -177,13 +177,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: prepared.scale.domain(),
         exact: false,
         format: Some(std::sync::Arc::new(format.clone())),
-        numeric_source: crate::numeric::source::NumericSource::from_binding(
-            scope
-                .numeric_binding(source.description(), &row_source, &operation)
-                .unwrap(),
-            [source.user_x_limits(), source.user_y_limits()],
-        )
-        .unwrap(),
+        numeric: scope
+            .numeric_binding(source.description(), &row_source, &operation)
+            .unwrap(),
+        raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
     };
     let sibling = ContinuousContributor {
         field: "color".into(),
@@ -196,17 +193,18 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: (-4.0, 12.0),
         exact: true,
         format: Some(std::sync::Arc::new(format)),
-        numeric_source: crate::numeric::source::NumericSource::from_binding(
-            scope
-                .numeric_binding(source.description(), &row_source, &operation)
-                .unwrap(),
-            [source.user_x_limits(), source.user_y_limits()],
-        )
-        .unwrap(),
+        numeric: scope
+            .numeric_binding(source.description(), &row_source, &operation)
+            .unwrap(),
+        raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
     };
-    let shared = ContinuousContributor::merge([contributor, sibling])
-        .unwrap()
-        .unwrap();
+    let shared = crate::decorations::legend::descriptor::merge_continuous(
+        &operation.root_identity(),
+        &operation,
+        [contributor, sibling],
+    )
+    .unwrap()
+    .unwrap();
     prepared.install_shared_domain(&shared).unwrap();
     assert_eq!(
         prepared.values.as_ref().unwrap().labels,

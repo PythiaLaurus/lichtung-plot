@@ -71,6 +71,25 @@ impl NumericBinding<'_> {
     }
 }
 
+impl<'v> NumericBinding<'v> {
+    pub(crate) fn shared(
+        root: &crate::orchestrator::registration::RootIdentity,
+        operation: &'v crate::font::canonical::OperationContext,
+        owner: &'v OwnerInfo,
+    ) -> Result<Self> {
+        if *root != operation.root_identity() {
+            return Err(Error::Render(
+                "row source belongs to a different source or operation".into(),
+            ));
+        }
+        Ok(Self {
+            operation,
+            owner,
+            plot_id: None,
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct NumericSource {
     pub(crate) operation: crate::font::canonical::OperationContext,
@@ -142,13 +161,6 @@ impl NumericSource {
     pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
         self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
             .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
-    }
-    pub(crate) fn try_copy(&self) -> Result<Self> {
-        Ok(Self {
-            operation: self.operation.clone(),
-            owner: self.owner.try_copy()?,
-            raw_limits: self.raw_limits,
-        })
     }
     pub(crate) fn indexed(
         &self,

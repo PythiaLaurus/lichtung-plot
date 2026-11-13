@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn shared_native_numeric_binding_reduces_the_original_owners_once_before_capture() {
+    let owners = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let observed = owners.clone();
+    let format = crate::NumericFormat::default().set_function(move |context| {
+        assert_eq!(context.role(), crate::NumericRole::ContinuousColor);
+        assert_eq!(context.purpose(), crate::NumericPurpose::ActualSet);
+        assert_eq!(context.domain().unwrap().data_limits(), Some((1.0, 4.0)));
+        observed.lock().unwrap().push(context.owner().0.try_copy()?);
+        context.format_builtin()
+    });
+    let heatmap = Plot::heatmap(
+        crate::CategoryValues::new("column", ["C", "C"]).unwrap(),
+        crate::CategoryValues::new("row", ["A", "B"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+    )
+    .color_label_format(format.clone());
+    let swarm = Plot::beeswarm(
+        crate::CategoryValues::new("row", ["A", "B"]).unwrap(),
+        crate::NumericValues::new("x", [1.0, 2.0]),
+        crate::NumericValues::new("value", [3.0, 4.0]),
+    )
+    .color_label_format(format);
+    let root = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1400, 600)
+        .legend_policy(CanvasLegendPolicy::Shared)
+        .panel(0, 0, heatmap)
+        .unwrap()
+        .panel(0, 1, swarm)
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    {
+        let owners = owners.lock().unwrap();
+        assert_eq!(
+            owners.len(),
+            1,
+            "Shared materializes one complete set before fonts"
+        );
+        let owner = &owners[0];
+        assert!(
+            owner.kind.is_none(),
+            "the original contributors are heterogeneous"
+        );
+        assert!(owner.canvas.is_none() && owner.facet.is_none() && owner.shared);
+        assert_eq!(owner.scope.as_deref(), Some("shared continuous value"));
+    }
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    assert_eq!(
+        owners.lock().unwrap().len(),
+        1,
+        "replay never calls the formatter"
+    );
+}
+
+#[test]
 fn authored_display_slots_preserve_common_source_and_real_blank_line_metrics() {
     const SOURCE: &str = "\n  Alpha \r\n\r\nBeta  \n";
     let plot = Plot::line(

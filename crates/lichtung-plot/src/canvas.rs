@@ -961,6 +961,7 @@ impl Canvas {
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(None);
@@ -971,6 +972,21 @@ impl Canvas {
 
         let mut contributors = Vec::new();
         crate::data::source::reserve_source(&mut contributors, self.placements.len())?;
+        let row_sources = crate::data::source::collect_source(
+            self.placements.plots().enumerate().map(|(index, plot)| {
+                Ok(plot
+                    .zip(interiors.get(index).and_then(Option::as_ref))
+                    .and_then(|(plot, inputs)| {
+                        inputs.scopes.first().map(|scope| {
+                            crate::data::source::RowSourceContext::new(
+                                plot.description(),
+                                scope,
+                                operation,
+                            )
+                        })
+                    }))
+            }),
+        )?;
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
             if !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
@@ -986,16 +1002,30 @@ impl Canvas {
             let theme = &themes.plot_request(index).ok_or_else(|| {
                 Error::Render("shared continuous guide has no owning Plot theme".into())
             })?;
+            let (scope, rows) = inputs
+                .scopes
+                .first()
+                .zip(row_sources[index].as_ref())
+                .ok_or_else(|| {
+                    Error::Render("continuous guide lacks its operation-bound owner".into())
+                })?;
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
-                    plot, inputs, theme,
+                    plot,
+                    inputs,
+                    theme,
+                    scope.axis_numeric_binding(plot.description(), rows, operation)?,
                 )?
                 .ok_or_else(|| {
                     Error::Render("shared continuous guide has no color identity".into())
                 })?;
             contributors.push(contributor);
         }
-        crate::decorations::legend::descriptor::ContinuousContributor::merge(contributors)
+        crate::decorations::legend::descriptor::merge_continuous(
+            &operation.root_identity(),
+            operation,
+            contributors,
+        )
     }
 
     fn install_shared_continuous_domain(
@@ -1590,8 +1620,11 @@ impl Canvas {
                         )?;
                     }
                 }
-                let continuous_shared_guide =
-                    self.prepare_continuous_shared_guide(&themes, &interiors)?;
+                let continuous_shared_guide = self.prepare_continuous_shared_guide(
+                    &themes,
+                    &interiors,
+                    &prepared_stage.operation(),
+                )?;
                 if let Some(descriptor) = &continuous_shared_guide {
                     self.install_shared_continuous_domain(&mut interiors, descriptor)?;
                 }
