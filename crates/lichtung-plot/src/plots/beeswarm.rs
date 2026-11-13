@@ -16,7 +16,6 @@ use crate::Plot;
 
 #[derive(Debug)]
 pub(crate) struct PreparedBeeswarm {
-    pub(crate) levels: Vec<String>,
     pub(crate) x_data: (f64, f64),
     rows: Vec<(usize, f64, f64, ObservationAlpha)>,
     colors: Vec<crate::theme::OpaqueColor>,
@@ -31,7 +30,7 @@ pub(crate) struct PreparedBeeswarm {
 fn retained<'v>(
     chart: &Plot,
     registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
-) -> Result<&'v PreparedBeeswarm, Error> {
+) -> Result<(&'v PreparedBeeswarm, &'v [String]), Error> {
     if registered.is_none() {
         return Err(Error::Render(
             "Beeswarm requires root-prepared source rows".into(),
@@ -40,7 +39,15 @@ fn retained<'v>(
     match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Beeswarm")?
         .as_ref()
     {
-        crate::orchestrator::registration::FamilyRef::Beeswarm(marks) => Ok(marks),
+        crate::orchestrator::registration::FamilyRef::Beeswarm(marks) => Ok((
+            marks,
+            &registered
+                .expect("prepared Beeswarm occurrence")
+                .axes
+                .categories(1)
+                .expect("prepared Beeswarm categories")
+                .raw,
+        )),
         _ => Err(Error::Render(
             "Beeswarm requires root-prepared source rows".into(),
         )),
@@ -54,10 +61,8 @@ pub(crate) fn intrinsic_body_minimum(
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart, registered)?;
-    if prepared.levels.is_empty()
-        || prepared.rows.is_empty()
-        || prepared.rows.len() != prepared.colors.len()
+    let (prepared, levels) = retained(chart, registered)?;
+    if levels.is_empty() || prepared.rows.is_empty() || prepared.rows.len() != prepared.colors.len()
     {
         return Err(Error::Render(
             "Beeswarm source rows and prepared points differ".into(),
@@ -78,13 +83,13 @@ pub(crate) fn intrinsic_body_minimum(
 
     let pitch = 2.0 * quanta_pixels(packing_radius(chart, theme)?);
     for &(category, _, _, _) in &prepared.rows {
-        if category >= prepared.levels.len() {
+        if category >= levels.len() {
             return Err(Error::Render(
                 "Beeswarm point category exceeds prepared levels".into(),
             ));
         }
     }
-    let count = u32::try_from(prepared.levels.len())
+    let count = u32::try_from(levels.len())
         .map_err(|_| Error::Render("Beeswarm category count exceeds spatial range".into()))?;
     let height = pitch * f64::from(count);
     if !height.is_finite() {
@@ -152,7 +157,7 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_, '_>,
     selection: crate::theme::ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
-) -> Result<PreparedBeeswarm, Error> {
+) -> Result<(PreparedBeeswarm, Vec<String>), Error> {
     let alpha =
         chart
             .description()
@@ -231,18 +236,20 @@ pub(crate) fn prepare(
     let samples = crate::data::source::collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples)?;
     let colors = crate::data::source::collect_source(rows.iter().map(|row| scale.color(row.2)))?;
-    Ok(PreparedBeeswarm {
+    Ok((
+        PreparedBeeswarm {
+            x_data,
+            rows,
+            colors,
+            values,
+            format,
+            scale,
+            selection,
+            colorbar_stops,
+            color_label: chart.description().prepare_color_label(None)?,
+        },
         levels,
-        x_data,
-        rows,
-        colors,
-        values,
-        format,
-        scale,
-        selection,
-        colorbar_stops,
-        color_label: chart.description().prepare_color_label(None)?,
-    })
+    ))
 }
 
 impl PreparedBeeswarm {
@@ -372,7 +379,11 @@ pub(crate) fn natural_body_height(
     let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
         .max(2.0 * theme.typography.axes.tick_label.font_size)
-        * marks.levels.len() as f64;
+        * axes
+            .categories(1)
+            .expect("prepared Beeswarm categories")
+            .raw
+            .len() as f64;
     Ok(height.max(hard.1).max(3.0 * width / 4.0))
 }
 
@@ -380,7 +391,7 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained(chart, context.registered)?;
+    let (prepared, levels) = retained(chart, context.registered)?;
     let theme = context.theme;
 
     let minimum = intrinsic_body_minimum(
@@ -421,11 +432,8 @@ pub(crate) fn measure(
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("Beeswarm axes require preparation".into()))?;
     let range = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(prepared.x_data))?;
-    let projection = crate::layout::Projection::new(
-        range,
-        (0.0, prepared.levels.len() as f64),
-        panel.as_tuple(),
-    );
+    let projection =
+        crate::layout::Projection::new(range, (0.0, levels.len() as f64), panel.as_tuple());
     let source = context
         .registered
         .expect("prepared Beeswarm occurrence")
@@ -509,7 +517,7 @@ pub(crate) fn measure(
     let preferred = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
         2.0 * theme.typography.axes.tick_label.font_size,
     )?);
-    let tracks = crate::data::source::collect_source(prepared.levels.iter().map(|_| {
+    let tracks = crate::data::source::collect_source(levels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {
             min: hard_pitch,
             preferred,
@@ -528,7 +536,7 @@ pub(crate) fn measure(
         crate::data::source::collect_source(labels.iter().zip(&bands).map(|(label, band)| {
             let middle = f64::midpoint(band.0, band.1);
             Ok(crate::layout::AxisTick::new(
-                (middle - panel.y0) / panel.height() * prepared.levels.len() as f64,
+                (middle - panel.y0) / panel.height() * levels.len() as f64,
                 crate::data::source::copy_source_string(&label.label)?,
             ))
         }))?;
@@ -570,7 +578,7 @@ pub(crate) fn measure(
     let x_range = layout.projection.x_range();
     let zero = if chart.description().zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
-        let (_, y1) = layout.projection.project(0.0, prepared.levels.len() as f64);
+        let (_, y1) = layout.projection.project(0.0, levels.len() as f64);
         Some((
             [Point2D::new(x, y0), Point2D::new(x, y1)],
             theme
@@ -657,7 +665,7 @@ pub(crate) fn measure(
         .reduce(crate::render::geometry::GeometryBox::union)
     {
         if chart.user_x_limits().is_none() {
-            let levels = u32::try_from(prepared.levels.len()).map_err(|_| {
+            let levels = u32::try_from(levels.len()).map_err(|_| {
                 Error::Render("Beeswarm category count exceeds spatial range".into())
             })?;
             payload.domain_expansions = crate::layout::interior::automatic_absolute_ink_expansions(
@@ -671,12 +679,10 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.y_tick_keys = Some(crate::data::source::collect_source(
-        prepared
-            .levels
-            .iter()
-            .map(|level| crate::data::source::copy_source_string(level)),
-    )?);
+    result.y_tick_keys =
+        Some(crate::data::source::collect_source(levels.iter().map(
+            |level| crate::data::source::copy_source_string(level),
+        ))?);
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),

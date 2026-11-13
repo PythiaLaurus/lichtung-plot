@@ -143,6 +143,10 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "closed scientific dispatch moves each original result into its occurrence before parent completion"
+)]
 pub(crate) fn prepare_plot_registration(
     panel: &mut PlotRegistrationBuild<'_>,
     source: &Plot,
@@ -157,12 +161,25 @@ pub(crate) fn prepare_plot_registration(
         PlotKind::Waterfall => Ok(PreparedFamily::Waterfall(crate::plots::waterfall::prepare(
             source, data,
         )?)),
-        PlotKind::Beeswarm => Ok(PreparedFamily::Beeswarm(crate::plots::beeswarm::prepare(
-            source,
-            data,
-            continuous_selection(source, owner)?,
-            numeric,
-        )?)),
+        PlotKind::Beeswarm => {
+            let (marks, levels) = crate::plots::beeswarm::prepare(
+                source,
+                data,
+                continuous_selection(source, owner)?,
+                numeric,
+            )?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, levels.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [marks.x_data, slots],
+                [None, Some(levels)],
+            )?);
+            Ok(PreparedFamily::Beeswarm(marks))
+        }
         PlotKind::Marginal => {
             let (marks, axes) = crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
             panel.axes = Some(axes);
@@ -659,16 +676,29 @@ pub(crate) fn prepare_plot<'src>(
                         resources,
                     )?,
                 )?),
-                PlotKind::Beeswarm => PreparedFamily::Beeswarm(crate::plots::beeswarm::prepare(
-                    source,
-                    data,
-                    continuous_selection(source, owner)?,
-                    panel.scope.numeric_binding(
-                        source.description(),
-                        &panel.row_source,
-                        resources,
-                    )?,
-                )?),
+                PlotKind::Beeswarm => {
+                    let (marks, levels) = crate::plots::beeswarm::prepare(
+                        source,
+                        data,
+                        continuous_selection(source, owner)?,
+                        panel.scope.numeric_binding(
+                            source.description(),
+                            &panel.row_source,
+                            resources,
+                        )?,
+                    )?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, levels.len() as f64);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        [marks.x_data, slots],
+                        [None, Some(levels)],
+                    )?);
+                    PreparedFamily::Beeswarm(marks)
+                }
                 PlotKind::Waterfall => {
                     PreparedFamily::Waterfall(crate::plots::waterfall::prepare(source, data)?)
                 }
@@ -1170,12 +1200,8 @@ fn prepare(
         }
         PlotKind::Beeswarm => {
             let marks = marks!(reference, PreparedFamily::Beeswarm(marks) => marks, "beeswarm axes require retained semantics");
-            let levels = crate::data::source::collect_source(
-                marks
-                    .levels
-                    .iter()
-                    .map(|level| crate::data::source::copy_source_string(level)),
-            )?;
+            let levels = prepared_axes.as_mut().expect("prepared Beeswarm axes").sources_mut()[1]
+                .categories.take().expect("prepared Beeswarm categories").raw;
             let slots = chart
                 .description()
                 .y_axis_spec()

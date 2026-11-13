@@ -178,7 +178,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             let panel = &registry.panels[id.slot];
             let scope = &panel.scope;
             let row_source = &panel.row_source;
-            let mut prepared = prepare(
+            let (mut prepared, levels) = prepare(
                 &source,
                 registry.data(&id, &operation)?,
                 selection.clone(),
@@ -257,6 +257,17 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                         && stop.color == color.as_rgb()));
             }
             let expected = prepared.colors.clone();
+            let panel = &mut registry.panels[id.slot];
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, levels.len() as f64);
+            panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
+                panel,
+                [prepared.x_data, slots],
+                [None, Some(levels)],
+            )?);
             registry.panels[id.slot].family = Some(
                 crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
             );
