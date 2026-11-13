@@ -40,7 +40,6 @@ struct Trace {
 
 #[derive(Debug)]
 pub(crate) struct PreparedInteraction {
-    pub(crate) conditions: Vec<String>,
     pub(crate) range: (f64, f64),
     traces: Vec<Trace>,
 }
@@ -59,7 +58,13 @@ pub(crate) fn intrinsic_body_minimum(
         .ok_or_else(|| {
             Error::Render("Interaction intrinsic requires root-prepared traces".into())
         })?;
-    if prepared.conditions.is_empty() || prepared.traces.is_empty() {
+    let conditions = &registered
+        .expect("prepared Interaction occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared Interaction categories")
+        .raw;
+    if conditions.is_empty() || prepared.traces.is_empty() {
         return Err(Error::Render(
             "Interaction has no categorical slots or traces".into(),
         ));
@@ -113,7 +118,7 @@ pub(crate) fn intrinsic_body_minimum(
         numeric = numeric.max(stroke);
         pitch = pitch.max(stroke);
         for cell in &trace.cells {
-            if cell.condition >= prepared.conditions.len() {
+            if cell.condition >= conditions.len() {
                 return Err(Error::Render(
                     "Interaction occupied condition exceeds prepared slots".into(),
                 ));
@@ -124,7 +129,7 @@ pub(crate) fn intrinsic_body_minimum(
             }
         }
     }
-    let count = u32::try_from(prepared.conditions.len())
+    let count = u32::try_from(conditions.len())
         .map_err(|_| Error::Render("Interaction condition count exceeds spatial range".into()))?;
     let categorical = pitch * f64::from(count);
     if !categorical.is_finite() {
@@ -330,7 +335,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     parent: Option<&ObservedCollectives>,
-) -> Result<PreparedInteraction, Error> {
+) -> Result<(PreparedInteraction, Vec<String>), Error> {
     data.validate_row_source()?;
     let alpha =
         chart
@@ -472,11 +477,13 @@ pub(crate) fn prepare(
         }
     }
 
-    Ok(PreparedInteraction {
+    Ok((
+        PreparedInteraction {
+            range: crate::data::min_max(lower.into_iter().chain(upper), "interaction")?,
+            traces,
+        },
         conditions,
-        range: crate::data::min_max(lower.into_iter().chain(upper), "interaction")?,
-        traces,
-    })
+    ))
 }
 
 #[derive(Debug)]
@@ -532,7 +539,17 @@ impl InteractionPayload {
                     .into());
             }
             if chart.user_y_limits().is_none() {
-                let count = u32::try_from(marks.conditions.len()).map_err(|_| {
+                let count = u32::try_from(
+                    context
+                        .registered
+                        .expect("prepared Interaction occurrence")
+                        .axes
+                        .categories(0)
+                        .expect("prepared Interaction categories")
+                        .raw
+                        .len(),
+                )
+                .map_err(|_| {
                     Error::Render("Interaction condition count exceeds spatial range".into())
                 })?;
                 self.domain_expansions =

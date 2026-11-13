@@ -158,9 +158,20 @@ pub(crate) fn prepare_plot_registration(
         .scope
         .numeric_binding(panel.source, &panel.row_source, operation)?;
     let family = match source.kind() {
-        PlotKind::Waterfall => Ok(PreparedFamily::Waterfall(crate::plots::waterfall::prepare(
-            source, data,
-        )?)),
+        PlotKind::Waterfall => {
+            let (marks, labels) = crate::plots::waterfall::prepare(source, data)?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, labels.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [marks.range, slots],
+                [None, Some(labels)],
+            )?);
+            Ok(PreparedFamily::Waterfall(marks))
+        }
         PlotKind::Beeswarm => {
             let (marks, levels) = crate::plots::beeswarm::prepare(
                 source,
@@ -200,9 +211,20 @@ pub(crate) fn prepare_plot_registration(
             panel.axes = Some(prepare_pair_axes(panel, ranges, levels.map(Some))?);
             Ok(PreparedFamily::Heatmap(marks))
         }
-        PlotKind::Interaction => Ok(PreparedFamily::Interaction(
-            crate::plots::interaction::prepare(source, data, None)?,
-        )),
+        PlotKind::Interaction => {
+            let (marks, conditions) = crate::plots::interaction::prepare(source, data, None)?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, conditions.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [slots, marks.range],
+                [Some(conditions), None],
+            )?);
+            Ok(PreparedFamily::Interaction(marks))
+        }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             Ok(PreparedFamily::Distribution {
                 kind: source.kind(),
@@ -234,10 +256,20 @@ pub(crate) fn prepare_plot_registration(
                 )?,
             })
         }
-        PlotKind::Dumbbell => Ok(PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
-            source.description(),
-            data,
-        )?)),
+        PlotKind::Dumbbell => {
+            let (marks, categories) = crate::plots::dumbbell::prepare(source.description(), data)?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, categories.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [marks.range, slots],
+                [None, Some(categories)],
+            )?);
+            Ok(PreparedFamily::Dumbbell(marks))
+        }
         PlotKind::Histogram => {
             let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
                 source.description(),
@@ -296,7 +328,14 @@ impl PreparedFamily {
                     .raw
                     .len() as f64,
             ),
-            Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
+            Self::Interaction(_) => (
+                0.0,
+                axes.expect("prepared Interaction axes")
+                    .categories(0)
+                    .expect("prepared Interaction categories")
+                    .raw
+                    .len() as f64,
+            ),
             Self::Distribution { marks, .. } => (0.0, marks.categories().len() as f64),
             Self::Bars { kind, marks, .. } => {
                 if matches!(
@@ -675,10 +714,21 @@ pub(crate) fn prepare_plot<'src>(
                     panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
                     PreparedFamily::Regression(marks)
                 }
-                PlotKind::Dumbbell => PreparedFamily::Dumbbell(crate::plots::dumbbell::prepare(
-                    source.description(),
-                    data,
-                )?),
+                PlotKind::Dumbbell => {
+                    let (marks, categories) =
+                        crate::plots::dumbbell::prepare(source.description(), data)?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, categories.len() as f64);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        [marks.range, slots],
+                        [None, Some(categories)],
+                    )?);
+                    PreparedFamily::Dumbbell(marks)
+                }
                 PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
                     prepared.expect("prepared facet estimates")
                 }
@@ -725,11 +775,37 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Beeswarm(marks)
                 }
                 PlotKind::Waterfall => {
-                    PreparedFamily::Waterfall(crate::plots::waterfall::prepare(source, data)?)
+                    let (marks, labels) = crate::plots::waterfall::prepare(source, data)?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, labels.len() as f64);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        [marks.range, slots],
+                        [None, Some(labels)],
+                    )?);
+                    PreparedFamily::Waterfall(marks)
                 }
-                PlotKind::Interaction => PreparedFamily::Interaction(
-                    crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())?,
-                ),
+                PlotKind::Interaction => {
+                    let (marks, conditions) = crate::plots::interaction::prepare(
+                        source,
+                        data,
+                        interaction_parent.as_ref(),
+                    )?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, conditions.len() as f64);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        [slots, marks.range],
+                        [Some(conditions), None],
+                    )?);
+                    PreparedFamily::Interaction(marks)
+                }
                 PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                     PreparedFamily::Distribution {
                         kind: source.kind(),
@@ -1174,18 +1250,16 @@ fn prepare(
         }
         PlotKind::Dumbbell => {
             let marks = marks!(reference, PreparedFamily::Dumbbell(marks) => marks, "Dumbbell axes require prepared semantics");
-            categories[1] = Some(crate::data::source::collect_source(
-                marks
-                    .categories
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?);
+            let levels = prepared_axes.as_mut().expect("prepared Dumbbell axes").sources_mut()[1]
+                .categories.take().expect("prepared Dumbbell categories").raw;
+            let slots = (0.0, levels.len() as f64);
+            categories[1] = Some(levels);
             [
                 crate::layout::continuous_auto_range(
                     marks.range,
                     chart.description().x_axis_spec(),
                 )?,
-                (0.0, marks.categories.len() as f64),
+                slots,
             ]
         }
         PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
@@ -1207,12 +1281,8 @@ fn prepare(
         }
         PlotKind::Interaction => {
             let marks = marks!(reference, PreparedFamily::Interaction(marks) => marks, "interaction axes require retained semantics");
-            let levels = crate::data::source::collect_source(
-                marks
-                    .conditions
-                    .iter()
-                    .map(|level| crate::data::source::copy_source_string(level)),
-            )?;
+            let levels = prepared_axes.as_mut().expect("prepared Interaction axes").sources_mut()[0]
+                .categories.take().expect("prepared Interaction categories").raw;
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);
             [
@@ -1243,12 +1313,8 @@ fn prepare(
         }
         PlotKind::Waterfall => {
             let marks = marks!(reference, PreparedFamily::Waterfall(marks) => marks, "waterfall axes require retained semantics");
-            let levels = crate::data::source::collect_source(
-                marks
-                    .labels
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?;
+            let levels = prepared_axes.as_mut().expect("prepared Waterfall axes").sources_mut()[1]
+                .categories.take().expect("prepared Waterfall categories").raw;
             let slots = chart
                 .description()
                 .y_axis_spec()

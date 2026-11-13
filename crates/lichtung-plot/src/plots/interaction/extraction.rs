@@ -59,7 +59,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     )
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let (prepared, _) = crate::data::with_source_data_for_test(
         &chart,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,

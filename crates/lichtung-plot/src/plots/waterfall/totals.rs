@@ -68,7 +68,7 @@ impl PreparedWaterfall {
     }
 
     fn source_y(&self) -> Result<f64> {
-        Ok(f64::from(u32::try_from(self.labels.len()).map_err(
+        Ok(f64::from(u32::try_from(self.spans.len()).map_err(
             |_| Error::Render("Waterfall category count exceeds spatial range".into()),
         )?))
     }

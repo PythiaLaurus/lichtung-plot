@@ -30,7 +30,6 @@ struct DumbbellRow {
 
 #[derive(Debug)]
 pub(crate) struct DumbbellData {
-    pub(crate) categories: Vec<String>,
     group_count: usize,
     rows: Vec<DumbbellRow>,
     pub(crate) range: (f64, f64),
@@ -48,7 +47,13 @@ pub(crate) fn intrinsic_body_minimum(
             _ => None,
         })
         .ok_or_else(|| Error::Render("Dumbbell intrinsic requires root-prepared pairs".into()))?;
-    if prepared.categories.is_empty() || prepared.group_count == 0 || prepared.rows.is_empty() {
+    let categories = &registered
+        .expect("prepared Dumbbell occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Dumbbell categories")
+        .raw;
+    if categories.is_empty() || prepared.group_count == 0 || prepared.rows.is_empty() {
         return Err(Error::Render(
             "Dumbbell has no occupied category/pair slots".into(),
         ));
@@ -62,9 +67,7 @@ pub(crate) fn intrinsic_body_minimum(
         );
     let mut offset = 0.0_f64;
     for row in &prepared.rows {
-        if row.category_index >= prepared.categories.len()
-            || row.group_index >= prepared.group_count
-        {
+        if row.category_index >= categories.len() || row.group_index >= prepared.group_count {
             return Err(Error::Render(
                 "Dumbbell occupied slot exceeds prepared categories".into(),
             ));
@@ -102,7 +105,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let pitch = (outward / (0.5 - offset)).max(1.0 / 1024.0);
     let rows =
-        f64::from(u32::try_from(prepared.categories.len()).map_err(|_| {
+        f64::from(u32::try_from(categories.len()).map_err(|_| {
             Error::Render("Dumbbell category count exceeds coordinate range".into())
         })?);
     let height = pitch * rows;
@@ -231,7 +234,14 @@ pub(crate) fn measure_marks(
         .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
 
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, context.theme)?;
+    let categories = &context
+        .registered
+        .expect("prepared Dumbbell occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Dumbbell categories")
+        .raw;
+    let mut result = project(chart, prepared, categories, layout, context.theme)?;
     let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result
         .marks
         .as_ref()
@@ -257,7 +267,7 @@ pub(crate) fn measure_marks(
         .copied()
         .reduce(crate::render::geometry::GeometryBox::union)
     {
-        let count = u32::try_from(prepared.categories.len()).map_err(|_| {
+        let count = u32::try_from(categories.len()).map_err(|_| {
             Error::Render("Dumbbell category count exceeds coordinate range".into())
         })?;
         let requests = crate::layout::interior::automatic_absolute_ink_expansions(
@@ -281,6 +291,7 @@ pub(crate) fn measure_marks(
 fn project(
     chart: &Plot,
     prepared: &DumbbellData,
+    categories: &[String],
     layout: crate::layout::Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
@@ -288,7 +299,7 @@ fn project(
         .description()
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
-    let category_count = prepared.categories.len();
+    let category_count = categories.len();
     let connector = theme
         .marks
         .get_strokes()
@@ -361,7 +372,7 @@ fn project(
 pub(crate) fn prepare(
     chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
-) -> Result<DumbbellData, Error> {
+) -> Result<(DumbbellData, Vec<String>), Error> {
     data.validate_row_source()?;
     let source = chart;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
@@ -455,12 +466,14 @@ pub(crate) fn prepare(
     }
 
     let range = crate::data::min_max(left.into_iter().chain(right), "dumbbell")?;
-    Ok(DumbbellData {
-        categories: category_levels,
-        group_count: group_levels.len().max(1),
-        rows,
-        range,
-    })
+    Ok((
+        DumbbellData {
+            group_count: group_levels.len().max(1),
+            rows,
+            range,
+        },
+        category_levels,
+    ))
 }
 
 fn endpoint_style(

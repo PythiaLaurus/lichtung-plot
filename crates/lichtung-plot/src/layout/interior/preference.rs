@@ -73,7 +73,13 @@ pub(crate) fn categorical_preference(
             let marks = family!("Dumbbell preference lacks preparation", "Dumbbell", F::Dumbbell(marks) => marks);
             (
                 crate::layout::AxisSide::Left,
-                marks.categories.len(),
+                registered
+                    .expect("prepared Dumbbell occurrence")
+                    .axes
+                    .categories(1)
+                    .expect("prepared Dumbbell categories")
+                    .raw
+                    .len(),
                 marks.primary_mark_count(),
             )
         }
@@ -102,7 +108,13 @@ pub(crate) fn categorical_preference(
             let marks = family!("Interaction preference lacks preparation", "Interaction", F::Interaction(marks) => marks);
             (
                 crate::layout::AxisSide::Bottom,
-                marks.conditions.len(),
+                registered
+                    .expect("prepared Interaction occurrence")
+                    .axes
+                    .categories(0)
+                    .expect("prepared Interaction categories")
+                    .raw
+                    .len(),
                 marks.checked_primary_mark_count()?,
             )
         }

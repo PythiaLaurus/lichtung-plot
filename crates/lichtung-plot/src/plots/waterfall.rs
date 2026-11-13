@@ -21,7 +21,6 @@ use crate::Plot;
 
 #[derive(Debug)]
 pub(crate) struct PreparedWaterfall {
-    pub(crate) labels: Vec<String>,
     pub(crate) range: (f64, f64),
     // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
     spans: Vec<WaterfallSpan>,
@@ -425,7 +424,13 @@ fn mark_intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(chart, registered)?;
-    if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
+    let labels = &registered
+        .expect("prepared Waterfall occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Waterfall categories")
+        .raw;
+    if labels.is_empty() || labels.len() != prepared.spans.len() {
         return Err(Error::Render(
             "Waterfall categories and scientific spans differ".into(),
         ));
@@ -485,7 +490,7 @@ fn mark_intrinsic_body_minimum(
             .backend_style(),
     )?);
     let categories = f64::from(
-        u32::try_from(prepared.labels.len())
+        u32::try_from(labels.len())
             .map_err(|_| Error::Render("Waterfall category count exceeds spatial range".into()))?,
     );
     let mark_height = pitch * categories;
@@ -605,6 +610,10 @@ pub(crate) fn natural_body_height(
     let axes = registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
+    let labels = &axes
+        .categories(1)
+        .expect("prepared Waterfall categories")
+        .raw;
     let range = chart
         .description()
         .x_axis_spec()
@@ -625,7 +634,7 @@ pub(crate) fn natural_body_height(
     let plan = plan_annotations(
         &projection,
         panel,
-        marks.labels.len() as f64,
+        labels.len() as f64,
         &marks.selected_totals(&projection)?.totals,
         PlotRenderContext::new(data, panel, theme).with_registration(registered_owner, intrinsic),
     )
@@ -641,7 +650,7 @@ pub(crate) fn natural_body_height(
             .1,
         );
     Ok(hard
-        .max(2.0 * theme.typography.axes.tick_label.font_size * marks.labels.len() as f64)
+        .max(2.0 * theme.typography.axes.tick_label.font_size * labels.len() as f64)
         .max(3.0 * width / 4.0)
         + plan.height)
 }
@@ -649,7 +658,7 @@ pub(crate) fn natural_body_height(
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
-) -> Result<PreparedWaterfall, Error> {
+) -> Result<(PreparedWaterfall, Vec<String>), Error> {
     let label_col = chart
         .description()
         .x_col()
@@ -695,13 +704,15 @@ pub(crate) fn prepare(
         },
     )?;
     let total_candidates = [(base, base_label), (running, terminal_label)];
-    Ok(PreparedWaterfall {
+    Ok((
+        PreparedWaterfall {
+            range,
+            spans,
+            total_candidates,
+            total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
+        },
         labels,
-        range,
-        spans,
-        total_candidates,
-        total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
-    })
+    ))
 }
 
 fn prepare_spans(
@@ -743,7 +754,13 @@ pub(crate) fn measure(
     let prepared = retained(chart, context.registered)?;
     let theme = context.theme;
 
-    let labels = &prepared.labels;
+    let labels = &context
+        .registered
+        .expect("prepared Waterfall occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Waterfall categories")
+        .raw;
     let spans = &prepared.spans;
     let range = prepared.range;
     let base = prepared.total_candidates[0].0;
@@ -1135,7 +1152,7 @@ pub(crate) fn measure(
             .copied()
             .reduce(crate::render::geometry::GeometryBox::union)
         {
-            let count = u32::try_from(prepared.labels.len()).map_err(|_| {
+            let count = u32::try_from(labels.len()).map_err(|_| {
                 Error::Render("Waterfall category count exceeds spatial range".into())
             })?;
             let requests = crate::layout::interior::automatic_absolute_ink_expansions(
