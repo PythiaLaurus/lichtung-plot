@@ -176,7 +176,14 @@ impl PreparedInteriorInputs<'_> {
                     }
                 }
                 F::Distribution { marks, .. } => {
-                    for value in marks.observed_hue_levels() {
+                    for value in marks.observed_hue_levels(
+                        registered
+                            .policy
+                            .coordinated
+                            .colors
+                            .as_deref()
+                            .expect("prepared distribution color domain"),
+                    ) {
                         include(value)?;
                     }
                 }
@@ -287,15 +294,21 @@ impl PreparedInteriorInputs<'_> {
                         .map(String::as_str),
                     )?;
                 }
-                F::Distribution { marks, .. } => {
-                    let domain = if marks.hue_levels().is_empty() {
+                F::Distribution { .. } => {
+                    let hues = registered
+                        .policy
+                        .coordinated
+                        .colors
+                        .as_deref()
+                        .expect("prepared distribution color domain");
+                    let domain = if hues.is_empty() {
                         &registered
                             .axes
                             .categories(0)
                             .expect("prepared distribution categories")
                             .raw
                     } else {
-                        marks.hue_levels()
+                        hues
                     };
                     include_keys(&mut keys, domain.iter().map(String::as_str))?;
                 }
@@ -388,6 +401,12 @@ impl PreparedInteriorInputs<'_> {
                         .categories(0)
                         .expect("prepared distribution categories")
                         .raw,
+                    registered
+                        .policy
+                        .coordinated
+                        .colors
+                        .as_deref()
+                        .expect("prepared distribution color domain"),
                     theme,
                     data,
                 )

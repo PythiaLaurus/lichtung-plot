@@ -232,10 +232,11 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Interaction(marks))
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-            let (marks, categories) =
+            let (marks, categories, domains) =
                 crate::plots::categorical_distribution::PreparedDistribution::new(
                     source, data, None,
                 )?;
+            panel.policy.coordinated = domains;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -900,12 +901,13 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Interaction(marks)
                 }
                 PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-                    let (marks, categories) =
+                    let (marks, categories, domains) =
                         crate::plots::categorical_distribution::PreparedDistribution::new(
                             source,
                             data,
                             Some(facet),
                         )?;
+                    panel.policy.coordinated = domains;
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "category lengths are admitted source rows"

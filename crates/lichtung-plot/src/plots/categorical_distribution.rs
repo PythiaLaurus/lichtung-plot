@@ -3,6 +3,7 @@
 use crate::data::PlotData;
 use crate::decorations::legend::source::{FillRole, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::orchestrator::registration::CoordinatedDomains;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::theme::CategoryColors;
 use crate::{Error, Plot, PlotKind};
@@ -18,7 +19,12 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
-    pub(crate) fn series_center(&self, category: &str, series: &str) -> Result<f64, Error> {
+    pub(crate) fn series_center(
+        &self,
+        category: &str,
+        series: &str,
+        groups: Option<&[String]>,
+    ) -> Result<f64, Error> {
         let sample = match self {
             Self::Boxplot(marks) => &marks.sample,
             Self::Violin(marks) => &marks.sample,
@@ -39,7 +45,7 @@ impl PreparedDistribution {
             })?;
         Ok(crate::plots::distribution_sample::center(
             group,
-            sample.group_levels.len(),
+            groups.expect("prepared distribution group domain").len(),
         ))
     }
     pub(crate) fn alpha_guide(
@@ -59,12 +65,13 @@ impl PreparedDistribution {
         &self,
         chart: &Plot,
         categories: &[String],
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources();
-        let keys = if !self.hue_levels().is_empty() {
-            chart.global_hue_levels().unwrap_or(self.hue_levels())
+        let keys = if !hues.is_empty() {
+            chart.global_hue_levels().unwrap_or(hues)
         } else if !chart.description().has_facets() || matches!(self, Self::Supplied(_)) {
             categories
         } else {
@@ -113,16 +120,18 @@ impl PreparedDistribution {
         &self,
         chart: &Plot,
         categories: &[String],
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, categories, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, &colors)
+        let colors = self.resolved_colors(chart, categories, hues, theme, data)?;
+        self.guide_entries_with_colors(chart, hues, theme, &colors)
     }
 
     pub(crate) fn guide_entries_with_colors(
         &self,
         chart: &Plot,
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
@@ -130,11 +139,13 @@ impl PreparedDistribution {
         let (sample, boxplot) = match self {
             Self::Boxplot(prepared) => (&prepared.sample, true),
             Self::Violin(prepared) => (&prepared.sample, false),
-            Self::Supplied(prepared) => return prepared.guide_entries(chart, theme, colors),
+            Self::Supplied(_) => {
+                return crate::plots::violin::precomputed::guide_entries(chart, hues, theme, colors)
+            }
         };
         let mut entries = Vec::new();
-        crate::data::source::reserve_source(&mut entries, sample.hue_levels.len())?;
-        for label in sample.observed_hue_levels() {
+        crate::data::source::reserve_source(&mut entries, hues.len())?;
+        for label in sample.observed_hue_levels(hues) {
             let color = colors.color(label)?;
             let key = GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?;
             let key = if boxplot {
@@ -175,16 +186,11 @@ impl PreparedDistribution {
         Ok(entries)
     }
 
-    pub(crate) fn hue_levels(&self) -> &[String] {
-        match self {
-            Self::Boxplot(prepared) => &prepared.sample.hue_levels,
-            Self::Violin(prepared) => &prepared.sample.hue_levels,
-            Self::Supplied(prepared) => prepared.hue_levels(),
-        }
-    }
-
-    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.hue_levels().iter().filter_map(|hue| {
+    pub(crate) fn observed_hue_levels<'a>(
+        &'a self,
+        hues: &'a [String],
+    ) -> impl Iterator<Item = &'a str> {
+        hues.iter().filter_map(|hue| {
             let present = match self {
                 Self::Boxplot(prepared) => prepared.sample.observes_hue(hue),
                 Self::Violin(prepared) => prepared.sample.observes_hue(hue),
@@ -197,32 +203,30 @@ impl PreparedDistribution {
         chart: &Plot,
         data: PlotData<'_, '_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
-    ) -> Result<(Self, Vec<String>), Error> {
+    ) -> Result<(Self, Vec<String>, CoordinatedDomains), Error> {
         data.validate_row_source()?;
-        let (prepared, categories) = match chart.kind() {
+        let (prepared, categories, groups, hues) = match chart.kind() {
             PlotKind::Boxplot => {
-                let (marks, categories) = crate::plots::boxplot::prepare(chart, data, facet)?;
-                Ok((Self::Boxplot(marks), categories))
+                let (marks, categories, groups, hues) =
+                    crate::plots::boxplot::prepare(chart, data, facet)?;
+                Ok((Self::Boxplot(marks), categories, Some(groups), hues))
             }
             PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => {
-                let (marks, categories) =
+                let (marks, categories, hues) =
                     crate::plots::violin::precomputed::prepare(chart.description())?;
-                Ok((Self::Supplied(marks), categories))
+                Ok((Self::Supplied(marks), categories, None, hues))
             }
             PlotKind::Violin | PlotKind::Raincloud => {
-                let (marks, categories) = crate::plots::violin::prepare(chart, data, facet)?;
-                Ok((Self::Violin(marks), categories))
+                let (marks, categories, groups, hues) =
+                    crate::plots::violin::prepare(chart, data, facet)?;
+                Ok((Self::Violin(marks), categories, Some(groups), hues))
             }
             _ => Err(Error::Render(
                 "categorical distribution preparation requires its family".into(),
             )),
         }?;
         if let Some(exact) = chart.description().categorical_map_spec() {
-            let keys = if prepared.hue_levels().is_empty() {
-                &categories
-            } else {
-                prepared.hue_levels()
-            };
+            let keys = if hues.is_empty() { &categories } else { &hues };
             for key in keys {
                 if exact.color_in(key).is_none() {
                     return Err(Error::Data(format!(
@@ -231,7 +235,14 @@ impl PreparedDistribution {
                 }
             }
         }
-        Ok((prepared, categories))
+        Ok((
+            prepared,
+            categories,
+            CoordinatedDomains {
+                colors: Some(crate::data::source::source_arc(hues)?),
+                groups: groups.map(crate::data::source::source_arc).transpose()?,
+            },
+        ))
     }
 
     pub(crate) const fn range(&self) -> (f64, f64) {

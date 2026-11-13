@@ -18,7 +18,6 @@ use crate::Plot;
 pub(crate) struct PreparedRaincloud {
     pub(crate) range: (f64, f64),
     groups: Vec<PreparedRaincloudGroup>,
-    hues: Vec<String>,
 }
 
 pub(crate) fn intrinsic_body_minimum(
@@ -199,37 +198,33 @@ impl PreparedRaincloud {
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.groups.len() as u128
     }
+}
 
-    pub(crate) fn hue_levels(&self) -> &[String] {
-        &self.hues
-    }
+pub(crate) fn guide_entries(
+    chart: &Plot,
+    hues: &[String],
+    theme: &crate::text::TextRequestContext<'_, '_>,
 
-    pub(crate) fn guide_entries(
-        &self,
-        chart: &Plot,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-
-        colors: &CategoryColors,
-    ) -> Result<Vec<GuideSourceKey>, Error> {
-        crate::data::source::collect_source(self.hues.iter().map(|hue| {
-            let color = colors.color(hue)?;
-            Ok(
-                GuideSourceKey::hue_only(chart.description().point_legend_identity(hue)?)?
-                    .with_point(
-                        chart.description().distribution_point_style(
-                            theme.marks.get_points().get_mandatory_strip(),
-                            color,
-                        ),
-                        PointRole::MandatoryStrip,
-                    )
-                    .with_fill(
-                        theme.marks.get_fills().get_bodies().get_violin_body(),
+    colors: &CategoryColors,
+) -> Result<Vec<GuideSourceKey>, Error> {
+    crate::data::source::collect_source(hues.iter().map(|hue| {
+        let color = colors.color(hue)?;
+        Ok(
+            GuideSourceKey::hue_only(chart.description().point_legend_identity(hue)?)?
+                .with_point(
+                    chart.description().distribution_point_style(
+                        theme.marks.get_points().get_mandatory_strip(),
                         color,
-                        FillRole::ViolinBody,
                     ),
-            )
-        }))
-    }
+                    PointRole::MandatoryStrip,
+                )
+                .with_fill(
+                    theme.marks.get_fills().get_bodies().get_violin_body(),
+                    color,
+                    FillRole::ViolinBody,
+                ),
+        )
+    }))
 }
 
 #[derive(Debug)]
@@ -253,7 +248,7 @@ thread_local! {
 
 pub(crate) fn prepare(
     chart: &crate::builder::PlotDescription,
-) -> Result<(PreparedRaincloud, Vec<String>), Error> {
+) -> Result<(PreparedRaincloud, Vec<String>, Vec<String>), Error> {
     let input = chart
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
@@ -335,14 +330,7 @@ pub(crate) fn prepare(
                 })
             },
         ))?;
-    Ok((
-        PreparedRaincloud {
-            range,
-            groups,
-            hues,
-        },
-        categories,
-    ))
+    Ok((PreparedRaincloud { range, groups }, categories, hues))
 }
 
 pub(super) fn measure_marks(
@@ -362,7 +350,20 @@ pub(super) fn measure_marks(
         .expect("prepared distribution categories")
         .raw;
     let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
-        .resolved_colors(chart, categories, theme, data)?;
+        .resolved_colors(
+            chart,
+            categories,
+            context
+                .registered
+                .expect("prepared supplied Raincloud occurrence")
+                .policy
+                .coordinated
+                .colors
+                .as_deref()
+                .expect("prepared distribution color domain"),
+            theme,
+            data,
+        )?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (index, group) in input.groups.iter().enumerate() {

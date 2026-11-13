@@ -191,9 +191,16 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let raincloud = chart.kind() == crate::PlotKind::Raincloud;
-    let grouped = !sample.group_levels.is_empty();
+    let group_levels = registered
+        .expect("prepared sampled distribution occurrence")
+        .policy
+        .coordinated
+        .groups
+        .as_deref()
+        .expect("prepared distribution group domain");
+    let grouped = !group_levels.is_empty();
     let width = if grouped {
-        (0.72 / sample.group_levels.len() as f64).min(0.34)
+        (0.72 / group_levels.len() as f64).min(0.34)
     } else {
         0.8
     };
@@ -273,14 +280,12 @@ pub(crate) fn intrinsic_body_minimum(
         if !raincloud {
             numeric = numeric.max(summary_ink.map_or(0.0, |ink| ink.top - ink.bottom));
         }
-        if group.x_index >= x_levels.len()
-            || (grouped && group.group_index >= sample.group_levels.len())
-        {
+        if group.x_index >= x_levels.len() || (grouped && group.group_index >= group_levels.len()) {
             return Err(Error::Render(
                 "sampled distribution group exceeds prepared category slot".into(),
             ));
         }
-        let center = crate::plots::distribution_sample::center(group, sample.group_levels.len());
+        let center = crate::plots::distribution_sample::center(group, group_levels.len());
         let offset = center - (group.x_index as f64 + 0.5);
         let point = if points_visible {
             crate::alpha::marks::point_ink(
@@ -344,17 +349,21 @@ pub(crate) fn intrinsic_body_minimum(
     ))
 }
 
+#[expect(
+    clippy::type_complexity,
+    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
+)]
 pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(PreparedViolin, Vec<String>), Error> {
+) -> Result<(PreparedViolin, Vec<String>, Vec<String>, Vec<String>), Error> {
     let family = if chart.kind() == crate::PlotKind::Violin {
         "violin"
     } else {
         "raincloud"
     };
-    let (sample, categories) =
+    let (sample, categories, group_levels, hue_levels) =
         crate::plots::distribution_sample::prepare_scoped(chart, data, family, facet)?;
     if chart.kind() == crate::PlotKind::Raincloud {
         let mut source_rows = Vec::new();
@@ -439,6 +448,8 @@ pub(crate) fn prepare(
             densities,
         },
         categories,
+        group_levels,
+        hue_levels,
     ))
 }
 
@@ -470,14 +481,31 @@ pub(crate) fn measure_marks(
         .categories(0)
         .expect("prepared distribution categories")
         .raw;
-    let group_levels = &sample.group_levels;
+    let domains = &context
+        .registered
+        .expect("prepared sampled distribution occurrence")
+        .policy
+        .coordinated;
+    let group_levels = domains
+        .groups
+        .as_deref()
+        .expect("prepared distribution group domain");
     let support_range = prepared.support_range;
     let base_display_range = layout.projection.y_range();
     let rendered_maxima =
         crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.description().raw_overlay_spec();
     let panel = context.panel;
-    let colors = retained.resolved_colors(chart, x_levels, theme, data)?;
+    let colors = retained.resolved_colors(
+        chart,
+        x_levels,
+        domains
+            .colors
+            .as_deref()
+            .expect("prepared distribution color domain"),
+        theme,
+        data,
+    )?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,

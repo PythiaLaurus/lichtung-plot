@@ -165,7 +165,16 @@ pub(crate) fn data(
                         _ => None,
                     })
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
-                return marks.series_center(category, series);
+                return marks.series_center(
+                    category,
+                    series,
+                    registered
+                        .policy
+                        .coordinated
+                        .groups
+                        .as_deref()
+                        .map(Vec::as_slice),
+                );
             }
             let mode = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, .. } => Some(mode), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;

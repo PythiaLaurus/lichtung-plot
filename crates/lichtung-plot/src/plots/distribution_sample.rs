@@ -26,8 +26,6 @@ pub(crate) struct DistributionGroup {
 
 #[derive(Debug)]
 pub(crate) struct DistributionSample {
-    pub(crate) group_levels: Vec<String>,
-    pub(crate) hue_levels: Vec<String>,
     pub(crate) groups: Vec<DistributionGroup>,
 }
 
@@ -38,15 +36,18 @@ impl DistributionSample {
             .any(|group| group.hue_label.as_deref() == Some(hue))
     }
 
-    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.hue_levels
-            .iter()
+    pub(crate) fn observed_hue_levels<'a>(
+        &'a self,
+        hues: &'a [String],
+    ) -> impl Iterator<Item = &'a str> {
+        hues.iter()
             .filter_map(|hue| self.observes_hue(hue).then_some(hue.as_str()))
     }
 }
 
 #[expect(
     clippy::too_many_lines,
+    clippy::type_complexity,
     reason = "ordered grouping admits nested source buffers"
 )]
 pub(crate) fn prepare_scoped(
@@ -54,7 +55,7 @@ pub(crate) fn prepare_scoped(
     data: PlotData<'_, '_>,
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(DistributionSample, Vec<String>), Error> {
+) -> Result<(DistributionSample, Vec<String>, Vec<String>, Vec<String>), Error> {
     let alpha =
         chart
             .description()
@@ -188,12 +189,10 @@ pub(crate) fn prepare_scoped(
         group.fill_alpha = fill_alpha.aggregate(key, series)?;
     }
     Ok((
-        DistributionSample {
-            group_levels,
-            hue_levels,
-            groups,
-        },
+        DistributionSample { groups },
         x_levels,
+        group_levels,
+        hue_levels,
     ))
 }
 
