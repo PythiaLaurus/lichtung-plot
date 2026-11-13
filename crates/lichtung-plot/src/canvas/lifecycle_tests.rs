@@ -198,6 +198,64 @@ fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
 }
 
 #[test]
+fn shared_bar_palette_keeps_local_hue_indices_even_without_guide_contributions() {
+    let source = |series| {
+        Plot::bar(
+            crate::CategoryValues::new("category", ["one"]).unwrap(),
+            crate::BarInput::estimates(crate::NumericValues::new("value", [1.0])),
+        )
+        .series(crate::CategoryValues::new("cohort", [series]).unwrap())
+        .legend(crate::LegendPolicy::Hidden)
+    };
+    let canvas = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1000, 500)
+        .legend_policy(CanvasLegendPolicy::Shared)
+        .panel(0, 0, source("first"))
+        .unwrap()
+        .panel(0, 1, source("second"))
+        .unwrap();
+    let mut second_color = (0, 0, 0);
+    let root = canvas
+        .build_preflight_plan(|prepared, _| {
+            assert!(prepared.shared_guide.is_none());
+            let domains = prepared.color_domains.as_ref().unwrap();
+            assert_eq!(domains.len(), 1);
+            assert_eq!(domains[0].1, ["first", "second"]);
+            for (index, raw) in ["first", "second"].into_iter().enumerate() {
+                let registered = &prepared.interiors[index].as_ref().unwrap().plots[0];
+                let local = registered.policy.coordinated.colors.as_deref().unwrap();
+                assert_eq!(local.as_slice(), [raw]);
+                let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } =
+                    &registered.family
+                else {
+                    panic!("prepared Bars")
+                };
+                assert_eq!(marks.bars[0].hue_index, Some(0));
+                assert_eq!(local[marks.bars[0].hue_index.unwrap()], raw);
+                assert!(registered.guide.descriptor.is_none());
+                assert!(registered.guide.alpha.sources.is_empty());
+            }
+            second_color = prepared
+                .themes
+                .plot(1)
+                .unwrap()
+                .color_scales
+                .get_qualitative()
+                .colors()[1]
+                .as_rgb();
+        })
+        .unwrap();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    assert!(svg.contains(&format!(
+        "fill=\"#{:02X}{:02X}{:02X}\"",
+        second_color.0, second_color.1, second_color.2,
+    )));
+}
+
+#[test]
 fn hidden_native_materialization_distinguishes_authored_visibility_from_canvas_policy() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let calls = Arc::new(AtomicUsize::new(0));
