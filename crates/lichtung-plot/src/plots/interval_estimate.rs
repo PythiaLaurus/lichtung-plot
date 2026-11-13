@@ -16,7 +16,6 @@ mod alpha_tests;
 
 #[derive(Debug)]
 pub(crate) struct PreparedEstimate {
-    pub(crate) kind: crate::PlotKind,
     pub(crate) labels: Vec<String>,
     estimates: Vec<Option<EstimateTuple>>,
     alphas: Vec<ObservationAlpha>,
@@ -321,7 +320,6 @@ impl PreparedEstimate {
             line_alphas.push(row.line_alpha);
         }
         Ok(Self {
-            kind: chart.kind(),
             labels,
             estimates,
             alphas,
@@ -966,7 +964,6 @@ fn prepare_model<'a>(
             },
         ))?;
     Ok(PreparedEstimate {
-        kind: chart.kind(),
         labels,
         estimates: transformed_estimates,
         alphas,

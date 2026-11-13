@@ -1157,7 +1157,7 @@ impl Canvas {
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
         scatter: &[Option<crate::plots::scatter::PreparedScatter>],
         line: &[Option<crate::plots::line::PreparedLine>],
-        reference: &[Option<crate::plots::shared_x::PreparedReference>],
+        reference: &[Option<crate::orchestrator::registration::PreparedFamily>],
     ) -> Result<Vec<Option<(f64, f64)>>, Error> {
         let mut ranges = Vec::new();
         if self.x_range_groups.is_empty() {
@@ -1317,7 +1317,7 @@ impl Canvas {
                             .configured_source_rows()?
                             .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                             .with_operation(&resources);
-                        Some(crate::plots::shared_x::PreparedReference::new(
+                        Some(crate::orchestrator::registration::PreparedFamily::new(
                             plot,
                             data,
                             themes

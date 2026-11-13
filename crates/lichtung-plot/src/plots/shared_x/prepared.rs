@@ -125,27 +125,7 @@ impl PreparedAxes {
     }
 }
 
-/// Scientific inputs before a parent's shared range is known.
-pub(crate) enum PreparedReference {
-    Waterfall(crate::plots::waterfall::PreparedWaterfall),
-    Beeswarm(crate::plots::beeswarm::PreparedBeeswarm),
-    Marginal(crate::plots::marginal::PreparedMarginal),
-    Heatmap(crate::plots::heatmap::HeatmapData),
-    Interaction(crate::plots::interaction::PreparedInteraction),
-    Distribution(
-        crate::PlotKind,
-        crate::plots::categorical_distribution::PreparedDistribution,
-    ),
-    Bars(crate::PlotKind, crate::plots::bar_data::PreparedBars),
-    Estimate(crate::plots::interval_estimate::PreparedEstimate),
-    Dumbbell(crate::plots::dumbbell::DumbbellData),
-    Histogram(crate::plots::histogram::HistogramSemantics),
-    Density(crate::plots::density::PreparedDensity),
-    Qq(crate::plots::qq::PreparedQq),
-    Regression(crate::plots::regression::PreparedRegression),
-}
-
-impl PreparedReference {
+impl PreparedFamily {
     pub(crate) fn new(
         source: &Plot,
         data: PlotData<'_, '_>,
@@ -171,30 +151,34 @@ impl PreparedReference {
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
             )?)),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Distribution(
-                source.kind(),
-                crate::plots::categorical_distribution::PreparedDistribution::new(
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Distribution {
+                kind: source.kind(),
+                marks: crate::plots::categorical_distribution::PreparedDistribution::new(
                     source, data, None,
                 )?,
-            )),
+            }),
             PlotKind::Bar
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar => Ok(Self::Bars(
-                source.kind(),
-                crate::plots::bar_data::prepare(
+            | PlotKind::StackedHorizontalBar => Ok(Self::Bars {
+                kind: source.kind(),
+                mode: crate::plots::bar_data::mode(source),
+                marks: crate::plots::bar_data::prepare(
                     source,
                     data,
                     crate::plots::bar_data::mode(source),
                 )?,
-            )),
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => Ok(
-                Self::Estimate(crate::plots::interval_estimate::PreparedEstimate::new(
-                    source,
-                    data,
-                    source.description().significance_annotations(),
-                )?),
-            ),
+            }),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+                Ok(Self::Estimate {
+                    kind: source.kind(),
+                    marks: crate::plots::interval_estimate::PreparedEstimate::new(
+                        source,
+                        data,
+                        source.description().significance_annotations(),
+                    )?,
+                })
+            }
             PlotKind::Dumbbell => Ok(Self::Dumbbell(crate::plots::dumbbell::prepare(
                 source.description(),
                 data,
@@ -239,8 +223,8 @@ impl PreparedReference {
             Self::Marginal(marks) => marks.ranges[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
-            Self::Distribution(_, marks) => (0.0, marks.categories().len() as f64),
-            Self::Bars(kind, marks) => {
+            Self::Distribution { marks, .. } => (0.0, marks.categories().len() as f64),
+            Self::Bars { kind, marks, .. } => {
                 if matches!(
                     kind,
                     PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
@@ -254,7 +238,7 @@ impl PreparedReference {
                     (0.0, marks.categories.len() as f64)
                 }
             }
-            Self::Estimate(marks) => marks.x_range()?,
+            Self::Estimate { marks, .. } => marks.x_range()?,
             Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
                 marks.range,
                 source.description().x_axis_spec(),
@@ -263,144 +247,63 @@ impl PreparedReference {
             Self::Density(marks) => marks.ranges(source.description())?[0],
             Self::Qq(marks) => marks.ranges(source.description())?[0],
             Self::Regression(marks) => marks.ranges[0],
+            Self::Scatter(_) | Self::Line { .. } | Self::Matrix(_) => {
+                return Err(Error::Render(
+                    "shared semantics require an extracted reference or paired-endpoint family"
+                        .into(),
+                ))
+            }
         })
     }
 }
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
-    waterfall: Option<&'a crate::plots::waterfall::PreparedWaterfall>,
-    beeswarm: Option<&'a crate::plots::beeswarm::PreparedBeeswarm>,
-    marginal: Option<&'a crate::plots::marginal::PreparedMarginal>,
-    heatmap: Option<&'a crate::plots::heatmap::HeatmapData>,
-    interaction: Option<&'a crate::plots::interaction::PreparedInteraction>,
-    distribution: Option<&'a crate::plots::categorical_distribution::PreparedDistribution>,
-    bars: Option<&'a crate::plots::bar_data::PreparedBars>,
-    estimate: Option<&'a crate::plots::interval_estimate::PreparedEstimate>,
     estimate_fallback: Option<(f64, f64)>,
-    dumbbell: Option<&'a crate::plots::dumbbell::DumbbellData>,
     x_limits: Option<(f64, f64)>,
     labels: Option<&'a crate::Labels>,
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "borrowed root configuration attaches each admitted family payload without cloning source-owned plots"
-)]
 pub(crate) fn prepare_reference_plot(
     source: &Plot,
 
-    marks: PreparedReference,
+    family: PreparedFamily,
     scope: Option<&str>,
     x_limits: Option<(f64, f64)>,
     labels: Option<&crate::Labels>,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedInteriorInputs, Error> {
-    let mut bins = None;
-    let mut beeswarm = None;
-    let mut waterfall = None;
-    let mut heatmap = None;
-    let mut marginal = None;
-    let mut dumbbell = None;
-    let mut estimate = None;
-    let mut bars = None;
-    let mut distribution = None;
-    let mut interaction = None;
-    let mut curves = None;
-    let mut quantiles = None;
-    let mut fit = None;
-    let kind = match marks {
-        PreparedReference::Waterfall(marks) => {
-            waterfall = Some(marks);
-            PlotKind::Waterfall
-        }
-        PreparedReference::Beeswarm(mut marks) => {
+    let mut family = match family {
+        PreparedFamily::Beeswarm(mut marks) => {
             if labels.is_some() {
                 marks.color_label = source.description().prepare_color_label(labels)?;
             }
-            beeswarm = Some(marks);
-            PlotKind::Beeswarm
+            PreparedFamily::Beeswarm(marks)
         }
-        PreparedReference::Marginal(marks) => {
-            marginal = Some(crate::plots::marginal::finish(marks, x_limits)?);
-            PlotKind::Marginal
+        PreparedFamily::Marginal(marks) => {
+            PreparedFamily::Marginal(crate::plots::marginal::finish(marks, x_limits)?)
         }
-        PreparedReference::Heatmap(mut marks) => {
+        PreparedFamily::Heatmap(mut marks) => {
             if labels.is_some() {
                 marks.color_label = source.description().prepare_color_label(labels)?;
             }
-            heatmap = Some(marks);
-            PlotKind::Heatmap
+            PreparedFamily::Heatmap(marks)
         }
-        PreparedReference::Interaction(marks) => {
-            interaction = Some(marks);
-            PlotKind::Interaction
-        }
-        PreparedReference::Distribution(kind, marks) => {
-            distribution = Some(marks);
-            kind
-        }
-        PreparedReference::Bars(kind, marks) => {
-            bars = Some(marks);
-            kind
-        }
-        PreparedReference::Estimate(marks) => {
-            let kind = marks.kind;
-            estimate = Some(marks);
-            kind
-        }
-        PreparedReference::Dumbbell(marks) => {
-            dumbbell = Some(marks);
-            PlotKind::Dumbbell
-        }
-        PreparedReference::Histogram(marks) => {
-            bins = Some(marks);
-            PlotKind::Histogram
-        }
-        PreparedReference::Density(marks) => {
-            curves = Some(marks);
-            PlotKind::Density
-        }
-        PreparedReference::Qq(marks) => {
-            quantiles = Some(marks);
-            PlotKind::Qq
-        }
-        PreparedReference::Regression(marks) => {
-            fit = Some(marks);
-            PlotKind::Regression
-        }
+        family => family,
     };
-    let route = InteriorRoute::classify(kind);
+    let route = InteriorRoute::classify(family.kind());
     route.validate(source.description())?;
-    let mut axes = prepare(
-        source,
-        None,
-        None,
-        None,
-        bins.as_ref(),
-        curves.as_ref(),
-        quantiles.as_ref(),
-        fit.as_ref(),
-        Some(ReferenceAxisConfig {
-            waterfall: waterfall.as_ref(),
-            beeswarm: beeswarm.as_ref(),
-            marginal: marginal.as_ref(),
-            heatmap: heatmap.as_ref(),
-            interaction: interaction.as_ref(),
-            distribution: distribution.as_ref(),
-            bars: bars.as_ref(),
-            x_limits,
-            labels,
-            dumbbell: dumbbell.as_ref(),
-            estimate: estimate.as_ref(),
-            estimate_fallback: None,
-        }),
-    )?;
+    let config = ReferenceAxisConfig {
+        x_limits,
+        labels,
+        ..ReferenceAxisConfig::default()
+    };
+    let mut axes = prepare(source, None, Some(&family), Some(config))?;
     axes.bind_numeric(source, resources, None, scope)?;
-    if let Some(marks) = waterfall.as_mut() {
+    if let PreparedFamily::Waterfall(marks) = &mut family {
         marks.prepare_totals(&axes, false)?;
     }
-    if let Some(quantiles) = &quantiles {
+    if let PreparedFamily::Qq(quantiles) = &family {
         quantiles.validate_ranges(axes.ranges)?;
     }
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
@@ -415,31 +318,9 @@ pub(crate) fn prepare_reference_plot(
     let mut retained = Vec::new();
     crate::data::source::reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
-    let family = bins
-        .map(PreparedFamily::Histogram)
-        .or_else(|| curves.map(PreparedFamily::Density))
-        .or_else(|| quantiles.map(PreparedFamily::Qq))
-        .or_else(|| fit.map(PreparedFamily::Regression))
-        .or_else(|| {
-            bars.map(|marks| PreparedFamily::Bars {
-                kind,
-                mode: crate::plots::bar_data::mode(source),
-                marks,
-            })
-        })
-        .or_else(|| estimate.map(|marks| PreparedFamily::Estimate { kind, marks }))
-        .or_else(|| dumbbell.map(PreparedFamily::Dumbbell))
-        .or_else(|| distribution.map(|marks| PreparedFamily::Distribution { kind, marks }))
-        .or_else(|| interaction.map(PreparedFamily::Interaction))
-        .or_else(|| waterfall.map(PreparedFamily::Waterfall))
-        .or_else(|| beeswarm.map(PreparedFamily::Beeswarm))
-        .or_else(|| marginal.map(PreparedFamily::Marginal))
-        .or_else(|| heatmap.map(PreparedFamily::Heatmap));
     let mut families = Vec::new();
-    if let Some(family) = family {
-        crate::data::source::reserve_source(&mut families, 1)?;
-        families.push((scope()?, family));
-    }
+    crate::data::source::reserve_source(&mut families, 1)?;
+    families.push((scope()?, family));
     Ok(PreparedInteriorInputs {
         discrete_guides: std::sync::OnceLock::new(),
         route,
@@ -490,7 +371,7 @@ pub(crate) fn prepare_plot(
     {
         return prepare_reference_plot(
             source,
-            PreparedReference::new(source, source_data, owner)?,
+            PreparedFamily::new(source, source_data, owner)?,
             source.axis_scope(),
             None,
             None,
@@ -748,140 +629,58 @@ pub(crate) fn prepare_plot(
                 )
             })
             .transpose()?;
+            let family = waterfall_marks
+                .map(PreparedFamily::Waterfall)
+                .or_else(|| beeswarm_marks.map(PreparedFamily::Beeswarm))
+                .or_else(|| heatmap_marks.map(PreparedFamily::Heatmap))
+                .or_else(|| interaction_marks.map(PreparedFamily::Interaction))
+                .or_else(|| {
+                    distribution_marks.map(|marks| PreparedFamily::Distribution {
+                        kind: source.kind(),
+                        marks,
+                    })
+                })
+                .or_else(|| {
+                    bar_marks.map(|marks| PreparedFamily::Bars {
+                        kind: source.kind(),
+                        mode: crate::plots::bar_data::mode(source),
+                        marks,
+                    })
+                })
+                .or_else(|| {
+                    estimates.map(|marks| PreparedFamily::Estimate {
+                        kind: source.kind(),
+                        marks,
+                    })
+                })
+                .or_else(|| pairs.map(PreparedFamily::Dumbbell))
+                .or_else(|| quantiles.map(PreparedFamily::Qq))
+                .or_else(|| fit.map(PreparedFamily::Regression))
+                .or_else(|| bins.map(PreparedFamily::Histogram))
+                .or_else(|| curves.map(PreparedFamily::Density))
+                .or_else(|| {
+                    paths.map(|marks| PreparedFamily::Line {
+                        kind: source.kind(),
+                        marks,
+                    })
+                })
+                .or_else(|| marks.map(PreparedFamily::Scatter));
             let mut axes = prepare(
                 source,
                 Some(facet),
-                marks.as_ref(),
-                paths.as_ref(),
-                bins.as_ref(),
-                curves.as_ref(),
-                quantiles.as_ref(),
-                fit.as_ref(),
+                family.as_ref(),
                 Some(ReferenceAxisConfig {
-                    waterfall: waterfall_marks.as_ref(),
-                    beeswarm: beeswarm_marks.as_ref(),
-                    marginal: None,
-                    heatmap: heatmap_marks.as_ref(),
-                    interaction: interaction_marks.as_ref(),
-                    distribution: distribution_marks.as_ref(),
-                    bars: bar_marks.as_ref(),
-                    dumbbell: pairs.as_ref(),
-                    estimate: estimates.as_ref(),
                     estimate_fallback,
                     ..ReferenceAxisConfig::default()
                 }),
             )?;
             let scope = panel.scope()?;
             axes.bind_numeric(source, resources, panel.numeric_cell(), Some(&scope))?;
-            if let Some(marks) = waterfall_marks {
+            if let Some(family) = family {
                 crate::data::source::reserve_source(&mut families, 1)?;
                 families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Waterfall(marks),
-                ));
-            }
-            if let Some(marks) = beeswarm_marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Beeswarm(marks),
-                ));
-            }
-            if let Some(marks) = heatmap_marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Heatmap(marks),
-                ));
-            }
-            if let Some(marks) = interaction_marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Interaction(marks),
-                ));
-            }
-            if let Some(marks) = distribution_marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Distribution {
-                        kind: source.kind(),
-                        marks,
-                    },
-                ));
-            }
-            if let Some(marks) = bar_marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Bars {
-                        kind: source.kind(),
-                        mode: crate::plots::bar_data::mode(source),
-                        marks,
-                    },
-                ));
-            }
-            if let Some(estimates) = estimates {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Estimate {
-                        kind: source.kind(),
-                        marks: estimates,
-                    },
-                ));
-            }
-            if let Some(pairs) = pairs {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Dumbbell(pairs),
-                ));
-            }
-            if let Some(quantiles) = quantiles {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Qq(quantiles),
-                ));
-            }
-            if let Some(fit) = fit {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Regression(fit),
-                ));
-            }
-            if let Some(bins) = bins {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Histogram(bins),
-                ));
-            }
-            if let Some(curves) = curves {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Density(curves),
-                ));
-            }
-            if let Some(paths) = paths {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Line {
-                        kind: source.kind(),
-                        marks: paths,
-                    },
-                ));
-            }
-            if let Some(marks) = marks {
-                crate::data::source::reserve_source(&mut families, 1)?;
-                families.push((
-                    Some(crate::data::source::copy_source_string(&scope)?),
-                    PreparedFamily::Scatter(marks),
+                    family,
                 ));
             }
             retained.push((Some(scope), axes));
@@ -949,7 +748,7 @@ pub(crate) fn prepare_plot(
             PreparedFamily::Matrix(marks),
         ));
     } else {
-        let mut axes = prepare(source, None, None, None, None, None, None, None, None)?;
+        let mut axes = prepare(source, None, None, None)?;
         axes.bind_numeric(source, resources, None, source.axis_scope())?;
         crate::data::source::reserve_source(&mut retained, 1)?;
         retained.push((
@@ -976,18 +775,8 @@ pub(crate) fn prepare_scatter_plot(
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedInteriorInputs, Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
-
-    let mut axes = prepare(
-        source,
-        None,
-        Some(&marks),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let family = PreparedFamily::Scatter(marks);
+    let mut axes = prepare(source, None, Some(&family), None)?;
     axes.bind_numeric(source, resources, None, source.axis_scope())?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
@@ -1004,7 +793,7 @@ pub(crate) fn prepare_scatter_plot(
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((scope()?, PreparedFamily::Scatter(marks)));
+    panels.push((scope()?, family));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(PlotKind::Scatter),
         discrete_guides: std::sync::OnceLock::new(),
@@ -1020,17 +809,11 @@ pub(crate) fn prepare_line_plot(
     marks: crate::plots::line::PreparedLine,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedInteriorInputs, Error> {
-    let mut axes = prepare(
-        source,
-        None,
-        None,
-        Some(&marks),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let family = PreparedFamily::Line {
+        kind: source.kind(),
+        marks,
+    };
+    let mut axes = prepare(source, None, Some(&family), None)?;
     axes.bind_numeric(source, resources, None, source.axis_scope())?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
@@ -1047,13 +830,7 @@ pub(crate) fn prepare_line_plot(
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((
-        scope()?,
-        PreparedFamily::Line {
-            kind: source.kind(),
-            marks,
-        },
-    ));
+    panels.push((scope()?, family));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         discrete_guides: std::sync::OnceLock::new(),
@@ -1126,31 +903,32 @@ fn validate_range(range: (f64, f64)) -> Result<(), Error> {
 #[expect(
     clippy::cast_precision_loss,
     clippy::too_many_lines,
-    clippy::too_many_arguments,
     reason = "closed scientific axis dispatch; category lengths are bounded source rows"
 )]
 fn prepare(
     chart: &Plot,
 
     facet: Option<crate::data::FacetAxisSources<'_>>,
-    scatter: Option<&crate::plots::scatter::PreparedScatter>,
-    line: Option<&crate::plots::line::PreparedLine>,
-    histogram: Option<&crate::plots::histogram::HistogramSemantics>,
-    density: Option<&crate::plots::density::PreparedDensity>,
-    qq: Option<&crate::plots::qq::PreparedQq>,
-    regression: Option<&crate::plots::regression::PreparedRegression>,
+    family: Option<&PreparedFamily>,
     reference_config: Option<ReferenceAxisConfig<'_>>,
 ) -> Result<PreparedAxes, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
 
     #[cfg(test)]
     super::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
+    macro_rules! marks {
+        ($source:expr, $pattern:pat => $marks:ident, $error:literal) => {{
+            let Some($pattern) = $source else {
+                return Err(Error::Render($error.into()));
+            };
+            $marks
+        }};
+    }
+    let reference = reference_config.as_ref().and(family);
     let mut categories: [Option<Vec<String>>; 2] = [None, None];
     let mut ranges = match chart.kind() {
         PlotKind::Regression => {
-            let ranges = regression
-                .ok_or_else(|| Error::Render("Regression axes require prepared semantics".into()))?
-                .ranges;
+            let ranges = marks!(family, PreparedFamily::Regression(marks) => marks, "Regression axes require prepared semantics").ranges;
             [
                 chart
                     .description()
@@ -1165,20 +943,14 @@ fn prepare(
             ]
         }
         PlotKind::Scatter => {
-            let ranges = scatter
-                .ok_or_else(|| {
-                    Error::Render("Scatter axis inputs require prepared semantics".into())
-                })?
-                .ranges;
+            let ranges = marks!(family, PreparedFamily::Scatter(marks) => marks, "Scatter axis inputs require prepared semantics").ranges;
             [
                 crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec())?,
                 crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?,
             ]
         }
         PlotKind::Histogram => {
-            let ranges = histogram
-                .ok_or_else(|| Error::Render("Histogram axes require prepared semantics".into()))?
-                .ranges;
+            let ranges = marks!(family, PreparedFamily::Histogram(marks) => marks, "Histogram axes require prepared semantics").ranges;
             [
                 chart
                     .description()
@@ -1192,16 +964,10 @@ fn prepare(
                     .unwrap_or(ranges[1]),
             ]
         }
-        PlotKind::Density => density
-            .ok_or_else(|| Error::Render("Density axes require prepared semantics".into()))?
-            .ranges(chart.description())?,
-        PlotKind::Qq => qq
-            .ok_or_else(|| Error::Render("Qq axes require prepared semantics".into()))?
-            .ranges(chart.description())?,
+        PlotKind::Density => marks!(family, PreparedFamily::Density(marks) => marks, "Density axes require prepared semantics").ranges(chart.description())?,
+        PlotKind::Qq => marks!(family, PreparedFamily::Qq(marks) => marks, "Qq axes require prepared semantics").ranges(chart.description())?,
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let line = line.ok_or_else(|| {
-                Error::Render("line axis inputs require prepared semantics".into())
-            })?;
+            let line = marks!(family, PreparedFamily::Line { marks, .. } => marks, "line axis inputs require prepared semantics");
             categories[0] = line
                 .conditions
                 .as_ref()
@@ -1227,20 +993,13 @@ fn prepare(
             ]
         }
         PlotKind::Marginal => {
-            reference_config
-                .as_ref()
-                .and_then(|config| config.marginal)
-                .ok_or_else(|| Error::Render("marginal axes require retained semantics".into()))?
-                .ranges
+            marks!(reference, PreparedFamily::Marginal(marks) => marks, "marginal axes require retained semantics").ranges
         }
         PlotKind::Bar
         | PlotKind::StackedBar
         | PlotKind::HorizontalBar
         | PlotKind::StackedHorizontalBar => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.bars)
-                .ok_or_else(|| Error::Render("bar axes require prepared semantics".into()))?;
+            let marks = marks!(reference, PreparedFamily::Bars { marks, .. } => marks, "bar axes require prepared semantics");
             let levels = crate::data::source::collect_source(
                 marks
                     .categories
@@ -1270,12 +1029,7 @@ fn prepare(
             }
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.distribution)
-                .ok_or_else(|| {
-                    Error::Render("categorical distribution axes require retained semantics".into())
-                })?;
+            let marks = marks!(reference, PreparedFamily::Distribution { marks, .. } => marks, "categorical distribution axes require retained semantics");
             let levels = crate::data::source::collect_source(
                 marks
                     .categories()
@@ -1291,10 +1045,7 @@ fn prepare(
             ]
         }
         PlotKind::Dumbbell => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.dumbbell)
-                .ok_or_else(|| Error::Render("Dumbbell axes require prepared semantics".into()))?;
+            let marks = marks!(reference, PreparedFamily::Dumbbell(marks) => marks, "Dumbbell axes require prepared semantics");
             categories[1] = Some(crate::data::source::collect_source(
                 marks
                     .categories
@@ -1313,9 +1064,7 @@ fn prepare(
             let config = reference_config.as_ref().ok_or_else(|| {
                 Error::Render("estimate axes require root-prepared semantics".into())
             })?;
-            let marks = config
-                .estimate
-                .ok_or_else(|| Error::Render("estimate axes require retained rows".into()))?;
+            let marks = marks!(family, PreparedFamily::Estimate { marks, .. } => marks, "estimate axes require retained rows");
             categories[1] = Some(crate::data::source::collect_source(
                 marks
                     .labels
@@ -1329,12 +1078,7 @@ fn prepare(
             [range, (0.0, marks.labels.len() as f64)]
         }
         PlotKind::Interaction => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.interaction)
-                .ok_or_else(|| {
-                    Error::Render("interaction axes require retained semantics".into())
-                })?;
+            let marks = marks!(reference, PreparedFamily::Interaction(marks) => marks, "interaction axes require retained semantics");
             let levels = crate::data::source::collect_source(
                 marks
                     .conditions
@@ -1352,10 +1096,7 @@ fn prepare(
             ]
         }
         PlotKind::Beeswarm => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.beeswarm)
-                .ok_or_else(|| Error::Render("beeswarm axes require retained semantics".into()))?;
+            let marks = marks!(reference, PreparedFamily::Beeswarm(marks) => marks, "beeswarm axes require retained semantics");
             let levels = crate::data::source::collect_source(
                 marks
                     .levels
@@ -1377,10 +1118,7 @@ fn prepare(
             ]
         }
         PlotKind::Waterfall => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.waterfall)
-                .ok_or_else(|| Error::Render("waterfall axes require retained semantics".into()))?;
+            let marks = marks!(reference, PreparedFamily::Waterfall(marks) => marks, "waterfall axes require retained semantics");
             let levels = crate::data::source::collect_source(
                 marks
                     .labels
@@ -1402,10 +1140,7 @@ fn prepare(
             ]
         }
         PlotKind::Heatmap => {
-            let marks = reference_config
-                .as_ref()
-                .and_then(|config| config.heatmap)
-                .ok_or_else(|| Error::Render("heatmap axes require retained semantics".into()))?;
+            let marks = marks!(reference, PreparedFamily::Heatmap(marks) => marks, "heatmap axes require retained semantics");
             let x = crate::data::source::collect_source(
                 marks
                     .x_levels

@@ -206,7 +206,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     let expected = prepared.colors.clone();
     let inputs = crate::plots::shared_x::prepare_reference_plot(
         &source,
-        crate::plots::shared_x::PreparedReference::Beeswarm(prepared),
+        crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
         None,
         None,
         None,
