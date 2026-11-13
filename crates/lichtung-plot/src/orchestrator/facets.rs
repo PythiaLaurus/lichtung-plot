@@ -27,14 +27,14 @@ pub(crate) fn text_census_labels(
 ) -> Result<(), Error> {
     let selectors = data::facet_selectors(source, source.data())?;
     for panel in data::extract_panels(source, &selectors, None, source.data())? {
-        if source.text_layouts.facet.iter().any(Option::is_some) {
+        if source.text_layouts().facet.iter().any(Option::is_some) {
             for (index, selector) in panel.cell.iter().enumerate() {
                 let role = if panel.cell.as_slice().len() == 1 {
                     1
                 } else {
                     index
                 };
-                if source.text_layouts.facet[role]
+                if source.text_layouts().facet[role]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
                 {

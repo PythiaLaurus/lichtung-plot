@@ -602,7 +602,10 @@ impl Plot {
         }
         if kind == PlotKind::Matrix {
             self.validate_matrix_variables()?;
-        } else if !self.matrix_variable_names().is_empty() {
+        } else if self
+            .matrix_variables()
+            .is_some_and(|variables| !variables.is_empty())
+        {
             return Err(Error::Data(format!(
                 "plot kind {kind:?}: matrix variables are not supported"
             )));
@@ -617,7 +620,7 @@ impl Plot {
                     .into(),
             ));
         }
-        let variables = self.matrix_variable_names();
+        let variables = self.matrix_variables().unwrap_or_default();
         if variables.len() < 2 {
             return Err(Error::Data(
                 "matrix: at least two ordered variables are required".into(),
@@ -625,12 +628,13 @@ impl Plot {
         }
         let mut seen = HashSet::new();
         for variable in variables {
+            let variable = variable.name();
             if variable.trim().is_empty() {
                 return Err(Error::Data(
                     "matrix: variable names must be nonempty".into(),
                 ));
             }
-            if !seen.insert(variable.as_str()) {
+            if !seen.insert(variable) {
                 return Err(Error::Data(format!(
                     "matrix: duplicate variable name {variable:?}"
                 )));

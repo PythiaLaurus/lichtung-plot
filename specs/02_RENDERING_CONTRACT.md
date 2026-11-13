@@ -16,6 +16,12 @@ real owner, without duplicated source occurrences or partial publication.
 
 ## Scientific Inputs And Validation
 
+Authored Plot configuration uses a by-value description with one shared payload.
+Cloning shares that payload; payload setters use copy-on-write and leave sibling
+configurations unchanged. Const-capable inline setters remain const. Forest's
+literal reference belongs to its native input; Matrix names come directly from
+the ordered native variables rather than a second name inventory.
+
 Plot consumes owned immutable native values. Semantic constructors return exact
 `Plot<kind::Family>` values; sealed capabilities reject categorically unsupported
 configuration at compile time. Data-dependent checks validate aligned lengths,

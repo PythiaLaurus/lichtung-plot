@@ -58,7 +58,7 @@ impl ScopedAlpha<'_> {
 
 impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn alpha_inputs(&self) -> &AlphaInputs {
-        &self.alpha
+        &self.description.payload.alpha
     }
 
     /// Replace point-fill alpha using original observations or explicit Single.
@@ -176,7 +176,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_alpha(mut self, target: AlphaTarget, encoding: AlphaEncoding) -> Self {
-        self.alpha.set(target, encoding);
+        self.description.payload_mut().alpha.set(target, encoding);
         self
     }
 
@@ -187,7 +187,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         required_fields: &[&str],
     ) -> Result<PreparedAlpha, crate::Error> {
         let mut facets = Vec::new();
-        if let Some(facet) = &self.facet {
+        if let Some(facet) = &self.description.payload.facet {
             crate::data::source::reserve_source(&mut facets, 3)?;
             facets.extend(facet.values().map(crate::CategoryValues::name));
         }
@@ -196,9 +196,12 @@ impl<K: crate::kind::Marker> Plot<K> {
         } else {
             self.row_count()
         };
-        self.alpha
-            .get(target)
-            .prepare(unit, original_len, required_fields, &facets)
+        self.description.payload.alpha.get(target).prepare(
+            unit,
+            original_len,
+            required_fields,
+            &facets,
+        )
     }
 
     pub(crate) fn prepare_scoped_alpha<'a>(
@@ -210,7 +213,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> crate::Result<ScopedAlpha<'a>> {
         let prepared = self.prepare_alpha(target, unit, required_fields)?;
         let mut facets = Vec::new();
-        if let Some(facet) = &self.facet {
+        if let Some(facet) = &self.description.payload.facet {
             for values in facet.values() {
                 if data.height() == 0
                     || !prepared

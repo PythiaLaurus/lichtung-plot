@@ -31,19 +31,29 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
     let retained = plot
         .retain_composed_inputs(ScopedGuideInputs::for_test(&plot))
         .unwrap();
-    assert_eq!(retained.x_axis_spec.generation, plot.x_axis_spec.generation);
-    assert_eq!(retained.y_axis_spec.generation, plot.y_axis_spec.generation);
-    assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec.format);
-    assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec.format);
+    assert_eq!(
+        retained.x_axis_spec.generation,
+        plot.x_axis_spec().generation
+    );
+    assert_eq!(
+        retained.y_axis_spec.generation,
+        plot.y_axis_spec().generation
+    );
+    assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec().format);
+    assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec().format);
     assert!(plot.same_composed_inputs(&retained, &retained.guides));
-    plot.x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
+    plot.description.payload_mut().x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.x_axis_spec
+    plot.description
+        .payload_mut()
+        .x_axis_spec
         .generation
         .clone_from(&retained.x_axis_spec.generation);
-    plot.y_axis_spec.generation = TickGeneration::automatic();
+    plot.description.payload_mut().y_axis_spec.generation = TickGeneration::automatic();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.y_axis_spec
+    plot.description
+        .payload_mut()
+        .y_axis_spec
         .generation
         .clone_from(&retained.y_axis_spec.generation);
     for selection in [
@@ -51,25 +61,26 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         TickGeneration::maximum(5).unwrap(),
     ] {
         let mut changed = plot.clone();
-        changed.x_axis_spec.generation = selection.clone();
+        changed.description.payload_mut().x_axis_spec.generation = selection.clone();
         assert!(!changed.same_composed_inputs(&retained, &retained.guides));
         let counted = changed
             .retain_composed_inputs(ScopedGuideInputs::for_test(&changed))
             .unwrap();
         assert!(changed.same_composed_inputs(&counted, &counted.guides));
-        changed.x_axis_spec.generation = if selection.target_count().is_some() {
-            TickGeneration::maximum(5).unwrap()
-        } else {
-            TickGeneration::target(5).unwrap()
-        };
+        changed.description.payload_mut().x_axis_spec.generation =
+            if selection.target_count().is_some() {
+                TickGeneration::maximum(5).unwrap()
+            } else {
+                TickGeneration::target(5).unwrap()
+            };
         assert!(!changed.same_composed_inputs(&counted, &counted.guides));
     }
     for side in 0..2 {
         let mut changed = plot.clone();
         if side == 0 {
-            changed.x_axis_spec.format = None;
+            changed.description.payload_mut().x_axis_spec.format = None;
         } else {
-            changed.y_axis_spec.format = None;
+            changed.description.payload_mut().y_axis_spec.format = None;
         }
         assert!(!changed.same_composed_inputs(&retained, &retained.guides));
     }
@@ -93,8 +104,11 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
     let retained = automatic
         .retain_composed_inputs(ScopedGuideInputs::for_test(&automatic))
         .unwrap();
-    assert_eq!(automatic.x_axis_spec.limits, configured.x_axis_spec.limits);
-    assert_eq!(automatic.x_axis_spec.limits, shared.x_axis_spec.limits);
+    assert_eq!(
+        automatic.x_axis_spec().limits,
+        configured.x_axis_spec().limits
+    );
+    assert_eq!(automatic.x_axis_spec().limits, shared.x_axis_spec().limits);
     assert!(automatic.same_composed_inputs(&retained, &retained.guides));
     assert!(!configured.same_composed_inputs(&retained, &retained.guides));
     assert!(!shared.same_composed_inputs(&retained, &retained.guides));

@@ -136,7 +136,7 @@ impl HeightInputs {
         };
         Ok(Self {
             prose: plot.copy_prose()?,
-            text_layouts: plot.text_layouts.clone(),
+            text_layouts: plot.text_layouts().clone(),
             output_dimensions: plot.output_dimensions,
             axis_titles: plot.copy_axis_titles()?,
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,

@@ -183,6 +183,7 @@ pub(crate) enum PlotInput {
         estimate: NumericValues,
         term: CategoryValues,
         bounds: Bounds,
+        reference: f64,
     },
     Dumbbell {
         category: CategoryValues,

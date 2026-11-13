@@ -1075,7 +1075,12 @@ fn push_deferred_plot_requirements(
     }
 
     if kind == PlotKind::Matrix {
-        for variable in plot.matrix_variable_names() {
+        for variable in plot
+            .matrix_variables()
+            .unwrap_or_default()
+            .iter()
+            .map(crate::NumericValues::name)
+        {
             for role in 0..2 {
                 let address = body_address.clone();
                 push_owned(
@@ -1396,7 +1401,7 @@ fn push_plot_axis_ticks(
                 base.clone()
             };
             for side in 0..2 {
-                if plot.text_layouts.ticks[side]
+                if plot.text_layouts().ticks[side]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
                 {
@@ -1446,7 +1451,7 @@ fn push_plot_axis_ticks(
             if side == 1 && !plot.y_tick_labels_visible() {
                 continue;
             }
-            if plot.text_layouts.ticks[side]
+            if plot.text_layouts().ticks[side]
                 .as_ref()
                 .is_some_and(crate::TextLayout::hidden)
             {

@@ -117,7 +117,7 @@ impl ResolvedCanvasThemes {
                             theme
                         }
                     };
-                    theme.text_layouts = plot.text_layouts.clone();
+                    theme.text_layouts = plot.text_layouts().clone();
                     theme.apply_text_defaults(plot.kind());
                     Ok(theme)
                 })

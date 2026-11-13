@@ -401,8 +401,9 @@ pub(crate) fn prepare_axes(
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
 
-    crate::data::source::reserve_source(&mut cols, chart.matrix_variable_names().len())?;
-    cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
+    let variables = chart.matrix_variables().unwrap_or_default();
+    crate::data::source::reserve_source(&mut cols, variables.len())?;
+    cols.extend(variables.iter().map(crate::NumericValues::name));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (mut groups, hues) = build_groups(chart, &cols, data)?;
     let fill_alpha =

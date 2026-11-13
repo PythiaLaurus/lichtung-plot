@@ -103,7 +103,7 @@ impl crate::Plot {
             );
             inputs
                 .text_layout
-                .clone_from(&self.text_layouts.ticks[index]);
+                .clone_from(&self.text_layouts().ticks[index]);
             inputs
         })
     }

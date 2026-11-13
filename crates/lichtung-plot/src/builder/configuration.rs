@@ -20,7 +20,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::SourceRows,
     {
-        self.source_rows = Some(source_rows);
+        self.description.payload_mut().source_rows = Some(source_rows);
         self
     }
 
@@ -30,7 +30,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Hue,
     {
-        self.hue = Some(values);
+        self.description.payload_mut().hue = Some(values);
         self
     }
 
@@ -40,7 +40,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Group,
     {
-        self.group = Some(values);
+        self.description.payload_mut().group = Some(values);
         self
     }
 
@@ -51,7 +51,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Series,
     {
-        self.series = Some(values);
+        self.description.payload_mut().series = Some(values);
         self
     }
 
@@ -63,7 +63,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::ContinuousColor,
     {
-        self.color_label
+        self.description
+            .payload_mut()
+            .color_label
             .replace_from(label.into())
             .expect("public Text always has a source");
         self
@@ -82,7 +84,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::ContinuousColor,
     {
-        self.color_label_format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().color_label_format = Some(std::sync::Arc::new(format));
         self
     }
 
@@ -92,7 +94,10 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::HeatmapOptions,
     {
-        self.heatmap_null_row_annotations.push(annotation);
+        self.description
+            .payload_mut()
+            .heatmap_null_row_annotations
+            .push(annotation);
         self
     }
 
@@ -102,7 +107,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::HeatmapOptions,
     {
-        self.heatmap_highlight = Some(values);
+        self.description.payload_mut().heatmap_highlight = Some(values);
         self
     }
 
@@ -119,7 +124,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CoefficientOptions,
     {
-        self.estimate_labels = Some(format);
+        self.description.payload_mut().estimate_labels = Some(format);
         self
     }
 
@@ -129,7 +134,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::SignificanceStyle,
     {
-        self.significance_mark_style = Some(style);
+        self.description.significance_mark_style = Some(style);
         self
     }
 
@@ -140,7 +145,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// instruction; an explicit default layout resets it to owner defaults.
     #[must_use]
     pub fn title(mut self, title: impl Into<crate::Text>) -> Self {
-        self.title
+        self.description
+            .title
             .replace_from(title.into())
             .expect("public Text always has a source");
         self
@@ -150,7 +156,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn subtitle(mut self, subtitle: impl Into<crate::Text>) -> Self {
-        self.subtitle
+        self.description
+            .subtitle
             .replace_from(subtitle.into())
             .expect("public Text always has a source");
         self
@@ -174,7 +181,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     #[must_use]
     pub const fn title_alignment(mut self, alignment: crate::TextAlignment) -> Self {
-        self.title.edit_alignment(alignment);
+        self.description.title.edit_alignment(alignment);
         self
     }
 
@@ -185,7 +192,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// call contributes no instruction; it does not bypass those lower owners.
     #[must_use]
     pub const fn subtitle_alignment(mut self, alignment: crate::TextAlignment) -> Self {
-        self.subtitle.edit_alignment(alignment);
+        self.description.subtitle.edit_alignment(alignment);
         self
     }
 
@@ -193,7 +200,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn caption(mut self, caption: impl Into<crate::Text>) -> Self {
-        self.caption
+        self.description
+            .payload_mut()
+            .caption
             .replace_from(caption.into())
             .expect("public Text always has a source");
         self
@@ -204,7 +213,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// follows [`Self::title`], preserving prior instructions when omitted.
     #[must_use]
     pub fn x_label(mut self, label: impl Into<crate::Text>) -> Self {
-        self.x_label
+        self.description
+            .payload_mut()
+            .x_label
             .replace_from(label.into())
             .expect("public Text always has a source");
         self
@@ -215,7 +226,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
     pub fn y_label(mut self, label: impl Into<crate::Text>) -> Self {
-        self.y_label
+        self.description
+            .payload_mut()
+            .y_label
             .replace_from(label.into())
             .expect("public Text always has a source");
         self
@@ -224,7 +237,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Set presentation rules for every label inferred from data identities.
     #[must_use]
     pub fn labels(mut self, labels: Labels) -> Self {
-        self.labels = labels;
+        self.description.payload_mut().labels = labels;
         self
     }
 
@@ -239,7 +252,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoricalX,
     {
-        self.x_axis_spec.category_labels = value;
+        self.description.payload_mut().x_axis_spec.category_labels = value;
         self
     }
 
@@ -249,7 +262,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoricalY,
     {
-        self.y_axis_spec.category_labels = value;
+        self.description.payload_mut().y_axis_spec.category_labels = value;
         self
     }
 
@@ -259,7 +272,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.x_axis_spec = self.x_axis_spec.limits(min, max);
+        let axis = &mut self.description.payload_mut().x_axis_spec;
+        *axis = std::mem::take(axis).limits(min, max);
         self.x_limits_user_explicit = true;
         self
     }
@@ -270,7 +284,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.y_axis_spec = self.y_axis_spec.limits(min, max);
+        let axis = &mut self.description.payload_mut().y_axis_spec;
+        *axis = std::mem::take(axis).limits(min, max);
         self.y_limits_user_explicit = true;
         self
     }
@@ -281,7 +296,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.x_axis_spec.exact_ticks = Some(ticks);
+        self.description.payload_mut().x_axis_spec.exact_ticks = Some(ticks);
         self
     }
 
@@ -291,7 +306,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.y_axis_spec.exact_ticks = Some(ticks);
+        self.description.payload_mut().y_axis_spec.exact_ticks = Some(ticks);
         self
     }
 
@@ -341,7 +356,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.x_axis_spec.generation = generation;
+        self.description.payload_mut().x_axis_spec.generation = generation;
         self
     }
 
@@ -379,7 +394,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.y_axis_spec.generation = generation;
+        self.description.payload_mut().y_axis_spec.generation = generation;
         self
     }
 
@@ -397,7 +412,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.x_axis_spec.format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().x_axis_spec.format = Some(std::sync::Arc::new(format));
         self
     }
 
@@ -414,7 +429,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.y_axis_spec.format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().y_axis_spec.format = Some(std::sync::Arc::new(format));
         self
     }
 
@@ -424,7 +439,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Guides,
     {
-        self.guides.push(guide);
+        self.description.payload_mut().guides.push(guide);
         self
     }
 
@@ -439,7 +454,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoryOrder,
     {
-        self.category_orders.primary = order.into();
+        self.description.payload_mut().category_orders.primary = order.into();
         self
     }
 
@@ -452,7 +467,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::HeatmapOptions,
     {
-        self.category_orders.x = order.into();
+        self.description.payload_mut().category_orders.x = order.into();
         self
     }
 
@@ -465,7 +480,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::HeatmapOptions,
     {
-        self.category_orders.y = order.into();
+        self.description.payload_mut().category_orders.y = order.into();
         self
     }
 
@@ -475,7 +490,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::SignedBars,
     {
-        self.color_by_sign = true;
+        self.description.payload_mut().color_by_sign = true;
         self
     }
 
@@ -485,7 +500,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::ZeroLine,
     {
-        self.zero_line = true;
+        self.description.payload_mut().zero_line = true;
         self
     }
 
@@ -495,7 +510,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::EstimateStatus,
     {
-        self.estimate_status = Some(statuses.into_iter().collect::<Vec<_>>().into());
+        self.description.payload_mut().estimate_status =
+            Some(statuses.into_iter().collect::<Vec<_>>().into());
         self
     }
 
@@ -505,7 +521,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Markers,
     {
-        self.markers_visible = visible;
+        self.description.payload_mut().markers_visible = visible;
         self
     }
 
@@ -536,7 +552,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoricalScale,
     {
-        self.categorical_color_scale = Some(scale);
+        self.description.payload_mut().categorical_color_scale = Some(scale);
         self
     }
 
@@ -566,7 +582,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::ContinuousColor,
     {
-        self.continuous_color_scale = Some(scale);
+        self.description.payload_mut().continuous_color_scale = Some(scale);
         self
     }
 
@@ -576,7 +592,10 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::PanelText,
     {
-        self.panel_text_annotations.push(annotation);
+        self.description
+            .payload_mut()
+            .panel_text_annotations
+            .push(annotation);
         self
     }
 
@@ -586,7 +605,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::PointOutline,
     {
-        self.point_outline_visible = false;
+        self.description.payload_mut().point_outline_visible = false;
         self
     }
 
@@ -596,7 +615,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// a [`crate::Canvas`] inherits the Canvas root theme.
     #[must_use]
     pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = Some(std::sync::Arc::new(theme));
+        self.description.payload_mut().theme = Some(std::sync::Arc::new(theme));
         self
     }
 
@@ -609,7 +628,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Significance<P>,
     {
-        self.significance
+        self.description
+            .payload_mut()
+            .significance
             .extend(annotations.into_iter().map(Significance::into_annotation));
         self
     }
@@ -636,7 +657,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     #[must_use]
     pub const fn width(mut self, width: u32) -> Self {
-        self.root_size = crate::layout::RootRequest::ExactWidth(width);
+        self.description.root_size = crate::layout::RootRequest::ExactWidth(width);
         self
     }
 
@@ -654,7 +675,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     #[must_use]
     pub const fn max_width(mut self, maximum: u32) -> Self {
-        self.root_size = crate::layout::RootRequest::MaxWidth(maximum);
+        self.description.root_size = crate::layout::RootRequest::MaxWidth(maximum);
         self
     }
 
@@ -665,7 +686,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Final canonical dimensions are available on [`crate::Output`].
     #[must_use]
     pub const fn size(mut self, width: u32, height: u32) -> Self {
-        self.root_size = crate::layout::RootRequest::ExactSize { width, height };
+        self.description.root_size = crate::layout::RootRequest::ExactSize { width, height };
         self
     }
 
@@ -679,7 +700,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Legend,
     {
-        self.legend_policy = policy;
+        self.description.payload_mut().legend_policy = policy;
         self
     }
 
@@ -708,7 +729,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::Legend,
     {
-        self.legend_composition = composition;
+        self.description.legend_composition = composition;
         self
     }
 
@@ -719,7 +740,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::RawOverlay,
     {
-        self.raw_overlay = overlay;
+        self.description.raw_overlay = overlay;
         self
     }
 }
@@ -728,14 +749,14 @@ impl Plot<crate::kind::Heatmap> {
     /// Select Cartesian or structural triangular heatmap cells.
     #[must_use]
     pub fn layout(mut self, layout: HeatmapLayout) -> Self {
-        self.heatmap_layout = layout;
+        self.description.payload_mut().heatmap_layout = layout;
         self
     }
 
     /// Configure optional heatmap cell-value annotations.
     #[must_use]
     pub fn annotations(mut self, annotations: HeatmapAnnotations) -> Self {
-        self.heatmap_annotations = annotations;
+        self.description.payload_mut().heatmap_annotations = annotations;
         self
     }
 }
@@ -744,7 +765,7 @@ impl Plot<crate::kind::Forest> {
     /// Set the numeric axis scale used by a forest plot.
     #[must_use]
     pub fn scale(mut self, scale: AxisScale) -> Self {
-        self.axis_scale = scale;
+        self.description.payload_mut().axis_scale = scale;
         self
     }
 }
@@ -753,14 +774,14 @@ impl Plot<crate::kind::Bar> {
     /// Set spacing between series inside each category.
     #[must_use]
     pub fn spacing(mut self, spacing: BarSpacing) -> Self {
-        self.bar_spacing = spacing;
+        self.description.payload_mut().bar_spacing = spacing;
         self
     }
 
     /// Append a strict point layer positioned at prepared bar centers.
     #[must_use]
     pub fn point_layer(mut self, layer: BarPointLayer) -> Self {
-        self.bar_point_layers.push(layer);
+        self.description.payload_mut().bar_point_layers.push(layer);
         self
     }
 }
@@ -769,14 +790,14 @@ impl Plot<crate::kind::HorizontalBar> {
     /// Set spacing between series inside each category.
     #[must_use]
     pub fn spacing(mut self, spacing: BarSpacing) -> Self {
-        self.bar_spacing = spacing;
+        self.description.payload_mut().bar_spacing = spacing;
         self
     }
 
     /// Append a strict point layer positioned at prepared bar centers.
     #[must_use]
     pub fn point_layer(mut self, layer: BarPointLayer) -> Self {
-        self.bar_point_layers.push(layer);
+        self.description.payload_mut().bar_point_layers.push(layer);
         self
     }
 }
@@ -785,21 +806,21 @@ impl Plot<crate::kind::Histogram> {
     /// Set the histogram bin-selection strategy.
     #[must_use]
     pub fn bins(mut self, bins: HistogramBins) -> Self {
-        self.histogram_bins = bins;
+        self.description.payload_mut().histogram_bins = bins;
         self
     }
 
     /// Set the histogram vertical-axis normalization.
     #[must_use]
     pub fn stat(mut self, stat: HistogramStat) -> Self {
-        self.histogram_stat = stat;
+        self.description.payload_mut().histogram_stat = stat;
         self
     }
 
     /// Add a KDE density curve and complete source-observation rug.
     #[must_use]
     pub fn composite(mut self, composite: HistogramComposite) -> Self {
-        self.histogram_composite = std::sync::Arc::new(composite);
+        self.description.payload_mut().histogram_composite = std::sync::Arc::new(composite);
         self
     }
 }
@@ -808,7 +829,7 @@ impl Plot<crate::kind::Qq> {
     /// Set the normal Q-Q reference-line policy.
     #[must_use]
     pub fn reference_line(mut self, line: QqLine) -> Self {
-        self.qq_line = line;
+        self.description.payload_mut().qq_line = line;
         self
     }
 }
@@ -821,14 +842,14 @@ impl Plot<crate::kind::Line> {
     /// identifies the complete layer once.
     #[must_use]
     pub fn point_layer(mut self, layer: PointLayer) -> Self {
-        self.point_layers.push(layer);
+        self.description.payload_mut().point_layers.push(layer);
         self
     }
 
     /// Add a drawable band to the line series.
     #[must_use]
     pub fn band(mut self, bounds: Bounds) -> Self {
-        self.line_band = Some(bounds);
+        self.description.payload_mut().line_band = Some(bounds);
         self
     }
 }
@@ -837,7 +858,7 @@ impl Plot<crate::kind::Regression> {
     /// Select the generated confidence-band policy.
     #[must_use]
     pub const fn band(mut self, band: RegressionBand) -> Self {
-        self.regression_band = band;
+        self.description.regression_band = band;
         self
     }
 }
@@ -846,7 +867,7 @@ impl Plot<crate::kind::LinePath> {
     /// Select the complete-path color and legend policy.
     #[must_use]
     pub const fn style(mut self, style: LinePathStyle) -> Self {
-        self.line_path_style = style;
+        self.description.line_path_style = style;
         self
     }
 }
@@ -855,7 +876,7 @@ impl Plot<crate::kind::Coefficient> {
     /// Set the scientific reference/null line.
     #[must_use]
     pub fn reference_line(mut self, value: f64) -> Self {
-        self.coefficient_reference_line = Some(value);
+        self.description.payload_mut().coefficient_reference_line = Some(value);
         self
     }
 }
@@ -864,14 +885,14 @@ impl Plot<crate::kind::Interaction> {
     /// Set whether connectors are drawn between category estimates.
     #[must_use]
     pub const fn connectors(mut self, visible: bool) -> Self {
-        self.interaction_connectors = Some(visible);
+        self.description.interaction_connectors = Some(visible);
         self
     }
 
     /// Set exactly one typed point-and-connector style per interaction group.
     #[must_use]
     pub fn styles(mut self, styles: impl IntoIterator<Item = InteractionStyle>) -> Self {
-        self.interaction_styles = Some(styles.into_iter().collect());
+        self.description.payload_mut().interaction_styles = Some(styles.into_iter().collect());
         self
     }
 }
@@ -887,14 +908,14 @@ impl Plot<crate::kind::Waterfall> {
     /// ```
     #[must_use]
     pub fn total_format(mut self, format: NumericFormat) -> Self {
-        self.total_format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().total_format = Some(std::sync::Arc::new(format));
         self
     }
 
     /// Set caller-owned labels for base and terminal annotations.
     #[must_use]
     pub fn total_labels(mut self, labels: WaterfallLabels) -> Self {
-        self.waterfall_labels = Some(labels);
+        self.description.payload_mut().waterfall_labels = Some(labels);
         self
     }
 }
