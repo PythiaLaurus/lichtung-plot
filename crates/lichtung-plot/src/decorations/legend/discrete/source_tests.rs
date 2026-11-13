@@ -88,7 +88,16 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
             else {
                 panic!("prepared Bars")
             };
-            assert_eq!(bars.series, ["absent", "seen"]);
+            assert_eq!(
+                inputs.plots[0]
+                    .policy
+                    .coordinated
+                    .groups
+                    .as_deref()
+                    .unwrap()
+                    .as_slice(),
+                ["absent", "seen"]
+            );
             assert!(bars
                 .bars
                 .iter()

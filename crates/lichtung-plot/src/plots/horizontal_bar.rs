@@ -27,6 +27,19 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
+    let domains = &context
+        .registered
+        .expect("prepared Bar occurrence")
+        .policy
+        .coordinated;
+    let series = domains
+        .groups
+        .as_deref()
+        .expect("prepared Bar group domain");
+    let hues = domains
+        .colors
+        .as_deref()
+        .expect("prepared Bar color domain");
     let categories = &context
         .registered
         .expect("prepared Bar occurrence")
@@ -34,7 +47,7 @@ pub(crate) fn measure_marks(
         .categories(1)
         .expect("prepared Bar categories")
         .raw;
-    let (colors, accents) = prepared.resolved_colors(chart, categories, theme, data)?;
+    let (colors, accents) = bar_data::resolved_colors(chart, categories, hues, theme, data)?;
     let y_count = categories.len() as f64;
     let panel_box = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;
@@ -61,7 +74,7 @@ pub(crate) fn measure_marks(
         &attached_label_plans,
         &attached,
     )?;
-    let anchor_count = prepared.series.len().max(1);
+    let anchor_count = series.len().max(1);
     let mut rendered_maxima =
         crate::data::source::collect_source((0..categories.len()).map(|_| {
             crate::data::source::collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))
@@ -112,7 +125,7 @@ pub(crate) fn measure_marks(
     let significance = crate::significance::plan_horizontal(
         chart,
         categories,
-        &prepared.series,
+        series,
         &rendered_maxima,
         theme.marks.get_extents().get_categories().group_span(true),
         base_x_range,
@@ -134,7 +147,7 @@ pub(crate) fn measure_marks(
         context.fit_scope(),
         true,
         domain_expansion.is_some(),
-        |mark, plan| place_bar_significance(&attached, mark, plan, prepared, &layout),
+        |mark, plan| place_bar_significance(&attached, mark, plan, series.len(), &layout),
     )?;
 
     let mut payload = bar_data::BarPayload {
@@ -162,13 +175,13 @@ pub(crate) fn measure_marks(
     for bar in &prepared.bars {
         let (y_center, height) = bar_data::category_bar_geometry(
             bar,
-            prepared,
+            series.len(),
             mode,
             chart.description().bar_spacing_spec(),
             true,
             theme.marks.get_extents().get_categories(),
         );
-        let color = prepared.bar_color(chart, categories, bar, &colors, &accents)?;
+        let color = bar_data::bar_color(chart, categories, hues, bar, &colors, &accents)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
@@ -212,14 +225,18 @@ pub(crate) fn measure_marks(
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
         payload.text.push(place_bar_significance(
-            &attached, mark, text_plan, prepared, &layout,
+            &attached,
+            mark,
+            text_plan,
+            series.len(),
+            &layout,
         )?);
     }
     for point in &prepared.points {
         let y_center = bar_data::category_center(
             point.category_index,
             point.series_index,
-            prepared,
+            series.len(),
             mode,
             theme.marks.get_extents().get_categories().group_span(true),
         );
@@ -281,11 +298,11 @@ fn place_bar_significance(
     attached: &bar_data::BarSignificance,
     mark: &PreparedBarSignificance,
     text_plan: &ResolvedTextPlan,
-    prepared: &PreparedBars,
+    series_count: usize,
     layout: &Layout,
 ) -> Result<PlacedText, Error> {
     let gap = attached.appearance.gap_pixels()?;
-    let y = attached.center(mark, prepared);
+    let y = attached.center(mark, series_count);
     let (edge_x, y) = layout.projection.project(mark.edge, y);
     let (x, anchor) = if mark.positive {
         let x = edge_x + gap;

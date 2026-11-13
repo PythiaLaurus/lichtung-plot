@@ -164,7 +164,14 @@ impl PreparedInteriorInputs<'_> {
                     }
                 }
                 F::Bars { marks, .. } => {
-                    for value in marks.observed_hue_levels() {
+                    for value in marks.observed_hue_levels(
+                        registered
+                            .policy
+                            .coordinated
+                            .colors
+                            .as_deref()
+                            .expect("prepared Bar color domain"),
+                    ) {
                         include(value)?;
                     }
                 }
@@ -256,7 +263,7 @@ impl PreparedInteriorInputs<'_> {
                 F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
                 F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
                 F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Bars { marks, .. } => {
+                F::Bars { .. } => {
                     let categories = &registered
                         .axes
                         .categories(usize::from(matches!(
@@ -267,7 +274,17 @@ impl PreparedInteriorInputs<'_> {
                         .raw;
                     include_keys(
                         &mut keys,
-                        marks.color_keys(categories).iter().map(String::as_str),
+                        crate::plots::bar_data::color_keys(
+                            categories,
+                            registered
+                                .policy
+                                .coordinated
+                                .colors
+                                .as_deref()
+                                .expect("prepared Bar color domain"),
+                        )
+                        .iter()
+                        .map(String::as_str),
                     )?;
                 }
                 F::Distribution { marks, .. } => {
@@ -349,8 +366,15 @@ impl PreparedInteriorInputs<'_> {
                     )))
                     .expect("prepared Bar categories")
                     .raw;
-                let (colors, accents) = marks.resolved_colors(chart, categories, theme, data)?;
-                crate::plots::bar_data::guide_sources(marks, chart, theme, &colors, &accents)
+                let hues = registered
+                    .policy
+                    .coordinated
+                    .colors
+                    .as_deref()
+                    .expect("prepared Bar color domain");
+                let (colors, accents) =
+                    crate::plots::bar_data::resolved_colors(chart, categories, hues, theme, data)?;
+                crate::plots::bar_data::guide_sources(marks, chart, hues, theme, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 let marks = Self::family(registered, kind, |family| match family {
@@ -618,7 +642,18 @@ impl PreparedInteriorInputs<'_> {
                     )))
                     .expect("prepared Bar categories")
                     .raw;
-                marks.alpha_guide(chart, categories, theme, &mut guide)?;
+                marks.alpha_guide(
+                    chart,
+                    categories,
+                    registered
+                        .policy
+                        .coordinated
+                        .groups
+                        .as_deref()
+                        .expect("prepared Bar group domain"),
+                    theme,
+                    &mut guide,
+                )?;
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 standard!(F::Distribution { marks, .. } => marks);

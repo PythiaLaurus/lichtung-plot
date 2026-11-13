@@ -9,7 +9,7 @@ pub(crate) use axes::{
     DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
     PreparedAxisSource, PreparedCategorySource,
 };
-pub(crate) use policy::PlotScopePolicy;
+pub(crate) use policy::{CoordinatedDomains, PlotScopePolicy};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);

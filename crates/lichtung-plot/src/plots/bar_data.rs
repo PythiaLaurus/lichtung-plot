@@ -14,6 +14,7 @@ use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, LiteralDomain};
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey};
+use crate::orchestrator::registration::CoordinatedDomains;
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
@@ -62,13 +63,13 @@ impl BarSignificance {
         })
     }
 
-    pub(crate) fn center(&self, mark: &PreparedBarSignificance, prepared: &PreparedBars) -> f64 {
+    pub(crate) fn center(&self, mark: &PreparedBarSignificance, series_count: usize) -> f64 {
         mark.series_index
             .map_or(mark.category_index as f64 + 0.5, |series| {
                 category_center(
                     mark.category_index,
                     Some(series),
-                    prepared,
+                    series_count,
                     self.mode,
                     self.group_span,
                 )
@@ -81,7 +82,7 @@ impl BarSignificance {
 pub(crate) fn category_center(
     category_index: usize,
     series_index: Option<usize>,
-    prepared: &PreparedBars,
+    series_count: usize,
     mode: BarMode,
     group_span: f64,
 ) -> f64 {
@@ -90,13 +91,13 @@ pub(crate) fn category_center(
         return center;
     }
     let slot_width = group_span;
-    let slot = slot_width / prepared.series.len().max(1) as f64;
+    let slot = slot_width / series_count.max(1) as f64;
     center - slot_width / 2.0 + slot * (series_index.unwrap_or(0) as f64 + 0.5)
 }
 
 pub(crate) fn category_bar_geometry(
     bar: &PreparedBar,
-    prepared: &PreparedBars,
+    series_count: usize,
     mode: BarMode,
     spacing: BarSpacing,
     horizontal: bool,
@@ -105,7 +106,7 @@ pub(crate) fn category_bar_geometry(
     let center = category_center(
         bar.category_index,
         bar.series_index,
-        prepared,
+        series_count,
         mode,
         geometry.group_span(horizontal),
     );
@@ -113,7 +114,7 @@ pub(crate) fn category_bar_geometry(
         BarMode::Single | BarMode::Stacked => geometry.body_breadth(horizontal),
         BarMode::Grouped => {
             let slot_width = geometry.group_span(horizontal);
-            let slot = slot_width / prepared.series.len().max(1) as f64;
+            let slot = slot_width / series_count.max(1) as f64;
             match spacing {
                 BarSpacing::Comfort => slot * 0.82,
                 BarSpacing::Compact => slot,
@@ -135,6 +136,13 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(registered.map(|registered| registered.family.as_ref()))?;
+    let series = registered
+        .expect("prepared Bar occurrence")
+        .policy
+        .coordinated
+        .groups
+        .as_deref()
+        .expect("prepared Bar group domain");
     let horizontal = matches!(
         chart.kind(),
         crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
@@ -176,9 +184,7 @@ pub(crate) fn intrinsic_body_minimum(
                 .backend_style(),
         ))?;
         if bar.category_index >= categories.len()
-            || bar
-                .series_index
-                .is_some_and(|index| index >= prepared.series.len())
+            || bar.series_index.is_some_and(|index| index >= series.len())
         {
             return Err(Error::Render(
                 "bar occupied slot exceeds prepared category/series".into(),
@@ -186,7 +192,7 @@ pub(crate) fn intrinsic_body_minimum(
         }
         let (center, thickness) = category_bar_geometry(
             bar,
-            prepared,
+            series.len(),
             mode,
             chart.description().bar_spacing_spec(),
             horizontal,
@@ -240,7 +246,7 @@ pub(crate) fn intrinsic_body_minimum(
         if point.category_index >= categories.len()
             || point
                 .series_index
-                .is_some_and(|index| index >= prepared.series.len())
+                .is_some_and(|index| index >= series.len())
         {
             return Err(Error::Render(
                 "bar supplemental point exceeds prepared category/series".into(),
@@ -249,7 +255,7 @@ pub(crate) fn intrinsic_body_minimum(
         let center = category_center(
             point.category_index,
             point.series_index,
-            prepared,
+            series.len(),
             mode,
             theme
                 .marks
@@ -304,9 +310,9 @@ pub(crate) fn intrinsic_body_minimum(
 pub(crate) struct PreparedBar {
     /// Index into the owning categorical axis's raw domain.
     pub(crate) category_index: usize,
-    /// Optional index into [`PreparedBars::series`].
+    /// Optional index into the owning policy's positioned group domain.
     pub(crate) series_index: Option<usize>,
-    /// Optional index into [`PreparedBars::hues`] for color only.
+    /// Optional index into the owning policy's color domain.
     pub(crate) hue_index: Option<usize>,
     /// Start value on the numeric axis.
     pub(crate) start: f64,
@@ -343,10 +349,6 @@ pub(crate) struct PreparedBarPoint {
 /// Prepared bar data and metadata shared by both orientations.
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedBars {
-    /// Series labels in observed order. Empty for `Single` mode.
-    pub(crate) series: Vec<String>,
-    /// Color labels derived from positioned series in observed order.
-    pub(crate) hues: Vec<String>,
     /// Prepared bars/segments.
     pub(crate) bars: Vec<PreparedBar>,
     /// Numeric value range including zero and CI/stack extents.
@@ -362,6 +364,7 @@ impl PreparedBars {
         &self,
         chart: &Plot,
         categories: &[String],
+        series: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -371,7 +374,7 @@ impl PreparedBars {
             let unit = AlphaUnit::aggregate(
                 chart,
                 &categories[bar.category_index],
-                bar.series_index.map(|index| self.series[index].as_str()),
+                bar.series_index.map(|index| series[index].as_str()),
             )?;
             guide.fill(
                 AlphaGlyphRole::Fill,
@@ -406,8 +409,11 @@ impl PreparedBars {
         Ok(())
     }
 
-    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.hues.iter().enumerate().filter_map(|(index, hue)| {
+    pub(crate) fn observed_hue_levels<'a>(
+        &'a self,
+        hues: &'a [String],
+    ) -> impl Iterator<Item = &'a str> {
+        hues.iter().enumerate().filter_map(|(index, hue)| {
             self.bars
                 .iter()
                 .any(|bar| bar.hue_index == Some(index))
@@ -415,71 +421,71 @@ impl PreparedBars {
         })
     }
 
-    pub(crate) fn color_keys<'a>(&'a self, categories: &'a [String]) -> &'a [String] {
-        if self.hues.is_empty() {
-            categories
-        } else {
-            &self.hues
-        }
-    }
-
-    pub(crate) fn resolved_colors(
-        &self,
-        chart: &Plot,
-        categories: &[String],
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
-    ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources();
-        let keys = if self.hues.is_empty() {
-            categories
-        } else {
-            chart.global_hue_levels().unwrap_or(&self.hues)
-        };
-        let colors = CategoryColors::resolve(
-            if chart.description().colors_by_sign() {
-                &[]
-            } else {
-                keys
-            },
-            theme.color_scales.get_qualitative(),
-            if chart.description().colors_by_sign() {
-                None
-            } else {
-                chart.description().categorical_color_scale_spec()
-            },
-            resources,
-        )?;
-        let accents = AccentColors::resolve(
-            theme.marks.get_accents(),
-            if chart.description().colors_by_sign() {
-                2
-            } else {
-                0
-            },
-        )?;
-        Ok((colors, accents))
-    }
-
-    pub(crate) fn bar_color(
-        &self,
-        chart: &Plot,
-        categories: &[String],
-        bar: &PreparedBar,
-        colors: &CategoryColors,
-        accents: &AccentColors,
-    ) -> Result<(u8, u8, u8), Error> {
-        if chart.description().colors_by_sign() {
-            accents.color(usize::from(bar.end < bar.start))
-        } else if let Some(hue) = bar.hue_index {
-            colors.color(&self.hues[hue])
-        } else {
-            colors.color(&categories[bar.category_index])
-        }
-    }
-
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.bars.len() as u128
+    }
+}
+
+pub(crate) fn color_keys<'a>(categories: &'a [String], hues: &'a [String]) -> &'a [String] {
+    if hues.is_empty() {
+        categories
+    } else {
+        hues
+    }
+}
+
+pub(crate) fn resolved_colors(
+    chart: &Plot,
+    categories: &[String],
+    hues: &[String],
+    theme: &crate::text::TextRequestContext<'_, '_>,
+    data: PlotData<'_, '_>,
+) -> Result<(CategoryColors, AccentColors), Error> {
+    let resources = data.source_resources();
+    let keys = if hues.is_empty() {
+        categories
+    } else {
+        chart.global_hue_levels().unwrap_or(hues)
+    };
+    let colors = CategoryColors::resolve(
+        if chart.description().colors_by_sign() {
+            &[]
+        } else {
+            keys
+        },
+        theme.color_scales.get_qualitative(),
+        if chart.description().colors_by_sign() {
+            None
+        } else {
+            chart.description().categorical_color_scale_spec()
+        },
+        resources,
+    )?;
+    let accents = AccentColors::resolve(
+        theme.marks.get_accents(),
+        if chart.description().colors_by_sign() {
+            2
+        } else {
+            0
+        },
+    )?;
+    Ok((colors, accents))
+}
+
+pub(crate) fn bar_color(
+    chart: &Plot,
+    categories: &[String],
+    hues: &[String],
+    bar: &PreparedBar,
+    colors: &CategoryColors,
+    accents: &AccentColors,
+) -> Result<(u8, u8, u8), Error> {
+    if chart.description().colors_by_sign() {
+        accents.color(usize::from(bar.end < bar.start))
+    } else if let Some(hue) = bar.hue_index {
+        colors.color(&hues[hue])
+    } else {
+        colors.color(&categories[bar.category_index])
     }
 }
 
@@ -906,7 +912,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     mode: BarMode,
-) -> Result<(PreparedBars, Vec<String>), Error> {
+) -> Result<(PreparedBars, Vec<String>, CoordinatedDomains), Error> {
     prepare_scoped(
         chart,
         data,
@@ -922,8 +928,8 @@ pub(crate) fn prepare_scoped<'a>(
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
-) -> Result<(PreparedBars, Vec<String>), Error> {
-    let (mut prepared, categories) = prepare_core(chart, data, mode, facet)?;
+) -> Result<(PreparedBars, Vec<String>, CoordinatedDomains), Error> {
+    let (mut prepared, categories, series, hues) = prepare_core(chart, data, mode, facet)?;
     let category = data
         .column(
             chart
@@ -954,23 +960,18 @@ pub(crate) fn prepare_scoped<'a>(
     };
     for bar in &mut prepared.bars {
         let key = (category, categories[bar.category_index].as_str());
-        let series = chart.description().group_name().zip(
-            bar.series_index
-                .map(|index| prepared.series[index].as_str()),
-        );
+        let series = chart
+            .description()
+            .group_name()
+            .zip(bar.series_index.map(|index| series[index].as_str()));
         bar.fill_alpha = fill_alpha.aggregate(key, series)?;
         if let Some(alpha) = line_alpha.as_ref().filter(|_| bar.interval.is_some()) {
             bar.line_alpha = alpha.aggregate(key, series)?;
         }
     }
-    apply_attached_significance(annotations, &mut prepared, &categories, mode)?;
-    prepared.points = prepare_point_layers(
-        chart.description(),
-        &prepared,
-        mode,
-        &categories,
-        &prepared.series,
-    )?;
+    apply_attached_significance(annotations, &mut prepared, &categories, &series, mode)?;
+    prepared.points =
+        prepare_point_layers(chart.description(), &prepared, mode, &categories, &series)?;
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
@@ -980,7 +981,7 @@ pub(crate) fn prepare_scoped<'a>(
         .categorical_map_spec()
         .filter(|_| !chart.description().colors_by_sign())
     {
-        for key in prepared.color_keys(&categories) {
+        for key in color_keys(&categories, &hues) {
             if exact.color_in(key).is_none() {
                 return Err(Error::Data(format!(
                     "bar: category {key:?} has no caller-owned color"
@@ -988,15 +989,26 @@ pub(crate) fn prepare_scoped<'a>(
             }
         }
     }
-    Ok((prepared, categories))
+    Ok((
+        prepared,
+        categories,
+        CoordinatedDomains {
+            colors: Some(crate::data::source::source_arc(hues)?),
+            groups: Some(crate::data::source::source_arc(series)?),
+        },
+    ))
 }
 
+#[expect(
+    clippy::type_complexity,
+    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
+)]
 fn prepare_core(
     chart: &Plot,
     data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(PreparedBars, Vec<String>), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>, Vec<String>), Error> {
     data.validate_row_source()?;
     let x_col = chart
         .description()
@@ -1047,7 +1059,7 @@ fn prepare_core(
             facet_identity: &facet_identity,
         })
     };
-    let (mut prepared, mut categories) = match mode {
+    let (mut prepared, mut categories, series, hues) = match mode {
         BarMode::Single => prepare_single(
             categories,
             channels.hues.as_deref(),
@@ -1091,9 +1103,9 @@ fn prepare_core(
         !data.is_full_plot(),
     )?;
     if let Some(bounds) = chart.description().bar_bound_cols() {
-        apply_precomputed_bounds(chart, data, &mut prepared, &categories, bounds)?;
+        apply_precomputed_bounds(chart, data, &mut prepared, &categories, &series, bounds)?;
     }
-    Ok((prepared, categories))
+    Ok((prepared, categories, series, hues))
 }
 
 fn facet_identity(
@@ -1127,6 +1139,7 @@ fn apply_attached_significance<'a>(
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     prepared: &mut PreparedBars,
     categories: &[String],
+    series_order: &[String],
     mode: BarMode,
 ) -> Result<(), Error> {
     for (source_index, annotation) in annotations.into_iter().enumerate() {
@@ -1147,14 +1160,13 @@ fn apply_attached_significance<'a>(
         let series_index = target
             .series_name()
             .map(|series| {
-                prepared
-                    .series
+                series_order
                     .iter()
                     .position(|candidate| candidate == series)
                     .ok_or_else(|| {
                         Error::Data(format!(
                             "bar significance references unknown series {series:?}; available series: {}",
-                            prepared.series.join(", ")
+                            series_order.join(", ")
                         ))
                     })
             })
@@ -1215,6 +1227,7 @@ fn apply_precomputed_bounds(
     data: crate::data::PlotData<'_, '_>,
     prepared: &mut PreparedBars,
     category_order: &[String],
+    series_order: &[String],
     (lower_column, upper_column): (&str, &str),
 ) -> Result<(), Error> {
     let category_column = chart
@@ -1244,8 +1257,7 @@ fn apply_precomputed_bounds(
         let series_index = groups
             .as_ref()
             .map(|values| {
-                prepared
-                    .series
+                series_order
                     .iter()
                     .position(|group| group == &values[row])
                     .ok_or_else(|| {
@@ -1586,6 +1598,7 @@ fn sort_single_values(
 pub(crate) fn guide_sources(
     prepared: &PreparedBars,
     chart: &Plot,
+    hues: &[String],
     theme: &crate::text::TextRequestContext<'_, '_>,
 
     colors: &CategoryColors,
@@ -1617,8 +1630,8 @@ pub(crate) fn guide_sources(
     }
 
     let mut entries = Vec::new();
-    crate::data::source::reserve_source(&mut entries, prepared.hues.len())?;
-    for label in prepared.observed_hue_levels() {
+    crate::data::source::reserve_source(&mut entries, hues.len())?;
+    for label in prepared.observed_hue_levels(hues) {
         entries.push(
             GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?.with_fill(
                 theme.marks.get_fills().get_bodies().get_bar_body(),
@@ -1630,13 +1643,17 @@ pub(crate) fn guide_sources(
     Ok(entries)
 }
 
+#[expect(
+    clippy::type_complexity,
+    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
+)]
 fn prepare_single(
     categories: Vec<String>,
     hues: Option<&[String]>,
     values: Vec<f64>,
     mut hue_levels: Vec<String>,
     summary: BarSummaryInput<'_>,
-) -> Result<(PreparedBars, Vec<String>), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>, Vec<String>), Error> {
     let mut category_levels = Vec::new();
     let mut groups: Vec<SingleBarCell> = Vec::new();
     for (row, (category, value)) in categories.into_iter().zip(values).enumerate() {
@@ -1710,17 +1727,21 @@ fn prepare_single(
     let value_range = value_range(&bars)?;
     Ok((
         PreparedBars {
-            series: Vec::new(),
-            hues: hue_levels,
             value_range,
             bars,
             points: Vec::new(),
             significance: Vec::new(),
         },
         category_levels,
+        Vec::new(),
+        hue_levels,
     ))
 }
 
+#[expect(
+    clippy::type_complexity,
+    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
+)]
 fn prepare_grouped(
     categories: Vec<String>,
     series: Vec<String>,
@@ -1729,7 +1750,7 @@ fn prepare_grouped(
     series_order: Vec<String>,
     hue_order: Vec<String>,
     summary: BarSummaryInput<'_>,
-) -> Result<(PreparedBars, Vec<String>), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>, Vec<String>), Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
         return Err(Error::Data(
             "bar: category/value/series length mismatch".into(),
@@ -1822,20 +1843,24 @@ fn prepare_grouped(
 
     Ok((
         PreparedBars {
-            series: series_levels,
-            hues: hue_levels,
             value_range,
             bars,
             points: Vec::new(),
             significance: Vec::new(),
         },
         category_levels,
+        series_levels,
+        hue_levels,
     ))
 }
 
 #[expect(
     clippy::too_many_lines,
     reason = "admitted grouping and ordered signed stack accumulation share one scientific owner"
+)]
+#[expect(
+    clippy::type_complexity,
+    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
 )]
 fn prepare_stacked(
     categories: Vec<String>,
@@ -1844,7 +1869,7 @@ fn prepare_stacked(
     values: Vec<f64>,
     series_order: Vec<String>,
     hue_order: Vec<String>,
-) -> Result<(PreparedBars, Vec<String>), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>, Vec<String>), Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
         return Err(Error::Data(
             "bar: category/value/series length mismatch".into(),
@@ -1957,14 +1982,14 @@ fn prepare_stacked(
     let value_range = value_range(&bars)?;
     Ok((
         PreparedBars {
-            series: series_levels,
-            hues: hue_levels,
             value_range,
             bars,
             points: Vec::new(),
             significance: Vec::new(),
         },
         category_levels,
+        series_levels,
+        hue_levels,
     ))
 }
 

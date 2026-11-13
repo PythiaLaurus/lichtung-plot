@@ -167,7 +167,7 @@ pub(crate) fn data(
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
                 return marks.series_center(category, series);
             }
-            let (mode, bars) = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
+            let mode = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, .. } => Some(mode), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
             let category = categories
                 .expect("positioned categorical axis")
@@ -175,15 +175,20 @@ pub(crate) fn data(
                 .iter()
                 .position(|raw| raw == category)
                 .ok_or_else(|| Error::Data("annotation category is absent".into()))?;
-            let series = bars
-                .series
+            let groups = registered
+                .policy
+                .coordinated
+                .groups
+                .as_deref()
+                .expect("prepared Bar group domain");
+            let series = groups
                 .iter()
                 .position(|raw| raw == series)
                 .ok_or_else(|| Error::Data("annotation series is absent".into()))?;
             Ok(crate::plots::bar_data::category_center(
                 category,
                 Some(series),
-                bars,
+                groups.len(),
                 mode,
                 theme
                     .marks

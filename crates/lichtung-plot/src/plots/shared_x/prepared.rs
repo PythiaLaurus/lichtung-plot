@@ -255,11 +255,12 @@ pub(crate) fn prepare_plot_registration(
         | PlotKind::HorizontalBar
         | PlotKind::StackedBar
         | PlotKind::StackedHorizontalBar => {
-            let (marks, categories) = crate::plots::bar_data::prepare(
+            let (marks, categories, domains) = crate::plots::bar_data::prepare(
                 source,
                 data,
                 crate::plots::bar_data::mode(source),
             )?;
+            panel.policy.coordinated = domains;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -924,13 +925,14 @@ pub(crate) fn prepare_plot<'src>(
                 | PlotKind::HorizontalBar
                 | PlotKind::StackedBar
                 | PlotKind::StackedHorizontalBar => {
-                    let (marks, categories) = crate::plots::bar_data::prepare_scoped(
+                    let (marks, categories, domains) = crate::plots::bar_data::prepare_scoped(
                         source,
                         data,
                         crate::plots::bar_data::mode(source),
                         Some(facet),
                         panel.significance_annotations(),
                     )?;
+                    panel.policy.coordinated = domains;
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "category lengths are admitted source rows"

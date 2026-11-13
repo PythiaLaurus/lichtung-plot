@@ -5,9 +5,10 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) coordinated: CoordinatedDomains,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct CoordinatedDomains {
     pub(crate) colors: Option<std::sync::Arc<Vec<String>>>,
+    pub(crate) groups: Option<std::sync::Arc<Vec<String>>>,
 }
 
 pub(crate) struct AxisTextVisibility {
