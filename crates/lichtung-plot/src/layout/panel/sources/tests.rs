@@ -780,7 +780,7 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
-        limits: Some((0.0, 10.0)),
+        window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         generation: TickGeneration::maximum(1).unwrap(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,
@@ -788,7 +788,7 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     };
     let y = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
-        limits: Some((0.0, 10.0)),
+        window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         generation: TickGeneration::additive(2.0).unwrap(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,

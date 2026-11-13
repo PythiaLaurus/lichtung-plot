@@ -1366,7 +1366,8 @@ fn point_layer_row_is_visible(
                 || plot
                     .description()
                     .x_axis_spec()
-                    .limits
+                    .window
+                    .map(crate::layout::RawWindow::pair)
                     .is_none_or(|limits| x >= limits.0 && x <= limits.1))
     }) && y.is_some_and(|y| {
         y.is_finite()
@@ -1374,7 +1375,8 @@ fn point_layer_row_is_visible(
                 || plot
                     .description()
                     .y_axis_spec()
-                    .limits
+                    .window
+                    .map(crate::layout::RawWindow::pair)
                     .is_none_or(|limits| y >= limits.0 && y <= limits.1))
     })
 }

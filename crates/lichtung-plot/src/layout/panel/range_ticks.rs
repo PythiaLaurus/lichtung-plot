@@ -19,7 +19,7 @@ pub(crate) fn continuous_auto_range(
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.limits {
+    if let Some(limits) = spec.window.map(super::RawWindow::pair) {
         Ok(limits)
     } else {
         broaden_nice_range(range, NICE_RANGE_SEED_COUNT, DEFAULT_RANGE_MARGIN_FRACTION)
@@ -35,7 +35,7 @@ pub(crate) fn anchored_auto_range(
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.limits {
+    if let Some(limits) = spec.window.map(super::RawWindow::pair) {
         return Ok(limits);
     }
     if !(range.0.is_finite() && range.1.is_finite() && anchor.is_finite()) {
@@ -115,11 +115,11 @@ pub(crate) fn display_axis_spec(spec: &AxisSpec, range: (f64, f64)) -> AxisSpec 
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisSpecPreparation,
     );
-    if spec.limits.is_some() {
+    if spec.window.is_some() {
         spec.clone()
     } else {
         let mut display = spec.clone();
-        display.limits = Some(range);
+        display.window = Some(super::RawWindow::from_pair(range));
         display
     }
 }

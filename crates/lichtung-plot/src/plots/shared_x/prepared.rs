@@ -106,7 +106,7 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
     pub(crate) fn numeric_probe(
         self,
         numeric: crate::numeric::source::NumericBinding<'_>,
-        windows: [Option<&(f64, f64)>; 2],
+        windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
         let (AxisSlot::Pair(axis_side) | AxisSlot::MarginalCentral(axis_side)) =
             self.source.witness.slot
@@ -116,7 +116,7 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
         let side = usize::from(axis_side == crate::layout::AxisSide::Left);
         if self.exact_ticks().is_some()
             || self.source.categories.is_some()
-            || self.empty_numeric_source(windows[side].copied())?
+            || self.empty_numeric_source(windows[side].map(|window| window.pair()))?
         {
             return Ok(None);
         }
@@ -1269,13 +1269,11 @@ fn prepare(
                 chart
                     .description()
                     .x_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[0]),
+                    .window.map_or(ranges[0], crate::layout::RawWindow::pair),
                 chart
                     .description()
                     .y_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[1]),
+                    .window.map_or(ranges[1], crate::layout::RawWindow::pair),
             ]
         }
         PlotKind::Scatter => {
@@ -1293,13 +1291,11 @@ fn prepare(
                 chart
                     .description()
                     .x_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[0]),
+                    .window.map_or(ranges[0], crate::layout::RawWindow::pair),
                 chart
                     .description()
                     .y_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[1]),
+                    .window.map_or(ranges[1], crate::layout::RawWindow::pair),
             ]
         }
         PlotKind::Density => marks!(family, PreparedFamily::Density(marks) => marks, "Density axes require prepared semantics").ranges(chart.description())?,
@@ -1313,13 +1309,11 @@ fn prepare(
                 chart
                     .description()
                     .x_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[0]),
+                    .window.map_or(ranges[0], crate::layout::RawWindow::pair),
                 chart
                     .description()
                     .y_axis_spec()
-                    .limits
-                    .unwrap_or(ranges[1]),
+                    .window.map_or(ranges[1], crate::layout::RawWindow::pair),
             ]
         }
         PlotKind::Marginal => {
@@ -1415,8 +1409,7 @@ fn prepare(
             let slots = chart
                 .description()
                 .y_axis_spec()
-                .limits
-                .unwrap_or((0.0, levels.len() as f64));
+                .window.map_or((0.0, levels.len() as f64), crate::layout::RawWindow::pair);
             categories[1] = Some(levels);
             [
                 crate::layout::continuous_auto_range(
@@ -1433,8 +1426,7 @@ fn prepare(
             let slots = chart
                 .description()
                 .y_axis_spec()
-                .limits
-                .unwrap_or((0.0, levels.len() as f64));
+                .window.map_or((0.0, levels.len() as f64), crate::layout::RawWindow::pair);
             categories[1] = Some(levels);
             [
                 crate::layout::continuous_auto_range(

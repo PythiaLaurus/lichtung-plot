@@ -27,7 +27,7 @@ pub(crate) use panel::{anchored_auto_range, continuous_auto_range, display_axis_
 pub(crate) use panel::{
     range_policies, AxisSemanticInputs, CoordinateLayoutInputs, RangePolicy, RangeProvenance,
 };
-pub(crate) use panel::{Axis, AxisSide, AxisSpec, AxisSystemPlan, Layout, Projection};
+pub(crate) use panel::{Axis, AxisSide, AxisSpec, AxisSystemPlan, Layout, Projection, RawWindow};
 #[allow(unused_imports)]
 pub(crate) use text::{
     foundational_plot_requirements, maximum_width_quanta, DeferredAnnotationTextPlan,

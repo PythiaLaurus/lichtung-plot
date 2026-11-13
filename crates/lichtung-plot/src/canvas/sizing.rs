@@ -109,12 +109,12 @@ impl HeightInputs {
         let ranges = [
             plot.description()
                 .x_axis_spec()
-                .limits
-                .unwrap_or(axes.ranges()[0]),
+                .window
+                .map_or(axes.ranges()[0], crate::layout::RawWindow::pair),
             plot.description()
                 .y_axis_spec()
-                .limits
-                .unwrap_or(axes.ranges()[1]),
+                .window
+                .map_or(axes.ranges()[1], crate::layout::RawWindow::pair),
         ]
         .map(|range| [range.0.to_bits(), range.1.to_bits()]);
         let child =

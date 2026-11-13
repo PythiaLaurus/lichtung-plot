@@ -533,13 +533,13 @@ pub(crate) fn intrinsic_body_minimum(
         chart
             .description()
             .x_axis_spec()
-            .limits
-            .unwrap_or(input.ranges()[0]),
+            .window
+            .map_or(input.ranges()[0], crate::layout::RawWindow::pair),
         chart
             .description()
             .y_axis_spec()
-            .limits
-            .unwrap_or(input.ranges()[1]),
+            .window
+            .map_or(input.ranges()[1], crate::layout::RawWindow::pair),
         (0.0, 1.0, 0.0, 1.0),
     );
     let totals = &prepared.selected_totals(&projection)?.totals;
@@ -617,16 +617,16 @@ pub(crate) fn natural_body_height(
     let range = chart
         .description()
         .x_axis_spec()
-        .limits
-        .unwrap_or(axes.ranges()[0]);
+        .window
+        .map_or(axes.ranges()[0], crate::layout::RawWindow::pair);
     let panel = PixelRect::new(0.0, width, 0.0, 1.0);
     let projection = crate::layout::Projection::new(
         range,
         chart
             .description()
             .y_axis_spec()
-            .limits
-            .unwrap_or(axes.ranges()[1]),
+            .window
+            .map_or(axes.ranges()[1], crate::layout::RawWindow::pair),
         panel.as_tuple(),
     );
     let registered_owner = registered.expect("prepared Waterfall occurrence");
@@ -773,8 +773,8 @@ pub(crate) fn measure(
         Ok(chart
             .description()
             .y_axis_spec()
-            .limits
-            .unwrap_or((0.0, labels.len() as f64)))
+            .window
+            .map_or((0.0, labels.len() as f64), crate::layout::RawWindow::pair))
     })?;
     let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple())
         .with_categories([None, Some(labels.len())]);

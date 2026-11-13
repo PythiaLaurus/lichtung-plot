@@ -697,7 +697,7 @@ impl PlotDescription {
         if source.is_numeric() {
             return Ok(());
         }
-        if self.x_axis_spec().limits.is_some() {
+        if self.x_axis_spec().window.is_some() {
             return Err(Error::Data(
                 "trajectory: categorical condition x does not support numeric x limits".into(),
             ));

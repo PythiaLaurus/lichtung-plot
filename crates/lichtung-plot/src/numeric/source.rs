@@ -126,7 +126,7 @@ impl OwnerInfo {
 pub(crate) struct AxisRequest<'a> {
     pub(crate) format: Option<&'a crate::NumericFormat>,
     pub(crate) binding: NumericBinding<'a>,
-    pub(crate) raw_windows: [Option<&'a (f64, f64)>; 2],
+    pub(crate) raw_windows: [Option<&'a crate::layout::RawWindow>; 2],
     pub(crate) provenance: crate::layout::RangeProvenance,
     pub(crate) generation: crate::TickGeneration,
     pub(crate) source_indices: Option<&'a [usize]>,
@@ -134,7 +134,8 @@ pub(crate) struct AxisRequest<'a> {
 
 impl AxisRequest<'_> {
     pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
-        self.raw_windows[usize::from(side == crate::layout::AxisSide::Left)].copied()
+        self.raw_windows[usize::from(side == crate::layout::AxisSide::Left)]
+            .map(|window| window.pair())
     }
     pub(crate) fn materialize(
         &self,
@@ -174,7 +175,7 @@ impl AxisRequest<'_> {
             crate::AxisScale::Linear
         };
         let raw = if log {
-            self.raw_windows[index].copied()
+            self.raw_windows[index].map(|window| window.pair())
         } else {
             Some(range)
         };

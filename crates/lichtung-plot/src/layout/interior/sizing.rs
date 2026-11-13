@@ -347,7 +347,8 @@ pub(crate) fn horizontal_gutter_preference(
                 include_label(label)?;
             }
         } else if !base.empty_numeric_source(
-            registered.expect("prepared axis occurrence").raw_windows()[1].copied(),
+            registered.expect("prepared axis occurrence").raw_windows()[1]
+                .map(|window| window.pair()),
         )? {
             for value in [
                 axes.ranges()[1].0,

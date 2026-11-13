@@ -798,7 +798,8 @@ fn plan_panel_attempt(
         .map(|range| {
             plot.description()
                 .x_axis_spec()
-                .limits
+                .window
+                .map(crate::layout::RawWindow::pair)
                 .map_or(range, |base| (base.0.min(range.0), base.1.max(range.1)))
         });
     let planned_y_limits = round
@@ -806,7 +807,8 @@ fn plan_panel_attempt(
         .map(|range| {
             plot.description()
                 .y_axis_spec()
-                .limits
+                .window
+                .map(crate::layout::RawWindow::pair)
                 .map_or(range, |base| (base.0.min(range.0), base.1.max(range.1)))
         });
     if let Some(limits) = planned_x_limits {

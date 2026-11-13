@@ -364,8 +364,8 @@ pub(crate) fn natural_body_height(
     let range = chart
         .description()
         .x_axis_spec()
-        .limits
-        .unwrap_or(axes.ranges()[0]);
+        .window
+        .map_or(axes.ranges()[0], crate::layout::RawWindow::pair);
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(

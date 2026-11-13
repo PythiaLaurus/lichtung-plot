@@ -116,7 +116,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
     for count in [0_u32, 1, 10_000, 10_001] {
         let spec = AxisSpec {
             provenance: RangeProvenance::Automatic,
-            limits: None,
+            window: None,
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
             format: None,
@@ -142,7 +142,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
     ] {
         let spec = AxisSpec {
             provenance: RangeProvenance::Automatic,
-            limits: None,
+            window: None,
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
             format: None,
@@ -164,7 +164,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
 fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_known_limits() {
     let mut spec = AxisSpec {
         provenance: RangeProvenance::Automatic,
-        limits: None,
+        window: None,
         generation: crate::TickGeneration::automatic(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,
@@ -175,9 +175,9 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
         ]),
     };
     spec.validate("x-axis").unwrap();
-    spec.limits = Some((-f64::MAX, f64::MAX));
+    spec.window = Some(crate::layout::RawWindow::from_pair((-f64::MAX, f64::MAX)));
     spec.validate("x-axis").unwrap();
-    spec.limits = Some((0.0, f64::MAX));
+    spec.window = Some(crate::layout::RawWindow::from_pair((0.0, f64::MAX)));
     assert!(matches!(
         spec.validate("x-axis"),
         Err(crate::Error::Data(message)) if message.contains("outside resolved range")
@@ -546,7 +546,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
     let theme = crate::text::TextRequestContext::new(&appearance, &text);
     let spec = AxisSpec {
         provenance: RangeProvenance::Configured,
-        limits: Some((0.0, 10.0)),
+        window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         exact_ticks: Some(vec![
             AxisTick::new(0.0, ""),
             AxisTick::new(5.0, "middle"),

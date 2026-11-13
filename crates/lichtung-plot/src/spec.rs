@@ -768,8 +768,14 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             crate::orchestrator::registration::FamilyRef::kind,
         ));
         self.prepared_limits = [
-            plot.description().x_axis_spec().limits,
-            plot.description().y_axis_spec().limits,
+            plot.description()
+                .x_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+            plot.description()
+                .y_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
         ];
         if plot.kind() == PlotKind::Forest
             && plot.description().axis_scale_spec() == AxisScale::Log10
@@ -859,7 +865,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         for (target, source) in specs.iter_mut().zip([x_spec, y_spec]) {
             *target = crate::layout::AxisSpec {
                 provenance: source.provenance,
-                limits: source.limits,
+                window: source.window,
                 generation: source.generation.clone(),
                 category_labels: source.category_labels.clone(),
                 format: source.format.clone(),
@@ -899,7 +905,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
                 } else {
                     *range = self.prepared_limits[side].unwrap_or(axes.ranges()[side]);
                 }
-                specs[side].limits = Some(*range);
+                specs[side].window = Some(crate::layout::RawWindow::from_pair(*range));
             }
         }
         Layout::new_with_ticks_and_axis_specs_in_panel_box(

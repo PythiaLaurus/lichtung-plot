@@ -1257,7 +1257,7 @@ fn marginal_display_range<'a>(
     spec: &AxisSpec,
 ) -> Result<(f64, f64), Error> {
     let data_display_range = marginal_data_display_range(data_range, spec);
-    if spec.limits.is_some() {
+    if spec.window.is_some() {
         return Ok(data_display_range);
     }
 
@@ -1278,7 +1278,7 @@ fn marginal_data_display_range(data_range: (f64, f64), spec: &AxisSpec) -> (f64,
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.limits {
+    if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return limits;
     }
     let lo = data_range.0.min(data_range.1);

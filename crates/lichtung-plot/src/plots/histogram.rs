@@ -265,7 +265,10 @@ impl HistogramSemantics {
             .chain(rugs.iter().map(|r| r.top))
             .fold(0.0_f64, f64::max);
         let ranges = [
-            source.x_axis_spec().limits.unwrap_or(range),
+            source
+                .x_axis_spec()
+                .window
+                .map_or(range, crate::layout::RawWindow::pair),
             crate::layout::anchored_auto_range((0.0, maximum), source.y_axis_spec(), 0.0)?,
         ];
         Ok((

@@ -360,7 +360,8 @@ fn measure(
                 let domain = plot
                     .description()
                     .x_axis_spec()
-                    .limits
+                    .window
+                    .map(crate::layout::RawWindow::pair)
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
                 plot = plot.with_planned_x_limits(domain);
             }
@@ -371,7 +372,8 @@ fn measure(
                 let domain = plot
                     .description()
                     .y_axis_spec()
-                    .limits
+                    .window
+                    .map(crate::layout::RawWindow::pair)
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
                 plot = plot.with_planned_y_limits(domain);
             }

@@ -55,12 +55,29 @@ use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 pub struct AxisSpec {
     pub(crate) provenance: RangeProvenance,
     /// Explicit visible data range. When `None`, the renderer computes one.
-    pub limits: Option<(f64, f64)>,
+    pub(crate) window: Option<RawWindow>,
     /// Exact numeric tick source, selected before any automatic text is measured.
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
     pub(crate) generation: crate::TickGeneration,
     pub(crate) category_labels: crate::CategoryLabelSelection,
     pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
+}
+
+/// Authored raw-data endpoints, distinct from a prepared display extent.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RawWindow {
+    pub(crate) lower: f64,
+    pub(crate) upper: f64,
+}
+
+impl RawWindow {
+    pub(crate) const fn from_pair((lower, upper): (f64, f64)) -> Self {
+        Self { lower, upper }
+    }
+
+    pub(crate) const fn pair(self) -> (f64, f64) {
+        (self.lower, self.upper)
+    }
 }
 
 /// A single tick on an axis: a data-space position and the

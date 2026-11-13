@@ -22,13 +22,13 @@ impl AxisSpec {
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::AxisSpecPreparation,
         );
-        self.limits = Some((min, max));
+        self.window = Some(super::RawWindow::from_pair((min, max)));
         self.provenance = super::RangeProvenance::Configured;
         self
     }
 
     pub(crate) fn validate(&self, axis: &str) -> Result<(), Error> {
-        if let Some((minimum, maximum)) = self.limits {
+        if let Some((minimum, maximum)) = self.window.map(super::RawWindow::pair) {
             if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
                 return Err(Error::Data(format!(
                     "{axis} limits must be finite and strictly ascending; got {minimum}..{maximum}"
@@ -36,7 +36,7 @@ impl AxisSpec {
             }
         }
         if let Some(ticks) = &self.exact_ticks {
-            Axis::validate_tick_source(ticks, self.limits, axis)?;
+            Axis::validate_tick_source(ticks, self.window.map(super::RawWindow::pair), axis)?;
         }
         Ok(())
     }

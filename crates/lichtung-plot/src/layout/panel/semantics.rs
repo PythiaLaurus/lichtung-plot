@@ -225,7 +225,7 @@ mod tests {
         let automatic = AxisSpec::default();
         let displayed = super::super::display_axis_spec(&automatic, (-1.0, 11.0));
         let configured = AxisSpec::default().limits(-1.0, 11.0);
-        assert_eq!(displayed.limits, configured.limits);
+        assert_eq!(displayed.window, configured.window);
         assert_eq!(displayed.provenance, RangeProvenance::Automatic);
         assert_eq!(configured.provenance, RangeProvenance::Configured);
         let forest = crate::Plot::forest(

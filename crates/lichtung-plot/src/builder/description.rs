@@ -188,8 +188,15 @@ mod tests {
             &original.description.payload,
             &edited.description.payload
         ));
-        assert_eq!(original.description().x_axis_spec().limits, None);
-        assert_eq!(edited.description().x_axis_spec().limits, Some((-1.0, 2.0)));
+        assert_eq!(original.description().x_axis_spec().window, None);
+        assert_eq!(
+            edited
+                .description()
+                .x_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+            Some((-1.0, 2.0))
+        );
         assert_eq!(
             original.description().copy_axis_titles().unwrap()[0].as_str(),
             "Horizontal"

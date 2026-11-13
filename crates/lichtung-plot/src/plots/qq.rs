@@ -305,12 +305,14 @@ pub(crate) fn project(
         if chart
             .description()
             .x_axis_spec()
-            .limits
+            .window
+            .map(crate::layout::RawWindow::pair)
             .is_some_and(|(minimum, maximum)| *theoretical < minimum || *theoretical > maximum)
             || chart
                 .description()
                 .y_axis_spec()
-                .limits
+                .window
+                .map(crate::layout::RawWindow::pair)
                 .is_some_and(|(minimum, maximum)| *observed < minimum || *observed > maximum)
         {
             continue;
@@ -351,7 +353,7 @@ pub(super) fn qq_display_range(
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.limits {
+    if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return Ok(limits);
     }
     if data_range.0.total_cmp(&data_range.1).is_eq() {

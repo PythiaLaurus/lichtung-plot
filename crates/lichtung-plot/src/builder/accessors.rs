@@ -1267,18 +1267,22 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().axes[1].limits = Some(limits);
+        self.description.payload_mut().axes[1].window =
+            Some(crate::layout::RawWindow::from_pair(limits));
         self
     }
 
     pub(crate) fn with_planned_x_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().axes[0].limits = Some(limits);
+        self.description.payload_mut().axes[0].window =
+            Some(crate::layout::RawWindow::from_pair(limits));
         self
     }
 
     pub(crate) fn user_x_limits(&self) -> Option<(f64, f64)> {
         if self.x_limits_user_explicit {
-            self.description.payload.axes[0].limits
+            self.description.payload.axes[0]
+                .window
+                .map(crate::layout::RawWindow::pair)
         } else {
             None
         }
@@ -1286,7 +1290,9 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn user_y_limits(&self) -> Option<(f64, f64)> {
         if self.y_limits_user_explicit {
-            self.description.payload.axes[1].limits
+            self.description.payload.axes[1]
+                .window
+                .map(crate::layout::RawWindow::pair)
         } else {
             None
         }

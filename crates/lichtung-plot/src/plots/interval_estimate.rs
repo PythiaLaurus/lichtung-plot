@@ -299,7 +299,14 @@ impl PreparedEstimate {
         let rows = crate::plots::point_interval::prepare(chart, data)?;
 
         let range = estimate_data_range(rows.iter().map(|row| &row.estimate));
-        let range = match (chart.description().x_axis_spec().limits, range) {
+        let range = match (
+            chart
+                .description()
+                .x_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+            range,
+        ) {
             (Some(limits), _) => Some(limits),
             (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
                 range,
@@ -839,7 +846,12 @@ fn prepare_model<'a>(
         }))?;
     let transformed_reference = transform(reference)?;
 
-    let range = if let Some((lower, upper)) = chart.description().x_axis_spec().limits {
+    let range = if let Some((lower, upper)) = chart
+        .description()
+        .x_axis_spec()
+        .window
+        .map(crate::layout::RawWindow::pair)
+    {
         let limits = (transform(lower)?, transform(upper)?);
         if limits.0 >= limits.1 {
             return Err(Error::Data(format!("{family}: logarithmic x-axis limits must remain distinguishable after transformation")).into());
@@ -1357,11 +1369,11 @@ pub(crate) fn log_tick_plan(
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
     numeric: crate::numeric::source::NumericBinding<'_>,
-    windows: [Option<&(f64, f64)>; 2],
+    windows: [Option<&crate::layout::RawWindow>; 2],
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
     let format = axis.numeric_request(numeric, windows)?;
-    let raw = windows[0].copied();
+    let raw = windows[0].map(|window| window.pair());
     crate::layout::NumericTickPlan::measure_selected_source(
         range,
         axis.authored()

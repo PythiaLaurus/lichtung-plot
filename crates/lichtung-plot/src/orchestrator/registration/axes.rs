@@ -347,7 +347,7 @@ impl<'a> BaseAxisRef<'a> {
     pub(crate) fn numeric_request(
         self,
         binding: crate::numeric::source::NumericBinding<'a>,
-        windows: [Option<&'a (f64, f64)>; 2],
+        windows: [Option<&'a crate::layout::RawWindow>; 2],
     ) -> Result<Option<crate::numeric::source::AxisRequest<'a>>, Error> {
         let Some(authored) = self.authored() else {
             return Ok(None);
@@ -377,7 +377,7 @@ impl<'a> BaseAxisRef<'a> {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: crate::numeric::source::NumericBinding<'a>,
-        windows: [Option<&'a (f64, f64)>; 2],
+        windows: [Option<&'a crate::layout::RawWindow>; 2],
     ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
         crate::layout::layout_axis_ticks(
             self.exact_ticks(),

@@ -297,7 +297,10 @@ impl PreparedDensity {
         chart: &crate::builder::PlotDescription,
     ) -> Result<[(f64, f64); 2], Error> {
         Ok([
-            chart.x_axis_spec().limits.unwrap_or(self.x_range),
+            chart
+                .x_axis_spec()
+                .window
+                .map_or(self.x_range, crate::layout::RawWindow::pair),
             crate::layout::anchored_auto_range((0.0, self.maximum), chart.y_axis_spec(), 0.0)?,
         ])
     }

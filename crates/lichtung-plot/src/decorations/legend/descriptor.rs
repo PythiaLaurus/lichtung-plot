@@ -33,7 +33,7 @@ pub(crate) struct ContinuousContributor<'v> {
     pub exact: bool,
     pub format: Option<Arc<NumericFormat>>,
     pub numeric: crate::numeric::source::NumericBinding<'v>,
-    pub raw_windows: [Option<&'v (f64, f64)>; 2],
+    pub raw_windows: [Option<&'v crate::layout::RawWindow>; 2],
 }
 
 impl PartialEq for ContinuousContributor<'_> {
@@ -53,10 +53,10 @@ impl PartialEq for ContinuousContributor<'_> {
             && self.numeric.owner == other.numeric.owner
             && self
                 .raw_windows
-                .map(|window| window.map(|(a, b)| (a.to_bits(), b.to_bits())))
-                == other
-                    .raw_windows
-                    .map(|window| window.map(|(a, b)| (a.to_bits(), b.to_bits())))
+                .map(|window| window.map(|window| (window.lower.to_bits(), window.upper.to_bits())))
+                == other.raw_windows.map(|window| {
+                    window.map(|window| (window.lower.to_bits(), window.upper.to_bits()))
+                })
     }
 }
 
@@ -155,9 +155,9 @@ impl<'v> ContinuousContributor<'v> {
             numeric,
             raw_windows: [
                 plot.user_x_limits()
-                    .and(plot.description().x_axis_spec().limits.as_ref()),
+                    .and(plot.description().x_axis_spec().window.as_ref()),
                 plot.user_y_limits()
-                    .and(plot.description().y_axis_spec().limits.as_ref()),
+                    .and(plot.description().y_axis_spec().window.as_ref()),
             ],
         }))
     }

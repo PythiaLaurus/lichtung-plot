@@ -204,7 +204,7 @@ impl Intrinsics {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
             } else if pair[side].exact_ticks().is_none()
-                && !pair[side].empty_numeric_source(windows[side].copied())?
+                && !pair[side].empty_numeric_source(windows[side].map(|window| window.pair()))?
             {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.

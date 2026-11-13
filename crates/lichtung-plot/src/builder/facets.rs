@@ -103,7 +103,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             if kind == PlotKind::Forest && self.description.payload.axis_scale == AxisScale::Log10 {
                 self.resolved_facet_x_range = Some(range);
             } else {
-                self.description.payload_mut().axes[0].limits = Some(range);
+                self.description.payload_mut().axes[0].window =
+                    Some(crate::layout::RawWindow::from_pair(range));
             }
         }
         if let Some(range) = y_range {
@@ -113,7 +114,8 @@ impl<K: crate::kind::Marker> Plot<K> {
                 self.description.payload_mut().axes[1].provenance =
                     crate::layout::RangeProvenance::Shared;
             }
-            self.description.payload_mut().axes[1].limits = Some(range);
+            self.description.payload_mut().axes[1].window =
+                Some(crate::layout::RawWindow::from_pair(range));
         }
         self
     }
@@ -149,7 +151,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             (&self.description.payload.axes[0], &other.x_axis_spec),
             (&self.description.payload.axes[1], &other.y_axis_spec),
         ] {
-            if axis.limits != other.0
+            if axis.window.map(crate::layout::RawWindow::pair) != other.0
                 || axis.provenance != other.1
                 || axis.generation != other.2
                 || !same_values(axis.exact_ticks.as_deref(), other.5.as_deref())
@@ -160,8 +162,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
         self.description().same_prose(&other.prose)
             && self.description().same_axis_titles(&other.axis_titles)
-            && range(self.description.payload.axes[0].limits) == range(other.x_axis_spec.0)
-            && range(self.description.payload.axes[1].limits) == range(other.y_axis_spec.0)
+            && range(
+                self.description.payload.axes[0]
+                    .window
+                    .map(crate::layout::RawWindow::pair),
+            ) == range(other.x_axis_spec.0)
+            && range(
+                self.description.payload.axes[1]
+                    .window
+                    .map(crate::layout::RawWindow::pair),
+            ) == range(other.y_axis_spec.0)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
             && same_values(
                 self.global_hue_levels.as_deref(),
@@ -223,7 +233,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             )
         });
         for (target, source) in axes.iter_mut().zip(&self.description.payload.axes) {
-            target.0 = source.limits;
+            target.0 = source.window.map(crate::layout::RawWindow::pair);
             target.1 = source.provenance;
             target.2.clone_from(&source.generation);
             target.3.clone_from(&source.category_labels);

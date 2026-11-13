@@ -196,7 +196,7 @@ pub(crate) fn point_interval_display_range(
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.limits {
+    if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return Ok(limits);
     }
     let display = crate::layout::continuous_auto_range(data_range, spec)?;

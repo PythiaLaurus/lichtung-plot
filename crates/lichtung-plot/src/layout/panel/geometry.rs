@@ -104,7 +104,7 @@ impl Layout {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
-        raw_windows: [Option<&(f64, f64)>; 2],
+        raw_windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<Self, crate::layout::fit::PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
@@ -116,14 +116,14 @@ impl Layout {
         // them deliberately.
         let x_range = if x_ticks.is_empty() || x_spec.exact_ticks.is_some() {
             resolve_range(x_range, x_spec)?
-        } else if let Some(limits) = x_spec.limits {
+        } else if let Some(limits) = x_spec.window.map(crate::layout::RawWindow::pair) {
             limits
         } else {
             x_range
         };
         let y_range = if y_ticks.is_empty() || y_spec.exact_ticks.is_some() {
             resolve_range(y_range, y_spec)?
-        } else if let Some(limits) = y_spec.limits {
+        } else if let Some(limits) = y_spec.window.map(crate::layout::RawWindow::pair) {
             limits
         } else {
             y_range
@@ -205,7 +205,7 @@ impl AxisSpec {
     pub(crate) fn numeric_request<'v>(
         &'v self,
         binding: Option<crate::numeric::source::NumericBinding<'v>>,
-        raw_windows: [Option<&'v (f64, f64)>; 2],
+        raw_windows: [Option<&'v crate::layout::RawWindow>; 2],
     ) -> Result<Option<crate::numeric::source::AxisRequest<'v>>, Error> {
         let Some(binding) = binding else {
             if self.format.is_some() || self.generation.position_function().is_some() {
@@ -236,7 +236,7 @@ impl AxisSpec {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
-        raw_windows: [Option<&(f64, f64)>; 2],
+        raw_windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
         layout_axis_ticks(
             self.exact_ticks.as_deref().map(|raw| {

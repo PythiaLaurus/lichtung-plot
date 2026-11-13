@@ -107,12 +107,12 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         .retain_composed_inputs(ScopedGuideInputs::for_test(&automatic), None, None)
         .unwrap();
     assert_eq!(
-        automatic.description().x_axis_spec().limits,
-        configured.description().x_axis_spec().limits
+        automatic.description().x_axis_spec().window,
+        configured.description().x_axis_spec().window
     );
     assert_eq!(
-        automatic.description().x_axis_spec().limits,
-        shared.description().x_axis_spec().limits
+        automatic.description().x_axis_spec().window,
+        shared.description().x_axis_spec().window
     );
     assert!(automatic.same_composed_inputs(&retained, &retained.guides, None, None));
     assert!(!configured.same_composed_inputs(&retained, &retained.guides, None, None));

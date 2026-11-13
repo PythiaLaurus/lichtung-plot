@@ -1850,7 +1850,7 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
     ]
     .iter()
     .any(|spec| {
-        spec.limits.is_some()
+        spec.window.is_some()
             || spec.exact_ticks.is_some()
             || spec.format.is_some()
             || !spec.generation.is_automatic()
