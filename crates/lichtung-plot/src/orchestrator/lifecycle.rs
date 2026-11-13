@@ -3,6 +3,7 @@
 use crate::Error;
 
 use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
+use super::plan::{MeasuredOwnedPlan, MeasuredRootContent};
 use super::root::{CachedRootFrame, RootLayoutCaches};
 use crate::builder::Plot;
 use crate::decorations::plan::MeasuredPlotPlan;
@@ -225,11 +226,6 @@ impl PreparedPlotInputs<'_> {
         });
         Ok(frame)
     }
-}
-
-enum PlotLayoutPlan {
-    Unfaceted(Box<UnfacetedPlotPlan>),
-    Faceted(Box<super::facets::FacetPlan>),
 }
 
 #[cfg(test)]
@@ -495,14 +491,6 @@ mod soft_hyphen_tests {
             assert_eq!(retained, SOURCE);
         }
     }
-}
-
-struct UnfacetedPlotPlan {
-    dimensions: (u32, u32),
-    panel_plan: MeasuredPlotPlan,
-    canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
-    legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
-    layers: [String; 2],
 }
 
 #[cfg(test)]
@@ -1007,25 +995,23 @@ impl PlotPlan {
                     .attach(source.clone())?
                     .with_canvas_size(width, height);
                 let plan = if source.description().has_facets() {
-                    PlotLayoutPlan::Faceted(Box::new(
-                        super::facets::FacetPlan::new(
-                            &source,
-                            &prepared.operation,
-                            kind,
-                            &request,
-                            round,
-                            children,
-                            prepared
-                                .facet_guide
-                                .as_ref()
-                                .expect("faceted root guide was prepared"),
-                            sizing.automatic_height(),
-                            &prepared.axes,
-                        )
-                        .map_err(crate::layout::fit::PlanError::into_error)?,
-                    ))
+                    super::facets::OwnedFacetPlan::measure(
+                        &source,
+                        &prepared.operation,
+                        kind,
+                        &request,
+                        round,
+                        children,
+                        prepared
+                            .facet_guide
+                            .as_ref()
+                            .expect("faceted root guide was prepared"),
+                        sizing.automatic_height(),
+                        &prepared.axes,
+                    )
+                    .map_err(crate::layout::fit::PlanError::into_error)?
                 } else {
-                    PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
+                    measure_single_plot(
                         &source,
                         prepared.axes.plots.first(),
                         prepared.axes.intrinsic(&prepared.axes.plots[0]),
@@ -1034,18 +1020,10 @@ impl PlotPlan {
                         prepared.root_frame(&source, frames)?,
                         round,
                         sizing.automatic_height(),
-                    )?))
+                    )?
                 };
                 children.finish_round(round);
-                let assigned = match &plan {
-                    PlotLayoutPlan::Unfaceted(plan) => {
-                        let (width, height) = plan.dimensions;
-                        crate::layout::RootSize::new(width, height)
-                    }
-                    PlotLayoutPlan::Faceted(plan) => {
-                        crate::layout::RootSize::new(plan.dimensions.0, plan.dimensions.1)
-                    }
-                };
+                let assigned = plan.size;
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, layout, final_stage| {
@@ -1060,9 +1038,7 @@ impl PlotPlan {
                     "prepared plot scene capture",
                     &request,
                     final_stage,
-                    |backend| {
-                        render_plot_scene(source, kind, width, height, &request, &layout, backend)
-                    },
+                    |backend| render_plot_scene(source, kind, width, height, &layout, backend),
                 )?;
                 #[cfg(test)]
                 assert_eq!(
@@ -1103,198 +1079,200 @@ fn render_plot_scene(
     kind: PlotKind,
     width: u32,
     height: u32,
-    theme: &TextRequestContext<'_, '_>,
-    layout: &PlotLayoutPlan,
+    layout: &MeasuredOwnedPlan,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     backend.draw_surface(
         PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height)),
-        theme.surfaces.canvas_root,
+        layout.root_paint,
         SurfaceRole::CanvasRoot,
     )?;
-    match layout {
-        PlotLayoutPlan::Unfaceted(plan) => plan.render(source, kind, theme, backend),
-        PlotLayoutPlan::Faceted(plan) => plan.render(source, kind, theme, backend),
+    match &layout.content {
+        MeasuredRootContent::Single { plot, legend } => {
+            render_single_plot(source, kind, plot, legend.as_ref(), &layout.frame, backend)
+        }
+        MeasuredRootContent::Facets(plan) => plan.render(source, kind, &layout.frame, backend),
+        MeasuredRootContent::Canvas(_) => unreachable!("standalone measured content"),
     }
 }
 
-impl UnfacetedPlotPlan {
-    #[expect(
-        clippy::too_many_lines,
-        clippy::too_many_arguments,
-        reason = "one selected standalone panel retains its original frame completion and legend checks"
-    )]
-    fn new(
-        source: &Plot,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        intrinsic: &crate::orchestrator::root::PlotIntrinsics,
-        kind: PlotKind,
-        theme: &TextRequestContext<'_, '_>,
-        mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
-        round: &mut crate::layout::kernel::FeedbackRound,
-        content_height: bool,
-    ) -> Result<Self, Error> {
-        let cell = canvas_layout.panel_box;
-        source.description().configured_source_rows()?;
-        let operation = theme.text.prepared_font_environment()?.operation();
-        let mut context = PlotRenderContext::new(
-            registered
-                .expect("prepared standalone plot")
-                .data(&operation)?,
-            cell,
-            theme,
-        )
-        .with_registration(registered.expect("prepared standalone plot"), intrinsic);
-        context.content_height = content_height;
-        source.validate_interior_preparation(registered)?;
-        let discrete_guide = if kind == PlotKind::Matrix {
-            None
-        } else {
-            source
-                .prepared_discrete_guide()?
-                .map(|descriptor| {
-                    crate::decorations::legend::discrete::GuideSlot::new(
-                        descriptor,
-                        &crate::layout::ComponentAddress::root()
-                            .child(crate::layout::AddressRole::PlotBody, 0)?,
-                        source.description().legend_position_spec(),
-                    )
-                })
-                .transpose()?
-        };
-        let panel_plan =
-            crate::layout::fit::measured(crate::decorations::plan::plan_panel_with_context(
-                source,
-                kind,
-                crate::decorations::plan::LegendRole::Panel,
-                context,
-                discrete_guide.as_ref(),
-                round,
-                &crate::layout::ComponentAddress::root()
-                    .child(crate::layout::AddressRole::PlotBody, 0)?,
-            ))
-            .map_err(crate::layout::fit::PlanError::into_error)?;
-
-        let mut plot = panel_plan.plot_with_planned_limits(source);
-        if content_height {
-            let height = crate::layout::kernel::root_dimension(
-                canvas_layout.height_for_body(
-                    panel_plan
-                        .preference
-                        .as_ref()
-                        .expect("content frame height preference")
-                        .height,
-                    theme,
-                )?,
-            )?;
-            plot = plot.with_canvas_size(
-                panel_plan.selected.dimensions.canvas_size().dimensions()?.0,
-                height,
-            );
-            let mut resized =
-                plot.measured_canvas_layout(registered, intrinsic, &operation, theme)?;
-            resized.panel_box = crate::orchestrator::assignment::completion_frame(
-                kind,
-                &panel_plan.selected,
-                &panel_plan.result,
-            );
-            canvas_layout = resized.into_shared();
-        }
-        round.observe_canvas(&canvas_layout)?;
-        let legend = panel_plan
-            .legend
-            .as_ref()
-            .map(|resolved| {
-                let (x, y) = resolved.bounds.anchor();
-                let draw = resolved.legend.select(x, y)?;
-                let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-                draw.geometry(&mut geometry)?;
-                geometry.observe_feedback(round)?;
-                let scope = crate::layout::fit::FitScope::root()
-                    .child(crate::layout::AddressRole::PlotBody, 0)?
-                    .child(
-                        crate::decorations::legend::address_role(
-                            source.description().legend_position_spec(),
-                        ),
-                        0,
-                    )?;
-                let (width, height) = plot.canvas_dimensions()?;
-                if geometry.bounds().iter().any(|ink| {
-                    ink.left < 0.0
-                        || ink.right > f64::from(width)
-                        || ink.bottom < 0.0
-                        || ink.top > f64::from(height)
-                }) {
-                    round.record_failure(scope.failure(
-                        crate::layout::fit::FitKind::LegendOrGuide,
-                        "selected standalone legend ink exceeds the exact root",
-                    ))?;
-                }
-                let mut layer = String::new();
-                let length = source
-                    .axis_scope()
-                    .map_or(Some(6), |scope| scope.len().checked_add(7))
-                    .ok_or_else(|| {
-                        Error::Render("standalone legend layer length overflow".into())
-                    })?;
-                crate::data::source::reserve_source_string(&mut layer, length)?;
-                if let Some(scope) = source.axis_scope() {
-                    layer.push_str(scope);
-                    layer.push('-');
-                }
-                layer.push_str("legend");
-                Ok::<_, Error>((layer, draw))
+#[expect(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    reason = "one selected standalone panel retains its original frame completion and legend checks"
+)]
+fn measure_single_plot(
+    source: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    kind: PlotKind,
+    theme: &TextRequestContext<'_, '_>,
+    mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
+    round: &mut crate::layout::kernel::FeedbackRound,
+    content_height: bool,
+) -> Result<MeasuredOwnedPlan, Error> {
+    let cell = canvas_layout.panel_box;
+    source.description().configured_source_rows()?;
+    let operation = theme.text.prepared_font_environment()?.operation();
+    let mut context = PlotRenderContext::new(
+        registered
+            .expect("prepared standalone plot")
+            .data(&operation)?,
+        cell,
+        theme,
+    )
+    .with_registration(registered.expect("prepared standalone plot"), intrinsic);
+    context.content_height = content_height;
+    source.validate_interior_preparation(registered)?;
+    let discrete_guide = if kind == PlotKind::Matrix {
+        None
+    } else {
+        source
+            .prepared_discrete_guide()?
+            .map(|descriptor| {
+                crate::decorations::legend::discrete::GuideSlot::new(
+                    descriptor,
+                    &crate::layout::ComponentAddress::root()
+                        .child(crate::layout::AddressRole::PlotBody, 0)?,
+                    source.description().legend_position_spec(),
+                )
             })
-            .transpose()?;
-        Ok(Self {
-            dimensions: plot.canvas_dimensions()?,
-            panel_plan,
-            canvas_layout,
-            legend,
-            layers: [source.layer_name("grid"), source.layer_name("axes")],
-        })
-    }
+            .transpose()?
+    };
+    let panel_plan =
+        crate::layout::fit::measured(crate::decorations::plan::plan_panel_with_context(
+            source,
+            kind,
+            crate::decorations::plan::LegendRole::Panel,
+            context,
+            discrete_guide.as_ref(),
+            round,
+            &crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)?,
+        ))
+        .map_err(crate::layout::fit::PlanError::into_error)?;
 
-    fn render(
-        &self,
-        source: &Plot,
-        kind: PlotKind,
-        theme: &TextRequestContext<'_, '_>,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        backend.draw_surface(
-            self.panel_plan.panel_box,
-            theme.surfaces.plot_panel,
-            SurfaceRole::PlotPanel,
+    let mut plot = panel_plan.plot_with_planned_limits(source);
+    if content_height {
+        let height = crate::layout::kernel::root_dimension(
+            canvas_layout.height_for_body(
+                panel_plan
+                    .preference
+                    .as_ref()
+                    .expect("content frame height preference")
+                    .height,
+                theme,
+            )?,
         )?;
-        if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
-            crate::decorations::apply::apply_grid(&self.layers[0], &self.panel_plan, backend)?;
-        }
-        source.description().configured_source_rows()?;
-        crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
-        let rendered = self.panel_plan.result.draw_body(backend)?;
-
-        crate::significance::render_selected(&self.panel_plan.result, backend)?;
-
-        match self.panel_plan.result.decoration_mode {
-            DecorationMode::Standard => {
-                crate::decorations::apply::apply_axes(&self.layers[1], &self.panel_plan, backend)?;
-                if let Some((layer, legend)) = &self.legend {
-                    crate::render::backend::with_layer(backend, layer, |backend| {
-                        legend.draw(backend)
-                    })?;
-                }
-            }
-            DecorationMode::SelfManaged => {}
-        }
-        self.canvas_layout
-            .root_text
-            .draw(source.description().prose(), backend)?;
-        debug_assert_eq!(rendered, self.panel_plan.result.decoration_mode);
-        Ok(())
+        plot = plot.with_canvas_size(
+            panel_plan.selected.dimensions.canvas_size().dimensions()?.0,
+            height,
+        );
+        let mut resized = plot.measured_canvas_layout(registered, intrinsic, &operation, theme)?;
+        resized.panel_box = crate::orchestrator::assignment::completion_frame(
+            kind,
+            &panel_plan.selected,
+            &panel_plan.result,
+        );
+        canvas_layout = resized.into_shared();
     }
+    round.observe_canvas(&canvas_layout)?;
+    let legend = panel_plan
+        .legend
+        .as_ref()
+        .map(|resolved| {
+            let (x, y) = resolved.bounds.anchor();
+            let draw = resolved.legend.select(x, y)?;
+            let mut geometry = crate::render::geometry::GeometrySnapshot::new();
+            draw.geometry(&mut geometry)?;
+            geometry.observe_feedback(round)?;
+            let scope = crate::layout::fit::FitScope::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)?
+                .child(
+                    crate::decorations::legend::address_role(
+                        source.description().legend_position_spec(),
+                    ),
+                    0,
+                )?;
+            let (width, height) = plot.canvas_dimensions()?;
+            if geometry.bounds().iter().any(|ink| {
+                ink.left < 0.0
+                    || ink.right > f64::from(width)
+                    || ink.bottom < 0.0
+                    || ink.top > f64::from(height)
+            }) {
+                round.record_failure(scope.failure(
+                    crate::layout::fit::FitKind::LegendOrGuide,
+                    "selected standalone legend ink exceeds the exact root",
+                ))?;
+            }
+            let mut layer = String::new();
+            let length = source
+                .axis_scope()
+                .map_or(Some(6), |scope| scope.len().checked_add(7))
+                .ok_or_else(|| Error::Render("standalone legend layer length overflow".into()))?;
+            crate::data::source::reserve_source_string(&mut layer, length)?;
+            if let Some(scope) = source.axis_scope() {
+                layer.push_str(scope);
+                layer.push('-');
+            }
+            layer.push_str("legend");
+            Ok::<_, Error>((layer, draw))
+        })
+        .transpose()?;
+    let (width, height) = plot.canvas_dimensions()?;
+    Ok(MeasuredOwnedPlan {
+        size: crate::layout::RootSize::new(width, height),
+        frame: canvas_layout,
+        root_paint: theme.surfaces.canvas_root,
+        content: MeasuredRootContent::Single {
+            plot: std::sync::Arc::new(panel_plan),
+            legend,
+        },
+    })
 }
 
+fn render_single_plot(
+    source: &Plot,
+    kind: PlotKind,
+    plot: &MeasuredPlotPlan,
+    legend: Option<&(String, crate::decorations::legend::LegendDrawPlan)>,
+    frame: &crate::layout::RootFramePlan,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    backend.draw_surface(plot.panel_box, plot.surface, SurfaceRole::PlotPanel)?;
+    if plot.result.decoration_mode == DecorationMode::Standard {
+        crate::decorations::apply::apply_grid(
+            &plot.layers.as_ref().expect("standalone plot layers").grid,
+            plot,
+            backend,
+        )?;
+    }
+    source.description().configured_source_rows()?;
+    crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
+    let rendered = plot.result.draw_body(backend)?;
+
+    crate::significance::render_selected(&plot.result, backend)?;
+
+    match plot.result.decoration_mode {
+        DecorationMode::Standard => {
+            crate::decorations::apply::apply_axes(
+                &plot.layers.as_ref().expect("standalone plot layers").axes,
+                plot,
+                backend,
+            )?;
+            if let Some((layer, legend)) = legend {
+                crate::render::backend::with_layer(backend, layer, |backend| legend.draw(backend))?;
+            }
+        }
+        DecorationMode::SelfManaged => {}
+    }
+    frame
+        .root_text
+        .draw(source.description().prose(), backend)?;
+    debug_assert_eq!(rendered, plot.result.decoration_mode);
+    Ok(())
+}
 impl Plot {
     #[cfg(test)]
     pub(crate) fn intrinsic_for_test(
@@ -1442,7 +1420,7 @@ mod root_title_tests {
                 },
                 |(inputs, operation), assigned, round| {
                     let plot = inputs.attach(source.clone())?;
-                    let plan = UnfacetedPlotPlan::new(
+                    let plan = measure_single_plot(
                         &plot,
                         inputs.plots.first(),
                         inputs.intrinsic(&inputs.plots[0]),
@@ -1467,14 +1445,17 @@ mod root_title_tests {
             )
             .unwrap();
             let plan = root.plan();
-            let body = plan.canvas_layout.panel_box;
-            let panel = plan.panel_plan.panel_box;
+            let MeasuredRootContent::Single { plot, .. } = &plan.content else {
+                panic!("measured single plot")
+            };
+            let body = plan.frame.panel_box;
+            let panel = plot.panel_box;
             reserves.push((panel.y0 - body.y0).to_bits());
             assert!(
                 panel.y0 > body.y0,
                 "multiline axis requires its own extra gutter"
             );
-            let required = plan.panel_plan.result.axes.as_ref().unwrap().requirements();
+            let required = plot.result.axes.as_ref().unwrap().requirements();
             let axis_ink_bottom = panel.y0 - required.bottom;
             let text_sizes =
                 crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
@@ -1485,7 +1466,7 @@ mod root_title_tests {
             let caption_top = if caption.is_empty() {
                 0.0
             } else {
-                8.0 + crate::theme::composition::hard(&plan.canvas_layout.root_text.reserves.bottom)
+                8.0 + crate::theme::composition::hard(&plan.frame.root_text.reserves.bottom)
                     .unwrap()
                     - crate::theme::composition::hard(
                         &theme
@@ -1636,7 +1617,7 @@ mod retained_legend_tests {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    UnfacetedPlotPlan::new(
+                    measure_single_plot(
                         &plot,
                         inputs.plots.first(),
                         inputs.intrinsic(&inputs.plots[0]),
@@ -1655,7 +1636,10 @@ mod retained_legend_tests {
                 ))
             },
             |_, _, mut plan, stage| {
-                let (layer, draw) = plan.legend.as_ref().unwrap();
+                let MeasuredRootContent::Single { plot, legend } = &mut plan.content else {
+                    panic!("measured single plot")
+                };
+                let (layer, draw) = legend.as_ref().unwrap();
                 assert_eq!(layer, "legend");
                 let mut geometry = crate::render::geometry::GeometrySnapshot::new();
                 draw.geometry(&mut geometry)?;
@@ -1664,7 +1648,11 @@ mod retained_legend_tests {
                 draw.draw(&mut backend)?;
                 backend.end()?;
                 assert_eq!(geometry.bounds(), backend.bounds());
-                let measured = plan.panel_plan.legend.as_mut().unwrap();
+                let measured = std::sync::Arc::get_mut(plot)
+                    .unwrap()
+                    .legend
+                    .as_mut()
+                    .unwrap();
                 std::sync::Arc::make_mut(&mut measured.legend.metrics).font_size = f64::NAN;
                 measured.bounds = measured.bounds.translated(10_000.0, 10_000.0);
                 capture_text_replay_plan(
@@ -1673,7 +1661,16 @@ mod retained_legend_tests {
                     "retained standalone legend",
                     &theme,
                     stage,
-                    |backend| plan.render(&source, source.kind(), &theme, backend),
+                    |backend| {
+                        render_single_plot(
+                            &source,
+                            source.kind(),
+                            plot,
+                            legend.as_ref(),
+                            &plan.frame,
+                            backend,
+                        )
+                    },
                 )
             },
         )

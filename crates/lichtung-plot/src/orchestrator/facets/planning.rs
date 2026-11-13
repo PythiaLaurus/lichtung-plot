@@ -179,7 +179,6 @@ fn adjusted_shared_axis_panel(
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
-    clippy::type_complexity,
     reason = "facet measurement keeps immutable grid, scale, theme, and child-plan inputs explicit"
 )]
 pub(super) fn native_parent(
@@ -201,17 +200,21 @@ pub(super) fn native_parent(
     content_sizing: bool,
     inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
 ) -> Result<
-    crate::layout::fit::FitOutcome<(Plot, Vec<super::OwnedFacetChild>, Vec<PixelRect>)>,
+    crate::layout::fit::FitOutcome<(
+        Plot,
+        Vec<super::OwnedFacetChild>,
+        super::tracks::GridAssignment,
+    )>,
     Error,
 > {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
     let resources = theme.text.prepared_font_environment()?.operation();
-    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
+    let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();
     crate::data::source::reserve_source(&mut requirements, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
-        let address = grid.child(
+        let address = grid_owner.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
@@ -247,7 +250,7 @@ pub(super) fn native_parent(
         natural_width: false,
         natural_height: false,
     });
-    let cells = match super::tracks::allocate(
+    let grid = match super::tracks::allocate(
         outer,
         (rows, columns),
         panels,
@@ -257,7 +260,7 @@ pub(super) fn native_parent(
         &scope.child(AddressRole::FacetGrid, 0)?,
         track_sizing.as_ref(),
     )? {
-        FitOutcome::Measured(grid) => grid.cells,
+        FitOutcome::Measured(grid) => grid,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
     let mut child_miss = None;
@@ -293,7 +296,7 @@ pub(super) fn native_parent(
                 panel_plot = panel_plot.with_planned_y_limits(range);
             }
         }
-        let cell = cells[facet.row * columns + facet.column];
+        let cell = grid.cells[facet.row * columns + facet.column];
         if containing_trial {
             if let FitOutcome::Miss(reason) = crate::decorations::plan::check_assigned_body(
                 &panel_plot,
@@ -380,7 +383,7 @@ pub(super) fn native_parent(
         if result.legend.is_some() {
             legend_owner = false;
         }
-        let cell = cells[facet.row * columns + facet.column];
+        let cell = grid.cells[facet.row * columns + facet.column];
         let requirement =
             match fit::outcome(super::rendering::strip_requirement(
                 result.result.axes.as_ref().ok_or_else(|| {
@@ -398,7 +401,7 @@ pub(super) fn native_parent(
                     continue;
                 }
             };
-        let address = grid.child(
+        let address = grid_owner.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
@@ -435,9 +438,9 @@ pub(super) fn native_parent(
         return Ok(FitOutcome::Miss(failure));
     }
     for facet in panels {
-        facet.panel = cells[facet.row * columns + facet.column];
+        facet.panel = grid.cells[facet.row * columns + facet.column];
     }
-    Ok(FitOutcome::Measured((plot.clone(), panel_plans, cells)))
+    Ok(FitOutcome::Measured((plot.clone(), panel_plans, grid)))
 }
 
 pub(super) fn feedback_plot(

@@ -3,6 +3,7 @@
 use crate::Error;
 use std::fmt::Write;
 
+use super::plan::{MeasuredOwnedPlan, MeasuredRootContent};
 use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
@@ -150,19 +151,13 @@ pub(super) fn prepare_discrete_guide(
     legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
 }
 
-pub(super) struct FacetPlan {
-    pub(super) dimensions: (u32, u32),
+pub(crate) struct OwnedFacetPlan {
+    grid: crate::layout::PixelRect,
     cells: Vec<crate::layout::PixelRect>,
-    children: Vec<OwnedFacetChild>,
-    outside_legend: Option<ResolvedLegend>,
-    horizontal_axis_label: Option<crate::Text>,
-    vertical_axis_label: Option<crate::Text>,
-    canvas_layout: crate::layout::RootFramePlan,
-    outer: crate::layout::PixelRect,
     shared_axis_origin: (f64, f64),
-    shared_axis_text: Vec<crate::render::backend::PlacedText>,
+    children: Vec<OwnedFacetChild>,
+    shared_titles: Vec<crate::render::backend::PlacedText>,
     parent_guide: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
-    panel_layers: Vec<[String; 2]>,
 }
 
 pub(super) struct OwnedFacetChild {
@@ -173,14 +168,14 @@ pub(super) struct OwnedFacetChild {
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
 }
 
-impl FacetPlan {
+impl OwnedFacetPlan {
     #[expect(
         clippy::too_many_lines,
         clippy::too_many_arguments,
         clippy::cast_precision_loss,
         reason = "the legacy parent adapter keeps complete-frame guide trials explicit"
     )]
-    pub(super) fn new(
+    pub(super) fn measure(
         source: &Plot,
         operation: &crate::font::canonical::OperationContext,
         kind: PlotKind,
@@ -190,7 +185,7 @@ impl FacetPlan {
         prepared_guide: &PreparedFacetGuide,
         content_sizing: bool,
         inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
-    ) -> Result<Self, crate::layout::fit::PlanError> {
+    ) -> Result<MeasuredOwnedPlan, crate::layout::fit::PlanError> {
         if !source.description().significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
         {
@@ -579,7 +574,7 @@ impl FacetPlan {
                     content_sizing,
                     inputs,
                 )?;
-                let (planned_plot, mut children, cells) = match measured {
+                let (planned_plot, mut children, grid) = match measured {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
                         #[cfg(test)]
@@ -657,17 +652,15 @@ impl FacetPlan {
                 }
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();
-                let mut panel_layers = Vec::new();
                 theme.text.prepared_font_environment()?;
 
-                crate::data::source::reserve_source(&mut panel_layers, panels.len())?;
                 crate::data::source::reserve_source(&mut legends, panels.len())?;
                 crate::data::source::reserve_source(&mut strip_layers, panels.len())?;
                 for (index, (facet, child)) in panels.iter().zip(&children).enumerate() {
                     let panel = &child.plot;
                     let scope = facet.render_scope()?;
-                    let mut layers = [String::new(), String::new(), String::new()];
-                    for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend"]) {
+                    let mut layers = [String::new()];
+                    for (layer, suffix) in layers.iter_mut().zip(["legend"]) {
                         let length = scope
                             .len()
                             .checked_add(suffix.len() + 1)
@@ -677,8 +670,7 @@ impl FacetPlan {
                         layer.push('-');
                         layer.push_str(suffix);
                     }
-                    let [grid, axes, legend_layer] = layers;
-                    panel_layers.push([grid, axes]);
+                    let [legend_layer] = layers;
                     let legend = if index == 0 {
                         outside_legend.as_ref().or(panel.legend.as_ref())
                     } else {
@@ -727,25 +719,28 @@ impl FacetPlan {
                     child.legend = legend;
                 }
                 let plan = Self {
-                    dimensions,
-                    cells,
-                    children,
-                    outside_legend,
-                    horizontal_axis_label,
-                    vertical_axis_label,
-                    canvas_layout,
-                    outer,
+                    grid: outer,
+                    cells: grid.cells,
                     shared_axis_origin,
-                    shared_axis_text,
+                    children,
+                    shared_titles: shared_axis_text,
                     parent_guide,
-                    panel_layers,
                 };
-                plan.observe_arranged(round)?;
+                plan.observe_arranged(
+                    [horizontal_axis_label.as_ref(), vertical_axis_label.as_ref()],
+                    outside_legend.as_ref(),
+                    round,
+                )?;
                 #[cfg(test)]
                 if let Some(trial) = &guide_trial {
                     trial.complete(&guide_outcome);
                 }
-                return Ok(plan);
+                return Ok(MeasuredOwnedPlan {
+                    size: crate::layout::RootSize::new(dimensions.0, dimensions.1),
+                    frame: canvas_layout.into_shared(),
+                    root_paint: theme.surfaces.canvas_root,
+                    content: MeasuredRootContent::Facets(plan),
+                });
             }
         }
         Err(first_miss
@@ -760,18 +755,16 @@ impl FacetPlan {
 
     fn observe_arranged(
         &self,
-
+        labels: [Option<&crate::Text>; 2],
+        outside_legend: Option<&ResolvedLegend>,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
         round.begin_owner(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::FacetGrid, 0)?,
         )?;
-        round.observe_box(self.outer)?;
-        for label in [&self.horizontal_axis_label, &self.vertical_axis_label]
-            .into_iter()
-            .flatten()
-        {
+        round.observe_box(self.grid)?;
+        for label in labels.into_iter().flatten() {
             round.observe_authored_text(label)?;
         }
         round.observe_number(self.shared_axis_origin.0)?;
@@ -781,7 +774,7 @@ impl FacetPlan {
             let plan = &child.plot;
             round.observe_box(plan.panel_box)?;
             let legend = if index == 0 {
-                self.outside_legend.as_ref().or(plan.legend.as_ref())
+                outside_legend.or(plan.legend.as_ref())
             } else {
                 plan.legend.as_ref()
             };
@@ -797,7 +790,7 @@ impl FacetPlan {
         &self,
         source: &Plot,
         kind: PlotKind,
-        theme: &TextRequestContext<'_, '_>,
+        frame: &crate::layout::RootFramePlan,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         rendering::render_scene(
@@ -805,10 +798,8 @@ impl FacetPlan {
             kind,
             &self.children,
             self.parent_guide.as_ref(),
-            &self.panel_layers,
-            &self.shared_axis_text,
-            &self.canvas_layout,
-            theme,
+            &self.shared_titles,
+            frame,
             backend,
         )
     }
@@ -941,7 +932,7 @@ mod feedback_tests {
                     |(inputs, guide, operation), assigned, round| {
                         let source = inputs.attach(source.clone())?;
                         calls += 1;
-                        let plan = FacetPlan::new(
+                        let plan = OwnedFacetPlan::measure(
                             &source,
                             operation,
                             PlotKind::Scatter,
@@ -953,8 +944,12 @@ mod feedback_tests {
                             inputs,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?;
+                        let MeasuredRootContent::Facets(content) = &plan.content else {
+                            panic!("measured facet content")
+                        };
                         if calls == 2 {
-                            retained_neighbor = Some(std::sync::Arc::clone(&plan.children[1].plot));
+                            retained_neighbor =
+                                Some(std::sync::Arc::clone(&content.children[1].plot));
                             round.request_domain(
                                 &owner,
                                 &owner,
@@ -965,7 +960,7 @@ mod feedback_tests {
                             assert_eq!(
                                 std::sync::Arc::ptr_eq(
                                     retained_neighbor.as_ref().unwrap(),
-                                    &plan.children[1].plot
+                                    &content.children[1].plot
                                 ),
                                 !disabled && scales == FacetScales::Free
                             );
@@ -977,8 +972,11 @@ mod feedback_tests {
                         ))
                     },
                     |_, assigned, plan, stage| {
+                        let MeasuredRootContent::Facets(content) = &plan.content else {
+                            panic!("measured facet content")
+                        };
                         let (width, height) = assigned.dimensions()?;
-                        let panels = plan
+                        let panels = content
                             .children
                             .iter()
                             .map(|child| {
@@ -1012,7 +1010,9 @@ mod feedback_tests {
                             "facet child reuse test",
                             &theme,
                             stage,
-                            |backend| plan.render(&source, PlotKind::Scatter, &theme, backend),
+                            |backend| {
+                                content.render(&source, PlotKind::Scatter, &plan.frame, backend)
+                            },
                         )?;
                         crate::orchestrator::validate_text_replay_plan(
                             width,
@@ -1162,7 +1162,7 @@ mod feedback_tests {
                     ));
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    FacetPlan::new(
+                    OwnedFacetPlan::measure(
                         &source,
                         operation,
                         PlotKind::Scatter,
@@ -1177,22 +1177,25 @@ mod feedback_tests {
                 ))
             },
             |_, assigned, plan, stage| {
-                let expected = plan
+                let MeasuredRootContent::Facets(content) = &plan.content else {
+                    panic!("measured facet content")
+                };
+                let expected = content
                     .children
                     .iter()
                     .flat_map(|child| &child.strips)
-                    .chain(&plan.shared_axis_text)
+                    .chain(&content.shared_titles)
                     .collect::<Vec<_>>();
                 assert!(expected.iter().any(|text| text
                     .plan
                     .lines
                     .iter()
                     .any(|line| line.selected_soft_hyphen.is_some())));
-                assert!(plan
-                    .shared_axis_text
+                assert!(content
+                    .shared_titles
                     .iter()
                     .all(|planned| planned.plan.source == text));
-                assert!(plan
+                assert!(content
                     .children
                     .iter()
                     .flat_map(|child| &child.strips)
@@ -1212,7 +1215,7 @@ mod feedback_tests {
                     "facet producer closure",
                     &theme,
                     stage,
-                    |backend| plan.render(&source, PlotKind::Scatter, &theme, backend),
+                    |backend| content.render(&source, PlotKind::Scatter, &plan.frame, backend),
                 )?;
                 crate::font::canonical::FONT_SHAPE_CALLS
                     .with(|calls| assert_eq!(calls.get(), 0, "first capture must not shape"));
@@ -1245,6 +1248,10 @@ mod feedback_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one actual containing-frame trial verifies the selected parent guide and shared title after the complete grid remeasurement"
+    )]
     fn automatic_shared_facet_guide_remeasures_the_whole_grid() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),
@@ -1313,7 +1320,7 @@ mod feedback_tests {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    FacetPlan::new(
+                    OwnedFacetPlan::measure(
                         &source,
                         operation,
                         PlotKind::Scatter,
@@ -1330,15 +1337,32 @@ mod feedback_tests {
             |_, _, plan, _| Ok(plan),
         )
         .unwrap();
-        let plan = root.plan();
-        let guide = plan.outside_legend.as_ref().unwrap();
+        let MeasuredRootContent::Facets(plan) = &root.plan().content else {
+            panic!("measured facet content")
+        };
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
+        plan.parent_guide
+            .as_ref()
+            .unwrap()
+            .1
+            .geometry(&mut geometry)
+            .unwrap();
+        let guide_bottom = geometry
+            .bounds()
+            .iter()
+            .map(|ink| ink.bottom)
+            .reduce(f64::min)
+            .unwrap();
         assert!(plan
             .children
             .iter()
-            .all(|child| guide.bounds.bottom > plan.cells[child.slot.0].y1));
+            .all(|child| guide_bottom > plan.cells[child.slot.0].y1));
         assert_eq!(
-            plan.horizontal_axis_label.as_ref(),
-            source.description().prepare_axis_labels(None).unwrap()[0].as_ref()
+            plan.shared_titles[0].plan.source,
+            source.description().prepare_axis_labels(None).unwrap()[0]
+                .as_ref()
+                .unwrap()
+                .as_str()
         );
     }
 

@@ -19,6 +19,7 @@ pub(crate) use lifecycle::with_prepared_plot_for_test;
 #[cfg(test)]
 pub(crate) mod measurements;
 mod output;
+pub(crate) mod plan;
 pub(crate) mod registration;
 pub(crate) mod root;
 mod validation;

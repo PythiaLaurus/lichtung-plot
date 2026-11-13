@@ -296,7 +296,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
             },
             |(inputs, guide, changed_guide, operation), assigned, round| {
                 let plot = inputs.attach(source.clone())?;
-                let original = FacetPlan::new(
+                let original = OwnedFacetPlan::measure(
                     &plot,
                     operation,
                     PlotKind::Scatter,
@@ -316,7 +316,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     ));
                 }
                 exercised = true;
-                let same = FacetPlan::new(
+                let same = OwnedFacetPlan::measure(
                     &plot,
                     operation,
                     PlotKind::Scatter,
@@ -328,13 +328,19 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
+                let MeasuredRootContent::Facets(original) = original.content else {
+                    panic!("measured facet content")
+                };
+                let MeasuredRootContent::Facets(same) = same.content else {
+                    panic!("measured facet content")
+                };
                 for (first, repeated) in original.children.iter().zip(&same.children) {
                     assert_eq!(
                         std::sync::Arc::ptr_eq(&first.plot, &repeated.plot),
                         !disabled
                     );
                 }
-                let changed = FacetPlan::new(
+                let changed_plan = OwnedFacetPlan::measure(
                     &plot,
                     operation,
                     PlotKind::Scatter,
@@ -346,6 +352,9 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
+                let MeasuredRootContent::Facets(changed) = &changed_plan.content else {
+                    panic!("measured facet content")
+                };
                 for (first, replacement) in same.children.iter().zip(&changed.children) {
                     assert_eq!(first.plot.panel_box, replacement.plot.panel_box);
                 }
@@ -370,7 +379,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     FeedbackKind::OwnedInk,
                     [1.0, 0.0, 0.0, 0.0],
                 )?;
-                let unstable = FacetPlan::new(
+                let unstable = OwnedFacetPlan::measure(
                     &plot,
                     operation,
                     PlotKind::Scatter,
@@ -382,6 +391,9 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
+                let MeasuredRootContent::Facets(unstable) = unstable.content else {
+                    panic!("measured facet content")
+                };
                 assert!(!std::sync::Arc::ptr_eq(
                     &changed.children[0].plot,
                     &unstable.children[0].plot
@@ -401,17 +413,20 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    changed,
+                    changed_plan,
                 ))
             },
             |_, _, plan, stage| {
+                let MeasuredRootContent::Facets(content) = &plan.content else {
+                    panic!("measured facet content")
+                };
                 let replay = crate::orchestrator::capture_text_replay_plan(
                     1200,
                     800,
                     "routed facet guide dependencies",
                     &theme,
                     stage,
-                    |backend| plan.render(&source, PlotKind::Scatter, &theme, backend),
+                    |backend| content.render(&source, PlotKind::Scatter, &plan.frame, backend),
                 )?;
                 crate::orchestrator::validate_text_replay_plan(
                     1200,

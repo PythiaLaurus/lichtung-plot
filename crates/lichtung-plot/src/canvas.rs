@@ -15,6 +15,7 @@ use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
 use crate::layout::{PixelRect, RootFramePlan};
+use crate::orchestrator::plan::{MeasuredOwnedPlan, MeasuredRootContent};
 use crate::render::backend::{with_layer, Backend, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::AxisDomain;
@@ -41,26 +42,16 @@ thread_local! {
 
 struct OwnedCanvasPlot {
     anchor: crate::orchestrator::root::GridSlot,
-    kind: PlotKind,
-    surface: crate::Color,
     plot: Arc<crate::decorations::plan::MeasuredPlotPlan>,
     prose: crate::decorations::title_block::plan::RootTitleBlockPlan,
     prose_layer: String,
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
-    layers: [String; 2],
 }
 
 type PreparedColorDomains = Vec<(String, Vec<String>)>;
 use crate::decorations::legend::discrete::PreparedGuide;
 
-struct CanvasPlan {
-    dimensions: (u32, u32),
-    root_paint: crate::Color,
-    canvas_layout: RootFramePlan,
-    content: OwnedCanvasPlan,
-}
-
-struct OwnedCanvasPlan {
+pub(crate) struct OwnedCanvasPlan {
     grid: tracks::CanvasGridAssignment,
     plots: Vec<OwnedCanvasPlot>,
     text_panels: Vec<TextPanelPlan>,
@@ -1640,7 +1631,7 @@ impl Canvas {
                     "Canvas measurement must not open a backend"
                 );
                 children.finish_round(round);
-                let assigned = crate::layout::RootSize::new(plan.dimensions.0, plan.dimensions.1);
+                let assigned = plan.size;
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, plan, final_stage| {
@@ -2020,7 +2011,7 @@ impl Canvas {
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         content_sizing: bool,
         mut measurements: Option<&mut sizing::HeightMeasurements>,
-    ) -> Result<CanvasPlan, Error> {
+    ) -> Result<MeasuredOwnedPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
         let prepared = self.prepare_canvas_round(
@@ -2437,7 +2428,7 @@ impl Canvas {
         compact_changes: &mut bool,
         children: &mut crate::decorations::plan::children::ChildPlans,
         mut measurements: Option<&mut sizing::HeightMeasurements>,
-    ) -> Result<crate::layout::fit::FitOutcome<CanvasPlan>, Error> {
+    ) -> Result<crate::layout::fit::FitOutcome<MeasuredOwnedPlan>, Error> {
         use crate::layout::fit;
         let root_address = crate::layout::ComponentAddress::root();
         let guide_owner = root_address.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
@@ -3012,7 +3003,7 @@ impl Canvas {
                     continue;
                 }
             };
-            measured.push((index, kind, panel_plan, local));
+            measured.push((index, panel_plan, local));
             requirements.push((row, column, requirement));
         }
         if let Some(failure) = child_miss {
@@ -3118,19 +3109,14 @@ impl Canvas {
 
         let mut panels = Vec::new();
         fit::reserve(&mut panels, measured.len(), "Canvas selected panels")?;
-        for (index, kind, panel_plan, local) in measured {
+        for (index, panel_plan, local) in measured {
             let _ = cells[index].expect("measured owner assignment");
-            let mut layers = [String::new(), String::new(), String::new(), String::new()];
-            for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
+            let mut layers = [String::new(), String::new()];
+            for (layer, suffix) in layers.iter_mut().zip(["legend", "title"]) {
                 crate::data::source::reserve_source_string(layer, 40)?;
                 write!(layer, "panel-{index}-{suffix}").expect("admitted Canvas layer name");
             }
-            let [grid, axes, legend, header_layer] = layers;
-            let surface = themes
-                .plot(index)
-                .expect("configured panel theme")
-                .surfaces
-                .plot_panel;
+            let [legend, header_layer] = layers;
             let legend = panel_plan
                 .legend
                 .as_ref()
@@ -3142,47 +3128,48 @@ impl Canvas {
                 .map(|draw| (legend, draw));
             panels.push(OwnedCanvasPlot {
                 anchor: crate::orchestrator::root::GridSlot(index),
-                kind,
-                surface,
                 plot: panel_plan,
                 prose: local.text,
                 prose_layer: header_layer,
                 legend,
-                layers: [grid, axes],
             });
         }
-        let plan = CanvasPlan {
-            dimensions: (
-                assigned.dimensions()?.0,
-                crate::layout::kernel::root_dimension(
-                    canvas_layout.panel_box.y1 + canvas_layout.insets.top,
-                )?,
-            ),
-            root_paint: themes.root().surfaces.canvas_root,
-            canvas_layout,
-            content: OwnedCanvasPlan {
-                grid,
-                plots: panels,
-                text_panels,
-                shared_guide: shared_legend
-                    .as_ref()
-                    .map(|legend| {
-                        let (x, y) = legend.bounds.anchor();
-                        legend.legend.select(x, y)
-                    })
-                    .transpose()?,
-            },
+        let size = crate::layout::RootSize::new(
+            assigned.dimensions()?.0,
+            crate::layout::kernel::root_dimension(
+                canvas_layout.panel_box.y1 + canvas_layout.insets.top,
+            )?,
+        );
+        let content = OwnedCanvasPlan {
+            grid,
+            plots: panels,
+            text_panels,
+            shared_guide: shared_legend
+                .as_ref()
+                .map(|legend| {
+                    let (x, y) = legend.bounds.anchor();
+                    legend.legend.select(x, y)
+                })
+                .transpose()?,
         };
-        Self::observe_arranged(&plan, round)?;
+        let plan = MeasuredOwnedPlan {
+            size,
+            frame: canvas_layout.into_shared(),
+            root_paint: themes.root().surfaces.canvas_root,
+            content: MeasuredRootContent::Canvas(content),
+        };
+        let MeasuredRootContent::Canvas(content) = &plan.content else {
+            unreachable!("measured Canvas content")
+        };
+        Self::observe_arranged(content, round)?;
         Ok(FitOutcome::Measured(plan))
     }
 
     fn observe_arranged(
-        plan: &CanvasPlan,
+        content: &OwnedCanvasPlan,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        let content = &plan.content;
         for panel in &content.text_panels {
             geometry.text(panel.title_placement, panel.title.plan(), None)?;
             geometry.text(panel.body_placement, panel.body.plan(), None)?;
@@ -3213,7 +3200,7 @@ impl Canvas {
 
     fn render_planned_canvas(
         &self,
-        plan: &CanvasPlan,
+        plan: &MeasuredOwnedPlan,
         width: u32,
         height: u32,
         backend: &mut dyn Backend,
@@ -3223,14 +3210,20 @@ impl Canvas {
             plan.root_paint,
             SurfaceRole::CanvasRoot,
         )?;
-        let content = &plan.content;
+        let MeasuredRootContent::Canvas(content) = &plan.content else {
+            unreachable!("measured Canvas content")
+        };
         for panel in &content.plots {
-            backend.draw_surface(panel.plot.panel_box, panel.surface, SurfaceRole::PlotPanel)?;
+            backend.draw_surface(
+                panel.plot.panel_box,
+                panel.plot.surface,
+                SurfaceRole::PlotPanel,
+            )?;
         }
         for panel in &content.plots {
             crate::render::backend::with_layer_role(
                 backend,
-                &panel.layers[0],
+                &panel.plot.layers.as_ref().expect("Canvas plot layers").grid,
                 crate::render::backend::LayerRole::Grid,
                 |backend| {
                     panel
@@ -3250,19 +3243,25 @@ impl Canvas {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
             plot.description().configured_source_rows()?;
-            crate::layout::interior::InteriorRoute::classify(panel.kind)
+            crate::layout::interior::InteriorRoute::classify(plot.kind())
                 .validate(plot.description())?;
             panel.plot.result.draw_body(backend)?;
             crate::significance::render_selected(&panel.plot.result, backend)?;
-            with_layer(backend, &panel.layers[1], |backend| {
-                panel
-                    .plot
-                    .result
-                    .axes
-                    .as_ref()
-                    .ok_or_else(|| Error::Render("Canvas plan is missing immutable axes".into()))?
-                    .draw(backend)
-            })?;
+            with_layer(
+                backend,
+                &panel.plot.layers.as_ref().expect("Canvas plot layers").axes,
+                |backend| {
+                    panel
+                        .plot
+                        .result
+                        .axes
+                        .as_ref()
+                        .ok_or_else(|| {
+                            Error::Render("Canvas plan is missing immutable axes".into())
+                        })?
+                        .draw(backend)
+                },
+            )?;
             if let Some((layer, legend)) = &panel.legend {
                 with_layer(backend, layer, |backend| legend.draw(backend))?;
             }
@@ -3284,7 +3283,7 @@ impl Canvas {
                 legend.draw(backend)
             })?;
         }
-        plan.canvas_layout.root_text.draw_retained(backend)
+        plan.frame.root_text.draw_retained(backend)
     }
 
     #[expect(

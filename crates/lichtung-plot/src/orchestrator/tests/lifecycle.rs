@@ -750,7 +750,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             Plot::waterfall(group, delta, 10.0).erase(),
         ),
     ];
-    let mut preparation_work = [0_u64; 3];
+    let mut preparation_work = [0_u64; 2];
     let mut alpha_components = [0_usize; 3];
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
@@ -895,11 +895,15 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             .with(|calls| assert_eq!(calls.get(), 0, "{kind:?}"));
         for (total, counter) in preparation_work.iter_mut().zip([
             crate::orchestrator::measurements::Counter::AxisRangePreparation,
-            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
             crate::orchestrator::measurements::Counter::AxisSourcePreparation,
         ]) {
             *total += work.counters[counter as usize];
         }
+        assert_eq!(
+            work.counters[crate::orchestrator::measurements::Counter::AxisSpecPreparation as usize],
+            0,
+            "{kind:?}: root preparation must not replay authored AxisSpec::limits"
+        );
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
         assert_eq!(plan.dimensions(), (1200, 900));
         // Dropping the source before every concrete output makes a source-size

@@ -732,6 +732,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the actual cache entry and both feedback rounds remain together to isolate replay without remeasurement"
+    )]
     fn later_panel_cache_replays_feedback_without_remeasurement() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
@@ -794,6 +798,8 @@ mod tests {
                                         None,
                                     ),
                                     legend: None,
+                                    layers: None,
+                                    surface: theme.surfaces.plot_panel,
                                     planned_x_limits: None,
                                     planned_y_limits: None,
                                 }),

@@ -9,7 +9,7 @@ use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnch
 use crate::spec::PlotKind;
 
 pub(super) fn observe_arranged_chrome(
-    plan: &super::FacetPlan,
+    plan: &super::OwnedFacetPlan,
 
     round: &mut crate::layout::kernel::FeedbackRound,
 ) -> Result<(), Error> {
@@ -20,7 +20,7 @@ pub(super) fn observe_arranged_chrome(
             geometry.text(text.placement, &text.plan, None)?;
         }
     }
-    for text in &plan.shared_axis_text {
+    for text in &plan.shared_titles {
         geometry.text(text.placement, &text.plan, None)?;
     }
     for (_, legend) in plan.parent_guide.iter().chain(
@@ -33,34 +33,28 @@ pub(super) fn observe_arranged_chrome(
     geometry.observe_feedback(round)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the immutable scene inputs preserve facet rendering order and geometry"
-)]
 pub(super) fn render_scene(
     source: &Plot,
     kind: PlotKind,
     children: &[super::OwnedFacetChild],
     parent_guide: Option<&(String, crate::decorations::legend::LegendDrawPlan)>,
-    panel_layers: &[[String; 2]],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::RootFramePlan,
-    theme: &crate::text::TextRequestContext<'_, '_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     for child in children {
         let panel_plan = &child.plot;
         backend.draw_surface(
             panel_plan.panel_box,
-            theme.surfaces.plot_panel,
+            panel_plan.surface,
             SurfaceRole::PlotPanel,
         )?;
     }
-    for (layers, child) in panel_layers.iter().zip(children) {
+    for child in children {
         let panel_plan = &child.plot;
         crate::render::backend::with_layer_role(
             backend,
-            &layers[0],
+            &panel_plan.layers.as_ref().expect("facet plot layers").grid,
             crate::render::backend::LayerRole::Grid,
             |backend| {
                 panel_plan
@@ -78,14 +72,18 @@ pub(super) fn render_scene(
         crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
         panel_plan.result.draw_body(backend)?;
         crate::significance::render_selected(&panel_plan.result, backend)?;
-        crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {
-            panel_plan
-                .result
-                .axes
-                .as_ref()
-                .ok_or_else(|| Error::Render("facet plan is missing immutable axes".into()))?
-                .draw(backend)
-        })?;
+        crate::render::backend::with_layer(
+            backend,
+            &panel_plan.layers.as_ref().expect("facet plot layers").axes,
+            |backend| {
+                panel_plan
+                    .result
+                    .axes
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("facet plan is missing immutable axes".into()))?
+                    .draw(backend)
+            },
+        )?;
         let legend = if index == 0 {
             parent_guide.or(child.legend.as_ref())
         } else {

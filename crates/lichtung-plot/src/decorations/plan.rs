@@ -190,8 +190,58 @@ pub(crate) struct MeasuredPlotPlan {
     pub(crate) panel_box: PixelRect,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
+    pub(crate) layers: Option<PlotLayerNames>,
+    pub(crate) surface: crate::Color,
     planned_x_limits: Option<(f64, f64)>,
     planned_y_limits: Option<(f64, f64)>,
+}
+
+pub(crate) struct PlotLayerNames {
+    pub(crate) grid: String,
+    pub(crate) axes: String,
+}
+
+impl PlotLayerNames {
+    fn prepare(plot: &Plot, context: PlotRenderContext<'_, '_>) -> Result<Self, Error> {
+        use std::fmt::Write as _;
+        if context.canvas.is_some() {
+            let mut layers = [String::new(), String::new()];
+            for (layer, suffix) in layers.iter_mut().zip(["grid", "axes"]) {
+                crate::data::source::reserve_source_string(layer, 40)?;
+                write!(
+                    layer,
+                    "{}-{suffix}",
+                    plot.axis_scope().expect("Canvas plot scope")
+                )
+                .expect("admitted Canvas layer name");
+            }
+            let [grid, axes] = layers;
+            Ok(Self { grid, axes })
+        } else if context
+            .registered
+            .is_some_and(|registered| registered.source.has_facets())
+        {
+            let scope = plot.axis_scope().expect("facet plot scope");
+            let mut layers = [String::new(), String::new()];
+            for (layer, suffix) in layers.iter_mut().zip(["grid", "axes"]) {
+                let length = scope
+                    .len()
+                    .checked_add(suffix.len() + 1)
+                    .ok_or_else(|| Error::Render("facet layer length overflow".into()))?;
+                crate::data::source::reserve_source_string(layer, length)?;
+                layer.push_str(scope);
+                layer.push('-');
+                layer.push_str(suffix);
+            }
+            let [grid, axes] = layers;
+            Ok(Self { grid, axes })
+        } else {
+            Ok(Self {
+                grid: plot.layer_name("grid"),
+                axes: plot.layer_name("axes"),
+            })
+        }
+    }
 }
 
 pub(crate) fn place_outside_legend(
@@ -1598,6 +1648,8 @@ fn plan_panel_attempt(
         panel_box,
         result,
         legend: resolved,
+        layers: Some(PlotLayerNames::prepare(plot, context)?),
+        surface: context.theme.surfaces.plot_panel,
         planned_x_limits,
         planned_y_limits,
     }))
