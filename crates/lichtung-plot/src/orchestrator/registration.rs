@@ -9,7 +9,9 @@ pub(crate) use axes::{
     BaseAxisRef, DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
     PreparedAxisSource, PreparedCategorySource,
 };
-pub(crate) use policy::{CoordinatedDomains, GutterOwner, PlotScopePolicy};
+pub(crate) use policy::{
+    ContinuousMaterialization, CoordinatedDomains, GutterOwner, PlotScopePolicy,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);
@@ -129,6 +131,12 @@ pub(crate) fn guide_composition(
         || source.legend_composition_spec(),
         |registered| registered.policy.guide_composition,
     )
+}
+
+pub(crate) fn continuous_guide_suppressed(registered: Option<&PlotRegistration<'_>>) -> bool {
+    registered.is_some_and(|registered| {
+        registered.policy.continuous_materialization != ContinuousMaterialization::Local
+    })
 }
 
 impl std::fmt::Debug for PlotRegistration<'_> {

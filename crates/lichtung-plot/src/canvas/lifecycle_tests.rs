@@ -1,6 +1,53 @@
 use super::*;
 
 #[test]
+fn hidden_native_materialization_distinguishes_authored_visibility_from_canvas_policy() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::clone(&calls);
+    let source = Plot::heatmap(
+        crate::CategoryValues::new("column", ["C", "C"]).unwrap(),
+        crate::CategoryValues::new("row", ["A", "B"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+    )
+    .legend(crate::LegendPolicy::Hidden)
+    .color_label_format(
+        crate::NumericFormat::default().set_function(move |context| {
+            assert_eq!(context.purpose(), crate::NumericPurpose::ActualSet);
+            observed.fetch_add(1, Ordering::SeqCst);
+            context.format_builtin()
+        }),
+    )
+    .size(800, 600);
+    source.preflight().unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    Canvas::grid(1, 1)
+        .unwrap()
+        .size(800, 600)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(0, 0, source)
+        .unwrap()
+        .build_preflight_plan(|prepared, _| {
+            let registered = &prepared.interiors[0].as_ref().unwrap().plots[0];
+            assert_eq!(
+                registered.policy.continuous_materialization,
+                crate::orchestrator::registration::ContinuousMaterialization::Suppressed
+            );
+            let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+                &registered.family
+            else {
+                panic!("prepared Heatmap family")
+            };
+            assert!(marks
+                .guide_descriptor("value", &prepared.themes.plot_request(0).unwrap())
+                .unwrap()
+                .is_none());
+        })
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn shared_native_numeric_binding_reduces_the_original_owners_once_before_capture() {
     let owners = Arc::new(std::sync::Mutex::new(Vec::new()));
     let observed = owners.clone();

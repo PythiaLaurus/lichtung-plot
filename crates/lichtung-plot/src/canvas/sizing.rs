@@ -175,7 +175,9 @@ impl HeightInputs {
             parent_insets,
             y_labels: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
             legend: plot.description().legend_policy_spec(),
-            continuous_hidden: plot.continuous_guide_suppressed(),
+            continuous_hidden: crate::orchestrator::registration::continuous_guide_suppressed(
+                registered,
+            ),
             numeric: crate::numeric::inputs::NumericInputs::new(plot, registered, Some(canvas))?,
             alpha: plot.description().alpha_inputs().clone(),
             guides: ScopedGuideInputs::new(

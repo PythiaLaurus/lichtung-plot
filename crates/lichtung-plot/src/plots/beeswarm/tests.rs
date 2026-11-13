@@ -19,8 +19,8 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     )
     .x_limits(-1.0, 1.0)
     .hide_point_outline()
-    .erase()
-    .with_suppressed_continuous_guide();
+    .legend(crate::LegendPolicy::Hidden)
+    .erase();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let primary = theme
         .marks
@@ -185,6 +185,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 scope
                     .numeric_binding(source.description(), row_source, &operation)
                     .unwrap(),
+                panel.policy.continuous_materialization,
             )
             .unwrap();
             assert_eq!(prepared.colors, colors);

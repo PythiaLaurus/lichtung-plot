@@ -181,7 +181,8 @@ impl<K: crate::kind::Marker> Plot<K> {
                 == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.description.payload.legend_policy == other.legend_policy
-            && self.suppress_continuous_guide == other.suppress_continuous_guide
+            && crate::orchestrator::registration::continuous_guide_suppressed(registered)
+                == other.suppress_continuous_guide
             && self.description.root_size == other.root_size
             && other.numeric.matches(self, registered, canvas)
             && self.description.payload.alpha == other.alpha
@@ -289,7 +290,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             ),
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.description.payload.legend_policy,
-            suppress_continuous_guide: self.suppress_continuous_guide,
+            suppress_continuous_guide:
+                crate::orchestrator::registration::continuous_guide_suppressed(registered),
             root_size: self.description.root_size,
             numeric: crate::numeric::inputs::NumericInputs::new(self, registered, canvas)?,
             alpha: self.description.payload.alpha.clone(),

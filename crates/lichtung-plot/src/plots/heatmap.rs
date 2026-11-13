@@ -1202,28 +1202,29 @@ pub(crate) fn measure(
         context.data.source_resources(),
         theme,
     )?;
-    let (body, colorbar) = if chart.continuous_guide_suppressed()
-        || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
-    {
-        (context.panel, None)
-    } else {
-        let (body, guide) = guide::measure(
-            chart,
-            context.panel,
-            minimum.0,
-            theme,
-            &context
-                .fit_scope()
-                .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
-            context.content_height.then_some((
+    let (body, colorbar) =
+        if crate::orchestrator::registration::continuous_guide_suppressed(context.registered)
+            || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+        {
+            (context.panel, None)
+        } else {
+            let (body, guide) = guide::measure(
                 chart,
-                context.registered,
-                context.intrinsic(),
-                context.data.source_resources(),
-            )),
-        )?;
-        (body, Some(guide))
-    };
+                context.panel,
+                minimum.0,
+                theme,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
+                context.content_height.then_some((
+                    chart,
+                    context.registered,
+                    context.intrinsic(),
+                    context.data.source_resources(),
+                )),
+            )?;
+            (body, Some(guide))
+        };
     let mut annotations = None;
     let mut columns = None;
     let mut rows = None;
@@ -1579,6 +1580,7 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_, '_>,
     selection: ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
+    materialization: crate::orchestrator::registration::ContinuousMaterialization,
 ) -> Result<(HeatmapData, [Vec<String>; 2]), Error> {
     validate_options(chart)?;
     let alpha =
@@ -1801,25 +1803,26 @@ pub(crate) fn prepare(
     ))?;
     let color_format = chart.description().color_label_format_spec().cloned();
     numeric.check_data(data)?;
-    let colorbar_values = if chart.continuous_guide_suppressed() {
-        None
-    } else {
-        Some(crate::decorations::legend::descriptor::domain_presentation(
-            (domain.minimum, domain.maximum),
-            domain.center,
-            color_format.as_deref().map(|format| {
-                (
-                    format,
-                    numeric,
-                    if color.selection.get_domain().is_some() {
-                        crate::NumericRangeOrigin::Explicit
-                    } else {
-                        crate::NumericRangeOrigin::Automatic
-                    },
-                )
-            }),
-        )?)
-    };
+    let colorbar_values =
+        if materialization == crate::orchestrator::registration::ContinuousMaterialization::Local {
+            Some(crate::decorations::legend::descriptor::domain_presentation(
+                (domain.minimum, domain.maximum),
+                domain.center,
+                color_format.as_deref().map(|format| {
+                    (
+                        format,
+                        numeric,
+                        if color.selection.get_domain().is_some() {
+                            crate::NumericRangeOrigin::Explicit
+                        } else {
+                            crate::NumericRangeOrigin::Automatic
+                        },
+                    )
+                }),
+            )?)
+        } else {
+            None
+        };
     let mut prepared = HeatmapData {
         color_label: chart.description().prepare_color_label(None)?,
         layout: heatmap_layout,

@@ -1229,15 +1229,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn with_suppressed_continuous_guide(mut self) -> Self {
-        self.suppress_continuous_guide = true;
-        self
-    }
-
-    pub(crate) const fn continuous_guide_suppressed(&self) -> bool {
-        self.suppress_continuous_guide
-    }
-
     pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
         self.description.payload_mut().axes[1].window =
             Some(crate::layout::RawWindow::from_pair(limits));

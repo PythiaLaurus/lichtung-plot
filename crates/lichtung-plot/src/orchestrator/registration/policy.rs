@@ -5,6 +5,7 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) axis_text: AxisTextVisibility,
     pub(crate) gutter_owner: GutterOwner,
     pub(crate) guide_composition: crate::LegendComposition,
+    pub(crate) continuous_materialization: ContinuousMaterialization,
     pub(crate) coordinated: CoordinatedDomains,
 }
 
@@ -12,6 +13,13 @@ pub(crate) struct PlotScopePolicy {
 pub(crate) enum GutterOwner {
     Root,
     Composition,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContinuousMaterialization {
+    Local,
+    SharedFinal,
+    Suppressed,
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +59,7 @@ impl PlotScopePolicy {
                 GutterOwner::Root
             },
             guide_composition: source.legend_composition_spec(),
+            continuous_materialization: ContinuousMaterialization::Local,
             coordinated: CoordinatedDomains::default(),
         }
     }

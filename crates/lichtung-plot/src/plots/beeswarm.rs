@@ -159,6 +159,7 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_, '_>,
     selection: crate::theme::ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
+    materialization: crate::orchestrator::registration::ContinuousMaterialization,
 ) -> Result<(PreparedBeeswarm, Vec<String>), Error> {
     let alpha =
         chart
@@ -215,25 +216,26 @@ pub(crate) fn prepare(
     });
     let format = chart.description().color_label_format_spec().cloned();
     numeric.check_data(data)?;
-    let values = if chart.continuous_guide_suppressed() {
-        None
-    } else {
-        Some(crate::decorations::legend::descriptor::domain_presentation(
-            color_range,
-            selection.get_center(),
-            format.as_deref().map(|format| {
-                (
-                    format,
-                    numeric,
-                    if selection.get_domain().is_some() {
-                        crate::NumericRangeOrigin::Explicit
-                    } else {
-                        crate::NumericRangeOrigin::Automatic
-                    },
-                )
-            }),
-        )?)
-    };
+    let values =
+        if materialization == crate::orchestrator::registration::ContinuousMaterialization::Local {
+            Some(crate::decorations::legend::descriptor::domain_presentation(
+                color_range,
+                selection.get_center(),
+                format.as_deref().map(|format| {
+                    (
+                        format,
+                        numeric,
+                        if selection.get_domain().is_some() {
+                            crate::NumericRangeOrigin::Explicit
+                        } else {
+                            crate::NumericRangeOrigin::Automatic
+                        },
+                    )
+                }),
+            )?)
+        } else {
+            None
+        };
     let scale = crate::theme::ContinuousColors::selected(color_range, &selection)?;
     let samples = crate::data::source::collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples)?;
@@ -403,32 +405,33 @@ pub(crate) fn measure(
         context.data.source_resources(),
         theme,
     )?;
-    let (panel, colorbar) = if chart.continuous_guide_suppressed()
-        || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
-    {
-        (context.panel, None)
-    } else {
-        let guide_scope = context
-            .fit_scope()
-            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let descriptor = chart
-            .prepared_discrete_guide()?
-            .ok_or_else(|| Error::Render("native Beeswarm guide was not prepared".into()))?;
-        let (body, guide) = crate::layout::interior::guide::native_right(
-            descriptor,
-            context.panel,
-            minimum.0,
-            theme,
-            &guide_scope,
-            context.content_height.then_some((
-                chart,
-                context.registered,
-                context.intrinsic(),
-                context.data.source_resources(),
-            )),
-        )?;
-        (body, Some(guide))
-    };
+    let (panel, colorbar) =
+        if crate::orchestrator::registration::continuous_guide_suppressed(context.registered)
+            || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+        {
+            (context.panel, None)
+        } else {
+            let guide_scope = context
+                .fit_scope()
+                .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+            let descriptor = chart
+                .prepared_discrete_guide()?
+                .ok_or_else(|| Error::Render("native Beeswarm guide was not prepared".into()))?;
+            let (body, guide) = crate::layout::interior::guide::native_right(
+                descriptor,
+                context.panel,
+                minimum.0,
+                theme,
+                &guide_scope,
+                context.content_height.then_some((
+                    chart,
+                    context.registered,
+                    context.intrinsic(),
+                    context.data.source_resources(),
+                )),
+            )?;
+            (body, Some(guide))
+        };
     let axes = context
         .registered
         .and_then(|registered| registered.axes.coordinate())

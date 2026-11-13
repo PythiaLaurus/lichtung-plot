@@ -55,7 +55,7 @@ impl GuidedPreference {
 /// while this intrinsic input is retained.
 pub(crate) fn guided_preference(
     plot: &Plot,
-    _inputs: &super::PreparedInteriorInputs,
+    inputs: &super::PreparedInteriorInputs,
     _theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Option<GuidedPreference>, Error> {
     let native = matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm);
@@ -68,7 +68,8 @@ pub(crate) fn guided_preference(
         || (position != crate::LegendPosition::Auto
             && !crate::decorations::plan::is_outside(position))
         || plot.kind() == PlotKind::Matrix
-        || (native && plot.continuous_guide_suppressed())
+        || (native
+            && crate::orchestrator::registration::continuous_guide_suppressed(inputs.plots.first()))
     {
         return Ok(None);
     }

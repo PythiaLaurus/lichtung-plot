@@ -1315,20 +1315,6 @@ impl Canvas {
                 slots.push(None);
                 continue;
             };
-            let suppressed = plot
-                .filter(|plot| {
-                    matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
-                        && matches!(
-                            self.legend_policy,
-                            CanvasLegendPolicy::Shared | CanvasLegendPolicy::Hidden
-                        )
-                })
-                .map(|plot| plot.clone().with_suppressed_continuous_guide());
-            let plot = if suppressed.is_some() {
-                suppressed.as_ref()
-            } else {
-                plot
-            };
             let plot = plot.expect("configured Canvas source");
             let mut scope = crate::orchestrator::registration::Scope::new(
                 plot,
@@ -1355,6 +1341,19 @@ impl Canvas {
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 panel.policy.guide_composition = self.legend_composition;
             }
+            panel.policy.continuous_materialization = match self.legend_policy {
+                CanvasLegendPolicy::Hidden => {
+                    crate::orchestrator::registration::ContinuousMaterialization::Suppressed
+                }
+                CanvasLegendPolicy::Shared
+                    if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) =>
+                {
+                    crate::orchestrator::registration::ContinuousMaterialization::SharedFinal
+                }
+                CanvasLegendPolicy::PerPlot | CanvasLegendPolicy::Shared => {
+                    crate::orchestrator::registration::ContinuousMaterialization::Local
+                }
+            };
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
@@ -2261,13 +2260,7 @@ impl Canvas {
 
     fn cell_visibility(&self, mut plot: Plot) -> Plot {
         if self.legend_policy == CanvasLegendPolicy::Hidden {
-            plot = plot
-                .with_suppressed_legend()
-                .with_suppressed_continuous_guide();
-        } else if self.legend_policy == CanvasLegendPolicy::Shared
-            && matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
-        {
-            plot = plot.with_suppressed_continuous_guide();
+            plot = plot.with_suppressed_legend();
         }
         plot
     }

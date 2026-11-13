@@ -353,6 +353,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
         scope
             .numeric_binding(source.description(), &row_source, &operation)
             .unwrap(),
+        crate::orchestrator::registration::ContinuousMaterialization::Local,
     )
     .unwrap();
     assert_eq!(

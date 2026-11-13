@@ -154,6 +154,7 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 continuous_selection(source, owner)?,
                 numeric,
+                panel.policy.continuous_materialization,
             )?;
             #[expect(
                 clippy::cast_precision_loss,
@@ -180,6 +181,7 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 continuous_selection(source, owner)?,
                 numeric,
+                panel.policy.continuous_materialization,
             )?;
             #[expect(
                 clippy::cast_precision_loss,
@@ -824,6 +826,7 @@ pub(crate) fn prepare_plot<'src>(
                             &panel.row_source,
                             resources,
                         )?,
+                        panel.policy.continuous_materialization,
                     )?;
                     #[expect(
                         clippy::cast_precision_loss,
@@ -847,6 +850,7 @@ pub(crate) fn prepare_plot<'src>(
                             &panel.row_source,
                             resources,
                         )?,
+                        panel.policy.continuous_materialization,
                     )?;
                     #[expect(
                         clippy::cast_precision_loss,
