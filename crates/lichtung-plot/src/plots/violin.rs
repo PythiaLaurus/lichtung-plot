@@ -336,7 +336,7 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn prepare(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<PreparedViolin, Error> {
     let family = if chart.kind() == crate::PlotKind::Violin {

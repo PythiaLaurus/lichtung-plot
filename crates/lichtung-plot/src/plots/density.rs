@@ -141,7 +141,7 @@ impl PreparedDensity {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let keys = if let Some(global) = chart.global_hue_levels() {
@@ -215,7 +215,7 @@ impl PreparedDensity {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         order: &[(usize, usize)],
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accent) = self.resolved_colors(chart, theme, data)?;
@@ -265,7 +265,7 @@ impl PreparedDensity {
         Ok(entries)
     }
 
-    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(chart: &Plot, data: PlotData<'_, '_>) -> Result<Self, Error> {
         data.validate_row_source()?;
         let column = chart
             .description()
@@ -418,7 +418,7 @@ pub(crate) fn project(
     prepared: &PreparedDensity,
     layout: Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
     let mut payload = DensityPayload {
         clip: layout.projection.panel_box(),
@@ -497,8 +497,8 @@ pub(crate) fn project(
 }
 
 #[cfg(test)]
-fn prepare_density<'a>(
-    data: impl Into<crate::data::PlotData<'a>>,
+fn prepare_density(
+    data: crate::data::PlotData<'_, '_>,
     value_col: &str,
     group_col: Option<&str>,
     group_name: Option<&str>,
@@ -512,7 +512,7 @@ fn prepare_density<'a>(
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let column = chart
         .description()
@@ -580,9 +580,9 @@ fn density_support(
     Ok((low, high, bandwidth))
 }
 
-fn prepare_density_for_chart<'a>(
+fn prepare_density_for_chart(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
     value_col: &str,
 ) -> Result<PreparedDensity, Error> {
     prepare_density_ordered(
@@ -596,8 +596,8 @@ fn prepare_density_for_chart<'a>(
     )
 }
 
-fn prepare_density_ordered<'a>(
-    data: impl Into<crate::data::PlotData<'a>>,
+fn prepare_density_ordered(
+    data: crate::data::PlotData<'_, '_>,
     value_col: &str,
     group_col: Option<&str>,
     group_name: Option<&str>,
@@ -605,7 +605,6 @@ fn prepare_density_ordered<'a>(
     hue_name: Option<&str>,
     identity_order: Option<&[crate::data::CollectivePair]>,
 ) -> Result<PreparedDensity, Error> {
-    let data = data.into();
     let values = crate::data::strict_finite_f64(data, value_col, "density")?;
     let channels = crate::data::observed_collectives(
         data, group_col, group_name, hue_col, hue_name, None, "density",
@@ -1293,7 +1292,7 @@ mod tests {
         }
         let plot = plot.erase();
         prepare_density(
-            &plot,
+            plot.data(),
             crate::data::X,
             grouped.then_some(crate::data::GROUP),
             grouped.then_some("group"),

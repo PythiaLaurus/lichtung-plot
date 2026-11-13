@@ -2,6 +2,17 @@
 
 use crate::{builder::PlotDescription, Error};
 
+#[derive(Debug, Clone)]
+pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);
+
+impl PartialEq for RootIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for RootIdentity {}
+
 #[derive(Clone, Copy)]
 pub(crate) enum FacetRole {
     Row,

@@ -421,7 +421,7 @@ impl PreparedBars {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let keys = if self.hues.is_empty() {
@@ -890,12 +890,11 @@ struct GroupedBarCell {
 }
 
 /// Build prepared bar data from category, value, and optional series channels.
-pub(crate) fn prepare<'a>(
+pub(crate) fn prepare(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
     mode: BarMode,
 ) -> Result<PreparedBars, Error> {
-    let data = data.into();
     prepare_scoped(
         chart,
         data,
@@ -907,7 +906,7 @@ pub(crate) fn prepare<'a>(
 
 pub(crate) fn prepare_scoped<'a>(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
@@ -976,7 +975,7 @@ pub(crate) fn prepare_scoped<'a>(
 
 fn prepare_core(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<PreparedBars, Error> {
@@ -1078,7 +1077,10 @@ fn prepare_core(
     Ok(prepared)
 }
 
-fn facet_identity(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<FacetIdentity, Error> {
+fn facet_identity(
+    chart: &Plot,
+    data: crate::data::PlotData<'_, '_>,
+) -> Result<FacetIdentity, Error> {
     let (row, column, wrap, _) = chart.description().facet_columns();
     let mut identity = Vec::new();
     for facet_column in [row, column, wrap].into_iter().flatten() {
@@ -1191,7 +1193,7 @@ fn apply_attached_significance<'a>(
 
 fn apply_precomputed_bounds(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     prepared: &mut PreparedBars,
     (lower_column, upper_column): (&str, &str),
 ) -> Result<(), Error> {

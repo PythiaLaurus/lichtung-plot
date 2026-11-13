@@ -147,7 +147,7 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(
         source: &Plot,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         match source.kind() {
@@ -632,7 +632,7 @@ pub(crate) fn prepare_plot(
             ))
         .then(|| source_data.bind_row_source())
         .transpose()?;
-        let panels = crate::orchestrator::text_census_panels(source)?;
+        let panels = crate::orchestrator::text_census_panels(source.description())?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| {
                 crate::data::observed_collectives(

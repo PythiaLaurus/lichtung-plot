@@ -45,7 +45,7 @@ pub(super) struct GridAssignment {
     reason = "facet ownership and prepared summaries are shared by both measurement phases"
 )]
 pub(super) fn allocate(
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
@@ -78,7 +78,7 @@ pub(super) fn allocate(
 }
 
 pub(super) fn natural_width(
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     shape: (usize, usize),
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
@@ -129,7 +129,7 @@ enum Measurement {
     reason = "one measured facet Grid retains row-major sparse cells, gutters, and both axis vectors"
 )]
 fn measure(
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
@@ -602,7 +602,8 @@ mod tests {
             let theme = crate::text::TextRequestContext::new(&theme, &text);
 
             let foreign = OperationContext::new();
-            let data = PlotData::with_rows(&plot, &rows, &ids).with_operation(&foreign);
+            let data =
+                PlotData::with_rows(plot.description(), &rows, &ids).with_operation(&foreign);
 
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let result = allocate(

@@ -3,7 +3,7 @@
 use crate::Error;
 use std::fmt::Write;
 
-use crate::builder::Plot;
+use crate::builder::{Plot, PlotDescription};
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
@@ -87,16 +87,16 @@ pub(crate) fn text_census_labels(
     Ok(())
 }
 
-pub(crate) struct FacetTextCensusPanel<'a> {
-    plot: &'a Plot,
+pub(crate) struct FacetTextCensusPanel<'src> {
+    source: &'src PlotDescription,
     panel: data::FacetPanel,
     cell: Option<crate::FacetCell>,
 }
 
-impl FacetTextCensusPanel<'_> {
-    pub(crate) fn data(&self) -> crate::data::PlotData<'_> {
+impl<'src> FacetTextCensusPanel<'src> {
+    pub(crate) fn data(&self) -> crate::data::PlotData<'src, '_> {
         let (rows, diagnostic_rows) = self.panel.rows.selected();
-        crate::data::PlotData::with_rows(self.plot, rows, diagnostic_rows)
+        crate::data::PlotData::with_rows(self.source, rows, diagnostic_rows)
             .with_numeric_facet(self.cell.as_ref())
     }
 
@@ -110,8 +110,7 @@ impl FacetTextCensusPanel<'_> {
     pub(crate) fn significance_annotations(
         &self,
     ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
-        self.plot
-            .description()
+        self.source
             .significance_annotations()
             .iter()
             .filter(|annotation| {
@@ -127,8 +126,10 @@ impl FacetTextCensusPanel<'_> {
     }
 }
 
-pub(crate) fn text_census_panels(source: &Plot) -> Result<Vec<FacetTextCensusPanel<'_>>, Error> {
-    if !source.description().significance_annotations().is_empty()
+pub(crate) fn text_census_panels(
+    source: &PlotDescription,
+) -> Result<Vec<FacetTextCensusPanel<'_>>, Error> {
+    if !source.significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
         return Err(Error::Data(format!(
@@ -136,8 +137,8 @@ pub(crate) fn text_census_panels(source: &Plot) -> Result<Vec<FacetTextCensusPan
             source.kind()
         )));
     }
-    let selectors = data::facet_selectors(source.description())?;
-    let panels = data::extract_panels(source.description(), &selectors, None)?;
+    let selectors = data::facet_selectors(source)?;
+    let panels = data::extract_panels(source, &selectors, None)?;
     data::validate_significance_facet_anchors(source, &panels)?;
     crate::data::source::collect_source(panels.into_iter().map(|panel| {
         let cell = match panel.cell.as_slice() {
@@ -156,7 +157,7 @@ pub(crate) fn text_census_panels(source: &Plot) -> Result<Vec<FacetTextCensusPan
             }
         };
         Ok(FacetTextCensusPanel {
-            plot: source,
+            source,
             panel,
             cell,
         })
@@ -245,7 +246,7 @@ impl FacetPlan {
             )?);
         }
         let mut panels = data::extract_panels(source.description(), &selectors, None)?;
-        data::validate_significance_facet_anchors(source, &panels)?;
+        data::validate_significance_facet_anchors(source.description(), &panels)?;
         let mut minima = Vec::new();
         crate::data::source::reserve_source(&mut minima, panels.len())?;
         for facet in &panels {

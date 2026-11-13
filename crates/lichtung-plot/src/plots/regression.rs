@@ -213,7 +213,7 @@ impl PreparedRegression {
 
     pub(crate) fn new(
         chart: &crate::builder::PlotDescription,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;

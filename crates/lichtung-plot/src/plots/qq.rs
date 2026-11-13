@@ -143,7 +143,7 @@ impl PreparedQq {
 
     pub(crate) fn new(
         chart: &crate::builder::PlotDescription,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
@@ -356,7 +356,7 @@ pub(crate) fn project(
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let column = chart
         .description()

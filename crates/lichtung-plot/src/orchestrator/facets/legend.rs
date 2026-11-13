@@ -115,7 +115,7 @@ fn preflight_panels(
             .with_significance_subset(facet.significance_selectors());
         let (rows, diagnostic_rows) = facet.rows.selected();
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, rows, diagnostic_rows)
+            crate::data::PlotData::with_rows(panel_plot.description(), rows, diagnostic_rows)
                 .with_operation(&resources),
             facet.panel,
             theme,
@@ -137,7 +137,7 @@ pub(super) fn resolve_shared_facet_axis(
     results: &[std::sync::Arc<PlotRenderResult>],
     shared: bool,
     x_axis: bool,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<Option<(f64, f64)>, Error> {
     if !shared || results.is_empty() {
         return Ok(None);

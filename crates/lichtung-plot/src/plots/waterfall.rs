@@ -579,7 +579,7 @@ pub(crate) fn natural_body_height(
 
 pub(crate) fn prepare(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<PreparedWaterfall, Error> {
     data.source_resources()?;
     let label_col = chart
@@ -641,7 +641,7 @@ pub(crate) fn prepare(
 fn prepare_spans(
     base: f64,
     deltas: &[f64],
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     alpha: &crate::alpha::PreparedAlpha,
 ) -> Result<(Vec<WaterfallSpan>, (f64, f64)), Error> {
     data.source_resources()?;

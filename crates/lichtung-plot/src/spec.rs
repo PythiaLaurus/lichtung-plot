@@ -642,7 +642,7 @@ use crate::Error;
 /// Shared immutable inputs for one plot renderer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a, 'src> {
-    pub(crate) data: crate::data::PlotData<'a>,
+    pub(crate) data: crate::data::PlotData<'src, 'a>,
     pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
     // An embedded content-sized child still fills its parent's arranged row.
@@ -673,7 +673,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         PlotRenderContext { theme, ..self }
     }
     pub(crate) fn new(
-        data: crate::data::PlotData<'a>,
+        data: crate::data::PlotData<'src, 'a>,
         panel: PixelRect,
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
@@ -695,8 +695,8 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     }
 
     pub(crate) fn with_source_rows(
-        data: crate::data::PlotData<'a>,
-        source_rows: &'a crate::SourceRows,
+        data: crate::data::PlotData<'src, 'a>,
+        source_rows: &'src crate::SourceRows,
         panel: PixelRect,
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {

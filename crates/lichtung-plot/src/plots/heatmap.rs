@@ -1416,7 +1416,7 @@ pub(crate) fn measure(
 
 fn category_levels(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     x: &[String],
     y: &[String],
 ) -> Result<[Vec<String>; 2], Error> {
@@ -1448,12 +1448,11 @@ fn category_levels(
     }
 }
 
-pub(crate) fn prepare<'a>(
+pub(crate) fn prepare(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
     selection: ContinuousColorScale,
 ) -> Result<HeatmapData, Error> {
-    let data = data.into();
     validate_options(chart)?;
     let alpha =
         chart
@@ -1826,7 +1825,7 @@ fn resolve_null_row_annotations(
 }
 
 fn normalized_categories(
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     column: &str,
     axis: &str,
 ) -> Result<Vec<String>, Error> {

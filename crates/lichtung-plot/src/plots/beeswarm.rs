@@ -137,7 +137,7 @@ fn packing_radius(
 
 pub(crate) fn prepare(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     selection: crate::theme::ContinuousColorScale,
 ) -> Result<PreparedBeeswarm, Error> {
     let alpha =

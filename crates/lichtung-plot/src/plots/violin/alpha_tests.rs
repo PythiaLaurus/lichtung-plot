@@ -40,7 +40,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     .erase();
     let prepared = prepare(
         &source,
-        PlotData::with_rows(&source, &[3, 0, 2], &[200, 900, 800]),
+        PlotData::with_rows(source.description(), &[3, 0, 2], &[200, 900, 800]),
         None,
     )
     .unwrap();

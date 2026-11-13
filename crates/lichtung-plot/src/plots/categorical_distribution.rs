@@ -59,7 +59,7 @@ impl PreparedDistribution {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources()?;
         let keys = if !self.hue_levels().is_empty() {
@@ -102,7 +102,7 @@ impl PreparedDistribution {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
@@ -183,7 +183,7 @@ impl PreparedDistribution {
     }
     pub(crate) fn new(
         chart: &Plot,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;

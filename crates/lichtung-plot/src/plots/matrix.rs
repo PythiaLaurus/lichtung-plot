@@ -137,7 +137,7 @@ impl PreparedMatrixAxes {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let colors = CategoryColors::resolve(
@@ -259,7 +259,7 @@ impl PreparedMatrixAxes {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
         let mapped = crate::data::source::collect_source(
@@ -402,7 +402,7 @@ impl MatrixPayload {
 
 pub(crate) fn prepare_axes(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<PreparedMatrixAxes, Error> {
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
@@ -1179,7 +1179,7 @@ fn select_diagonal_kde(
 fn build_groups(
     chart: &Plot,
     cols: &[&str],
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let alpha =
         chart
@@ -1360,7 +1360,7 @@ fn matrix_group_context(
 }
 
 fn extract_columns_f64(
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     cols: &[&str],
 ) -> Result<Vec<Vec<f64>>, Error> {
     let columns = crate::data::source::collect_source(

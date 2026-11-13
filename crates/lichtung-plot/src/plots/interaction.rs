@@ -220,7 +220,7 @@ impl PreparedInteraction {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
         let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
         let parent = if has_hue {
@@ -263,7 +263,7 @@ impl PreparedInteraction {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
@@ -336,7 +336,7 @@ pub(crate) struct PreparedInteractionInputs {
 )]
 pub(crate) fn prepare(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     parent: Option<&ObservedCollectives>,
 ) -> Result<PreparedInteraction, Error> {
     data.validate_row_source()?;

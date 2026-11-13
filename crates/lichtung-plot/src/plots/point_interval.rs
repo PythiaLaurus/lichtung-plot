@@ -19,7 +19,7 @@ pub(crate) struct PointIntervalRow {
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let rows = prepare(chart, data)?;
     if let Some(limits) = chart.description().x_axis_spec().limits {
@@ -36,11 +36,10 @@ pub(crate) fn shared_x_domain(
     point_interval_display_range(range, chart.description().x_axis_spec())
 }
 
-pub(crate) fn prepare<'a>(
+pub(crate) fn prepare(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
-    let data = data.into();
     let alpha =
         chart
             .description()
@@ -128,7 +127,7 @@ pub(crate) fn prepare<'a>(
 fn apply_category_order(
     rows: &mut [PointIntervalRow],
     order: &CategoryOrder,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(), Error> {
     match order {
         CategoryOrder::Observed => {}

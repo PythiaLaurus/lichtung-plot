@@ -224,7 +224,7 @@ impl PreparedLine {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let map = CategoryColors::resolve(
@@ -318,7 +318,7 @@ impl PreparedLine {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (map, accent) = self.resolved_colors(chart, theme, data)?;
@@ -433,7 +433,7 @@ impl PreparedLine {
 
     pub(crate) fn new(
         chart: &Plot,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
         let mut prepared = Self::prepare_scientific(chart, data, conditions)?;
@@ -478,7 +478,7 @@ impl PreparedLine {
     )]
     fn prepare_scientific(
         chart: &Plot,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
@@ -812,7 +812,7 @@ impl PreparedLine {
     }
 }
 
-pub(crate) fn shared_x_domain(chart: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
+pub(crate) fn shared_x_domain(chart: &Plot, data: PlotData<'_, '_>) -> Result<(f64, f64), Error> {
     let prepared = PreparedLine::prepare_scientific(chart, data, None)?;
     if prepared.conditions.is_some() {
         return Err(Error::Data(
@@ -865,7 +865,7 @@ fn project(
     prepared: &PreparedLine,
     layout: crate::layout::Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let mut payload = LinePayload {

@@ -372,7 +372,7 @@ fn project(
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let left = crate::data::strict_finite_f64(
         data,
@@ -397,11 +397,10 @@ pub(crate) fn shared_x_domain(
     )
 }
 
-pub(crate) fn prepare<'a>(
+pub(crate) fn prepare(
     chart: &crate::builder::PlotDescription,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<DumbbellData, Error> {
-    let data = data.into();
     data.validate_row_source()?;
     let source = chart;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;

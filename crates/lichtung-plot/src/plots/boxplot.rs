@@ -179,7 +179,7 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn prepare(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<PreparedBoxplot, Error> {
     let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;

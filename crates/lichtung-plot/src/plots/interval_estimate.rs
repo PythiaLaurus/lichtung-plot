@@ -292,7 +292,7 @@ impl PreparedEstimate {
 
     pub(crate) fn new<'a>(
         chart: &Plot,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
@@ -434,7 +434,7 @@ pub(crate) struct EstimateTuple {
 
 pub(crate) fn prepare_estimate_tuples(
     chart: &crate::builder::PlotDescription,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     family: &str,
     require_intervals: bool,
 ) -> Result<Vec<Option<EstimateTuple>>, Error> {
@@ -668,7 +668,7 @@ fn not_estimable_text_x(
 
 pub(crate) fn axis_categories(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     family: &str,
 ) -> Result<Vec<String>, Error> {
     let column = chart
@@ -688,7 +688,7 @@ pub(crate) fn axis_categories(
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let forest = chart.kind() == crate::spec::PlotKind::Forest;
     let family = if forest { "forest" } else { "coefficient" };
@@ -748,7 +748,7 @@ pub(crate) fn shared_x_domain(
 )]
 fn prepare_model<'a>(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
 ) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
     let alpha =

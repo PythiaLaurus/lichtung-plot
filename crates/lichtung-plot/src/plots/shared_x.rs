@@ -33,13 +33,13 @@ pub(crate) fn domain(
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     DOMAIN_PREPARATIONS.with(|count| count.set(count.get() + 1));
-    let data = crate::data::PlotData::from(chart).with_operation(resources);
+    let data = crate::data::PlotData::new(chart.description()).with_operation(resources);
     domain_with_data(chart, data)
 }
 
 pub(super) fn domain_with_data(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let range = match chart.kind() {
         PlotKind::Scatter | PlotKind::Regression => {

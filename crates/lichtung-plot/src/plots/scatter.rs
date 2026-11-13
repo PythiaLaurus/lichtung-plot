@@ -162,7 +162,7 @@ impl PreparedScatter {
 
     pub(crate) fn new(
         chart: &crate::builder::PlotDescription,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
@@ -247,7 +247,7 @@ impl PreparedScatter {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources()?;
         let keys = if let Some(global) = chart.global_hue_levels() {
@@ -279,7 +279,7 @@ impl PreparedScatter {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let map = self.resolved_colors(chart, theme, data)?;
@@ -351,7 +351,7 @@ impl PreparedScatter {
         chart: &Plot,
         projection: &crate::layout::Projection,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<ScatterPayload, Error> {
         #[cfg(test)]
         STAGES.with(|stages| {

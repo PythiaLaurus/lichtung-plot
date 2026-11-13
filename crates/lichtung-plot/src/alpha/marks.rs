@@ -17,7 +17,11 @@ pub(crate) struct ObservationAlpha {
 }
 
 impl ObservationAlpha {
-    pub(crate) fn resolve(data: PlotData<'_>, alpha: &PreparedAlpha, row: usize) -> Result<Self> {
+    pub(crate) fn resolve(
+        data: PlotData<'_, '_>,
+        alpha: &PreparedAlpha,
+        row: usize,
+    ) -> Result<Self> {
         Ok(Self {
             slot: data.row_index(row),
             source_row: data.source_row(row),

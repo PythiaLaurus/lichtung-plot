@@ -68,7 +68,7 @@ impl NumericSource {
             raw_limits: self.raw_limits,
         })
     }
-    pub(crate) fn for_data(plot: &Plot, data: crate::data::PlotData<'_>) -> Result<Self> {
+    pub(crate) fn for_data(plot: &Plot, data: crate::data::PlotData<'_, '_>) -> Result<Self> {
         Self::for_plot(plot, data.source_resources()?, data.numeric_facet())
     }
     pub(crate) fn for_plot(

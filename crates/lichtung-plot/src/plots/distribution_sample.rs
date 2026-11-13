@@ -52,7 +52,7 @@ impl DistributionSample {
 )]
 pub(crate) fn prepare_scoped(
     chart: &Plot,
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<DistributionSample, Error> {

@@ -20,8 +20,8 @@ use crate::spec::{
 use crate::{HistogramGeometry, NumericFormat, RaincloudGeometry};
 
 impl Plot {
-    pub(crate) const fn data(&self) -> crate::data::PlotData<'_> {
-        crate::data::PlotData::new(self)
+    pub(crate) const fn data(&self) -> crate::data::PlotData<'_, '_> {
+        crate::data::PlotData::new(self.description())
     }
 }
 

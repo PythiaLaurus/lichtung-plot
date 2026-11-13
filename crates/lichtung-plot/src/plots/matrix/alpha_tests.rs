@@ -25,7 +25,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     .erase();
     let prepared = prepare_axes(
         &source,
-        crate::data::PlotData::with_rows(&source, &[2, 0, 1], &[300, 100, 200]),
+        crate::data::PlotData::with_rows(source.description(), &[2, 0, 1], &[300, 100, 200]),
     )
     .unwrap();
     assert_eq!(

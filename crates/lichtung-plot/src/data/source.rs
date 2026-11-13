@@ -3,9 +3,9 @@
 use super::PlotData;
 use crate::Error;
 
-pub(crate) struct RowSourceContext<'a> {
-    source: &'a crate::Plot,
-    operation: &'a crate::font::canonical::OperationContext,
+pub(crate) struct RowSourceContext<'src> {
+    source: &'src crate::builder::PlotDescription,
+    root_identity: crate::orchestrator::registration::RootIdentity,
 }
 
 pub(crate) fn sort_numeric_source(values: &mut [f64]) {
@@ -36,8 +36,8 @@ fn sift<T>(values: &mut [T], mut root: usize, compare: &impl Fn(&T, &T) -> std::
     }
 }
 
-impl<'a> PlotData<'a> {
-    pub(crate) fn bind_row_source(self) -> Result<RowSourceContext<'a>, Error> {
+impl<'src, 'op> PlotData<'src, 'op> {
+    pub(crate) fn bind_row_source(self) -> Result<RowSourceContext<'src>, Error> {
         if !self.is_full_plot() {
             return Err(Error::Render(
                 "row topology census requires the original source".into(),
@@ -47,22 +47,22 @@ impl<'a> PlotData<'a> {
             .operation
             .ok_or_else(|| Error::Render("row topology census requires an operation".into()))?;
         Ok(RowSourceContext {
-            source: self.plot,
-            operation,
+            source: self.source,
+            root_identity: operation.root_identity(),
         })
     }
 
-    pub(crate) fn with_row_source(mut self, source: Option<&'a RowSourceContext<'a>>) -> Self {
-        self.row_topology = source;
+    pub(crate) fn with_row_source(mut self, source: Option<&'op RowSourceContext<'src>>) -> Self {
+        self.row_source = source;
         self
     }
 
     pub(crate) fn validate_row_source(self) -> Result<(), Error> {
-        if let Some(source) = self.row_topology {
-            if !std::ptr::eq(self.plot, source.source)
+        if let Some(source) = self.row_source {
+            if !std::ptr::eq(self.source, source.source)
                 || self
                     .operation
-                    .is_none_or(|operation| !operation.same_operation(source.operation))
+                    .is_none_or(|operation| operation.root_identity() != source.root_identity)
             {
                 return Err(Error::Render(
                     "row source belongs to a different source or operation".into(),
@@ -175,6 +175,51 @@ mod tests {
     use crate::font::canonical::OperationContext;
 
     #[test]
+    fn native_columns_outlive_selected_views_without_retaining_operation_resources() {
+        let source = crate::Plot::scatter(
+            crate::NumericValues::new("x", [10.0, 20.0, 30.0]),
+            crate::NumericValues::new("y", [3.0, 2.0, 1.0]),
+        )
+        .erase();
+        let (column, binding, alive) = {
+            let operation = OperationContext::new();
+            let binding = source
+                .data()
+                .with_operation(&operation)
+                .bind_row_source()
+                .unwrap();
+            let rows = vec![2, 0];
+            let diagnostic = vec![9001, 700];
+            let selected = PlotData::with_rows(source.description(), &rows, &diagnostic)
+                .with_operation(&operation)
+                .with_row_source(Some(&binding));
+            selected.validate_row_source().unwrap();
+            assert_eq!((selected.row_index(0), selected.source_row(0)), (2, 9001));
+            (
+                selected.column(crate::data::X).unwrap(),
+                binding,
+                operation.liveness_probe(),
+            )
+        };
+        assert!(!alive());
+        let crate::data::DataColumn::Numeric(values) = column else {
+            panic!("native numeric source")
+        };
+        assert_eq!(
+            values.get(2).flatten().unwrap().to_bits(),
+            30.0_f64.to_bits()
+        );
+        let foreign = OperationContext::new();
+        assert!(source
+            .data()
+            .with_operation(&foreign)
+            .with_row_source(Some(&binding))
+            .validate_row_source()
+            .is_err());
+        assert!(!alive());
+    }
+
+    #[test]
     fn row_source_is_bound_to_its_source_and_shared_operation() {
         let source = crate::Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0, 3.0]),
@@ -196,7 +241,7 @@ mod tests {
         let clone = operation.clone();
         let rows = [2, 0];
         let ids = [302, 300];
-        let data = PlotData::with_rows(&source, &rows, &ids)
+        let data = PlotData::with_rows(source.description(), &rows, &ids)
             .with_operation(&clone)
             .with_row_source(Some(&binding));
         data.validate_row_source().unwrap();

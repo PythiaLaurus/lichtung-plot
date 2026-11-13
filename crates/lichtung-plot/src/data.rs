@@ -60,16 +60,22 @@ pub(crate) struct FacetAxisSources<'a> {
 
 /// A borrowed semantic plot view, optionally restricted to selected source rows.
 #[derive(Clone, Copy)]
-pub(crate) struct PlotData<'a> {
-    numeric_facet: Option<&'a crate::FacetCell>,
-    plot: &'a crate::builder::Plot,
-    rows: Option<&'a [usize]>,
-    source_rows: Option<&'a [usize]>,
-    operation: Option<&'a crate::font::canonical::OperationContext>,
-    row_topology: Option<&'a source::RowSourceContext<'a>>,
+pub(crate) struct PlotData<'src, 'op> {
+    source: &'src crate::builder::PlotDescription,
+    rows: Option<&'op [usize]>,
+    diagnostic_rows: DiagnosticRows<'src, 'op>,
+    numeric_facet: Option<&'op crate::FacetCell>,
+    operation: Option<&'op crate::font::canonical::OperationContext>,
+    row_source: Option<&'op source::RowSourceContext<'src>>,
 }
 
-impl std::fmt::Debug for PlotData<'_> {
+#[derive(Clone, Copy)]
+pub(crate) enum DiagnosticRows<'src, 'op> {
+    Native(Option<&'src crate::SourceRows>),
+    Selected(&'op [usize]),
+}
+
+impl std::fmt::Debug for PlotData<'_, '_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PlotData")
@@ -79,63 +85,62 @@ impl std::fmt::Debug for PlotData<'_> {
     }
 }
 
-impl<'a> PlotData<'a> {
-    pub(crate) const fn new(plot: &'a crate::builder::Plot) -> Self {
+impl<'src, 'op> PlotData<'src, 'op> {
+    pub(crate) const fn new(source: &'src crate::builder::PlotDescription) -> Self {
         Self {
-            plot,
+            source,
             numeric_facet: None,
             rows: None,
-            source_rows: None,
+            diagnostic_rows: DiagnosticRows::Native(None),
             operation: None,
-            row_topology: None,
+            row_source: None,
         }
     }
 
-    pub(crate) fn map_source_rows(mut self, source_rows: &'a crate::SourceRows) -> Self {
-        self.source_rows = Some(source_rows.as_slice());
+    pub(crate) fn map_source_rows(mut self, source_rows: &'src crate::SourceRows) -> Self {
+        self.diagnostic_rows = DiagnosticRows::Native(Some(source_rows));
         self
     }
 
     pub(crate) const fn with_rows(
-        plot: &'a crate::builder::Plot,
-        rows: &'a [usize],
-        source_rows: &'a [usize],
+        source: &'src crate::builder::PlotDescription,
+        rows: &'op [usize],
+        source_rows: &'op [usize],
     ) -> Self {
         Self {
-            plot,
+            source,
             numeric_facet: None,
             rows: Some(rows),
-            source_rows: Some(source_rows),
+            diagnostic_rows: DiagnosticRows::Selected(source_rows),
             operation: None,
-            row_topology: None,
+            row_source: None,
         }
     }
 
     /// Axis source work uses the root counters; ordinary mark preparation remains separate.
     pub(crate) fn with_operation(
         mut self,
-        resources: &'a crate::font::canonical::OperationContext,
+        resources: &'op crate::font::canonical::OperationContext,
     ) -> Self {
         self.operation = Some(resources);
         self
     }
 
-    pub(crate) fn with_numeric_facet(mut self, facet: Option<&'a crate::FacetCell>) -> Self {
+    pub(crate) fn with_numeric_facet(mut self, facet: Option<&'op crate::FacetCell>) -> Self {
         self.numeric_facet = facet;
         self
     }
-    pub(crate) const fn numeric_facet(self) -> Option<&'a crate::FacetCell> {
+    pub(crate) const fn numeric_facet(self) -> Option<&'op crate::FacetCell> {
         self.numeric_facet
     }
 
     pub(crate) fn facet_selector(
         self,
-    ) -> Result<Option<crate::orchestrator::registration::FacetSelector<'a, 'a>>, Error> {
+    ) -> Result<Option<crate::orchestrator::registration::FacetSelector<'src, 'op>>, Error> {
         if self.height() == 0 {
             return Ok(None);
         }
-        self.plot
-            .description()
+        self.source
             .facet_spec()
             .zip(self.numeric_facet)
             .map(|(schema, levels)| {
@@ -146,24 +151,23 @@ impl<'a> PlotData<'a> {
 
     pub(crate) fn source_resources(
         self,
-    ) -> Result<&'a crate::font::canonical::OperationContext, Error> {
+    ) -> Result<&'op crate::font::canonical::OperationContext, Error> {
         self.operation.ok_or_else(|| {
             Error::Render("numeric source requires the current root operation".into())
         })
     }
 
-    pub(crate) fn column(self, key: &str) -> Result<DataColumn<'a>, Error> {
+    pub(crate) fn column(self, key: &str) -> Result<DataColumn<'src>, Error> {
         #[cfg(test)]
         SOURCE_COLUMN_READS.with(|calls| calls.set(calls.get() + 1));
-        self.plot
-            .description()
+        self.source
             .data_column(key)
             .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
     }
 
     pub(crate) fn height(self) -> usize {
         self.rows
-            .map_or_else(|| self.plot.description().row_count(), <[usize]>::len)
+            .map_or_else(|| self.source.row_count(), <[usize]>::len)
     }
 
     pub(crate) const fn is_full_plot(self) -> bool {
@@ -171,14 +175,17 @@ impl<'a> PlotData<'a> {
     }
 
     pub(crate) fn source_row(self, local_row: usize) -> usize {
-        self.source_rows
-            .and_then(|rows| rows.get(local_row))
+        let diagnostic = match self.diagnostic_rows {
+            DiagnosticRows::Native(rows) => rows.and_then(|rows| rows.as_slice().get(local_row)),
+            DiagnosticRows::Selected(rows) => rows.get(local_row),
+        };
+        diagnostic
             .copied()
             .unwrap_or_else(|| self.row_index(local_row))
     }
 
     pub(crate) fn estimate_statuses(self) -> Result<Option<Vec<crate::EstimateStatus>>, Error> {
-        let Some(statuses) = self.plot.description().estimate_status_values() else {
+        let Some(statuses) = self.source.estimate_status_values() else {
             return Ok(None);
         };
         crate::data::source::collect_source((0..self.height())
@@ -216,18 +223,11 @@ impl<'a> PlotData<'a> {
     }
 }
 
-impl<'a> From<&'a crate::builder::Plot> for PlotData<'a> {
-    fn from(plot: &'a crate::builder::Plot) -> Self {
-        Self::new(plot)
-    }
-}
-
-pub(crate) fn strict_finite_f64<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn strict_finite_f64(
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<f64>, Error> {
-    let data = data.into();
     let DataColumn::Numeric(values) = data.column(column)? else {
         return Err(Error::Data(format!(
             "{plot}: value {:?} must be numeric",
@@ -359,12 +359,11 @@ pub(crate) fn strict_source_normalized_strings(
     }))
 }
 
-pub(crate) fn nullable_finite_f64<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn nullable_finite_f64(
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<Option<f64>>, Error> {
-    let data = data.into();
     let DataColumn::Numeric(values) = data.column(column)? else {
         return Err(Error::Data(format!(
             "{plot}: value {:?} must be numeric",
@@ -385,12 +384,11 @@ pub(crate) fn nullable_finite_f64<'a>(
     }))
 }
 
-pub(crate) fn strict_bool<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn strict_bool(
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<bool>, Error> {
-    let data = data.into();
     let DataColumn::Boolean(values) = data.column(column)? else {
         return Err(Error::Data(format!(
             "{plot}: value {:?} must be Boolean",
@@ -410,13 +408,12 @@ pub(crate) fn strict_bool<'a>(
     }))
 }
 
-pub(crate) fn aligned_finite_f64<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn aligned_finite_f64(
+    data: PlotData<'_, '_>,
     x_column: &str,
     y_column: &str,
     plot: &str,
 ) -> Result<Vec<(f64, f64)>, Error> {
-    let data = data.into();
     let x = optional_finite_f64(data, x_column, plot)?;
     let y = optional_finite_f64(data, y_column, plot)?;
     if x.len() != y.len() {
@@ -433,13 +430,12 @@ pub(crate) fn aligned_finite_f64<'a>(
     Ok(pairs)
 }
 
-pub(crate) fn aligned_finite_rows<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn aligned_finite_rows(
+    data: PlotData<'_, '_>,
     x_column: &str,
     y_column: &str,
     plot: &str,
 ) -> Result<Vec<(usize, f64, f64)>, Error> {
-    let data = data.into();
     let x = optional_finite_f64(data, x_column, plot)?;
     let y = optional_finite_f64(data, y_column, plot)?;
     if x.len() != y.len() {
@@ -462,7 +458,7 @@ pub(crate) fn aligned_finite_rows<'a>(
 }
 
 fn optional_finite_f64(
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<Option<f64>>, Error> {
@@ -524,8 +520,8 @@ pub(crate) struct ObservedCollectives {
     pub(crate) collapsed: bool,
 }
 
-pub(crate) fn observed_collectives<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn observed_collectives(
+    data: PlotData<'_, '_>,
     group_column: Option<&str>,
     group_name: Option<&str>,
     hue_column: Option<&str>,
@@ -533,7 +529,6 @@ pub(crate) fn observed_collectives<'a>(
     retained_rows: Option<&[usize]>,
     plot: &str,
 ) -> Result<ObservedCollectives, Error> {
-    let data = data.into();
     let mut row_indices = Vec::new();
     crate::data::source::reserve_source(
         &mut row_indices,
@@ -650,7 +645,7 @@ pub(crate) fn finish_observed_collectives(
 }
 
 fn strict_strings_for_rows(
-    data: PlotData<'_>,
+    data: PlotData<'_, '_>,
     column: &str,
     rows: &[usize],
     plot: &str,
@@ -674,14 +669,13 @@ fn strict_strings_for_rows(
     ))
 }
 
-pub(crate) fn collective_channels<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn collective_channels(
+    data: PlotData<'_, '_>,
     group_column: Option<&str>,
     hue_column: Option<&str>,
     cells: Option<&[String]>,
     plot: &str,
 ) -> Result<CollectiveChannels, Error> {
-    let data = data.into();
     let groups = group_column
         .map(|column| strict_strings(data, column, plot))
         .transpose()?;
@@ -864,12 +858,11 @@ pub(crate) fn explicit_category_order(
     Ok(seen)
 }
 
-pub(crate) fn strict_strings<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn strict_strings(
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<String>, Error> {
-    let data = data.into();
     let DataColumn::Category(values) = data.column(column)? else {
         return Err(Error::Data(format!(
             "{plot}: value {:?} must be categorical",
@@ -889,13 +882,12 @@ pub(crate) fn strict_strings<'a>(
     }))
 }
 
-pub(crate) fn strict_normalized_strings<'a>(
-    data: impl Into<PlotData<'a>>,
+pub(crate) fn strict_normalized_strings(
+    data: PlotData<'_, '_>,
     column: &str,
     plot: &str,
     role: &str,
 ) -> Result<Vec<String>, Error> {
-    let data = data.into();
     crate::data::source::collect_source(
         strict_strings(data, column, plot)?
             .into_iter()
@@ -1009,7 +1001,7 @@ mod tests {
         .erase();
 
         let channels = observed_collectives(
-            &plot,
+            plot.data(),
             plot.description().group_col(),
             plot.description().group_name(),
             plot.description().hue_col(),

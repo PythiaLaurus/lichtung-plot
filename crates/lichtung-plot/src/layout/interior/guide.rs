@@ -287,7 +287,7 @@ impl PreparedInteriorInputs {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         scope: Option<&str>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         self.route.validate(chart.description())?;

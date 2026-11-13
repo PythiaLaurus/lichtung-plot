@@ -176,7 +176,7 @@ impl HistogramSemantics {
 
     pub(crate) fn new(
         source: &crate::builder::PlotDescription,
-        data: PlotData<'_>,
+        data: PlotData<'_, '_>,
         owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
@@ -491,7 +491,7 @@ pub(crate) fn project(
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     if let Some(input) = chart.description().histogram_composite_geometry_input() {
         return input.validate();

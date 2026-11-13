@@ -111,7 +111,7 @@ impl PreparedMarginal {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let keys = chart.global_hue_levels().unwrap_or(&self.hues);
@@ -150,7 +150,7 @@ impl PreparedMarginal {
         &self,
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_>,
+        data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors, &accents)
@@ -856,7 +856,7 @@ pub(crate) fn measure(
 
 pub(crate) fn prepare(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<PreparedMarginal, Error> {
     let (mut groups, hues) = build_groups(chart, data)?;
     let fill_alpha = chart.description().prepare_collective_alpha(
@@ -1013,7 +1013,7 @@ fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 
 
 pub(crate) fn shared_x_domain(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let (groups, _) = build_groups(chart, data)?;
 
@@ -1030,11 +1030,10 @@ pub(crate) fn shared_x_domain(
     Ok(range)
 }
 
-fn build_groups<'a>(
+fn build_groups(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    let data = data.into();
     let alpha =
         chart
             .description()

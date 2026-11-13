@@ -279,7 +279,7 @@ fn draw_shared_facet_axis_labels(
 pub(super) fn facet_label(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
 ) -> Result<String, Error> {
     data.source_resources()?;
     let mut label = String::new();
@@ -305,7 +305,7 @@ pub(super) fn facet_label(
 pub(super) fn strip_sources(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<crate::Text>, Error> {
     if theme.text_layouts.facet.iter().all(Option::is_none) {
@@ -338,7 +338,7 @@ pub(super) fn strip_sources(
 pub(super) fn strip_plans(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     scope: &crate::layout::fit::FitScope,
@@ -366,7 +366,7 @@ pub(super) fn strip_plans(
 pub(super) fn strip_widths(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     strip_sources(plot, cell, data, theme)?.iter().try_fold(
@@ -387,7 +387,7 @@ pub(super) fn strip_requirement(
     axes: &crate::layout::AxisSystemPlan,
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_>,
+    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     panel: PixelRect,
     scope: &crate::layout::fit::FitScope,
@@ -428,8 +428,8 @@ mod tests {
         {
             let resources = OperationContext::new();
 
-            let data =
-                crate::data::PlotData::with_rows(&plot, &rows, &ids).with_operation(&resources);
+            let data = crate::data::PlotData::with_rows(plot.description(), &rows, &ids)
+                .with_operation(&resources);
             let result = facet_label(&plot, &cell, data);
             assert_eq!(result.unwrap(), "ab = cd");
 

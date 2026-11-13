@@ -336,11 +336,11 @@ pub(super) fn extract_panels(
 }
 
 pub(super) fn validate_significance_facet_anchors(
-    plot: &Plot,
+    plot: &PlotDescription,
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
     let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
-    for annotation in plot.description().significance_annotations() {
+    for annotation in plot.significance_annotations() {
         let Some(cell) = annotation.facet_cell() else {
             return Err(Error::Render(
                 "faceted significance annotation must identify one FacetCell; annotations are never replicated across facets".into(),

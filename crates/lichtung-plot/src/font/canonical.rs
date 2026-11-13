@@ -1182,6 +1182,10 @@ impl OperationContext {
         Arc::ptr_eq(&self.identity, &other.identity)
     }
 
+    pub(crate) fn root_identity(&self) -> crate::orchestrator::registration::RootIdentity {
+        crate::orchestrator::registration::RootIdentity(Arc::clone(&self.identity))
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             identity: Arc::new(()),
