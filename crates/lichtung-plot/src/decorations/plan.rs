@@ -184,9 +184,9 @@ impl ResolvedLegend {
 }
 
 pub(crate) struct PanelPlan {
-    // Content requests expose their preferred frame here; embedded fill may
-    // arrange a taller physical panel_box under the owning Grid's row maximum.
-    pub(crate) frame_box: PixelRect,
+    pub(crate) selected: crate::orchestrator::assignment::PlotMeasureAssignment,
+    pub(crate) preference:
+        Option<std::sync::Arc<crate::orchestrator::assignment::PlotFrameHeightPreference>>,
     pub(crate) panel_box: PixelRect,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
@@ -889,11 +889,9 @@ fn plan_panel_attempt(
             .as_ref()
             .map_or(0.0, |guide| guide.metrics.outside_gap),
     );
-    let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter);
-    let owned_ink = round.insets(address, FeedbackKind::OwnedInk);
-    for (gutter, ink) in assigned_gutters.iter_mut().zip(owned_ink) {
-        *gutter += ink;
-    }
+    let insets = crate::orchestrator::assignment::ParentInsets::consumed(round, address);
+    let assigned_gutters = insets.assigned_gutters();
+    let owned_ink = insets.owned_ink_pixels();
     let panel_box = match frame.assign_fit(
         cell,
         legend
@@ -1558,29 +1556,23 @@ fn plan_panel_attempt(
         legend.observe_feedback(round)?;
     }
     geometry.observe_feedback(round)?;
+    let selected = crate::orchestrator::assignment::PlotMeasureAssignment {
+        dimensions: plot.measure_dimensions()?,
+        frame: cell,
+        content_height: context.content_height,
+        fill_content_height: context.fill_content_height,
+        content_preference: context.content_preference,
+        insets,
+    };
+    let preference = context.content_height.then(|| {
+        std::sync::Arc::new(crate::orchestrator::assignment::PlotFrameHeightPreference {
+            height: crate::orchestrator::assignment::completion_frame(kind, &selected, &result)
+                .height(),
+        })
+    });
     Ok(FitOutcome::Measured(PanelPlan {
-        frame_box: if context.fill_content_height {
-            PixelRect::new(
-                cell.x0,
-                cell.x1,
-                cell.y0,
-                cell.y0 + context.content_preference.unwrap_or(cell.height()),
-            )
-        } else if context.content_height
-            && matches!(
-                kind,
-                PlotKind::Heatmap | PlotKind::Beeswarm | PlotKind::Matrix
-            )
-        {
-            PixelRect::new(
-                cell.x0,
-                cell.x1,
-                cell.y0,
-                result.layout.projection.panel_box().y1 + assigned_gutters[3],
-            )
-        } else {
-            cell
-        },
+        selected,
+        preference,
         panel_box,
         result,
         legend: resolved,

@@ -683,16 +683,21 @@ impl FeedbackRound {
         reason = "legacy pixel adapters consume exact-root-bounded layout quanta"
     )]
     pub(crate) fn insets(&self, target: &ComponentAddress, kind: FeedbackKind) -> [f64; 4] {
+        self.insets_quanta(target, kind)
+            .map(|value| value as f64 / 1024.0)
+    }
+
+    pub(crate) fn insets_quanta(&self, target: &ComponentAddress, kind: FeedbackKind) -> [i64; 4] {
         let index = find_index(&self.state.consumed, |entry| {
             entry.target == *target
                 && entry.kind == kind
                 && matches!(entry.value, FeedbackValue::Insets(_))
         });
-        index.map_or([0.0; 4], |index| {
+        index.map_or([0; 4], |index| {
             let FeedbackValue::Insets(values) = self.state.consumed[index].value else {
                 unreachable!("matched inset feedback")
             };
-            values.map(|value| value as f64 / 1024.0)
+            values
         })
     }
 

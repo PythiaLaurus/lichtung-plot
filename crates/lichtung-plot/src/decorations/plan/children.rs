@@ -775,7 +775,15 @@ mod tests {
                                 inputs: Inputs::new(&source, context, &owner, round)?,
                                 role: LegendRole::Suppressed,
                                 result: Arc::new(PanelPlan {
-                                    frame_box: context.panel,
+                                    selected: crate::orchestrator::assignment::PlotMeasureAssignment {
+                                        dimensions: crate::orchestrator::assignment::PlotMeasureDimensions { canvas: assigned.assigned_size()?, output_override: None },
+                                        frame: context.panel,
+                                        content_height: context.content_height,
+                                        fill_content_height: context.fill_content_height,
+                                        content_preference: context.content_preference,
+                                        insets: crate::orchestrator::assignment::ParentInsets::consumed(round, &owner),
+                                    },
+                                    preference: None,
                                     panel_box: context.panel,
                                     result: PlotRenderResult::new(
                                         crate::layout::Layout::envelope(

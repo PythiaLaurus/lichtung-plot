@@ -1162,11 +1162,25 @@ impl UnfacetedPlotPlan {
         let mut plot = panel_plan.plot_with_planned_limits(source);
         if content_height {
             let height = crate::layout::kernel::root_dimension(
-                canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
+                canvas_layout.height_for_body(
+                    panel_plan
+                        .preference
+                        .as_ref()
+                        .expect("content frame height preference")
+                        .height,
+                    theme,
+                )?,
             )?;
-            plot = plot.with_canvas_size(source.canvas_dimensions()?.0, height);
+            plot = plot.with_canvas_size(
+                panel_plan.selected.dimensions.canvas_size().dimensions()?.0,
+                height,
+            );
             let mut resized = plot.measured_canvas_layout(registered, intrinsic, theme)?;
-            resized.panel_box = panel_plan.frame_box;
+            resized.panel_box = crate::orchestrator::assignment::completion_frame(
+                kind,
+                &panel_plan.selected,
+                &panel_plan.result,
+            );
             canvas_layout = resized.into_shared();
         }
         round.observe_canvas(&canvas_layout)?;
