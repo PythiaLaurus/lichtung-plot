@@ -75,6 +75,8 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         .unwrap();
     let points = theme.marks.get_points().clone().primary(primary).unwrap();
     theme.marks = theme.marks.clone().points(points).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

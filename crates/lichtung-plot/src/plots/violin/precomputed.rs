@@ -11,7 +11,7 @@ use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::theme::{CategoryColors, ResolvedTheme};
+use crate::theme::CategoryColors;
 use crate::Plot;
 
 #[derive(Debug)]
@@ -24,7 +24,7 @@ pub(crate) struct PreparedRaincloud {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let crate::plots::categorical_distribution::PreparedDistribution::Supplied(prepared) =
         crate::plots::categorical_distribution::retained(chart)?
@@ -137,7 +137,7 @@ impl PreparedRaincloud {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -194,7 +194,7 @@ impl PreparedRaincloud {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -337,11 +337,11 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
 pub(super) fn measure_marks(
     chart: &Plot,
     input: &PreparedRaincloud,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let colors = crate::plots::categorical_distribution::retained(chart)?
         .resolved_colors(chart, theme, data)?;
@@ -375,7 +375,7 @@ fn project_cloud_and_summary(
     prepared: &PreparedRaincloudGroup,
     color: (u8, u8, u8),
     index: usize,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     payload: &mut DistributionPayload,
 ) -> Result<(), Error> {
     let group = prepared;
@@ -480,7 +480,7 @@ fn project_strip(
     prepared: &PreparedRaincloudGroup,
     style: &crate::render::backend::PointStyle,
     index: usize,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     payload: &mut DistributionPayload,
 
     scope: &crate::layout::fit::FitScope,

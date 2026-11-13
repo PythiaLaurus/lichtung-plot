@@ -15,7 +15,7 @@ mod tests;
     reason = "one explicit ellipsis transaction preserves complete source admission, paragraph context, source-bounded views and terminal handling"
 )]
 pub(crate) fn measure(
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -50,9 +50,13 @@ pub(crate) fn measure(
     let mut analysis = request.clone();
     analysis.edit_instructions().bounds = None;
     analysis.edit_instructions().wrapping = Some(crate::TextWrapping::NoSoftWrap);
-    let mut analysis_theme = theme.clone();
-    analysis_theme.text_height = None;
-    analysis_theme.text_padding = None;
+    let analysis_appearance = theme.theme.clone();
+    let mut analysis_theme = crate::text::TextRequestContext {
+        theme: &analysis_appearance,
+        ..*theme
+    };
+    analysis_theme.trial.height = None;
+    analysis_theme.trial.padding = None;
     let basis = match super::request::measure_current(
         &analysis_theme,
         source,

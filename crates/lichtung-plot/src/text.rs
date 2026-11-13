@@ -7,12 +7,14 @@ pub(crate) mod orientation;
 pub(crate) mod position;
 pub use orientation::{TextOrientation, TextRotation, TextRotationMode};
 pub(crate) mod roles;
+mod service;
 pub use layout::{
     TextAnchor, TextBounds, TextDirection, TextElision, TextEllipsis, TextFailure, TextOffset,
     TextOffsetFrame, TextOverflow, TextOverlap, TextVisibility, TextWrapping,
 };
 pub use position::{DataCoordinate, DataPosition, TextCoordinate, TextPosition};
 pub use roles::GuideTextRole;
+pub(crate) use service::{TextRequestContext, TextService};
 
 /// Authored display text with optional complete appearance and layout instructions.
 ///

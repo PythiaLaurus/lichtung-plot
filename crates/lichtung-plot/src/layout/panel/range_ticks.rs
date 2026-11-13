@@ -1,8 +1,6 @@
 use super::AxisSpec;
 #[cfg(test)]
 use super::{AxisSide, AxisTick, Projection};
-#[cfg(test)]
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
@@ -157,7 +155,7 @@ pub(crate) fn automatic_numeric_ticks(
     range: (f64, f64),
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<AxisTick>, Error> {
     Ok(super::sources::numeric_tick_plan(
         range,

@@ -63,7 +63,7 @@ pub(crate) struct HistogramSemantics {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_histogram
@@ -136,7 +136,7 @@ impl HistogramSemantics {
     pub(crate) fn alpha_guide(
         &self,
         _chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -326,7 +326,7 @@ impl HistogramPayload {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -388,7 +388,7 @@ pub(crate) fn measure_marks(
 pub(crate) fn project(
     prepared: &HistogramSemantics,
     layout: crate::layout::Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
     let project = |x, y| {
         let (x, y) = layout.projection.project(x, y);
@@ -888,6 +888,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "checks bins and independently supplied overlays across complete appearance edits"
+    )]
     fn histogram_bin_and_present_overlay_ink_are_independent_hard_inputs() {
         let sample = || {
             Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
@@ -903,7 +907,10 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
+        let text_service = crate::text::TextService::default();
+        let baseline = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         let curve = theme
             .marks
             .get_strokes()
@@ -931,7 +938,15 @@ mod tests {
             .unwrap();
         let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
+        assert_eq!(
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
+            baseline
+        );
         let outline = crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap();
         let bin = theme
             .marks
@@ -950,7 +965,9 @@ mod tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        let styled = chart.intrinsic_body_minimum(&theme).unwrap();
+        let styled = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
         let bin = theme
@@ -973,7 +990,15 @@ mod tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
+        assert_eq!(
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
+            baseline
+        );
 
         let source = sample()
             .composite(crate::HistogramComposite::KdeAndRug(
@@ -983,7 +1008,9 @@ mod tests {
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let overlay = chart.intrinsic_body_minimum(&theme).unwrap();
+        let overlay = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert_eq!(overlay.0.to_bits(), baseline.0.to_bits());
         assert_eq!(overlay.1.to_bits(), 140.0_f64.to_bits());
     }
@@ -1056,6 +1083,8 @@ mod tests {
         assert_eq!(prepared.curve, before.curve);
         assert_eq!(prepared.rugs, before.rugs);
         let theme = original.resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -1141,6 +1170,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_histogram.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);

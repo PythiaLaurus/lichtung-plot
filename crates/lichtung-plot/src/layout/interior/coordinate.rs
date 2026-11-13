@@ -29,7 +29,7 @@ impl Intrinsics {
     /// feedback, and hidden shared-axis labels cannot invalidate its analysis.
     pub(crate) fn prepared<'a>(
         plot: &'a Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<&'a Self, Error> {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
@@ -39,7 +39,7 @@ impl Intrinsics {
 
     pub(crate) fn prepare<'a>(
         axes: &'a crate::plots::shared_x::PreparedAxes,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: Option<&str>,
         y_labels_visible: bool,
     ) -> Result<&'a Self, Error> {
@@ -93,7 +93,7 @@ impl Intrinsics {
     )]
     fn analyze(
         axes: &crate::plots::shared_x::PreparedAxes,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         diagnostic_scope: Option<&str>,
         y_labels_visible: bool,
     ) -> Result<Self, Error> {
@@ -281,7 +281,7 @@ impl InteriorRoute {
     pub(crate) fn measure(
         self,
         plot: &Plot,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(match self {
@@ -505,7 +505,7 @@ impl InteriorRoute {
 /// Facet/Canvas track allocation remains with the existing parent adapters.
 pub(crate) fn canvas_layout(
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<crate::layout::RootFramePlan, PlanError> {
     use crate::decorations::title_block::plan::RootAlignments;
     let minimum = plot.intrinsic_body_minimum(theme)?;
@@ -574,6 +574,8 @@ mod intrinsic_tests {
             if tight_lines {
                 theme.typography.axes.tick_label.line_height_multiplier = 0.1;
             }
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let minimum = Intrinsics::prepared(&chart, &theme)
                 .unwrap()
                 .minimum(&chart);
@@ -639,6 +641,8 @@ mod intrinsic_tests {
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let measured = theme
                 .measure_text(
                     label,

@@ -145,7 +145,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach_with_guides_for_test(
         &self,
         plot: Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Plot, Error> {
         self.prepare_discrete_guides(
             &plot,
@@ -162,7 +162,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn prepare_intrinsics(
         &self,
         plot: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(), Error> {
         self.route.validate(plot)?;
         for (index, (scope, axes)) in self.axes.iter().enumerate() {
@@ -219,7 +219,7 @@ impl PreparedInteriorInputs {
 impl Plot {
     pub(crate) fn intrinsic_body_minimum(
         &self,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
             coordinate::Intrinsics::prepared(self, theme)?.minimum(self)

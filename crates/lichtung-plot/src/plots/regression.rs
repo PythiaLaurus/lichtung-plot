@@ -43,7 +43,7 @@ pub(crate) struct PreparedRegression {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_regression
@@ -115,7 +115,7 @@ impl PreparedRegression {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -163,7 +163,7 @@ impl PreparedRegression {
     /// fit confirms this producer's semantic input; a panel is not needed.
     pub(crate) fn guide_entries(
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         color: (u8, u8, u8),
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -320,7 +320,7 @@ impl RegressionPayload {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -408,7 +408,7 @@ pub(crate) fn project(
     chart: &Plot,
     prepared: &PreparedRegression,
     layout: crate::layout::Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
     let marks = theme.marks();
@@ -560,6 +560,8 @@ mod style_tests {
         primary.outline = None;
         let points = theme.marks.get_points().clone().primary(primary).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
+        let text_service = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let baseline = crate::plots::shared_x::prepare_panel_for_test(&base, &theme).unwrap();
         assert!(
@@ -591,6 +593,10 @@ mod style_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "checks independent observation, fit and band ink under complete appearance edits"
+    )]
     fn regression_observation_and_fit_ink_remeasure_with_custom_styles() {
         let source = Plot::regression(
             crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
@@ -601,7 +607,10 @@ mod style_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let before = chart.intrinsic_body_minimum(&theme).unwrap();
+        let text_service = crate::text::TextService::default();
+        let before = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         let radii = theme
             .marks
             .get_points()
@@ -611,7 +620,9 @@ mod style_tests {
             .unwrap();
         let points = theme.marks.get_points().clone().radii(radii).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        let sized = chart.intrinsic_body_minimum(&theme).unwrap();
+        let sized = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert_eq!(sized.0.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         let mut primary = theme.marks.get_points().get_primary().clone();
@@ -619,7 +630,15 @@ mod style_tests {
         primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
         let points = theme.marks.get_points().clone().primary(primary).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        assert_eq!(
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
+            before
+        );
         let fit = theme
             .marks
             .get_strokes()
@@ -638,7 +657,12 @@ mod style_tests {
         let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(
-            chart.intrinsic_body_minimum(&theme).unwrap(),
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
             (140.0, 140.0)
         );
         let fit = theme
@@ -658,7 +682,15 @@ mod style_tests {
             .unwrap();
         let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        assert_eq!(
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
+            before
+        );
         let mapped = chart.clone().with_alpha(
             AlphaTarget::Line,
             crate::alpha::AlphaEncoding::single(
@@ -666,9 +698,17 @@ mod style_tests {
             )
             .unwrap(),
         );
-        let mapped = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+        let mapped = crate::plots::shared_x::prepare_panel_for_test(
+            &mapped,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         assert_eq!(
-            intrinsic_body_minimum(&mapped, &theme).unwrap(),
+            intrinsic_body_minimum(
+                &mapped,
+                &crate::text::TextRequestContext::new(&theme, &text_service)
+            )
+            .unwrap(),
             (140.0, 140.0)
         );
         let band = theme
@@ -690,7 +730,9 @@ mod style_tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bands(bands).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        let band = chart.intrinsic_body_minimum(&theme).unwrap();
+        let band = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert!(band.0 >= 140.0 && band.1 >= 140.0);
     }
 
@@ -712,10 +754,19 @@ mod style_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
+        let text_service = crate::text::TextService::default();
         let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let old = chart
-            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            ))
             .unwrap();
         let band = theme
             .marks
@@ -738,9 +789,17 @@ mod style_tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bands(bands).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let changed = chart
-            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            ))
             .unwrap();
         let payload = |result: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Regression(payload) =
@@ -763,9 +822,17 @@ mod style_tests {
             )
             .unwrap(),
         );
-        let mapped = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+        let mapped = crate::plots::shared_x::prepare_panel_for_test(
+            &mapped,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let mapped = mapped
-            .measure_selected_interior(PlotRenderContext::new(mapped.data(), panel, &theme))
+            .measure_selected_interior(PlotRenderContext::new(
+                mapped.data(),
+                panel,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            ))
             .unwrap();
         let (mapped_polygon, mapped_fill) = payload(&mapped);
         assert_eq!(mapped_polygon, new_polygon);
@@ -777,7 +844,7 @@ mod style_tests {
         );
         let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
             &chart,
-            &theme,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
             crate::LegendComposition::Separate,
         )
         .unwrap()
@@ -819,10 +886,19 @@ mod style_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
+        let text_service = crate::text::TextService::default();
         let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let old = chart
-            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            ))
             .unwrap();
         let fit = theme
             .marks
@@ -843,9 +919,17 @@ mod style_tests {
             .unwrap();
         let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let changed = chart
-            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            ))
             .unwrap();
         let payload = |result: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Regression(payload) =

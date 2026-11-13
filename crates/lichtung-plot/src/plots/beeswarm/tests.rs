@@ -31,6 +31,8 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
         .unwrap();
     let points = theme.marks.get_points().clone().primary(primary).unwrap();
     theme.marks = theme.marks.clone().points(points).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let select = |source: &Plot| {
         let chart = crate::plots::shared_x::prepare_panel_for_test(source, &theme).unwrap();
         let selected = chart
@@ -212,6 +214,8 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     )
     .unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(

@@ -7,7 +7,7 @@ use crate::{CategoryValues, Color, NumericValues, Plot};
 
 fn prepare(
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> crate::layout::interior::PreparedInteriorInputs {
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
@@ -31,7 +31,7 @@ fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<Prepa
 
 fn separate_inputs(
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> crate::layout::interior::PreparedInteriorInputs {
     prepare(
         &plot
@@ -54,6 +54,10 @@ fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme)
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "checks prepared mapped and literal outlines, observed keys and independent alpha context before fonts"
+)]
 fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observed_keys() {
     let plot = Plot::bar(
         CategoryValues::new("category", ["one", "two"]).unwrap(),
@@ -70,13 +74,18 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     )
     .unwrap();
     bar_fill(&mut theme, fill);
+    let text = crate::text::TextService::default();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &theme);
-    let projected_mapped =
-        PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
-            .unwrap()
-            .unwrap();
-    let projected_inputs = separate_inputs(&plot, &theme);
+    let inputs = prepare(&plot, &crate::text::TextRequestContext::new(&theme, &text));
+    let projected_mapped = PreparedGuide::prepare_for_test(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    let projected_inputs =
+        separate_inputs(&plot, &crate::text::TextRequestContext::new(&theme, &text));
     assert_eq!(self::guide(&projected_inputs), &projected_mapped);
     let bars = &inputs.bars.as_ref().unwrap().panels[0].1;
     assert_eq!(bars.series, ["absent", "seen"]);
@@ -120,11 +129,14 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         .outline(Some(fixed))
         .unwrap();
     bar_fill(&mut theme, body);
-    let fixed_inputs = prepare(&plot, &theme);
-    let projected_fixed =
-        PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
-            .unwrap()
-            .unwrap();
+    let fixed_inputs = prepare(&plot, &crate::text::TextRequestContext::new(&theme, &text));
+    let projected_fixed = PreparedGuide::prepare_for_test(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
     let fixed_guide = self::guide(&fixed_inputs);
     let fixed_entry = &fixed_guide.sections[0].entries()[0];
     assert_eq!(fixed_entry.key, entry.key);
@@ -161,6 +173,8 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
         .fill_alpha(255)
         .unwrap();
     bar_fill(theme, body);
+    let text = crate::text::TextService::default();
+    let theme = &crate::text::TextRequestContext::new(theme, &text);
     let mapped = plot.clone().with_alpha(
         AlphaTarget::Fill,
         AlphaEncoding::keyed(
@@ -529,6 +543,8 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
         .clone()
         .color(Color::rgba(40, 50, 60, 0))
         .unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme);
     assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
@@ -611,7 +627,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
 
 fn assert_interaction_alpha_context(
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     outline: Color,
 ) {
     use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaValues};

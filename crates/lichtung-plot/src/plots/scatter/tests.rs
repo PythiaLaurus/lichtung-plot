@@ -42,6 +42,8 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     );
     assert_eq!(prepared.ranges, [(1.0, 1.0); 2]);
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let hidden_alpha = chart
         .prepared_discrete_guides

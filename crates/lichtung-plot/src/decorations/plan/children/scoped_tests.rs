@@ -5,10 +5,12 @@ use crate::decorations::legend::discrete::scoped::{
 use crate::decorations::legend::discrete::PreparedGuide;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
-use crate::theme::ResolvedTheme;
 use crate::LegendComposition;
 
-fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedGuide> {
+fn parent_guide(
+    field: &str,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Arc<PreparedGuide> {
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
@@ -24,7 +26,7 @@ fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedGuide> {
 fn measure(
     children: &mut ChildPlans<'_>,
     source: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     owner: &ComponentAddress,
     round: &FeedbackRound,
     produced: &std::cell::Cell<usize>,
@@ -66,6 +68,8 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
     )
     .erase();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let first_guide = parent_guide("first field", &theme);
     let second_guide = parent_guide("second field", &theme);
     let guide_owner = ComponentAddress::root()
@@ -288,7 +292,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             )?;
             assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
 
-            let mut different_font = theme.clone();
+            let mut different_font = theme.theme.clone();
             different_font.typography.axes.tick_label.stack =
                 crate::font::canonical::FontStack::new(
                     [crate::font::canonical::FontFamily::named("Noto Sand")?]
@@ -299,8 +303,12 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
                                 .cloned(),
                         ),
                 )?;
-            let changed_font = PlotRenderContext::new(source.data(), panel, &different_font)
-                .with_guides(&only_view);
+            let request = crate::text::TextRequestContext {
+                theme: &different_font,
+                ..theme
+            };
+            let changed_font =
+                PlotRenderContext::new(source.data(), panel, &request).with_guides(&only_view);
             let changed = measure(
                 &mut children,
                 &source,

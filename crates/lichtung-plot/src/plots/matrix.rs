@@ -36,7 +36,7 @@ use crate::render::backend::{
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde, strict_scott_bandwidth};
-use crate::theme::{AccentColors, CategoryColors, ResolvedTheme};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
 use crate::{LegendPosition, Plot};
 
@@ -66,7 +66,7 @@ impl PreparedMatrixAxes {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -95,7 +95,10 @@ impl PreparedMatrixAxes {
         Ok(())
     }
 
-    fn density_ink(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+    fn density_ink(
+        &self,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> Result<(f64, f64), Error> {
         fill_ink_outset(
             &theme
                 .marks
@@ -107,7 +110,11 @@ impl PreparedMatrixAxes {
         )
     }
 
-    fn point_dimensions(&self, chart: &Plot, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+    fn point_dimensions(
+        &self,
+        chart: &Plot,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> Result<(f64, f64), Error> {
         let style = chart.point_style(
             theme,
             (0, 0, 0),
@@ -129,7 +136,7 @@ impl PreparedMatrixAxes {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
@@ -164,7 +171,7 @@ impl PreparedMatrixAxes {
 /// determine the hard area of each variable's native tracks.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart.prepared_matrix_axes.as_ref().ok_or_else(|| {
         Error::Render("matrix intrinsic requires prepared variable domains".into())
@@ -207,7 +214,7 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = chart
         .prepared_matrix_axes
@@ -239,7 +246,7 @@ pub(crate) fn natural_body_preference(
 
 pub(crate) fn natural_guide_preference(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let Some(descriptor) = chart.prepared_discrete_guide()? else {
         return Ok((0.0, 0.0));
@@ -251,7 +258,7 @@ impl PreparedMatrixAxes {
     pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
@@ -447,10 +454,10 @@ pub(crate) fn prepare_axes(
 
 pub(crate) fn measure(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let prepared = chart
         .prepared_matrix_axes
@@ -577,13 +584,17 @@ pub(crate) fn measure(
     // Each cell freezes the selected sides once. Common plans own ticks and
     // outer text without painting a duplicate frame or grid.
     let common_chrome = theme.axes.cell_axis_chrome();
-    let mut axis_theme = theme.clone();
-    axis_theme.axes = axis_theme
+    let mut axis_appearance = theme.theme.clone();
+    axis_appearance.axes = axis_appearance
         .axes
         .clone()
         .frame(common_chrome.frame.cloned())?
         .cell_frame(None)?
         .grid(common_chrome.grid.cloned())?;
+    let axis_theme = crate::text::TextRequestContext {
+        theme: &axis_appearance,
+        ..*theme
+    };
 
     // X selection depends only on a column's range and X coordinates; Y
     // selection depends only on a row's range and Y coordinates. Retain the
@@ -907,10 +918,10 @@ fn matrix_ticks<'a>(
     range: (f64, f64),
     projection: &layout::Projection,
     side: layout::AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<&'a layout::NumericTickPlan, crate::layout::fit::PlanError> {
-    let environment = theme.prepared_font_environment()?;
+    let environment = theme.text.prepared_font_environment()?;
 
     let range_bits = [range.0.to_bits(), range.1.to_bits()];
     let panel = projection.panel_box();
@@ -958,7 +969,7 @@ fn matrix_ticks<'a>(
 fn matrix_legend(
     chart: &Plot,
     available: (f64, Option<f64>),
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
     use crate::layout::fit::FitOutcome;
@@ -978,7 +989,7 @@ fn matrix_guide_entries(
     chart: &Plot,
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<GuideSourceKey>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
@@ -1077,7 +1088,7 @@ fn prepare_density(
 
 /// Project root-prepared KDE curves into admitted cell operands.
 fn select_diagonal_kde(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     marks: &mut Vec<MatrixPrimitive>,
     group_colors: &[(u8, u8, u8)],
     groups: &[HueGroup],

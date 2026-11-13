@@ -4,6 +4,8 @@ use crate::LegendComposition;
 
 fn empty_block() -> TextBlock {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     TextBlock::from_resolved(
         fit::measured(fit::text(
             &theme,
@@ -257,7 +259,11 @@ fn factorized_plot(group_field: &str) -> crate::Plot {
     .erase()
 }
 
-fn factorized_fixture() -> (Arc<PreparedGuide>, ResolvedTheme) {
+fn factorized_fixture() -> (
+    Arc<PreparedGuide>,
+    crate::theme::ResolvedTheme,
+    crate::text::TextService,
+) {
     use crate::PointShape;
     let plot = factorized_plot("group");
     let mut theme = crate::Theme::publication().resolve().unwrap();
@@ -291,15 +297,21 @@ fn factorized_fixture() -> (Arc<PreparedGuide>, ResolvedTheme) {
         )
         .unwrap();
     theme.marks = theme.marks.clone().points(points).unwrap();
-    let descriptor = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
-        .unwrap()
-        .unwrap();
-    (descriptor, theme)
+    let text = crate::text::TextService::default();
+    let descriptor = PreparedGuide::prepare_for_test(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    (descriptor, theme, text)
 }
 
 #[test]
 fn factorized_keys_and_multiline_titles_freeze_in_one_contained_frame() {
-    let (descriptor, theme) = factorized_fixture();
+    let (descriptor, theme, text) = factorized_fixture();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     assert_eq!(
         (descriptor.counts.sections, descriptor.counts.entries),
         (2, 4)
@@ -309,6 +321,8 @@ fn factorized_keys_and_multiline_titles_freeze_in_one_contained_frame() {
         .unwrap();
     let mut frameless_theme = crate::Theme::publication().resolve().unwrap();
     frameless_theme.legend = theme.legend.clone().frame(None).unwrap();
+    let frameless_text = crate::text::TextService::default();
+    let frameless_theme = crate::text::TextRequestContext::new(&frameless_theme, &frameless_text);
     for horizontal in [false, true] {
         let measured = fit::measured(Legend::measure_assigned(
             Arc::clone(&descriptor),
@@ -417,7 +431,7 @@ fn measure_fixture(
     descriptor: &Arc<PreparedGuide>,
     available: (f64, Option<f64>),
     variant: (bool, bool),
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Legend {
     fit::measured(Legend::measure_assigned(
@@ -432,12 +446,12 @@ fn measure_fixture(
     .unwrap()
 }
 
-fn frozen_svg(measured: &Legend, theme: &ResolvedTheme) -> Vec<u8> {
+fn frozen_svg(measured: &Legend, theme: &crate::text::TextRequestContext<'_, '_>) -> Vec<u8> {
     use crate::render::backend::Backend;
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
         600,
         600,
-        theme.prepared_font_environment().unwrap(),
+        theme.text.prepared_font_environment().unwrap(),
     );
     backend.begin(600, 600).unwrap();
     let (x, y) = measured.box_at(20.0, 30.0).anchor();
@@ -452,7 +466,8 @@ fn frozen_svg(measured: &Legend, theme: &ResolvedTheme) -> Vec<u8> {
     reason = "one actual scoped cache key proves complete consumed-input identity and same-operation uncached replay"
 )]
 fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
-    let (descriptor, theme) = factorized_fixture();
+    let (descriptor, theme, text) = factorized_fixture();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let scope = FitScope::root()
         .child(AddressRole::OutsideGuideAuto, 0)
         .unwrap();
@@ -511,7 +526,7 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         frozen_svg(&different, &theme)
     );
 
-    let mut painted = theme.clone();
+    let mut painted = theme.theme.clone();
     painted.typography.guides.legend_label = painted
         .typography
         .guides
@@ -519,6 +534,10 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         .clone()
         .color(crate::Color::rgba(11, 23, 37, 71))
         .unwrap();
+    let painted = crate::text::TextRequestContext {
+        theme: &painted,
+        ..theme
+    };
     let new_paint = measure_fixture(&descriptor, (420.0, None), (false, false), &painted, &scope);
     assert!(!Arc::ptr_eq(&original.layout, &new_paint.layout));
     assert_eq!(
@@ -529,16 +548,24 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         frozen_svg(&original, &theme),
         frozen_svg(&new_paint, &painted)
     );
-    let mut reset = theme.clone();
+    let mut reset = theme.theme.clone();
     reset.text_layouts.guide[1] = Some(crate::TextLayout::default());
+    let reset = crate::text::TextRequestContext {
+        theme: &reset,
+        ..theme
+    };
     let reset_plan = measure_fixture(&descriptor, (420.0, None), (false, false), &reset, &scope);
     assert!(!Arc::ptr_eq(&original.layout, &reset_plan.layout));
     assert_eq!(
         frozen_svg(&original, &theme),
         frozen_svg(&reset_plan, &reset)
     );
-    let mut unrelated = theme.clone();
+    let mut unrelated = theme.theme.clone();
     unrelated.surfaces.plot_panel = crate::Color::rgb(1, 2, 3);
+    let unrelated = crate::text::TextRequestContext {
+        theme: &unrelated,
+        ..theme
+    };
     let unrelated = measure_fixture(
         &descriptor,
         (420.0, None),
@@ -604,7 +631,7 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
     assert_alpha_measurement_cache(&theme);
 }
 
-fn assert_alpha_measurement_cache(theme: &ResolvedTheme) {
+fn assert_alpha_measurement_cache(theme: &crate::text::TextRequestContext<'_, '_>) {
     let prepare = |different: bool, source_row| {
         let values = crate::alpha::AlphaValues::continuous(
             crate::NumericValues::new("quality", [0.25, 0.375, 0.75]),
@@ -684,7 +711,7 @@ fn assert_alpha_measurement_cache(theme: &ResolvedTheme) {
     );
 }
 
-fn assert_color_measurement_cache(theme: &ResolvedTheme) {
+fn assert_color_measurement_cache(theme: &crate::text::TextRequestContext<'_, '_>) {
     let plot = |field: &str| {
         crate::Plot::beeswarm(
             crate::CategoryValues::new("category", ["A", "A"]).unwrap(),

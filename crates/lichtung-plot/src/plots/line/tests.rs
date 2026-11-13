@@ -11,7 +11,7 @@ fn labeled_layer(value: f64, label: &str) -> crate::PointLayer {
 
 fn measure_layer(
     layer: crate::PointLayer,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> PlotRenderResult {
     let source = Plot::line(
         crate::NumericValues::new("x", [0.0, 2.0]),
@@ -97,6 +97,8 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
     .y_limits(-1.0, 3.0)
     .erase();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -257,6 +259,8 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
         [0, 1, 2]
     );
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -299,6 +303,8 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
 #[test]
 fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let paint = crate::Color::rgba(13, 29, 47, 53);
     let layer = labeled_layer(1.0, "Exact").radius(9).unwrap();
     let color_then_alpha = measure_layer(layer.clone().color(paint).alpha(131), &theme);
@@ -392,6 +398,8 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         .unwrap()
         .weight(crate::TextWeight::Semibold)
         .unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(

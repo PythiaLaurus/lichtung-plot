@@ -55,6 +55,8 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
             )
             .alignment(crate::TextAlignment::End),
     );
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let aligned = layout.plan_axes(&theme).unwrap();
     let (x, xp) = aligned.x_axis.title.as_ref().unwrap();
     let (y, yp) = aligned.y_axis.title.as_ref().unwrap();
@@ -130,6 +132,8 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
             .grid(None)
             .unwrap();
         let layout = Layout::envelope(panel);
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let plan = layout.plan_axes(&theme).unwrap();
         let expected_right = if right { 410.0_f64 / 1024.0 } else { 0.0 };
         assert_eq!(
@@ -178,6 +182,8 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
         .grid(None)
         .unwrap();
     let layout = Layout::envelope(crate::layout::PixelRect::new(80.0, 480.0, 80.0, 480.0));
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let plan = layout.plan_axes(&theme).unwrap();
     assert!(plan.frame.is_none());
     assert_eq!(
@@ -228,6 +234,8 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
     layout.x_axis.source = TickSource::EXACT;
     layout.x_axis.ticks = vec![AxisTick::new(0.5, "I")];
     layout.x_axis.label = Some("I".into());
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let plan = layout.plan_axes(&theme).unwrap();
     let label = &plan.x_axis.ticks[0].label.as_ref().unwrap().0;
     let title = &plan.x_axis.title.as_ref().unwrap().0;

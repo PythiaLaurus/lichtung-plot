@@ -4,7 +4,6 @@ use super::{AxisSide, NumericTickPlan, Projection, SourceKind, TickSource};
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::numeric::{context::DomainInfo, operand::Operand, source::AxisRequest};
 use crate::spec::ticks::function::View;
-use crate::theme::ResolvedTheme;
 use crate::{AxisScale, CoordinateAxis, Error, TickPositions};
 
 #[cfg(test)]
@@ -60,7 +59,7 @@ pub(super) fn plan(
     log: bool,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     request: Option<&AxisRequest<'_>>,
     scope: &FitScope,
 ) -> Result<NumericTickPlan, PlanError> {

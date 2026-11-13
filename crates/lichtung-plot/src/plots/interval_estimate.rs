@@ -9,7 +9,6 @@ use crate::Error;
 use crate::layout::{AxisSpec, Layout, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor};
 use crate::spec::{AxisScale, EstimateStatus, PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 #[cfg(test)]
@@ -44,7 +43,7 @@ impl PreparedEstimate {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -81,7 +80,7 @@ impl PreparedEstimate {
         Ok(())
     }
 
-    fn interval_ink(&self, theme: &ResolvedTheme) -> Result<f64, Error> {
+    fn interval_ink(&self, theme: &crate::text::TextRequestContext<'_, '_>) -> Result<f64, Error> {
         crate::alpha::marks::require_aligned_points(self.estimates.len(), self.line_alphas.len())?;
         let style = theme
             .marks
@@ -104,7 +103,7 @@ impl PreparedEstimate {
     fn point_ink(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<crate::alpha::marks::PointInk>, Error> {
         point_ink(
             &chart.point_style(
@@ -150,7 +149,7 @@ impl PreparedEstimate {
     pub(crate) fn mark_intrinsic(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         if self.labels.len() != self.estimates.len() {
             return Err(Error::Render(
@@ -565,7 +564,7 @@ pub(crate) fn estimate_data_range<'a>(
 }
 
 fn plan_not_estimable(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     appearance: &crate::theme::TextTheme,
     layout: &Layout,
     vertical_guide_x: Option<f64>,
@@ -970,7 +969,7 @@ fn prepare_model<'a>(
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -999,7 +998,7 @@ fn project(
     chart: &Plot,
     prepared: &PreparedEstimate,
     layout: Layout,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let labels = &prepared.labels;
@@ -1384,7 +1383,7 @@ pub(crate) fn log_tick_plan(
     range: (f64, f64),
     spec: &crate::layout::AxisSpec,
     panel: crate::layout::PixelRect,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());

@@ -14,7 +14,7 @@ use crate::{Error, Plot};
 #[cfg(test)]
 pub(crate) fn prepare_panel_for_test(
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Plot, Error> {
     let resources = crate::font::canonical::OperationContext::new();
     let inputs = prepare_plot(plot, &resources, Some(theme))?;

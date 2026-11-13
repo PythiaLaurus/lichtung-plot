@@ -38,7 +38,7 @@ pub(crate) struct DumbbellData {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_dumbbell
@@ -127,7 +127,7 @@ impl DumbbellData {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -170,7 +170,7 @@ impl DumbbellData {
 
     pub(crate) fn guide_entries(
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let endpoints = chart
             .dumbbell_endpoints_spec()
@@ -224,7 +224,7 @@ impl DumbbellPayload {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -291,7 +291,7 @@ fn project(
     chart: &Plot,
     prepared: &DumbbellData,
     layout: crate::layout::Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
     let endpoints = chart
         .dumbbell_endpoints_spec()
@@ -498,7 +498,7 @@ pub(crate) fn prepare<'a>(
 
 fn endpoint_style(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     color: crate::Color,
 ) -> crate::render::backend::PointStyle {
     let mut point = chart.point_style(

@@ -19,7 +19,7 @@ use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
-use crate::theme::{AccentColors, CategoryColors, ResolvedTheme};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::{CategoryOrder, Plot, ValueSort};
 
 #[cfg(test)]
@@ -47,7 +47,7 @@ pub(crate) struct BarSignificance {
 impl BarSignificance {
     pub(crate) fn new(
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         horizontal: bool,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -130,7 +130,7 @@ pub(crate) fn category_bar_geometry(
 )]
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(chart)?;
     if prepared.categories.is_empty() || prepared.bars.is_empty() {
@@ -355,7 +355,7 @@ impl PreparedBars {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -419,7 +419,7 @@ impl PreparedBars {
     pub(crate) fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
@@ -692,7 +692,7 @@ impl BarPayload {
     pub(crate) fn retain(
         mut self,
         mut result: crate::spec::PlotRenderResult,
-        context: crate::spec::PlotRenderContext<'_>,
+        context: crate::spec::PlotRenderContext<'_, '_>,
         chart: &Plot,
         prepared: &PreparedBars,
     ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
@@ -787,7 +787,7 @@ pub(crate) fn domain_expansion(
 }
 
 pub(crate) fn attached_significance_text_plans(
-    context: crate::spec::PlotRenderContext<'_>,
+    context: crate::spec::PlotRenderContext<'_, '_>,
     marks: &[PreparedBarSignificance],
     appearance: &crate::theme::TextTheme,
     alignment: impl Fn(&PreparedBarSignificance) -> crate::layout::PhysicalTextAlignment,
@@ -1515,7 +1515,7 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) -> Result<()
 pub(crate) fn guide_sources(
     prepared: &PreparedBars,
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 
     colors: &CategoryColors,
     accents: &AccentColors,

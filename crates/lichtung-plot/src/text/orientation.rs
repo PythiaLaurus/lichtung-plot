@@ -86,32 +86,70 @@ impl TextOrientation {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct DirectionFrame {
-    pub(crate) plot: crate::Plot,
-    pub(crate) layout: crate::layout::Layout,
+#[derive(Clone, Copy)]
+pub(crate) struct TextReferenceResolver<'v, 'src> {
+    pub(crate) plot: &'src crate::Plot,
+    pub(crate) layout: &'v crate::layout::Layout,
 }
-impl std::fmt::Debug for DirectionFrame {
+impl std::fmt::Debug for TextReferenceResolver<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DirectionFrame")
+        f.debug_struct("TextReferenceResolver")
             .field("layout", &self.layout)
             .finish_non_exhaustive()
     }
 }
-impl DirectionFrame {
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        self.layout.projection.x_range() == other.layout.projection.x_range()
-            && self.layout.projection.y_range() == other.layout.projection.y_range()
-            && self.layout.projection.pixel_box() == other.layout.projection.pixel_box()
-            && self.layout.x_axis.assigned_cells == other.layout.x_axis.assigned_cells
-            && self.layout.y_axis.assigned_cells == other.layout.y_axis.assigned_cells
-            && self.plot.axis_scope() == other.plot.axis_scope()
+impl TextReferenceResolver<'_, '_> {
+    #[expect(
+        clippy::type_complexity,
+        reason = "preserves the original narrow direction comparison projection"
+    )]
+    pub(crate) fn snapshot(
+        &self,
+    ) -> (
+        [(f64, f64); 2],
+        crate::layout::PixelRect,
+        [Option<Vec<(f64, f64)>>; 2],
+        Option<String>,
+    ) {
+        (
+            [
+                self.layout.projection.x_range(),
+                self.layout.projection.y_range(),
+            ],
+            self.layout.projection.panel_box(),
+            [
+                self.layout.x_axis.assigned_cells.clone(),
+                self.layout.y_axis.assigned_cells.clone(),
+            ],
+            self.plot.axis_scope().map(str::to_owned),
+        )
+    }
+
+    #[expect(
+        clippy::type_complexity,
+        reason = "preserves the original narrow direction comparison projection"
+    )]
+    pub(crate) fn matches_snapshot(
+        &self,
+        other: &(
+            [(f64, f64); 2],
+            crate::layout::PixelRect,
+            [Option<Vec<(f64, f64)>>; 2],
+            Option<String>,
+        ),
+    ) -> bool {
+        other.0[0] == self.layout.projection.x_range()
+            && other.0[1] == self.layout.projection.y_range()
+            && other.1 == self.layout.projection.panel_box()
+            && other.2[0] == self.layout.x_axis.assigned_cells
+            && other.2[1] == self.layout.y_axis.assigned_cells
+            && other.3.as_deref() == self.plot.axis_scope()
     }
     pub(crate) fn rotation(
         &self,
         from: &DataPosition,
         to: &DataPosition,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<TextRotation> {
         let point = |point: &DataPosition| {
             let position = crate::TextPosition::new(
@@ -119,12 +157,7 @@ impl DirectionFrame {
                 crate::TextCoordinate::data(point.y.clone()),
             );
             Ok::<_, Error>(crate::text::position::resolve::point(
-                crate::text::position::resolve::resolve(
-                    &position,
-                    &self.plot,
-                    &self.layout,
-                    theme,
-                )?,
+                crate::text::position::resolve::resolve(&position, self.plot, self.layout, theme)?,
                 self.layout.projection.panel_box(),
             ))
         };

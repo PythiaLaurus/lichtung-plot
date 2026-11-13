@@ -8,6 +8,8 @@ use super::*;
 #[test]
 fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
 
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
     let scope = crate::layout::fit::FitScope::root();
@@ -56,6 +58,8 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
 #[test]
 fn complete_numeric_candidate_admission_precedes_geometric_fit_rejection() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1.0, 0.0, 1.0));
     let ticks = [
         AxisTick::new(0.0, "First label has no room"),
@@ -175,6 +179,8 @@ fn count_targets_allow_nice_deviation_and_maxima_filter_before_formatting() {
         [adjacent.0, adjacent.1]
     );
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 2000.0, 0.0, 1000.0));
     crate::orchestrator::measurements::start();
     let selected = numeric_tick_plan(
@@ -388,6 +394,8 @@ fn source_semantics_reject_before_fonts() {
         ((0.0, 1.0), false, TickGeneration::log10_decades(1).unwrap()),
     ] {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
         assert!(numeric_tick_plan(
@@ -461,6 +469,8 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         format::{NumericFormat, NumericPrecision},
     };
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
@@ -543,6 +553,8 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
 #[test]
 fn midpoint_is_conditional_and_must_itself_fit() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let scope = crate::layout::fit::FitScope::root()
         .child(crate::layout::AddressRole::FacetCell, 3)
         .unwrap();
@@ -588,6 +600,8 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, 1.0, 0.0, 100.0));
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 0.0;
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     assert!(matches!(
         numeric_tick_plan(
             (1.1, 1.2),
@@ -619,6 +633,8 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
 #[test]
 fn generated_labels_are_unique_across_decimal_and_power_ranges() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for (range, log) in [
         ((1.000_000_000_000_01, 1.000_000_000_000_09), false),
         ((-400.0, 400.0), true),
@@ -756,6 +772,8 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
 #[test]
 fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),

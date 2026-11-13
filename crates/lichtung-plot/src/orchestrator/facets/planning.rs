@@ -14,11 +14,10 @@ use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequireme
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{PixelRect, RootFramePlan};
 use crate::spec::{FacetScales, PlotRenderContext};
-use crate::theme::ResolvedTheme;
 
 pub(super) fn canvas_layout(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     horizontal_axis_label: Option<&crate::Text>,
     vertical_axis_label: Option<&crate::Text>,
     round: &mut FeedbackRound,
@@ -55,7 +54,7 @@ pub(super) fn canvas_layout(
 pub(super) fn reserve_rewrapped_shared_axis_titles(
     horizontal_axis_label: Option<&crate::Text>,
     vertical_axis_label: Option<&crate::Text>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     reserved_panel: PixelRect,
     candidate_panel: PixelRect,
     round: &mut FeedbackRound,
@@ -83,7 +82,7 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
 pub(super) fn shared_axis_requirements(
     horizontal: Option<&crate::Text>,
     vertical: Option<&crate::Text>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     panel: PixelRect,
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
@@ -123,7 +122,7 @@ pub(super) fn shared_axis_requirements(
 fn adjusted_shared_axis_panel(
     horizontal_axis_label: Option<&crate::Text>,
     vertical_axis_label: Option<&crate::Text>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     baseline: [f64; 4],
     candidate: PixelRect,
     round: &mut FeedbackRound,
@@ -189,7 +188,7 @@ pub(super) fn native_parent(
     outer: PixelRect,
     shape: (usize, usize),
     facet_scales: FacetScales,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
     probe_cells: &[PixelRect],
@@ -203,7 +202,7 @@ pub(super) fn native_parent(
 ) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = plot.data().with_operation(&resources);
     let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();

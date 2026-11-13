@@ -70,6 +70,8 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         .unwrap();
     let points = theme.marks.get_points().clone().primary(primary).unwrap();
     theme.marks = theme.marks.clone().points(points).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

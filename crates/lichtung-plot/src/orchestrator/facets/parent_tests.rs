@@ -55,6 +55,8 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     let source = source.erase();
     let operation = crate::font::canonical::OperationContext::new();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme)).unwrap();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let prepared =
@@ -167,6 +169,8 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
     for disabled in [false, true] {
         DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let mut children = ChildPlans::facets(&source);
         let mut exercised = false;
         let root = crate::layout::plan_root(
@@ -216,7 +220,9 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                theme
+                    .text
+                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok((inputs, guide, changed))
             },
             |(inputs, guide, changed_guide), assigned, round| {

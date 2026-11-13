@@ -1,7 +1,6 @@
 //! Bottom-up standard-panel soft sizes; exact root assignment remains separate.
 
 use crate::layout::PhysicalTextAlignment;
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +43,7 @@ fn ceil_ratio(numerator: i128, denominator: i128) -> Result<i64, Error> {
 )]
 pub(crate) fn categorical_preference(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<CategoricalSizePreference, Error> {
     let scope = plot.axis_scope();
@@ -207,7 +206,7 @@ fn ceil_sqrt(value: u128) -> Result<u32, Error> {
 )]
 pub(crate) fn mark_preference(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<StandardSizePreference, Error> {
     let scope = plot.axis_scope();
@@ -437,6 +436,8 @@ mod tests {
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, axis);
@@ -511,6 +512,8 @@ mod tests {
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
@@ -554,7 +557,12 @@ mod tests {
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        let text = crate::text::TextService::default();
+        let original = super::super::coordinate::canvas_layout(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text),
+        )
+        .unwrap();
         let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
         assert_eq!(preference.mark_pitch.to_bits(), 16.0_f64.to_bits());
@@ -574,7 +582,11 @@ mod tests {
             .unwrap();
         let points = theme.marks.get_points().clone().radii(radii).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        let styled = super::super::coordinate::canvas_layout(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text),
+        )
+        .unwrap();
         let preference = standard(&styled);
         assert_eq!(preference.primary_marks, 25);
         assert!(preference.mark_pitch > 160.0);
@@ -587,7 +599,11 @@ mod tests {
         primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
         let points = theme.marks.get_points().clone().primary(primary).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        let invisible = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        let invisible = super::super::coordinate::canvas_layout(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text),
+        )
+        .unwrap();
         assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(
             standard(&invisible).mark_pitch.to_bits(),
@@ -604,7 +620,11 @@ mod tests {
         let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let clipped = prepared.attach(source).unwrap();
-        let exact = super::super::coordinate::canvas_layout(&clipped, &theme).unwrap();
+        let exact = super::super::coordinate::canvas_layout(
+            &clipped,
+            &crate::text::TextRequestContext::new(&theme, &text),
+        )
+        .unwrap();
         assert_eq!(standard(&exact).primary_marks, 25);
     }
 }

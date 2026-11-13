@@ -127,7 +127,7 @@ impl PreparedGuide {
     #[cfg(test)]
     pub(crate) fn prepare_for_test(
         plot: &crate::Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
@@ -171,7 +171,7 @@ impl PreparedGuide {
     pub(crate) fn append_requirements(
         &self,
         requirements: &mut Vec<PreparedTextRequirement>,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &ComponentAddress,
         mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<()> {

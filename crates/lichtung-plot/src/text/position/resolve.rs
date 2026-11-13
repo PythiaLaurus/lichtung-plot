@@ -3,7 +3,6 @@
 use super::{Coordinate, DataCoordinate, DataValue, Position, TextPosition};
 use crate::layout::{Layout, PixelRect};
 use crate::render::backend::Point2D;
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, Result};
 
 #[derive(Debug, Clone, Copy)]
@@ -24,7 +23,7 @@ pub(crate) fn resolve(
     position: &TextPosition,
     plot: &Plot,
     layout: &Layout,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<[ReferenceAxis; 2]> {
     let Position::Coordinates(x, y) = &position.0 else {
         return Err(Error::Render(
@@ -107,7 +106,7 @@ pub(crate) fn data(
     coordinate: &DataCoordinate,
     side: usize,
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64> {
     let axes = plot
         .prepared_axis_inputs()

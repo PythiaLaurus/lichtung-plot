@@ -33,6 +33,8 @@ fn all_sources() -> impl Iterator<Item = Plot> {
 #[test]
 fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_legacy_constructors() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for source in sources() {
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
@@ -83,6 +85,8 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
 #[test]
 fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_creation() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for source in sources() {
         let source = source.x_label("").y_label("");
         let inputs =
@@ -148,6 +152,8 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let panel = PixelRect::new(30.0, 810.0, 50.0, 600.0);
     let selected = plot
@@ -245,6 +251,8 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
         }
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()

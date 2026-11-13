@@ -34,7 +34,6 @@ use crate::plots::categorical_distribution::{self, DistributionPayload, Prepared
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range};
-use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 #[derive(Debug, PartialEq)]
@@ -71,7 +70,7 @@ impl PreparedViolin {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::alpha::AlphaUnitKind;
@@ -143,7 +142,7 @@ impl PreparedViolin {
 /// The strip's occupied physical width and the final IQR-box separation use
 /// the complete resolved point/box stroke, not the historical 2px point hint.
 pub(crate) fn raincloud_strip_pitch(
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     point: Option<crate::render::geometry::GeometryBox>,
 ) -> Result<f64, Error> {
@@ -165,7 +164,7 @@ pub(crate) fn raincloud_strip_pitch(
 /// grammar consumed by their selected polygons, without KDE-vertex counting.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let PreparedDistribution::Violin(prepared) = categorical_distribution::retained(chart)? else {
         return Err(Error::Render(
@@ -429,7 +428,7 @@ pub(crate) fn prepare(
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let retained = categorical_distribution::retained(chart)?;
@@ -445,7 +444,7 @@ pub(crate) fn measure_marks(
         DistributionLayout::Raincloud
     };
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let sample = &prepared.sample;
     let x_levels = &sample.x_levels;

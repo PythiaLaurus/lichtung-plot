@@ -10,7 +10,6 @@ use crate::layout::kernel::{SpatialRounding, TrackSpec};
 use crate::layout::{AddressRole, PhysicalTextAlignment, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{self, FillStyle, GradientStop, PlacedText, Point2D, TextAnchor};
 use crate::theme::spacing::ExactLength;
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 fn hard(value: &ExactLength) -> Result<i64, Error> {
@@ -49,7 +48,7 @@ fn projected_minimum(
 
 pub(super) fn intrinsic_width(
     descriptor: &ContinuousDescriptor,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     metrics: &LegendMetrics,
 ) -> Result<ExactLength, Error> {
     let mut width = ExactLength::pixels(0.0)?;
@@ -115,7 +114,7 @@ impl ColorContent {
         descriptor: &ContinuousDescriptor,
         width: i64,
         horizontal: bool,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         metrics: &LegendMetrics,
         scope: &FitScope,
     ) -> Result<Self, PlanError> {

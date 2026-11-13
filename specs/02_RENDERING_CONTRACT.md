@@ -401,6 +401,12 @@ serialization and reserve canonical scene/SVG/scratch storage before one balance
 final Null validation. Count/capture are not extra Null lifecycles. Preflight uses
 the same preparation/planning/validation path without publishing an artifact.
 
+Resolved appearance contains no font environment, text memo or directional Plot
+owner. Each operation owns one text service shared by root and child appearances.
+Measurement borrows that service through short-lived requests carrying the current
+projection and trial inputs. Existing appearance-copy boundaries, font admission
+before memo lookup, trial memo bypass and guide measurement reuse remain unchanged.
+
 Selected interior and chrome plans own their draw operands, layer names and paint;
 they do not retain working Plot arrays or measurement contexts for capture. The
 capture coordinator reads source/route checks at their original draw sites, then

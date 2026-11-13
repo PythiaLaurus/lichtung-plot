@@ -16,7 +16,9 @@ fn typography_reuses_analysis_and_keeps_complete_sources() {
     }
     for (name, source) in workloads {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let environment = theme.prepared_font_environment().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        let environment = theme.text.prepared_font_environment().unwrap();
         let resources = environment.operation();
         environment.validate_operation(&resources).unwrap();
 

@@ -641,7 +641,7 @@ use crate::Error;
 
 /// Shared immutable inputs for one plot renderer.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct PlotRenderContext<'a> {
+pub(crate) struct PlotRenderContext<'a, 'src> {
     pub(crate) data: crate::data::PlotData<'a>,
     pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
@@ -656,17 +656,17 @@ pub(crate) struct PlotRenderContext<'a> {
     prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
     prepared_limits: [Option<(f64, f64)>; 2],
     prepared_kind: Option<PlotKind>,
-    pub(crate) theme: &'a crate::theme::ResolvedTheme,
+    pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
     facet_scales: Option<FacetScales>,
     pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
 
-impl<'a> PlotRenderContext<'a> {
+impl<'a, 'src> PlotRenderContext<'a, 'src> {
     pub(crate) fn with_theme<'b>(
         self,
-        theme: &'b crate::theme::ResolvedTheme,
-    ) -> PlotRenderContext<'b>
+        theme: &'b crate::text::TextRequestContext<'b, 'src>,
+    ) -> PlotRenderContext<'b, 'src>
     where
         'a: 'b,
     {
@@ -675,7 +675,7 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) fn new(
         data: crate::data::PlotData<'a>,
         panel: PixelRect,
-        theme: &'a crate::theme::ResolvedTheme,
+        theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
         Self {
             data,
@@ -698,7 +698,7 @@ impl<'a> PlotRenderContext<'a> {
         data: crate::data::PlotData<'a>,
         source_rows: &'a [usize],
         panel: PixelRect,
-        theme: &'a crate::theme::ResolvedTheme,
+        theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
         Self {
             data: data.map_source_rows(source_rows),
@@ -793,7 +793,7 @@ impl<'a> PlotRenderContext<'a> {
         y_label: Option<crate::Text>,
         x_spec: &crate::layout::AxisSpec,
         y_spec: &crate::layout::AxisSpec,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Layout, crate::layout::fit::PlanError> {
         if self.prepared_kind.is_some_and(|kind| {
             crate::layout::interior::InteriorRoute::classify(kind).is_coordinate()
@@ -829,7 +829,7 @@ impl<'a> PlotRenderContext<'a> {
         mut y_ticks: Vec<crate::layout::AxisTick>,
         x_spec: &crate::layout::AxisSpec,
         y_spec: &crate::layout::AxisSpec,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Layout, crate::layout::fit::PlanError> {
         let mut specs = [
             crate::layout::AxisSpec::default(),

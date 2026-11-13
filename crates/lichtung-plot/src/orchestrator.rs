@@ -40,6 +40,8 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
             source.clone()
         };
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
@@ -159,7 +161,7 @@ impl Plot {
     pub(crate) fn measure_panel(
         &self,
         kind: PlotKind,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
         #[cfg(test)]
@@ -173,7 +175,12 @@ impl Plot {
             context.axis_range(crate::layout::AxisSide::Left, || Ok((0.0, 1.0)))?,
             context.panel.as_tuple(),
         );
-        let directional = context.theme.with_text_projection(self, &frame);
+        let appearance = context.theme.theme.clone();
+        let request = crate::text::TextRequestContext {
+            theme: &appearance,
+            ..*context.theme
+        };
+        let directional = request.with_text_projection(self, &frame);
         let context = context.with_theme(&directional);
         match kind {
             PlotKind::Scatter
@@ -217,7 +224,7 @@ impl Plot {
 
     pub(crate) fn measure_selected_interior(
         &self,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         use crate::layout::interior::{InteriorRoute as R, SpecializedGrid as G};
         self.validate_interior_preparation()?;
@@ -331,7 +338,7 @@ fn validate_frozen_axes_and_guides(
 #[cfg(test)]
 fn validate_axis_text(
     layout: &crate::layout::Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
     layout
@@ -370,7 +377,9 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
 fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     use crate::layout::fit::{FitScope, PlanError};
     let theme = crate::Theme::publication().resolve().unwrap();
-    theme.prepare_font_environment().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
+    theme.text.prepare_font_environment().unwrap();
     let mut layout =
         crate::layout::Layout::envelope(crate::layout::PixelRect::new(80.0, 610.0, 60.0, 450.0));
     layout.x_axis.label = Some("W".repeat(200).into());

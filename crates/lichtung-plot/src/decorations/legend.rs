@@ -586,7 +586,7 @@ impl LegendBox {
 impl Legend {
     fn allocation_metrics(
         descriptor: &PreparedGuide,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(LegendMetrics, f64), Error> {
         let label_size = descriptor
             .sections
@@ -620,14 +620,14 @@ impl Legend {
 
     pub(crate) fn natural_preference(
         descriptor: &PreparedGuide,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         measurement::natural_preference(descriptor, theme)
     }
 
     pub(crate) fn vertical_widths(
         descriptor: &PreparedGuide,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<GuideWidths, Error> {
         measurement::width_requirements(descriptor, theme)
     }
@@ -637,7 +637,7 @@ impl Legend {
         available: (f64, impl Into<Option<f64>>),
         horizontal: bool,
         compact: bool,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         compact_changes: &mut bool,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<crate::layout::fit::FitOutcome<Self>, Error> {

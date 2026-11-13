@@ -17,7 +17,7 @@ use crate::render::backend::{
 use crate::spec::{
     CategoryOrder, HeatmapAnnotations, HeatmapLayout, PlotRenderContext, PlotRenderResult,
 };
-use crate::theme::{ContinuousColorScale, OpaqueColor, ResolvedTheme};
+use crate::theme::{ContinuousColorScale, OpaqueColor};
 use crate::Plot;
 
 #[cfg(test)]
@@ -55,7 +55,7 @@ impl HeatmapData {
     pub(crate) fn alpha_guide(
         &self,
         _chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -104,7 +104,7 @@ impl HeatmapData {
 
     pub(crate) fn guide_semantics(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain();
         let missing = self
@@ -180,7 +180,7 @@ impl HeatmapData {
     pub(crate) fn guide_descriptor(
         &self,
         field: &str,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
         let Some(values) = &self.colorbar_values else {
             return Ok(None);
@@ -219,7 +219,7 @@ fn assigned_columns(
     labels: &[String],
     selection: &crate::CategoryLabelSelection,
     panel: PixelRect,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
@@ -326,7 +326,7 @@ fn assigned_rows(
     selection: &crate::CategoryLabelSelection,
     labels_visible: bool,
     tick_width: f64,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::{GridRequirement, TrackSpec};
@@ -554,7 +554,7 @@ impl HeatmapIntrinsicCache {
         &self,
         prepared: &HeatmapData,
         axes: &crate::plots::shared_x::PreparedAxes,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> bool {
         self.color_scale.same(&prepared.color.scale)
             && self.layouts == theme.text_layouts
@@ -589,7 +589,7 @@ impl HeatmapIntrinsicCache {
         without_y_labels: (f64, f64),
         prepared: &HeatmapData,
         axes: &crate::plots::shared_x::PreparedAxes,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         let color_scale = prepared.color.scale.clone();
         let text = |role: &crate::theme::TextTheme| -> Result<_, Error> {
@@ -638,7 +638,7 @@ impl HeatmapIntrinsicCache {
 /// frame, or cell is assigned. Category packing and elision remain T5e.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let axes = chart
         .prepared_axis_inputs()
@@ -654,7 +654,7 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = retained_in(chart)?;
     let hard = intrinsic_body_minimum(chart, theme)?;
@@ -667,14 +667,14 @@ pub(crate) fn natural_body_preference(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let marks = retained_in(chart)?;
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
-    theme.prepared_font_environment()?;
+    theme.text.prepared_font_environment()?;
     let labels = axes.display_categories[0]
         .as_ref()
         .ok_or_else(|| Error::Render("natural Heatmap columns missing".into()))?;
@@ -729,7 +729,10 @@ pub(crate) fn natural_body_height(
     Ok(heights.into_iter().sum())
 }
 
-fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+fn intrinsic_cell_ink(
+    prepared: &HeatmapData,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<(f64, f64), Error> {
     let (columns, rows) = (prepared.x_levels.len(), prepared.y_levels.len());
     let slots = columns.checked_mul(rows).ok_or_else(|| {
         Error::Render("heatmap declared cell topology exceeds spatial capacity".into())
@@ -831,7 +834,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
 fn column_label_hard(
     _prepared: &HeatmapData,
     label: &str,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
     if let Some(layout) = &theme.text_layouts.ticks[0] {
         if layout.hidden()
@@ -865,7 +868,7 @@ fn column_label_hard(
 pub(crate) fn prepare_intrinsics(
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: Option<&str>,
 ) -> Result<(f64, f64), Error> {
     Ok(analyze_intrinsics(prepared, axes, theme, scope)?.0)
@@ -878,10 +881,10 @@ pub(crate) fn prepare_intrinsics(
 fn analyze_intrinsics(
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     diagnostic_scope: Option<&str>,
 ) -> Result<((f64, f64), (f64, f64)), Error> {
-    theme.prepared_font_environment()?;
+    theme.text.prepared_font_environment()?;
     #[cfg(not(test))]
     let _ = diagnostic_scope;
 
@@ -1107,7 +1110,7 @@ impl HeatmapData {
 
 pub(crate) fn measure(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = retained_in(chart)?;
     let theme = context.theme;
@@ -2053,7 +2056,7 @@ fn select_cells(
     prepared: &HeatmapData,
     columns: &[f64],
     rows: &[f64],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     annotations: &AnnotationPlans,
 ) -> Result<Vec<CellPayload>, Error> {
     let x_count = prepared.x_levels.len();
@@ -2207,7 +2210,7 @@ fn measure_annotations(
     chart: &Plot,
     prepared: &HeatmapData,
     columns: &[f64],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<AnnotationPlans, crate::layout::fit::PlanError> {
     use crate::layout::fit::{self, FitFailure, FitKind, FitOutcome};
@@ -2249,12 +2252,17 @@ fn measure_annotations(
                 .ok_or_else(|| {
                     Error::Render("heatmap value has no prepared resolved fill".into())
                 })?;
-            let mut assigned_theme = theme.clone();
+            let assigned_appearance = theme.theme.clone();
+            let mut assigned_theme = crate::text::TextRequestContext {
+                theme: &assigned_appearance,
+                ..*theme
+            };
             let geometry = theme.annotations.get_cells();
-            assigned_theme.text_padding = Some((
+            let padding = (
                 geometry.get_value_horizontal_padding().clone(),
                 geometry.get_value_vertical_padding().clone(),
-            ));
+            );
+            assigned_theme.trial.padding = Some(&padding);
             let appearance = assigned_theme.contrasting_text(fill)?;
             let owner = prepared.value_owners[index]
                 .as_deref()
@@ -2304,12 +2312,17 @@ fn measure_annotations(
             .get_cells()
             .null_row_padding(appearance.theme.get_font_size())?;
         let available_width = padding.available_width(columns[columns.len() - 1] - columns[0])?;
-        let mut assigned_theme = theme.clone();
+        let assigned_appearance = theme.theme.clone();
+        let mut assigned_theme = crate::text::TextRequestContext {
+            theme: &assigned_appearance,
+            ..*theme
+        };
         let geometry = theme.annotations.get_cells();
-        assigned_theme.text_padding = Some((
+        let padding = (
             geometry.get_null_row_horizontal_padding().clone(),
             geometry.get_null_row_vertical_padding().clone(),
-        ));
+        );
+        assigned_theme.trial.padding = Some(&padding);
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
         let block = match fit::outcome(fit::measured(
             crate::layout::text::request::measure_occurrence(
@@ -2356,7 +2369,7 @@ fn check_annotation_tracks(
     annotations: &AnnotationPlans,
     columns: &[f64],
     rows: &[f64],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
     use crate::layout::fit::{FitFailure, FitKind};

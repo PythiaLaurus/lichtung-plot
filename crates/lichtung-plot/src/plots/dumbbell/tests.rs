@@ -38,6 +38,8 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         .radii(radii)
         .unwrap();
     theme.marks = theme.marks.clone().points(points).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(

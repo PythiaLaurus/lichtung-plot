@@ -8,7 +8,6 @@ use crate::decorations::plan::PanelPlan;
 use crate::layout::{PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::PlotKind;
-use crate::theme::ResolvedTheme;
 
 pub(super) fn observe_arranged_chrome(
     plan: &super::FacetPlan,
@@ -46,7 +45,7 @@ pub(super) fn render_scene(
     strip_text: &[Vec<PlacedText>],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::RootFramePlan,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     for panel_plan in panel_plans {
@@ -104,9 +103,9 @@ pub(super) fn render_scene(
 pub(super) fn plan_facet_strip(
     plot: &Plot,
     facet: &FacetPanel,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let spacing = theme.facet_strip_lengths()?;
     let plans = strip_plans(
         plot,
@@ -179,7 +178,7 @@ pub(super) fn plan_shared_facet_axis_labels(
     vertical_label: Option<&crate::Text>,
     grid: PixelRect,
     axis_origin: (f64, f64),
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let mut plans = Vec::new();
 
@@ -305,7 +304,7 @@ pub(super) fn strip_sources(
     plot: &Plot,
     cell: &FacetCell,
     data: crate::data::PlotData<'_>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<crate::Text>, Error> {
     if theme.text_layouts.facet.iter().all(Option::is_none) {
         return Ok(vec![facet_label(plot, cell, data)?.into()]);
@@ -338,7 +337,7 @@ pub(super) fn strip_plans(
     plot: &Plot,
     cell: &FacetCell,
     data: crate::data::PlotData<'_>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Vec<crate::layout::ResolvedTextPlan>, crate::layout::fit::PlanError> {
@@ -366,7 +365,7 @@ pub(super) fn strip_widths(
     plot: &Plot,
     cell: &FacetCell,
     data: crate::data::PlotData<'_>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     strip_sources(plot, cell, data, theme)?.iter().try_fold(
         (0.0_f64, 0.0_f64),
@@ -387,7 +386,7 @@ pub(super) fn strip_requirement(
     plot: &Plot,
     cell: &FacetCell,
     data: crate::data::PlotData<'_>,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     panel: PixelRect,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::canvas::EdgeSpaceRequirements, crate::layout::fit::PlanError> {
@@ -453,6 +452,8 @@ mod tests {
             .font_size(17.0)
             .unwrap();
         theme.typography.axes.axis_title.line_height_multiplier = 1.25;
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let grid = PixelRect::new(71.25, 372.75, 83.25, 304.75);
         let facet = FacetPanel {
             panel_index: 0,

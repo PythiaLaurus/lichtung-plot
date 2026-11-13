@@ -11,7 +11,7 @@ use crate::data::source::{
 };
 use crate::layout::ComponentAddress;
 use crate::render::backend::{FillStyle, LineStyle, PointStyle};
-use crate::theme::{Color, OpaqueColor, ResolvedTheme};
+use crate::theme::{Color, OpaqueColor};
 use crate::{Error, Plot, PlotKind, Result};
 
 use super::discrete::{
@@ -258,7 +258,11 @@ pub(crate) struct AlphaGuideBuilder<'a> {
 }
 
 impl<'a> AlphaGuideBuilder<'a> {
-    pub(crate) fn new(plot: &'a Plot, theme: &ResolvedTheme, owner: &'a ComponentAddress) -> Self {
+    pub(crate) fn new(
+        plot: &'a Plot,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+        owner: &'a ComponentAddress,
+    ) -> Self {
         let paint = theme.typography.guides.legend_label.get_color();
         Self {
             plot,

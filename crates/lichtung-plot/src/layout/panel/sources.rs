@@ -2,7 +2,6 @@
 
 use super::{AxisSide, AxisTick, Projection};
 use crate::layout::PhysicalTextAlignment;
-use crate::theme::ResolvedTheme;
 use crate::{Error, TickGeneration};
 
 // Only the automatic candidate program is bounded by this private seed grammar.
@@ -196,7 +195,7 @@ fn upper_seed_count(span: f64, ch_quanta: i64) -> Result<usize, Error> {
 fn measured_seed(
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<usize, Error> {
     let probe = theme.measure_text(
         "0",
@@ -556,7 +555,7 @@ pub(crate) fn numeric_tick_plan(
     log: bool,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
@@ -625,7 +624,7 @@ impl NumericTickPlan {
         operands: &[crate::numeric::operand::Operand],
         log: bool,
         format: &crate::numeric::source::AxisRequest<'_>,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         mut source: TickSource,
         projection: &Projection,
         side: AxisSide,
@@ -652,6 +651,7 @@ impl NumericTickPlan {
         if let Some(explanation) = &set.explanation {
             let appearance = explanation.appearance(&theme.typography.axes.tick_label);
             theme
+                .text
                 .prepared_font_environment()?
                 .admit_text(
                     &appearance.theme.stack,
@@ -677,7 +677,7 @@ impl NumericTickPlan {
         log: bool,
         projection: &Projection,
         side: AxisSide,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         format: Option<&crate::numeric::source::AxisRequest<'_>>,
         scope: &crate::layout::fit::FitScope,
         raw: Option<(f64, f64)>,
@@ -822,7 +822,7 @@ pub(super) fn labels_fit(
     ticks: &[AxisTick],
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<bool, Error> {
     if let Some(crate::text::orientation::Orientation::Automatic(angles)) = theme
         .tick_text_appearance(side)
@@ -836,11 +836,15 @@ pub(super) fn labels_fit(
             return Ok(true);
         }
         for angle in angles {
-            let mut selected = theme.clone();
-            selected.text_layouts.ticks[usize::from(side == AxisSide::Left)] = theme
+            let mut selected_appearance = theme.theme.clone();
+            selected_appearance.text_layouts.ticks[usize::from(side == AxisSide::Left)] = theme
                 .tick_text_appearance(side)
                 .layout
                 .map(|request| request.clone().rotation(*angle));
+            let selected = crate::text::TextRequestContext {
+                theme: &selected_appearance,
+                ..*theme
+            };
             if labels_fit(ticks, projection, side, &selected)? {
                 return Ok(true);
             }
@@ -861,7 +865,7 @@ pub(super) fn labels_fit(
     let visibility = appearance
         .layout
         .and_then(|request| request.instructions().visibility.as_ref());
-    let environment = theme.prepared_font_environment()?;
+    let environment = theme.text.prepared_font_environment()?;
     for &index in &eligible {
         if appearance.includes(index, &eligible) {
             environment

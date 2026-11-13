@@ -19,14 +19,14 @@ use crate::Plot;
 /// Measure the current vertical bar policy without a layout backend.
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
     let mode = bar_data::mode(chart);
     let prepared = bar_data::retained(chart)?;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
     let mut rendered_maxima =

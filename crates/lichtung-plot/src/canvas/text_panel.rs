@@ -8,7 +8,6 @@ use crate::layout::kernel::{
 use crate::layout::{AddressRole, PhysicalTextAlignment, PixelRect, TextBlock};
 use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::TextAppearance;
-use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
 #[cfg(test)]
@@ -23,7 +22,10 @@ fn pixels(quanta: i64) -> f64 {
 }
 
 impl TextPanel {
-    pub(super) fn appearances<'a>(&'a self, theme: &'a ResolvedTheme) -> [TextAppearance<'a>; 2] {
+    pub(super) fn appearances<'a>(
+        &'a self,
+        theme: &'a crate::theme::ResolvedTheme,
+    ) -> [TextAppearance<'a>; 2] {
         [
             self.title
                 .appearance(theme.typography.get_composition().get_text_panel_title()),
@@ -46,7 +48,10 @@ pub(super) struct TextPanelIntrinsics {
 }
 
 impl TextPanelIntrinsics {
-    pub(super) fn prepare(source: &TextPanel, theme: &ResolvedTheme) -> Result<Self, Error> {
+    pub(super) fn prepare(
+        source: &TextPanel,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> Result<Self, Error> {
         let [title_style, body_style] = source.appearances(theme);
         let title = fit::intrinsic_widths(
             theme,
@@ -129,7 +134,7 @@ impl TextPanelIntrinsics {
 pub(super) fn natural_height(
     source: &TextPanel,
     width: f64,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
     let [title, body] = source.appearances(theme);
     let [title_alignment, body_alignment] = source.alignments();
@@ -176,7 +181,7 @@ impl TextPanelPlan {
         source: &TextPanel,
         index: usize,
         cell: PixelRect,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         intrinsics: TextPanelIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {

@@ -40,7 +40,7 @@ impl PreparedWaterfall {
     pub(crate) fn alpha_guide(
         &self,
         _chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -128,6 +128,8 @@ mod geometry_tests {
         .theme(theme.clone());
         source.preflight().unwrap();
         let resolved = theme.resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let resolved = crate::text::TextRequestContext::new(&resolved, &text);
         let chart =
             crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
         let marks = retained(&chart).unwrap();
@@ -185,8 +187,15 @@ mod geometry_tests {
         let operation = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
         let mut theme = crate::theme::Theme::publication().resolve().unwrap();
-        let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
-        let default = BodyGeometry::new(&theme);
+        let text_service = crate::text::TextService::default();
+        let chart = inputs
+            .attach_with_guides_for_test(
+                source,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+            )
+            .unwrap();
+        let default =
+            BodyGeometry::new(&crate::text::TextRequestContext::new(&theme, &text_service));
         assert_eq!(
             [
                 default.breadth,
@@ -198,12 +207,12 @@ mod geometry_tests {
             [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
         );
         let panel = crate::layout::PixelRect::new(10.0, 810.0, 20.0, 620.0);
-        let measure = |theme: &crate::theme::ResolvedTheme| {
+        let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
             chart
                 .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, theme))
                 .unwrap()
         };
-        let original = measure(&theme);
+        let original = measure(&crate::text::TextRequestContext::new(&theme, &text_service));
         let crate::layout::interior::MarkPayload::Waterfall(original_payload) =
             &original.marks.as_ref().unwrap().payload
         else {
@@ -258,7 +267,7 @@ mod geometry_tests {
             .waterfall_body_category_breadth(crate::theme::RelativeSpacing::new(0.3).unwrap())
             .unwrap();
         theme.marks = theme.marks.clone().extents(extents).unwrap();
-        let narrower = measure(&theme);
+        let narrower = measure(&crate::text::TextRequestContext::new(&theme, &text_service));
         let payload = |plan: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Waterfall(payload) =
                 &plan.marks.as_ref().unwrap().payload
@@ -285,7 +294,11 @@ mod geometry_tests {
             .waterfall_body_category_breadth(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
             .unwrap();
         theme.marks = theme.marks.clone().extents(extents).unwrap();
-        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
+        assert!(mark_intrinsic_body_minimum(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service)
+        )
+        .is_err());
         let body = theme
             .marks
             .get_fills()
@@ -303,7 +316,11 @@ mod geometry_tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
+        assert!(mark_intrinsic_body_minimum(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service)
+        )
+        .is_err());
         let connector = theme
             .marks
             .get_strokes()
@@ -326,12 +343,16 @@ mod geometry_tests {
             .connectors(connectors)
             .unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_ok());
+        assert!(mark_intrinsic_body_minimum(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service)
+        )
+        .is_ok());
     }
 }
 
 impl BodyGeometry {
-    fn new(theme: &crate::theme::ResolvedTheme) -> Self {
+    fn new(theme: &crate::text::TextRequestContext<'_, '_>) -> Self {
         let breadth = theme
             .marks
             .get_extents()
@@ -351,7 +372,7 @@ impl BodyGeometry {
 
 fn mark_intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(chart)?;
     if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
@@ -436,7 +457,7 @@ fn mark_intrinsic_body_minimum(
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = mark_intrinsic_body_minimum(chart, theme)?;
     let axes =
@@ -497,10 +518,10 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let inputs = chart
         .prepared_waterfall
         .as_ref()
@@ -630,7 +651,7 @@ fn prepare_spans(
 
 pub(crate) fn measure(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = retained(chart)?;
     let theme = context.theme;
@@ -1097,7 +1118,7 @@ struct ShelfRow {
 
 fn total_shelf_size(
     candidates: &[(f64, Option<crate::Text>); 2],
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> f64 {
     candidates
         .iter()
@@ -1116,13 +1137,18 @@ fn plan_annotations(
     panel: PixelRect,
     source_y: f64,
     candidates: &[(f64, Option<crate::Text>); 2],
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
     let frame = crate::layout::Layout {
         projection: projection.clone(),
         ..crate::layout::Layout::envelope(panel)
     };
-    let directional = context.theme.reproject_text(&frame);
+    let appearance = context.theme.theme.clone();
+    let request = crate::text::TextRequestContext {
+        theme: &appearance,
+        ..*context.theme
+    };
+    let directional = request.reproject_text(&frame);
     let theme = &directional;
     let scope = context.fit_scope();
     let mut rows: Vec<ShelfRow> = Vec::new();

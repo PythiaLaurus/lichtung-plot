@@ -3,6 +3,8 @@ use super::*;
 #[test]
 fn fixed_sources_keep_every_original_power_and_refuse_caps_or_text_nonfit() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let view = (1.0, 64.0);
     let range = LatticeRange::new(view, false, 1.0, 2.0).unwrap();
     let positions = positions(
@@ -101,6 +103,8 @@ fn fixed_sources_keep_every_original_power_and_refuse_caps_or_text_nonfit() {
 #[test]
 fn preferred_sublattices_obey_the_cap_without_inventing_a_nonlattice_midpoint() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let view = (0.0, 6.0);
     let projection = Projection::new(view, (0.0, 1.0), (0.0, 900.0, 0.0, 500.0));
     let selected = plan(
@@ -145,6 +149,8 @@ fn preferred_sublattices_obey_the_cap_without_inventing_a_nonlattice_midpoint() 
 #[test]
 fn empty_and_capped_huge_sources_do_not_materialize_numeric_functions() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let policy =
         crate::NumericFormat::default().set_function(|_| panic!("unreached numeric owner"));
     let format = crate::numeric::source::AxisRequest::for_test(&policy);

@@ -9,7 +9,6 @@ use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 #[expect(
@@ -52,7 +51,7 @@ pub(super) fn allocate(
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<GridAssignment>, Error> {
@@ -83,7 +82,7 @@ pub(super) fn natural_width(
     shape: (usize, usize),
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: &ContentSizing<'_>,
 ) -> Result<FitOutcome<f64>, Error> {
@@ -136,7 +135,7 @@ fn measure(
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
     phase: Phase,
@@ -150,7 +149,7 @@ fn measure(
     let count = rows
         .checked_mul(columns)
         .ok_or_else(|| Error::Render("facet Grid topology overflowed".into()))?;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = data.with_operation(&resources);
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
@@ -525,6 +524,8 @@ mod tests {
                 .clone()
                 .font_size(f64::from(em))
                 .unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 1,
@@ -595,6 +596,8 @@ mod tests {
         let ids = [7, 29];
         {
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
 
             let foreign = OperationContext::new();
             let data = PlotData::with_rows(&plot, &rows, &ids).with_operation(&foreign);
@@ -633,6 +636,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let panels = [0, 1].map(|index| FacetPanel {
             panel_index: index,
             row: 0,

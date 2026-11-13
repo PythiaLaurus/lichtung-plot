@@ -509,9 +509,14 @@ mod tests {
                 .mandatory_strip(strip)
                 .unwrap();
             theme.marks = theme.marks.clone().points(points).unwrap();
-            let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
+            let text = crate::text::TextService::default();
+            let minimum = chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+                .unwrap();
             let panel = crate::layout::PixelRect::new(10.0, 610.0, 20.0, 420.0);
             let measure = |theme: &super::super::ResolvedTheme| {
+                let request = crate::text::TextRequestContext::new(theme, &text);
+                let theme = &request;
                 let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, theme).unwrap();
                 chart
                     .measure_selected_interior(crate::spec::PlotRenderContext::new(
@@ -531,7 +536,12 @@ mod tests {
                 .unwrap();
             let points = theme.marks.get_points().clone().raw_overlay(raw).unwrap();
             theme.marks = theme.marks.clone().points(points).unwrap();
-            assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), minimum);
+            assert_eq!(
+                chart
+                    .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+                    .unwrap(),
+                minimum
+            );
             let after = measure(&theme);
             assert!(before.discrete_guide.is_some());
             assert_eq!(before.discrete_guide.as_ref().unwrap().counts.entries, 1);

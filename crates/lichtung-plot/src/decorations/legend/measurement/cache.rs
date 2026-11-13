@@ -6,7 +6,7 @@ use super::{Legend, PreparedGuide};
 use crate::layout::fit::{FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{LayoutScalar, SpatialRounding};
 use crate::layout::ComponentAddress;
-use crate::theme::{LegendTheme, ResolvedTheme, TextTheme};
+use crate::theme::{LegendTheme, TextTheme};
 use crate::Error;
 
 #[derive(Debug, Default)]
@@ -80,14 +80,15 @@ pub(super) fn measure_assigned(
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     compact_changes: &mut bool,
     scope: &FitScope,
 ) -> Result<FitOutcome<Legend>, Error> {
     let (width, height) = constraints(available)?;
     {
         let cache = theme
-            .guide_measurements
+            .text
+            .guides
             .lock()
             .map_err(|_| Error::Render("guide measurement cache lock poisoned".into()))?;
         for entry in &cache.entries {
@@ -137,7 +138,8 @@ pub(super) fn measure_assigned(
         },
     };
     let mut cache = theme
-        .guide_measurements
+        .text
+        .guides
         .lock()
         .map_err(|_| Error::Render("guide measurement cache lock poisoned".into()))?;
     cache.entries.try_reserve(1).map_err(|error| {

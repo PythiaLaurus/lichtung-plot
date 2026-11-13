@@ -7,7 +7,6 @@ mod tests;
 use super::{ExactRational, PhysicalTextAlignment, ResolvedTextPlan, TextPlanError};
 use crate::layout::fit::{FitOutcome, FitScope};
 use crate::text::TextAppearance;
-use crate::theme::ResolvedTheme;
 use crate::{Error, TextFailure, TextFitPriority, TextOverflow, TextTheme};
 use std::sync::Arc;
 
@@ -29,7 +28,7 @@ pub(crate) struct FitInput {
     reason = "the single local transaction orders complete/marked size programs, their certified exclusions and terminal floor handling"
 )]
 pub(crate) fn measure(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -61,10 +60,14 @@ pub(crate) fn measure(
     instructions.orientation = None;
     instructions.wrapping = Some(crate::TextWrapping::NoSoftWrap);
     let basis_style = appearance.theme.clone().font_size(1.0)?;
-    let mut basis_theme = theme.clone();
-    basis_theme.text_height = None;
-    basis_theme.text_size_trial = None;
-    basis_theme.text_padding = None;
+    let basis_appearance = theme.theme.clone();
+    let mut basis_theme = crate::text::TextRequestContext {
+        theme: &basis_appearance,
+        ..*theme
+    };
+    basis_theme.trial.height = None;
+    basis_theme.trial.size_trace = None;
+    basis_theme.trial.padding = None;
     let basis = match super::request::measure_current(
         &basis_theme,
         source,
@@ -81,13 +84,17 @@ pub(crate) fn measure(
         FitOutcome::Measured(plan) => plan,
         FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
     };
-    let evidence = BoundsEvidence::new(&basis, theme.prepared_font_environment()?, appearance)
+    let evidence = BoundsEvidence::new(&basis, theme.text.prepared_font_environment()?, appearance)
         .map_err(metric_error)?;
     let selected = |layout: &crate::TextLayout, size: f64| -> Result<_, Error> {
         let style = appearance.theme.clone().font_size(size)?;
         let trace = Arc::new(stability::Stability::new(size, minimum));
-        let mut trial = theme.clone();
-        trial.text_size_trial = Some(Arc::clone(&trace));
+        let trial_appearance = theme.theme.clone();
+        let mut trial = crate::text::TextRequestContext {
+            theme: &trial_appearance,
+            ..*theme
+        };
+        trial.trial.size_trace = Some(&trace);
         let outcome = super::request::measure_unfitted(
             &trial,
             source,
@@ -111,8 +118,8 @@ pub(crate) fn measure(
             appearance: appearance.theme.clone(),
             width,
             exact_override: appearance.exact_override,
-            height: theme.text_height,
-            padding: theme.text_padding.clone(),
+            height: theme.trial.height,
+            padding: theme.trial.padding.cloned(),
             // These references identify deliberate appearance owners, never
             // equality inferred from equal current glyphs or preferred sizes.
             contrast_role: if std::ptr::eq(
@@ -146,7 +153,7 @@ pub(crate) fn measure(
             width,
             minimum,
             maximum,
-            theme.text_height,
+            theme.trial.height,
             layout
                 .instructions()
                 .overflow
@@ -451,7 +458,7 @@ pub(crate) struct GroupMember {
     reason = "actual group membership, common interval and joint certified trials are frozen together"
 )]
 pub(crate) fn uniform(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     plans: &mut [ResolvedTextPlan],
     scope: &FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
@@ -530,15 +537,19 @@ pub(crate) fn uniform(
             let mut size = target;
             loop {
                 let trace = Arc::new(stability::Stability::new(size, minimum));
-                let mut trial = theme.clone();
-                trial.text_size_trial = Some(Arc::clone(&trace));
+                let trial_appearance = theme.theme.clone();
+                let mut trial = crate::text::TextRequestContext {
+                    theme: &trial_appearance,
+                    ..*theme
+                };
+                trial.trial.size_trace = Some(&trace);
                 let mut selected = Vec::new();
                 crate::data::source::reserve_source(&mut selected, indices.len())?;
                 let mut miss = false;
                 for (&index, member) in indices.iter().zip(&members) {
                     let mut request = member.request.clone();
-                    trial.text_height = member.input.height;
-                    trial.text_padding.clone_from(&member.input.padding);
+                    trial.trial.height = member.input.height;
+                    trial.trial.padding = member.input.padding.as_ref();
                     request.edit_instructions().fit = None;
                     if abbreviated
                         || (member.request.instructions().fit_priority
@@ -645,7 +656,7 @@ fn is_uniform(plan: &ResolvedTextPlan) -> bool {
 }
 
 pub(crate) fn uniform_options(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     plans: &mut [Option<ResolvedTextPlan>],
     scope: &FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
@@ -659,7 +670,7 @@ pub(crate) fn uniform_options(
 }
 
 pub(crate) fn uniform_placed(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     text: &mut [crate::render::backend::PlacedText],
     scope: &FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
@@ -690,7 +701,7 @@ fn same_appearance(a: &ResolvedTextPlan, b: &ResolvedTextPlan) -> bool {
 }
 
 pub(crate) fn minimum_height(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
 ) -> Result<Option<i64>, Error> {
@@ -715,7 +726,7 @@ pub(crate) fn minimum_height(
         .expect("fit policy")
         .bounds(appearance.theme.get_font_size())?
         .0;
-    let environment = theme.prepared_font_environment()?;
+    let environment = theme.text.prepared_font_environment()?;
     let pair = environment
         .prepared_pair(
             appearance.theme.get_stack(),
@@ -761,7 +772,7 @@ pub(crate) fn minimum_height(
 }
 
 pub(crate) fn assign_height(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     plan: &ResolvedTextPlan,
     height: f64,
     scope: &FitScope,
@@ -769,8 +780,12 @@ pub(crate) fn assign_height(
     let Some(input) = &plan.fit_input else {
         return Ok(plan.clone());
     };
-    let mut assigned = theme.clone();
-    assigned.text_padding.clone_from(&input.padding);
+    let assigned_appearance = theme.theme.clone();
+    let mut assigned = crate::text::TextRequestContext {
+        theme: &assigned_appearance,
+        ..*theme
+    };
+    assigned.trial.padding = input.padding.as_ref();
     crate::layout::fit::measured(super::request::measure_height(
         &assigned,
         plan.original_source(),
@@ -788,7 +803,7 @@ pub(crate) fn assign_height(
 }
 
 pub(crate) fn hard_height(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     plan: &ResolvedTextPlan,
 ) -> Result<(f64, f64), Error> {
     let Some(input) = &plan.fit_input else {

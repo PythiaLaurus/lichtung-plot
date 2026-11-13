@@ -91,10 +91,13 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
         Some(&crate::Theme::publication()),
     )
     .unwrap();
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = crate::text::TextRequestContext::new(&appearance, &text);
     inputs
         .prepare_discrete_guides(
             &source,
-            &crate::Theme::publication().resolve().unwrap(),
+            &request,
             &operation,
             &ComponentAddress::root(),
             false,

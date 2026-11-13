@@ -9,7 +9,7 @@ use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
 use crate::render::backend::Backend;
 use crate::spec::{FacetScales, LegendPosition, PlotKind};
-use crate::theme::ResolvedTheme;
+use crate::text::TextRequestContext;
 
 mod data;
 mod legend;
@@ -167,7 +167,7 @@ pub(super) struct PreparedFacetGuide {
 pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
-    theme: &ResolvedTheme,
+    theme: &TextRequestContext<'_, '_>,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedFacetGuide, Error> {
@@ -201,7 +201,7 @@ impl FacetPlan {
     pub(super) fn new(
         source: &Plot,
         kind: PlotKind,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         prepared_guide: &PreparedFacetGuide,
@@ -228,7 +228,7 @@ impl FacetPlan {
         )?;
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let resources = theme.prepared_font_environment()?.operation();
+        let resources = theme.text.prepared_font_environment()?.operation();
         let data = source.data().with_operation(&resources);
         let mut base_plot = data::base_plot(source, kind, &resources)?;
         if let Some(levels) = &prepared_guide.hue_levels {
@@ -662,7 +662,7 @@ impl FacetPlan {
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();
                 let mut panel_layers = Vec::new();
-                theme.prepared_font_environment()?;
+                theme.text.prepared_font_environment()?;
 
                 crate::data::source::reserve_source(&mut panel_layers, panels.len())?;
                 crate::data::source::reserve_source(&mut legends, panels.len())?;
@@ -782,7 +782,7 @@ impl FacetPlan {
         &self,
         source: &Plot,
         kind: PlotKind,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         rendering::render_scene(
@@ -881,6 +881,8 @@ mod feedback_tests {
                 DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
                 CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
                 let theme = crate::Theme::publication().resolve().unwrap();
+                let text = crate::text::TextService::default();
+                let theme = crate::text::TextRequestContext::new(&theme, &text);
                 let mut children = ChildPlans::facets(&source);
                 let mut calls = 0;
                 let mut retained_neighbor = None;
@@ -917,7 +919,11 @@ mod feedback_tests {
                             Some(&mut presence),
                         )
                         .map_err(|error| Error::Render(error.to_string()))?;
-                        theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                        theme.text.prepare_font_environment_from_census(
+                            &mut census,
+                            presence,
+                            stage,
+                        )?;
                         Ok((inputs, guide))
                     },
                     |(inputs, guide), assigned, round| {
@@ -1083,6 +1089,8 @@ mod feedback_tests {
         .size(900, 900)
         .erase();
         let theme = source.resolve_theme().unwrap();
+        let text_service = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         crate::layout::plan_root(
             source.sizing_request(),
             |stage| {
@@ -1116,7 +1124,9 @@ mod feedback_tests {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                theme
+                    .text
+                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok((inputs, guide))
             },
             |(inputs, guide), assigned, round| {
@@ -1225,6 +1235,8 @@ mod feedback_tests {
         .size(960, 640)
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = crate::layout::plan_root(
             source.sizing_request(),
             |stage| {
@@ -1258,7 +1270,9 @@ mod feedback_tests {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(format!("facet D1 census: {error}")))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                theme
+                    .text
+                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok((inputs, guide))
             },
             |(inputs, guide), assigned, round| {

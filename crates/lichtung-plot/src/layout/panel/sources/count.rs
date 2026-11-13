@@ -2,7 +2,6 @@
 
 use super::{AxisSide, NumericTickPlan, Projection, SourceKind, TickSource};
 use crate::layout::fit::{FitKind, FitScope, PlanError};
-use crate::theme::ResolvedTheme;
 use crate::{Error, TickSingleton, TickSpace};
 
 pub(crate) struct CountPositions {
@@ -139,7 +138,7 @@ pub(crate) fn plan(
     raw: Option<(f64, f64)>,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &FitScope,
 ) -> Result<NumericTickPlan, PlanError> {

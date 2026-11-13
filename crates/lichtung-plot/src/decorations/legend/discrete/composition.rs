@@ -107,7 +107,7 @@ impl PreparedGuide {
     /// occurrence records survive preparation; no complete-pair adapter remains.
     pub(crate) fn prepare(
         plot: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &ComponentAddress,
         keys: Vec<GuideSourceKey>,
         continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
@@ -393,7 +393,7 @@ fn insert(
 fn separate_source(
     sections: &mut Vec<Section>,
     plot: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
     mut source: GuideKeySource,

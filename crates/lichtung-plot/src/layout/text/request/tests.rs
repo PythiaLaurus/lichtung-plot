@@ -5,6 +5,8 @@ use crate::{Text, TextBounds, TextLayout, TextOverflow, TextVisibility};
 #[test]
 fn explicit_zero_bounds_preserve_source_and_consume_only_the_selected_terminal_action() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let scope = FitScope::root();
     let source = "First line\nSecond line";
     let bounds = TextBounds::new(Some(0.0), Some(0.0), Some(0)).unwrap();
@@ -70,6 +72,8 @@ fn explicit_zero_bounds_preserve_source_and_consume_only_the_selected_terminal_a
 #[test]
 fn explicit_hidden_text_does_not_consume_its_unavailable_exact_font() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let style = theme
         .typography
         .root

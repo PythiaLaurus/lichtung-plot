@@ -40,7 +40,10 @@ fn descriptor() -> ContinuousDescriptor {
     }
 }
 
-fn prepared(descriptor: &ContinuousDescriptor, theme: &ResolvedTheme) -> Arc<PreparedGuide> {
+fn prepared(
+    descriptor: &ContinuousDescriptor,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Arc<PreparedGuide> {
     let plot = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0]),
         crate::NumericValues::new("y", [0.0]),
@@ -64,7 +67,7 @@ fn measure(
     available: (f64, f64),
     horizontal: bool,
     compact: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     changes: &mut bool,
 ) -> FitOutcome<Legend> {
     Legend::measure_assigned(
@@ -121,6 +124,8 @@ fn authored_title_owns_line_alignment_gap_and_complete_measurement_identity() {
             .unwrap(),
     );
     descriptor.title = Arc::new(title.clone().alignment(crate::TextAlignment::End));
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let measure = |descriptor: &ContinuousDescriptor| {
         fit::measured(Ok(measure(
             descriptor,
@@ -167,7 +172,9 @@ fn authored_title_owns_line_alignment_gap_and_complete_measurement_identity() {
 #[test]
 fn unusable_guide_misses_without_shaping() {
     let theme = crate::Theme::publication().resolve().unwrap();
-    theme.prepare_font_environment().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
+    theme.text.prepare_font_environment().unwrap();
     let descriptor = prepared(&descriptor(), &theme);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     assert!(matches!(
@@ -244,6 +251,8 @@ fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
     descriptor.missing = None;
     descriptor.numeric =
         super::super::descriptor::domain_presentation(descriptor.domain, None, None).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for horizontal in [false, true] {
         let preferred = fit::measured(Ok(measure(
             &descriptor,
@@ -317,6 +326,8 @@ fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
 #[test]
 fn asymmetric_numeric_centers_keep_their_fraction_or_return_typed_fit() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut descriptor = descriptor();
     descriptor.missing = None;
     descriptor.domain = (-0.01, 100.0);
@@ -371,6 +382,8 @@ fn asymmetric_numeric_centers_keep_their_fraction_or_return_typed_fit() {
 #[test]
 fn horizontal_and_vertical_guides_freeze_one_gradient_and_missing_block() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let descriptor = descriptor();
     for horizontal in [false, true] {
         let guide = fit::measured(Ok(measure(
@@ -438,6 +451,8 @@ fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped()
         .as_mut()
         .unwrap()
         .width = 40.0;
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for horizontal in [false, true] {
         let guide = fit::measured(Ok(measure(
             &descriptor,
@@ -488,6 +503,8 @@ fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.guides.legend_title.font_size = 40.0;
     theme.typography.guides.legend_title.weight = crate::TextWeight::Bold;
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let guide = fit::measured(Ok(measure(
         &descriptor(),
         (300.0, 300.0),
@@ -526,6 +543,8 @@ fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
     theme.legend = theme.legend.clone().frame(None).unwrap();
     let mut descriptor = descriptor();
     descriptor.missing.as_mut().unwrap().outline = None;
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let guide = fit::measured(Ok(measure(
         &descriptor,
         (500.0, 500.0),
@@ -568,6 +587,7 @@ fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
 #[test]
 fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
     let descriptor = descriptor();
     let mut changes = false;
     let preferred = fit::measured(Ok(measure(
@@ -575,7 +595,7 @@ fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
         (300.0, 300.0),
         false,
         false,
-        &theme,
+        &crate::text::TextRequestContext::new(&theme, &text),
         &mut changes,
     )))
     .unwrap();
@@ -585,7 +605,7 @@ fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
         (300.0, 300.0),
         false,
         true,
-        &theme,
+        &crate::text::TextRequestContext::new(&theme, &text),
         &mut changes,
     )))
     .unwrap();
@@ -604,7 +624,7 @@ fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
         (300.0, 300.0),
         false,
         false,
-        &theme,
+        &crate::text::TextRequestContext::new(&theme, &text),
         &mut changes,
     );
     assert!(

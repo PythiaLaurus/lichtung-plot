@@ -3,7 +3,6 @@
 use super::{AxisSide, NumericTickPlan, Projection, SourceKind, TickSource};
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::numeric::{lattice::generation::LatticeRange, logarithm, operand::Operand};
-use crate::theme::ResolvedTheme;
 use crate::{Error, Result, TickRequirement};
 use num_bigint::BigInt;
 
@@ -71,7 +70,7 @@ fn selected(
     source: TickSource,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
 ) -> Result<Option<NumericTickPlan>> {
     let plan = if let Some(format) = format {
@@ -107,7 +106,7 @@ pub(super) fn plan(
     maximum: Option<usize>,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &FitScope,
 ) -> std::result::Result<NumericTickPlan, PlanError> {

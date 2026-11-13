@@ -5,6 +5,8 @@ use crate::TickGeneration;
 fn empty_axis_measurement_does_not_shape_text() {
     {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
 
         let layout = Layout::envelope(PixelRect::new(80.0, 770.0, 60.0, 570.0));
         let standard = super::super::CoordinateLayoutInputs::new(&theme).unwrap();
@@ -26,6 +28,8 @@ fn empty_axis_measurement_does_not_shape_text() {
 #[test]
 fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidden() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(1.0, "")],
@@ -54,6 +58,8 @@ fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidd
 #[test]
 fn empty_category_alias_keeps_its_line_until_the_owner_hides_tick_text() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 480.0),
         Vec::new(),
@@ -81,6 +87,8 @@ fn empty_category_alias_keeps_its_line_until_the_owner_hides_tick_text() {
 #[test]
 fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(1.0, "one")],
@@ -131,6 +139,8 @@ fn layout(panel: PixelRect, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSour
 #[test]
 fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for origin in [80.0, 80.0 + 1.0 / 1024.0, 80.1, 80.2] {
         let end = origin + 300.0 + 1.0 / 1024.0;
         let ticks = || {
@@ -175,6 +185,8 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
 #[test]
 fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 380.0, 80.0, 380.0),
         vec![AxisTick::new(0.25, "first"), AxisTick::new(1.75, "second")],
@@ -225,7 +237,9 @@ fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
 
 #[test]
 fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
-    let theme = crate::Theme::publication().resolve().unwrap();
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&appearance, &text);
     let source = TickSource {
         kind: SourceKind::LogInterval(3),
         ordinal: 2,
@@ -240,7 +254,8 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
     );
     let plan = layout.plan_axes(&theme).unwrap();
     drop(layout);
-    drop(theme);
+    drop(appearance);
+    drop(text);
     for plan in [&plan, &plan.clone()] {
         assert_eq!(plan.x_axis.source, source);
         assert_eq!(plan.x_axis.ticks[0].position.to_bits(), 0.0_f64.to_bits());
@@ -256,6 +271,8 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
 #[test]
 fn exact_cells_use_adjacent_label_midpoints_and_skip_empty_labels() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![
@@ -289,6 +306,8 @@ fn exact_cells_use_adjacent_label_midpoints_and_skip_empty_labels() {
 #[test]
 fn category_bands_round_exact_ratios_and_preserve_reverse_semantic_order() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let ticks = vec![
         AxisTick::new(2.5, "third"),
         AxisTick::new(1.5, "second"),
@@ -321,6 +340,8 @@ fn category_bands_round_exact_ratios_and_preserve_reverse_semantic_order() {
 #[test]
 fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let label = "W".repeat(50);
     let layout = layout(
         PixelRect::new(80.0, 280.0, 80.0, 280.0),
@@ -339,6 +360,7 @@ fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
 #[test]
 fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_glyph() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
     let layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 280.0),
         vec![
@@ -349,11 +371,14 @@ fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_gl
         Vec::new(),
         TickSource::SUPPLIED,
     );
-    assert!(layout.plan_axes(&theme).is_err());
+    assert!(layout
+        .plan_axes(&crate::text::TextRequestContext::new(&theme, &text))
+        .is_err());
     theme.text_layouts.ticks[0] = Some(
         crate::TextLayout::default()
             .visibility(crate::TextVisibility::every(2, 0, crate::LabelEndpoints::Both).unwrap()),
     );
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let plan = layout.plan_axes(&theme).unwrap();
     assert_eq!(plan.x_axis.eligible_labels, [0, 1, 2]);
     assert_eq!(
@@ -383,6 +408,7 @@ fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_gl
 fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids() {
     use crate::{TextLayout, TextOrientation, TextRotation};
     let mut theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
     let layout = layout(
         PixelRect::new(80.0, 180.0, 80.0, 380.0),
         vec![
@@ -393,13 +419,17 @@ fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids
         Vec::new(),
         TickSource::EXACT,
     );
-    assert!(layout.plan_axes(&theme).is_err());
+    assert!(layout
+        .plan_axes(&crate::text::TextRequestContext::new(&theme, &text))
+        .is_err());
     let policy = TextLayout::default().orientation(TextOrientation::automatic_ticks(vec![
         TextRotation::horizontal(),
         TextRotation::vertical_up(),
     ]));
     theme.text_layouts.ticks[0] = Some(policy.clone());
-    let selected = layout.plan_axes(&theme).unwrap();
+    let selected = layout
+        .plan_axes(&crate::text::TextRequestContext::new(&theme, &text))
+        .unwrap();
     for tick in &selected.x_axis.ticks {
         let (plan, placement) = tick.label.as_ref().unwrap();
         assert_eq!(plan.source, "LightGBM");
@@ -409,6 +439,7 @@ fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids
         assert!(bounds.x0 >= tick.cell.start && bounds.x1 <= tick.cell.end && bounds.y1 < 80.0);
     }
     theme.text_layouts.ticks[0] = Some(TextLayout::default().rotation(TextRotation::vertical_up()));
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let fixed = layout.plan_axes(&theme).unwrap();
     assert_eq!(
         selected.grid.as_ref().unwrap().lines,
@@ -430,6 +461,7 @@ fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids
 fn exact_labels_retain_original_strings_and_positions_under_explicit_display_distinctness() {
     use crate::{TextBounds, TextElision, TextEllipsis, TextFailure, TextLayout, TextOverflow};
     let mut theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
     let source = layout(
         PixelRect::new(80.0, 480.0, 80.0, 280.0),
         vec![
@@ -447,7 +479,7 @@ fn exact_labels_retain_original_strings_and_positions_under_explicit_display_dis
         ));
     theme.text_layouts.ticks[0] = Some(request.clone());
     assert!(source
-        .plan_axes(&theme)
+        .plan_axes(&crate::text::TextRequestContext::new(&theme, &text))
         .unwrap_err()
         .to_string()
         .contains("ambiguous after ellipsis"));
@@ -455,6 +487,7 @@ fn exact_labels_retain_original_strings_and_positions_under_explicit_display_dis
         TextEllipsis::new(TextElision::End).distinct(false),
         TextFailure::Error,
     )));
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let selected = source.plan_axes(&theme).unwrap();
     assert_eq!(selected.x_axis.ticks.len(), 2);
     for (original, tick) in source.x_axis.ticks.iter().zip(&selected.x_axis.ticks) {
@@ -468,6 +501,8 @@ fn exact_labels_retain_original_strings_and_positions_under_explicit_display_dis
 #[test]
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 100.0),
         Vec::new(),
@@ -488,6 +523,8 @@ fn vertical_category_cells_reject_insufficient_height_without_dropping() {
 #[test]
 fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(200.0, 700.0, 80.0, 480.0),
         Vec::new(),
@@ -522,6 +559,8 @@ fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() 
 #[test]
 fn gutter_is_provisional_below_at_and_above_forty_percent() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 680.0, 80.0, 480.0),
         Vec::new(),
@@ -553,6 +592,8 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
             theme.axes.frame = None;
         }
         theme.axes.ticks.as_mut().unwrap().length = 17;
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let panel = PixelRect::new(250.0, 650.0, 150.0, 550.0);
         let mut layout = layout(
             panel,
@@ -607,6 +648,8 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
 #[test]
 fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
     let theme = crate::Theme::science().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut layout = layout(
         PixelRect::new(80.0, 480.0, 80.0, 480.0),
         Vec::new(),
@@ -628,6 +671,8 @@ fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
 #[test]
 fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for origin in [0.0, 1.0 / 1024.0, 0.1, -0.1] {
         let end = origin + 81_923.0 / 1024.0;
         let mut layout = layout(
@@ -662,6 +707,8 @@ fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins()
 #[test]
 fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     for side in [AxisSide::Bottom, AxisSide::Left] {
         let text = theme
             .measure_text(
@@ -727,9 +774,15 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "compares source selection, final axis and exact quantum fit boundary in one operation"
+)]
 fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
     use super::super::sources::{labels_fit, numeric_tick_plan};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let ticks = [
         AxisTick::new(0.0, "0"),
         AxisTick::new(1.0, "1"),

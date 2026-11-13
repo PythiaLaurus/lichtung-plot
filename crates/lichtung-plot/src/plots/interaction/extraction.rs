@@ -66,6 +66,8 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     assert_eq!(prepared.traces[0].cells[0].alpha.value.unwrap().alpha, 0);
     assert_eq!(prepared.traces[1].cells[0].alpha.value.unwrap().alpha, 230);
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

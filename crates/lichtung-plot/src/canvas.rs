@@ -94,6 +94,7 @@ struct PreparedCanvasRound<'a> {
 struct ResolvedCanvasThemes {
     root: Box<ResolvedTheme>,
     plots: Vec<Option<Box<ResolvedTheme>>>,
+    text: crate::text::TextService,
 }
 
 impl ResolvedCanvasThemes {
@@ -113,7 +114,6 @@ impl ResolvedCanvasThemes {
                         Some(theme) => {
                             let mut theme = Box::new(theme.resolve()?);
                             theme.canvas_surface_override = Some(root.surfaces.canvas_root);
-                            theme.share_font_environment_from(&root);
                             theme
                         }
                     };
@@ -124,7 +124,11 @@ impl ResolvedCanvasThemes {
                 .transpose()
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        Ok(Self { root, plots })
+        Ok(Self {
+            root,
+            plots,
+            text: crate::text::TextService::default(),
+        })
     }
 
     fn prepare_font_environment(
@@ -133,7 +137,7 @@ impl ResolvedCanvasThemes {
         presence: Vec<u64>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(), Error> {
-        self.root
+        self.text
             .prepare_font_environment_from_census(census, presence, prepared_stage)
     }
 
@@ -143,6 +147,15 @@ impl ResolvedCanvasThemes {
 
     fn plot(&self, index: usize) -> Option<&ResolvedTheme> {
         self.plots.get(index)?.as_deref()
+    }
+
+    fn root_request(&self) -> crate::text::TextRequestContext<'_, '_> {
+        crate::text::TextRequestContext::new(self.root(), &self.text)
+    }
+
+    fn plot_request(&self, index: usize) -> Option<crate::text::TextRequestContext<'_, '_>> {
+        self.plot(index)
+            .map(|theme| crate::text::TextRequestContext::new(theme, &self.text))
     }
 }
 
@@ -966,7 +979,7 @@ impl Canvas {
                     Error::Render("shared continuous guide has no prepared interior".into())
                 })?;
 
-            let theme = themes.plot(index).ok_or_else(|| {
+            let theme = &themes.plot_request(index).ok_or_else(|| {
                 Error::Render("shared continuous guide has no owning Plot theme".into())
             })?;
             let contributor =
@@ -1091,8 +1104,8 @@ impl Canvas {
                 )?;
                 plot = plot.with_global_color_levels(levels);
             }
-            let theme = themes
-                .plot(index)
+            let theme = &themes
+                .plot_request(index)
                 .expect("configured Canvas panel has a resolved theme");
             let inputs = interiors
                 .get(index)
@@ -1572,7 +1585,7 @@ impl Canvas {
                     width,
                     height,
                     "prepared canvas scene capture",
-                    prepared.themes.root(),
+                    &prepared.themes.root_request(),
                     final_stage,
                     |backend| self.render_planned_canvas(&plan, width, height, backend),
                 )?;
@@ -1627,7 +1640,9 @@ impl Canvas {
                 let plot = self.cell_visibility(source.clone(), index);
                 inputs.prepare_intrinsics(
                     &plot,
-                    themes.plot(index).expect("prepared Canvas panel theme"),
+                    &themes
+                        .plot_request(index)
+                        .expect("prepared Canvas panel theme"),
                 )?;
             }
         }
@@ -1641,7 +1656,9 @@ impl Canvas {
             text_panels.push(
                 panel
                     .as_ref()
-                    .map(|panel| text_panel::TextPanelIntrinsics::prepare(panel, themes.root()))
+                    .map(|panel| {
+                        text_panel::TextPanelIntrinsics::prepare(panel, &themes.root_request())
+                    })
                     .transpose()?,
             );
         }
@@ -1660,7 +1677,9 @@ impl Canvas {
                     crate::data::source::reserve_source_string(&mut scope, 32)?;
                     write!(scope, "panel-{index}").expect("reserved Canvas scope");
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-                        themes.plot(index).expect("configured Canvas Plot theme"),
+                        &themes
+                            .plot_request(index)
+                            .expect("configured Canvas Plot theme"),
                         plot.prose(),
                         Some(&scope),
                     )
@@ -1669,7 +1688,7 @@ impl Canvas {
             plot_titles.push(summary);
         }
         let root = crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-            themes.root(),
+            &themes.root_request(),
             self.prose(),
             None,
         )?;
@@ -1726,7 +1745,7 @@ impl Canvas {
         if let Some(guide) = shared_guide {
             guide.append_requirements(
                 &mut requirements,
-                themes.root(),
+                &themes.root_request(),
                 &root.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?,
                 Some(prepared_stage),
             )?;
@@ -1790,7 +1809,8 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("text-panel census index overflowed".into()))?,
             )?;
-            let [title_style, body_style] = panel.appearances(themes.root());
+            let request = themes.root_request();
+            let [title_style, body_style] = panel.appearances(&request);
             for (slot, role, source, appearance) in [
                 (
                     0,
@@ -1838,8 +1858,8 @@ impl Canvas {
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 plot = plot.with_suppressed_legend();
             }
-            let theme = themes
-                .plot(index)
+            let theme = &themes
+                .plot_request(index)
                 .expect("configured canvas panel has a resolved theme");
             let cell = root.child(
                 crate::layout::AddressRole::CanvasCell,
@@ -1865,7 +1885,7 @@ impl Canvas {
         }
         crate::layout::PreparedTextRequirement::append_preference_metrics(
             &mut requirements,
-            themes.root(),
+            &themes.root_request(),
             &root,
             prepared_stage,
         )?;
@@ -1879,8 +1899,8 @@ impl Canvas {
                 )?;
                 crate::layout::PreparedTextRequirement::append_preference_metrics(
                     &mut requirements,
-                    themes
-                        .plot(index)
+                    &themes
+                        .plot_request(index)
                         .expect("configured Canvas Plot retains theme"),
                     &owner,
                     prepared_stage,
@@ -2066,10 +2086,10 @@ impl Canvas {
 
         let canvas_layout = RootFramePlan::measure(
             (width, height),
-            themes.root(),
+            &themes.root_request(),
             self.prose(),
             crate::decorations::title_block::plan::RootAlignments::resolve(
-                themes.root(),
+                &themes.root_request(),
                 self.prose_alignments(),
                 [None; 2],
             ),
@@ -2283,7 +2303,9 @@ impl Canvas {
             let Some(plot) = plot else {
                 continue;
             };
-            let theme = themes.plot(index).expect("configured Canvas plot theme");
+            let theme = &themes
+                .plot_request(index)
+                .expect("configured Canvas plot theme");
             let dependencies = self.consumed_guide_dependencies(
                 index,
                 cells[index].expect("configured owner assignment").width(),
@@ -2422,7 +2444,7 @@ impl Canvas {
                 ),
                 horizontal,
                 compact,
-                themes.root(),
+                &themes.root_request(),
                 compact_changes,
                 &guide_scope,
             )? {
@@ -2441,8 +2463,12 @@ impl Canvas {
                 } else {
                     height.max(h)
                 };
-                canvas_layout =
-                    sizing::content_frame(self, themes.root(), assigned.dimensions()?.0, height)?;
+                canvas_layout = sizing::content_frame(
+                    self,
+                    &themes.root_request(),
+                    assigned.dimensions()?.0,
+                    height,
+                )?;
                 full_outer = canvas_layout.panel_box;
             }
             #[cfg(test)]
@@ -2463,8 +2489,12 @@ impl Canvas {
                     FitOutcome::Measured(height) => height,
                     FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
                 };
-                canvas_layout =
-                    sizing::content_frame(self, themes.root(), assigned.dimensions()?.0, height)?;
+                canvas_layout = sizing::content_frame(
+                    self,
+                    &themes.root_request(),
+                    assigned.dimensions()?.0,
+                    height,
+                )?;
                 full_outer = canvas_layout.panel_box;
                 outer = full_outer;
             }
@@ -2523,8 +2553,8 @@ impl Canvas {
                         "canvas row {row} requires a configured first-column panel for shared category labels"
                     ))
                 })?;
-                let expected_theme = themes
-                    .plot(first_index)
+                let expected_theme = &themes
+                    .plot_request(first_index)
                     .expect("configured canvas panel has a resolved theme");
                 let dependencies = self.consumed_guide_dependencies(
                     first_index,
@@ -2564,8 +2594,8 @@ impl Canvas {
                                 .into(),
                         ));
                     }
-                    let theme = themes
-                        .plot(index)
+                    let theme = &themes
+                        .plot_request(index)
                         .expect("configured canvas panel has a resolved theme");
                     let dependencies = self.consumed_guide_dependencies(
                         index,
@@ -2704,8 +2734,8 @@ impl Canvas {
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = plot.kind();
-            let theme = themes
-                .plot(index)
+            let theme = &themes
+                .plot_request(index)
                 .expect("configured canvas panel has a resolved theme");
             let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
             let cell = cells[index].expect("configured owner assignment");
@@ -2938,7 +2968,7 @@ impl Canvas {
                 text_panel,
                 index,
                 cells[index].expect("configured TextPanel assignment"),
-                themes.root(),
+                &themes.root_request(),
                 intrinsic,
                 &scope,
             )? {
@@ -3154,8 +3184,8 @@ impl Canvas {
         probes.resize_with(plots.len(), || None);
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let theme = themes
-                .plot(index)
+            let theme = &themes
+                .plot_request(index)
                 .expect("configured canvas panel has a resolved theme");
             let result = crate::layout::fit::measured(children.canvas_probe(
                 plot,
@@ -3173,7 +3203,7 @@ impl Canvas {
 
 fn plot_category_domain(
     plot: &Plot,
-    context: crate::spec::PlotRenderContext<'_>,
+    context: crate::spec::PlotRenderContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans<'_>,
     index: usize,
     round: &crate::layout::kernel::FeedbackRound,

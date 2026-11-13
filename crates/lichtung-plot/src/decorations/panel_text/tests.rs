@@ -11,6 +11,8 @@ fn near(actual: f64, expected: f64) {
 fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes() {
     use crate::{DataCoordinate, Text, TextCoordinate, TextLayout};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 20.0]),
         crate::NumericValues::new("y", [0.0, 10.0]),
@@ -70,6 +72,8 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
 fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_uniform_bands() {
     use crate::{DataCoordinate, TextCoordinate};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let source = Plot::bar(
         crate::CategoryValues::new("group", ["first_raw", "second_raw"]).unwrap(),
         crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0])),
@@ -98,6 +102,8 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
 fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles() {
     use crate::{DataCoordinate, DataPosition, Text, TextLayout, TextOrientation, TextRotation};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 20.0]),
         crate::NumericValues::new("y", [0.0, 10.0]),
@@ -182,6 +188,8 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
         .clone()
         .panel_text_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
         .unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);
     let result = chart

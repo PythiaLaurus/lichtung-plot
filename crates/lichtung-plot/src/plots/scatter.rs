@@ -66,7 +66,7 @@ pub(crate) struct ScatterPayload {
 /// may clip a point at their boundary; only automatic axes require full ink.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_scatter
@@ -127,7 +127,7 @@ impl PreparedScatter {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         let style = chart.point_style(
@@ -243,7 +243,7 @@ impl PreparedScatter {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources()?;
@@ -275,7 +275,7 @@ impl PreparedScatter {
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -286,7 +286,7 @@ impl PreparedScatter {
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[usize],
         map: &CategoryColors,
@@ -346,7 +346,7 @@ impl PreparedScatter {
         &self,
         chart: &Plot,
         projection: &crate::layout::Projection,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<ScatterPayload, Error> {
         #[cfg(test)]
@@ -419,7 +419,7 @@ impl ScatterPayload {
 /// Projection may change with the assignment; capture only draws this payload.
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
@@ -444,7 +444,7 @@ pub(crate) fn measure_marks(
                 "Scatter measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
     let point_style = chart.point_style(

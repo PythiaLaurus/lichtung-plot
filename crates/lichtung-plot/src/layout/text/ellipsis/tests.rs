@@ -8,6 +8,8 @@ fn measured(
     width: f64,
 ) -> Result<ResolvedTextPlan, fit::PlanError> {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text_service = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text_service);
     let text = Text::new(source).layout(layout);
     fit::measured(fit::text(
         &theme,

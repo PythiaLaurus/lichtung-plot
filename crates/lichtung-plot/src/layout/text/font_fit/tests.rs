@@ -2,7 +2,7 @@ use super::*;
 use crate::{TextBounds, TextFit, TextLayout, TextWrapping};
 
 fn selected(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: &TextTheme,
     request: &TextLayout,
@@ -26,6 +26,8 @@ fn fractional_floor_and_equal_ranges_retain_preferred_appearance_separately() {
     assert!(TextFit::range(14.0, 10.0).is_err());
     assert!(TextFit::range(10.0, f64::INFINITY).is_err());
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let appearance = theme
         .typography
         .root
@@ -80,6 +82,8 @@ fn fractional_floor_and_equal_ranges_retain_preferred_appearance_separately() {
 #[test]
 fn metric_proposals_find_fractional_sizes_and_large_intervals_do_not_sample_integer_sizes() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let style = theme
         .typography
         .root
@@ -102,7 +106,7 @@ fn metric_proposals_find_fractional_sizes_and_large_intervals_do_not_sample_inte
     assert!((10.0..14.0).contains(&plan.style.font_size));
     assert_ne!(plan.style.font_size.fract().to_bits(), 0.0_f64.to_bits());
     assert!(plan.width() <= 125.0);
-    assert!(theme.text_query_count()<=2,"only the source basis and an optional selected result may be retained, never failed size scenes");
+    assert!(theme.text.text_query_count()<=2,"only the source basis and an optional selected result may be retained, never failed size scenes");
     let fixed = style.clone().font_size(plan.style.font_size).unwrap();
     let expected = crate::layout::fit::measured(super::super::request::measure_unfitted(
         &theme,
@@ -124,6 +128,8 @@ fn metric_proposals_find_fractional_sizes_and_large_intervals_do_not_sample_inte
 fn priorities_keep_complete_content_or_preferred_size_and_floor_actions_remain_explicit() {
     use crate::{TextElision, TextEllipsis};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let style = theme
         .typography
         .root
@@ -189,6 +195,8 @@ fn priorities_keep_complete_content_or_preferred_size_and_floor_actions_remain_e
 #[test]
 fn uniform_roles_use_the_common_interval_without_coupling_independent_or_contrast_members() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let style = theme
         .typography
         .root
@@ -240,7 +248,11 @@ fn uniform_roles_use_the_common_interval_without_coupling_independent_or_contras
     assert_eq!(plans[3].style.font_size.to_bits(), 14.0_f64.to_bits());
     assert_eq!(plans[0].fit_group, plans[1].fit_group);
     assert_ne!(plans[0].fit_group, plans[3].fit_group);
-    let core = theme.prepared_font_environment().unwrap().liveness_probe();
+    let core = theme
+        .text
+        .prepared_font_environment()
+        .unwrap()
+        .liveness_probe();
     let frozen = plans
         .iter()
         .map(ResolvedTextPlan::freeze_selected)
@@ -258,7 +270,7 @@ fn uniform_roles_use_the_common_interval_without_coupling_independent_or_contras
         assert_eq!(plan.request, selected.request);
     }
     drop(plans);
-    drop(theme);
+    drop(text);
     assert!(!core());
     assert_eq!(frozen[0].source, "Short");
 }
@@ -266,6 +278,8 @@ fn uniform_roles_use_the_common_interval_without_coupling_independent_or_contras
 #[test]
 fn exact_metric_cells_cover_rounding_boundaries_and_leave_trial_queries_uncached() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let style = theme
         .typography
         .root
@@ -277,10 +291,14 @@ fn exact_metric_cells_cover_rounding_boundaries_and_leave_trial_queries_uncached
         .wrapping(TextWrapping::Legal)
         .bounds(TextBounds::new(None, Some(100.0), Some(3)).unwrap());
     let trace = Arc::new(stability::Stability::new(12.25, 12.0));
-    let mut trial = theme.clone();
-    trial.text_size_trial = Some(Arc::clone(&trace));
+    let trial_appearance = theme.theme.clone();
+    let mut trial = crate::text::TextRequestContext {
+        theme: &trial_appearance,
+        ..theme
+    };
+    trial.trial.size_trace = Some(&trace);
     let source = "A contextual line with legal wrapping";
-    let cache_before = theme.text_query_count();
+    let cache_before = theme.text.text_query_count();
     let FitOutcome::Measured(plan) = super::super::request::measure_unfitted(
         &trial,
         source,
@@ -293,7 +311,7 @@ fn exact_metric_cells_cover_rounding_boundaries_and_leave_trial_queries_uncached
     .unwrap() else {
         panic!("metric cell");
     };
-    assert_eq!(theme.text_query_count(), cache_before);
+    assert_eq!(theme.text.text_query_count(), cache_before);
     let lower = trace.lower().unwrap();
     assert!((12.0..=12.25).contains(&lower));
     for size in [lower, f64::midpoint(lower, 12.25), 12.25] {

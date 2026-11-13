@@ -58,7 +58,7 @@ impl ContinuousContributor {
     pub(crate) fn for_plot(
         plot: &Plot,
         input: &crate::layout::interior::PreparedInteriorInputs,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<Self>, Error> {
         let Some(field) = plot.color_dimension_key() else {
             return Ok(None);

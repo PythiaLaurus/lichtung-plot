@@ -58,6 +58,8 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
         [(3, 200, 64), (0, 900, 0), (2, 800, 230)]
     );
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

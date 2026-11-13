@@ -8,6 +8,7 @@ use crate::decorations::plan::PanelPlan;
 use crate::layout::PixelRect;
 use crate::render::backend::{Backend, SurfaceRole};
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::text::{TextRequestContext, TextService};
 use crate::theme::ResolvedTheme;
 
 pub(super) struct PlotPlan {
@@ -18,6 +19,7 @@ struct PreparedPlotInputs {
     axes: crate::layout::interior::PreparedInteriorInputs,
     facet_guide: Option<super::facets::PreparedFacetGuide>,
     theme: Box<ResolvedTheme>,
+    text: TextService,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     root_frame: std::cell::RefCell<Option<CachedRootFrame>>,
@@ -38,7 +40,8 @@ impl PreparedPlotInputs {
         source: &Plot,
     ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
         let dimensions = source.canvas_dimensions()?;
-        let minimum = source.intrinsic_body_minimum(&self.theme)?;
+        let request = TextRequestContext::new(&self.theme, &self.text);
+        let minimum = source.intrinsic_body_minimum(&request)?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
         if let Some(cached) = self.root_frame.borrow().as_ref() {
@@ -49,7 +52,7 @@ impl PreparedPlotInputs {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
         }
-        let frame = source.measured_canvas_layout(&self.theme)?;
+        let frame = source.measured_canvas_layout(&request)?;
 
         let frame = frame.into_shared();
         *self.root_frame.borrow_mut() = Some(CachedRootFrame {
@@ -83,7 +86,7 @@ fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
         source.kind(),
         || Ok(Box::new(source.resolve_theme()?)),
         |prepared, replay| {
-            let environment = prepared.theme.prepared_font_environment().unwrap();
+            let environment = prepared.text.prepared_font_environment().unwrap();
             let core = environment.liveness_probe();
             let operation = environment.operation().liveness_probe();
             let frame = prepared.root_frame.borrow();
@@ -273,7 +276,7 @@ mod soft_hyphen_tests {
                         .iter()
                         .filter(|pair| pair.pair_ordinal != title.pair_ordinal)
                         .all(|pair| !pair.required_scalars.contains(&'-')));
-                    let environment = prepared.theme.prepared_font_environment().unwrap();
+                    let environment = prepared.text.prepared_font_environment().unwrap();
                     assert!(environment.prepared_pairs_are_sealed().unwrap());
                     let resolved = environment
                         .prepared_pair(&pair.stack, crate::font::canonical::RequestedWeight::Bold)
@@ -787,20 +790,22 @@ impl PlotPlan {
             sizing,
             |prepared_stage| {
                 let theme = resolve_theme()?;
+                let text = TextService::default();
+                let request = TextRequestContext::new(&theme, &text);
                 source.validate_configuration(kind)?;
                 let axes = crate::plots::shared_x::prepare_plot(
                     source,
                     &prepared_stage.operation(),
                     Some(&theme),
                 )?;
-                axes.validate_categorical_scale(source, &theme, None)?;
+                axes.validate_categorical_scale(source, &request, None)?;
                 let facet_guide = source
                     .has_facets()
                     .then(|| {
                         super::facets::prepare_discrete_guide(
                             source,
                             kind,
-                            &theme,
+                            &request,
                             &axes,
                             &prepared_stage.operation(),
                         )
@@ -809,7 +814,7 @@ impl PlotPlan {
                 if !source.has_facets() {
                     axes.prepare_discrete_guides(
                         source,
-                        &theme,
+                        &request,
                         &prepared_stage.operation(),
                         &crate::layout::ComponentAddress::root()
                             .child(crate::layout::AddressRole::PlotBody, 0)?,
@@ -820,7 +825,7 @@ impl PlotPlan {
                     Some(&axes),
                     source,
                     kind,
-                    theme.as_ref(),
+                    &request,
                     &crate::layout::ComponentAddress::root(),
                     true,
                     true,
@@ -829,7 +834,7 @@ impl PlotPlan {
                 )?;
                 crate::layout::PreparedTextRequirement::append_preference_metrics(
                     &mut requirements,
-                    &theme,
+                    &request,
                     &crate::layout::ComponentAddress::root(),
                     prepared_stage,
                 )?;
@@ -849,17 +854,17 @@ impl PlotPlan {
                         census.counts.structural_addresses
                     )));
                 }
-                theme.prepare_font_environment_from_census(
+                text.prepare_font_environment_from_census(
                     &mut census,
                     scalar_presence,
                     prepared_stage,
                 )?;
                 // Scientific preparation and the font census are complete. No
                 // parent width has been allocated when these summaries are retained.
-                axes.prepare_intrinsics(source, &theme)?;
+                axes.prepare_intrinsics(source, &request)?;
                 let root_text =
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-                        &theme,
+                        &request,
                         source.prose(),
                         None,
                     )?;
@@ -867,12 +872,14 @@ impl PlotPlan {
                     axes,
                     facet_guide,
                     theme,
+                    text,
                     text_census: census,
                     root_text,
                     root_frame: std::cell::RefCell::new(None),
                 })
             },
             |prepared, assigned, round| {
+                let request = TextRequestContext::new(&prepared.theme, &prepared.text);
                 let assigned =
                     if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
                         crate::layout::RootSize::new(width, height)
@@ -881,7 +888,7 @@ impl PlotPlan {
                         if source.has_facets() {
                             super::facets::natural_size(
                                 &attached,
-                                &prepared.theme,
+                                &request,
                                 assigned,
                                 round,
                                 prepared.facet_guide.as_ref().expect("prepared facet guide"),
@@ -891,7 +898,7 @@ impl PlotPlan {
                             crate::layout::interior::sizing::plot_size(
                                 &attached,
                                 &prepared.axes,
-                                &prepared.theme,
+                                &request,
                                 assigned,
                                 round,
                             )?
@@ -915,7 +922,7 @@ impl PlotPlan {
                         super::facets::FacetPlan::new(
                             &source,
                             kind,
-                            &prepared.theme,
+                            &request,
                             round,
                             &mut children,
                             prepared
@@ -931,7 +938,7 @@ impl PlotPlan {
                     PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
                         &source,
                         kind,
-                        &prepared.theme,
+                        &request,
                         prepared.root_frame(&source)?,
                         round,
                         sizing.automatic_height(),
@@ -950,6 +957,7 @@ impl PlotPlan {
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, layout, final_stage| {
+                let request = TextRequestContext::new(&prepared.theme, &prepared.text);
                 let _ = &prepared.text_census;
                 let (width, height) = assigned.dimensions()?;
                 #[cfg(test)]
@@ -958,18 +966,10 @@ impl PlotPlan {
                     width,
                     height,
                     "prepared plot scene capture",
-                    &prepared.theme,
+                    &request,
                     final_stage,
                     |backend| {
-                        render_plot_scene(
-                            source,
-                            kind,
-                            width,
-                            height,
-                            &prepared.theme,
-                            &layout,
-                            backend,
-                        )
+                        render_plot_scene(source, kind, width, height, &request, &layout, backend)
                     },
                 )?;
                 #[cfg(test)]
@@ -1011,7 +1011,7 @@ fn render_plot_scene(
     kind: PlotKind,
     width: u32,
     height: u32,
-    theme: &ResolvedTheme,
+    theme: &TextRequestContext<'_, '_>,
     layout: &PlotLayoutPlan,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -1030,7 +1030,7 @@ impl UnfacetedPlotPlan {
     fn new(
         source: &Plot,
         kind: PlotKind,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
         mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
         round: &mut crate::layout::kernel::FeedbackRound,
         content_height: bool,
@@ -1137,7 +1137,7 @@ impl UnfacetedPlotPlan {
         &self,
         source: &Plot,
         kind: PlotKind,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         backend.draw_surface(
@@ -1186,7 +1186,7 @@ impl Plot {
         &self,
         kind: PlotKind,
         panel: crate::layout::PixelRect,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, Error> {
         crate::layout::fit::measured(self.preflight_measurement(
             kind,
@@ -1201,7 +1201,7 @@ impl Plot {
         &self,
         kind: PlotKind,
         panel: crate::layout::PixelRect,
-        theme: &ResolvedTheme,
+        theme: &TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<crate::layout::fit::FitOutcome<PlotRenderResult>, Error> {
         crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
@@ -1253,6 +1253,8 @@ mod root_title_tests {
         for caption in ["", "Independent caption\nSecond caption line"] {
             let source = source.clone().caption(caption);
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let root = crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 800,
@@ -1415,6 +1417,8 @@ mod retained_legend_tests {
         .erase()
         .with_legend_position(crate::LegendPosition::OutsideRight);
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         measurements::start();
         let root = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
@@ -1450,7 +1454,9 @@ mod retained_legend_tests {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                theme
+                    .text
+                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok(inputs)
             },
             |inputs, assigned, round| {

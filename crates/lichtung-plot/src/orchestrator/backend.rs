@@ -542,7 +542,7 @@ pub(crate) fn capture_text_replay_plan(
     width: u32,
     height: u32,
     _scope: &str,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     final_stage: &mut crate::layout::kernel::FinalStage<'_>,
     capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
 ) -> Result<TextReplayPlan, Error> {
@@ -553,7 +553,7 @@ pub(crate) fn capture_text_replay_plan(
             "prepared scene dimensions must be positive".into(),
         ));
     }
-    let verifier = SealedTextVerifier::new(theme.prepared_font_environment()?);
+    let verifier = SealedTextVerifier::new(theme.text.prepared_font_environment()?);
     let mut backend = TextPlanningBackend::new(&verifier, final_stage, height);
     #[cfg(test)]
     super::measurements::producer();
@@ -1184,7 +1184,7 @@ mod tests {
         });
     }
 
-    fn replay_text_style(theme: &crate::theme::ResolvedTheme) -> TextStyle {
+    fn replay_text_style(theme: &crate::text::TextRequestContext<'_, '_>) -> TextStyle {
         let title = &theme.typography.root.title;
         TextStyle {
             color: title.paint,
@@ -1197,10 +1197,11 @@ mod tests {
     }
 
     fn capture_test_plan(
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
     ) -> crate::layout::FrozenRoot<TextReplayPlan> {
         theme
+            .text
             .prepared_font_environment()
             .unwrap()
             .operation()
@@ -1246,6 +1247,8 @@ mod tests {
             });
         };
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = capture_test_plan(&theme, |backend| {
             COORDINATE_CONVERSIONS.with(|count| count.set(0));
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
@@ -1319,6 +1322,8 @@ mod tests {
             FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
         };
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let source = " A & B\n\nC \u{5d0}\u{5d1}  D";
         let plans = [
             PhysicalTextAlignment::Start,
@@ -1441,6 +1446,8 @@ mod tests {
     #[test]
     fn canonical_text_checks_absolute_origins_and_bottom_up_overflow_before_freeze() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let plan = theme
             .measure_text(
                 "A",
@@ -1506,6 +1513,8 @@ mod tests {
     fn frozen_rectangles_replay_without_spatial_conversion() {
         use crate::render::coordinates::SPATIAL_CONVERSIONS;
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = capture_test_plan(&theme, |backend| {
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
             let bounds = PixelRect::new(-0.25, 50.125, -2.5, 80.25);
@@ -1546,7 +1555,7 @@ mod tests {
     }
 
     fn storage_labels(
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> (ResolvedTextPlan, DeferredAnnotationTextPlan) {
         let text = theme
             .measure_text(
@@ -1649,6 +1658,8 @@ mod tests {
     #[test]
     fn prepared_svg_replay_moves_the_actual_reserved_buffers_unchanged() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().clear());
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         NULL_END_CALLS.with(|calls| calls.set(0));
@@ -1680,8 +1691,11 @@ mod tests {
         crate::render::svg_backend::SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         assert_eq!(addresses, output.storage_addresses());
         SVG_RAW_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-        let mut reference =
-            SvgBackend::in_memory_with_fonts(100, 100, theme.prepared_font_environment().unwrap());
+        let mut reference = SvgBackend::in_memory_with_fonts(
+            100,
+            100,
+            theme.text.prepared_font_environment().unwrap(),
+        );
         plan.replay(100, 100, &mut reference, "reference SVG")
             .unwrap();
         let reference = reference.into_output().unwrap();
@@ -1702,6 +1716,8 @@ mod tests {
     fn prepared_storage_uses_quantum_primitive_svg_and_matching_png_bytes() {
         use sha2::{Digest as _, Sha256};
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = capture_test_plan(&theme, |backend| {
             backend.draw_surface(
                 PixelRect::new(0.0, 100.0, 0.0, 100.0),
@@ -1755,7 +1771,10 @@ mod tests {
     #[test]
     fn capture_rejects_unplanned_text_and_brackets_without_font_work() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         theme
+            .text
             .prepared_font_environment()
             .unwrap()
             .operation()
@@ -1832,8 +1851,11 @@ mod tests {
     #[test]
     fn every_nonempty_canonical_storage_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let labels = storage_labels(&theme);
         theme
+            .text
             .prepared_font_environment()
             .unwrap()
             .operation()
@@ -1939,6 +1961,8 @@ mod tests {
     #[test]
     fn capture_append_refusal_precedes_frozen_text_materialization() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let text = theme
             .measure_text(
                 "retained text",
@@ -1949,6 +1973,7 @@ mod tests {
             )
             .unwrap();
         theme
+            .text
             .prepared_font_environment()
             .unwrap()
             .operation()
@@ -2008,6 +2033,8 @@ mod tests {
     #[test]
     fn retained_capture_payload_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         for payload in [
             "prepared layer name",
             "prepared scatter points",
@@ -2107,6 +2134,8 @@ mod tests {
     #[test]
     fn frozen_scene_replay_consumes_exactly_the_captured_calls() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let position = Point2D::new(40.0, 60.0);
         let placement = PlannedTextPlacement::middle(position, TextAnchor::Middle, 0.0);
         let labels = ["first", "second"].map(|source| {
@@ -2139,6 +2168,8 @@ mod tests {
     #[test]
     fn direct_planned_bracket_null_and_svg_reject_absolute_and_y_overflow() {
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let resolved = theme
             .measure_text(
                 "A",

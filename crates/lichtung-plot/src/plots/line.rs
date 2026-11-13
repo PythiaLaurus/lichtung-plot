@@ -69,7 +69,7 @@ pub(crate) struct LinePayload {
 /// Resolve one prepared path's painted hard span before parent allocation.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_line
@@ -170,7 +170,7 @@ impl PreparedLine {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -222,7 +222,7 @@ impl PreparedLine {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
@@ -244,7 +244,7 @@ impl PreparedLine {
         &self,
         chart: &Plot,
         group: &LineGroup,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         map: &CategoryColors,
         accent: &AccentColors,
     ) -> Result<(u8, u8, u8), Error> {
@@ -316,7 +316,7 @@ impl PreparedLine {
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -327,7 +327,7 @@ impl PreparedLine {
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[usize],
         map: &CategoryColors,
@@ -812,7 +812,7 @@ fn categorical_index(index: usize) -> Result<f64, Error> {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -831,7 +831,7 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     project(chart, prepared, layout, theme, data, context.fit_scope())
 }
@@ -844,7 +844,7 @@ fn project(
     chart: &Plot,
     prepared: &PreparedLine,
     layout: crate::layout::Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {

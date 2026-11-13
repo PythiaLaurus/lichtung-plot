@@ -70,7 +70,7 @@ pub(crate) fn plan(
     rendered_maxima: &[f64],
     y_range: (f64, f64),
     panel: PixelRect,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     let effective = theme.effective_significance(chart.significance_mark_style_override())?;
@@ -106,6 +106,8 @@ fn plan_comparisons(
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let effective = theme.effective_significance(Some(mark_style))?;
     plan_comparisons_with_label(
         annotations,
@@ -137,7 +139,7 @@ fn plan_comparisons_with_label(
     panel: PixelRect,
     legend_constraint: LegendAnnotationConstraint,
     effective: &EffectiveSignificance,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_comparisons_at_with_label(
@@ -177,7 +179,7 @@ fn plan_comparisons_at_with_label(
     legend_constraint: LegendAnnotationConstraint,
     horizontal: bool,
     effective: &EffectiveSignificance,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     validate_range(y_range, y_limits.is_some())?;
@@ -642,7 +644,7 @@ pub(crate) fn plan_grouped(
     y_range: (f64, f64),
     panel: PixelRect,
     stacked: bool,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
@@ -675,7 +677,7 @@ pub(crate) fn plan_horizontal(
     x_range: (f64, f64),
     panel: PixelRect,
     stacked: bool,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
@@ -731,7 +733,7 @@ fn plan_grouped_oriented(
     legend_constraint: LegendAnnotationConstraint,
     stacked: bool,
     horizontal: bool,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     if categories.is_empty()

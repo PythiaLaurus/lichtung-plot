@@ -51,7 +51,7 @@ pub use mark_paint::{
     DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, OutlineTheme,
     PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
 };
-pub(crate) use resolved::ResolvedTheme;
+pub(crate) use resolved::{ResolvedTheme, TextService};
 pub use resolved::{SurfaceTheme, TextTheme};
 
 pub use paint::Color;

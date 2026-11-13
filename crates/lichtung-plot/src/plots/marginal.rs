@@ -66,7 +66,7 @@ impl PreparedMarginal {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -110,7 +110,7 @@ impl PreparedMarginal {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
@@ -149,7 +149,7 @@ impl PreparedMarginal {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
@@ -159,7 +159,7 @@ impl PreparedMarginal {
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
         accents: &AccentColors,
@@ -204,7 +204,7 @@ impl PreparedMarginal {
 /// parent's hard input; the fixed strip/gap packing remains local until T5e3.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_marginal
@@ -244,7 +244,10 @@ pub(crate) fn intrinsic_body_minimum(
     ))
 }
 
-fn density_ink(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<(f64, f64), Error> {
+fn density_ink(
+    chart: &Plot,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_marginal
         .as_ref()
@@ -287,7 +290,7 @@ fn measure_linked_panel(
     panel: PixelRect,
     ranges: [(f64, f64); 2],
     role: layout::AddressRole,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<MarginalRegionProjection, crate::layout::fit::PlanError> {
     if ![panel.x0, panel.x1, panel.y0, panel.y1]
         .into_iter()
@@ -381,7 +384,7 @@ impl MarginalPayload {
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let hard = intrinsic_body_minimum(chart, theme)?;
     let gap = theme.composition_grid_gap()?;
@@ -407,7 +410,7 @@ pub(crate) fn natural_body_preference(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let gap = theme.composition_grid_gap()?;
@@ -458,7 +461,7 @@ pub(crate) fn natural_body_height(
 
 pub(crate) fn measure(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let prepared = chart
@@ -466,7 +469,7 @@ pub(crate) fn measure(
         .as_ref()
         .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
 
     // --- Layout geometry ---

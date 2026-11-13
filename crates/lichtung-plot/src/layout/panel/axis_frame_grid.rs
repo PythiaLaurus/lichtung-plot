@@ -7,7 +7,7 @@ use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::spacing::ExactLength;
-use crate::theme::{AxisLengths, ResolvedTheme};
+use crate::theme::AxisLengths;
 
 #[cfg(test)]
 mod appearance_tests;
@@ -75,7 +75,7 @@ impl AxisSystemPlan {
     pub(crate) fn uniform_titles(
         plans: &mut [&mut Self],
         side: AxisSide,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &FitScope,
     ) -> Result<(), PlanError> {
         let mut text = crate::data::source::collect_source(
@@ -335,7 +335,10 @@ impl AxisSystemPlan {
 
 impl Layout {
     #[cfg(test)]
-    pub(crate) fn plan_axes(&self, theme: &ResolvedTheme) -> Result<AxisSystemPlan, Error> {
+    pub(crate) fn plan_axes(
+        &self,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> Result<AxisSystemPlan, Error> {
         self.measure_axes(theme, &FitScope::root(), self.test_semantics())
             .map_err(PlanError::into_error)
     }
@@ -357,7 +360,7 @@ impl Layout {
 
     pub(crate) fn measure_axes(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &FitScope,
         semantics: [super::AxisSemanticInputs; 2],
     ) -> Result<AxisSystemPlan, PlanError> {
@@ -368,13 +371,18 @@ impl Layout {
 
     pub(crate) fn measure_axes_with_inputs(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &FitScope,
         semantics: [super::AxisSemanticInputs; 2],
         standard: impl FnOnce() -> Result<super::CoordinateLayoutInputs, Error>,
     ) -> Result<AxisSystemPlan, PlanError> {
         let standard = standard()?;
-        let directional = theme.reproject_text(self);
+        let appearance = theme.theme.clone();
+        let directional = crate::text::TextRequestContext {
+            theme: &appearance,
+            ..*theme
+        }
+        .reproject_text(self);
         let theme = &directional;
         // Evaluate both siblings: a later fatal error takes precedence over a fit miss.
         let x_axis = self.x_axis.measure(
@@ -546,7 +554,7 @@ impl Axis {
     fn vertical_label_width(
         &self,
         panel: crate::layout::PixelRect,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<f64, Error> {
         if let Some(width) = self.assigned_tick_width {
             return Ok(width);
@@ -599,7 +607,7 @@ impl Axis {
         &self,
         projection: &Projection,
         side: AxisSide,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         standard: &super::CoordinateLayoutInputs,
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
@@ -619,9 +627,13 @@ impl Axis {
                     .expect("angle request");
                 let mut miss = None;
                 for angle in angles {
-                    let mut selected = theme.clone();
-                    selected.text_layouts.ticks[usize::from(side == AxisSide::Left)] =
+                    let mut selected_appearance = theme.theme.clone();
+                    selected_appearance.text_layouts.ticks[usize::from(side == AxisSide::Left)] =
                         Some(original.clone().rotation(*angle));
+                    let selected = crate::text::TextRequestContext {
+                        theme: &selected_appearance,
+                        ..*theme
+                    };
                     match self.measure(projection, side, &selected, standard, scope) {
                         Ok(mut plan) => {
                             for tick in &mut plan.ticks {

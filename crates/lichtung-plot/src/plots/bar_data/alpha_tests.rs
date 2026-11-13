@@ -98,6 +98,8 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             .unwrap();
         let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_bars.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);
@@ -246,6 +248,8 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
             .unwrap(),
         );
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let prepared = retained(&chart).unwrap();
         assert_eq!(prepared.primary_mark_count(), 5);

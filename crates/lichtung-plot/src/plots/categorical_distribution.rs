@@ -45,7 +45,7 @@ impl PreparedDistribution {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         match self {
@@ -58,7 +58,7 @@ impl PreparedDistribution {
     pub(crate) fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources()?;
@@ -101,7 +101,7 @@ impl PreparedDistribution {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
@@ -111,7 +111,7 @@ impl PreparedDistribution {
     pub(crate) fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -330,7 +330,7 @@ impl DistributionPayload {
     pub(crate) fn retain(
         mut self,
         mut result: crate::spec::PlotRenderResult,
-        context: crate::spec::PlotRenderContext<'_>,
+        context: crate::spec::PlotRenderContext<'_, '_>,
         chart: &Plot,
     ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();

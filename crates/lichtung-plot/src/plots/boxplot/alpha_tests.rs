@@ -108,6 +108,8 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .summaries(summaries)
         .unwrap();
     theme.marks = theme.marks.clone().strokes(strokes).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     assert_eq!(
         intrinsic_body_minimum(&chart, &theme).unwrap().1.to_bits(),

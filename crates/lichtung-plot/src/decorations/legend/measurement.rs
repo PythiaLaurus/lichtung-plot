@@ -16,7 +16,6 @@ use crate::layout::fit::{self, FitKind, FitOutcome, FitScope, PlanError};
 use crate::layout::kernel::{allocate_tracks, LayoutScalar, SpatialRounding, TrackSpec};
 use crate::layout::{AddressRole, ResolvedTextPlan, TextBlock};
 use crate::theme::spacing::ExactLength;
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 #[expect(
@@ -66,7 +65,7 @@ struct SectionIntrinsics {
 
 fn guide_intrinsics(
     descriptor: &PreparedGuide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     metrics: &LegendMetrics,
 ) -> Result<Vec<SectionIntrinsics>, Error> {
     let mut sections = Vec::new();
@@ -378,7 +377,7 @@ fn entry_allocation(
 fn measure_title(
     text: &crate::Text,
     width: i64,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<(ResolvedTextPlan, ExactLength), PlanError> {
     let appearance = text.appearance(theme.guide_text_appearance(crate::GuideTextRole::Title));
@@ -414,7 +413,7 @@ fn measure_section(
     intrinsic: &SectionIntrinsics,
     cap: i64,
     horizontal: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     metrics: &LegendMetrics,
     scope: &FitScope,
     inner_width: i64,
@@ -722,7 +721,7 @@ fn measure_layout(
     assignment: &Assignment,
     horizontal: bool,
     compact: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     metrics: &LegendMetrics,
     frame_minimum: f64,
     compact_changes: &mut bool,
@@ -785,7 +784,7 @@ fn measure_layout(
 
 pub(super) fn natural_preference(
     descriptor: &PreparedGuide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let (metrics, frame_minimum) = Legend::allocation_metrics(descriptor, theme)?;
     let intrinsic = guide_intrinsics(descriptor, theme, &metrics)?;
@@ -815,7 +814,7 @@ pub(super) fn natural_preference(
 
 pub(super) fn width_requirements(
     descriptor: &PreparedGuide,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<super::GuideWidths, Error> {
     let (metrics, frame_minimum) = Legend::allocation_metrics(descriptor, theme)?;
     let intrinsics = guide_intrinsics(descriptor, theme, &metrics)?;
@@ -869,7 +868,7 @@ pub(super) fn measure_assigned(
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     compact_changes: &mut bool,
     scope: &FitScope,
 ) -> Result<FitOutcome<Legend>, Error> {
@@ -889,7 +888,7 @@ fn measure_uncached(
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     compact_changes: &mut bool,
     scope: &FitScope,
 ) -> Result<FitOutcome<Legend>, Error> {

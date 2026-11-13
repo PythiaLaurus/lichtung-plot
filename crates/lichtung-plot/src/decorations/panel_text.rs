@@ -6,7 +6,7 @@ use crate::layout::{
 };
 use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::position::resolve::{self, ReferenceAxis};
-use crate::theme::{spacing::ExactLength, ResolvedTheme};
+use crate::theme::spacing::ExactLength;
 use crate::{
     DataAreaCorner, Plot, TextAlignment, TextAnchor, TextFailure, TextOverlap, TextPosition,
     TextWrapping,
@@ -129,7 +129,7 @@ fn corner_anchor(corner: DataAreaCorner) -> TextAnchor {
 pub(crate) fn measure_plans(
     plot: &Plot,
     layout: &Layout,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<Vec<PlotTextAnnotationPlan>, PlanError> {
     let plans = fit::collect(
@@ -154,10 +154,15 @@ fn measure(
     annotation: &crate::PlotTextAnnotation,
     plot: &Plot,
     layout: &Layout,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<PlotTextAnnotationPlan, PlanError> {
-    let directional = theme.with_text_projection(plot, layout);
+    let appearance = theme.theme.clone();
+    let request = crate::text::TextRequestContext {
+        theme: &appearance,
+        ..*theme
+    };
+    let directional = request.with_text_projection(plot, layout);
     let theme = &directional;
     let panel = layout.projection.panel_box();
     let appearance = annotation

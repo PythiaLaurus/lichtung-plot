@@ -503,7 +503,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
             }
             let frame = crate::layout::RootFramePlan::measure(
                 (650, 900),
-                prepared.themes.root(),
+                &prepared.themes.root_request(),
                 canvas.prose(),
                 crate::decorations::title_block::plan::RootAlignments::resolve(
                     prepared.themes.root(),
@@ -662,7 +662,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
                 assert!(text.style.exact_override);
                 assert_eq!(text.line_texts().concat(), source.replace('\n', ""));
             }
-            let theme = prepared.themes.root();
+            let theme = &prepared.themes.root_request();
             let wide = text_panel::natural_height(&panel, 600.0, theme).unwrap();
             let narrow = text_panel::natural_height(&panel, 280.0, theme).unwrap();
             assert!(

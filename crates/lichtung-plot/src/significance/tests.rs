@@ -49,6 +49,8 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         .tick_height(crate::theme::RelativeSpacing::ratio(1, 2).unwrap())
         .unwrap();
     theme.annotations = theme.annotations.clone().significance(geometry).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let selected = plan(
         &chart,
         &categories(),
@@ -139,6 +141,8 @@ fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() 
         .level_step(RelativeSpacing::ratio(0, 1).unwrap())
         .unwrap();
     theme.annotations = theme.annotations.clone().significance(geometry).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let effective = theme.effective_significance(None).unwrap();
     let annotations = [comparison("a", "b", 0.01), comparison("a", "c", 0.01)];
     let label = theme

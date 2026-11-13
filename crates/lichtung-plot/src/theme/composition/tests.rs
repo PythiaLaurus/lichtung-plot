@@ -11,6 +11,8 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
         .clone()
         .root_padding(RootPadding::new(third.clone(), third, zero.clone(), zero).unwrap())
         .unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let measure = |hard| {
         RootFramePlan::measure(
             (1, 1),

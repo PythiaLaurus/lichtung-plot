@@ -7,7 +7,6 @@ use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::text_width;
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
 #[expect(
@@ -19,12 +18,12 @@ pub(super) fn grid_height(
     panels: &[data::FacetPanel],
     shape: (usize, usize),
     minima: &[(f64, f64)],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     round: &FeedbackRound,
     width: f64,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<fit::FitOutcome<f64>, Error> {
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = plot.data().with_operation(&resources);
     let owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut gutters = Vec::new();
@@ -77,13 +76,13 @@ pub(super) fn grid_height(
 )]
 pub(in crate::orchestrator) fn natural_size(
     source: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     request: crate::layout::RootRequest,
     round: &FeedbackRound,
     guide: &PreparedFacetGuide,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<RootSize, Error> {
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
 
     let data = source.data().with_operation(&resources);
     let selectors = data::facet_selectors(source, data)?;

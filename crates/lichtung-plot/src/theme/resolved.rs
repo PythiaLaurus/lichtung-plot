@@ -38,18 +38,10 @@ thread_local! {
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
-    pub(crate) text_size_trial: Option<Arc<crate::layout::text::font_fit::stability::Stability>>,
-    pub(crate) text_height: Option<i64>,
-    pub(crate) text_padding: Option<(crate::RelativeSpacing, crate::RelativeSpacing)>,
     pub(crate) text_layouts: crate::text::roles::TextRoles,
-    pub(crate) text_direction: Option<std::sync::Arc<crate::text::orientation::DirectionFrame>>,
     appearance: Theme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
-    font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
-    text_queries: Arc<Mutex<TextQueryCache>>,
-    /// Complete guide measurements share this operation's prepared font scope.
-    pub(crate) guide_measurements: Arc<Mutex<crate::decorations::legend::GuideMeasurements>>,
 }
 
 impl std::ops::Deref for ResolvedTheme {
@@ -398,14 +390,6 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
-    #[cfg(test)]
-    pub(crate) fn text_query_count(&self) -> usize {
-        self.text_queries
-            .lock()
-            .expect("text query cache")
-            .entries
-            .len()
-    }
     pub(crate) fn apply_text_defaults(&mut self, kind: crate::PlotKind) {
         if kind == crate::PlotKind::Heatmap {
             for side in 0..2 {
@@ -423,45 +407,6 @@ impl ResolvedTheme {
                 }
             }
         }
-    }
-    pub(crate) fn with_text_projection(
-        &self,
-        plot: &crate::Plot,
-        layout: &crate::layout::Layout,
-    ) -> Self {
-        let mut theme = self.clone();
-        theme.text_direction = Some(std::sync::Arc::new(
-            crate::text::orientation::DirectionFrame {
-                plot: plot.clone(),
-                layout: layout.clone(),
-            },
-        ));
-        theme
-    }
-
-    pub(crate) fn reproject_text(&self, layout: &crate::layout::Layout) -> Self {
-        self.text_direction.as_ref().map_or_else(
-            || self.clone(),
-            |frame| self.with_text_projection(&frame.plot, layout),
-        )
-    }
-    pub(crate) fn measure_appearance_text<'a>(
-        &self,
-        source: &str,
-        appearance: impl Into<crate::text::TextAppearance<'a>>,
-        alignment: PhysicalTextAlignment,
-        owner: &str,
-    ) -> Result<ResolvedTextPlan, Error> {
-        crate::layout::fit::measured(crate::layout::text::request::measure_quanta(
-            self,
-            source,
-            appearance.into(),
-            i64::MAX,
-            alignment,
-            owner,
-            &crate::layout::fit::ROOT_SCOPE,
-        ))
-        .map_err(crate::layout::fit::PlanError::into_error)
     }
     pub(crate) fn tick_text_appearance(
         &self,
@@ -487,14 +432,7 @@ impl ResolvedTheme {
         Ok(Self {
             appearance,
             text_layouts: crate::text::roles::TextRoles::default(),
-            text_size_trial: None,
-            text_height: None,
-            text_padding: None,
-            text_direction: None,
             canvas_surface_override: None,
-            font_environment: Arc::new(OnceLock::new()),
-            text_queries: Arc::default(),
-            guide_measurements: Arc::default(),
         })
     }
 
@@ -504,11 +442,6 @@ impl ResolvedTheme {
             && self.canvas_surface_override == other.canvas_surface_override
             && self.marks == other.marks
             && self.annotations == other.annotations
-            && self
-                .text_direction
-                .as_ref()
-                .zip(other.text_direction.as_ref())
-                .is_none_or(|(a, b)| a.same(b))
     }
 }
 
@@ -521,7 +454,22 @@ impl ResolvedTheme {
         self.legend
             .shared_gap_pixels(self.typography.guides.legend_label.get_font_size())
     }
-    pub(crate) fn same_validated(&self, other: &Self) -> Result<bool, Error> {
+    #[expect(
+        clippy::type_complexity,
+        clippy::ref_option,
+        reason = "retains the original optional direction projection and comparison boundary"
+    )]
+    pub(crate) fn same_validated(
+        &self,
+        other: &Self,
+        direction: &Option<(
+            [(f64, f64); 2],
+            crate::layout::PixelRect,
+            [Option<Vec<(f64, f64)>>; 2],
+            Option<String>,
+        )>,
+        current: Option<crate::text::orientation::TextReferenceResolver<'_, '_>>,
+    ) -> Result<bool, Error> {
         if !self.axes.same_validated(&other.axes)? {
             return Ok(false);
         }
@@ -531,7 +479,13 @@ impl ResolvedTheme {
         if !self.composition.same(&other.composition) {
             return Ok(false);
         }
-        if !self.non_text_eq(other) || self.text_layouts != other.text_layouts {
+        if !self.non_text_eq(other)
+            || !direction
+                .as_ref()
+                .zip(current)
+                .is_none_or(|(saved, current)| current.matches_snapshot(saved))
+            || self.text_layouts != other.text_layouts
+        {
             return Ok(false);
         }
         for (left, right) in self
@@ -547,6 +501,34 @@ impl ResolvedTheme {
         Ok(true)
     }
 
+    /// Select a complete text role over one final variable-fill paint before
+    /// font preparation, using owner-local panel/root surfaces and backdrop.
+    pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextTheme, Error> {
+        super::contrast::select(
+            fill,
+            self.surfaces.get_plot_panel(),
+            self.canvas_surface_override
+                .unwrap_or(self.surfaces.get_canvas_root()),
+            self.annotations.get_planning_backdrop().into(),
+            self.typography.get_annotations().get_contrast().get_light(),
+            self.typography.get_annotations().get_contrast().get_dark(),
+        )
+    }
+}
+
+/// One operation's font preparation and optional text/guide memo tables.
+#[derive(Debug, Default)]
+pub(crate) struct TextService {
+    pub(crate) fonts: OnceLock<Result<PreparedFontEnvironment, String>>,
+    queries: Mutex<TextQueryCache>,
+    pub(crate) guides: Mutex<crate::decorations::legend::GuideMeasurements>,
+}
+
+impl TextService {
+    #[cfg(test)]
+    pub(crate) fn text_query_count(&self) -> usize {
+        self.queries.lock().expect("text query cache").entries.len()
+    }
     /// Initialize this operation's canonical system-font environment.
     pub(crate) fn prepare_font_environment(&self) -> Result<(), Error> {
         self.prepared_font_environment().map(|_| ())
@@ -558,7 +540,7 @@ impl ResolvedTheme {
         presence: Vec<u64>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(), Error> {
-        self.font_environment
+        self.fonts
             .get_or_init(|| {
                 #[cfg(test)]
                 FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
@@ -571,13 +553,43 @@ impl ResolvedTheme {
             .map_err(|error| Error::Render(format!("font preflight: {error}")))
     }
 
-    /// Make this separately resolved theme use the root operation's environment.
-    pub(crate) fn share_font_environment_from(&mut self, root: &Self) {
-        self.font_environment = Arc::clone(&root.font_environment);
-        self.text_queries = Arc::clone(&root.text_queries);
-        self.guide_measurements = Arc::clone(&root.guide_measurements);
+    /// Borrow this operation's prepared canonical font environment.
+    pub(crate) fn prepared_font_environment(&self) -> Result<&PreparedFontEnvironment, Error> {
+        #[cfg(test)]
+        if self.fonts.get().is_none() {
+            self.fonts.get_or_init(|| {
+                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
+                PreparedFontEnvironment::discover_system().map_err(|error| error.to_string())
+            });
+        }
+        let prepared = self.fonts.get().ok_or_else(|| {
+            Error::Render("font environment was requested before canonical text preparation".into())
+        })?;
+        prepared
+            .as_ref()
+            .map_err(|error| Error::Render(format!("font preflight: {error}")))
     }
+}
 
+impl crate::text::TextRequestContext<'_, '_> {
+    pub(crate) fn measure_appearance_text<'a>(
+        &self,
+        source: &str,
+        appearance: impl Into<crate::text::TextAppearance<'a>>,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<ResolvedTextPlan, Error> {
+        crate::layout::fit::measured(crate::layout::text::request::measure_quanta(
+            self,
+            source,
+            appearance.into(),
+            i64::MAX,
+            alignment,
+            owner,
+            &crate::layout::fit::ROOT_SCOPE,
+        ))
+        .map_err(crate::layout::fit::PlanError::into_error)
+    }
     /// Plan one foundational appearance within an exact finite pixel width.
     #[cfg(test)]
     pub(crate) fn plan_text(
@@ -616,8 +628,8 @@ impl ResolvedTheme {
         labels: impl Iterator<Item = &'a str> + Clone,
         available_height: f64,
     ) -> Result<f64, crate::Error> {
-        self.prepare_font_environment()?;
-        let environment = self.prepared_font_environment()?;
+        self.text.prepare_font_environment()?;
+        let environment = self.text.prepared_font_environment()?;
 
         let appearance = self.typography.get_axes().get_tick_label();
         let height = crate::layout::maximum_width_quanta(available_height)
@@ -728,20 +740,6 @@ impl ResolvedTheme {
         )
     }
 
-    /// Select a complete text role over one final variable-fill paint before
-    /// font preparation, using owner-local panel/root surfaces and backdrop.
-    pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextTheme, Error> {
-        super::contrast::select(
-            fill,
-            self.surfaces.get_plot_panel(),
-            self.canvas_surface_override
-                .unwrap_or(self.surfaces.get_canvas_root()),
-            self.annotations.get_planning_backdrop().into(),
-            self.typography.get_annotations().get_contrast().get_light(),
-            self.typography.get_annotations().get_contrast().get_dark(),
-        )
-    }
-
     fn plan_text_quanta(
         &self,
         source: &str,
@@ -780,7 +778,7 @@ impl ResolvedTheme {
         scope: &crate::layout::fit::FitScope,
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let mut input = TextPlanInput {
-            size_trace: self.text_size_trial.clone(),
+            size_trace: self.trial.size_trace.cloned(),
             direction,
             source,
             stack: appearance.get_stack(),
@@ -796,7 +794,7 @@ impl ResolvedTheme {
             },
             exact_override,
         };
-        let environment = self.prepared_font_environment()?;
+        let environment = self.text.prepared_font_environment()?;
         input.provenance.pair_ordinal = environment
             .admit_text(
                 appearance.get_stack(),
@@ -808,7 +806,7 @@ impl ResolvedTheme {
 
         // Size trials are deliberately not optional-cache entries: failed glyph
         // arrays and their certificates die with this local candidate.
-        if self.text_size_trial.is_some() {
+        if self.trial.size_trace.is_some() {
             return environment.plan_text(input).map_err(|error| match error {
                 crate::layout::TextPlanError::Fit(miss) => scope
                     .failure(
@@ -865,7 +863,8 @@ impl ResolvedTheme {
         preferred_lines: Option<usize>,
     ) -> Result<(Option<CachedTextResult>, TextQueryKey), Error> {
         let cache = self
-            .text_queries
+            .text
+            .queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
         let query_key = cache.query_key(input, preferred_lines);
@@ -915,7 +914,8 @@ impl ResolvedTheme {
         mut query_key: TextQueryKey,
     ) -> Result<(), Error> {
         let mut cache = self
-            .text_queries
+            .text
+            .queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
         // This root-local memo is optional and bounded, never an all-width table.
@@ -1029,23 +1029,6 @@ impl ResolvedTheme {
             cache.profiles.insert(position, exact_record.entry);
         }
         Ok(())
-    }
-
-    /// Borrow this operation's prepared canonical font environment.
-    pub(crate) fn prepared_font_environment(&self) -> Result<&PreparedFontEnvironment, Error> {
-        #[cfg(test)]
-        if self.font_environment.get().is_none() {
-            self.font_environment.get_or_init(|| {
-                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
-                PreparedFontEnvironment::discover_system().map_err(|error| error.to_string())
-            });
-        }
-        let prepared = self.font_environment.get().ok_or_else(|| {
-            Error::Render("font environment was requested before canonical text preparation".into())
-        })?;
-        prepared
-            .as_ref()
-            .map_err(|error| Error::Render(format!("font preflight: {error}")))
     }
 }
 
@@ -1511,10 +1494,13 @@ mod tests {
     )]
     fn indexed_text_queries_preserve_matching_and_collision_order() {
         let root = Theme::publication().resolve().unwrap();
-        root.font_environment
+        let text = TextService::default();
+        let root = crate::text::TextRequestContext::new(&root, &text);
+        root.text
+            .fonts
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
-        let environment = root.prepared_font_environment().unwrap();
+        let environment = root.text.prepared_font_environment().unwrap();
         let resources = environment.operation();
         environment.validate_operation(&resources).unwrap();
         let mut appearance = root.typography.root.caption.clone();
@@ -1537,7 +1523,7 @@ mod tests {
             }
         }
         {
-            let cache = root.text_queries.lock().unwrap();
+            let cache = root.text.queries.lock().unwrap();
             assert_eq!(cache.entries.len(), 128);
             assert_eq!(cache.exact.len(), 128);
             assert_eq!(
@@ -1570,7 +1556,7 @@ mod tests {
         )
         .unwrap();
         let collision = indexed_query_input("AA", &appearance, "collision");
-        let mut cache = root.text_queries.lock().unwrap();
+        let mut cache = root.text.queries.lock().unwrap();
         let expected = cache.entries.len() - 1;
         let TextQueryCache { exact, shaping, .. } = &mut *cache;
         for index in [exact, shaping] {
@@ -1675,8 +1661,11 @@ mod tests {
     #[test]
     fn retained_profile_does_not_trust_a_reused_mutable_input_address() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         theme
-            .font_environment
+            .text
+            .fonts
             .set(Ok(PreparedFontEnvironment::synthetic_faces(&[(
                 "Literal",
                 &['A', 'X'],
@@ -1714,14 +1703,17 @@ mod tests {
             .unwrap();
         assert!(!first.shares_payload(&second));
         assert_eq!(second.source, "X");
-        assert_eq!(theme.text_queries.lock().unwrap().profiles.len(), 2);
+        assert_eq!(theme.text.queries.lock().unwrap().profiles.len(), 2);
     }
 
     #[test]
     fn later_font_admissions_preserve_cached_shapes_and_complete_request_payloads() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         theme
-            .font_environment
+            .text
+            .fonts
             .set(Ok(PreparedFontEnvironment::synthetic_faces(&[
                 ("Base", &['A']),
                 ("Complete", &['A', '\u{301}']),
@@ -1750,6 +1742,7 @@ mod tests {
         assert!(marked.shares_payload(&measure("A\u{301}")));
         assert_eq!(crate::font::canonical::planning_counts(), counts);
         theme
+            .text
             .prepared_font_environment()
             .unwrap()
             .operation()
@@ -1759,13 +1752,16 @@ mod tests {
         assert!(first.shares_payload(&measure("A")));
         assert!(marked.shares_payload(&measure("A\u{301}")));
         assert_eq!(crate::font::canonical::planning_counts(), counts);
-        assert_eq!(theme.text_queries.lock().unwrap().entries.len(), 2);
+        assert_eq!(theme.text.queries.lock().unwrap().entries.len(), 2);
     }
 
     #[test]
     fn text_cache_stops_optional_insertion_without_refusing_rendering() {
         let root = Theme::publication().resolve().unwrap();
-        root.font_environment
+        let text = TextService::default();
+        let root = crate::text::TextRequestContext::new(&root, &text);
+        root.text
+            .fonts
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let mut appearance = root.typography.root.caption.clone();
@@ -1778,9 +1774,9 @@ mod tests {
         for index in 1..256 {
             render(&format!("owner {index}"));
         }
-        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 256);
+        assert_eq!(root.text.queries.lock().unwrap().entries.len(), 256);
         assert_eq!(render("uncached owner").source, "A");
-        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 256);
+        assert_eq!(root.text.queries.lock().unwrap().entries.len(), 256);
         assert!(first.shares_payload(&render("first")));
     }
 }

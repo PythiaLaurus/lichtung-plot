@@ -10,7 +10,6 @@ use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::{body_preference, text_width};
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
 #[cfg(test)]
@@ -235,7 +234,7 @@ pub(super) fn measured_preference(
     local_text_height: f64,
     round: &FeedbackRound,
     owner: &ComponentAddress,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
@@ -265,7 +264,7 @@ pub(super) fn measured_preference(
 )]
 pub(super) fn cell_height(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
     per_plot: bool,
@@ -392,7 +391,7 @@ pub(super) fn grid_gutters(
 
 pub(super) fn content_frame(
     source: &Canvas,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: u32,
     height: f64,
 ) -> Result<crate::layout::RootFramePlan, Error> {
@@ -435,7 +434,7 @@ pub(super) fn measure(
     if let crate::layout::RootRequest::ExactSize { width, height } = requested {
         return Ok(RootSize::new(width, height));
     }
-    let theme = prepared.themes.root();
+    let theme = &prepared.themes.root_request();
 
     let mut plots = Vec::new();
     fit::reserve(

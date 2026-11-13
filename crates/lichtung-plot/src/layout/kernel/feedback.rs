@@ -1300,6 +1300,8 @@ mod tests {
             .erase();
             let operation = crate::font::canonical::OperationContext::new();
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let inputs =
                 crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
             let discoveries =
@@ -1698,6 +1700,8 @@ mod tests {
         let plot = source.clone().erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let standard = crate::layout::CoordinateLayoutInputs::new(&theme).unwrap();
         let state = |plot: &crate::Plot, standard: &crate::layout::CoordinateLayoutInputs| {
             let mut round = FeedbackRound::new(None, 0).unwrap();
@@ -1740,7 +1744,7 @@ mod tests {
             automatic,
             state(&plot.with_planned_x_limits((0.0, 1.0)), &standard)
         );
-        let mut changed_theme = theme.clone();
+        let mut changed_theme = theme.theme.clone();
         changed_theme
             .typography
             .axes

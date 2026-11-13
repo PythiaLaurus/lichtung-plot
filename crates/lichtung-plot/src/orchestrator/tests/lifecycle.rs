@@ -781,10 +781,13 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             Some(&crate::theme::Theme::publication()),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let request = crate::text::TextRequestContext::new(&appearance, &text);
         prepared
             .prepare_discrete_guides(
                 &plot,
-                &crate::Theme::publication().resolve().unwrap(),
+                &request,
                 &resources,
                 &crate::layout::ComponentAddress::root(),
                 false,
@@ -858,6 +861,8 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 );
             }
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
             prepared
@@ -1080,6 +1085,8 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
         | PlotKind::Waterfall => None,
     };
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     for composition in [Combined, Separate] {
         let plot = plot.clone().with_parent_legend_composition(composition);

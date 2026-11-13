@@ -5,10 +5,12 @@ use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::layout::interior::preference::panel;
 use crate::render::backend::PlacedText;
 use crate::spec::PlotRenderContext;
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind, Result, Text, TextTheme};
 
-fn role<'a>(plot: &Plot, theme: &'a ResolvedTheme) -> Result<&'a TextTheme> {
+fn role<'a>(
+    plot: &Plot,
+    theme: &'a crate::text::TextRequestContext<'_, '_>,
+) -> Result<&'a TextTheme> {
     match plot.kind() {
         PlotKind::Heatmap => theme.contrasting_text(theme.surfaces.get_plot_panel()),
         PlotKind::Waterfall => Ok(&theme.typography.annotations.waterfall_total),
@@ -50,7 +52,7 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
     Ok(())
 }
 
-fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_>) -> Result<Option<&'a Text>> {
+fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_, '_>) -> Result<Option<&'a Text>> {
     match plot.kind() {
         PlotKind::Heatmap => plot
             .prepared_heatmap
@@ -85,13 +87,16 @@ fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_>) -> Result<Option<&
     }
 }
 
-fn gap(theme: &ResolvedTheme) -> Result<f64> {
+fn gap(theme: &crate::text::TextRequestContext<'_, '_>) -> Result<f64> {
     theme
         .panel_edge_length()?
         .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)
 }
 
-pub(crate) fn preferred_width(plot: &Plot, theme: &ResolvedTheme) -> Result<f64> {
+pub(crate) fn preferred_width(
+    plot: &Plot,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<f64> {
     let mut width = 0.0_f64;
     sources(plot, |text| {
         width = width.max(super::slot::preferred_width(
@@ -104,7 +109,10 @@ pub(crate) fn preferred_width(plot: &Plot, theme: &ResolvedTheme) -> Result<f64>
     Ok(width.max(axis_preferences(plot, theme)?.0))
 }
 
-pub(crate) fn axis_preferences(plot: &Plot, theme: &ResolvedTheme) -> Result<(f64, f64)> {
+pub(crate) fn axis_preferences(
+    plot: &Plot,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<(f64, f64)> {
     let mut preferred = [0.0_f64; 2];
     // The axis owner later measures the actual selected set. Intrinsic probes
     // include common explanations without inventing scientific tick positions.
@@ -128,7 +136,11 @@ pub(crate) fn axis_preferences(plot: &Plot, theme: &ResolvedTheme) -> Result<(f6
     Ok((preferred[0], preferred[1]))
 }
 
-pub(crate) fn natural_height(plot: &Plot, theme: &ResolvedTheme, width: f64) -> Result<f64> {
+pub(crate) fn natural_height(
+    plot: &Plot,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+    width: f64,
+) -> Result<f64> {
     let mut height = 0.0_f64;
     sources(plot, |text| {
         let plan = ExplanationPlan::measure(
@@ -146,10 +158,10 @@ pub(crate) fn natural_height(plot: &Plot, theme: &ResolvedTheme, width: f64) -> 
     Ok(height)
 }
 
-pub(crate) fn reserve<'a>(
+pub(crate) fn reserve<'a, 'src>(
     plot: &Plot,
-    context: PlotRenderContext<'a>,
-) -> std::result::Result<(PlotRenderContext<'a>, Option<PlacedText>), PlanError> {
+    context: PlotRenderContext<'a, 'src>,
+) -> std::result::Result<(PlotRenderContext<'a, 'src>, Option<PlacedText>), PlanError> {
     let Some(text) = source(plot, context)? else {
         return Ok((context, None));
     };

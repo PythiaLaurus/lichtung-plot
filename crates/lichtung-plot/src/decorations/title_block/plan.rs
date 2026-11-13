@@ -5,7 +5,6 @@ use crate::layout::{AddressRole, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{Backend, PlannedTextPlacement, Point2D};
 use crate::theme::composition::RootPaddingLengths;
 use crate::theme::spacing::ExactLength;
-use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
 #[cfg(test)]
@@ -20,7 +19,7 @@ pub(crate) struct RootAlignments {
 
 impl RootAlignments {
     pub(crate) fn resolve(
-        theme: &ResolvedTheme,
+        theme: &crate::theme::ResolvedTheme,
         plot: [Option<TextAlignment>; 3],
         panel: [Option<TextAlignment>; 2],
     ) -> Self {
@@ -120,7 +119,7 @@ impl RootTitleBlockIntrinsics {
 
 impl RootTitleBlockPlan {
     pub(crate) fn appearances<'a>(
-        theme: &'a ResolvedTheme,
+        theme: &'a crate::theme::ResolvedTheme,
         sources: [Option<&'a crate::Text>; 3],
     ) -> [crate::text::TextAppearance<'a>; 3] {
         let roles = [
@@ -134,7 +133,7 @@ impl RootTitleBlockPlan {
     }
 
     pub(crate) fn minimum_height(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         body: f64,
     ) -> Result<f64, Error> {
@@ -206,7 +205,7 @@ impl RootTitleBlockPlan {
 
     /// Intrinsics do not depend on alignment or on an allocated height.
     pub(crate) fn intrinsic_widths(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         scope: Option<&str>,
     ) -> Result<RootTitleBlockIntrinsics, Error> {
@@ -239,7 +238,7 @@ impl RootTitleBlockPlan {
         reason = "one assigned-width pass freezes bounded text and adjacent role geometry"
     )]
     pub(crate) fn measure(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         span: PixelRect,
         padding: &RootPaddingLengths,
@@ -413,7 +412,7 @@ impl RootTitleBlockPlan {
 
     /// Width-dependent text and owned gaps, before the parent assigns height.
     pub(crate) fn content_reserves(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         width: f64,
         alignments: RootAlignments,
@@ -424,7 +423,7 @@ impl RootTitleBlockPlan {
     }
 
     fn measure_content(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         width: f64,
         alignments: RootAlignments,
@@ -524,7 +523,7 @@ impl RootTitleBlockPlan {
     }
 
     fn measured_spacing(
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         sources: [Option<&crate::Text>; 3],
         plans: &[Option<ResolvedTextPlan>],
     ) -> Result<crate::theme::composition::RootTitleLengths, Error> {

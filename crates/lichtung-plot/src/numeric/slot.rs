@@ -17,7 +17,7 @@ impl ExplanationPlan {
         role: impl Into<crate::text::TextAppearance<'a>>,
         width: f64,
         default: TextAlignment,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &FitScope,
     ) -> Result<Self, PlanError> {
         let alignment = text.resolved_alignment(default);
@@ -92,7 +92,7 @@ impl ExplanationPlan {
 pub(crate) fn preferred_width<'a>(
     text: &'a Text,
     role: impl Into<crate::text::TextAppearance<'a>>,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
     crate::layout::interior::sizing::text_width(theme, text.as_str(), text.appearance(role))
 }

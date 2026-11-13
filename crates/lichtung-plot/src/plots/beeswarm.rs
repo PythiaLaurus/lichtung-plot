@@ -43,7 +43,7 @@ fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(chart)?;
     if prepared.levels.is_empty()
@@ -110,7 +110,10 @@ fn quanta_pixels(value: i64) -> f64 {
     value as f64 / 1024.0
 }
 
-fn packing_radius(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<i64, Error> {
+fn packing_radius(
+    chart: &Plot,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<i64, Error> {
     let mut style = chart.point_style(
         theme,
         (0, 0, 0),
@@ -219,7 +222,7 @@ impl PreparedBeeswarm {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         let point = chart.point_style(
@@ -302,7 +305,7 @@ impl PreparedBeeswarm {
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let inputs = chart
@@ -337,7 +340,7 @@ pub(crate) fn natural_body_height(
 
 pub(crate) fn measure(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = retained(chart)?;
     let theme = context.theme;
@@ -674,7 +677,7 @@ impl BeeswarmPayload {
 fn select_colorbar(
     guide: &crate::decorations::legend::Legend,
     panel: PixelRect,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
     let bounds = guide.box_at(
         panel.x1 + theme.legend_outside_gap()?,

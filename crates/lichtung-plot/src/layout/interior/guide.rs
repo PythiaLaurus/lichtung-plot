@@ -5,7 +5,6 @@ use super::PreparedInteriorInputs;
 use crate::data::PlotData;
 use crate::decorations::legend::discrete::{PreparedGuide, PreparedGuides, ScopedGuide};
 use crate::decorations::legend::GuideSourceKey;
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 /// One measured mandatory right guide beside the flexible scientific body.
@@ -13,7 +12,7 @@ pub(crate) fn native_right(
     descriptor: std::sync::Arc<PreparedGuide>,
     panel: crate::layout::PixelRect,
     minimum: f64,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 
     content_plot: Option<&Plot>,
@@ -285,7 +284,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
         scope: Option<&str>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -381,7 +380,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn prepare_discrete_guides(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         resources: &crate::font::canonical::OperationContext,
         owner: &crate::layout::ComponentAddress,
         facet_cells: bool,
@@ -475,7 +474,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn continuous_source(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: Option<&str>,
     ) -> Result<
         Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
@@ -505,7 +504,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn alpha_sources(
         &self,
         chart: &Plot,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: Option<&str>,
         owner: &crate::layout::ComponentAddress,
     ) -> Result<std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>, Error> {

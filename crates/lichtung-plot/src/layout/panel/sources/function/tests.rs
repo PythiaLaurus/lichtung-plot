@@ -27,6 +27,8 @@ fn warning_views_materialize_once_per_consumed_span_and_keep_complete_policy_ide
         crate::TickGeneration::function(|_| Ok(Vec::new().into()))
     );
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let policy = crate::NumericFormat::default();
     let mut request = AxisRequest::for_test(&policy);
     request.format = None;
@@ -87,6 +89,8 @@ fn warning_views_materialize_once_per_consumed_span_and_keep_complete_policy_ide
 #[test]
 fn filtering_keeps_unsorted_duplicates_original_ids_and_raw_or_exponent_operands() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let indices = Arc::new(Mutex::new(Vec::new()));
     let seen = indices.clone();
     let policy = crate::NumericFormat::default().set_function(move |context| {
@@ -168,6 +172,8 @@ fn filtering_keeps_unsorted_duplicates_original_ids_and_raw_or_exponent_operands
 #[test]
 fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let calls = Arc::new(AtomicUsize::new(0));
     let seen = calls.clone();
     let policy = crate::NumericFormat::default()

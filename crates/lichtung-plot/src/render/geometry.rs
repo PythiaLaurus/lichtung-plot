@@ -230,9 +230,9 @@ enum GeometryCanvasState {
 
 #[cfg(test)]
 impl GeometryBackend {
-    pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
+    pub(crate) fn new(theme: &crate::text::TextRequestContext<'_, '_>) -> Result<Self, Error> {
         Ok(Self::with_environment(
-            theme.prepared_font_environment()?.clone(),
+            theme.text.prepared_font_environment()?.clone(),
         ))
     }
 

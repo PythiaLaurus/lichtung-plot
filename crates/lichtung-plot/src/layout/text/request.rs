@@ -6,7 +6,6 @@ use crate::layout::{
     PhysicalTextAlignment,
 };
 use crate::text::TextAppearance;
-use crate::theme::ResolvedTheme;
 use crate::{Error, TextFailure, TextWrapping};
 
 #[cfg(test)]
@@ -17,7 +16,7 @@ mod tests;
     reason = "original occurrence eligibility is independent of the complete measured text request and assignment"
 )]
 pub(crate) fn measure_occurrence(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -36,7 +35,7 @@ pub(crate) fn measure_occurrence(
 }
 
 pub(crate) fn measure(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: f64,
@@ -61,7 +60,7 @@ pub(crate) fn measure(
     reason = "the parent supplies an independent finite height in addition to the original text request"
 )]
 pub(crate) fn measure_height(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: f64,
@@ -76,8 +75,12 @@ pub(crate) fn measure_height(
     else {
         return measure(theme, source, appearance, width, alignment, owner, scope);
     };
-    let mut assigned = theme.clone();
-    assigned.text_height = Some(capacity(height)?);
+    let assigned_appearance = theme.theme.clone();
+    let mut assigned = crate::text::TextRequestContext {
+        theme: &assigned_appearance,
+        ..*theme
+    };
+    assigned.trial.height = Some(capacity(height)?);
     Ok(
         match measure(
             &assigned, source, appearance, width, alignment, owner, scope,
@@ -94,7 +97,7 @@ pub(crate) fn measure_height(
 }
 
 pub(crate) fn measure_quanta(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -120,7 +123,7 @@ pub(crate) fn measure_quanta(
 }
 
 pub(super) fn measure_unfitted(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -156,7 +159,7 @@ pub(super) fn measure_unfitted(
     reason = "one complete text request resolves independent spatial/line constraints and its explicit terminal action"
 )]
 pub(super) fn measure_current(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: TextAppearance<'_>,
     width: i64,
@@ -177,8 +180,8 @@ pub(super) fn measure_current(
     }
     let request = appearance.layout.unwrap_or(&crate::TextLayout::EMPTY);
     let mut width = width;
-    let mut assigned_height = theme.text_height;
-    if let Some((horizontal, vertical)) = &theme.text_padding {
+    let mut assigned_height = theme.trial.height;
+    if let Some((horizontal, vertical)) = &theme.trial.padding {
         let padding =
             |spacing: &crate::RelativeSpacing, size: f64| -> Result<i64, super::TextPlanError> {
                 Ok(spacing
@@ -190,7 +193,7 @@ pub(super) fn measure_current(
             .map_err(|error| Error::Render(error.to_string()))?;
         let v = padding(vertical, appearance.theme.get_font_size())
             .map_err(|error| Error::Render(error.to_string()))?;
-        if let Some(trace) = &theme.text_size_trial {
+        if let Some(trace) = &theme.trial.size_trace {
             trace
                 .observe(h, |size| padding(horizontal, size))
                 .map_err(|error| Error::Render(error.to_string()))?;
@@ -207,7 +210,7 @@ pub(super) fn measure_current(
         .as_ref()
         .map(|orientation| &orientation.0)
     {
-        let frame = theme.text_direction.as_ref().ok_or_else(|| {
+        let frame = theme.reference.as_ref().ok_or_else(|| {
             Error::Data("data text direction requires actual scientific axes".into())
         })?;
         let resolved = request.clone().rotation(frame.rotation(from, to, theme)?);

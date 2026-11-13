@@ -4,7 +4,6 @@ use crate::decorations::legend::discrete::PreparedGuide;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{ComponentAddress, PhysicalTextAlignment};
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 pub(crate) struct GuidedPreference {
@@ -25,14 +24,17 @@ impl GuidedPreference {
         )
     }
 
-    pub(crate) fn preference(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+    pub(crate) fn preference(
+        &self,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> Result<(f64, f64), Error> {
         crate::decorations::legend::Legend::natural_preference(&self.descriptor, theme)
     }
 
     pub(crate) fn at_width(
         &self,
         width: f64,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &FitScope,
     ) -> Result<(f64, f64), Error> {
         let guide = fit::measured(crate::decorations::legend::Legend::measure_assigned(
@@ -54,7 +56,7 @@ impl GuidedPreference {
 pub(crate) fn guided_preference(
     plot: &Plot,
     _inputs: &super::PreparedInteriorInputs,
-    _theme: &ResolvedTheme,
+    _theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Option<GuidedPreference>, Error> {
     let native = matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm);
     let position = if native {
@@ -81,7 +83,7 @@ pub(crate) fn guided_preference(
 
 pub(crate) fn guided_body_height(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     guide: Option<&GuidedPreference>,
     scope: &FitScope,
@@ -128,7 +130,7 @@ fn pixels(value: i64) -> f64 {
 }
 
 pub(crate) fn text_width<'a>(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     role: impl Into<crate::text::TextAppearance<'a>>,
 ) -> Result<f64, Error> {
@@ -152,7 +154,7 @@ pub(crate) fn text_width<'a>(
 
 pub(crate) fn body_preference(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<(f64, f64), Error> {
     use super::{InteriorRoute, SpecializedGrid};
@@ -214,7 +216,7 @@ pub(crate) fn body_preference(
 
 fn axis_title_style<'a>(
     plot: &'a Plot,
-    theme: &'a ResolvedTheme,
+    theme: &'a crate::text::TextRequestContext<'_, '_>,
     side: usize,
 ) -> &'a crate::TextTheme {
     plot.prepared_axis_inputs()
@@ -228,7 +230,7 @@ fn axis_title_style<'a>(
 /// Actual selected-source gutters subsequently replace this estimate via feedback.
 pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let title = axis_title_style(plot, theme, 1);
     let lengths = theme.axes.get_spacing().lengths(
@@ -328,7 +330,7 @@ pub(crate) fn horizontal_gutter_preference(
 pub(crate) fn plot_size(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     requested: crate::layout::RootRequest,
     round: &FeedbackRound,
 ) -> Result<RootSize, Error> {
@@ -431,7 +433,7 @@ pub(crate) fn plot_size(
 
 fn outer_width(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     body: f64,
     gutters: (f64, f64),
     guide: f64,
@@ -455,7 +457,7 @@ fn outer_width(
 impl Plot {
     pub(crate) fn natural_body_height(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         width: f64,
         preference: f64,
     ) -> Result<f64, Error> {
@@ -496,7 +498,7 @@ impl Plot {
 mod tests {
     fn prepared_color(
         descriptor: crate::decorations::legend::descriptor::ContinuousDescriptor,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide> {
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0]),
@@ -573,6 +575,8 @@ mod tests {
                 ..crate::numeric::set::FormattedSet::default()
             },
         };
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let label_width = descriptor
             .numeric
             .labels
@@ -657,6 +661,8 @@ mod tests {
         )
         .unwrap();
         theme.legend = theme.legend.clone().frame(Some(frame)).unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
             selection: crate::theme::ContinuousColorScale::sequential(
                 Some(

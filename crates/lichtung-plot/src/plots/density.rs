@@ -48,7 +48,7 @@ pub(crate) struct PreparedDensityInputs {
 /// primary marks. The resolved stroke is measured before parent assignment.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_density
@@ -105,7 +105,7 @@ impl PreparedDensity {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -140,7 +140,7 @@ impl PreparedDensity {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
@@ -214,7 +214,7 @@ impl PreparedDensity {
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
         order: &[(usize, usize)],
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -225,7 +225,7 @@ impl PreparedDensity {
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[(usize, usize)],
         colors: &CategoryColors,
@@ -330,7 +330,7 @@ impl DensityPayload {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
@@ -349,7 +349,7 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme, data)?;
@@ -403,7 +403,7 @@ pub(crate) fn project(
     chart: &Plot,
     prepared: &PreparedDensity,
     layout: Layout,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let mut payload = DensityPayload {
@@ -905,7 +905,10 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let original = chart.intrinsic_body_minimum(&theme).unwrap();
+        let text_service = crate::text::TextService::default();
+        let original = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         let line = theme
             .marks
             .get_data_lines()
@@ -920,7 +923,9 @@ mod tests {
             .density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
-        let thick = chart.intrinsic_body_minimum(&theme).unwrap();
+        let thick = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert_eq!(thick.0.to_bits(), original.0.to_bits());
         assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
         let line = theme
@@ -937,7 +942,15 @@ mod tests {
             .density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+        assert_eq!(
+            chart
+                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
+                    &theme,
+                    &text_service
+                ))
+                .unwrap(),
+            original
+        );
         let area = theme
             .marks
             .get_fills()
@@ -962,12 +975,18 @@ mod tests {
             .densities(densities)
             .unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        let area = chart.intrinsic_body_minimum(&theme).unwrap();
+        let area = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .unwrap();
         assert_eq!(area.0.to_bits(), original.0.to_bits());
         assert!(area.1 >= 140.0);
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "checks selected palette order, source reads and style invalidation on the actual curves"
+    )]
     fn selected_curves_use_parent_collective_order_and_palette_without_rereading_columns() {
         let source = Plot::density(NumericValues::new(
             "sample",
@@ -988,13 +1007,18 @@ mod tests {
                 },
             ]);
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let text_service = crate::text::TextService::default();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
                 crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                &theme,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
             ))
             .unwrap();
         assert_eq!(
@@ -1031,12 +1055,16 @@ mod tests {
             .density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(
+            &chart,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+        )
+        .unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
                 crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                &theme,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
             ))
             .unwrap();
         let crate::layout::interior::MarkPayload::Density(changed_payload) =
@@ -1131,6 +1159,8 @@ mod tests {
         let line = lines.get_density_line().clone().alpha(0).unwrap();
         let lines = lines.clone().density_line(line).unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
+        let text_service = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_density.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);

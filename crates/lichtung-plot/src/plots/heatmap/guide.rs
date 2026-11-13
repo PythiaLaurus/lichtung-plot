@@ -3,14 +3,13 @@
 use crate::decorations::legend::{Legend, LegendDrawPlan};
 use crate::layout::fit::{FitScope, PlanError};
 use crate::layout::PixelRect;
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 pub(super) fn measure(
     chart: &crate::Plot,
     panel: PixelRect,
     minimum: f64,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 
     content_plot: Option<&crate::Plot>,
@@ -31,7 +30,7 @@ pub(super) fn measure(
 pub(super) fn select(
     guide: &Legend,
     body: PixelRect,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<LegendDrawPlan, Error> {
     let bounds = guide.box_at(
         body.x1 + theme.legend_outside_gap()?,

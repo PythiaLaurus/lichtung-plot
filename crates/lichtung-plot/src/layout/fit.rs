@@ -2,7 +2,6 @@
 
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 #[allow(
@@ -142,7 +141,7 @@ pub(crate) fn measured<T>(result: Result<FitOutcome<T>, Error>) -> Result<T, Pla
 }
 
 pub(crate) fn text<'a>(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: impl Into<crate::text::TextAppearance<'a>>,
     width: f64,
@@ -152,7 +151,7 @@ pub(crate) fn text<'a>(
 ) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
     let appearance = appearance.into();
     if !appearance.hidden() {
-        theme.prepare_font_environment()?;
+        theme.text.prepare_font_environment()?;
     }
     if width.is_finite() && width < 0.0 {
         return Ok(FitOutcome::Miss(scope.failure(
@@ -165,7 +164,7 @@ pub(crate) fn text<'a>(
 
 /// Independent authored slots accept All/Hidden; reduction programs require a real label group.
 pub(crate) fn single_text<'a>(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: impl Into<crate::text::TextAppearance<'a>>,
     width: f64,
@@ -214,7 +213,7 @@ pub(crate) fn collect<T>(
     reason = "intrinsic quantum widths are compared with root-bounded pixel assignments"
 )]
 pub(crate) fn intrinsic_widths<'a>(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     source: &str,
     appearance: impl Into<crate::text::TextAppearance<'a>>,
     owner: &str,
@@ -306,7 +305,7 @@ pub(crate) fn intrinsic_widths<'a>(
                 .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1)))
                 .unwrap_or((0.0, natural))),
             crate::text::orientation::Orientation::Data(from, to) => theme
-                .text_direction
+                .reference
                 .as_ref()
                 .map_or(Ok((0.0, natural)), |frame| {
                     frame.rotation(from, to, theme).map(project)
@@ -323,7 +322,9 @@ mod tests {
     #[test]
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        theme.prepare_font_environment().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        theme.text.prepare_font_environment().unwrap();
         let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
         let result = collect::<()>(
             "fit siblings",

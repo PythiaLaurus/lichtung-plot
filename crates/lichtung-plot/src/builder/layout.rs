@@ -2,12 +2,11 @@ use crate::Error;
 
 use super::Plot;
 use crate::layout::RootFramePlan;
-use crate::theme::ResolvedTheme;
 
 impl Plot {
     pub(crate) fn measured_canvas_layout(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<RootFramePlan, Error> {
         if !self.has_facets() {
             return crate::layout::interior::coordinate::canvas_layout(self, theme)

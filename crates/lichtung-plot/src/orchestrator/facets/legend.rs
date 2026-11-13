@@ -6,14 +6,13 @@ use super::data::FacetPanel;
 use crate::builder::Plot;
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
 
 /// Prepare the real shared discrete identity and glyph set at the root's
 /// semantic boundary, before any font census or panel assignment.
 pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
@@ -69,7 +68,7 @@ pub(super) fn preflight_coordinated_panels(
     base_plot: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
 ) -> Result<(Plot, Vec<std::sync::Arc<PlotRenderResult>>), crate::layout::fit::PlanError> {
@@ -100,12 +99,12 @@ fn preflight_panels(
     kind: PlotKind,
     panels: &[FacetPanel],
     facet_scales: crate::FacetScales,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
     phase: MeasurementPhase,
 ) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, crate::layout::fit::PlanError> {
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
 
     let mut preflight = Vec::new();
     crate::data::source::reserve_source(&mut preflight, panels.len())?;

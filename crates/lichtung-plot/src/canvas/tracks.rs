@@ -13,7 +13,6 @@ use crate::layout::kernel::{
 use crate::layout::PhysicalTextAlignment;
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
-use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
 #[expect(
@@ -98,7 +97,7 @@ fn interior_insets(insets: &[[i64; 2]], start: usize, span: usize, rows: bool) -
 fn plot_minimum(
     plot: &Plot,
     title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let mut hard = plot.intrinsic_body_minimum(theme)?;
     let sources = plot.prose();
@@ -139,7 +138,7 @@ pub(super) fn minimum(
             plot_minimum(
                 plot,
                 titles[index].expect("Plot title intrinsics"),
-                themes.plot(index).expect("Plot theme"),
+                &themes.plot_request(index).expect("Plot theme"),
             )?
         } else if let Some(text) = text[index] {
             text.minimum
@@ -378,7 +377,7 @@ fn measure(
             "Canvas Grid has mismatched declared slots".into(),
         ));
     }
-    let theme = themes.root();
+    let theme = &themes.root_request();
 
     let gap = required(theme.composition_grid_gap()?)?;
     let em = required(
@@ -444,7 +443,7 @@ fn measure(
         // layout. Header/body requirements remain inner-track requirements.
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let theme = themes.plot(index).expect("prepared Plot theme");
+            let theme = &themes.plot_request(index).expect("prepared Plot theme");
             let (left, right) =
                 crate::layout::interior::sizing::horizontal_gutter_preference(plot, theme)?;
             let footprint = placements.footprint(index).expect("Plot owner");
@@ -510,8 +509,8 @@ fn measure(
     crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
-            let child_theme = themes
-                .plot(index)
+            let child_theme = &themes
+                .plot_request(index)
                 .expect("configured Plot retains its theme");
             let hard = plot_minimum(
                 plot,
@@ -904,7 +903,7 @@ fn measure(
                 )?;
                 super::sizing::cell_height(
                     plot,
-                    themes.plot(index).expect("prepared Plot theme"),
+                    &themes.plot_request(index).expect("prepared Plot theme"),
                     width,
                     content.interiors[index]
                         .as_ref()

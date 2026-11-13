@@ -47,7 +47,7 @@ pub(crate) struct PreparedInteraction {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
         .prepared_interaction
@@ -147,7 +147,7 @@ impl PreparedInteraction {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -216,7 +216,7 @@ impl PreparedInteraction {
     fn resolved_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<CategoryColors, Error> {
         let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
@@ -259,7 +259,7 @@ impl PreparedInteraction {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
@@ -269,7 +269,7 @@ impl PreparedInteraction {
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -491,7 +491,7 @@ impl InteractionPayload {
         chart: &Plot,
         marks: &PreparedInteraction,
         projection: &crate::layout::Projection,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
     ) -> Result<(), crate::layout::fit::PlanError> {
         let mut full = crate::render::geometry::GeometrySnapshot::new();
 
@@ -563,7 +563,7 @@ impl InteractionPayload {
 )]
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let marks = chart
@@ -579,7 +579,7 @@ pub(crate) fn measure_marks(
         .ok_or_else(|| {
             Error::Render("interaction measurement requires root-prepared semantics".into())
         })?;
-    let resources = context.theme.prepared_font_environment()?.operation();
+    let resources = context.theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),

@@ -58,6 +58,8 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
     .theme(theme.clone());
     source.preflight().unwrap();
     let resolved = theme.resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let resolved = crate::text::TextRequestContext::new(&resolved, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
     let result = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -111,6 +113,9 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 22.0;
     theme.typography.annotations.contrast.dark.font_size = 11.0;
+    let text = crate::text::TextService::default();
+    let mut appearance = theme;
+    let theme = crate::text::TextRequestContext::new(&appearance, &text);
     let chart = inputs
         .attach_with_guides_for_test(original_source, &theme)
         .unwrap();
@@ -200,7 +205,8 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .unwrap()
         .value_vertical_padding(crate::theme::RelativeSpacing::ratio(2, 1).unwrap())
         .unwrap();
-    theme.annotations = theme.annotations.clone().cells(padding).unwrap();
+    appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
+    let theme = crate::text::TextRequestContext::new(&appearance, &text);
     assert!(!axes
         .heatmap_intrinsics
         .get()
@@ -302,6 +308,8 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
         [-1.0_f64, 0.0, 1.0].map(f64::to_bits)
     );
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

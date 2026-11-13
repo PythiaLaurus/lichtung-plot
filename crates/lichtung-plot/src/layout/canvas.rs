@@ -7,7 +7,6 @@
 use crate::layout::AxisSystemPlan;
 #[cfg(test)]
 use crate::layout::PhysicalTextAlignment;
-use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextTheme;
 #[cfg(test)]
@@ -82,7 +81,7 @@ pub(crate) struct EdgeSpaceRequirements {
 impl EdgeSpaceRequirements {
     pub(crate) fn measure_header(
         axes: &AxisSystemPlan,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let required = axes.requirements();
 
@@ -129,7 +128,7 @@ impl RootFramePlan {
     pub(crate) fn height_for_body(
         &self,
         body: f64,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<f64, crate::Error> {
         let padding = theme.root_padding_lengths()?;
         let bottom = self
@@ -159,7 +158,7 @@ impl RootFramePlan {
     }
     pub(crate) fn measure(
         canvas_size: (u32, u32),
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         text: [Option<&crate::Text>; 3],
         alignments: crate::decorations::title_block::plan::RootAlignments,
         minimum_body: (f64, f64),
@@ -211,7 +210,7 @@ impl RootFramePlan {
 
 #[cfg(test)]
 fn try_wrap_text(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     text: &str,
     appearance: &TextTheme,
     maximum_width: f64,
@@ -228,7 +227,7 @@ fn try_wrap_text(
 
 #[cfg(test)]
 fn wrap_text(
-    theme: &ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     text: &str,
     appearance: &TextTheme,
     maximum_width: f64,
@@ -262,6 +261,8 @@ mod tests {
     #[test]
     fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let frame = RootFramePlan::measure(
             (100, 80),
             &theme,
@@ -292,6 +293,8 @@ mod tests {
     )]
     fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let insets = CanvasInsets {
             left: 16.0,
             right: 16.0,
@@ -326,6 +329,8 @@ mod tests {
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
@@ -377,6 +382,9 @@ mod tests {
         let title = crate::Text::new("title");
         let subtitle = crate::Text::new("subtitle");
         let content = [Some(&title), Some(&subtitle), None];
+        let text = crate::text::TextService::default();
+        let base = crate::text::TextRequestContext::new(&base, &text);
+        let spaced = crate::text::TextRequestContext::new(&spaced, &text);
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
             &base, [None; 3], [None; 2],
         );
@@ -404,6 +412,8 @@ mod tests {
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
         let theme = Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let mut appearance = theme.typography.annotations.panel_text.clone();
         appearance.font_size = 12.0;
 

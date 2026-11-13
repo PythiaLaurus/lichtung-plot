@@ -78,6 +78,8 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         .summaries(summaries)
         .unwrap();
     theme.marks = theme.marks.clone().strokes(strokes).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     assert_eq!(
         prepared.interval_ink(&theme).unwrap().to_bits(),
         40.0_f64.to_bits()

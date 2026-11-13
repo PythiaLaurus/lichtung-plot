@@ -258,6 +258,8 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme)).unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let semantics = prepared.guide_semantics(&theme).unwrap();
     assert_eq!(
@@ -289,7 +291,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
         700,
         500,
-        theme.prepared_font_environment().unwrap(),
+        theme.text.prepared_font_environment().unwrap(),
     );
     backend.begin(700, 500).unwrap();
     payload.draw(&mut backend).unwrap();

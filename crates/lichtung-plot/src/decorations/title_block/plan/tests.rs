@@ -3,6 +3,8 @@ use super::*;
 #[test]
 fn fitted_prose_uses_permitted_minima_and_selected_gaps_without_changing_root_padding() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let request = crate::TextLayout::default().fit(crate::TextFit::range(14.0, 14.0).unwrap());
     let original = crate::Text::new("Complete fitted heading")
         .style(

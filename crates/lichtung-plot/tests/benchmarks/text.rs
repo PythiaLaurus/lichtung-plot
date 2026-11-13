@@ -243,7 +243,9 @@ fn paragraph_case(multiline: bool) -> [Duration; 2] {
         "Measured response".to_owned()
     };
     let theme = crate::Theme::publication().resolve().unwrap();
-    theme.prepare_font_environment().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
+    theme.text.prepare_font_environment().unwrap();
     let mut previous = None;
     let mut elapsed_samples = [Duration::ZERO; 2];
     for (repeat, elapsed_sample) in elapsed_samples.iter_mut().enumerate() {

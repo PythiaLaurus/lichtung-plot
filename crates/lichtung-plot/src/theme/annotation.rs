@@ -288,7 +288,10 @@ mod tests {
             .padding(RelativeSpacing::ratio(0, 1).unwrap())
             .unwrap();
         theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
-        let unpadded = chart.intrinsic_body_minimum(&theme).unwrap();
+        let text = crate::text::TextService::default();
+        let unpadded = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+            .unwrap();
         // Each edge contributes exactly 1/4 quantum at the selected 14px role.
         // The combined 1/2 quantum reserves one quantum, rather than two.
         let shelf = theme
@@ -298,7 +301,9 @@ mod tests {
             .padding(RelativeSpacing::ratio(1, 14 * 4096).unwrap())
             .unwrap();
         theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
-        let padded = chart.intrinsic_body_minimum(&theme).unwrap();
+        let padded = chart
+            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+            .unwrap();
         assert_eq!(padded.0.to_bits(), unpadded.0.to_bits());
         assert_eq!(
             (padded.1 - unpadded.1).to_bits(),

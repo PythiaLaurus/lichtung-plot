@@ -31,6 +31,16 @@ struct Inputs {
     fill_content_height: bool,
     plot: crate::builder::ComposedInputs,
     theme: crate::theme::ResolvedTheme,
+    #[expect(
+        clippy::type_complexity,
+        reason = "the original direction comparison retains only its value projection"
+    )]
+    direction: Option<(
+        [(f64, f64); 2],
+        crate::layout::PixelRect,
+        [Option<Vec<(f64, f64)>>; 2],
+        Option<String>,
+    )>,
     scales: Option<FacetScales>,
     feedback: ChildFeedbackInputs,
 }
@@ -38,11 +48,15 @@ struct Inputs {
 impl Inputs {
     fn new(
         plot: &Plot,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<Self, Error> {
-        let theme = context.theme.clone();
+        let theme = context.theme.theme.clone();
+        let direction = context
+            .theme
+            .reference
+            .map(|reference| reference.snapshot());
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
@@ -62,6 +76,7 @@ impl Inputs {
                 context.guides.dependencies,
             )?)?,
             theme,
+            direction,
             scales: context.facet_scales(),
             feedback: round.child_inputs(&owners)?,
             owners,
@@ -71,7 +86,7 @@ impl Inputs {
     fn matches(
         &self,
         plot: &Plot,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<bool, Error> {
@@ -87,7 +102,11 @@ impl Inputs {
             )
             && plot.same_composed_inputs(&self.plot, &self.plot.guides)
             && self.plot.guides.stable(round)
-            && self.theme.same_validated(context.theme)?
+            && self.theme.same_validated(
+                context.theme.theme,
+                &self.direction,
+                context.theme.reference,
+            )?
             && self.scales == context.facet_scales()
             && round.child_inputs_equal(&self.feedback, &self.owners)
             && round.child_stable(&self.owners))
@@ -175,7 +194,7 @@ impl<'a> ChildPlans<'a> {
     pub(crate) fn canvas_probe(
         &mut self,
         plot: &Plot,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
         index: usize,
         phase: MeasurementPhase,
         round: &FeedbackRound,
@@ -215,7 +234,7 @@ impl<'a> ChildPlans<'a> {
     pub(crate) fn measure(
         &mut self,
         plot: &Plot,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
         owner: &ComponentAddress,
         phase: MeasurementPhase,
         round: &FeedbackRound,
@@ -268,7 +287,7 @@ impl<'a> ChildPlans<'a> {
         &mut self,
         plot: &Plot,
         role: LegendRole,
-        context: PlotRenderContext<'_>,
+        context: PlotRenderContext<'_, '_>,
         discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
         round: &mut FeedbackRound,
         owner: &ComponentAddress,
@@ -358,7 +377,9 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
-        theme.prepare_font_environment().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        theme.text.prepare_font_environment().unwrap();
         let root = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 800,
@@ -394,6 +415,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "compares actual child hits against independent legend paint and geometry edits"
+    )]
     fn actual_child_hit_is_invalidated_by_legend_only_paint_and_geometry_changes() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
@@ -401,6 +426,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -441,7 +468,7 @@ mod tests {
                 ))
                 .map_err(crate::layout::fit::PlanError::into_error)?;
                 assert!(Arc::ptr_eq(&first, &hit));
-                let mut paint = theme.clone();
+                let mut paint = theme.theme.clone();
                 let frame = paint
                     .legend
                     .get_frame()
@@ -461,6 +488,11 @@ mod tests {
                 )?;
                 geometry.legend = geometry.legend.clone().frame(Some(changed))?;
                 for custom in [&paint, &geometry] {
+                    let request = crate::text::TextRequestContext {
+                        theme: custom,
+                        ..theme
+                    };
+                    let custom = &request;
                     let changed = crate::layout::fit::measured(children.measure(
                         &source,
                         PlotRenderContext::new(source.data(), panel, custom),
@@ -572,6 +604,8 @@ mod tests {
                 );
             }
             let theme = crate::Theme::publication().resolve().unwrap();
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
                 .unwrap();
@@ -675,6 +709,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -766,6 +802,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let owner = ComponentAddress::root()
             .child(AddressRole::CanvasCell, 0)
             .unwrap();
@@ -831,8 +869,12 @@ mod tests {
                 ] {
                     assert!(!key.matches(&plot, context, &owner, round)?);
                 }
-                let mut appearance = theme.clone();
+                let mut appearance = theme.theme.clone();
                 appearance.typography.axes.tick_label.font_size += 1.0;
+                let appearance = crate::text::TextRequestContext {
+                    theme: &appearance,
+                    ..theme
+                };
                 assert!(!key.matches(
                     &source,
                     PlotRenderContext::new(source.data(), panel, &appearance),

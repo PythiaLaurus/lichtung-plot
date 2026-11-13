@@ -269,7 +269,7 @@ pub(crate) fn plan_panel(
     kind: PlotKind,
     cell: PixelRect,
     role: LegendRole,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
@@ -302,7 +302,7 @@ pub(crate) fn plan_panel_with_context(
     plot: &Plot,
     kind: PlotKind,
     role: LegendRole,
-    mut context: PlotRenderContext<'_>,
+    mut context: PlotRenderContext<'_, '_>,
     discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
@@ -558,7 +558,7 @@ pub(crate) fn plan_panel_with_context(
 
 fn content_frame(
     plot: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     round: &FeedbackRound,
     address: &ComponentAddress,
     guide: Option<(bool, (f64, f64), f64)>,
@@ -622,7 +622,7 @@ pub(crate) fn check_assigned_body(
     discovered: &PlotRenderResult,
     cell: PixelRect,
     assigned: PixelRect,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
     use crate::layout::fit::{self, FitOutcome};
@@ -735,7 +735,7 @@ fn plan_panel_attempt(
     plot: &Plot,
     kind: PlotKind,
     role: LegendRole,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
@@ -1565,7 +1565,7 @@ fn plan_panel_attempt(
 fn measure_geometry(
     plot: &Plot,
     kind: PlotKind,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometrySnapshot)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     match kind {

@@ -46,7 +46,7 @@ impl PreparedTextRequirement {
     /// authored text before bounded layout starts.
     pub(crate) fn append_preference_metrics(
         requirements: &mut Vec<Self>,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &ComponentAddress,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(), Error> {
@@ -696,7 +696,7 @@ pub(crate) fn foundational_plot_requirements(
     interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
     plot: &Plot,
     kind: PlotKind,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     base: &ComponentAddress,
     include_caption: bool,
     filter_point_label_x_to_limits: bool,
@@ -731,7 +731,7 @@ impl PreparedTextRequirement {
         requirements: &mut Vec<Self>,
         plot: &Plot,
         kind: PlotKind,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         base: &ComponentAddress,
         include_caption: bool,
         filter_point_label_x_to_limits: bool,
@@ -975,7 +975,7 @@ fn push_deferred_plot_requirements(
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &Plot,
     kind: PlotKind,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     base: &ComponentAddress,
     filter_point_label_x_to_limits: bool,
     filter_point_label_y_to_limits: bool,
@@ -1381,7 +1381,7 @@ fn push_plot_axis_ticks(
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &Plot,
     kind: PlotKind,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
     base: &ComponentAddress,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
@@ -1689,6 +1689,8 @@ mod tests {
         )
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let error = foundational_plot_requirements(
             None,
@@ -2414,6 +2416,8 @@ mod tests {
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 None,
@@ -2492,8 +2496,15 @@ mod tests {
             canonical::named_stack(&["Dark missing row"]);
         theme.typography.annotations.contrast.light.font_size = 39.0;
         theme.typography.annotations.contrast.dark.font_size = 9.0;
+        let text_service = crate::text::TextService::default();
         inputs
-            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .prepare_discrete_guides(
+                &plot,
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+                &resources,
+                &ComponentAddress::root(),
+                false,
+            )
             .unwrap();
         for (backdrop, expected) in [
             (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
@@ -2509,7 +2520,7 @@ mod tests {
                     Some(&inputs),
                     &plot,
                     PlotKind::Heatmap,
-                    &theme,
+                    &crate::text::TextRequestContext::new(&theme, &text_service),
                     &ComponentAddress::root(),
                     true,
                     true,
@@ -2566,6 +2577,8 @@ mod tests {
             canonical::named_stack(&["Selected dark contrast"]);
         theme.typography.annotations.contrast.light.font_size = 39.0;
         theme.typography.annotations.contrast.dark.font_size = 9.0;
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
@@ -2671,6 +2684,8 @@ mod tests {
             canonical::named_stack(&["Estimate detail only"]);
         theme.typography.annotations.estimate_detail.font_size = 20.0;
         theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
+        let text = crate::text::TextService::default();
+        let theme = crate::text::TextRequestContext::new(&theme, &text);
         inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
@@ -2743,6 +2758,8 @@ mod tests {
                 if light_selected { 64.0 } else { 7.0 };
             theme.typography.annotations.contrast.dark.font_size =
                 if light_selected { 7.0 } else { 64.0 };
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
             crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 800,
@@ -2781,7 +2798,11 @@ mod tests {
                         Some(&mut presence),
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
-                    theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                    theme.text.prepare_font_environment_from_census(
+                        &mut census,
+                        presence,
+                        stage,
+                    )?;
                     let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
                     let minimum = crate::plots::heatmap::prepare_intrinsics(
                         marks,

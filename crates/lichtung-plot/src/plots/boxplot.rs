@@ -53,7 +53,7 @@ pub(crate) struct PreparedBoxplot {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
-    theme: &crate::theme::ResolvedTheme,
+    theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
         return Err(Error::Render(
@@ -238,7 +238,7 @@ impl PreparedBoxplot {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
-        theme: &crate::theme::ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::alpha::AlphaUnitKind;
@@ -304,14 +304,14 @@ impl PreparedBoxplot {
 
 pub(crate) fn measure_marks(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
+    context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.operation();
+    let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let sample = &prepared.sample;
     let stats = &prepared.stats;

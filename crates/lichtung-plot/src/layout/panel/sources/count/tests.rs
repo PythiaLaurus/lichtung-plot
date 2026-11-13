@@ -150,6 +150,8 @@ fn singleton_and_space_requests_do_not_substitute_density_or_another_domain() {
 #[test]
 fn explicit_sources_above_ten_thousand_keep_their_cardinality_and_refuse_text_nonfit() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 2_000_000.0, 0.0, 480.0));
     let format =
         crate::NumericFormat::default().value_function(|context| Ok(context.index().to_string()));

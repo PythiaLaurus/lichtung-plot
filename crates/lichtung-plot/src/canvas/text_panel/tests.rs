@@ -4,6 +4,8 @@ use crate::{Text, TextAnchor, TextLayout, TextOffset, TextOffsetFrame};
 #[test]
 fn body_anchor_uses_the_enlarged_post_inset_sequence_cell_not_the_whole_panel() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let source = TextPanel::new(
         "Title",
         Text::new("A body\nwith two lines").layout(
@@ -67,6 +69,8 @@ fn body_anchor_uses_the_enlarged_post_inset_sequence_cell_not_the_whole_panel() 
 fn assigned_sequence_height_fits_body_without_shrinking_an_independent_heading() {
     use crate::{TextFit, TextFitGrouping};
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let heading = theme.typography.composition.text_panel_title.clone();
     let body = theme
         .typography

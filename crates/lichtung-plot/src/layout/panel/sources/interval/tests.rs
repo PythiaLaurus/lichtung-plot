@@ -172,6 +172,8 @@ fn logarithmic_data_intervals_retain_physical_operands_independently_of_scale_in
 #[test]
 fn fixed_sources_refuse_caps_and_text_nonfit_while_preferred_sources_keep_complete_recovery() {
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let projection =
         super::super::Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 640.0, 0.0, 480.0));
     let plan = |requirement, maximum| {

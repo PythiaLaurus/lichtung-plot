@@ -92,6 +92,8 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
         );
     assert_eq!(supplied.row_count(), 0);
     let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&theme, &text);
     let chart = crate::plots::shared_x::prepare_panel_for_test(&supplied.erase(), &theme).unwrap();
     let selected = chart
         .measure_selected_interior(crate::spec::PlotRenderContext::new(

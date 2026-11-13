@@ -4,7 +4,6 @@ use crate::layout::fit::PlanError;
 use crate::layout::PixelRect;
 #[cfg(test)]
 use crate::render::backend::Backend;
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 impl Layout {
@@ -49,7 +48,7 @@ impl Layout {
         y_label: Option<crate::Text>,
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         // Hardcoded academic-style margins for now.
         let pixel_box = default_panel_box(canvas_width, canvas_height);
@@ -70,7 +69,7 @@ impl Layout {
         y_label: Option<crate::Text>,
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         Self::new_with_ticks_and_axis_specs_in_panel_box(
             x_range,
@@ -100,7 +99,7 @@ impl Layout {
         y_ticks: Vec<AxisTick>,
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         #[cfg(test)]
@@ -175,7 +174,7 @@ impl Layout {
     #[cfg(test)]
     pub fn draw_decorations(
         &self,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         self.plan_axes(theme)?.draw(backend)
@@ -207,7 +206,7 @@ impl AxisSpec {
         supplied: Vec<AxisTick>,
         projection: &Projection,
         side: AxisSide,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
         #[cfg(test)]

@@ -7,7 +7,6 @@ use crate::decorations::title_block::plan::{
 use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::FitKind;
 use crate::layout::{AddressRole, PixelRect};
-use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
 pub(super) struct PlotLocalTextPlan {
@@ -19,7 +18,7 @@ impl PlotLocalTextPlan {
     pub(super) fn measure(
         plot: &Plot,
         cell: PixelRect,
-        theme: &ResolvedTheme,
+        theme: &crate::text::TextRequestContext<'_, '_>,
         panel_alignments: [Option<TextAlignment>; 2],
         intrinsics: RootTitleBlockIntrinsics,
         scope: &FitScope,
