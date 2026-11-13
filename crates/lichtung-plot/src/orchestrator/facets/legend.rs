@@ -16,11 +16,15 @@ pub(super) fn prepare_discrete_guide(
     inputs: &mut crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let (mut base, collectives) = super::data::base_plot(source, kind)?;
+    let (mut base, groups, collectives) = super::data::base_plot(source, kind)?;
+    let groups = groups.map(crate::data::source::source_arc).transpose()?;
     let collectives = collectives
         .map(crate::data::source::source_arc)
         .transpose()?;
     for registered in &mut inputs.plots {
+        if groups.is_some() {
+            registered.policy.coordinated.groups.clone_from(&groups);
+        }
         registered
             .policy
             .coordinated

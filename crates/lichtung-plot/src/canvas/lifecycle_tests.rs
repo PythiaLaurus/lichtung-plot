@@ -1,6 +1,68 @@
 use super::*;
 
 #[test]
+fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
+    let source = |group| {
+        Plot::interaction(
+            crate::CategoryValues::new("condition", ["before", "after"]).unwrap(),
+            crate::NumericValues::new("estimate", [1.0, 2.0]),
+            crate::CategoryValues::new("cohort", [group; 2]).unwrap(),
+            crate::Bounds::new(
+                crate::NumericValues::new("lower", [0.5, 1.5]),
+                crate::NumericValues::new("upper", [1.5, 2.5]),
+            ),
+        )
+    };
+    for policy in [CanvasLegendPolicy::Shared, CanvasLegendPolicy::PerPlot] {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 500)
+            .legend_policy(policy)
+            .panel(0, 0, source("first"))
+            .unwrap()
+            .panel(0, 1, source("second"))
+            .unwrap();
+        let mut second_color = (0, 0, 0);
+        let root = canvas
+            .build_preflight_plan(|prepared, _| {
+                second_color = prepared
+                    .themes
+                    .plot(1)
+                    .unwrap()
+                    .color_scales
+                    .get_qualitative()
+                    .colors()[1]
+                    .as_rgb();
+                for (index, raw) in ["first", "second"].into_iter().enumerate() {
+                    let registered = &prepared.interiors[index].as_ref().unwrap().plots[0];
+                    let groups =
+                        crate::orchestrator::registration::composed_group_levels(Some(registered));
+                    if policy == CanvasLegendPolicy::Shared {
+                        assert_eq!(groups.unwrap(), ["first", "second"]);
+                    } else {
+                        assert!(groups.is_none());
+                    }
+                    let crate::orchestrator::registration::PreparedFamily::Interaction(marks) =
+                        &registered.family
+                    else {
+                        panic!("prepared Interaction")
+                    };
+                    assert_eq!(marks.color_keys().collect::<Vec<_>>(), [raw]);
+                }
+            })
+            .unwrap();
+        let mut backend = root.plan().take_svg_backend().unwrap();
+        Canvas::render_preflighted(&root, &mut backend).unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let second = format!(
+            "fill=\"#{:02X}{:02X}{:02X}\"",
+            second_color.0, second_color.1, second_color.2
+        );
+        assert_eq!(svg.contains(&second), policy == CanvasLegendPolicy::Shared);
+    }
+}
+
+#[test]
 fn hidden_native_materialization_distinguishes_authored_visibility_from_canvas_policy() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let calls = Arc::new(AtomicUsize::new(0));

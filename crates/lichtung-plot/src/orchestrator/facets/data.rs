@@ -202,13 +202,25 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
     })
 }
 
+#[expect(
+    clippy::type_complexity,
+    reason = "the original parent scans return their owning group and pair results directly for publication at the guide boundary"
+)]
 pub(super) fn base_plot(
     source: &Plot,
     kind: PlotKind,
-) -> Result<(Plot, Option<Vec<crate::data::CollectivePair>>), Error> {
+) -> Result<
+    (
+        Plot,
+        Option<Vec<String>>,
+        Option<Vec<crate::data::CollectivePair>>,
+    ),
+    Error,
+> {
     let source_rows = source.description().configured_source_rows()?;
     let mut base_plot = source.clone().without_facets();
     let mut collectives = None;
+    let mut groups = None;
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
@@ -219,9 +231,8 @@ pub(super) fn base_plot(
             source.description(),
             "facet collective channels",
         )?;
-        base_plot = base_plot
-            .with_global_group_levels(channels.group_levels)
-            .with_global_hue_levels(channels.hue_levels);
+        groups = Some(channels.group_levels);
+        base_plot = base_plot.with_global_hue_levels(channels.hue_levels);
         collectives = Some(channels.identities);
     } else if let Some(group_column) = source.description().group_col() {
         let column = source
@@ -239,7 +250,7 @@ pub(super) fn base_plot(
             source_rows,
             "facet graphical group",
         )?);
-        base_plot = base_plot.with_global_group_levels(levels);
+        groups = Some(levels);
     }
     if kind == PlotKind::Trajectory {
         if let Some(x_column) = source.description().x_col() {
@@ -266,7 +277,7 @@ pub(super) fn base_plot(
             }
         }
     }
-    Ok((base_plot, collectives))
+    Ok((base_plot, groups, collectives))
 }
 
 #[expect(

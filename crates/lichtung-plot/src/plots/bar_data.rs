@@ -1031,7 +1031,7 @@ fn prepare_core(
     )?;
     let group_order = crate::data::source::collect_source(
         facet
-            .map_or_else(|| chart.global_group_levels(), |sources| sources.groups)
+            .and_then(|sources| sources.groups)
             .unwrap_or(&channels.group_levels)
             .iter()
             .map(|s| crate::data::source::copy_source_string(s)),

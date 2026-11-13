@@ -275,6 +275,7 @@ impl PreparedLine {
         &self,
         chart: &Plot,
         collectives: Option<&[crate::data::CollectivePair]>,
+        groups: Option<&[String]>,
     ) -> Result<Vec<usize>, Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
             && chart.description().line_path_style_spec() == LinePathStyle::Hue;
@@ -290,7 +291,7 @@ impl PreparedLine {
                             collectives
                                 .and_then(|pairs| pairs.iter().position(|pair| pair == identity))
                         } else {
-                            chart.global_group_levels().and_then(|levels| {
+                            groups.and_then(|levels| {
                                 levels
                                     .iter()
                                     .position(|level| Some(level) == identity.group.as_ref())
@@ -588,9 +589,7 @@ impl PreparedLine {
             ));
         }
         let identities = collectives.unwrap_or(&channels.identities);
-        let group_levels = chart
-            .global_group_levels()
-            .unwrap_or(&channels.group_levels);
+        let group_levels = &channels.group_levels;
         let collective = kind == PlotKind::Line || hue_paths;
         if kind == PlotKind::Trajectory {
             let mut rows = crate::data::source::collect_source((0..x.len()).map(Ok))?;
@@ -880,6 +879,7 @@ fn project(
     let order = prepared.group_order(
         chart,
         crate::orchestrator::registration::collective_pairs(context.registered),
+        crate::orchestrator::registration::composed_group_levels(context.registered),
     )?;
     let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
 

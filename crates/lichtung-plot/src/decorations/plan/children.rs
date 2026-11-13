@@ -943,9 +943,6 @@ mod tests {
                             source
                                 .clone()
                                 .with_global_hue_levels(vec!["new hue".into()]),
-                            source
-                                .clone()
-                                .with_global_group_levels(vec!["new group".into()]),
                             source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(

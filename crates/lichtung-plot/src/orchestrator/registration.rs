@@ -164,6 +164,32 @@ pub(crate) fn line_condition_levels<'v>(
         .flatten()
 }
 
+/// The original optional global operand, not a family's mandatory local order.
+pub(crate) fn composed_group_levels<'v>(
+    registered: Option<&'v PlotRegistration<'_>>,
+) -> Option<&'v [String]> {
+    let registered = registered?;
+    if matches!(
+        registered.source.kind(),
+        crate::PlotKind::Bar
+            | crate::PlotKind::HorizontalBar
+            | crate::PlotKind::StackedBar
+            | crate::PlotKind::StackedHorizontalBar
+            | crate::PlotKind::Boxplot
+            | crate::PlotKind::Violin
+            | crate::PlotKind::Raincloud
+    ) && (!registered.source.has_facets() || registered.source.group_col().is_none())
+    {
+        return None;
+    }
+    registered
+        .policy
+        .coordinated
+        .groups
+        .as_deref()
+        .map(Vec::as_slice)
+}
+
 impl std::fmt::Debug for PlotRegistration<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

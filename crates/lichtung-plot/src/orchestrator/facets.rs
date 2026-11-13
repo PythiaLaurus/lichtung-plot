@@ -214,7 +214,7 @@ impl OwnedFacetPlan {
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
         theme.text.prepared_font_environment()?;
-        let (mut base_plot, _) = data::base_plot(source, kind)?;
+        let (mut base_plot, _, _) = data::base_plot(source, kind)?;
         if let Some(levels) = &prepared_guide.hue_levels {
             base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
                 levels

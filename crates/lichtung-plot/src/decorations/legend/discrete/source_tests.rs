@@ -66,7 +66,6 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     )
     .series(CategoryValues::new("cohort", ["seen", "seen"]).unwrap())
     .erase()
-    .with_global_group_levels(vec!["absent".into(), "seen".into()])
     .with_global_hue_levels(vec!["absent".into(), "seen".into()]);
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let fill = crate::DataFillTheme::new(
@@ -95,12 +94,12 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
                     .as_deref()
                     .unwrap()
                     .as_slice(),
-                ["absent", "seen"]
+                ["seen"]
             );
             assert!(bars
                 .bars
                 .iter()
-                .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
+                .all(|bar| bar.series_index == Some(0) && bar.hue_index == Some(1)));
         },
     );
     let projected_mapped = PreparedGuide::prepare_for_test(

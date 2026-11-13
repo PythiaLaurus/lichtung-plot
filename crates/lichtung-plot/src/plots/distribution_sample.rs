@@ -84,7 +84,6 @@ pub(crate) fn prepare_scoped(
     let group_levels = crate::data::source::collect_source(
         facet
             .and_then(|scope| scope.groups)
-            .or_else(|| chart.global_group_levels())
             .unwrap_or(&channels.group_levels)
             .iter()
             .map(|level| crate::data::source::copy_source_string(level)),

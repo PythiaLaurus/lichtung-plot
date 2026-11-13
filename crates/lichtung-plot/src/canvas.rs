@@ -1104,7 +1104,7 @@ impl Canvas {
     fn prepare_discrete_guides(
         &self,
         themes: &ResolvedCanvasThemes,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        interiors: &mut [Option<crate::layout::interior::PreparedInteriorInputs>],
         hue_groups: Option<&[(String, Vec<String>)]>,
         resources: &crate::font::canonical::OperationContext,
     ) -> Result<Option<Arc<PreparedGuide>>, Error> {
@@ -1113,6 +1113,7 @@ impl Canvas {
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(source) = plot else { continue };
             let mut plot = self.cell_visibility(source.clone());
+            let mut groups = None;
             if let Some(labels) = &self.labels {
                 plot = plot.labels(labels.clone());
             }
@@ -1126,17 +1127,29 @@ impl Canvas {
                         .iter()
                         .map(|level| crate::data::source::copy_source_string(level)),
                 )?;
-                plot = plot.with_global_color_levels(levels);
+                if plot.kind() == PlotKind::Interaction
+                    && plot.description().hue_dimension_key().is_none()
+                {
+                    groups = Some(levels);
+                } else {
+                    plot = plot.with_global_hue_levels(levels);
+                }
             }
             let theme = &themes
                 .plot_request(index)
                 .expect("configured Canvas panel has a resolved theme");
             let inputs = interiors
-                .get(index)
-                .and_then(Option::as_ref)
+                .get_mut(index)
+                .and_then(Option::as_mut)
                 .ok_or_else(|| {
                     Error::Render("Canvas point/path guide is missing prepared semantics".into())
                 })?;
+            if let Some(groups) = groups {
+                let groups = crate::data::source::source_arc(groups)?;
+                for registered in &mut inputs.plots {
+                    registered.policy.coordinated.groups = Some(Arc::clone(&groups));
+                }
+            }
             let owner = crate::layout::ComponentAddress::root().child(
                 crate::layout::AddressRole::CanvasCell,
                 u32::try_from(index).map_err(|_| {
@@ -1563,7 +1576,7 @@ impl Canvas {
                 }
                 let shared_guide = self.prepare_discrete_guides(
                     &themes,
-                    &interiors,
+                    &mut interiors,
                     color_domains.as_deref().map(Vec::as_slice),
                     &prepared_stage.operation(),
                 )?;
@@ -2219,7 +2232,13 @@ impl Canvas {
                             .iter()
                             .map(|level| crate::data::source::copy_source_string(level)),
                     )?;
-                    plot.with_global_color_levels(levels)
+                    if plot.kind() == PlotKind::Interaction
+                        && plot.description().hue_dimension_key().is_none()
+                    {
+                        plot
+                    } else {
+                        plot.with_global_hue_levels(levels)
+                    }
                 } else {
                     plot
                 };

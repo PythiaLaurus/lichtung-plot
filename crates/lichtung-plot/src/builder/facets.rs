@@ -162,7 +162,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 other.global_hue_levels.as_deref(),
             )
             && same_values(
-                self.global_group_levels.as_deref(),
+                crate::orchestrator::registration::composed_group_levels(registered),
                 other.global_group_levels.as_deref(),
             )
             && same_values(
@@ -242,7 +242,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         let mut levels = [None, None, None];
         for (target, source) in levels.iter_mut().zip([
             self.global_hue_levels.as_deref(),
-            self.global_group_levels.as_deref(),
+            crate::orchestrator::registration::composed_group_levels(registered),
             crate::orchestrator::registration::line_condition_levels(registered),
         ]) {
             if let Some(source) = source {
@@ -305,26 +305,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn with_global_color_levels(self, levels: Vec<String>) -> Self {
-        if self.kind() == PlotKind::Interaction && self.description().hue_dimension_key().is_none()
-        {
-            self.with_global_group_levels(levels)
-        } else {
-            self.with_global_hue_levels(levels)
-        }
-    }
-
     pub(crate) fn global_hue_levels(&self) -> Option<&[String]> {
         self.global_hue_levels.as_deref()
-    }
-
-    pub(crate) fn with_global_group_levels(mut self, levels: Vec<String>) -> Self {
-        self.global_group_levels = Some(levels);
-        self
-    }
-
-    pub(crate) fn global_group_levels(&self) -> Option<&[String]> {
-        self.global_group_levels.as_deref()
     }
 
     pub(crate) fn with_render_scope(mut self, scope: impl Into<String>) -> Self {

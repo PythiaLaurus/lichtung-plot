@@ -59,6 +59,67 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
 }
 
 #[test]
+fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
+    let source = Plot::bar(
+        crate::CategoryValues::new("category", ["one", "two", "one", "two"]).unwrap(),
+        crate::BarInput::estimates(crate::NumericValues::new("value", [9.0, 8.0, 1.0, 2.0])),
+    )
+    .series(crate::CategoryValues::new("cohort", ["absent", "absent", "seen", "seen"]).unwrap())
+    .facet(FacetSpec::column(
+        crate::CategoryValues::new("panel", ["parent", "parent", "child", "child"]).unwrap(),
+    ))
+    .erase();
+    let operation = crate::font::canonical::OperationContext::new();
+    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+    let plot = source
+        .clone()
+        .without_facets()
+        .with_render_scope(inputs.plots[1].scope.render_name.clone().unwrap());
+    let registered = &inputs.plots[1];
+    let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } = &registered.family
+    else {
+        panic!("prepared Bars")
+    };
+    assert!(marks
+        .bars
+        .iter()
+        .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
+    let retained = plot
+        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), Some(registered), None)
+        .unwrap();
+    assert_eq!(
+        retained.global_group_levels.as_deref().unwrap(),
+        ["absent", "seen"]
+    );
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(registered), None));
+    inputs.plots[1].policy.coordinated.groups =
+        Some(crate::data::source::source_arc(vec!["seen".into(), "absent".into()]).unwrap());
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+
+    let single = Plot::bar(
+        crate::CategoryValues::new("category", ["one"]).unwrap(),
+        crate::BarInput::estimates(crate::NumericValues::new("value", [1.0])),
+    )
+    .erase();
+    let inputs = crate::plots::shared_x::prepare_plot(&single, &operation, None).unwrap();
+    assert!(inputs.plots[0]
+        .policy
+        .coordinated
+        .groups
+        .as_ref()
+        .unwrap()
+        .is_empty());
+    let retained = single
+        .retain_composed_inputs(
+            ScopedGuideInputs::for_test(&single),
+            Some(&inputs.plots[0]),
+            None,
+        )
+        .unwrap();
+    assert!(retained.global_group_levels.is_none());
+}
+
+#[test]
 fn generation_cloning_and_composed_identity_include_both_axes() {
     let mut plot = plot()
         .x_tick_generation(TickGeneration::additive(2.0).unwrap())

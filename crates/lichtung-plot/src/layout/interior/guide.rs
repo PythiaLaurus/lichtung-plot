@@ -363,6 +363,7 @@ impl PreparedInteriorInputs<'_> {
                 let order = marks.group_order(
                     chart,
                     crate::orchestrator::registration::collective_pairs(Some(registered)),
+                    crate::orchestrator::registration::composed_group_levels(Some(registered)),
                 )?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
@@ -429,7 +430,12 @@ impl PreparedInteriorInputs<'_> {
                     F::Interaction(marks) => Some(marks),
                     _ => None,
                 })?;
-                marks.guide_entries(chart, theme, data)
+                marks.guide_entries(
+                    chart,
+                    theme,
+                    data,
+                    crate::orchestrator::registration::composed_group_levels(Some(registered)),
+                )
             }
             PlotKind::Marginal => Some(&registered.family)
                 .and_then(|family| match family {
@@ -480,6 +486,10 @@ impl PreparedInteriorInputs<'_> {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "local contribution preparation and the original ordered parent union remain at one publication boundary"
+    )]
     pub(crate) fn prepare_discrete_guides(
         &self,
         chart: &Plot,
@@ -567,6 +577,7 @@ impl PreparedInteriorInputs<'_> {
                 |registered| registered.policy.guide_composition,
             ),
             crate::orchestrator::registration::collective_pairs(self.plots.first()),
+            crate::orchestrator::registration::composed_group_levels(self.plots.first()),
             &panels,
             facet_cells,
         )?;
@@ -719,6 +730,7 @@ fn parent_guide_order(
     chart: &Plot,
     composition: crate::LegendComposition,
     collectives: Option<&[crate::data::CollectivePair]>,
+    groups: Option<&[String]>,
     panels: &[ScopedGuide],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
@@ -732,10 +744,7 @@ fn parent_guide_order(
         // include Hidden marks and cannot order visible guide contributions.
         if facet_cells {
             for (field, levels) in [
-                (
-                    chart.description().group_name(),
-                    chart.global_group_levels(),
-                ),
+                (chart.description().group_name(), groups),
                 (
                     chart.description().hue_dimension_key(),
                     chart.global_hue_levels(),

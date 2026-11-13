@@ -223,12 +223,13 @@ impl PreparedInteraction {
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
+        groups: Option<&[String]>,
     ) -> Result<CategoryColors, Error> {
         let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
         let parent = if has_hue {
             chart.global_hue_levels()
         } else {
-            chart.global_group_levels()
+            groups
         };
         let keys = if let Some(levels) = parent {
             crate::data::source::collect_source(
@@ -266,8 +267,9 @@ impl PreparedInteraction {
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
+        groups: Option<&[String]>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, theme, data)?;
+        let colors = self.resolved_colors(chart, theme, data, groups)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
 
@@ -386,7 +388,7 @@ pub(crate) fn prepare(
     }
     let conditions = crate::data::source::source_levels(&x)?;
     let domain = parent.unwrap_or(&channels);
-    let groups = chart.global_group_levels().unwrap_or(&domain.group_levels);
+    let groups = &domain.group_levels;
     let hues = chart.global_hue_levels().unwrap_or(&domain.hue_levels);
     let identities = collectives.unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
@@ -608,7 +610,12 @@ pub(crate) fn measure_marks(
         traces: Vec::new(),
         domain_expansions: [None; 2],
     };
-    let colors = marks.resolved_colors(chart, context.theme, data)?;
+    let colors = marks.resolved_colors(
+        chart,
+        context.theme,
+        data,
+        crate::orchestrator::registration::composed_group_levels(context.registered),
+    )?;
     crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
