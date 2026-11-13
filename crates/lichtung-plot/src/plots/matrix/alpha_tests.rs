@@ -23,9 +23,15 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     )
     .hide_point_outline()
     .erase();
-    let prepared = prepare_axes(
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
         &source,
-        crate::data::PlotData::with_rows(source.description(), &[2, 0, 1], &[300, 100, 200]),
+        &operation,
+        crate::orchestrator::registration::RowSelection::Selected {
+            input_slots: vec![2, 0, 1],
+            diagnostic_rows: vec![300, 100, 200],
+        },
+        |data| prepare_axes(&source, data).unwrap(),
     )
     .unwrap();
     assert_eq!(
@@ -36,10 +42,13 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             .collect::<Vec<_>>(),
         [(2, 300, 0), (0, 100, 0), (1, 200, 128)]
     );
-    let data = source
-        .data()
-        .map_source_rows(source.description().source_row_map().unwrap());
-    let before = prepare_axes(&source, data).unwrap();
+    let before = crate::data::with_source_data_for_test(
+        &source,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| prepare_axes(&source, data).unwrap(),
+    )
+    .unwrap();
     let control = source
         .clone()
         .with_alpha(
@@ -50,10 +59,13 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             AlphaTarget::Fill,
             AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
         );
-    let control_data = control
-        .data()
-        .map_source_rows(control.description().source_row_map().unwrap());
-    let after = prepare_axes(&control, control_data).unwrap();
+    let after = crate::data::with_source_data_for_test(
+        &control,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| prepare_axes(&control, data).unwrap(),
+    )
+    .unwrap();
     assert_eq!(before.ranges, after.ranges);
     for (before, after) in before.diagonals.iter().zip(&after.diagonals) {
         assert_eq!(before.positions, after.positions);

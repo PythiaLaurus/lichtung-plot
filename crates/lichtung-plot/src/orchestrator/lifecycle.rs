@@ -1308,18 +1308,12 @@ impl Plot {
                 "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
         }
-        let source_rows = self.description().configured_source_rows()?;
+        self.description().configured_source_rows()?;
         let operation = theme.text.prepared_font_environment()?.operation();
-        let mut context = if let Some(registered) = registered {
-            PlotRenderContext::new(registered.data(&operation)?, panel, theme)
-                .with_registration(registered)
-        } else {
-            source_rows.map_or_else(
-                || PlotRenderContext::new(self.data(), panel, theme),
-                |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
-            )
-        };
-        context = context.with_fit_scope(scope);
+        let registered = registered.expect("prepared plot measurement");
+        let context = PlotRenderContext::new(registered.data(&operation)?, panel, theme)
+            .with_registration(registered)
+            .with_fit_scope(scope);
         crate::layout::fit::outcome(self.measure_panel(kind, context))
     }
 }

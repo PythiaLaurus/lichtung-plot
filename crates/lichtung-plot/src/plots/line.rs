@@ -217,7 +217,7 @@ impl PreparedLine {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let map = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.get_qualitative(),
@@ -790,16 +790,6 @@ impl PreparedLine {
     }
 }
 
-pub(crate) fn shared_x_domain(chart: &Plot, data: PlotData<'_, '_>) -> Result<(f64, f64), Error> {
-    let prepared = PreparedLine::prepare_scientific(chart, data, None)?;
-    if prepared.conditions.is_some() {
-        return Err(Error::Data(
-            "canvas x-range group has a categorical x axis".into(),
-        ));
-    }
-    Ok(prepared.ranges[0])
-}
-
 fn categorical_index(index: usize) -> Result<f64, Error> {
     u32::try_from(index).map(f64::from).map_err(|_| {
         Error::Data(
@@ -825,8 +815,8 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     project(chart, prepared, layout, theme, data, context.fit_scope())
 }
 

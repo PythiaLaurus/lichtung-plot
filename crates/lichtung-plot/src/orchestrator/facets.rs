@@ -205,8 +205,7 @@ impl FacetPlan {
         )?;
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let resources = theme.text.prepared_font_environment()?.operation();
-        let data = source.data().with_operation(&resources);
+        theme.text.prepared_font_environment()?;
         let mut base_plot = data::base_plot(source, kind)?;
         if let Some(levels) = &prepared_guide.hue_levels {
             base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
@@ -231,7 +230,6 @@ impl FacetPlan {
             natural_height: false,
         });
         let provisional = fit::measured(tracks::allocate(
-            data,
             outer,
             (selectors.rows, selectors.columns),
             &panels,
@@ -252,8 +250,8 @@ impl FacetPlan {
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
-        let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true, data)?;
-        let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false, data)?;
+        let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
+        let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
         let shared_plot = base_plot
             .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
             .with_parent_axis_gutters();

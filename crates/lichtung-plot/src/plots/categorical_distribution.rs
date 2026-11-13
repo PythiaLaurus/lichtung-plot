@@ -61,7 +61,7 @@ impl PreparedDistribution {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let keys = if !self.hue_levels().is_empty() {
             chart.global_hue_levels().unwrap_or(self.hue_levels())
         } else if !chart.description().has_facets() || matches!(self, Self::Supplied(_)) {
@@ -69,11 +69,21 @@ impl PreparedDistribution {
         } else {
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
-            let source = chart.data().with_operation(resources);
             let column = chart.description().x_col().ok_or_else(|| {
                 Error::Render("distribution category color source is missing".into())
             })?;
-            let raw = crate::data::strict_strings(source, column, "distribution color domain")?;
+            let source = chart
+                .description()
+                .data_column(column)
+                .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?;
+            let crate::data::DataColumn::Category(values) = source else {
+                return Err(Error::Data(format!(
+                    "distribution color domain: value {:?} must be categorical",
+                    source.name()
+                )));
+            };
+            let raw =
+                crate::data::strict_source_strings(values, None, "distribution color domain")?;
             let parent = crate::data::source::source_levels(&raw)?;
             return CategoryColors::resolve(
                 &parent,

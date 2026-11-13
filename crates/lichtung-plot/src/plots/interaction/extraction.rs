@@ -14,6 +14,10 @@ pub(crate) fn source() -> Plot<crate::kind::Interaction> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one bound scientific operation checks raw lexical style identity and retained rendered group matching"
+)]
 fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching() {
     use crate::InteractionStyle;
 
@@ -54,7 +58,14 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
         .unwrap(),
     )
     .erase();
-    let prepared = prepare(&chart, chart.data(), None).unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
+        &chart,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| prepare(&chart, data, None).unwrap(),
+    )
+    .unwrap();
     assert_eq!(prepared.traces.len(), 2);
     assert_eq!(prepared.traces[0].identity.group.as_deref(), Some("A B"));
     assert_eq!(prepared.traces[0].style.point_shape, PointShape::Circle);

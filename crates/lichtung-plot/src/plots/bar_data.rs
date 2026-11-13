@@ -424,7 +424,7 @@ impl PreparedBars {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let keys = if self.hues.is_empty() {
             &self.categories[..]
         } else {

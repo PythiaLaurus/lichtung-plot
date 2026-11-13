@@ -83,248 +83,256 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             width: 800,
             height: 600,
         },
-        |_| Ok(()),
-        |(), assigned, round| {
-            let mut children = ChildPlans::facets();
-            let produced = std::cell::Cell::new(0);
-            let panel = PixelRect::new(20.0, 400.0, 20.0, 500.0);
-            let allocation = GuideAllocation::bounds(panel)?;
-            let first = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                descriptor_use(&first_guide, GuideOrientation::Vertical),
-                allocation,
-                round,
-            )?];
-            let first_view = GuideConsumption {
-                use_kind: GuideUse::SharedSuppressed,
-                local_guide: None,
-                dependencies: &first,
-            };
-            let context =
-                PlotRenderContext::new(source.data(), panel, &theme).with_guides(&first_view);
-            let original = measure(&mut children, &source, context, &owner, round, &produced)?;
-            let hit = measure(&mut children, &source, context, &owner, round, &produced)?;
-            assert!(Arc::ptr_eq(&original, &hit));
+        |stage| Ok(stage.operation()),
+        |operation, assigned, round| {
+            crate::data::with_source_data_for_test(
+                &source,
+                operation,
+                crate::orchestrator::registration::RowSelection::Full,
+                |data| {
+                    let mut children = ChildPlans::facets();
+                    let produced = std::cell::Cell::new(0);
+                    let panel = PixelRect::new(20.0, 400.0, 20.0, 500.0);
+                    let allocation = GuideAllocation::bounds(panel)?;
+                    let first = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        descriptor_use(&first_guide, GuideOrientation::Vertical),
+                        allocation,
+                        round,
+                    )?];
+                    let first_view = GuideConsumption {
+                        use_kind: GuideUse::SharedSuppressed,
+                        local_guide: None,
+                        dependencies: &first,
+                    };
+                    let context =
+                        PlotRenderContext::new(data, panel, &theme).with_guides(&first_view);
+                    let original =
+                        measure(&mut children, &source, context, &owner, round, &produced)?;
+                    let hit = measure(&mut children, &source, context, &owner, round, &produced)?;
+                    assert!(Arc::ptr_eq(&original, &hit));
 
-            // Aliased titles/labels and all glyphs agree; only complete raw/source
-            // identities differ. An equal containing box cannot preserve this hit.
-            let second = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                descriptor_use(&second_guide, GuideOrientation::Vertical),
-                allocation,
-                round,
-            )?];
-            let second_view = GuideConsumption {
-                dependencies: &second,
-                ..first_view
-            };
-            let changed = measure(
-                &mut children,
-                &source,
-                context.with_guides(&second_view),
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&original, &changed));
-            assert_eq!(
-                original.layout.projection.pixel_box(),
-                changed.layout.projection.pixel_box()
-            );
-            let horizontal = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                descriptor_use(&second_guide, GuideOrientation::Horizontal),
-                allocation,
-                round,
-            )?];
-            let horizontal_view = GuideConsumption {
-                dependencies: &horizontal,
-                ..first_view
-            };
-            let rotated = measure(
-                &mut children,
-                &source,
-                context.with_guides(&horizontal_view),
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&changed, &rotated));
-            let compact = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                DependencyUse::DescriptorAndAllocation {
-                    descriptor: Arc::clone(&second_guide),
-                    orientation: GuideOrientation::Horizontal,
-                    compact: true,
+                    // Aliased titles/labels and all glyphs agree; only complete raw/source
+                    // identities differ. An equal containing box cannot preserve this hit.
+                    let second = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        descriptor_use(&second_guide, GuideOrientation::Vertical),
+                        allocation,
+                        round,
+                    )?];
+                    let second_view = GuideConsumption {
+                        dependencies: &second,
+                        ..first_view
+                    };
+                    let changed = measure(
+                        &mut children,
+                        &source,
+                        context.with_guides(&second_view),
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&original, &changed));
+                    assert_eq!(
+                        original.layout.projection.pixel_box(),
+                        changed.layout.projection.pixel_box()
+                    );
+                    let horizontal = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        descriptor_use(&second_guide, GuideOrientation::Horizontal),
+                        allocation,
+                        round,
+                    )?];
+                    let horizontal_view = GuideConsumption {
+                        dependencies: &horizontal,
+                        ..first_view
+                    };
+                    let rotated = measure(
+                        &mut children,
+                        &source,
+                        context.with_guides(&horizontal_view),
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&changed, &rotated));
+                    let compact = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        DependencyUse::DescriptorAndAllocation {
+                            descriptor: Arc::clone(&second_guide),
+                            orientation: GuideOrientation::Horizontal,
+                            compact: true,
+                        },
+                        allocation,
+                        round,
+                    )?];
+                    let compact_view = GuideConsumption {
+                        dependencies: &compact,
+                        ..first_view
+                    };
+                    let compacted = measure(
+                        &mut children,
+                        &source,
+                        context.with_guides(&compact_view),
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&rotated, &compacted));
+
+                    let only = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        DependencyUse::AllocationOnly,
+                        allocation,
+                        round,
+                    )?];
+                    let only_view = GuideConsumption {
+                        dependencies: &only,
+                        ..first_view
+                    };
+                    let only_context = context.with_guides(&only_view);
+                    let allocated = measure(
+                        &mut children,
+                        &source,
+                        only_context,
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&compacted, &allocated));
+                    let equal = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        DependencyUse::AllocationOnly,
+                        allocation,
+                        round,
+                    )?];
+                    let equal_view = GuideConsumption {
+                        dependencies: &equal,
+                        ..first_view
+                    };
+                    assert!(Arc::ptr_eq(
+                        &allocated,
+                        &measure(
+                            &mut children,
+                            &source,
+                            context.with_guides(&equal_view),
+                            &owner,
+                            round,
+                            &produced
+                        )?
+                    ));
+                    let width = [ConsumedGuideDependency::new(
+                        guide_owner.clone(),
+                        DependencyUse::AllocationOnly,
+                        GuideAllocation::width(panel.width())?,
+                        round,
+                    )?];
+                    let width_view = GuideConsumption {
+                        dependencies: &width,
+                        ..first_view
+                    };
+                    let width_only = measure(
+                        &mut children,
+                        &source,
+                        context.with_guides(&width_view),
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&allocated, &width_only));
+                    let baseline = measure(
+                        &mut children,
+                        &source,
+                        only_context,
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+
+                    let unrelated = ComponentAddress::root().child(AddressRole::FacetCell, 1)?;
+                    let trial = round.begin_trial()?;
+                    round.begin_owner(&unrelated)?;
+                    round.observe_number(1.0)?;
+                    round.request_insets(
+                        &unrelated,
+                        &unrelated,
+                        crate::layout::kernel::FeedbackKind::AxisGutter,
+                        [1.0, 0.0, 0.0, 0.0],
+                    )?;
+                    let hit = measure(
+                        &mut children,
+                        &source,
+                        only_context,
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(Arc::ptr_eq(&baseline, &hit));
+                    round.record_failure(
+                        FitScope::new(&unrelated, 0)
+                            .failure(FitKind::TrackOrResidual, "reject unrelated trial"),
+                    )?;
+                    assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
+
+                    let trial = round.begin_trial()?;
+                    round.begin_owner(&guide_owner)?;
+                    round.observe_number(2.0)?;
+                    round.request_insets(
+                        &guide_owner,
+                        &guide_owner,
+                        crate::layout::kernel::FeedbackKind::AxisGutter,
+                        [1.0, 0.0, 0.0, 0.0],
+                    )?;
+                    let unstable = measure(
+                        &mut children,
+                        &source,
+                        only_context,
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&baseline, &unstable));
+                    round.record_failure(
+                        FitScope::new(&guide_owner, 0)
+                            .failure(FitKind::TrackOrResidual, "reject consumed ancestor trial"),
+                    )?;
+                    assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
+
+                    let mut different_font = theme.theme.clone();
+                    different_font.typography.axes.tick_label.stack =
+                        crate::font::canonical::FontStack::new(
+                            [crate::font::canonical::FontFamily::named("Noto Sand")?]
+                                .into_iter()
+                                .chain(
+                                    theme.typography.axes.tick_label.stack.families()[1..]
+                                        .iter()
+                                        .cloned(),
+                                ),
+                        )?;
+                    let request = crate::text::TextRequestContext {
+                        theme: &different_font,
+                        ..theme
+                    };
+                    let changed_font =
+                        PlotRenderContext::new(data, panel, &request).with_guides(&only_view);
+                    let changed = measure(
+                        &mut children,
+                        &source,
+                        changed_font,
+                        &owner,
+                        round,
+                        &produced,
+                    )?;
+                    assert!(!Arc::ptr_eq(&unstable, &changed));
+                    assert_eq!(produced.get(), 9);
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
                 },
-                allocation,
-                round,
-            )?];
-            let compact_view = GuideConsumption {
-                dependencies: &compact,
-                ..first_view
-            };
-            let compacted = measure(
-                &mut children,
-                &source,
-                context.with_guides(&compact_view),
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&rotated, &compacted));
-
-            let only = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                DependencyUse::AllocationOnly,
-                allocation,
-                round,
-            )?];
-            let only_view = GuideConsumption {
-                dependencies: &only,
-                ..first_view
-            };
-            let only_context = context.with_guides(&only_view);
-            let allocated = measure(
-                &mut children,
-                &source,
-                only_context,
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&compacted, &allocated));
-            let equal = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                DependencyUse::AllocationOnly,
-                allocation,
-                round,
-            )?];
-            let equal_view = GuideConsumption {
-                dependencies: &equal,
-                ..first_view
-            };
-            assert!(Arc::ptr_eq(
-                &allocated,
-                &measure(
-                    &mut children,
-                    &source,
-                    context.with_guides(&equal_view),
-                    &owner,
-                    round,
-                    &produced
-                )?
-            ));
-            let width = [ConsumedGuideDependency::new(
-                guide_owner.clone(),
-                DependencyUse::AllocationOnly,
-                GuideAllocation::width(panel.width())?,
-                round,
-            )?];
-            let width_view = GuideConsumption {
-                dependencies: &width,
-                ..first_view
-            };
-            let width_only = measure(
-                &mut children,
-                &source,
-                context.with_guides(&width_view),
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&allocated, &width_only));
-            let baseline = measure(
-                &mut children,
-                &source,
-                only_context,
-                &owner,
-                round,
-                &produced,
-            )?;
-
-            let unrelated = ComponentAddress::root().child(AddressRole::FacetCell, 1)?;
-            let trial = round.begin_trial()?;
-            round.begin_owner(&unrelated)?;
-            round.observe_number(1.0)?;
-            round.request_insets(
-                &unrelated,
-                &unrelated,
-                crate::layout::kernel::FeedbackKind::AxisGutter,
-                [1.0, 0.0, 0.0, 0.0],
-            )?;
-            let hit = measure(
-                &mut children,
-                &source,
-                only_context,
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(Arc::ptr_eq(&baseline, &hit));
-            round.record_failure(
-                FitScope::new(&unrelated, 0)
-                    .failure(FitKind::TrackOrResidual, "reject unrelated trial"),
-            )?;
-            assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
-
-            let trial = round.begin_trial()?;
-            round.begin_owner(&guide_owner)?;
-            round.observe_number(2.0)?;
-            round.request_insets(
-                &guide_owner,
-                &guide_owner,
-                crate::layout::kernel::FeedbackKind::AxisGutter,
-                [1.0, 0.0, 0.0, 0.0],
-            )?;
-            let unstable = measure(
-                &mut children,
-                &source,
-                only_context,
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&baseline, &unstable));
-            round.record_failure(
-                FitScope::new(&guide_owner, 0)
-                    .failure(FitKind::TrackOrResidual, "reject consumed ancestor trial"),
-            )?;
-            assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
-
-            let mut different_font = theme.theme.clone();
-            different_font.typography.axes.tick_label.stack =
-                crate::font::canonical::FontStack::new(
-                    [crate::font::canonical::FontFamily::named("Noto Sand")?]
-                        .into_iter()
-                        .chain(
-                            theme.typography.axes.tick_label.stack.families()[1..]
-                                .iter()
-                                .cloned(),
-                        ),
-                )?;
-            let request = crate::text::TextRequestContext {
-                theme: &different_font,
-                ..theme
-            };
-            let changed_font =
-                PlotRenderContext::new(source.data(), panel, &request).with_guides(&only_view);
-            let changed = measure(
-                &mut children,
-                &source,
-                changed_font,
-                &owner,
-                round,
-                &produced,
-            )?;
-            assert!(!Arc::ptr_eq(&unstable, &changed));
-            assert_eq!(produced.get(), 9);
-            Ok(crate::layout::MeasuredLayout::new(
-                assigned.assigned_size()?,
-                (),
-            ))
+            )?
         },
-        |(), _, (), _| Ok(()),
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
 }

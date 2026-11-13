@@ -31,75 +31,77 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
     )
     .erase();
     for prepared in [false, true] {
-        let inputs = if prepared {
-            Some(
-                crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &crate::font::canonical::OperationContext::new(),
-                    None,
-                )
-                .unwrap(),
-            )
-        } else {
-            None
-        };
-        let plot = &source;
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let mut context = PlotRenderContext::new(
-            plot.data(),
-            crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
-            &theme,
-        );
-        if let Some(registered) = inputs.as_ref().and_then(|inputs| inputs.plots.first()) {
-            context = context.with_registration(registered);
-        }
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-        SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(0));
-        measurements::start();
-        let error = plot.measure_panel(PlotKind::Line, context).unwrap_err();
-        assert!(matches!(
-            error,
-            crate::layout::fit::PlanError::Fatal(Error::Data(_))
-        ));
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
-        assert_eq!(
-            measurements::finish().counters,
-            [0; measurements::Counter::ALL.len()]
-        );
+        let operation = crate::font::canonical::OperationContext::new();
+        crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            registration::RowSelection::Full,
+            |data| {
+                let inputs = if prepared {
+                    Some(crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap())
+                } else {
+                    None
+                };
+                let plot = &source;
+                let theme = crate::Theme::publication().resolve().unwrap();
+                let text = crate::text::TextService::default();
+                let theme = crate::text::TextRequestContext::new(&theme, &text);
+                let mut context = PlotRenderContext::new(
+                    data,
+                    crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
+                    &theme,
+                );
+                if let Some(registered) = inputs.as_ref().and_then(|inputs| inputs.plots.first()) {
+                    context = context.with_registration(registered);
+                }
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+                RENDER_PANEL_CALLS.with(|calls| calls.set(0));
+                SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(0));
+                measurements::start();
+                let error = plot.measure_panel(PlotKind::Line, context).unwrap_err();
+                assert!(matches!(
+                    error,
+                    crate::layout::fit::PlanError::Fatal(Error::Data(_))
+                ));
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    0
+                );
+                assert_eq!(
+                    measurements::finish().counters,
+                    [0; measurements::Counter::ALL.len()]
+                );
 
-        measurements::start();
-        for error in [
-            plot.measure_panel(PlotKind::Line, context).unwrap_err(),
-            plot.measure_panel(PlotKind::Line, context).unwrap_err(),
-        ] {
-            assert!(matches!(
-                error,
-                crate::layout::fit::PlanError::Fatal(Error::Data(_))
-            ));
-        }
-        assert!(matches!(
-            plot.preflight_measurement(
-                context.registered,
-                PlotKind::Line,
-                context.panel,
-                &theme,
-                &crate::layout::fit::FitScope::root(),
-            ),
-            Err(Error::Data(_))
-        ));
+                measurements::start();
+                for error in [
+                    plot.measure_panel(PlotKind::Line, context).unwrap_err(),
+                    plot.measure_panel(PlotKind::Line, context).unwrap_err(),
+                ] {
+                    assert!(matches!(
+                        error,
+                        crate::layout::fit::PlanError::Fatal(Error::Data(_))
+                    ));
+                }
+                assert!(matches!(
+                    plot.preflight_measurement(
+                        context.registered,
+                        PlotKind::Line,
+                        context.panel,
+                        &theme,
+                        &crate::layout::fit::FitScope::root(),
+                    ),
+                    Err(Error::Data(_))
+                ));
 
-        assert_eq!(
-            measurements::finish().counters,
-            [0; measurements::Counter::ALL.len()]
-        );
-        assert_eq!(RENDER_PANEL_CALLS.with(std::cell::Cell::get), 0);
-        assert_eq!(SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get), 0);
+                assert_eq!(
+                    measurements::finish().counters,
+                    [0; measurements::Counter::ALL.len()]
+                );
+                assert_eq!(RENDER_PANEL_CALLS.with(std::cell::Cell::get), 0);
+                assert_eq!(SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get), 0);
+            },
+        )
+        .unwrap();
     }
 }
 

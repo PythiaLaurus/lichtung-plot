@@ -684,62 +684,6 @@ pub(crate) fn axis_categories(
     Ok(labels)
 }
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let forest = chart.kind() == crate::spec::PlotKind::Forest;
-    let family = if forest { "forest" } else { "coefficient" };
-    let reference = if forest {
-        chart.description().forest_reference_value()
-    } else {
-        chart
-            .description()
-            .coefficient_reference_line_value()
-            .unwrap_or(0.0)
-    };
-    let estimates = prepare_estimate_tuples(chart.description(), data, family, forest)?;
-    let transform = |value: f64| -> Result<f64, Error> {
-        if !value.is_finite() {
-            return Err(Error::Data(format!("{family}: axis values must be finite")));
-        }
-        match chart.description().axis_scale_spec() {
-            AxisScale::Linear => Ok(value),
-            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value),
-            AxisScale::Log10 => Err(Error::Data(format!("{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"))),
-        }
-    };
-    let reference = transform(reference)?;
-    let mut range: Option<(f64, f64)> = None;
-    for estimate in estimates.into_iter().flatten() {
-        for value in [Some(estimate.estimate), estimate.lower, estimate.upper]
-            .into_iter()
-            .flatten()
-        {
-            let value = transform(value)?;
-            range = Some(range.map_or((value, value), |range| {
-                (range.0.min(value), range.1.max(value))
-            }));
-        }
-    }
-    if let Some(limits) = chart.description().x_axis_spec().limits {
-        let range = (transform(limits.0)?, transform(limits.1)?);
-        if range.0 >= range.1 {
-            return Err(Error::Data(format!("{family}: logarithmic x-axis limits must remain distinguishable after transformation")));
-        }
-        return Ok(range);
-    }
-    let range = range.ok_or_else(|| {
-        Error::Data(format!(
-            "{family}: all rows are not_estimable; set explicit x-axis limits"
-        ))
-    })?;
-    crate::layout::continuous_auto_range(
-        (range.0.min(reference), range.1.max(reference)),
-        &AxisSpec::default(),
-    )
-}
-
 #[expect(
     clippy::too_many_lines,
     reason = "model semantics validate tuples, attached labels, and transformed domains before fonts"

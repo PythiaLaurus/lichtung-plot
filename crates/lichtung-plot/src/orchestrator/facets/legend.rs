@@ -16,11 +16,20 @@ pub(super) fn prepare_discrete_guide(
     inputs: &crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let source_data = source.data().with_operation(resources);
     let mut base = super::data::base_plot(source, kind)?;
     if let Some(column) = source.description().hue_col() {
         let observed = inputs.observed_color_levels(&base)?;
-        let values = crate::data::strict_strings(source_data, column, "facet hue")?;
+        let raw = source
+            .description()
+            .data_column(column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?;
+        let crate::data::DataColumn::Category(values) = raw else {
+            return Err(Error::Data(format!(
+                "facet hue: value {:?} must be categorical",
+                raw.name()
+            )));
+        };
+        let values = crate::data::strict_source_strings(values, None, "facet hue")?;
         let levels = crate::data::source::source_levels(&values)?;
         let mut present = Vec::new();
         crate::data::source::reserve_source(&mut present, levels.len())?;
@@ -140,12 +149,10 @@ pub(super) fn resolve_shared_facet_axis(
     results: &[std::sync::Arc<PlotRenderResult>],
     shared: bool,
     x_axis: bool,
-    data: crate::data::PlotData<'_, '_>,
 ) -> Result<Option<(f64, f64)>, Error> {
     if !shared || results.is_empty() {
         return Ok(None);
     }
-    data.source_resources()?;
     let domain = if x_axis {
         results[0].x_domain
     } else {

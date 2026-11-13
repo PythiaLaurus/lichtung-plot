@@ -2,7 +2,6 @@
 //! decoration gutters from the aligned data-panel tracks.
 
 use super::data::FacetPanel;
-use crate::data::PlotData;
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{FitOutcome, FitScope};
 use crate::layout::kernel::{
@@ -45,7 +44,6 @@ pub(super) struct GridAssignment {
     reason = "facet ownership and prepared summaries are shared by both measurement phases"
 )]
 pub(super) fn allocate(
-    data: PlotData<'_, '_>,
     outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
@@ -57,7 +55,6 @@ pub(super) fn allocate(
 ) -> Result<FitOutcome<GridAssignment>, Error> {
     Ok(
         match measure(
-            data,
             outer,
             shape,
             panels,
@@ -78,7 +75,6 @@ pub(super) fn allocate(
 }
 
 pub(super) fn natural_width(
-    data: PlotData<'_, '_>,
     shape: (usize, usize),
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
@@ -93,7 +89,6 @@ pub(super) fn natural_width(
     }
     Ok(
         match measure(
-            data,
             PixelRect::new(0.0, 0.0, 0.0, 0.0),
             shape,
             panels,
@@ -129,7 +124,6 @@ enum Measurement {
     reason = "one measured facet Grid retains row-major sparse cells, gutters, and both axis vectors"
 )]
 fn measure(
-    data: PlotData<'_, '_>,
     outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
@@ -149,8 +143,7 @@ fn measure(
     let count = rows
         .checked_mul(columns)
         .ok_or_else(|| Error::Render("facet Grid topology overflowed".into()))?;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
     crate::data::source::reserve_source(&mut column_insets, columns)?;
@@ -246,9 +239,9 @@ fn measure(
                 preference.0
             };
             preferred.max(crate::theme::composition::hard(
-                &strip_lengths.horizontal_inset.add_pixels(
-                    super::rendering::strip_widths(&plot, &panel.cell, data, theme)?.1,
-                )?,
+                &strip_lengths
+                    .horizontal_inset
+                    .add_pixels(super::rendering::strip_widths(&plot, &panel.cell, theme)?.1)?,
             )?)
         } else {
             minimum.0
@@ -411,9 +404,8 @@ fn measure(
                 )?
             };
             if row_insets[panel.row][1] == 0 {
-                let strips =
-                    super::rendering::strip_plans(&plot, &panel.cell, data, theme, width, scope)
-                        .map_err(crate::layout::fit::PlanError::into_error)?;
+                let strips = super::rendering::strip_plans(&plot, &panel.cell, theme, width, scope)
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
                 height = crate::theme::composition::hard(
                     &strip_lengths
                         .content_clearance
@@ -553,7 +545,6 @@ mod tests {
                 |_| Ok(()),
                 |(), assigned, round| {
                     let FitOutcome::Measured(grid) = allocate(
-                        plot.data(),
                         PixelRect::new(0.0, 0.0, 0.0, 0.0),
                         (1, 2),
                         &[],
@@ -575,7 +566,6 @@ mod tests {
                     assert_eq!(grid.size.0.to_bits(), (2.0 * f64::from(em)).to_bits());
                     assert_eq!(grid.size.1.to_bits(), f64::from(em).to_bits());
                     let FitOutcome::Measured(exact) = allocate(
-                        plot.data(),
                         PixelRect::new(0.0, 2.0 / 1024.0, 0.0, 1.0 / 1024.0),
                         (1, 2),
                         &[],
@@ -618,13 +608,27 @@ mod tests {
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
 
-            let foreign = OperationContext::new();
+            let operation = OperationContext::new();
+            let scope = crate::orchestrator::registration::Scope::new(
+                &plot,
+                &operation,
+                0,
+                crate::orchestrator::registration::RowSelection::Selected {
+                    input_slots: rows.to_vec(),
+                    diagnostic_rows: ids.to_vec(),
+                },
+                None,
+                None,
+            )
+            .unwrap();
+            let binding =
+                crate::data::source::RowSourceContext::new(plot.description(), &scope, &operation);
             let data =
-                PlotData::with_rows(plot.description(), &rows, &ids).with_operation(&foreign);
+                crate::data::PlotData::checked(plot.description(), &scope, &binding, &operation)
+                    .unwrap();
 
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let result = allocate(
-                data,
                 PixelRect::new(0.0, 400.0, 0.0, 200.0),
                 (2, 2),
                 &[],
@@ -650,11 +654,6 @@ mod tests {
 
     #[test]
     fn asymmetric_intrinsics_and_gutters_preserve_sparse_column_positions() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0]),
-            crate::NumericValues::new("y", [3.0, 4.0]),
-        )
-        .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
@@ -692,7 +691,6 @@ mod tests {
             ),
         ];
         let FitOutcome::Measured(cells) = allocate(
-            plot.data(),
             PixelRect::new(0.0, 400.0, 0.0, 200.0),
             (1, 2),
             &panels,

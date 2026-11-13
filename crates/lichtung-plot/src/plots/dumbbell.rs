@@ -358,33 +358,6 @@ fn project(
     Ok(result)
 }
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let left = crate::data::strict_finite_f64(
-        data,
-        chart
-            .description()
-            .y_col()
-            .ok_or_else(|| Error::Data("dumbbell: left value column not set".into()))?,
-        "dumbbell",
-    )?;
-    let right = crate::data::strict_finite_f64(
-        data,
-        chart
-            .description()
-            .dumbbell_right_col()
-            .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?,
-        "dumbbell",
-    )?;
-
-    crate::layout::continuous_auto_range(
-        crate::data::min_max(left.into_iter().chain(right), "dumbbell")?,
-        chart.description().x_axis_spec(),
-    )
-}
-
 pub(crate) fn prepare(
     chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,

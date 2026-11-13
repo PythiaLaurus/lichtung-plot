@@ -513,6 +513,10 @@ mod style_tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one source-binding contract compares filtered members, unchanged science and independent visible paint"
+    )]
     fn observation_alpha_keeps_joint_finite_members_fit_and_theme_zero_visibility_consistent() {
         let base = Plot::regression(
             crate::NumericValues::new("x", [1.0, f64::NAN, 2.0, 3.0]),
@@ -535,8 +539,21 @@ mod style_tests {
                 )
                 .unwrap(),
             );
-        let prepared = PreparedRegression::new(source.description(), source.data()).unwrap();
-        let baseline = PreparedRegression::new(base.description(), base.data()).unwrap();
+        let operation = crate::font::canonical::OperationContext::new();
+        let prepared = crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| PreparedRegression::new(source.description(), data).unwrap(),
+        )
+        .unwrap();
+        let baseline = crate::data::with_source_data_for_test(
+            &base,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| PreparedRegression::new(base.description(), data).unwrap(),
+        )
+        .unwrap();
         assert_eq!(prepared.fit_line, baseline.fit_line);
         assert_eq!(
             prepared

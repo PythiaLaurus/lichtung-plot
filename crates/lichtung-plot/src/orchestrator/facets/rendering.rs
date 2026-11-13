@@ -107,12 +107,11 @@ pub(super) fn plan_facet_strip(
     facet: &FacetPanel,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
-    let resources = theme.text.prepared_font_environment()?.operation();
+    theme.text.prepared_font_environment()?;
     let spacing = theme.facet_strip_lengths()?;
     let plans = strip_plans(
         plot,
         &facet.cell,
-        plot.data().with_operation(&resources),
         theme,
         facet.panel.width(),
         &crate::layout::fit::FitScope::root()
@@ -276,12 +275,7 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(
-    plot: &Plot,
-    cell: &FacetCell,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<String, Error> {
-    data.source_resources()?;
+pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> Result<String, Error> {
     let mut label = String::new();
     for (index, selector) in cell.iter().enumerate() {
         let variable = plot.description().resolve_label(&selector.variable)?;
@@ -305,13 +299,11 @@ pub(super) fn facet_label(
 pub(super) fn strip_sources(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<crate::Text>, Error> {
     if theme.text_layouts.facet.iter().all(Option::is_none) {
-        return Ok(vec![facet_label(plot, cell, data)?.into()]);
+        return Ok(vec![facet_label(plot, cell)?.into()]);
     }
-    data.source_resources()?;
     crate::data::source::collect_source(cell.iter().enumerate().map(|(index, selector)| {
         let role = if cell.as_slice().len() == 1 { 1 } else { index };
         let variable = plot.description().resolve_label(&selector.variable)?;
@@ -338,7 +330,6 @@ pub(super) fn strip_sources(
 pub(super) fn strip_plans(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     scope: &crate::layout::fit::FitScope,
@@ -347,29 +338,26 @@ pub(super) fn strip_plans(
         crate::theme::composition::capacity(width, &theme.facet_strip_lengths()?.horizontal_inset)?;
     crate::layout::fit::collect(
         "facet strip roles",
-        strip_sources(plot, cell, data, theme)?
-            .iter()
-            .map(|source| {
-                crate::layout::fit::measured(crate::layout::fit::single_text(
-                    theme,
-                    source.as_str(),
-                    source.appearance(&theme.typography.composition.facet_header),
-                    width,
-                    PhysicalTextAlignment::Center,
-                    "facet strip",
-                    scope,
-                ))
-            }),
+        strip_sources(plot, cell, theme)?.iter().map(|source| {
+            crate::layout::fit::measured(crate::layout::fit::single_text(
+                theme,
+                source.as_str(),
+                source.appearance(&theme.typography.composition.facet_header),
+                width,
+                PhysicalTextAlignment::Center,
+                "facet strip",
+                scope,
+            ))
+        }),
     )
 }
 
 pub(super) fn strip_widths(
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    strip_sources(plot, cell, data, theme)?.iter().try_fold(
+    strip_sources(plot, cell, theme)?.iter().try_fold(
         (0.0_f64, 0.0_f64),
         |(hard, preferred), text| {
             let widths = crate::layout::fit::intrinsic_widths(
@@ -387,14 +375,13 @@ pub(super) fn strip_requirement(
     axes: &crate::layout::AxisSystemPlan,
     plot: &Plot,
     cell: &FacetCell,
-    data: crate::data::PlotData<'_, '_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     panel: PixelRect,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::canvas::EdgeSpaceRequirements, crate::layout::fit::PlanError> {
     let mut requirement =
         crate::layout::canvas::EdgeSpaceRequirements::measure_header(axes, theme)?;
-    let plans = strip_plans(plot, cell, data, theme, panel.width(), scope)?;
+    let plans = strip_plans(plot, cell, theme, panel.width(), scope)?;
     let height = plans.iter().map(|plan| plan.occupied_size().1).sum();
     requirement.top = requirement.top.max(crate::theme::composition::hard(
         &theme
@@ -428,9 +415,24 @@ mod tests {
         {
             let resources = OperationContext::new();
 
-            let data = crate::data::PlotData::with_rows(plot.description(), &rows, &ids)
-                .with_operation(&resources);
-            let result = facet_label(&plot, &cell, data);
+            let scope = crate::orchestrator::registration::Scope::new(
+                &plot,
+                &resources,
+                0,
+                crate::orchestrator::registration::RowSelection::Selected {
+                    input_slots: rows.to_vec(),
+                    diagnostic_rows: ids.to_vec(),
+                },
+                None,
+                None,
+            )
+            .unwrap();
+            let binding =
+                crate::data::source::RowSourceContext::new(plot.description(), &scope, &resources);
+            let data =
+                crate::data::PlotData::checked(plot.description(), &scope, &binding, &resources)
+                    .unwrap();
+            let result = facet_label(&plot, &cell);
             assert_eq!(result.unwrap(), "ab = cd");
 
             assert_eq!(data.source_row(0), 29);

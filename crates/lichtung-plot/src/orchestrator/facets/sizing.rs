@@ -23,8 +23,7 @@ pub(super) fn grid_height(
     width: f64,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<fit::FitOutcome<f64>, Error> {
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = plot.data().with_operation(&resources);
+    theme.text.prepared_font_environment()?;
     let owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut gutters = Vec::new();
     crate::data::source::reserve_source(&mut gutters, panels.len())?;
@@ -48,7 +47,6 @@ pub(super) fn grid_height(
     }
     Ok(
         match tracks::allocate(
-            data,
             PixelRect::new(0.0, width, 0.0, 0.0),
             shape,
             panels,
@@ -82,9 +80,8 @@ pub(in crate::orchestrator) fn natural_size(
     guide: &PreparedFacetGuide,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<RootSize, Error> {
-    let resources = theme.text.prepared_font_environment()?.operation();
+    theme.text.prepared_font_environment()?;
 
-    let data = source.data().with_operation(&resources);
     let selectors = data::facet_selectors(source.description())?;
     let panels = data::extract_panels(source.description(), &selectors, None)?;
     let labels = source.description().prepare_axis_labels(None)?;
@@ -138,7 +135,6 @@ pub(in crate::orchestrator) fn natural_size(
     };
     let allocate = |width: Option<f64>, gutters: &[(usize, usize, EdgeSpaceRequirements)]| {
         fit::measured(tracks::allocate(
-            data,
             PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             (selectors.rows, selectors.columns),
             &panels,
@@ -164,7 +160,6 @@ pub(in crate::orchestrator) fn natural_size(
             allocate(None, &[])?.size
         } else {
             let width = fit::measured(tracks::natural_width(
-                data,
                 (selectors.rows, selectors.columns),
                 &panels,
                 &minima,

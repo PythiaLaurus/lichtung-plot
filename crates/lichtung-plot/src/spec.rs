@@ -698,31 +698,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         }
     }
 
-    pub(crate) fn with_source_rows(
-        data: crate::data::PlotData<'src, 'a>,
-        source_rows: &'src crate::SourceRows,
-        panel: PixelRect,
-        theme: &'a crate::text::TextRequestContext<'a, 'src>,
-    ) -> Self {
-        Self {
-            registered: None,
-            data: data.map_source_rows(source_rows),
-            panel,
-            content_height: false,
-            fill_content_height: false,
-            content_preference: None,
-            axis_label_width: panel.width().max(0.0),
-            prepared_axes: None,
-            prepared_limits: [None; 2],
-            prepared_kind: None,
-            prepared_family: None,
-            theme,
-            facet_scales: None,
-            guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
-            fit_scope: &crate::layout::fit::ROOT_SCOPE,
-        }
-    }
-
     pub(crate) const fn with_facet_scales(mut self, facet_scales: FacetScales) -> Self {
         self.facet_scales = Some(facet_scales);
         self

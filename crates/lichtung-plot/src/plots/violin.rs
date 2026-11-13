@@ -450,8 +450,8 @@ pub(crate) fn measure_marks(
         DistributionLayout::Raincloud
     };
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let sample = &prepared.sample;
     let x_levels = &sample.x_levels;
     let group_levels = &sample.group_levels;

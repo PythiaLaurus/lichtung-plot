@@ -25,8 +25,8 @@ pub(crate) fn measure_marks(
 
     let mode = bar_data::mode(chart);
     let prepared = bar_data::retained(context.prepared_family())?;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;

@@ -231,7 +231,14 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         )
         .unwrap(),
     );
-    let prepared = prepare(&absent, absent.data(), BarMode::Single).unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
+        &absent,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| prepare(&absent, data, BarMode::Single).unwrap(),
+    )
+    .unwrap();
     assert!(prepared.bars[0].interval.is_none());
     assert!(prepared.bars[0].line_alpha.is_none());
     let invalid = source.with_alpha(
@@ -239,7 +246,13 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         AlphaEncoding::observations(AlphaValues::new("uncertainty confidence", [0]).unwrap()),
     );
     assert!(matches!(
-        prepare(&invalid, invalid.data(), BarMode::Single).unwrap_err(),
+        crate::data::with_source_data_for_test(
+            &invalid,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| prepare(&invalid, data, BarMode::Single).unwrap_err()
+        )
+        .unwrap(),
         Error::Data(_)
     ));
 }

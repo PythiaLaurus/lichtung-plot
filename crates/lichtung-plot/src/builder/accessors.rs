@@ -19,12 +19,6 @@ use crate::spec::{
 };
 use crate::{HistogramGeometry, NumericFormat, RaincloudGeometry};
 
-impl Plot {
-    pub(crate) const fn data(&self) -> crate::data::PlotData<'_, '_> {
-        crate::data::PlotData::new(self.description())
-    }
-}
-
 impl PlotDescription {
     pub(crate) fn text_layouts(&self) -> &crate::text::roles::TextRoles {
         &self.payload.text_layouts

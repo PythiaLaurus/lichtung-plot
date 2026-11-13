@@ -244,7 +244,7 @@ impl PreparedInteraction {
             &keys,
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
-            data.source_resources()?,
+            data.source_resources(),
         )
     }
 
@@ -585,8 +585,8 @@ pub(crate) fn measure_marks(
         .ok_or_else(|| {
             Error::Render("interaction measurement requires root-prepared semantics".into())
         })?;
-    let resources = context.theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    context.theme.text.prepared_font_environment()?;
+    let data = context.data;
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),
         traces: Vec::new(),

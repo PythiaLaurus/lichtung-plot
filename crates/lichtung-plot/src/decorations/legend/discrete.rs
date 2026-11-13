@@ -132,7 +132,7 @@ impl PreparedGuide {
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
-        let data = plot.data().with_operation(&operation);
+        let data = inputs.plots[0].data(&operation)?;
         let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
         } else if let Some(matrix) =

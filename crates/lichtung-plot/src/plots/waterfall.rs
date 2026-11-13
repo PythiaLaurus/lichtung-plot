@@ -610,13 +610,14 @@ pub(crate) fn natural_body_height(
             .unwrap_or(axes.ranges[1]),
         panel.as_tuple(),
     );
-    let data = chart.data().with_operation(&resources);
+    let registered_owner = registered.expect("prepared Waterfall occurrence");
+    let data = registered_owner.data(&resources)?;
     let plan = plan_annotations(
         &projection,
         panel,
         marks.labels.len() as f64,
         &marks.selected_totals(&projection)?.totals,
-        PlotRenderContext::new(data, panel, theme),
+        PlotRenderContext::new(data, panel, theme).with_registration(registered_owner),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let hard = mark_intrinsic_body_minimum(chart, registered, theme)?
@@ -636,7 +637,6 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
 ) -> Result<PreparedWaterfall, Error> {
-    data.source_resources()?;
     let label_col = chart
         .description()
         .x_col()
@@ -697,7 +697,6 @@ fn prepare_spans(
     data: crate::data::PlotData<'_, '_>,
     alpha: &crate::alpha::PreparedAlpha,
 ) -> Result<(Vec<WaterfallSpan>, (f64, f64)), Error> {
-    data.source_resources()?;
     let mut running = base;
     let mut spans = Vec::new();
     crate::data::source::reserve_source(&mut spans, deltas.len())?;

@@ -71,16 +71,13 @@ fn sift<T>(values: &mut [T], mut root: usize, compare: &impl Fn(&T, &T) -> std::
 
 impl PlotData<'_, '_> {
     pub(crate) fn validate_row_source(self) -> Result<(), Error> {
-        if let Some(source) = self.row_source {
-            if !std::ptr::eq(self.source, source.source)
-                || self
-                    .operation
-                    .is_none_or(|operation| operation.root_identity() != source.root_identity)
-            {
-                return Err(Error::Render(
-                    "row source belongs to a different source or operation".into(),
-                ));
-            }
+        let source = self.row_source;
+        if !std::ptr::eq(self.source, source.source)
+            || self.operation.root_identity() != source.root_identity
+        {
+            return Err(Error::Render(
+                "row source belongs to a different source or operation".into(),
+            ));
         }
         Ok(())
     }
@@ -90,12 +87,10 @@ impl PlotData<'_, '_> {
         binding: crate::numeric::source::NumericBinding<'_>,
     ) -> Result<(), Error> {
         self.validate_row_source()?;
-        if self
-            .operation
-            .is_none_or(|operation| !operation.same_operation(binding.operation))
+        if !self.operation.same_operation(binding.operation)
             || binding
                 .plot_id
-                .is_some_and(|id| self.row_source.map(|source| &source.owner) != Some(id))
+                .is_some_and(|id| &self.row_source.owner != id)
         {
             return Err(Error::Render(
                 "row source belongs to a different source or operation".into(),
@@ -372,7 +367,12 @@ mod tests {
         assert!(invalid_slot.to_string().contains("original slot 3"));
         assert!(invalid_slot.to_string().contains("source row 999"));
         let other = OperationContext::new();
-        assert!(data.with_operation(&other).validate_row_source().is_err());
+        assert!(PlotData {
+            operation: &other,
+            ..data
+        }
+        .validate_row_source()
+        .is_err());
         assert!(
             PlotData::checked(source.clone().description(), &scope, &binding, &operation).is_err()
         );

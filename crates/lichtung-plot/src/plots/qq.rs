@@ -342,30 +342,6 @@ pub(crate) fn project(
     Ok(result)
 }
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let column = chart
-        .description()
-        .x_col()
-        .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
-    let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
-    if values.len() < 2 {
-        return Err(Error::Data(
-            "Q-Q plot: at least 2 finite observations are required".into(),
-        ));
-    }
-    qq_display_range(
-        (
-            theoretical_quantile(0, values.len())?,
-            theoretical_quantile(values.len() - 1, values.len())?,
-        ),
-        chart.description().x_axis_spec(),
-        "x-axis",
-    )
-}
-
 pub(super) fn qq_display_range(
     data_range: (f64, f64),
     spec: &crate::layout::AxisSpec,
@@ -744,7 +720,14 @@ mod tests {
             .x_limits(-2.0, 2.0)
             .y_limits(0.0, 4.0)
             .erase();
-        let prepared = PreparedQq::new(source.description(), source.data()).unwrap();
+        let operation = crate::font::canonical::OperationContext::new();
+        let prepared = crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| PreparedQq::new(source.description(), data).unwrap(),
+        )
+        .unwrap();
         assert_eq!(prepared.observed, [1.0, 1.0, 2.0, 3.0]);
         assert_eq!(
             prepared

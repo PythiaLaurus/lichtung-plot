@@ -373,10 +373,10 @@ impl PreparedInteriorInputs<'_> {
                 "discrete guides were prepared more than once".into(),
             ));
         }
-        let data = chart.data().with_operation(resources);
         let mut panels = Vec::new();
         crate::data::source::reserve_source(&mut panels, self.plots.len())?;
         for (index, registered) in self.plots.iter().enumerate() {
+            let data = registered.data(resources)?;
             let scope = registered.scope.render_name.as_deref();
             let scoped = if let Some(scope) = scope {
                 chart

@@ -1229,7 +1229,9 @@ impl Canvas {
                     }
                     marks.ranges[0]
                 } else {
-                    crate::plots::shared_x::domain(plot, &stage.operation())?
+                    return Err(Error::Data(
+                        "canvas x-range group requires a continuous single x axis".into(),
+                    ));
                 };
                 shared = Some(
                     shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),

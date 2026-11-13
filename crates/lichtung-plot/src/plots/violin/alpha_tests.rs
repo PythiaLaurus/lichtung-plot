@@ -38,10 +38,15 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     )
     .y_limits(-5.0, 10.0)
     .erase();
-    let prepared = prepare(
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
         &source,
-        PlotData::with_rows(source.description(), &[3, 0, 2], &[200, 900, 800]),
-        None,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Selected {
+            input_slots: vec![3, 0, 2],
+            diagnostic_rows: vec![200, 900, 800],
+        },
+        |data| prepare(&source, data, None).unwrap(),
     )
     .unwrap();
     assert_eq!(

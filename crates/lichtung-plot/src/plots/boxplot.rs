@@ -319,8 +319,8 @@ pub(crate) fn measure_marks(
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let sample = &prepared.sample;
     let stats = &prepared.stats;
     let x_levels = &sample.x_levels;

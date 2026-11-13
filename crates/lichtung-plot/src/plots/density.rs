@@ -135,7 +135,7 @@ impl PreparedDensity {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let keys = if let Some(global) = chart.global_hue_levels() {
             crate::data::source::collect_source(
                 global
@@ -351,8 +351,8 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme, data)?;
     let automatic = [
@@ -496,51 +496,6 @@ fn prepare_density(
     prepare_density_ordered(
         data, value_col, group_col, group_name, hue_col, hue_name, None,
     )
-}
-
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let column = chart
-        .description()
-        .x_col()
-        .ok_or_else(|| Error::Data("density: value column not set".into()))?;
-    let values = crate::data::strict_finite_f64(data, column, "density")?;
-    let channels = crate::data::observed_collectives(
-        data,
-        chart.description().group_col(),
-        chart.description().group_name(),
-        chart.description().hue_col(),
-        chart.description().hue_name(),
-        None,
-        "density",
-    )?;
-    if channels.rows.len() != values.len() {
-        return Err(Error::Data(
-            "density: value, graphical group, and hue columns must have equal lengths".into(),
-        ));
-    }
-    let mut range = (f64::INFINITY, f64::NEG_INFINITY);
-    let mut samples = Vec::new();
-    crate::data::source::reserve_source(&mut samples, values.len())?;
-    for identity in &channels.identities {
-        samples.clear();
-
-        samples.extend(
-            channels
-                .rows
-                .iter()
-                .zip(&values)
-                .filter_map(|(row, value)| (row == identity).then_some(*value)),
-        );
-        // Scott bandwidth scans five times; support adds one min/max pass.
-
-        let (low, high, _) =
-            density_support(&samples, || identity.description(channels.collapsed))?;
-        range = (range.0.min(low), range.1.max(high));
-    }
-    Ok(range)
 }
 
 fn density_support(
@@ -888,8 +843,13 @@ mod tests {
             .erase();
         let resources = crate::font::canonical::OperationContext::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let error =
-            PreparedDensity::new(&source, source.data().with_operation(&resources)).unwrap_err();
+        let error = crate::data::with_source_data_for_test(
+            &source,
+            &resources,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| PreparedDensity::new(&source, data).unwrap_err(),
+        )
+        .unwrap();
         assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -1297,14 +1257,21 @@ mod tests {
             plot = plot.hue(data.group.as_ref().unwrap().clone());
         }
         let plot = plot.erase();
-        prepare_density(
-            plot.data(),
-            crate::data::X,
-            grouped.then_some(crate::data::GROUP),
-            grouped.then_some("group"),
-            hued.then_some(crate::data::HUE),
-            hued.then_some("group"),
-        )
+        crate::data::with_source_data_for_test(
+            &plot,
+            &crate::font::canonical::OperationContext::new(),
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| {
+                prepare_density(
+                    data,
+                    crate::data::X,
+                    grouped.then_some(crate::data::GROUP),
+                    grouped.then_some("group"),
+                    hued.then_some(crate::data::HUE),
+                    hued.then_some("group"),
+                )
+            },
+        )?
     }
 
     #[test]

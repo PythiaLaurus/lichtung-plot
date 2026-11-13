@@ -343,8 +343,8 @@ pub(super) fn measure_marks(
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
         .resolved_colors(chart, theme, data)?;
 

@@ -27,10 +27,14 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     .y_limits(-20.0, 20.0)
     .hide_point_outline()
     .erase();
-    let data = source
-        .data()
-        .map_source_rows(source.description().source_row_map().unwrap());
-    let prepared = finish(prepare(&source, data).unwrap(), None).unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
+        &source,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| finish(prepare(&source, data).unwrap(), None).unwrap(),
+    )
+    .unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 6);
     assert_eq!(
         prepared
@@ -58,10 +62,13 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
             AlphaTarget::Fill,
             AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
         );
-    let control_data = control
-        .data()
-        .map_source_rows(control.description().source_row_map().unwrap());
-    let control = finish(prepare(&control, control_data).unwrap(), None).unwrap();
+    let control = crate::data::with_source_data_for_test(
+        &control,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| finish(prepare(&control, data).unwrap(), None).unwrap(),
+    )
+    .unwrap();
     assert_eq!(prepared.ranges, control.ranges);
     assert_eq!(prepared.curves.x_densities, control.curves.x_densities);
     assert_eq!(prepared.curves.y_densities, control.curves.y_densities);

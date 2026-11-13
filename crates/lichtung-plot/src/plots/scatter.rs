@@ -241,7 +241,7 @@ impl PreparedScatter {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let keys = if let Some(global) = chart.global_hue_levels() {
             crate::data::source::collect_source(
                 global
@@ -436,8 +436,8 @@ pub(crate) fn measure_marks(
                 "Scatter measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
     let point_style = chart.description().point_style(
         theme,

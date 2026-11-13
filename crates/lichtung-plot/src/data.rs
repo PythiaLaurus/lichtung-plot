@@ -65,8 +65,8 @@ pub(crate) struct PlotData<'src, 'op> {
     rows: Option<&'op [usize]>,
     diagnostic_rows: DiagnosticRows<'src, 'op>,
     numeric_facet: Option<&'op crate::FacetCell>,
-    operation: Option<&'op crate::font::canonical::OperationContext>,
-    row_source: Option<&'op source::RowSourceContext<'src>>,
+    operation: &'op crate::font::canonical::OperationContext,
+    row_source: &'op source::RowSourceContext<'src>,
 }
 
 #[derive(Clone, Copy)]
@@ -102,50 +102,9 @@ impl<'src, 'op> PlotData<'src, 'op> {
             rows,
             diagnostic_rows,
             numeric_facet: scope.numeric_owner.facet.as_ref(),
-            operation: Some(operation),
-            row_source: Some(row_source),
+            operation,
+            row_source,
         })
-    }
-
-    pub(crate) const fn new(source: &'src crate::builder::PlotDescription) -> Self {
-        Self {
-            source,
-            numeric_facet: None,
-            rows: None,
-            diagnostic_rows: DiagnosticRows::Native(None),
-            operation: None,
-            row_source: None,
-        }
-    }
-
-    pub(crate) fn map_source_rows(mut self, source_rows: &'src crate::SourceRows) -> Self {
-        self.diagnostic_rows = DiagnosticRows::Native(Some(source_rows));
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) const fn with_rows(
-        source: &'src crate::builder::PlotDescription,
-        rows: &'op [usize],
-        source_rows: &'op [usize],
-    ) -> Self {
-        Self {
-            source,
-            numeric_facet: None,
-            rows: Some(rows),
-            diagnostic_rows: DiagnosticRows::Selected(source_rows),
-            operation: None,
-            row_source: None,
-        }
-    }
-
-    /// Axis source work uses the root counters; ordinary mark preparation remains separate.
-    pub(crate) fn with_operation(
-        mut self,
-        resources: &'op crate::font::canonical::OperationContext,
-    ) -> Self {
-        self.operation = Some(resources);
-        self
     }
 
     pub(crate) const fn numeric_facet(self) -> Option<&'op crate::FacetCell> {
@@ -167,12 +126,8 @@ impl<'src, 'op> PlotData<'src, 'op> {
             .transpose()
     }
 
-    pub(crate) fn source_resources(
-        self,
-    ) -> Result<&'op crate::font::canonical::OperationContext, Error> {
-        self.operation.ok_or_else(|| {
-            Error::Render("numeric source requires the current root operation".into())
-        })
+    pub(crate) const fn source_resources(self) -> &'op crate::font::canonical::OperationContext {
+        self.operation
     }
 
     pub(crate) fn column(self, key: &str) -> Result<DataColumn<'src>, Error> {
@@ -239,6 +194,23 @@ impl<'src, 'op> PlotData<'src, 'op> {
         }
         alpha.observation(self.row_index(local_row), self.source_row(local_row))
     }
+}
+
+/// Isolated scientific fixtures borrow the same build binding as production.
+/// No prepared owner or operation-backed view can escape the callback.
+#[cfg(test)]
+pub(crate) fn with_source_data_for_test<'src, T>(
+    source: &'src crate::Plot,
+    operation: &crate::font::canonical::OperationContext,
+    rows: crate::orchestrator::registration::RowSelection,
+    visit: impl FnOnce(PlotData<'src, '_>) -> T,
+) -> Result<T, Error> {
+    let scope =
+        crate::orchestrator::registration::Scope::new(source, operation, 0, rows, None, None)?;
+    let mut registry =
+        crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
+    let id = registry.reserve(source.description(), scope, operation)?;
+    Ok(visit(registry.data(&id, operation)?))
 }
 
 pub(crate) fn strict_finite_f64(
@@ -424,28 +396,6 @@ pub(crate) fn strict_bool(
             None => Err(length_error(plot, values.name(), row)),
         }
     }))
-}
-
-pub(crate) fn aligned_finite_f64(
-    data: PlotData<'_, '_>,
-    x_column: &str,
-    y_column: &str,
-    plot: &str,
-) -> Result<Vec<(f64, f64)>, Error> {
-    let x = optional_finite_f64(data, x_column, plot)?;
-    let y = optional_finite_f64(data, y_column, plot)?;
-    if x.len() != y.len() {
-        return Err(Error::Data(format!(
-            "{plot}: aligned value length mismatch {} vs {}",
-            x.len(),
-            y.len()
-        )));
-    }
-    let mut pairs = Vec::new();
-    crate::data::source::reserve_source(&mut pairs, x.len())?;
-
-    pairs.extend(x.into_iter().zip(y).filter_map(|(x, y)| x.zip(y)));
-    Ok(pairs)
 }
 
 pub(crate) fn aligned_finite_rows(
@@ -1018,14 +968,22 @@ mod tests {
         .hue(crate::CategoryValues::new("hue", ["h2", "h1", "h2", "h1", "h2"]).unwrap())
         .erase();
 
-        let channels = observed_collectives(
-            plot.data(),
-            plot.description().group_col(),
-            plot.description().group_name(),
-            plot.description().hue_col(),
-            plot.description().hue_name(),
-            None,
-            "test",
+        let channels = with_source_data_for_test(
+            &plot,
+            &crate::font::canonical::OperationContext::new(),
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| {
+                observed_collectives(
+                    data,
+                    plot.description().group_col(),
+                    plot.description().group_name(),
+                    plot.description().hue_col(),
+                    plot.description().hue_name(),
+                    None,
+                    "test",
+                )
+                .unwrap()
+            },
         )
         .unwrap();
 

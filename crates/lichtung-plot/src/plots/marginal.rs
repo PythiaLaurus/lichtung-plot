@@ -113,7 +113,7 @@ impl PreparedMarginal {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let keys = chart.global_hue_levels().unwrap_or(&self.hues);
         let colors = CategoryColors::resolve(
             keys,
@@ -488,8 +488,8 @@ pub(crate) fn measure(
         })
         .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
 
     // --- Layout geometry ---
     let outer = context.panel;
@@ -1034,25 +1034,6 @@ fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 
         )?;
     }
     Ok(ranges)
-}
-
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let (groups, _) = build_groups(chart, data)?;
-
-    let range = crate::data::min_max(
-        groups.iter().flat_map(|group| group.x.iter().copied()),
-        "marginal",
-    )?;
-    let range = marginal_display_range(
-        groups.iter().map(|group| group.x.as_slice()),
-        range,
-        chart.description().x_axis_spec(),
-    )?;
-    validate_marginal_range(&groups, range, |group| &group.x, "x")?;
-    Ok(range)
 }
 
 fn build_groups(

@@ -203,7 +203,6 @@ pub(super) fn native_parent(
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
     let resources = theme.text.prepared_font_environment()?.operation();
-    let data = plot.data().with_operation(&resources);
     let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();
     crate::data::source::reserve_source(&mut requirements, panels.len())?;
@@ -220,7 +219,6 @@ pub(super) fn native_parent(
                 .ok_or_else(|| Error::Render("facet probe is missing its measured axes".into()))?,
             plot,
             &facet.cell,
-            data,
             theme,
             probe_cells[facet.row * columns + facet.column],
             &scope.child(AddressRole::FacetCell, index)?,
@@ -245,7 +243,6 @@ pub(super) fn native_parent(
         natural_height: false,
     });
     let cells = match super::tracks::allocate(
-        data,
         outer,
         (rows, columns),
         panels,
@@ -313,7 +310,6 @@ pub(super) fn native_parent(
             if let FitOutcome::Miss(reason) = fit::outcome(super::rendering::strip_plans(
                 &panel_plot,
                 &facet.cell,
-                data,
                 theme,
                 cell.width(),
                 &strip_scope,
@@ -390,7 +386,6 @@ pub(super) fn native_parent(
                 })?,
                 &panel_plot,
                 &facet.cell,
-                data,
                 theme,
                 cell,
                 &cell_scope,

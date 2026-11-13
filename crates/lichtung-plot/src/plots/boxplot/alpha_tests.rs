@@ -40,12 +40,12 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .unwrap(),
     )
     .erase();
-    let prepared = prepare(
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
         &source,
-        source
-            .data()
-            .map_source_rows(source.description().source_row_map().unwrap()),
-        None,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| prepare(&source, data, None).unwrap(),
     )
     .unwrap();
     assert_eq!(prepared.range, (-10.0, 10.0));

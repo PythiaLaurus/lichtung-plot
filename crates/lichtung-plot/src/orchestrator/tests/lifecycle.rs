@@ -772,8 +772,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             alpha_components[target.index()] += 1;
         }
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let domain =
-            crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
         let resources = crate::font::canonical::OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
@@ -803,30 +801,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 .as_ref()
                 .unwrap(),
         );
-        if matches!(
-            kind,
-            PlotKind::Interaction
-                | PlotKind::Heatmap
-                | PlotKind::Bar
-                | PlotKind::StackedBar
-                | PlotKind::Boxplot
-                | PlotKind::Violin
-                | PlotKind::Raincloud
-                | PlotKind::Matrix
-        ) {
-            assert!(domain.is_err(), "{kind:?}");
-        } else {
-            let range = domain.unwrap_or_else(|error| panic!("{kind:?}: {error}"));
-            assert_eq!(
-                range,
-                prepared.plots[0].axes.as_ref().unwrap().ranges[0],
-                "{kind:?}: shared/standalone parity"
-            );
-            assert!(
-                range.0.is_finite() && range.1.is_finite() && range.0 < range.1,
-                "{kind:?}"
-            );
-        }
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0,

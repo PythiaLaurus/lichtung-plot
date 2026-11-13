@@ -27,10 +27,14 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     .y_limits(0.0, 2.0)
     .legend(crate::LegendPolicy::Hidden)
     .erase();
-    let data = source
-        .data()
-        .map_source_rows(source.description().source_row_map().unwrap());
-    let prepared = PreparedScatter::new(source.description(), data).unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let prepared = crate::data::with_source_data_for_test(
+        &source,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| PreparedScatter::new(source.description(), data).unwrap(),
+    )
+    .unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 3);
     assert_eq!(
         prepared.groups[0]

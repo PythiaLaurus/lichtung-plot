@@ -17,25 +17,6 @@ pub(crate) struct PointIntervalRow {
     pub(crate) line_alpha: ObservationAlpha,
 }
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    let rows = prepare(chart, data)?;
-    if let Some(limits) = chart.description().x_axis_spec().limits {
-        return Ok(limits);
-    }
-
-    let range =
-        crate::plots::interval_estimate::estimate_data_range(rows.iter().map(|row| &row.estimate))
-            .ok_or_else(|| {
-                Error::Data(
-                    "point_interval: all rows are not_estimable; set explicit x-axis limits".into(),
-                )
-            })?;
-    point_interval_display_range(range, chart.description().x_axis_spec())
-}
-
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,

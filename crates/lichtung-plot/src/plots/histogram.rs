@@ -477,22 +477,6 @@ pub(crate) fn project(
     Ok(result)
 }
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_, '_>,
-) -> Result<(f64, f64), Error> {
-    if let Some(input) = chart.description().histogram_composite_geometry_input() {
-        return input.validate();
-    }
-    let column = chart
-        .description()
-        .x_col()
-        .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
-    let values = crate::data::strict_finite_f64(data, column, "histogram")?;
-    let edges = prepare_edges(&values, chart.description().histogram_bins_spec())?;
-    Ok((edges[0], edges[edges.len() - 1]))
-}
-
 #[derive(Debug)]
 struct PreparedHistogram {
     edges: Vec<f64>,
@@ -1022,10 +1006,21 @@ mod tests {
             .unwrap();
         let marks = original.marks().clone().extents(extents).unwrap();
         let edited = original.customize().marks(marks).build().unwrap();
-        let before =
-            HistogramSemantics::new(source.description(), source.data(), Some(&original)).unwrap();
-        let after =
-            HistogramSemantics::new(source.description(), source.data(), Some(&edited)).unwrap();
+        let operation = crate::font::canonical::OperationContext::new();
+        let before = crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| HistogramSemantics::new(source.description(), data, Some(&original)).unwrap(),
+        )
+        .unwrap();
+        let after = crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| HistogramSemantics::new(source.description(), data, Some(&edited)).unwrap(),
+        )
+        .unwrap();
         assert_eq!(before.bins, after.bins);
         assert_eq!(before.curve, after.curve);
         let scientific_maximum = before
@@ -1068,8 +1063,13 @@ mod tests {
                 )
                 .unwrap(),
             );
-        let prepared =
-            HistogramSemantics::new(mapped.description(), mapped.data(), Some(&original)).unwrap();
+        let prepared = crate::data::with_source_data_for_test(
+            &mapped,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| HistogramSemantics::new(mapped.description(), data, Some(&original)).unwrap(),
+        )
+        .unwrap();
         assert_eq!(prepared.bins, before.bins);
         assert_eq!(prepared.curve, before.curve);
         assert_eq!(prepared.rugs, before.rugs);

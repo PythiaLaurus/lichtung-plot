@@ -139,7 +139,7 @@ impl PreparedMatrixAxes {
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources()?;
+        let resources = data.source_resources();
         let colors = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.get_qualitative(),
@@ -474,8 +474,8 @@ pub(crate) fn measure(
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let resources = theme.text.prepared_font_environment()?.operation();
-    let data = context.data.with_operation(&resources);
+    theme.text.prepared_font_environment()?;
+    let data = context.data;
     let prepared = context
         .prepared_family()
         .and_then(|family| match family {
