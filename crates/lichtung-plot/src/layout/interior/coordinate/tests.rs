@@ -316,8 +316,10 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                     0,
                     vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))],
                 );
-                let fault = if inputs.plots[0]
+                let fault = if inputs.panels[0]
                     .axes
+                    .as_ref()
+                    .unwrap()
                     .coordinate()
                     .unwrap()
                     .categories(1)
@@ -328,19 +330,24 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                     fault
                 };
                 let fault = fault_source.get_or_init(|| fault);
-                let registered = &mut inputs.plots[0];
+                let registered = &mut inputs.panels[0];
                 registered.source = fault.description();
                 registered.row_source = crate::data::source::RowSourceContext::new(
                     registered.source,
                     &registered.scope,
                     &operation,
                 );
-                inputs.prepare_discrete_guides(
+                let guide = inputs.prepare_discrete_guides(
                     fault,
                     &theme,
                     &operation,
                     &crate::layout::ComponentAddress::root(),
                     false,
+                )?;
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(fault.kind()),
+                    guide,
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
@@ -365,8 +372,10 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             },
             |inputs, assigned, _| {
                 let (width, height) = assigned.assigned_size()?.dimensions()?;
-                let plot = inputs
-                    .attach(fault_source.get().unwrap().clone())?
+                let plot = fault_source
+                    .get()
+                    .unwrap()
+                    .clone()
                     .with_canvas_size(width, height);
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let scope = fit::FitScope::new(

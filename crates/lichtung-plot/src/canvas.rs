@@ -959,7 +959,7 @@ impl Canvas {
     fn prepare_continuous_shared_guide(
         &self,
         themes: &ResolvedCanvasThemes,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        interiors: &[Option<crate::orchestrator::registration::PlotRegistryBuilder>],
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
@@ -986,15 +986,19 @@ impl Canvas {
             let theme = &themes.plot_request(index).ok_or_else(|| {
                 Error::Render("shared continuous guide has no owning Plot theme".into())
             })?;
-            let registered = inputs.plots.first().ok_or_else(|| {
+            let registered = inputs.panels.first().ok_or_else(|| {
                 Error::Render("continuous guide lacks its operation-bound owner".into())
             })?;
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
                     plot,
-                    inputs,
+                    registered,
                     theme,
-                    registered.axis_numeric_binding(operation)?,
+                    registered.scope.axis_numeric_binding(
+                        registered.source,
+                        &registered.row_source,
+                        operation,
+                    )?,
                 )?
                 .ok_or_else(|| {
                     Error::Render("shared continuous guide has no color identity".into())
@@ -1010,7 +1014,7 @@ impl Canvas {
 
     fn install_shared_continuous_domain(
         &self,
-        interiors: &mut [Option<crate::layout::interior::PreparedInteriorInputs>],
+        interiors: &mut [Option<crate::orchestrator::registration::PlotRegistryBuilder>],
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
         for (index, plot) in self.placements.plots().enumerate() {
@@ -1020,28 +1024,30 @@ impl Canvas {
             };
             match plot.kind() {
                 PlotKind::Heatmap => {
-                    if input.plots.is_empty() {
+                    if input.panels.is_empty() {
                         return Err(Error::Render(
                             "shared Heatmap has no prepared inputs".into(),
                         ));
                     }
-                    for registered in &mut input.plots {
-                        if let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-                            &mut registered.family
+                    for registered in &mut input.panels {
+                        if let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(
+                            marks,
+                        )) = &mut registered.family
                         {
                             marks.install_shared_domain(descriptor)?;
                         }
                     }
                 }
                 PlotKind::Beeswarm => {
-                    if input.plots.is_empty() {
+                    if input.panels.is_empty() {
                         return Err(Error::Render(
                             "shared Beeswarm has no prepared inputs".into(),
                         ));
                     }
-                    for registered in &mut input.plots {
-                        if let crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) =
-                            &mut registered.family
+                    for registered in &mut input.panels {
+                        if let Some(crate::orchestrator::registration::PreparedFamily::Beeswarm(
+                            marks,
+                        )) = &mut registered.family
                         {
                             marks.install_shared_domain(descriptor)?;
                         }
@@ -1057,7 +1063,7 @@ impl Canvas {
     /// independently of guide visibility and section contribution.
     fn prepare_color_domains(
         &self,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        interiors: &[Option<crate::orchestrator::registration::PlotRegistryBuilder>],
     ) -> Result<Option<Arc<PreparedColorDomains>>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(None);
@@ -1101,17 +1107,32 @@ impl Canvas {
 
     /// Prepare every local contribution or explicit absence, then retain the
     /// one Shared union when selected. No body or font work determines presence.
-    fn prepare_discrete_guides(
-        &self,
+    #[expect(
+        clippy::type_complexity,
+        reason = "original guide completion publishes the same per-anchor occurrences and the Shared union together"
+    )]
+    fn prepare_discrete_guides<'src>(
+        &'src self,
         themes: &ResolvedCanvasThemes,
-        interiors: &mut [Option<crate::layout::interior::PreparedInteriorInputs>],
+        interiors: Vec<Option<crate::orchestrator::registration::PlotRegistryBuilder<'src>>>,
         hue_groups: Option<&[(String, Vec<String>)]>,
         resources: &crate::font::canonical::OperationContext,
-    ) -> Result<Option<Arc<PreparedGuide>>, Error> {
+    ) -> Result<
+        (
+            Vec<Option<crate::layout::interior::PreparedInteriorInputs<'src>>>,
+            Option<Arc<PreparedGuide>>,
+        ),
+        Error,
+    > {
         let mut contributions = Vec::new();
         crate::data::source::reserve_source(&mut contributions, self.placements.len())?;
-        for (index, plot) in self.placements.plots().enumerate() {
-            let Some(source) = plot else { continue };
+        let mut completed = Vec::new();
+        crate::data::source::reserve_source(&mut completed, interiors.len())?;
+        for (index, (plot, input)) in self.placements.plots().zip(interiors).enumerate() {
+            let Some(source) = plot else {
+                completed.push(None);
+                continue;
+            };
             let mut plot = source.clone();
             let mut groups = None;
             if let Some((_, levels)) = hue_groups.and_then(|groups| {
@@ -1135,15 +1156,12 @@ impl Canvas {
             let theme = &themes
                 .plot_request(index)
                 .expect("configured Canvas panel has a resolved theme");
-            let inputs = interiors
-                .get_mut(index)
-                .and_then(Option::as_mut)
-                .ok_or_else(|| {
-                    Error::Render("Canvas point/path guide is missing prepared semantics".into())
-                })?;
+            let mut inputs = input.ok_or_else(|| {
+                Error::Render("Canvas point/path guide is missing prepared semantics".into())
+            })?;
             if let Some(groups) = groups {
                 let groups = crate::data::source::source_arc(groups)?;
-                for registered in &mut inputs.plots {
+                for registered in &mut inputs.panels {
                     registered.policy.coordinated.groups = Some(Arc::clone(&groups));
                 }
             }
@@ -1153,19 +1171,23 @@ impl Canvas {
                     Error::Render("Canvas guide contributor address overflow".into())
                 })?,
             )?;
-            inputs.prepare_discrete_guides(&plot, theme, resources, &owner, false)?;
+            let root_guide =
+                inputs.prepare_discrete_guides(&plot, theme, resources, &owner, false)?;
             if self.legend_policy == CanvasLegendPolicy::Shared {
-                if let Some(descriptor) = &inputs
-                    .discrete_guides
-                    .get()
-                    .expect("prepared Canvas guide")
-                    .root
-                {
+                if let Some(descriptor) = &root_guide {
                     contributions.push(Arc::clone(descriptor));
                 }
             }
+            completed.push(Some(
+                crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(source.kind()),
+                    root_guide,
+                )?,
+            ));
         }
-        PreparedGuide::merge(&contributions, &[], "shared canvas legend")
+        let shared = PreparedGuide::merge(&contributions, &[], "shared canvas legend")?;
+        Ok((completed, shared))
     }
 
     #[expect(
@@ -1295,7 +1317,7 @@ impl Canvas {
         themes: Option<&ResolvedCanvasThemes>,
     ) -> Result<
         (
-            Vec<Option<crate::layout::interior::PreparedInteriorInputs<'_>>>,
+            Vec<Option<crate::orchestrator::registration::PlotRegistryBuilder<'_>>>,
             Vec<Option<(f64, f64)>>,
         ),
         Error,
@@ -1507,21 +1529,16 @@ impl Canvas {
                 }
             }
         }
-        let mut completed = registry.finish()?.into_iter();
+        let mut completed = registry.panels.into_iter();
         for slot in slots {
             interiors.push(if slot.is_some() {
                 let registered = completed.next().expect("prepared Canvas occurrence");
-                let route =
-                    crate::layout::interior::InteriorRoute::classify(registered.source.kind());
-                let plots = crate::data::source::collect_source(std::iter::once(Ok(registered)))?;
-                let plot_intrinsics =
-                    crate::layout::interior::PreparedInteriorInputs::intrinsic_slots(&plots)?;
-                Some(crate::layout::interior::PreparedInteriorInputs {
-                    plots,
-                    plot_intrinsics,
-                    route,
-                    discrete_guides: std::sync::OnceLock::new(),
-                })
+                let mut registry = crate::orchestrator::registration::PlotRegistryBuilder::new(
+                    resources.root_identity(),
+                );
+                registry.panels =
+                    crate::data::source::collect_source(std::iter::once(Ok(registered)))?;
+                Some(registry)
             } else {
                 None
             });
@@ -1588,9 +1605,9 @@ impl Canvas {
                 if let Some(descriptor) = &continuous_shared_guide {
                     self.install_shared_continuous_domain(&mut interiors, descriptor)?;
                 }
-                let shared_guide = self.prepare_discrete_guides(
+                let (interiors, shared_guide) = self.prepare_discrete_guides(
                     &themes,
-                    &mut interiors,
+                    interiors,
                     color_domains.as_deref().map(Vec::as_slice),
                     &prepared_stage.operation(),
                 )?;
@@ -2202,7 +2219,7 @@ impl Canvas {
 
             let mut plot = source.clone();
             if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
-                plot = inputs.attach(plot)?;
+                inputs.route.validate(plot.description())?;
             }
             if let Some(Some(range)) = shared_x.get(index) {
                 let kind = plot.kind();
@@ -2925,7 +2942,7 @@ impl Canvas {
                 crate::decorations::plan::LegendRole::Suppressed
             };
             let guide = if role == crate::decorations::plan::LegendRole::Panel {
-                plot.prepared_discrete_guide(Some(registered))?
+                crate::orchestrator::registration::guide_descriptor(Some(registered))?
                     .map(|descriptor| {
                         crate::decorations::legend::discrete::GuideSlot::new(
                             descriptor,

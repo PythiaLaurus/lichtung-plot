@@ -6,7 +6,6 @@ use crate::layout::PixelRect;
 use crate::Error;
 
 pub(super) fn measure(
-    chart: &crate::Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     panel: PixelRect,
     minimum: f64,
@@ -20,8 +19,7 @@ pub(super) fn measure(
         &crate::font::canonical::OperationContext,
     )>,
 ) -> Result<(PixelRect, Legend), PlanError> {
-    let descriptor = chart
-        .prepared_discrete_guide(registered)?
+    let descriptor = crate::orchestrator::registration::guide_descriptor(registered)?
         .ok_or_else(|| Error::Render("native Heatmap guide was not prepared".into()))?;
     crate::layout::interior::guide::native_right(
         descriptor,

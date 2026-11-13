@@ -500,8 +500,13 @@ fn measure(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real prepared operation compares natural and assigned empty-track behavior"
+    )]
     fn declared_empty_facet_tracks_use_only_facet_header_em_and_shrink_to_one_quantum() {
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
@@ -545,7 +550,19 @@ mod tests {
                 },
                 |stage| {
                     let operation = stage.operation();
-                    let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None)?;
+                    let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None)?;
+                    let guide = inputs.prepare_discrete_guides(
+                        &plot,
+                        &theme,
+                        &operation,
+                        &ComponentAddress::root(),
+                        false,
+                    )?;
+                    let inputs = PreparedInteriorInputs::from_registry(
+                        inputs,
+                        InteriorRoute::classify(plot.kind()),
+                        guide,
+                    )?;
                     Ok((inputs, operation))
                 },
                 |(inputs, operation), assigned, round| {

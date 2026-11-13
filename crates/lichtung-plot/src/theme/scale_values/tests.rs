@@ -260,8 +260,8 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme)).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let crate::orchestrator::registration::PreparedFamily::Heatmap(prepared) =
-        &inputs.plots[0].family
+    let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(prepared)) =
+        &inputs.panels[0].family
     else {
         panic!("prepared Heatmap")
     };

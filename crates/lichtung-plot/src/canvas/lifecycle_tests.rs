@@ -39,10 +39,7 @@ fn fixed_guide_use_keeps_shared_contributions_and_authored_visibility_distinct()
                         registered.source.legend_policy_spec() == crate::LegendPolicy::Hidden,
                         index == 1
                     );
-                    assert_eq!(
-                        inputs.discrete_guides.get().unwrap().root.is_some(),
-                        expected != GuideUse::Hidden
-                    );
+                    assert_eq!(inputs.root_guide.is_some(), expected != GuideUse::Hidden);
                     assert_eq!(
                         registered.policy.continuous_materialization,
                         if policy == CanvasLegendPolicy::Hidden {
@@ -1216,10 +1213,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                         prepared.interiors[index]
                             .as_ref()
                             .unwrap()
-                            .discrete_guides
-                            .get()
-                            .unwrap()
-                            .root
+                            .root_guide
                             .as_ref()
                             .unwrap()
                             .composition

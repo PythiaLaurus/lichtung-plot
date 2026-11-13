@@ -283,16 +283,17 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 &operation,
             )
             .unwrap();
-            let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                registry,
-                crate::layout::interior::InteriorRoute::classify(source.kind()),
-            )?;
-            inputs.prepare_discrete_guides(
+            let root_guide = registry.prepare_discrete_guides(
                 &source,
                 &theme,
                 &operation,
                 &crate::layout::ComponentAddress::root(),
                 false,
+            )?;
+            let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                registry,
+                crate::layout::interior::InteriorRoute::classify(source.kind()),
+                root_guide,
             )?;
             let requirements = crate::layout::foundational_plot_requirements(
                 Some(&inputs),
@@ -317,9 +318,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         },
         |(inputs, expected), assigned, _| {
             let (width, height) = assigned.assigned_size()?.dimensions()?;
-            let chart = inputs
-                .attach(source.clone())?
-                .with_canvas_size(width, height);
+            let chart = source.clone().with_canvas_size(width, height);
             let operation = text.prepared_font_environment()?.operation();
             let measured = chart
                 .measure_selected_interior(

@@ -700,8 +700,10 @@ pub(crate) fn measure_marks(
         payload.traces.push(selected);
     }
     payload.measure_ink(chart, marks, &layout.projection, context)?;
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    );
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

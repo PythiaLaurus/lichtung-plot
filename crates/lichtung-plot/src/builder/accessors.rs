@@ -1171,18 +1171,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.description
     }
 
-    pub(crate) fn prepared_discrete_guide(
-        &self,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    ) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error>
-    {
-        self.prepared_discrete_guides
-            .as_ref()
-            .ok_or_else(|| Error::Render("discrete guide semantics were not prepared".into()))?
-            .for_scope(crate::orchestrator::registration::render_name(registered))
-            .map(Option::<&_>::cloned)
-    }
-
     #[cfg(test)]
     pub(crate) fn with_test_axis_ticks(mut self, side: usize, ticks: Vec<crate::AxisTick>) -> Self {
         if side == 0 {

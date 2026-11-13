@@ -1255,16 +1255,18 @@ fn project(
             additional,
         );
     }
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
-            .with_axis_domains(
-                if categorical_x {
-                    AxisDomain::Categorical
-                } else {
-                    AxisDomain::Continuous
-                },
-                AxisDomain::Continuous,
-            );
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    )
+    .with_axis_domains(
+        if categorical_x {
+            AxisDomain::Categorical
+        } else {
+            AxisDomain::Continuous
+        },
+        AxisDomain::Continuous,
+    );
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Line(payload),

@@ -13,7 +13,7 @@ pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
     theme: &crate::text::TextRequestContext<'_, '_>,
-    inputs: &mut crate::layout::interior::PreparedInteriorInputs,
+    inputs: &mut crate::orchestrator::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
     let (mut base, groups, collectives) = super::data::base_plot(source, kind)?;
@@ -21,7 +21,7 @@ pub(super) fn prepare_discrete_guide(
     let collectives = collectives
         .map(crate::data::source::source_arc)
         .transpose()?;
-    for registered in &mut inputs.plots {
+    for registered in &mut inputs.panels {
         if groups.is_some() {
             registered.policy.coordinated.groups.clone_from(&groups);
         }
@@ -56,19 +56,13 @@ pub(super) fn prepare_discrete_guide(
             base = base.with_global_hue_levels(present);
         }
     }
-    inputs.prepare_discrete_guides(
+    let descriptor = inputs.prepare_discrete_guides(
         &base,
         theme,
         resources,
         &crate::layout::ComponentAddress::root(),
         true,
     )?;
-    let descriptor = inputs
-        .discrete_guides
-        .get()
-        .expect("prepared facet guide")
-        .root
-        .clone();
     let hue_levels = base
         .global_hue_levels()
         .map(|levels| {

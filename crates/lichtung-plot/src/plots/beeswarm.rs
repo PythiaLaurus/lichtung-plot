@@ -411,9 +411,11 @@ pub(crate) fn measure(
             let guide_scope = context
                 .fit_scope()
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-            let descriptor = chart
-                .prepared_discrete_guide(context.registered)?
-                .ok_or_else(|| Error::Render("native Beeswarm guide was not prepared".into()))?;
+            let descriptor =
+                crate::orchestrator::registration::guide_descriptor(context.registered)?
+                    .ok_or_else(|| {
+                        Error::Render("native Beeswarm guide was not prepared".into())
+                    })?;
             let (body, guide) = crate::layout::interior::guide::native_right(
                 descriptor,
                 context.panel,
@@ -689,8 +691,10 @@ pub(crate) fn measure(
             )?;
         }
     }
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    );
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =
         Some(crate::data::source::collect_source(levels.iter().map(

@@ -141,15 +141,7 @@ impl ScopedGuideInputs {
                 "suppressed guide scope has a local placement descriptor".into(),
             ));
         }
-        let contribution = plot
-            .prepared_discrete_guides
-            .as_ref()
-            .map(|guides| {
-                guides.for_scope(crate::orchestrator::registration::render_name(registered))
-            })
-            .transpose()?
-            .flatten()
-            .cloned();
+        let contribution = registered.and_then(|registered| registered.guide.descriptor.clone());
         let composition =
             crate::orchestrator::registration::guide_composition(plot.description(), registered);
         if contribution
@@ -180,17 +172,9 @@ impl ScopedGuideInputs {
             color_title: plot.description().copy_color_title()?,
             composition,
             use_kind,
-            contribution_prepared: plot.prepared_discrete_guides.is_some(),
+            contribution_prepared: registered.is_some(),
             contribution,
-            alpha: plot
-                .prepared_discrete_guides
-                .as_ref()
-                .map(|guides| {
-                    guides
-                        .alpha_for_scope(crate::orchestrator::registration::render_name(registered))
-                        .cloned()
-                })
-                .transpose()?,
+            alpha: registered.map(|registered| Arc::clone(&registered.guide.alpha)),
             local_guide: local_guide.cloned(),
             dependencies: super::shared_slice(retained)?,
         })
@@ -204,17 +188,11 @@ impl ScopedGuideInputs {
         self.composition
             == crate::orchestrator::registration::guide_composition(plot.description(), registered)
             && plot.description().same_color_title(&self.color_title)
-            && self.contribution_prepared == plot.prepared_discrete_guides.is_some()
-            && match &plot.prepared_discrete_guides {
-                Some(guides) => {
-                    guides
-                        .for_scope(crate::orchestrator::registration::render_name(registered))
-                        .is_ok_and(|guide| guide == self.contribution.as_ref())
-                        && guides
-                            .alpha_for_scope(crate::orchestrator::registration::render_name(
-                                registered,
-                            ))
-                            .is_ok_and(|alpha| Some(alpha) == self.alpha.as_ref())
+            && self.contribution_prepared == registered.is_some()
+            && match registered {
+                Some(registered) => {
+                    registered.guide.descriptor == self.contribution
+                        && Some(&registered.guide.alpha) == self.alpha.as_ref()
                 }
                 None => self.contribution.is_none() && self.alpha.is_none(),
             }

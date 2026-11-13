@@ -132,66 +132,15 @@ impl PreparedGuide {
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
         let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
-        for registered in &mut inputs.plots {
+        for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;
         }
-        let data = inputs.plots[0].data(&operation)?;
-        let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
-            Vec::new()
-        } else if let Some((matrix, registered)) =
-            inputs
-                .plots
-                .iter()
-                .find_map(|registered| match &registered.family {
-                    crate::orchestrator::registration::PreparedFamily::Matrix(marks) => {
-                        Some((marks, registered))
-                    }
-                    _ => None,
-                })
-        {
-            matrix.guide_sources(
-                plot,
-                registered
-                    .policy
-                    .coordinated
-                    .colors
-                    .as_deref()
-                    .expect("prepared Matrix color domain"),
-                theme,
-                data,
-            )?
-        } else {
-            inputs.guide_sources(plot, theme, data, &inputs.plots[0])?
-        };
-        let continuous = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
-            None
-        } else {
-            crate::layout::interior::PreparedInteriorInputs::continuous_source(
-                plot,
-                theme,
-                &inputs.plots[0],
-            )?
-        };
-        let alpha = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
-            Vec::new()
-        } else {
-            inputs
-                .alpha_sources(
-                    plot,
-                    theme,
-                    &inputs.plots[0],
-                    &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
-                )?
-                .sections(&inputs.plots[0].policy.labels)?
-        };
-        Self::prepare(
+        inputs.prepare_discrete_guides(
             plot,
-            &inputs.plots[0].policy,
             theme,
+            &operation,
             &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
-            keys,
-            continuous,
-            alpha,
+            false,
         )
     }
 
@@ -339,42 +288,6 @@ fn merge_entry(
     crate::data::source::reserve_source(entries, 1)?;
     entries.push(entry);
     Ok(())
-}
-
-/// Explicit per-scope contribution and one owning root union. None means actual
-/// noncontribution; an absent preparation owner is a different invariant state.
-#[derive(Debug)]
-pub(crate) struct PreparedGuides {
-    pub(crate) root: Option<Arc<PreparedGuide>>,
-    pub(crate) panels: Vec<ScopedGuide>,
-}
-
-#[derive(Debug)]
-pub(crate) struct ScopedGuide {
-    pub(crate) scope: Option<String>,
-    pub(crate) descriptor: Option<Arc<PreparedGuide>>,
-    pub(crate) alpha: Arc<super::alpha::PreparedAlphaInputs>,
-}
-
-impl PreparedGuides {
-    pub(crate) fn alpha_for_scope(
-        &self,
-        scope: Option<&str>,
-    ) -> Result<&Arc<super::alpha::PreparedAlphaInputs>> {
-        self.panels
-            .iter()
-            .find(|panel| panel.scope.as_deref() == scope)
-            .map(|panel| &panel.alpha)
-            .ok_or_else(|| Error::Render("alpha inputs are missing their prepared scope".into()))
-    }
-
-    pub(crate) fn for_scope(&self, scope: Option<&str>) -> Result<Option<&Arc<PreparedGuide>>> {
-        self.panels
-            .iter()
-            .find(|panel| panel.scope.as_deref() == scope)
-            .map(|panel| panel.descriptor.as_ref())
-            .ok_or_else(|| Error::Render("discrete guide is missing its prepared scope".into()))
-    }
 }
 
 impl PreparedGuide {

@@ -911,14 +911,11 @@ impl PreparedTextRequirement {
         ) == crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
             if let Some(interiors) = interiors {
-                let guides = interiors.discrete_guides.get().ok_or_else(|| {
-                    Error::Render("discrete guide font census requires prepared semantics".into())
-                })?;
                 if plot.description().has_facets()
                     && matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
                 {
-                    for (index, panel) in guides.panels.iter().enumerate() {
-                        if let Some(guide) = &panel.descriptor {
+                    for (index, panel) in interiors.plots.iter().enumerate() {
+                        if let Some(guide) = &panel.guide.descriptor {
                             let index = u32::try_from(index).map_err(|_| {
                                 Error::Render("native guide facet index overflow".into())
                             })?;
@@ -933,7 +930,7 @@ impl PreparedTextRequirement {
                             )?;
                         }
                     }
-                } else if let Some(guide) = &guides.root {
+                } else if let Some(guide) = &interiors.root_guide {
                     let guide_parent = if plot.description().has_facets()
                         || base.leaf_role() == AddressRole::CanvasCell
                     {
@@ -1733,6 +1730,7 @@ pub(crate) enum PreparedTextCensusError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
     use crate::orchestrator::root::intrinsic_inputs;
 
     #[test]
@@ -2528,7 +2526,7 @@ mod tests {
         )
         .erase();
         let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(
+        let mut inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
             Some(&crate::theme::Theme::publication()),
@@ -2551,7 +2549,7 @@ mod tests {
         theme.typography.annotations.contrast.light.font_size = 39.0;
         theme.typography.annotations.contrast.dark.font_size = 9.0;
         let text_service = crate::text::TextService::default();
-        inputs
+        let guide = inputs
             .prepare_discrete_guides(
                 &plot,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
@@ -2560,6 +2558,12 @@ mod tests {
                 false,
             )
             .unwrap();
+        let inputs = PreparedInteriorInputs::from_registry(
+            inputs,
+            InteriorRoute::classify(plot.kind()),
+            guide,
+        )
+        .unwrap();
         for (backdrop, expected) in [
             (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
             (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
@@ -2605,6 +2609,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real guide/census boundary compares the original and final shared contrast roles"
+    )]
     fn final_shared_heatmap_domain_reselects_complete_contrast_role_before_fonts() {
         let plot = crate::Plot::heatmap(
             crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -2633,10 +2641,16 @@ mod tests {
         theme.typography.annotations.contrast.dark.font_size = 9.0;
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        inputs
+        let guide = inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
-        let selected_stack = |inputs: &crate::layout::interior::PreparedInteriorInputs| {
+        let mut inputs = PreparedInteriorInputs::from_registry(
+            inputs,
+            InteriorRoute::classify(plot.kind()),
+            guide,
+        )
+        .unwrap();
+        let selected_stack = |inputs: &PreparedInteriorInputs| {
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
                     Some(inputs),
@@ -2727,7 +2741,7 @@ mod tests {
         .x_limits(1.0, 1.015)
         .erase();
         let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(
+        let mut inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
             Some(&crate::theme::Theme::publication()),
@@ -2740,9 +2754,15 @@ mod tests {
         theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        inputs
+        let guide = inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
+        let inputs = PreparedInteriorInputs::from_registry(
+            inputs,
+            InteriorRoute::classify(plot.kind()),
+            guide,
+        )
+        .unwrap();
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 Some(&inputs),
@@ -2784,6 +2804,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "keep guide completion, selective census and the original unavailable-font failure in one operation"
+    )]
     fn unavailable_unselected_heatmap_contrast_face_never_enters_font_preparation() {
         for (value, light_selected) in [(0.0, false), (1.0, true)] {
             let plot = crate::Plot::heatmap(
@@ -2825,17 +2849,22 @@ mod tests {
                     height: 600,
                 },
                 |stage| {
-                    let inputs = crate::plots::shared_x::prepare_plot(
+                    let mut inputs = crate::plots::shared_x::prepare_plot(
                         &plot,
                         &stage.operation(),
                         Some(&crate::theme::Theme::publication()),
                     )?;
-                    inputs.prepare_discrete_guides(
+                    let guide = inputs.prepare_discrete_guides(
                         &plot,
                         &theme,
                         &stage.operation(),
                         &ComponentAddress::root(),
                         false,
+                    )?;
+                    let inputs = PreparedInteriorInputs::from_registry(
+                        inputs,
+                        InteriorRoute::classify(plot.kind()),
+                        guide,
                     )?;
                     let requirements = foundational_plot_requirements(
                         Some(&inputs),

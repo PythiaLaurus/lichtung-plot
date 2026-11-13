@@ -998,8 +998,10 @@ pub(crate) fn measure(
         geometry.polygon(&group.top, &group.fill, Some(top_panel))?;
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    );
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),

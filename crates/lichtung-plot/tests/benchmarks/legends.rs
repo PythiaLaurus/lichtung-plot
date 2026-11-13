@@ -428,8 +428,20 @@ fn shared_legend_child_cache_replay_contract() {
                 height: 720,
             },
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
-                inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &owner, false)?;
+                let mut inputs =
+                    crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+                let guide = inputs.prepare_discrete_guides(
+                    &plot,
+                    &theme,
+                    &stage.operation(),
+                    &owner,
+                    false,
+                )?;
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(plot.kind()),
+                    guide,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &plot,
@@ -452,7 +464,7 @@ fn shared_legend_child_cache_replay_contract() {
                 Ok(inputs)
             },
             |inputs, assigned, round| {
-                let plot = inputs.attach(plot.clone())?;
+                let plot = plot.clone();
                 let panel = PixelRect::new(100.0, 1100.0, 100.0, 620.0);
                 let registered = &inputs.plots[0];
                 let operation = text.prepared_font_environment()?.operation();
@@ -905,10 +917,12 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
 #[test]
 #[expect(
     clippy::float_cmp,
-    reason = "compare consumed and requested gutters within the same root operation"
+    clippy::too_many_lines,
+    reason = "compare consumed and requested gutters through the complete real prepare/guide/feedback operation"
 )]
 fn native_measured_gutters_are_consumed_before_the_final_frame() {
     use crate::layout::fit::FitOutcome;
+    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
     use crate::layout::kernel::FeedbackKind;
     use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout};
     use crate::orchestrator::measurements;
@@ -930,8 +944,19 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             height: 400,
         },
         |stage| {
-            let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
-            inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &address, false)?;
+            let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+            let guide = inputs.prepare_discrete_guides(
+                &plot,
+                &theme,
+                &stage.operation(),
+                &address,
+                false,
+            )?;
+            let inputs = PreparedInteriorInputs::from_registry(
+                inputs,
+                InteriorRoute::classify(plot.kind()),
+                guide,
+            )?;
             let requirements = crate::layout::foundational_plot_requirements(
                 Some(&inputs),
                 &plot,
@@ -954,7 +979,7 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             Ok((inputs, stage.operation()))
         },
         |(inputs, operation), assigned, round| {
-            let plot = inputs.attach(plot.clone())?;
+            let plot = plot.clone();
             let canvas = plot.measured_canvas_layout(
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),

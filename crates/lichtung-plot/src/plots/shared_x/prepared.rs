@@ -1,4 +1,4 @@
-use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
+use crate::layout::interior::InteriorRoute;
 use crate::layout::AxisTick;
 use crate::orchestrator::registration::{
     AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, PreparedAxes, PreparedAxesOwner,
@@ -538,7 +538,7 @@ pub(crate) fn prepare_plot<'src>(
     source: &'src Plot,
     resources: &crate::font::canonical::OperationContext,
     owner: Option<&crate::theme::Theme>,
-) -> Result<PreparedInteriorInputs<'src>, Error> {
+) -> Result<PlotRegistryBuilder<'src>, Error> {
     let mut registry = PlotRegistryBuilder::new(resources.root_identity());
     let source_rows = source.description().configured_source_rows()?;
     let source_id = (!source.description().has_facets())
@@ -582,10 +582,7 @@ pub(crate) fn prepare_plot<'src>(
     {
         prepare_plot_registration(&mut registry.panels[0], source, owner, resources)?;
         prepare_reference_plot(source, &mut registry.panels[0], None, false, resources)?;
-        return PreparedInteriorInputs::from_registry(
-            registry,
-            InteriorRoute::classify(source.kind()),
-        );
+        return Ok(registry);
     }
     let source_data = source_id
         .as_ref()
@@ -603,10 +600,7 @@ pub(crate) fn prepare_plot<'src>(
         )?);
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
         prepare_scatter_plot(source, &mut registry.panels[0])?;
-        return PreparedInteriorInputs::from_registry(
-            registry,
-            InteriorRoute::classify(source.kind()),
-        );
+        return Ok(registry);
     }
     if matches!(
         source.kind(),
@@ -634,10 +628,7 @@ pub(crate) fn prepare_plot<'src>(
             marks,
         });
         prepare_line_plot(source, &mut registry.panels[0])?;
-        return PreparedInteriorInputs::from_registry(
-            registry,
-            InteriorRoute::classify(source.kind()),
-        );
+        return Ok(registry);
     }
     if source.description().has_facets() {
         crate::orchestrator::prepare_facet_scopes(source, &mut registry, resources)?;
@@ -1128,7 +1119,7 @@ pub(crate) fn prepare_plot<'src>(
         let axes = prepare(source, &registry.panels[0].scope.id, None, None, None, None)?;
         registry.panels[0].axes = Some(axes);
     }
-    PreparedInteriorInputs::from_registry(registry, InteriorRoute::classify(source.kind()))
+    Ok(registry)
 }
 
 fn facet_source_strings(

@@ -198,8 +198,8 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 Some(&crate::Theme::publication()),
             )
             .unwrap();
-            let crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks) =
-                &same_paint_inputs.plots[0].family
+            let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks)) =
+                &same_paint_inputs.panels[0].family
             else {
                 panic!("prepared Heatmap")
             };
@@ -229,8 +229,8 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 Some(&crate::Theme::publication()),
             )
             .unwrap();
-            let crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks) =
-                &changed_inputs.plots[0].family
+            let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks)) =
+                &changed_inputs.panels[0].family
             else {
                 panic!("prepared Heatmap")
             };

@@ -357,7 +357,8 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(prepared, layout, theme)?;
-    result.discrete_guide = chart.prepared_discrete_guide(context.registered)?;
+    result.discrete_guide =
+        crate::orchestrator::registration::guide_descriptor(context.registered)?;
     let crate::layout::interior::MarkPayload::Histogram(payload) = &result
         .marks
         .as_ref()

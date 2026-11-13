@@ -113,16 +113,15 @@ impl CompositionChildPolicy {
     }
 }
 
-/// Root-owned occurrences hold their scientific axes and extracted semantics.
-/// Attachment transports only guides, never scientific storage.
+/// Completed occurrences and their original root-level guide union.
 pub(crate) struct PreparedInteriorInputs<'src> {
     pub(crate) plots: Vec<crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) plot_intrinsics: Vec<(
         crate::orchestrator::registration::PlotOccurrenceId,
         crate::orchestrator::root::PlotIntrinsics,
     )>,
-    pub(crate) discrete_guides:
-        std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
+    pub(crate) root_guide:
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     pub(crate) route: InteriorRoute,
 }
 
@@ -130,14 +129,15 @@ impl<'src> PreparedInteriorInputs<'src> {
     pub(crate) fn from_registry(
         registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
         route: InteriorRoute,
+        root_guide: Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     ) -> Result<Self, Error> {
         let plots = registry.finish()?;
         let plot_intrinsics = Self::intrinsic_slots(&plots)?;
         Ok(Self {
             plots,
             plot_intrinsics,
+            root_guide,
             route,
-            discrete_guides: std::sync::OnceLock::new(),
         })
     }
 
@@ -197,12 +197,6 @@ impl<'src> PreparedInteriorInputs<'src> {
             )?;
         }
         Ok(())
-    }
-
-    pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
-        self.route.validate(plot.description())?;
-        plot.prepared_discrete_guides = self.discrete_guides.get().cloned();
-        Ok(plot)
     }
 }
 

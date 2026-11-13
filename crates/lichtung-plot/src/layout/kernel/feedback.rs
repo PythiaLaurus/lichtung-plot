@@ -1307,11 +1307,11 @@ mod tests {
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let inputs =
+            let mut inputs =
                 crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
             let discoveries =
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-            inputs
+            let descriptor = inputs
                 .prepare_discrete_guides(
                     &plot,
                     &theme,
@@ -1320,13 +1320,13 @@ mod tests {
                     false,
                 )
                 .unwrap();
-            let guides = inputs.discrete_guides.get().unwrap();
-            assert!(guides.root.is_none());
+            assert!(descriptor.is_none());
             assert_eq!(
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
                 discoveries
             );
-            Arc::clone(guides.alpha_for_scope(None).unwrap())
+            let registered = inputs.finish().unwrap().pop().unwrap();
+            registered.guide.alpha
         };
         let observe = |inputs: &Arc<PreparedAlphaInputs>| {
             let mut round = FeedbackRound::new(None, 0).unwrap();

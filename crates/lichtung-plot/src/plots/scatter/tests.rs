@@ -54,16 +54,8 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();
-            let hidden_alpha = chart
-                .prepared_discrete_guides
-                .as_ref()
-                .unwrap()
-                .alpha_for_scope(None)
-                .unwrap();
-            assert!(chart
-                .prepared_discrete_guide(inputs.plots.first())
-                .unwrap()
-                .is_none());
+            let hidden_alpha = &inputs.plots[0].guide.alpha;
+            assert!(inputs.plots[0].guide.descriptor.is_none());
             assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
             assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
             let selected = chart

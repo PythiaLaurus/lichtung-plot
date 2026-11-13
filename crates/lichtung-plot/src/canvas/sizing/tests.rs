@@ -139,15 +139,19 @@ fn assert_changed_height_inputs(
         },
         |stage| {
             let (mut interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
-            let inputs = interiors[0].take().expect("prepared Canvas occurrence");
-            inputs.prepare_discrete_guides(
+            let mut inputs = interiors[0].take().expect("prepared Canvas occurrence");
+            let root_guide = inputs.prepare_discrete_guides(
                 source,
                 &request,
                 &stage.operation(),
                 &ComponentAddress::root(),
                 false,
             )?;
-            Ok(inputs)
+            crate::layout::interior::PreparedInteriorInputs::from_registry(
+                inputs,
+                crate::layout::interior::InteriorRoute::classify(source.kind()),
+                root_guide,
+            )
         },
         |inputs, assigned, round| {
             inputs.plots[0]
@@ -155,7 +159,7 @@ fn assert_changed_height_inputs(
                 .render_name
                 .as_deref()
                 .expect("Canvas scope");
-            let source = inputs.attach(source.clone())?;
+            let source = source.clone();
             let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
             let ancestor = ComponentAddress::root().child(AddressRole::CanvasSharedLegend, 0)?;
             let dependencies = [ConsumedGuideDependency::new(
@@ -219,7 +223,7 @@ fn assert_changed_height_inputs(
             assert_eq!(same.width, different.width);
             assert_eq!(measurements.measured(&different, &owner, round)?, None);
             for changed in &variants {
-                let changed = inputs.attach(changed.clone())?;
+                let changed = changed.clone();
                 let different = HeightInputs::new(
                     &changed,
                     inputs.plots.first(),

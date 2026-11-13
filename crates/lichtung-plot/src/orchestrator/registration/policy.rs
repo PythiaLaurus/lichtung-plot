@@ -33,6 +33,28 @@ pub(crate) struct CoordinatedDomains {
     pub(crate) collectives: Option<std::sync::Arc<Vec<crate::data::CollectivePair>>>,
 }
 
+impl CoordinatedDomains {
+    pub(crate) fn composed_groups(
+        &self,
+        source: &crate::builder::PlotDescription,
+    ) -> Option<&[String]> {
+        if matches!(
+            source.kind(),
+            crate::PlotKind::Bar
+                | crate::PlotKind::HorizontalBar
+                | crate::PlotKind::StackedBar
+                | crate::PlotKind::StackedHorizontalBar
+                | crate::PlotKind::Boxplot
+                | crate::PlotKind::Violin
+                | crate::PlotKind::Raincloud
+        ) && (!source.has_facets() || source.group_col().is_none())
+        {
+            return None;
+        }
+        self.groups.as_deref().map(Vec::as_slice)
+    }
+}
+
 pub(crate) struct AxisTextVisibility {
     pub(crate) tick_labels: [bool; 2],
     pub(crate) titles: [bool; 2],

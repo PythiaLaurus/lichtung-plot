@@ -13,6 +13,7 @@ use crate::alpha::{
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
+use crate::orchestrator::registration::guide_descriptor;
 use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, LineRole, LiteralDomain, PointRole};
@@ -512,8 +513,7 @@ pub(crate) fn project(
         geometry.scatter(points, style, clip)?;
     }
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(layout, guide_descriptor(context.registered)?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Regression(payload),

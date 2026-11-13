@@ -1,5 +1,5 @@
 use super::*;
-use crate::decorations::legend::discrete::scoped::ScopedGuideInputs;
+use crate::decorations::legend::discrete::scoped::{GuideUse, ScopedGuideInputs};
 use crate::TickGeneration;
 
 fn plot() -> Plot<crate::kind::Scatter> {
@@ -9,6 +9,31 @@ fn plot() -> Plot<crate::kind::Scatter> {
     )
     .x_limits(0.0, 10.0)
     .y_limits(0.0, 4.0)
+}
+
+fn prepare_key_inputs<'src>(
+    source: &'src Plot,
+    operation: &crate::font::canonical::OperationContext,
+) -> crate::layout::interior::PreparedInteriorInputs<'src> {
+    let mut registry = crate::plots::shared_x::prepare_plot(source, operation, None).unwrap();
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let theme = crate::text::TextRequestContext::new(&appearance, &text);
+    let guide = registry
+        .prepare_discrete_guides(
+            source,
+            &theme,
+            operation,
+            &crate::layout::ComponentAddress::root(),
+            source.description().has_facets(),
+        )
+        .unwrap();
+    crate::layout::interior::PreparedInteriorInputs::from_registry(
+        registry,
+        crate::layout::interior::InteriorRoute::classify(source.kind()),
+        guide,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -34,11 +59,22 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
     ))
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+    let mut inputs = prepare_key_inputs(&source, &operation);
     let plot = source.clone().without_facets();
     let registered = &inputs.plots[0];
     let retained = plot
-        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), Some(registered), None)
+        .retain_composed_inputs(
+            ScopedGuideInputs::new(
+                &plot,
+                Some(registered),
+                GuideUse::SharedSuppressed,
+                None,
+                &[],
+            )
+            .unwrap(),
+            Some(registered),
+            None,
+        )
         .unwrap();
     assert_eq!(
         retained.global_line_condition_levels.as_deref().unwrap(),
@@ -67,7 +103,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
     ))
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+    let mut inputs = prepare_key_inputs(&source, &operation);
     let plot = source.clone().without_facets();
     let registered = &inputs.plots[1];
     let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } = &registered.family
@@ -79,7 +115,18 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         .iter()
         .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
     let retained = plot
-        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), Some(registered), None)
+        .retain_composed_inputs(
+            ScopedGuideInputs::new(
+                &plot,
+                Some(registered),
+                GuideUse::SharedSuppressed,
+                None,
+                &[],
+            )
+            .unwrap(),
+            Some(registered),
+            None,
+        )
         .unwrap();
     assert_eq!(
         retained.global_group_levels.as_deref().unwrap(),
@@ -95,7 +142,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         crate::BarInput::estimates(crate::NumericValues::new("value", [1.0])),
     )
     .erase();
-    let inputs = crate::plots::shared_x::prepare_plot(&single, &operation, None).unwrap();
+    let inputs = prepare_key_inputs(&single, &operation);
     assert!(inputs.plots[0]
         .policy
         .coordinated
@@ -105,7 +152,14 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         .is_empty());
     let retained = single
         .retain_composed_inputs(
-            ScopedGuideInputs::for_test(&single),
+            ScopedGuideInputs::new(
+                &single,
+                Some(&inputs.plots[0]),
+                GuideUse::SharedSuppressed,
+                None,
+                &[],
+            )
+            .unwrap(),
             Some(&inputs.plots[0]),
             None,
         )

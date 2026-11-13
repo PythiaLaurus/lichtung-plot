@@ -338,7 +338,7 @@ pub(crate) fn plan_panel(
     let context = PlotRenderContext::new(registered.data(&operation)?, cell, theme)
         .with_registration(registered, intrinsic);
     let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
-        plot.prepared_discrete_guide(Some(registered))?
+        crate::orchestrator::registration::guide_descriptor(Some(registered))?
             .map(|descriptor| {
                 crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
@@ -1242,10 +1242,8 @@ fn plan_panel_attempt(
     // Actual scientific alpha identity remains observable even when no guide is
     // explained or placed locally. Native color/Matrix guides also retain their
     // complete descriptor rather than only captured geometry and text.
-    if let Some(guides) = &plot.prepared_discrete_guides {
-        round.observe_alpha(guides.alpha_for_scope(
-            crate::orchestrator::registration::render_name(context.registered),
-        )?)?;
+    if let Some(registered) = context.registered {
+        round.observe_alpha(&registered.guide.alpha)?;
     }
     if let Some(guide) = &result.discrete_guide {
         round.observe_guide(guide)?;

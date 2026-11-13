@@ -277,11 +277,10 @@ pub(crate) fn natural_body_preference(
 }
 
 pub(crate) fn natural_guide_preference(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let Some(descriptor) = chart.prepared_discrete_guide(registered)? else {
+    let Some(descriptor) = crate::orchestrator::registration::guide_descriptor(registered)? else {
         return Ok((0.0, 0.0));
     };
     Legend::natural_preference(&descriptor, theme)
@@ -562,7 +561,6 @@ pub(crate) fn measure(
             .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents)),
     )?;
     let legend = match matrix_legend(
-        chart,
         context.registered,
         (
             context.panel.width(),
@@ -998,9 +996,11 @@ pub(crate) fn measure(
 
     let layout = Layout::envelope(outer);
 
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
-            .with_self_managed_decorations();
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    )
+    .with_self_managed_decorations();
     result.grid_axis_gutters = Some(gutters.map(f64::ceil));
     let payload = MatrixPayload {
         cells,
@@ -1092,14 +1092,13 @@ fn matrix_ticks<'a>(
 }
 
 fn matrix_legend(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     available: (f64, Option<f64>),
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
     use crate::layout::fit::FitOutcome;
-    let Some(descriptor) = chart.prepared_discrete_guide(registered)? else {
+    let Some(descriptor) = crate::orchestrator::registration::guide_descriptor(registered)? else {
         return Ok(FitOutcome::Measured(None));
     };
     let scope = scope.child(crate::layout::AddressRole::InsideGuide, 0)?;

@@ -117,10 +117,28 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) policy: PlotScopePolicy,
     pub(crate) axes: PreparedAxesOwner,
     pub(crate) family: PreparedFamily,
+    pub(crate) guide: GuideContribution,
+}
+
+#[derive(Debug)]
+pub(crate) struct GuideContribution {
+    pub(crate) descriptor:
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
+    pub(crate) alpha: std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>,
 }
 
 pub(crate) fn render_name<'v>(registered: Option<&'v PlotRegistration<'_>>) -> Option<&'v str> {
     registered?.scope.render_name.as_deref()
+}
+
+pub(crate) fn guide_descriptor(
+    registered: Option<&PlotRegistration<'_>>,
+) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error> {
+    Ok(registered
+        .ok_or_else(|| Error::Render("discrete guide semantics were not prepared".into()))?
+        .guide
+        .descriptor
+        .clone())
 }
 
 pub(crate) fn axis_tick_labels_visible(
@@ -218,25 +236,10 @@ pub(crate) fn composed_group_levels<'v>(
     registered: Option<&'v PlotRegistration<'_>>,
 ) -> Option<&'v [String]> {
     let registered = registered?;
-    if matches!(
-        registered.source.kind(),
-        crate::PlotKind::Bar
-            | crate::PlotKind::HorizontalBar
-            | crate::PlotKind::StackedBar
-            | crate::PlotKind::StackedHorizontalBar
-            | crate::PlotKind::Boxplot
-            | crate::PlotKind::Violin
-            | crate::PlotKind::Raincloud
-    ) && (!registered.source.has_facets() || registered.source.group_col().is_none())
-    {
-        return None;
-    }
     registered
         .policy
         .coordinated
-        .groups
-        .as_deref()
-        .map(Vec::as_slice)
+        .composed_groups(registered.source)
 }
 
 impl std::fmt::Debug for PlotRegistration<'_> {
@@ -290,6 +293,7 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) policy: PlotScopePolicy,
     pub(crate) family: Option<PreparedFamily>,
     pub(crate) axes: Option<PreparedAxesOwner>,
+    pub(crate) guide: Option<GuideContribution>,
 }
 
 impl<'src> PlotRegistrationBuild<'src> {
@@ -347,6 +351,7 @@ impl<'src> PlotRegistryBuilder<'src> {
             policy,
             family: None,
             axes: None,
+            guide: None,
         });
         Ok(id)
     }
@@ -378,6 +383,9 @@ impl<'src> PlotRegistryBuilder<'src> {
                 policy: panel.policy,
                 axes: panel.axes.expect("completed occurrence axes"),
                 family,
+                guide: panel
+                    .guide
+                    .expect("completed occurrence guide contribution"),
             })
         }))
     }

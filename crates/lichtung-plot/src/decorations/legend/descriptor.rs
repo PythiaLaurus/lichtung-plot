@@ -82,7 +82,7 @@ impl Eq for ContinuousDescriptor {}
 impl<'v> ContinuousContributor<'v> {
     pub(crate) fn for_plot(
         plot: &'v Plot,
-        input: &crate::layout::interior::PreparedInteriorInputs,
+        input: &crate::orchestrator::registration::PlotRegistrationBuild<'_>,
         theme: &crate::text::TextRequestContext<'_, '_>,
         numeric: crate::numeric::source::NumericBinding<'v>,
     ) -> Result<Option<Self>, Error> {
@@ -93,9 +93,9 @@ impl<'v> ContinuousContributor<'v> {
         let (title, semantics, samples) = match plot.kind() {
             crate::PlotKind::Heatmap => {
                 let marks = input
-                    .plots
-                    .first()
-                    .and_then(|registered| match &registered.family {
+                    .family
+                    .as_ref()
+                    .and_then(|family| match family {
                         crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
                             Some(marks)
                         }
@@ -113,9 +113,9 @@ impl<'v> ContinuousContributor<'v> {
             }
             crate::PlotKind::Beeswarm => {
                 let marks = input
-                    .plots
-                    .first()
-                    .and_then(|registered| match &registered.family {
+                    .family
+                    .as_ref()
+                    .and_then(|family| match family {
                         crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) => {
                             Some(marks)
                         }

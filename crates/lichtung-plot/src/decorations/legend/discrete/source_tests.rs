@@ -10,13 +10,13 @@ fn prepare(
     theme: &crate::text::TextRequestContext<'_, '_>,
     composition: LegendComposition,
     inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
-) -> Arc<PreparedGuides> {
+) -> Option<Arc<PreparedGuide>> {
     let operation = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
-    for registered in &mut inputs.plots {
+    for registered in &mut inputs.panels {
         registered.policy.guide_composition = composition;
     }
-    inputs
+    let root = inputs
         .prepare_discrete_guides(
             plot,
             theme,
@@ -27,18 +27,20 @@ fn prepare(
             false,
         )
         .unwrap();
+    let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+        inputs,
+        crate::layout::interior::InteriorRoute::classify(plot.kind()),
+        root.clone(),
+    )
+    .unwrap();
     inspect(&inputs);
-    inputs.discrete_guides.get().unwrap().clone()
-}
-
-fn guide(inputs: &Arc<PreparedGuides>) -> &Arc<PreparedGuide> {
-    inputs.root.as_ref().unwrap()
+    root
 }
 
 fn separate_inputs(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
-) -> Arc<PreparedGuides> {
+) -> Option<Arc<PreparedGuide>> {
     prepare(plot, theme, LegendComposition::Separate, |_| ())
 }
 
@@ -111,8 +113,8 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     .unwrap();
     let projected_inputs =
         separate_inputs(&plot, &crate::text::TextRequestContext::new(&theme, &text));
-    assert_eq!(self::guide(&projected_inputs), &projected_mapped);
-    let guide = guide(&inputs);
+    assert_eq!(projected_inputs.as_ref().unwrap(), &projected_mapped);
+    let guide = inputs.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 1);
     assert_eq!(guide.counts.primary_source_keys, 1);
     assert_eq!(guide.counts.source_occurrences, 1);
@@ -161,7 +163,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     )
     .unwrap()
     .unwrap();
-    let fixed_guide = self::guide(&fixed_inputs);
+    let fixed_guide = fixed_inputs.as_ref().unwrap();
     let fixed_entry = &fixed_guide.sections[0].entries()[0];
     assert_eq!(fixed_entry.key, entry.key);
     assert_ne!(fixed_guide, guide);
@@ -574,12 +576,12 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme, LegendComposition::Combined, |_| ());
-    assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
+    assert_complete_interaction(inputs.as_ref().unwrap(), &ratio, outline_paint);
     let projected = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
         .unwrap()
         .unwrap();
     let projected_inputs = separate_inputs(&plot, &theme);
-    assert_eq!(guide(&projected_inputs), &projected);
+    assert_eq!(projected_inputs.as_ref().unwrap(), &projected);
     assert_projected_interaction(&projected, outline_paint);
     assert_interaction_alpha_context(&plot, &theme, outline_paint);
     let unconfigured = interaction_input().legend_composition(LegendComposition::Separate);

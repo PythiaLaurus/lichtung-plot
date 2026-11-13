@@ -359,8 +359,10 @@ fn project(
         geometry.scatter(&pair[..1], &points[0], clip)?;
         geometry.scatter(&pair[1..], &points[1], clip)?;
     }
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    );
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

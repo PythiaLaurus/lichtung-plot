@@ -40,12 +40,12 @@ impl<'src> PreparedPlotInputs<'src> {
         let text = TextService::default();
         let request = TextRequestContext::new(&theme, &text);
         source.description().validate_configuration(kind)?;
-        let mut axes = crate::plots::shared_x::prepare_plot(
+        let mut registry = crate::plots::shared_x::prepare_plot(
             source,
             &prepared_stage.operation(),
             Some(&theme),
         )?;
-        axes.validate_categorical_scale(source, &request, None)?;
+        registry.validate_categorical_scale(source, &request, None)?;
         let facet_guide = source
             .description()
             .has_facets()
@@ -54,21 +54,30 @@ impl<'src> PreparedPlotInputs<'src> {
                     source,
                     kind,
                     &request,
-                    &mut axes,
+                    &mut registry,
                     &prepared_stage.operation(),
                 )
             })
             .transpose()?;
-        if !source.description().has_facets() {
-            axes.prepare_discrete_guides(
+        let root_guide = if source.description().has_facets() {
+            facet_guide
+                .as_ref()
+                .and_then(|guide| guide.descriptor.clone())
+        } else {
+            registry.prepare_discrete_guides(
                 source,
                 &request,
                 &prepared_stage.operation(),
                 &crate::layout::ComponentAddress::root()
                     .child(crate::layout::AddressRole::PlotBody, 0)?,
                 false,
-            )?;
-        }
+            )?
+        };
+        let axes = crate::layout::interior::PreparedInteriorInputs::from_registry(
+            registry,
+            crate::layout::interior::InteriorRoute::classify(kind),
+            root_guide,
+        )?;
         let mut requirements = crate::layout::foundational_plot_requirements(
             Some(&axes),
             source,
@@ -162,10 +171,8 @@ pub(crate) fn with_prepared_plot_for_test<T>(
         },
         |prepared, assigned, _| {
             let (width, height) = assigned.assigned_size()?.dimensions()?;
-            let plot = prepared
-                .axes
-                .attach(source.clone())?
-                .with_canvas_size(width, height);
+            prepared.axes.route.validate(source.description())?;
+            let plot = source.clone().with_canvas_size(width, height);
             let request = TextRequestContext::new(&prepared.theme, &prepared.text);
             result = Some(visit.take().expect("one feedback-free producer fixture")(
                 &plot,
@@ -297,7 +304,8 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
         source.kind(),
         || Ok(Box::new(source.description().resolve_theme()?)),
         |prepared, _| {
-            let source = prepared.axes.attach(source.clone()).unwrap();
+            prepared.axes.route.validate(source.description()).unwrap();
+            let source = source.clone();
 
             let mut caches = prepared.caches.borrow_mut();
             let frames = &mut caches.frames;
@@ -959,7 +967,8 @@ impl PlotPlan {
                     if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
                         crate::layout::RootSize::new(width, height)
                     } else {
-                        let attached = prepared.axes.attach(source.clone())?;
+                        prepared.axes.route.validate(source.description())?;
+                        let attached = source.clone();
                         if source.description().has_facets() {
                             super::facets::natural_size(
                                 &attached,
@@ -990,10 +999,8 @@ impl PlotPlan {
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?;
 
-                let source = prepared
-                    .axes
-                    .attach(source.clone())?
-                    .with_canvas_size(width, height);
+                prepared.axes.route.validate(source.description())?;
+                let source = source.clone().with_canvas_size(width, height);
                 let plan = if source.description().has_facets() {
                     super::facets::OwnedFacetPlan::measure(
                         &source,
@@ -1127,8 +1134,7 @@ fn measure_single_plot(
     let discrete_guide = if kind == PlotKind::Matrix {
         None
     } else {
-        source
-            .prepared_discrete_guide(registered)?
+        super::registration::guide_descriptor(registered)?
             .map(|descriptor| {
                 crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
@@ -1384,17 +1390,22 @@ mod root_title_tests {
                     height: 600,
                 },
                 |stage| {
-                    let inputs = crate::plots::shared_x::prepare_plot(
+                    let mut inputs = crate::plots::shared_x::prepare_plot(
                         &source,
                         &stage.operation(),
                         Some(&theme),
                     )?;
-                    inputs.prepare_discrete_guides(
+                    let guide = inputs.prepare_discrete_guides(
                         &source,
                         &theme,
                         &stage.operation(),
                         &crate::layout::ComponentAddress::root(),
                         false,
+                    )?;
+                    let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                        inputs,
+                        crate::layout::interior::InteriorRoute::classify(source.kind()),
+                        guide,
                     )?;
                     let requirements = crate::layout::foundational_plot_requirements(
                         Some(&inputs),
@@ -1418,7 +1429,7 @@ mod root_title_tests {
                     Ok((inputs, stage.operation()))
                 },
                 |(inputs, operation), assigned, round| {
-                    let plot = inputs.attach(source.clone())?;
+                    let plot = source.clone();
                     let plan = measure_single_plot(
                         &plot,
                         inputs.plots.first(),
@@ -1581,15 +1592,20 @@ mod retained_legend_tests {
                 height: 600,
             },
             |stage| {
-                let inputs =
+                let mut inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
-                inputs.prepare_discrete_guides(
+                let guide = inputs.prepare_discrete_guides(
                     &source,
                     &theme,
                     &stage.operation(),
                     &crate::layout::ComponentAddress::root()
                         .child(crate::layout::AddressRole::PlotBody, 0)?,
                     false,
+                )?;
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(source.kind()),
+                    guide,
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
@@ -1615,7 +1631,7 @@ mod retained_legend_tests {
                 Ok((inputs, stage.operation()))
             },
             |(inputs, operation), assigned, round| {
-                let plot = inputs.attach(source.clone())?;
+                let plot = source.clone();
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     measure_single_plot(

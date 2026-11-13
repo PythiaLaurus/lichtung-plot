@@ -1195,8 +1195,10 @@ pub(crate) fn measure(
             );
         }
     }
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    );
     result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =

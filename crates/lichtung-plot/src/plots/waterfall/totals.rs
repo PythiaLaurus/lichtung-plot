@@ -279,8 +279,8 @@ mod tests {
                 .erase()
                 .with_planned_y_limits(y_limits);
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None).unwrap();
-            let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
-                &inputs.plots[0].family
+            let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
+                &inputs.panels[0].family
             else {
                 panic!("prepared Waterfall")
             };
@@ -351,8 +351,8 @@ mod tests {
             .x_limits(1.0, 1.015)
             .erase();
         let mut inputs = crate::plots::shared_x::prepare_plot(&limited, &operation, None).unwrap();
-        let registered = &mut inputs.plots[0];
-        let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+        let registered = &mut inputs.panels[0];
+        let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
             &mut registered.family
         else {
             panic!("prepared Waterfall")
@@ -368,11 +368,15 @@ mod tests {
                     axes: [
                         registered
                             .axes
+                            .as_ref()
+                            .unwrap()
                             .coordinate()
                             .unwrap()
                             .axis(limited.description(), 0),
                         registered
                             .axes
+                            .as_ref()
+                            .unwrap()
                             .coordinate()
                             .unwrap()
                             .axis(limited.description(), 1),

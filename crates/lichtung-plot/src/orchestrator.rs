@@ -39,15 +39,29 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
             &operation,
             registration::RowSelection::Full,
             |data| {
-                let inputs = if prepared {
-                    Some(crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap())
-                } else {
-                    None
-                };
                 let plot = &source;
                 let theme = crate::Theme::publication().resolve().unwrap();
                 let text = crate::text::TextService::default();
                 let theme = crate::text::TextRequestContext::new(&theme, &text);
+                let inputs = prepared.then(|| {
+                    let mut registry =
+                        crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+                    let guide = registry
+                        .prepare_discrete_guides(
+                            &source,
+                            &theme,
+                            &operation,
+                            &crate::layout::ComponentAddress::root(),
+                            false,
+                        )
+                        .unwrap();
+                    crate::layout::interior::PreparedInteriorInputs::from_registry(
+                        registry,
+                        crate::layout::interior::InteriorRoute::classify(source.kind()),
+                        guide,
+                    )
+                    .unwrap()
+                });
                 let mut context = PlotRenderContext::new(
                     data,
                     crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
@@ -301,7 +315,7 @@ impl Plot {
             }
         }
         let guides = layers::GuideSnapshot::measure(self.description(), &result, &mut geometry)?;
-        validate_frozen_axes_and_guides(self, context.registered, &mut result)?;
+        validate_frozen_axes_and_guides(context.registered, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             context.registered.expect("prepared panel text reference"),
             self.measure_dimensions()?,
@@ -364,14 +378,13 @@ impl Plot {
 }
 
 fn validate_frozen_axes_and_guides(
-    plot: &Plot,
     registered: Option<&registration::PlotRegistration<'_>>,
     result: &mut PlotRenderResult,
 ) -> Result<(), crate::layout::fit::PlanError> {
     if result.decoration_mode != crate::spec::DecorationMode::SelfManaged && result.axes.is_none() {
         return Err(Error::Render("native panel is missing its frozen axes".into()).into());
     }
-    if result.discrete_guide != plot.prepared_discrete_guide(registered)? {
+    if result.discrete_guide != registration::guide_descriptor(registered)? {
         return Err(
             Error::Render("selected producer changed its prepared discrete guide".into()).into(),
         );
@@ -393,19 +406,10 @@ fn validate_axis_text(
 #[cfg(test)]
 #[test]
 fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
-    let plot = Plot::heatmap(
-        crate::CategoryValues::new("column", ["first", "second"]).unwrap(),
-        crate::CategoryValues::new("row", ["upper", "lower"]).unwrap(),
-        crate::NumericValues::new("value", [1.0, 2.0]),
-    )
-    .x_label("Horizontal")
-    .y_label("Vertical")
-    .labels(crate::Labels::raw())
-    .erase();
     let panel = crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0);
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let error = validate_frozen_axes_and_guides(&plot, None, &mut result).unwrap_err();
+    let error = validate_frozen_axes_and_guides(None, &mut result).unwrap_err();
     assert!(
         matches!(error, crate::layout::fit::PlanError::Fatal(Error::Render(message)) if message.contains("missing its frozen axes"))
     );

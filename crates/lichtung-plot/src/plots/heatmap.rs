@@ -1208,7 +1208,6 @@ pub(crate) fn measure(
             (context.panel, None)
         } else {
             let (body, guide) = guide::measure(
-                chart,
                 context.registered,
                 context.panel,
                 minimum.0,
@@ -1493,20 +1492,22 @@ pub(crate) fn measure(
     payload.validate_annotation_ink(context.fit_scope())?;
     let geometry = payload.geometry()?;
 
-    let mut result =
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
-            .with_resolved_axis_keys(
-                crate::data::source::collect_source(
-                    levels[0]
-                        .iter()
-                        .map(|s| crate::data::source::copy_source_string(s)),
-                )?,
-                crate::data::source::collect_source(
-                    levels[1]
-                        .iter()
-                        .map(|s| crate::data::source::copy_source_string(s)),
-                )?,
-            );
+    let mut result = PlotRenderResult::new(
+        layout,
+        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+    )
+    .with_resolved_axis_keys(
+        crate::data::source::collect_source(
+            levels[0]
+                .iter()
+                .map(|s| crate::data::source::copy_source_string(s)),
+        )?,
+        crate::data::source::collect_source(
+            levels[1]
+                .iter()
+                .map(|s| crate::data::source::copy_source_string(s)),
+        )?,
+    );
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result
         .numeric_presentation

@@ -175,12 +175,11 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     );
     assert_eq!(alpha.sources.len(), 2);
     assert!(alpha.sources.iter().all(|source| source.scope.is_some()));
-    let guides = inputs.discrete_guides.get().unwrap();
+    let plots = inputs.finish().unwrap();
     assert_eq!(
-        guides
-            .panels
+        plots
             .iter()
-            .map(|panel| panel.alpha.sources[0].glyphs[0].members.len())
+            .map(|panel| panel.guide.alpha.sources[0].glyphs[0].members.len())
             .collect::<Vec<_>>(),
         [4, 2]
     );
@@ -269,6 +268,11 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &operation,
                 )?;
                 assert_ne!(guide.descriptor, changed.descriptor);
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(source.kind()),
+                    guide.descriptor.clone(),
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,
@@ -293,7 +297,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 Ok((inputs, guide, changed, operation))
             },
             |(inputs, guide, changed_guide, operation), assigned, round| {
-                let plot = inputs.attach(source.clone())?;
+                let plot = source.clone();
                 let original = OwnedFacetPlan::measure(
                     &plot,
                     operation,

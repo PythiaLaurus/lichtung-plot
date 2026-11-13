@@ -886,23 +886,33 @@ mod tests {
                 let operation = stage.operation();
                 let mut inputs =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                inputs.plots[0].policy.gutter_owner =
+                inputs.panels[0].policy.gutter_owner =
                     crate::orchestrator::registration::GutterOwner::Composition;
                 let mut hidden =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                hidden.plots[0].policy.axis_text.tick_labels[1] = false;
+                hidden.panels[0].policy.axis_text.tick_labels[1] = false;
                 let mut collectives =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                collectives.plots[0].policy.coordinated.collectives =
+                collectives.panels[0].policy.coordinated.collectives =
                     Some(crate::data::source::source_arc(Vec::new())?);
                 let mut scales =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                scales.plots[0].policy.facet_scales = Some(FacetScales::Free);
+                scales.panels[0].policy.facet_scales = Some(FacetScales::Free);
                 let mut guide =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                guide.plots[0].policy.discrete_guide_use = GuideUse::Hidden;
-                guide.plots[0].policy.continuous_guide_use = GuideUse::Hidden;
-                Ok((operation, inputs, hidden, collectives, scales, guide))
+                guide.panels[0].policy.discrete_guide_use = GuideUse::Hidden;
+                guide.panels[0].policy.continuous_guide_use = GuideUse::Hidden;
+                let [inputs, hidden, collectives, scales, guide] =
+                    [inputs, hidden, collectives, scales, guide].map(|mut registry| {
+                        let guide = registry
+                            .prepare_discrete_guides(&source, &theme, &operation, &owner, false)?;
+                        crate::layout::interior::PreparedInteriorInputs::from_registry(
+                            registry,
+                            crate::layout::interior::InteriorRoute::classify(source.kind()),
+                            guide,
+                        )
+                    });
+                Ok((operation, inputs?, hidden?, collectives?, scales?, guide?))
             },
             |(operation, inputs, hidden, collectives, scales, guide), assigned, round| {
                 crate::data::with_source_data_for_test(

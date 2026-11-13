@@ -150,7 +150,7 @@ pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
     theme: &TextRequestContext<'_, '_>,
-    inputs: &mut crate::layout::interior::PreparedInteriorInputs,
+    inputs: &mut super::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedFacetGuide, Error> {
     legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
@@ -909,6 +909,12 @@ mod feedback_tests {
                             &mut inputs,
                             &stage.operation(),
                         )?;
+                        let inputs =
+                            crate::layout::interior::PreparedInteriorInputs::from_registry(
+                                inputs,
+                                crate::layout::interior::InteriorRoute::classify(source.kind()),
+                                guide.descriptor.clone(),
+                            )?;
                         let requirements = crate::layout::foundational_plot_requirements(
                             Some(&inputs),
                             &source,
@@ -935,7 +941,7 @@ mod feedback_tests {
                         Ok((inputs, guide, stage.operation()))
                     },
                     |(inputs, guide, operation), assigned, round| {
-                        let source = inputs.attach(source.clone())?;
+                        let source = source.clone();
                         calls += 1;
                         let plan = OwnedFacetPlan::measure(
                             &source,
@@ -1133,8 +1139,10 @@ mod feedback_tests {
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
                 )?;
-                assert!(inputs.plots.iter().all(|registered| registered
+                assert!(inputs.panels.iter().all(|registered| registered
                     .axes
+                    .as_ref()
+                    .unwrap()
                     .sources()
                     .iter()
                     .all(|source| source.label.get().is_none())));
@@ -1144,6 +1152,11 @@ mod feedback_tests {
                     &theme,
                     &mut inputs,
                     &stage.operation(),
+                )?;
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(source.kind()),
+                    guide.descriptor.clone(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
@@ -1169,7 +1182,7 @@ mod feedback_tests {
                 Ok((inputs, guide, stage.operation()))
             },
             |(inputs, guide, operation), assigned, round| {
-                let source = inputs.attach(source.clone())?;
+                let source = source.clone();
                 assert!(inputs
                     .plots
                     .iter()
@@ -1313,6 +1326,11 @@ mod feedback_tests {
                     &mut inputs,
                     &stage.operation(),
                 )?;
+                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                    inputs,
+                    crate::layout::interior::InteriorRoute::classify(source.kind()),
+                    guide.descriptor.clone(),
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,
@@ -1337,7 +1355,7 @@ mod feedback_tests {
                 Ok((inputs, guide, stage.operation()))
             },
             |(inputs, guide, operation), assigned, round| {
-                let source = inputs.attach(source.clone())?;
+                let source = source.clone();
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     OwnedFacetPlan::measure(
