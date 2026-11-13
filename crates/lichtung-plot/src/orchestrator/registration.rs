@@ -24,17 +24,37 @@ pub(crate) enum PreparedFamily {
     Density(crate::plots::density::PreparedDensity),
     Qq(crate::plots::qq::PreparedQq),
     Regression(crate::plots::regression::PreparedRegression),
+    Bars {
+        kind: crate::PlotKind,
+        mode: crate::plots::bar_data::BarMode,
+        marks: crate::plots::bar_data::PreparedBars,
+    },
+    Estimate {
+        kind: crate::PlotKind,
+        marks: crate::plots::interval_estimate::PreparedEstimate,
+    },
+    Dumbbell(crate::plots::dumbbell::DumbbellData),
+    Distribution {
+        kind: crate::PlotKind,
+        marks: crate::plots::categorical_distribution::PreparedDistribution,
+    },
+    Interaction(crate::plots::interaction::PreparedInteraction),
 }
 
 impl PreparedFamily {
     pub(crate) const fn kind(&self) -> crate::PlotKind {
         match self {
             Self::Scatter(_) => crate::PlotKind::Scatter,
-            Self::Line { kind, .. } => *kind,
             Self::Histogram(_) => crate::PlotKind::Histogram,
             Self::Density(_) => crate::PlotKind::Density,
             Self::Qq(_) => crate::PlotKind::Qq,
             Self::Regression(_) => crate::PlotKind::Regression,
+            Self::Line { kind, .. }
+            | Self::Bars { kind, .. }
+            | Self::Estimate { kind, .. }
+            | Self::Distribution { kind, .. } => *kind,
+            Self::Dumbbell(_) => crate::PlotKind::Dumbbell,
+            Self::Interaction(_) => crate::PlotKind::Interaction,
         }
     }
 }

@@ -479,9 +479,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
             crate::orchestrator::registration::PreparedFamily,
         )>,
     >,
-    pub(crate) prepared_estimate:
-        Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
-    pub(crate) prepared_bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
     pub(crate) prepared_marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
     pub(crate) prepared_waterfall:
         Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
@@ -489,12 +486,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) prepared_heatmap:
         Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
-    pub(crate) prepared_interaction:
-        Option<std::sync::Arc<crate::plots::interaction::PreparedInteractionInputs>>,
-    pub(crate) prepared_distributions:
-        Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
-    pub(crate) prepared_dumbbell:
-        Option<std::sync::Arc<crate::plots::dumbbell::PreparedDumbbellInputs>>,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     marker: PhantomData<K>,
@@ -559,15 +550,10 @@ impl Plot<crate::kind::Any> {
             prepared_discrete_guides: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_families: std::sync::Arc::new(Vec::new()),
-            prepared_estimate: None,
-            prepared_bars: None,
             prepared_marginal: None,
             prepared_heatmap: None,
             prepared_beeswarm: None,
             prepared_waterfall: None,
-            prepared_interaction: None,
-            prepared_distributions: None,
-            prepared_dumbbell: None,
             prepared_matrix_axes: None,
             axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
@@ -909,26 +895,17 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_matrix_axes,
             prepared_discrete_guides,
             prepared_families,
-            prepared_dumbbell,
-            prepared_estimate,
-            prepared_bars,
+
             prepared_marginal,
             prepared_heatmap,
             prepared_beeswarm,
             prepared_waterfall,
-            prepared_interaction,
-            prepared_distributions,
         } = self;
         Plot {
             prepared_waterfall,
             prepared_beeswarm,
             prepared_marginal,
             prepared_heatmap,
-            prepared_interaction,
-            prepared_distributions,
-            prepared_bars,
-            prepared_estimate,
-            prepared_dumbbell,
             prepared_families,
             prepared_axes,
             prepared_matrix_axes,

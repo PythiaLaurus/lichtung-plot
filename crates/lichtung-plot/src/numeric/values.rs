@@ -3,6 +3,7 @@
 use super::slot::ExplanationPlan;
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::layout::interior::preference::panel;
+use crate::orchestrator::registration::PreparedFamily;
 use crate::render::backend::PlacedText;
 use crate::spec::PlotRenderContext;
 use crate::{Error, Plot, PlotKind, Result, Text, TextTheme};
@@ -30,10 +31,8 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
             }
         }
         PlotKind::Coefficient => {
-            if let Some(inputs) = &plot.prepared_estimate {
-                if let Some(text) =
-                    panel(&inputs.panels, plot.axis_scope(), "Coefficient")?.numeric_explanation()
-                {
+            if let Some(marks) = estimate(plot)? {
+                if let Some(text) = marks.numeric_explanation() {
                     visit(text)?;
                 }
             }
@@ -52,6 +51,21 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
     Ok(())
 }
 
+fn estimate(plot: &Plot) -> Result<Option<&crate::plots::interval_estimate::PreparedEstimate>> {
+    if !plot
+        .prepared_families
+        .iter()
+        .any(|(_, family)| matches!(family, PreparedFamily::Estimate { .. }))
+    {
+        return Ok(None);
+    }
+    let family = panel(&plot.prepared_families, plot.axis_scope(), "Coefficient")?;
+    Ok(match family {
+        PreparedFamily::Estimate { marks, .. } => Some(marks),
+        _ => None,
+    })
+}
+
 fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_, '_>) -> Result<Option<&'a Text>> {
     match plot.kind() {
         PlotKind::Heatmap => plot
@@ -62,14 +76,8 @@ fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_, '_>) -> Result<Opti
             })
             .transpose()
             .map(Option::flatten),
-        PlotKind::Coefficient => plot
-            .prepared_estimate
-            .as_ref()
-            .map(|inputs| {
-                Ok(panel(&inputs.panels, plot.axis_scope(), "Coefficient")?.numeric_explanation())
-            })
-            .transpose()
-            .map(Option::flatten),
+        PlotKind::Coefficient => Ok(estimate(plot)?
+            .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation)),
         PlotKind::Waterfall => {
             let Some(inputs) = &plot.prepared_waterfall else {
                 return Ok(None);

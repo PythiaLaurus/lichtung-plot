@@ -50,15 +50,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_interaction
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Interaction(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, marks)| marks)
         .ok_or_else(|| {
             Error::Render("Interaction intrinsic requires root-prepared traces".into())
         })?;
@@ -325,11 +321,6 @@ impl PreparedInteraction {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedInteractionInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedInteraction)>,
-}
-
 #[expect(
     clippy::too_many_lines,
     reason = "one admitted semantic preparation boundary"
@@ -585,15 +576,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let marks = chart
-        .prepared_interaction
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Interaction(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, marks)| marks)
         .ok_or_else(|| {
             Error::Render("interaction measurement requires root-prepared semantics".into())
         })?;

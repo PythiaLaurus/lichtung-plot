@@ -419,7 +419,18 @@ pub(crate) fn prepare_reference_plot(
         .map(PreparedFamily::Histogram)
         .or_else(|| curves.map(PreparedFamily::Density))
         .or_else(|| quantiles.map(PreparedFamily::Qq))
-        .or_else(|| fit.map(PreparedFamily::Regression));
+        .or_else(|| fit.map(PreparedFamily::Regression))
+        .or_else(|| {
+            bars.map(|marks| PreparedFamily::Bars {
+                kind,
+                mode: crate::plots::bar_data::mode(source),
+                marks,
+            })
+        })
+        .or_else(|| estimate.map(|marks| PreparedFamily::Estimate { kind, marks }))
+        .or_else(|| dumbbell.map(PreparedFamily::Dumbbell))
+        .or_else(|| distribution.map(|marks| PreparedFamily::Distribution { kind, marks }))
+        .or_else(|| interaction.map(PreparedFamily::Interaction));
     let mut families = Vec::new();
     if let Some(family) = family {
         crate::data::source::reserve_source(&mut families, 1)?;
@@ -458,56 +469,6 @@ pub(crate) fn prepare_reference_plot(
                 })
             })
             .transpose()?,
-        interaction: interaction
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(
-                    crate::plots::interaction::PreparedInteractionInputs { panels },
-                )
-            })
-            .transpose()?,
-        distributions: distribution
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(
-                    crate::plots::categorical_distribution::PreparedDistributionInputs { panels },
-                )
-            })
-            .transpose()?,
-        bars: bars
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::bar_data::PreparedBarInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
-        estimate: estimate
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(
-                    crate::plots::interval_estimate::PreparedEstimateInputs { panels },
-                )
-            })
-            .transpose()?,
-        dumbbell: dumbbell
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::dumbbell::PreparedDumbbellInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
         route,
         axes: crate::data::source::source_arc(retained)?,
         matrix: None,
@@ -527,11 +488,6 @@ pub(crate) fn prepare_plot(
     let mut matrix = None;
     let mut retained = Vec::new();
     let mut families = Vec::new();
-    let mut dumbbell = Vec::new();
-    let mut estimate = Vec::new();
-    let mut bars = Vec::new();
-    let mut distributions = Vec::new();
-    let mut interaction = Vec::new();
     let mut heatmap = Vec::new();
     let mut beeswarm = Vec::new();
     let mut waterfall = Vec::new();
@@ -871,38 +827,48 @@ pub(crate) fn prepare_plot(
                 ));
             }
             if let Some(marks) = interaction_marks {
-                crate::data::source::reserve_source(&mut interaction, 1)?;
-                interaction.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Interaction(marks),
                 ));
             }
             if let Some(marks) = distribution_marks {
-                crate::data::source::reserve_source(&mut distributions, 1)?;
-                distributions.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Distribution {
+                        kind: source.kind(),
+                        marks,
+                    },
                 ));
             }
             if let Some(marks) = bar_marks {
-                crate::data::source::reserve_source(&mut bars, 1)?;
-                bars.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Bars {
+                        kind: source.kind(),
+                        mode: crate::plots::bar_data::mode(source),
+                        marks,
+                    },
                 ));
             }
             if let Some(estimates) = estimates {
-                crate::data::source::reserve_source(&mut estimate, 1)?;
-                estimate.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    estimates,
+                    PreparedFamily::Estimate {
+                        kind: source.kind(),
+                        marks: estimates,
+                    },
                 ));
             }
             if let Some(pairs) = pairs {
-                crate::data::source::reserve_source(&mut dumbbell, 1)?;
-                dumbbell.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    pairs,
+                    PreparedFamily::Dumbbell(pairs),
                 ));
             }
             if let Some(quantiles) = quantiles {
@@ -1042,57 +1008,6 @@ pub(crate) fn prepare_plot(
         } else {
             None
         },
-        interaction: if source.kind() == PlotKind::Interaction {
-            Some(crate::data::source::source_arc(
-                crate::plots::interaction::PreparedInteractionInputs {
-                    panels: interaction,
-                },
-            )?)
-        } else {
-            None
-        },
-        distributions: if matches!(
-            source.kind(),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
-        ) {
-            Some(crate::data::source::source_arc(
-                crate::plots::categorical_distribution::PreparedDistributionInputs {
-                    panels: distributions,
-                },
-            )?)
-        } else {
-            None
-        },
-        bars: if matches!(
-            source.kind(),
-            PlotKind::Bar
-                | PlotKind::HorizontalBar
-                | PlotKind::StackedBar
-                | PlotKind::StackedHorizontalBar
-        ) {
-            Some(crate::data::source::source_arc(
-                crate::plots::bar_data::PreparedBarInputs { panels: bars },
-            )?)
-        } else {
-            None
-        },
-        estimate: if matches!(
-            source.kind(),
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
-        ) {
-            Some(crate::data::source::source_arc(
-                crate::plots::interval_estimate::PreparedEstimateInputs { panels: estimate },
-            )?)
-        } else {
-            None
-        },
-        dumbbell: if source.kind() == PlotKind::Dumbbell {
-            Some(crate::data::source::source_arc(
-                crate::plots::dumbbell::PreparedDumbbellInputs { panels: dumbbell },
-            )?)
-        } else {
-            None
-        },
         families: crate::data::source::source_arc(families)?,
         route: InteriorRoute::classify(source.kind()),
         axes: crate::data::source::source_arc(retained)?,
@@ -1144,11 +1059,6 @@ pub(crate) fn prepare_scatter_plot(
         waterfall: None,
         marginal: None,
         heatmap: None,
-        bars: None,
-        interaction: None,
-        distributions: None,
-        estimate: None,
-        dumbbell: None,
         axes: crate::data::source::source_arc(retained_axes)?,
         matrix: None,
         families: crate::data::source::source_arc(panels)?,
@@ -1203,11 +1113,6 @@ pub(crate) fn prepare_line_plot(
         waterfall: None,
         marginal: None,
         heatmap: None,
-        bars: None,
-        interaction: None,
-        distributions: None,
-        estimate: None,
-        dumbbell: None,
         axes: crate::data::source::source_arc(retained_axes)?,
         matrix: None,
         families: crate::data::source::source_arc(panels)?,

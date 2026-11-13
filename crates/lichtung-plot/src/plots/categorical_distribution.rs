@@ -237,22 +237,15 @@ impl PreparedDistribution {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedDistributionInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedDistribution)>,
-}
-
 pub(crate) fn retained(chart: &Plot) -> Result<&PreparedDistribution, Error> {
     chart
-        .prepared_distributions
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Distribution { marks, .. } => {
+                Some(marks)
+            }
+            _ => None,
         })
-        .map(|(_, marks)| marks)
         .ok_or_else(|| {
             Error::Render(
                 "categorical distribution measurement requires root-prepared semantics".into(),

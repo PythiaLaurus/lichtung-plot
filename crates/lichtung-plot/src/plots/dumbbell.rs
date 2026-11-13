@@ -41,15 +41,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_dumbbell
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Dumbbell(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, marks)| marks)
         .ok_or_else(|| Error::Render("Dumbbell intrinsic requires root-prepared pairs".into()))?;
     if prepared.categories.is_empty() || prepared.group_count == 0 || prepared.rows.is_empty() {
         return Err(Error::Render(
@@ -197,11 +193,6 @@ impl DumbbellData {
 }
 
 #[derive(Debug)]
-pub(crate) struct PreparedDumbbellInputs {
-    pub(crate) panels: Vec<(Option<String>, DumbbellData)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct DumbbellPayload {
     clip: crate::layout::PixelRect,
     pub(crate) pairs: Vec<[Point2D; 2]>,
@@ -231,15 +222,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_dumbbell
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Dumbbell(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
 
     let projection = layout.projection.clone();

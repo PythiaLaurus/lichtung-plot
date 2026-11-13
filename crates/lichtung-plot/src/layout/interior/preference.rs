@@ -48,76 +48,69 @@ pub(crate) fn categorical_preference(
     hard: (f64, f64),
 ) -> Result<CategoricalSizePreference, Error> {
     let scope = plot.axis_scope();
-    let (axis, slots, primary_marks) =
-        match plot.kind() {
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
-                let inputs = plot
-                    .prepared_estimate
-                    .as_deref()
-                    .ok_or_else(|| Error::Render("estimate preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Estimate")?;
-                (
-                    crate::layout::AxisSide::Left,
-                    marks.labels.len(),
-                    marks.primary_mark_count(),
-                )
+    macro_rules! family {
+        ($missing:literal, $owner:literal, $pattern:pat => $marks:ident) => {{
+            if plot.prepared_families.is_empty() {
+                return Err(Error::Render($missing.into()));
             }
-            PlotKind::Dumbbell => {
-                let inputs = plot
-                    .prepared_dumbbell
-                    .as_deref()
-                    .ok_or_else(|| Error::Render("Dumbbell preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Dumbbell")?;
-                (
-                    crate::layout::AxisSide::Left,
-                    marks.categories.len(),
-                    marks.primary_mark_count(),
-                )
-            }
-            PlotKind::Bar
-            | PlotKind::StackedBar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedHorizontalBar => {
-                let inputs = plot
-                    .prepared_bars
-                    .as_deref()
-                    .ok_or_else(|| Error::Render("Bar preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Bars")?;
-                let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
-                    crate::layout::AxisSide::Bottom
-                } else {
-                    crate::layout::AxisSide::Left
-                };
-                (axis, marks.categories.len(), marks.primary_mark_count())
-            }
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-                let inputs = plot.prepared_distributions.as_deref().ok_or_else(|| {
-                    Error::Render("distribution preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Distribution")?;
-                (
-                    crate::layout::AxisSide::Bottom,
-                    marks.categories().len(),
-                    marks.primary_mark_count(),
-                )
-            }
-            PlotKind::Interaction => {
-                let inputs = plot.prepared_interaction.as_deref().ok_or_else(|| {
-                    Error::Render("Interaction preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Interaction")?;
-                (
-                    crate::layout::AxisSide::Bottom,
-                    marks.conditions.len(),
-                    marks.checked_primary_mark_count()?,
-                )
-            }
-            _ => {
-                return Err(Error::Render(
-                    "categorical preference requires a prepared categorical family".into(),
-                ))
-            }
-        };
+            let $pattern = panel(&plot.prepared_families, scope, $owner)? else {
+                return Err(Error::Render($missing.into()));
+            };
+            $marks
+        }};
+    }
+    let (axis, slots, primary_marks) = match plot.kind() {
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            let marks = family!("estimate preference lacks preparation", "Estimate", F::Estimate { marks, .. } => marks);
+            (
+                crate::layout::AxisSide::Left,
+                marks.labels.len(),
+                marks.primary_mark_count(),
+            )
+        }
+        PlotKind::Dumbbell => {
+            let marks = family!("Dumbbell preference lacks preparation", "Dumbbell", F::Dumbbell(marks) => marks);
+            (
+                crate::layout::AxisSide::Left,
+                marks.categories.len(),
+                marks.primary_mark_count(),
+            )
+        }
+        PlotKind::Bar
+        | PlotKind::StackedBar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedHorizontalBar => {
+            let marks =
+                family!("Bar preference lacks preparation", "Bars", F::Bars { marks, .. } => marks);
+            let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
+                crate::layout::AxisSide::Bottom
+            } else {
+                crate::layout::AxisSide::Left
+            };
+            (axis, marks.categories.len(), marks.primary_mark_count())
+        }
+        PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+            let marks = family!("distribution preference lacks preparation", "Distribution", F::Distribution { marks, .. } => marks);
+            (
+                crate::layout::AxisSide::Bottom,
+                marks.categories().len(),
+                marks.primary_mark_count(),
+            )
+        }
+        PlotKind::Interaction => {
+            let marks = family!("Interaction preference lacks preparation", "Interaction", F::Interaction(marks) => marks);
+            (
+                crate::layout::AxisSide::Bottom,
+                marks.conditions.len(),
+                marks.checked_primary_mark_count()?,
+            )
+        }
+        _ => {
+            return Err(Error::Render(
+                "categorical preference requires a prepared categorical family".into(),
+            ))
+        }
+    };
     let slots = u32::try_from(slots).map_err(|_| {
         Error::Render("categorical preference slot count exceeds spatial range".into())
     })?;

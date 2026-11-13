@@ -101,12 +101,18 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_bars.as_ref().unwrap().panels;
+        let panels = &chart.prepared_families;
         assert_eq!(panels.len(), 2);
-        for ((scope, prepared), (expected, ends, fills)) in panels.iter().zip([
+        for ((scope, family), (expected, ends, fills)) in panels.iter().zip([
             ([128, 64], [2.0_f64, 3.0], [0, 230]),
             ([0, 230], [6.0, 7.0], [64, 0]),
         ]) {
+            let crate::orchestrator::registration::PreparedFamily::Bars {
+                marks: prepared, ..
+            } = family
+            else {
+                panic!("prepared Bars")
+            };
             assert_eq!(
                 prepared
                     .bars

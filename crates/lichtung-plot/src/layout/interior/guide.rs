@@ -164,35 +164,27 @@ impl PreparedInteriorInputs {
                         include(value)?;
                     }
                 }
+                F::Bars { marks, .. } => {
+                    for value in marks.observed_hue_levels() {
+                        include(value)?;
+                    }
+                }
+                F::Distribution { marks, .. } => {
+                    for value in marks.observed_hue_levels() {
+                        include(value)?;
+                    }
+                }
+                F::Density(marks) => {
+                    for value in marks.hue_levels() {
+                        include(value)?;
+                    }
+                }
+                F::Interaction(marks) => {
+                    for value in marks.color_keys() {
+                        include(value)?;
+                    }
+                }
                 _ => {}
-            }
-        }
-        if let Some(inputs) = &self.bars {
-            for (_, marks) in &inputs.panels {
-                for value in marks.observed_hue_levels() {
-                    include(value)?;
-                }
-            }
-        }
-        if let Some(inputs) = &self.distributions {
-            for (_, marks) in &inputs.panels {
-                for value in marks.observed_hue_levels() {
-                    include(value)?;
-                }
-            }
-        }
-        for (_, family) in self.families.iter() {
-            if let crate::orchestrator::registration::PreparedFamily::Density(marks) = family {
-                for value in marks.hue_levels() {
-                    include(value)?;
-                }
-            }
-        }
-        if let Some(inputs) = &self.interaction {
-            for (_, marks) in &inputs.panels {
-                for value in marks.color_keys() {
-                    include(value)?;
-                }
             }
         }
         if let Some(marks) = &self.marginal {
@@ -259,27 +251,19 @@ impl PreparedInteriorInputs {
                 F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
                 F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
                 F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
+                F::Bars { marks, .. } => {
+                    include_keys(&mut keys, marks.color_keys().iter().map(String::as_str))?;
+                }
+                F::Distribution { marks, .. } => {
+                    let domain = if marks.hue_levels().is_empty() {
+                        marks.categories()
+                    } else {
+                        marks.hue_levels()
+                    };
+                    include_keys(&mut keys, domain.iter().map(String::as_str))?;
+                }
+                F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
                 _ => {}
-            }
-        }
-        if let Some(inputs) = &self.bars {
-            for (_, marks) in &inputs.panels {
-                include_keys(&mut keys, marks.color_keys().iter().map(String::as_str))?;
-            }
-        }
-        if let Some(inputs) = &self.distributions {
-            for (_, marks) in &inputs.panels {
-                let domain = if marks.hue_levels().is_empty() {
-                    marks.categories()
-                } else {
-                    marks.hue_levels()
-                };
-                include_keys(&mut keys, domain.iter().map(String::as_str))?;
-            }
-        }
-        if let Some(inputs) = &self.interaction {
-            for (_, marks) in &inputs.panels {
-                include_keys(&mut keys, marks.color_keys())?;
             }
         }
         if let Some(marks) = &self.marginal {
@@ -321,16 +305,18 @@ impl PreparedInteriorInputs {
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
             | PlotKind::StackedHorizontalBar => {
-                let marks = panel(self.bars.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Bars { marks, .. } => Some(marks),
+                    _ => None,
+                })?;
                 let (colors, accents) = marks.resolved_colors(chart, theme, data)?;
                 crate::plots::bar_data::guide_sources(marks, chart, theme, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-                let marks = panel(
-                    self.distributions.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Distribution { marks, .. } => Some(marks),
+                    _ => None,
+                })?;
                 marks.guide_entries(chart, theme, data)
             }
             PlotKind::Density => {
@@ -342,11 +328,10 @@ impl PreparedInteriorInputs {
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Interaction => {
-                let marks = panel(
-                    self.interaction.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Interaction(marks) => Some(marks),
+                    _ => None,
+                })?;
                 marks.guide_entries(chart, theme, data)
             }
             PlotKind::Marginal => self
@@ -366,11 +351,10 @@ impl PreparedInteriorInputs {
                 crate::plots::regression::PreparedRegression::guide_entries(chart, theme, color)
             }
             PlotKind::Dumbbell => {
-                panel(
-                    self.dumbbell.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                self.family(scope, kind, |family| match family {
+                    F::Dumbbell(marks) => Some(marks),
+                    _ => None,
+                })?;
                 crate::plots::dumbbell::DumbbellData::guide_entries(chart, theme)
             }
             PlotKind::Histogram
@@ -556,15 +540,19 @@ impl PreparedInteriorInputs {
                 standard!(F::Line { marks, .. } => marks);
             }
             PlotKind::Density => standard!(F::Density(marks) => marks),
-            PlotKind::Interaction => scoped!(interaction),
-            PlotKind::Dumbbell => scoped!(dumbbell),
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => scoped!(estimate),
+            PlotKind::Interaction => standard!(F::Interaction(marks) => marks),
+            PlotKind::Dumbbell => standard!(F::Dumbbell(marks) => marks),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+                standard!(F::Estimate { marks, .. } => marks);
+            }
             PlotKind::Histogram => standard!(F::Histogram(marks) => marks),
             PlotKind::Bar
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar => scoped!(bars),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => scoped!(distributions),
+            | PlotKind::StackedHorizontalBar => standard!(F::Bars { marks, .. } => marks),
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+                standard!(F::Distribution { marks, .. } => marks);
+            }
             PlotKind::Beeswarm => scoped!(beeswarm),
             PlotKind::Heatmap => scoped!(heatmap),
             PlotKind::Waterfall => scoped!(waterfall),

@@ -476,11 +476,6 @@ impl PreparedBars {
 }
 
 #[derive(Debug)]
-pub(crate) struct PreparedBarInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedBars)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct BarShape {
     pub(crate) polygon: [crate::render::backend::Point2D; 4],
     pub(crate) fill: FillStyle,
@@ -762,15 +757,11 @@ pub(crate) fn mode(chart: &Plot) -> BarMode {
 
 pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
     chart
-        .prepared_bars
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } => Some(marks),
+            _ => None,
         })
-        .map(|(_, marks)| marks)
         .ok_or_else(|| Error::Render("bar measurement requires root-prepared semantics".into()))
 }
 

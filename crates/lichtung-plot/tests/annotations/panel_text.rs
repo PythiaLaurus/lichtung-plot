@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    CategoryValues, DataAreaCorner, FacetSpec, LegendPolicy, LegendPosition, NumericValues, Plot,
-    PlotTextAnnotation, Theme,
+    BarInput, CategoryValues, DataAreaCorner, DataCoordinate, FacetSpec, LegendPolicy,
+    LegendPosition, NumericValues, Plot, PlotTextAnnotation, TextCoordinate, TextPosition, Theme,
 };
 
 use super::render_svg;
@@ -203,4 +203,50 @@ fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
     assert!(chart.svg(&output).is_err());
     assert!(!output.exists());
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn category_series_text_uses_positioned_bar_and_distribution_domains_at_the_terminal() {
+    fn exercise<K: lichtung_plot::kind::Legend + lichtung_plot::kind::TextAnnotation>(
+        plot: Plot<K>,
+        horizontal: bool,
+        missing: &str,
+    ) {
+        let annotation = |series| {
+            let category = TextCoordinate::data(DataCoordinate::category_series("A", series));
+            let numeric = TextCoordinate::data(DataCoordinate::numeric(2.5).unwrap());
+            PlotTextAnnotation::at(
+                if horizontal {
+                    TextPosition::new(numeric, category)
+                } else {
+                    TextPosition::new(category, numeric)
+                },
+                "Positioned note",
+            )
+            .unwrap()
+        };
+        let plot = plot.size(540, 360).legend(LegendPolicy::Hidden);
+        let selected = plot.clone().text_annotation(annotation("right"));
+        assert!(svg(&selected).contains(">Positioned note</text>"));
+        let error = render_svg(
+            plot.text_annotation(annotation("absent")),
+            "missing-positioned-series",
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(missing), "{error}");
+    }
+    let categories = CategoryValues::new("category", ["A", "A", "B", "B"]).unwrap();
+    let series = CategoryValues::new("series", ["left", "right", "left", "right"]).unwrap();
+    let values = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]);
+    exercise(
+        Plot::horizontal_bar(categories.clone(), BarInput::estimates(values.clone()))
+            .series(series.clone()),
+        true,
+        "annotation series is absent",
+    );
+    exercise(
+        Plot::boxplot(categories, values).series(series),
+        false,
+        "annotation category-series pair is absent from the actual distribution",
+    );
 }

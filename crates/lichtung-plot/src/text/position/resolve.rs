@@ -145,16 +145,26 @@ pub(crate) fn data(
                     "category-series reference requires the categorical axis".into(),
                 ));
             }
-            if let Some(distributions) = &plot.prepared_distributions {
-                let marks = distributions
-                    .panels
-                    .iter()
-                    .find(|(scope, _)| scope.as_deref() == plot.axis_scope())
-                    .map(|(_, marks)| marks)
+            if plot.prepared_families.iter().any(|(_, family)| {
+                matches!(
+                    family,
+                    crate::orchestrator::registration::PreparedFamily::Distribution { .. }
+                )
+            }) {
+                let marks = plot
+                    .prepared_family()
+                    .and_then(|family| match family {
+                        crate::orchestrator::registration::PreparedFamily::Distribution {
+                            marks,
+                            ..
+                        } => Some(marks),
+                        _ => None,
+                    })
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
                 return marks.series_center(category, series);
             }
-            let bars=plot.prepared_bars.as_ref().and_then(|input|input.panels.iter().find(|(scope,_)|scope.as_deref()==plot.axis_scope())).map(|(_,bars)|bars).ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
+            let (mode, bars) = plot.prepared_family().and_then(|family| match family { crate::orchestrator::registration::PreparedFamily::Bars { mode, marks, .. } => Some((*mode, marks)), _ => None })
+                .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
             let category = bars
                 .categories
                 .iter()
@@ -169,7 +179,7 @@ pub(crate) fn data(
                 category,
                 Some(series),
                 bars,
-                crate::plots::bar_data::mode(plot),
+                mode,
                 theme
                     .marks
                     .get_extents()

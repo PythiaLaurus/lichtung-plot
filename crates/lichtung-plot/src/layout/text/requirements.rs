@@ -1229,11 +1229,21 @@ fn push_deferred_plot_requirements(
         PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
     ) {
         let estimates = interiors
-            .and_then(|inputs| inputs.estimate.as_deref())
+            .filter(|inputs| {
+                matches!(
+                    inputs.route.kind(),
+                    PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
+                )
+            })
+            .map(|inputs| inputs.families.as_slice())
             .ok_or_else(|| {
                 Error::Render("estimate detail census requires root-prepared semantics".into())
             })?;
-        for (scope, marks) in &estimates.panels {
+        for (scope, family) in estimates {
+            let crate::orchestrator::registration::PreparedFamily::Estimate { marks, .. } = family
+            else {
+                continue;
+            };
             if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
                 continue;
             }
@@ -2723,7 +2733,12 @@ mod tests {
             )
         })
         .unwrap();
-        let prepared = &inputs.estimate.as_ref().unwrap().panels[0].1;
+        let crate::orchestrator::registration::PreparedFamily::Estimate {
+            marks: prepared, ..
+        } = &inputs.families[0].1
+        else {
+            panic!("prepared Estimate")
+        };
         assert_eq!(
             prepared
                 .text_occurrences()

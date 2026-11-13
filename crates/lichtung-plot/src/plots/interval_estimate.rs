@@ -29,11 +29,6 @@ pub(crate) struct PreparedEstimate {
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedEstimateInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedEstimate)>,
-}
-
 impl PreparedEstimate {
     pub(crate) fn numeric_explanation(&self) -> Option<&crate::Text> {
         self.value_presentation
@@ -991,15 +986,13 @@ pub(crate) fn measure_marks(
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_estimate
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Estimate { marks, .. } => {
+                Some(marks)
+            }
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render("estimate measurement requires root-prepared semantics".into())
         })?;

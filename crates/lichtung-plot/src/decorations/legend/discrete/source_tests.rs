@@ -87,7 +87,11 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     let projected_inputs =
         separate_inputs(&plot, &crate::text::TextRequestContext::new(&theme, &text));
     assert_eq!(self::guide(&projected_inputs), &projected_mapped);
-    let bars = &inputs.bars.as_ref().unwrap().panels[0].1;
+    let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
+        &inputs.families[0].1
+    else {
+        panic!("prepared Bars")
+    };
     assert_eq!(bars.series, ["absent", "seen"]);
     assert!(bars
         .bars

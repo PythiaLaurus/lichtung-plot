@@ -123,14 +123,6 @@ pub(crate) struct PreparedInteriorInputs {
     pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
     pub(crate) heatmap: Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
-    pub(crate) interaction:
-        Option<std::sync::Arc<crate::plots::interaction::PreparedInteractionInputs>>,
-    pub(crate) distributions:
-        Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
-    pub(crate) bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
-    pub(crate) estimate:
-        Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
-    pub(crate) dumbbell: Option<std::sync::Arc<crate::plots::dumbbell::PreparedDumbbellInputs>>,
     pub(crate) route: InteriorRoute,
     pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
@@ -202,13 +194,8 @@ impl PreparedInteriorInputs {
         plot.prepared_beeswarm.clone_from(&self.beeswarm);
         plot.prepared_heatmap.clone_from(&self.heatmap);
         plot.prepared_marginal.clone_from(&self.marginal);
-        plot.prepared_interaction.clone_from(&self.interaction);
         plot.prepared_matrix_axes.clone_from(&self.matrix);
         plot.prepared_families.clone_from(&self.families);
-        plot.prepared_dumbbell.clone_from(&self.dumbbell);
-        plot.prepared_estimate.clone_from(&self.estimate);
-        plot.prepared_bars.clone_from(&self.bars);
-        plot.prepared_distributions.clone_from(&self.distributions);
         Ok(plot)
     }
 }
@@ -238,15 +225,14 @@ impl Plot {
             )?),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
                 let prepared = self
-                    .prepared_estimate
-                    .as_ref()
-                    .and_then(|inputs| {
-                        inputs
-                            .panels
-                            .iter()
-                            .find(|(scope, _)| scope.as_deref() == self.axis_scope())
+                    .prepared_family()
+                    .and_then(|family| match family {
+                        crate::orchestrator::registration::PreparedFamily::Estimate {
+                            marks,
+                            ..
+                        } => Some(marks),
+                        _ => None,
                     })
-                    .map(|(_, marks)| marks)
                     .ok_or_else(|| {
                         Error::Render("estimate intrinsic requires root-prepared rows".into())
                     })?;
