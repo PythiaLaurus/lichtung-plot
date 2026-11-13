@@ -26,7 +26,7 @@ fn sources(
 ) -> Result<()> {
     match plot.kind() {
         PlotKind::Heatmap => {
-            if let Some(marks) = family(plot, registered, "Heatmap", |family| match family {
+            if let Some(marks) = family(registered, "Heatmap", |family| match family {
                 PreparedFamily::Heatmap(marks) => Some(marks),
                 _ => None,
             })? {
@@ -36,7 +36,7 @@ fn sources(
             }
         }
         PlotKind::Coefficient => {
-            if let Some(marks) = family(plot, registered, "Coefficient", |family| match family {
+            if let Some(marks) = family(registered, "Coefficient", |family| match family {
                 PreparedFamily::Estimate { marks, .. } => Some(marks),
                 _ => None,
             })? {
@@ -46,7 +46,7 @@ fn sources(
             }
         }
         PlotKind::Waterfall => {
-            if let Some(marks) = family(plot, registered, "Waterfall", |family| match family {
+            if let Some(marks) = family(registered, "Waterfall", |family| match family {
                 PreparedFamily::Waterfall(marks) => Some(marks),
                 _ => None,
             })? {
@@ -61,7 +61,6 @@ fn sources(
 }
 
 fn family<'a, T>(
-    plot: &Plot,
     registered: Option<&'a PlotRegistration<'_>>,
     owner: &str,
     select: impl Fn(&'a PreparedFamily) -> Option<&'a T>,
@@ -69,31 +68,26 @@ fn family<'a, T>(
     if registered.is_none_or(|registered| select(&registered.family).is_none()) {
         return Ok(None);
     }
-    Ok(select(panel(registered, plot.axis_scope(), owner)?))
+    Ok(select(panel(registered, owner)?))
 }
 
 fn source<'a>(plot: &Plot, context: PlotRenderContext<'a, '_>) -> Result<Option<&'a Text>> {
     match plot.kind() {
-        PlotKind::Heatmap => {
-            Ok(
-                family(plot, context.registered, "Heatmap", |family| match family {
-                    PreparedFamily::Heatmap(marks) => Some(marks),
-                    _ => None,
-                })?
-                .and_then(crate::plots::heatmap::HeatmapData::numeric_explanation),
-            )
-        }
+        PlotKind::Heatmap => Ok(
+            family(context.registered, "Heatmap", |family| match family {
+                PreparedFamily::Heatmap(marks) => Some(marks),
+                _ => None,
+            })?
+            .and_then(crate::plots::heatmap::HeatmapData::numeric_explanation),
+        ),
         PlotKind::Coefficient => {
-            Ok(family(
-                plot,
-                context.registered,
-                "Coefficient",
-                |family| match family {
+            Ok(
+                family(context.registered, "Coefficient", |family| match family {
                     PreparedFamily::Estimate { marks, .. } => Some(marks),
                     _ => None,
-                },
-            )?
-            .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation))
+                })?
+                .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation),
+            )
         }
         PlotKind::Waterfall => {
             if !context.registered.is_some_and(|registered| {
@@ -107,9 +101,7 @@ fn source<'a>(plot: &Plot, context: PlotRenderContext<'a, '_>) -> Result<Option<
                 .ok_or_else(|| Error::Render("total explanation lacks prepared axes".into()))?;
             let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges()[0]))?;
             let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges()[1]))?;
-            let PreparedFamily::Waterfall(marks) =
-                panel(context.registered, plot.axis_scope(), "Waterfall")?
-            else {
+            let PreparedFamily::Waterfall(marks) = panel(context.registered, "Waterfall")? else {
                 return Ok(None);
             };
             marks.total_explanation(&crate::layout::Projection::new(

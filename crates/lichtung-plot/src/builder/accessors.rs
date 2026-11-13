@@ -1173,12 +1173,13 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn prepared_discrete_guide(
         &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     ) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error>
     {
         self.prepared_discrete_guides
             .as_ref()
             .ok_or_else(|| Error::Render("discrete guide semantics were not prepared".into()))?
-            .for_scope(self.axis_scope())
+            .for_scope(crate::orchestrator::registration::render_name(registered))
             .map(Option::<&_>::cloned)
     }
 
@@ -1190,10 +1191,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             self.description.payload_mut().axes[1].exact_ticks = Some(ticks);
         }
         self
-    }
-
-    pub(crate) fn axis_scope(&self) -> Option<&str> {
-        self.render_scope.as_deref()
     }
 
     /// Assigned geometry is available only after the root or parent allocates it.

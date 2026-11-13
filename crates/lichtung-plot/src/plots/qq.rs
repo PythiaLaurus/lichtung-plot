@@ -223,7 +223,7 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
 
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, theme)?;
+    let mut result = project(chart, prepared, layout, context)?;
     if let Some(ink) = point_ink(
         &chart.description().point_style(
             theme,
@@ -261,8 +261,9 @@ pub(crate) fn project(
     chart: &Plot,
     prepared: &PreparedQq,
     layout: crate::layout::Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let mut payload = QqPayload {
         clip: layout.projection.panel_box(),
         line: None,
@@ -334,7 +335,8 @@ pub(crate) fn project(
     for (points, style) in &payload.point_batches {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Qq(payload),

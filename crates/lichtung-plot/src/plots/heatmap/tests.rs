@@ -87,7 +87,6 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
             assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
             assert_eq!(plan.lines.len(), 2);
             let minimum = intrinsic_body_minimum(
-                chart,
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),
                 &operation,
@@ -169,14 +168,17 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             assert_eq!(cell.fill.color.get_alpha(), 0);
             let plan = &cell.text.as_ref().unwrap().plan;
             assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
-            let (marks, levels) = retained_in(chart, inputs.plots.first()).unwrap();
+            let (marks, levels) = retained_in(inputs.plots.first()).unwrap();
             let axes = inputs.plots[0].axes.coordinate().unwrap();
             let intrinsic = inputs.intrinsic(&inputs.plots[0]);
             let original = heatmap_minima(
                 intrinsic,
-                &chart
-                    .intrinsic_inputs(inputs.plots.first(), theme, &operation)
-                    .unwrap(),
+                &crate::orchestrator::root::intrinsic_inputs(
+                    inputs.plots.first(),
+                    theme,
+                    &operation,
+                )
+                .unwrap(),
             )
             .unwrap()
             .0;
@@ -255,9 +257,12 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 .matches_inputs(marks, axes, &inputs.plots[0], &theme));
             let edited = heatmap_minima(
                 intrinsic,
-                &chart
-                    .intrinsic_inputs(inputs.plots.first(), &theme, &operation)
-                    .unwrap(),
+                &crate::orchestrator::root::intrinsic_inputs(
+                    inputs.plots.first(),
+                    &theme,
+                    &operation,
+                )
+                .unwrap(),
             )
             .unwrap()
             .0;

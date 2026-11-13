@@ -348,7 +348,7 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
 
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, theme)?;
+    let mut result = project(chart, prepared, layout, context)?;
     let automatic = [
         chart.user_x_limits().is_none(),
         chart.user_y_limits().is_none(),
@@ -415,8 +415,9 @@ pub(crate) fn project(
     chart: &Plot,
     prepared: &PreparedRegression,
     layout: crate::layout::Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let projection = &layout.projection;
     let marks = theme.marks();
     let color = crate::theme::AccentColors::resolve(marks.get_accents(), 1)?.color(0)?;
@@ -511,7 +512,8 @@ pub(crate) fn project(
         geometry.scatter(points, style, clip)?;
     }
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Regression(payload),

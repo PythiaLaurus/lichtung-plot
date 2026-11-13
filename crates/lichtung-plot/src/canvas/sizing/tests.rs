@@ -150,12 +150,12 @@ fn assert_changed_height_inputs(
             Ok(inputs)
         },
         |inputs, assigned, round| {
-            let scope = inputs.plots[0]
+            inputs.plots[0]
                 .scope
                 .render_name
                 .as_deref()
                 .expect("Canvas scope");
-            let source = inputs.attach(source.clone().with_render_scope(scope.to_owned()))?;
+            let source = inputs.attach(source.clone())?;
             let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
             let ancestor = ComponentAddress::root().child(AddressRole::CanvasSharedLegend, 0)?;
             let dependencies = [ConsumedGuideDependency::new(
@@ -219,7 +219,7 @@ fn assert_changed_height_inputs(
             assert_eq!(same.width, different.width);
             assert_eq!(measurements.measured(&different, &owner, round)?, None);
             for changed in &variants {
-                let changed = inputs.attach(changed.clone().with_render_scope(scope.to_owned()))?;
+                let changed = inputs.attach(changed.clone())?;
                 let different = HeightInputs::new(
                     &changed,
                     inputs.plots.first(),

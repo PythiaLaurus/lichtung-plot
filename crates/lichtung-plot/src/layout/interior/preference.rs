@@ -48,13 +48,12 @@ pub(crate) fn categorical_preference(
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<CategoricalSizePreference, Error> {
-    let scope = plot.axis_scope();
     macro_rules! family {
         ($missing:literal, $owner:literal, $pattern:pat => $marks:ident) => {{
             if registered.is_none() {
                 return Err(Error::Render($missing.into()));
             }
-            let $pattern = panel(registered, scope, $owner)? else {
+            let $pattern = panel(registered, $owner)? else {
                 return Err(Error::Render($missing.into()));
             };
             $marks
@@ -199,12 +198,9 @@ pub(crate) fn categorical_preference(
 
 pub(crate) fn panel<'a>(
     registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'_>>,
-    scope: Option<&str>,
     owner: &str,
 ) -> Result<&'a crate::orchestrator::registration::PreparedFamily, Error> {
-    if let Some(registered) =
-        registered.filter(|registered| registered.scope.render_name.as_deref() == scope)
-    {
+    if let Some(registered) = registered {
         return Ok(&registered.family);
     }
     Err(Error::Render(format!(
@@ -239,7 +235,6 @@ pub(crate) fn mark_preference(
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<StandardSizePreference, Error> {
-    let scope = plot.axis_scope();
     macro_rules! standard {
         ($owner:literal, $pattern:pat => $marks:ident) => {{
             if registered.is_none() {
@@ -248,7 +243,7 @@ pub(crate) fn mark_preference(
                     $owner
                 )));
             }
-            let $pattern = panel(registered, scope, $owner)? else {
+            let $pattern = panel(registered, $owner)? else {
                 return Err(Error::Render(format!(
                     "{} mark preference lacks preparation",
                     $owner

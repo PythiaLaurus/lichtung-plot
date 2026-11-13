@@ -257,15 +257,16 @@ pub(crate) fn measure_marks(
         &layout.projection,
         context.fit_scope(),
     )?;
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
-        .with_significance_plan(significance)
-        .with_deferred_annotation_text(crate::data::source::collect_source(
-            attached_label_plans.into_iter().map(|plan| {
-                Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
-                    plan,
-                ))
-            }),
-        )?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
+            .with_significance_plan(significance)
+            .with_deferred_annotation_text(crate::data::source::collect_source(
+                attached_label_plans.into_iter().map(|plan| {
+                    Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
+                        plan,
+                    ))
+                }),
+            )?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     payload.retain(result, context, chart, prepared)
 }

@@ -140,7 +140,7 @@ impl HeightInputs {
                 GuideUse::SharedSuppressed
             };
         let local = if use_kind == GuideUse::Local {
-            plot.prepared_discrete_guide()?
+            plot.prepared_discrete_guide(registered)?
                 .map(|descriptor| {
                     crate::decorations::legend::discrete::GuideSlot::new(
                         descriptor,
@@ -193,8 +193,7 @@ impl HeightInputs {
                 local.as_ref(),
                 dependencies,
             )?,
-            scope: plot
-                .axis_scope()
+            scope: crate::orchestrator::registration::render_name(registered)
                 .map(crate::data::source::copy_source_string)
                 .transpose()?,
         })
@@ -524,15 +523,14 @@ pub(super) fn measure(
         if let Some(labels) = &source.labels {
             plot = plot.labels(labels.clone());
         }
-        let scope = input
+        input
             .plots
             .first()
             .and_then(|registered| registered.scope.render_name.as_deref())
             .ok_or_else(|| {
                 Error::Render("Canvas content child requires its prepared scope".into())
             })?;
-        plot = input
-            .attach(plot.with_render_scope(crate::data::source::copy_source_string(scope)?))?;
+        plot = input.attach(plot)?;
         if let Some(limits) = prepared.shared_x.get(index).copied().flatten() {
             plot = plot.with_planned_x_limits(limits);
         }

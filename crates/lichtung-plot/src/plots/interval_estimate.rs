@@ -1347,8 +1347,9 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
-        .with_deferred_annotation_text(deferred_annotation_text);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
+            .with_deferred_annotation_text(deferred_annotation_text);
     result
         .numeric_presentation
         .clone_from(&prepared.value_presentation);

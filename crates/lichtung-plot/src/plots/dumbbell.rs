@@ -241,7 +241,7 @@ pub(crate) fn measure_marks(
         .categories(1)
         .expect("prepared Dumbbell categories")
         .raw;
-    let mut result = project(chart, prepared, categories, layout, context.theme)?;
+    let mut result = project(chart, prepared, categories, layout, context)?;
     let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result
         .marks
         .as_ref()
@@ -293,8 +293,9 @@ fn project(
     prepared: &DumbbellData,
     categories: &[String],
     layout: crate::layout::Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let endpoints = chart
         .description()
         .dumbbell_endpoints_spec()
@@ -358,7 +359,8 @@ fn project(
         geometry.scatter(&pair[..1], &points[0], clip)?;
         geometry.scatter(&pair[1..], &points[1], clip)?;
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

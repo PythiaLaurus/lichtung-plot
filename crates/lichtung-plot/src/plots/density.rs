@@ -493,7 +493,8 @@ pub(crate) fn project(
             geometry.line(segment, &curve.line_style, clip)?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Density(payload),
@@ -1004,7 +1005,6 @@ mod tests {
                     let chart = chart
                         .clone()
                         .without_facets()
-                        .with_render_scope(registered.scope.render_name.clone().unwrap())
                         .with_global_hue_levels(vec!["b".into(), "a".into()]);
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                     let selected = chart
@@ -1186,7 +1186,7 @@ mod tests {
                         expected
                     );
                     let scope = &registered.scope.render_name;
-                    let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
+                    let chart = chart.clone();
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                     let selected = chart
                         .measure_selected_interior(

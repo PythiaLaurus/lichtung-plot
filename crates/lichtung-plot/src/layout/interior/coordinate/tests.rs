@@ -113,8 +113,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
                 let intrinsic = inputs.intrinsic(&inputs.plots[0]);
                 let axes = crate::orchestrator::root::coordinate_intrinsic(
                     intrinsic,
-                    &plot
-                        .intrinsic_inputs(registered, theme, &operation)
+                    &crate::orchestrator::root::intrinsic_inputs(registered, theme, &operation)
                         .unwrap(),
                 )
                 .unwrap()

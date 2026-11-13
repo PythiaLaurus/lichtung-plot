@@ -68,25 +68,21 @@ pub(crate) fn prepare_plot_intrinsics(
     Ok(())
 }
 
-impl crate::Plot {
-    pub(crate) fn intrinsic_inputs<'v, 'src>(
-        &'v self,
-        registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'src>>,
-        request: &crate::text::TextRequestContext<'v, 'src>,
-        operation: &'v crate::font::canonical::OperationContext,
-    ) -> Result<PlotIntrinsicInputs<'v, 'src>, crate::Error> {
-        Ok(PlotIntrinsicInputs {
-            registered: registered.ok_or_else(|| {
-                crate::Error::Render("native coordinate panel requires root-prepared axes".into())
-            })?,
-            request: *request,
-            operation,
-            y_visible: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
-            diagnostic_scope: self.axis_scope(),
-        })
-    }
+pub(crate) fn intrinsic_inputs<'v, 'src>(
+    registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'src>>,
+    request: &crate::text::TextRequestContext<'v, 'src>,
+    operation: &'v crate::font::canonical::OperationContext,
+) -> Result<PlotIntrinsicInputs<'v, 'src>, crate::Error> {
+    Ok(PlotIntrinsicInputs {
+        registered: registered.ok_or_else(|| {
+            crate::Error::Render("native coordinate panel requires root-prepared axes".into())
+        })?,
+        request: *request,
+        operation,
+        y_visible: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
+        diagnostic_scope: crate::orchestrator::registration::render_name(registered),
+    })
 }
-
 pub(crate) struct RootLayoutCaches {
     pub(crate) children: ChildPlans,
     pub(crate) heights: crate::canvas::HeightMeasurements,
@@ -136,7 +132,7 @@ mod tests {
                     panic!("native coordinate slot")
                 };
                 assert!(value.get().is_none(), "post-font preparation must remain lazy");
-                let mut input = plot.intrinsic_inputs(Some(registered), request, operation).unwrap();
+                let mut input = intrinsic_inputs(Some(registered), request, operation).unwrap();
                 input.y_visible = plot.kind() != PlotKind::Beeswarm;
                 if plot.kind() == PlotKind::Beeswarm {
                     coordinate_intrinsic(intrinsic, &input).unwrap();
@@ -167,7 +163,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &request,
-            |plot, inputs, request, operation| {
+            |_, inputs, request, operation| {
                 let intrinsic = inputs.intrinsic(&inputs.plots[0]);
                 let PlotIntrinsics::Coordinate { value } = intrinsic else {
                     panic!("coordinate slot")
@@ -179,9 +175,7 @@ mod tests {
                 crate::orchestrator::measurements::start();
                 let error = coordinate_intrinsic(
                     intrinsic,
-                    &plot
-                        .intrinsic_inputs(inputs.plots.first(), &changed, operation)
-                        .unwrap(),
+                    &intrinsic_inputs(inputs.plots.first(), &changed, operation).unwrap(),
                 )
                 .unwrap_err();
                 let measured = crate::orchestrator::measurements::finish();

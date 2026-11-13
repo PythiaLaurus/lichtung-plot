@@ -843,12 +843,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
                     .plots
                     .iter()
                     .map(|registered| {
-                        let scope = registered.scope.render_name.clone();
-                        let panel = scope.map_or_else(
-                            || chart.clone(),
-                            |scope| chart.clone().with_render_scope(scope),
-                        );
-                        panel
+                        chart
                             .intrinsic_body_minimum(
                                 Some(registered),
                                 inputs.intrinsic(registered),

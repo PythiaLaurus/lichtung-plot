@@ -225,7 +225,7 @@ pub(crate) fn intrinsic_body_minimum(
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
     let mut central = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         registered, 1,
@@ -415,7 +415,7 @@ pub(crate) fn natural_body_preference(
     let ink = density_ink(registered, theme)?;
     let axes = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         registered, 1,
@@ -454,7 +454,7 @@ pub(crate) fn natural_body_height(
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         registered, 1,
@@ -539,7 +539,11 @@ pub(crate) fn measure(
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes_hard = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
-        &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
+        &crate::orchestrator::root::intrinsic_inputs(
+            context.registered,
+            theme,
+            context.data.source_resources(),
+        )?,
     )?
     .minimum(registered.policy.axis_text.tick_labels[1]);
     let central_hard = (
@@ -994,7 +998,8 @@ pub(crate) fn measure(
         geometry.polygon(&group.top, &group.fill, Some(top_panel))?;
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),

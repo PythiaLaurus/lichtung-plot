@@ -255,6 +255,7 @@ struct PendingTarget {
 
 pub(crate) struct AlphaGuideBuilder<'a> {
     plot: &'a Plot,
+    scope: Option<&'a str>,
     owner: &'a ComponentAddress,
     neutral: OpaqueColor,
     targets: [Option<PendingTarget>; 3],
@@ -263,12 +264,14 @@ pub(crate) struct AlphaGuideBuilder<'a> {
 impl<'a> AlphaGuideBuilder<'a> {
     pub(crate) fn new(
         plot: &'a Plot,
+        scope: Option<&'a str>,
         theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &'a ComponentAddress,
     ) -> Self {
         let paint = theme.typography.guides.legend_label.get_color();
         Self {
             plot,
+            scope,
             owner,
             neutral: OpaqueColor::rgb(paint.red(), paint.green(), paint.blue()),
             targets: [None, None, None],
@@ -500,7 +503,7 @@ impl<'a> AlphaGuideBuilder<'a> {
                 unit: pending.unit,
                 producer: self.plot.kind(),
                 owner: self.owner.clone(),
-                scope: self.plot.axis_scope().map(shared_text).transpose()?,
+                scope: self.scope.map(shared_text).transpose()?,
                 input: input.clone(),
                 neutral: self.neutral,
                 glyphs: shared_slice(glyphs)?,

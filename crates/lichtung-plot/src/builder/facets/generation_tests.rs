@@ -35,10 +35,7 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let plot = source
-        .clone()
-        .without_facets()
-        .with_render_scope(inputs.plots[0].scope.render_name.clone().unwrap());
+    let plot = source.clone().without_facets();
     let registered = &inputs.plots[0];
     let retained = plot
         .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), Some(registered), None)
@@ -71,10 +68,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let plot = source
-        .clone()
-        .without_facets()
-        .with_render_scope(inputs.plots[1].scope.render_name.clone().unwrap());
+    let plot = source.clone().without_facets();
     let registered = &inputs.plots[1];
     let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } = &registered.family
     else {

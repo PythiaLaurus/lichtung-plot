@@ -1328,9 +1328,7 @@ impl Canvas {
                 )?,
                 crate::orchestrator::registration::RowSelection::Full,
                 None,
-                plot.axis_scope()
-                    .map(crate::data::source::copy_source_string)
-                    .transpose()?,
+                None,
             )?;
             scope.numeric_owner.canvas = Some((index / self.columns, index % self.columns));
             scope.axis_numeric_owner.canvas = scope.numeric_owner.canvas;
@@ -1447,7 +1445,7 @@ impl Canvas {
                 panel
                     .scope
                     .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
-                let mut plot = plot.clone().with_render_scope(scope);
+                let mut plot = plot.clone();
                 if let Some(Some(range)) = shared_x.get(index) {
                     let kind = plot.kind();
                     plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
@@ -2202,11 +2200,7 @@ impl Canvas {
                 continue;
             };
 
-            let mut scope = String::new();
-            crate::data::source::reserve_source_string(&mut scope, 32)?;
-            write!(scope, "panel-{index}").expect("admitted scope");
             let mut plot = source.clone();
-            plot = plot.with_render_scope(scope);
             if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
                 plot = inputs.attach(plot)?;
             }
@@ -2931,7 +2925,7 @@ impl Canvas {
                 crate::decorations::plan::LegendRole::Suppressed
             };
             let guide = if role == crate::decorations::plan::LegendRole::Panel {
-                plot.prepared_discrete_guide()?
+                plot.prepared_discrete_guide(Some(registered))?
                     .map(|descriptor| {
                         crate::decorations::legend::discrete::GuideSlot::new(
                             descriptor,

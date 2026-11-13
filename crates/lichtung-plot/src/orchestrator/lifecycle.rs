@@ -1128,7 +1128,7 @@ fn measure_single_plot(
         None
     } else {
         source
-            .prepared_discrete_guide()?
+            .prepared_discrete_guide(registered)?
             .map(|descriptor| {
                 crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
@@ -1207,12 +1207,11 @@ fn measure_single_plot(
                 ))?;
             }
             let mut layer = String::new();
-            let length = source
-                .axis_scope()
+            let length = super::registration::render_name(registered)
                 .map_or(Some(6), |scope| scope.len().checked_add(7))
                 .ok_or_else(|| Error::Render("standalone legend layer length overflow".into()))?;
             crate::data::source::reserve_source_string(&mut layer, length)?;
-            if let Some(scope) = source.axis_scope() {
+            if let Some(scope) = super::registration::render_name(registered) {
                 layer.push_str(scope);
                 layer.push('-');
             }

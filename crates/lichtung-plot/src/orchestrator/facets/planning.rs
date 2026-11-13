@@ -277,7 +277,7 @@ pub(super) fn native_parent(
         })
         .transpose()?;
     for (index, facet) in panels.iter().enumerate() {
-        let mut panel_plot = plot.clone().with_render_scope(facet.render_scope()?);
+        let mut panel_plot = plot.clone();
         let registered = &inputs.plots[index];
         let domain_address = &registered.scope.address;
         if matches!(facet_scales, FacetScales::Free | FacetScales::FreeX) {

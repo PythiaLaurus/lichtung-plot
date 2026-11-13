@@ -1,6 +1,6 @@
 use super::{ComposedInputs, Plot, PlotDescription};
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
-use crate::orchestrator::registration::legend_policy;
+use crate::orchestrator::registration::{legend_policy, render_name};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
 #[cfg(test)]
@@ -180,7 +180,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             ) == other.axis_gutter_owner
             && crate::orchestrator::registration::axis_tick_labels_visible(registered, 1)
                 == other.y_tick_labels_visible
-            && self.render_scope == other.render_scope
+            && render_name(registered) == other.render_scope.as_deref()
             && legend_policy(self.description(), registered) == other.legend_policy
             && crate::orchestrator::registration::continuous_guide_suppressed(registered)
                 == other.suppress_continuous_guide
@@ -290,7 +290,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             y_tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
                 registered, 1,
             ),
-            render_scope: self.render_scope.as_deref().map(copy).transpose()?,
+            render_scope: render_name(registered).map(copy).transpose()?,
             legend_policy: legend_policy(self.description(), registered),
             suppress_continuous_guide:
                 crate::orchestrator::registration::continuous_guide_suppressed(registered),
@@ -308,17 +308,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn global_hue_levels(&self) -> Option<&[String]> {
         self.global_hue_levels.as_deref()
-    }
-
-    pub(crate) fn with_render_scope(mut self, scope: impl Into<String>) -> Self {
-        self.render_scope = Some(scope.into());
-        self
-    }
-
-    pub(crate) fn layer_name(&self, name: &str) -> String {
-        self.render_scope
-            .as_ref()
-            .map_or_else(|| name.to_owned(), |scope| format!("{scope}-{name}"))
     }
 
     pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {

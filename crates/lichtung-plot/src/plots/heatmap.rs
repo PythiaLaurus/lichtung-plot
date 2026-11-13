@@ -469,7 +469,6 @@ fn assigned_rows(
 }
 
 fn retained_in<'v>(
-    chart: &Plot,
     registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
 ) -> Result<(&'v HeatmapData, [&'v [String]; 2]), Error> {
     if registered.is_none() {
@@ -477,9 +476,7 @@ fn retained_in<'v>(
             "heatmap requires root-prepared semantics".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Heatmap")?
-        .as_ref()
-    {
+    match crate::layout::interior::preference::panel(registered, "Heatmap")?.as_ref() {
         crate::orchestrator::registration::FamilyRef::Heatmap(marks) => Ok((
             marks,
             [0, 1].map(|side| {
@@ -670,7 +667,6 @@ impl HeatmapIntrinsicCache {
 /// Hard consequences of the current cell-label algorithm, before a colorbar,
 /// frame, or cell is assigned. Category packing and elision remain T5e.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
@@ -679,10 +675,10 @@ pub(crate) fn intrinsic_body_minimum(
     registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
-    retained_in(chart, registered)?;
+    retained_in(registered)?;
     let (minimum, without_y_labels) = heatmap_minima(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?;
     if crate::orchestrator::registration::axis_tick_labels_visible(registered, 1) {
         Ok(minimum)
@@ -692,14 +688,13 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 pub(crate) fn natural_body_preference(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let (_, levels) = retained_in(chart, registered)?;
-    let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
+    let (_, levels) = retained_in(registered)?;
+    let hard = intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
     let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
         hard.0.max(pitch * levels[0].len() as f64),
@@ -713,7 +708,7 @@ pub(crate) fn natural_body_height(
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    let (marks, levels) = retained_in(chart, registered)?;
+    let (marks, levels) = retained_in(registered)?;
     let axes = registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
@@ -1192,11 +1187,10 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let (prepared, levels) = retained_in(chart, context.registered)?;
+    let (prepared, levels) = retained_in(context.registered)?;
     let theme = context.theme;
 
     let minimum = intrinsic_body_minimum(
-        chart,
         context.registered,
         context.intrinsic(),
         context.data.source_resources(),
@@ -1215,6 +1209,7 @@ pub(crate) fn measure(
         } else {
             let (body, guide) = guide::measure(
                 chart,
+                context.registered,
                 context.panel,
                 minimum.0,
                 theme,
@@ -1498,19 +1493,20 @@ pub(crate) fn measure(
     payload.validate_annotation_ink(context.fit_scope())?;
     let geometry = payload.geometry()?;
 
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
-        .with_resolved_axis_keys(
-            crate::data::source::collect_source(
-                levels[0]
-                    .iter()
-                    .map(|s| crate::data::source::copy_source_string(s)),
-            )?,
-            crate::data::source::collect_source(
-                levels[1]
-                    .iter()
-                    .map(|s| crate::data::source::copy_source_string(s)),
-            )?,
-        );
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
+            .with_resolved_axis_keys(
+                crate::data::source::collect_source(
+                    levels[0]
+                        .iter()
+                        .map(|s| crate::data::source::copy_source_string(s)),
+                )?,
+                crate::data::source::collect_source(
+                    levels[1]
+                        .iter()
+                        .map(|s| crate::data::source::copy_source_string(s)),
+                )?,
+            );
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result
         .numeric_presentation

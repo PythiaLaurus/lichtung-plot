@@ -39,10 +39,7 @@ fn scoped_annotation_indices_locate_sources_without_renumbering_filtered_occurre
             };
             assert_eq!(marks.significance.len(), 1);
             assert_eq!(marks.significance[0].source_index, 0);
-            let plot = plot
-                .clone()
-                .without_facets()
-                .with_render_scope(registered.scope.render_name.clone().unwrap());
+            let plot = plot.clone().without_facets();
             let result = plot
                 .measure_selected_interior(
                     crate::decorations::legend::discrete::scoped::GuideUse::Local,

@@ -551,10 +551,7 @@ pub(crate) fn prepare_plot<'src>(
                     .child(crate::layout::AddressRole::PlotBody, 0)?,
                 RowSelection::Full,
                 None,
-                source
-                    .axis_scope()
-                    .map(crate::data::source::copy_source_string)
-                    .transpose()?,
+                None,
             )?;
             registry.reserve(source.description(), scope, resources)
         })

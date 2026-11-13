@@ -666,9 +666,12 @@ mod intrinsic_tests {
                 |chart, inputs, theme, operation| {
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
-                        &chart
-                            .intrinsic_inputs(inputs.plots.first(), theme, operation)
-                            .unwrap(),
+                        &crate::orchestrator::root::intrinsic_inputs(
+                            inputs.plots.first(),
+                            theme,
+                            operation,
+                        )
+                        .unwrap(),
                     )
                     .unwrap()
                     .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);
@@ -751,9 +754,12 @@ mod intrinsic_tests {
                         .unwrap();
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
-                        &chart
-                            .intrinsic_inputs(inputs.plots.first(), theme, operation)
-                            .unwrap(),
+                        &crate::orchestrator::root::intrinsic_inputs(
+                            inputs.plots.first(),
+                            theme,
+                            operation,
+                        )
+                        .unwrap(),
                     )
                     .unwrap()
                     .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);

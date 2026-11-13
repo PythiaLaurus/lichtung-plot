@@ -144,7 +144,9 @@ impl ScopedGuideInputs {
         let contribution = plot
             .prepared_discrete_guides
             .as_ref()
-            .map(|guides| guides.for_scope(plot.axis_scope()))
+            .map(|guides| {
+                guides.for_scope(crate::orchestrator::registration::render_name(registered))
+            })
             .transpose()?
             .flatten()
             .cloned();
@@ -183,7 +185,11 @@ impl ScopedGuideInputs {
             alpha: plot
                 .prepared_discrete_guides
                 .as_ref()
-                .map(|guides| guides.alpha_for_scope(plot.axis_scope()).cloned())
+                .map(|guides| {
+                    guides
+                        .alpha_for_scope(crate::orchestrator::registration::render_name(registered))
+                        .cloned()
+                })
                 .transpose()?,
             local_guide: local_guide.cloned(),
             dependencies: super::shared_slice(retained)?,
@@ -202,10 +208,12 @@ impl ScopedGuideInputs {
             && match &plot.prepared_discrete_guides {
                 Some(guides) => {
                     guides
-                        .for_scope(plot.axis_scope())
+                        .for_scope(crate::orchestrator::registration::render_name(registered))
                         .is_ok_and(|guide| guide == self.contribution.as_ref())
                         && guides
-                            .alpha_for_scope(plot.axis_scope())
+                            .alpha_for_scope(crate::orchestrator::registration::render_name(
+                                registered,
+                            ))
                             .is_ok_and(|alpha| Some(alpha) == self.alpha.as_ref())
                 }
                 None => self.contribution.is_none() && self.alpha.is_none(),

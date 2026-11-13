@@ -863,7 +863,7 @@ pub(crate) fn measure_marks(
         }
     }
     payload.retain(
-        PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?)
             .with_significance_plan(significance),
         context,
         chart,

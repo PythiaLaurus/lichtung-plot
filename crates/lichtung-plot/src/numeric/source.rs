@@ -114,10 +114,7 @@ impl OwnerInfo {
             canvas: None,
             facet: facet.map(crate::FacetCell::try_copy).transpose()?,
             shared: false,
-            scope: plot
-                .axis_scope()
-                .map(crate::data::source::copy_source_string)
-                .transpose()?,
+            scope: None,
         })
     }
 }

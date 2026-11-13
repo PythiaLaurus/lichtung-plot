@@ -203,7 +203,7 @@ pub(crate) struct PlotLayerNames {
 }
 
 impl PlotLayerNames {
-    fn prepare(plot: &Plot, context: PlotRenderContext<'_, '_>) -> Result<Self, Error> {
+    fn prepare(context: PlotRenderContext<'_, '_>) -> Result<Self, Error> {
         use std::fmt::Write as _;
         if context.canvas.is_some() {
             let mut layers = [String::new(), String::new()];
@@ -212,7 +212,8 @@ impl PlotLayerNames {
                 write!(
                     layer,
                     "{}-{suffix}",
-                    plot.axis_scope().expect("Canvas plot scope")
+                    crate::orchestrator::registration::render_name(context.registered)
+                        .expect("Canvas plot scope")
                 )
                 .expect("admitted Canvas layer name");
             }
@@ -222,7 +223,8 @@ impl PlotLayerNames {
             .registered
             .is_some_and(|registered| registered.source.has_facets())
         {
-            let scope = plot.axis_scope().expect("facet plot scope");
+            let scope = crate::orchestrator::registration::render_name(context.registered)
+                .expect("facet plot scope");
             let mut layers = [String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes"]) {
                 let length = scope
@@ -238,8 +240,8 @@ impl PlotLayerNames {
             Ok(Self { grid, axes })
         } else {
             Ok(Self {
-                grid: plot.layer_name("grid"),
-                axes: plot.layer_name("axes"),
+                grid: "grid".to_owned(),
+                axes: "axes".to_owned(),
             })
         }
     }
@@ -336,7 +338,7 @@ pub(crate) fn plan_panel(
     let context = PlotRenderContext::new(registered.data(&operation)?, cell, theme)
         .with_registration(registered, intrinsic);
     let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
-        plot.prepared_discrete_guide()?
+        plot.prepared_discrete_guide(Some(registered))?
             .map(|descriptor| {
                 crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
@@ -1241,7 +1243,9 @@ fn plan_panel_attempt(
     // explained or placed locally. Native color/Matrix guides also retain their
     // complete descriptor rather than only captured geometry and text.
     if let Some(guides) = &plot.prepared_discrete_guides {
-        round.observe_alpha(guides.alpha_for_scope(plot.axis_scope())?)?;
+        round.observe_alpha(guides.alpha_for_scope(
+            crate::orchestrator::registration::render_name(context.registered),
+        )?)?;
     }
     if let Some(guide) = &result.discrete_guide {
         round.observe_guide(guide)?;
@@ -1652,7 +1656,7 @@ fn plan_panel_attempt(
         panel_box,
         result,
         legend: resolved,
-        layers: Some(PlotLayerNames::prepare(plot, context)?),
+        layers: Some(PlotLayerNames::prepare(context)?),
         surface: context.theme.surfaces.plot_panel,
         planned_x_limits,
         planned_y_limits,

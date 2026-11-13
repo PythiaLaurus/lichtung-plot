@@ -74,7 +74,7 @@ pub(crate) fn guided_preference(
     {
         return Ok(None);
     }
-    let Some(descriptor) = plot.prepared_discrete_guide()? else {
+    let Some(descriptor) = plot.prepared_discrete_guide(inputs.plots.first())? else {
         return Ok(None);
     };
     Ok(Some(GuidedPreference {
@@ -211,9 +211,7 @@ pub(crate) fn body_preference(
             crate::plots::matrix::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Heatmap) => {
-            crate::plots::heatmap::natural_body_preference(
-                plot, registered, intrinsic, operation, theme,
-            )
+            crate::plots::heatmap::natural_body_preference(registered, intrinsic, operation, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Beeswarm | SpecializedGrid::Waterfall) => {
             let ch = theme
@@ -427,7 +425,7 @@ pub(crate) fn plot_size(
         horizontal_gutter_preference(plot, registered, operation, theme)?;
     let guide = guided_preference(plot, inputs, theme)?;
     let (guide_width, guide_height) = if plot.kind() == PlotKind::Matrix {
-        crate::plots::matrix::natural_guide_preference(plot, theme)?
+        crate::plots::matrix::natural_guide_preference(plot, registered, theme)?
     } else if let Some(guide) = &guide {
         guide.preference(theme)?
     } else {

@@ -455,7 +455,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     y_limits_user_explicit: bool,
     resolved_facet_x_range: Option<(f64, f64)>,
     global_hue_levels: Option<Vec<String>>,
-    render_scope: Option<String>,
     pub(crate) prepared_discrete_guides:
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     marker: PhantomData<K>,
@@ -522,7 +521,6 @@ impl Plot<crate::kind::Any> {
             y_limits_user_explicit: false,
             resolved_facet_x_range: None,
             global_hue_levels: None,
-            render_scope: None,
             prepared_discrete_guides: None,
             marker: PhantomData,
         }
@@ -848,7 +846,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_limits_user_explicit,
             resolved_facet_x_range,
             global_hue_levels,
-            render_scope,
             marker: _,
             prepared_discrete_guides,
         } = self;
@@ -860,7 +857,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_limits_user_explicit,
             resolved_facet_x_range,
             global_hue_levels,
-            render_scope,
             marker: PhantomData,
         }
     }

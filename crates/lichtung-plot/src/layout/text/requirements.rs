@@ -1150,11 +1150,6 @@ fn push_deferred_plot_requirements(
             else {
                 continue;
             };
-            if plot.axis_scope().is_some()
-                && registered.scope.render_name.as_deref() != plot.axis_scope()
-            {
-                continue;
-            }
             for label in marks.total_font_sources(theme.text_layouts.total.as_ref()) {
                 push_deferred_body(
                     requirements,
@@ -1274,11 +1269,6 @@ fn push_deferred_plot_requirements(
             else {
                 continue;
             };
-            if plot.axis_scope().is_some()
-                && registered.scope.render_name.as_deref() != plot.axis_scope()
-            {
-                continue;
-            }
             if let Some(text) = marks.numeric_explanation() {
                 push_deferred_body(
                     requirements,
@@ -1435,10 +1425,6 @@ impl PreparedTextRequirement {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "retain the original ordered scope, visibility and category/number census branches"
-)]
 fn push_plot_axis_ticks(
     interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
     requirements: &mut Vec<PreparedTextRequirement>,
@@ -1454,11 +1440,6 @@ fn push_plot_axis_ticks(
             let Some(axes) = registered.axes.coordinate() else {
                 continue;
             };
-            if plot.axis_scope().is_some()
-                && plot.axis_scope() != registered.scope.render_name.as_deref()
-            {
-                continue;
-            }
             let owner = if plot.description().has_facets() {
                 base.child(
                     crate::layout::AddressRole::FacetCell,
@@ -1752,6 +1733,7 @@ pub(crate) enum PreparedTextCensusError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::orchestrator::root::intrinsic_inputs;
 
     #[test]
     fn text_census_without_an_operation_stage_refuses_before_font_or_address_work() {
@@ -2882,7 +2864,7 @@ mod tests {
                     )?;
                     let minimum = crate::plots::heatmap::heatmap_minima(
                         inputs.intrinsic(&inputs.plots[0]),
-                        &plot.intrinsic_inputs(inputs.plots.first(), &theme, &stage.operation())?,
+                        &intrinsic_inputs(inputs.plots.first(), &theme, &stage.operation())?,
                     )?
                     .0;
                     assert!(

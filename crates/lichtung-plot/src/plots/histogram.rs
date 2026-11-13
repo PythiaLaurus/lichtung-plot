@@ -357,7 +357,7 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(prepared, layout, theme)?;
-    result.discrete_guide = chart.prepared_discrete_guide()?;
+    result.discrete_guide = chart.prepared_discrete_guide(context.registered)?;
     let crate::layout::interior::MarkPayload::Histogram(payload) = &result
         .marks
         .as_ref()
@@ -1217,9 +1217,7 @@ mod tests {
                             .collect::<Vec<_>>(),
                         alphas
                     );
-                    let chart = chart
-                        .clone()
-                        .with_render_scope(registered.scope.render_name.as_deref().unwrap());
+                    let chart = chart.clone();
                     let selected = chart
                         .measure_selected_interior(
                             crate::decorations::legend::discrete::scoped::GuideUse::Local,

@@ -143,9 +143,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
                         ends.map(f64::to_bits)
                     );
                     assert!(prepared.bars.iter().all(|bar| bar.interval.is_some()));
-                    let chart = chart
-                        .clone()
-                        .with_render_scope(registered.scope.render_name.as_deref().unwrap());
+                    let chart = chart.clone();
                     let minimum = intrinsic_body_minimum(&chart, Some(registered), theme).unwrap();
                     assert_eq!(
                         (if horizontal { minimum.0 } else { minimum.1 }).to_bits(),

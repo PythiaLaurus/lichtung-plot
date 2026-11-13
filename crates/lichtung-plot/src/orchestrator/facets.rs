@@ -231,8 +231,8 @@ impl OwnedFacetPlan {
         data::validate_significance_facet_anchors(source.description(), &panels)?;
         let mut minima = Vec::new();
         crate::data::source::reserve_source(&mut minima, panels.len())?;
-        for (index, facet) in panels.iter().enumerate() {
-            let scoped = base_plot.clone().with_render_scope(facet.render_scope()?);
+        for index in 0..panels.len() {
+            let scoped = base_plot.clone();
             minima.push(scoped.intrinsic_body_minimum(
                 inputs.plots.get(index),
                 inputs.intrinsic(&inputs.plots[index]),

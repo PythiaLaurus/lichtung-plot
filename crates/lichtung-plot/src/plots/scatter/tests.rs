@@ -60,7 +60,10 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
                 .unwrap()
                 .alpha_for_scope(None)
                 .unwrap();
-            assert!(chart.prepared_discrete_guide().unwrap().is_none());
+            assert!(chart
+                .prepared_discrete_guide(inputs.plots.first())
+                .unwrap()
+                .is_none());
             assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
             assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
             let selected = chart

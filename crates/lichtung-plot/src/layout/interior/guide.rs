@@ -486,10 +486,6 @@ impl PreparedInteriorInputs<'_> {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "local contribution preparation and the original ordered parent union remain at one publication boundary"
-    )]
     pub(crate) fn prepare_discrete_guides(
         &self,
         chart: &Plot,
@@ -508,13 +504,6 @@ impl PreparedInteriorInputs<'_> {
         for (index, registered) in self.plots.iter().enumerate() {
             let data = registered.data(resources)?;
             let scope = registered.scope.render_name.as_deref();
-            let scoped = if let Some(scope) = scope {
-                chart
-                    .clone()
-                    .with_render_scope(crate::data::source::copy_source_string(scope)?)
-            } else {
-                chart.clone()
-            };
             let contributor = if facet_cells {
                 owner.child(
                     crate::layout::AddressRole::FacetCell,
@@ -524,7 +513,7 @@ impl PreparedInteriorInputs<'_> {
             } else {
                 owner.clone()
             };
-            let alpha = self.alpha_sources(&scoped, theme, registered, &contributor)?;
+            let alpha = self.alpha_sources(chart, theme, registered, &contributor)?;
             let descriptor = if crate::orchestrator::registration::legend_policy(
                 chart.description(),
                 Some(registered),
@@ -540,7 +529,7 @@ impl PreparedInteriorInputs<'_> {
                         })
                         .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
                         .guide_sources(
-                            &scoped,
+                            chart,
                             registered
                                 .policy
                                 .coordinated
@@ -551,11 +540,11 @@ impl PreparedInteriorInputs<'_> {
                             data,
                         )?
                 } else {
-                    self.guide_sources(&scoped, theme, data, registered)?
+                    self.guide_sources(chart, theme, data, registered)?
                 };
-                let continuous = Self::continuous_source(&scoped, theme, registered)?;
+                let continuous = Self::continuous_source(chart, theme, registered)?;
                 PreparedGuide::prepare(
-                    &scoped,
+                    chart,
                     &registered.policy,
                     theme,
                     &contributor,
@@ -638,8 +627,12 @@ impl PreparedInteriorInputs<'_> {
         owner: &crate::layout::ComponentAddress,
     ) -> Result<std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>, Error> {
         self.route.validate(chart.description())?;
-        let mut guide =
-            crate::decorations::legend::alpha::AlphaGuideBuilder::new(chart, theme, owner);
+        let mut guide = crate::decorations::legend::alpha::AlphaGuideBuilder::new(
+            chart,
+            registered.scope.render_name.as_deref(),
+            theme,
+            owner,
+        );
         if !guide.any_enabled() {
             return guide.finish();
         }

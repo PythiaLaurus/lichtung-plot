@@ -159,10 +159,7 @@ fn measure(
         // layout. Feedback can refine those requirements, but cannot grow a
         // root whose natural selection omitted them entirely.
         for (index, panel) in panels.iter().enumerate() {
-            let plot = content
-                .plot
-                .clone()
-                .with_render_scope(panel.render_scope()?);
+            let plot = content.plot.clone();
             let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
                 &plot,
                 content.inputs.plots.get(index),
@@ -212,10 +209,7 @@ fn measure(
     crate::data::source::reserve_source(&mut heights, panels.len())?;
     for (index, ((panel, minimum), address)) in panels.iter().zip(minima).zip(&owners).enumerate() {
         let preferred = if let Some(content) = content {
-            let plot = content
-                .plot
-                .clone()
-                .with_render_scope(panel.render_scope()?);
+            let plot = content.plot.clone();
             let preference = crate::layout::interior::sizing::body_preference(
                 &plot,
                 content.inputs.plots.get(index),
@@ -344,10 +338,7 @@ fn measure(
         for (index, ((panel, child), minimum)) in
             panels.iter().zip(&mut heights).zip(minima).enumerate()
         {
-            let mut plot = content
-                .plot
-                .clone()
-                .with_render_scope(panel.render_scope()?);
+            let mut plot = content.plot.clone();
             let address = ComponentAddress::root().child(
                 AddressRole::FacetCell,
                 u32::try_from(index)

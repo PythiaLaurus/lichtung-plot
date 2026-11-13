@@ -100,7 +100,7 @@ pub(in crate::orchestrator) fn natural_size(
     crate::data::source::reserve_source(&mut gutters, panels.len())?;
     let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     for (index, panel) in panels.iter().enumerate() {
-        let plot = base.clone().with_render_scope(panel.render_scope()?);
+        let plot = base.clone();
         minima.push(plot.intrinsic_body_minimum(
             inputs.plots.get(index),
             inputs.intrinsic(&inputs.plots[index]),

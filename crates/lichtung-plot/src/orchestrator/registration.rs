@@ -119,6 +119,10 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) family: PreparedFamily,
 }
 
+pub(crate) fn render_name<'v>(registered: Option<&'v PlotRegistration<'_>>) -> Option<&'v str> {
+    registered?.scope.render_name.as_deref()
+}
+
 pub(crate) fn axis_tick_labels_visible(
     registered: Option<&PlotRegistration<'_>>,
     side: usize,

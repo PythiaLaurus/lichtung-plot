@@ -28,7 +28,6 @@ pub(crate) struct PreparedBeeswarm {
 }
 
 fn retained<'v>(
-    chart: &Plot,
     registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
 ) -> Result<(&'v PreparedBeeswarm, &'v [String]), Error> {
     if registered.is_none() {
@@ -36,9 +35,7 @@ fn retained<'v>(
             "Beeswarm requires root-prepared source rows".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Beeswarm")?
-        .as_ref()
-    {
+    match crate::layout::interior::preference::panel(registered, "Beeswarm")?.as_ref() {
         crate::orchestrator::registration::FamilyRef::Beeswarm(marks) => Ok((
             marks,
             &registered
@@ -61,7 +58,7 @@ pub(crate) fn intrinsic_body_minimum(
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let (prepared, levels) = retained(chart, registered)?;
+    let (prepared, levels) = retained(registered)?;
     if levels.is_empty() || prepared.rows.is_empty() || prepared.rows.len() != prepared.colors.len()
     {
         return Err(Error::Render(
@@ -113,7 +110,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let axes = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         registered, 1,
@@ -353,12 +350,7 @@ pub(crate) fn natural_body_height(
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     }
     let crate::orchestrator::registration::FamilyRef::Beeswarm(marks) =
-        crate::layout::interior::preference::panel(
-            registered,
-            chart.axis_scope(),
-            "natural Beeswarm",
-        )?
-        .as_ref()
+        crate::layout::interior::preference::panel(registered, "natural Beeswarm")?.as_ref()
     else {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     };
@@ -395,7 +387,7 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let (prepared, levels) = retained(chart, context.registered)?;
+    let (prepared, levels) = retained(context.registered)?;
     let theme = context.theme;
 
     let minimum = intrinsic_body_minimum(
@@ -420,7 +412,7 @@ pub(crate) fn measure(
                 .fit_scope()
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
             let descriptor = chart
-                .prepared_discrete_guide()?
+                .prepared_discrete_guide(context.registered)?
                 .ok_or_else(|| Error::Render("native Beeswarm guide was not prepared".into()))?;
             let (body, guide) = crate::layout::interior::guide::native_right(
                 descriptor,
@@ -697,7 +689,8 @@ pub(crate) fn measure(
             )?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =
         Some(crate::data::source::collect_source(levels.iter().map(

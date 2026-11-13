@@ -301,7 +301,7 @@ impl Plot {
             }
         }
         let guides = layers::GuideSnapshot::measure(self.description(), &result, &mut geometry)?;
-        validate_frozen_axes_and_guides(self, &mut result)?;
+        validate_frozen_axes_and_guides(self, context.registered, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             context.registered.expect("prepared panel text reference"),
             self.measure_dimensions()?,
@@ -338,12 +338,11 @@ impl Plot {
             None
         } else {
             let mut name = String::new();
-            let length = self
-                .axis_scope()
+            let length = registration::render_name(context.registered)
                 .map_or(Some(10), |scope| scope.len().checked_add(11))
                 .ok_or_else(|| Error::Render("panel text layer name overflow".into()))?;
             crate::data::source::reserve_source_string(&mut name, length)?;
-            if let Some(scope) = self.axis_scope() {
+            if let Some(scope) = registration::render_name(context.registered) {
                 name.push_str(scope);
                 name.push('-');
             }
@@ -366,12 +365,13 @@ impl Plot {
 
 fn validate_frozen_axes_and_guides(
     plot: &Plot,
+    registered: Option<&registration::PlotRegistration<'_>>,
     result: &mut PlotRenderResult,
 ) -> Result<(), crate::layout::fit::PlanError> {
     if result.decoration_mode != crate::spec::DecorationMode::SelfManaged && result.axes.is_none() {
         return Err(Error::Render("native panel is missing its frozen axes".into()).into());
     }
-    if result.discrete_guide != plot.prepared_discrete_guide()? {
+    if result.discrete_guide != plot.prepared_discrete_guide(registered)? {
         return Err(
             Error::Render("selected producer changed its prepared discrete guide".into()).into(),
         );
@@ -405,7 +405,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     let panel = crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0);
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let error = validate_frozen_axes_and_guides(&plot, &mut result).unwrap_err();
+    let error = validate_frozen_axes_and_guides(&plot, None, &mut result).unwrap_err();
     assert!(
         matches!(error, crate::layout::fit::PlanError::Fatal(Error::Render(message)) if message.contains("missing its frozen axes"))
     );

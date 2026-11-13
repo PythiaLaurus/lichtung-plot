@@ -217,7 +217,7 @@ impl Plot {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
             crate::orchestrator::root::coordinate_intrinsic(
                 intrinsic,
-                &self.intrinsic_inputs(registered, theme, operation)?,
+                &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
             )?
             .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
                 registered, 1,
@@ -291,7 +291,7 @@ impl Plot {
                 self, registered, theme,
             )?),
             PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(
-                self, registered, intrinsic, operation, theme,
+                registered, intrinsic, operation, theme,
             )?),
             PlotKind::Beeswarm => Some(crate::plots::beeswarm::intrinsic_body_minimum(
                 self, registered, intrinsic, operation, theme,

@@ -69,7 +69,6 @@ struct WaterfallSpan {
 }
 
 fn retained<'v>(
-    chart: &Plot,
     registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
 ) -> Result<&'v PreparedWaterfall, Error> {
     if registered.is_none() {
@@ -77,9 +76,7 @@ fn retained<'v>(
             "Waterfall requires root-prepared spans".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Waterfall")?
-        .as_ref()
-    {
+    match crate::layout::interior::preference::panel(registered, "Waterfall")?.as_ref() {
         crate::orchestrator::registration::FamilyRef::Waterfall(marks) => Ok(marks),
         _ => Err(Error::Render(
             "Waterfall requires root-prepared spans".into(),
@@ -142,13 +139,13 @@ mod geometry_tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source.erase(),
             &resolved,
-            |chart, inputs, resolved, _operation| {
+            |_, inputs, resolved, _operation| {
                 let operation = resolved
                     .text
                     .prepared_font_environment()
                     .unwrap()
                     .operation();
-                let marks = retained(chart, inputs.plots.first()).unwrap();
+                let marks = retained(inputs.plots.first()).unwrap();
                 let panel = PixelRect::new(0.0, 800.0, 0.0, 400.0);
                 let projection =
                     crate::layout::Projection::new((0.0, 20.0), (0.0, 1.0), panel.as_tuple());
@@ -282,7 +279,7 @@ mod geometry_tests {
                         .get_references()
                         .get_waterfall_reference()
                         .backend_style()));
-                let prepared = retained(chart, inputs.plots.first()).unwrap();
+                let prepared = retained(inputs.plots.first()).unwrap();
                 assert_eq!(
                     prepared
                         .spans
@@ -424,7 +421,7 @@ fn mark_intrinsic_body_minimum(
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart, registered)?;
+    let prepared = retained(registered)?;
     let labels = &registered
         .expect("prepared Waterfall occurrence")
         .axes
@@ -521,12 +518,12 @@ pub(crate) fn intrinsic_body_minimum(
     let marks = mark_intrinsic_body_minimum(chart, registered, theme)?;
     let axes = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
-        &chart.intrinsic_inputs(registered, theme, operation)?,
+        &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         registered, 1,
     ));
-    let prepared = retained(chart, registered)?;
+    let prepared = retained(registered)?;
 
     let mut height = 0.0_f64;
     let input = registered
@@ -601,12 +598,7 @@ pub(crate) fn natural_body_height(
         return Err(Error::Render("natural Waterfall rows missing".into()));
     }
     let crate::orchestrator::registration::FamilyRef::Waterfall(marks) =
-        crate::layout::interior::preference::panel(
-            registered,
-            chart.axis_scope(),
-            "natural Waterfall",
-        )?
-        .as_ref()
+        crate::layout::interior::preference::panel(registered, "natural Waterfall")?.as_ref()
     else {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     };
@@ -647,7 +639,7 @@ pub(crate) fn natural_body_height(
         .max(
             crate::orchestrator::root::coordinate_intrinsic(
                 intrinsic,
-                &chart.intrinsic_inputs(registered, theme, operation)?,
+                &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
             )?
             .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
                 registered, 1,
@@ -756,7 +748,7 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained(chart, context.registered)?;
+    let prepared = retained(context.registered)?;
     let theme = context.theme;
 
     let labels = &context
@@ -801,7 +793,11 @@ pub(crate) fn measure(
     let mark_minimum = mark_intrinsic_body_minimum(chart, context.registered, theme)?;
     let axes_minimum = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
-        &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
+        &crate::orchestrator::root::intrinsic_inputs(
+            context.registered,
+            theme,
+            context.data.source_resources(),
+        )?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
         context.registered,
@@ -1199,7 +1195,8 @@ pub(crate) fn measure(
             );
         }
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =

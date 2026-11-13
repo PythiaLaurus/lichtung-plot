@@ -468,7 +468,8 @@ pub(crate) fn measure_marks(
     for (points, style) in &payload.groups {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
+    let mut result =
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide(context.registered)?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Scatter(payload),
