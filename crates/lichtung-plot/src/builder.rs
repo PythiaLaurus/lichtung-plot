@@ -473,10 +473,12 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) prepared_matrix_axes:
         Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
-    pub(crate) prepared_scatter:
-        Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
-    pub(crate) prepared_line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
-    pub(crate) prepared_qq: Option<std::sync::Arc<crate::plots::qq::PreparedQqInputs>>,
+    pub(crate) prepared_families: std::sync::Arc<
+        Vec<(
+            Option<String>,
+            crate::orchestrator::registration::PreparedFamily,
+        )>,
+    >,
     pub(crate) prepared_estimate:
         Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
     pub(crate) prepared_bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
@@ -493,12 +495,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
     pub(crate) prepared_dumbbell:
         Option<std::sync::Arc<crate::plots::dumbbell::PreparedDumbbellInputs>>,
-    pub(crate) prepared_regression:
-        Option<std::sync::Arc<crate::plots::regression::PreparedRegressionInputs>>,
-    pub(crate) prepared_histogram:
-        Option<std::sync::Arc<crate::plots::histogram::PreparedHistogramInputs>>,
-    pub(crate) prepared_density:
-        Option<std::sync::Arc<crate::plots::density::PreparedDensityInputs>>,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     marker: PhantomData<K>,
@@ -562,8 +558,7 @@ impl Plot<crate::kind::Any> {
             canvas_owner: None,
             prepared_discrete_guides: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
-            prepared_scatter: None,
-            prepared_qq: None,
+            prepared_families: std::sync::Arc::new(Vec::new()),
             prepared_estimate: None,
             prepared_bars: None,
             prepared_marginal: None,
@@ -573,10 +568,6 @@ impl Plot<crate::kind::Any> {
             prepared_interaction: None,
             prepared_distributions: None,
             prepared_dumbbell: None,
-            prepared_regression: None,
-            prepared_histogram: None,
-            prepared_density: None,
-            prepared_line: None,
             prepared_matrix_axes: None,
             axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
@@ -917,12 +908,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_axes,
             prepared_matrix_axes,
             prepared_discrete_guides,
-            prepared_scatter,
-            prepared_line,
-            prepared_histogram,
-            prepared_density,
-            prepared_qq,
-            prepared_regression,
+            prepared_families,
             prepared_dumbbell,
             prepared_estimate,
             prepared_bars,
@@ -943,12 +929,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_bars,
             prepared_estimate,
             prepared_dumbbell,
-            prepared_scatter,
-            prepared_qq,
-            prepared_regression,
-            prepared_histogram,
-            prepared_density,
-            prepared_line,
+            prepared_families,
             prepared_axes,
             prepared_matrix_axes,
             prepared_discrete_guides,

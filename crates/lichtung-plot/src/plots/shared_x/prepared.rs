@@ -1,6 +1,7 @@
 use crate::data::PlotData;
 use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 use crate::layout::{AxisSpec, AxisTick};
+use crate::orchestrator::registration::PreparedFamily;
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
 
@@ -414,6 +415,16 @@ pub(crate) fn prepare_reference_plot(
     let mut retained = Vec::new();
     crate::data::source::reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
+    let family = bins
+        .map(PreparedFamily::Histogram)
+        .or_else(|| curves.map(PreparedFamily::Density))
+        .or_else(|| quantiles.map(PreparedFamily::Qq))
+        .or_else(|| fit.map(PreparedFamily::Regression));
+    let mut families = Vec::new();
+    if let Some(family) = family {
+        crate::data::source::reserve_source(&mut families, 1)?;
+        families.push((scope()?, family));
+    }
     Ok(PreparedInteriorInputs {
         discrete_guides: std::sync::OnceLock::new(),
         waterfall: waterfall
@@ -500,46 +511,7 @@ pub(crate) fn prepare_reference_plot(
         route,
         axes: crate::data::source::source_arc(retained)?,
         matrix: None,
-        scatter: None,
-        line: None,
-        histogram: bins
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::histogram::PreparedHistogramInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
-        density: curves
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::density::PreparedDensityInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
-        qq: quantiles
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::qq::PreparedQqInputs { panels })
-            })
-            .transpose()?,
-        regression: fit
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(
-                    crate::plots::regression::PreparedRegressionInputs { panels },
-                )
-            })
-            .transpose()?,
+        families: crate::data::source::source_arc(families)?,
     })
 }
 
@@ -554,12 +526,7 @@ pub(crate) fn prepare_plot(
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();
-    let mut scatter = Vec::new();
-    let mut line = Vec::new();
-    let mut histogram = Vec::new();
-    let mut density = Vec::new();
-    let mut qq = Vec::new();
-    let mut regression = Vec::new();
+    let mut families = Vec::new();
     let mut dumbbell = Vec::new();
     let mut estimate = Vec::new();
     let mut bars = Vec::new();
@@ -939,39 +906,48 @@ pub(crate) fn prepare_plot(
                 ));
             }
             if let Some(quantiles) = quantiles {
-                crate::data::source::reserve_source(&mut qq, 1)?;
-                qq.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    quantiles,
+                    PreparedFamily::Qq(quantiles),
                 ));
             }
             if let Some(fit) = fit {
-                crate::data::source::reserve_source(&mut regression, 1)?;
-                regression.push((Some(crate::data::source::copy_source_string(&scope)?), fit));
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    PreparedFamily::Regression(fit),
+                ));
             }
             if let Some(bins) = bins {
-                crate::data::source::reserve_source(&mut histogram, 1)?;
-                histogram.push((Some(crate::data::source::copy_source_string(&scope)?), bins));
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    PreparedFamily::Histogram(bins),
+                ));
             }
             if let Some(curves) = curves {
-                crate::data::source::reserve_source(&mut density, 1)?;
-                density.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    curves,
+                    PreparedFamily::Density(curves),
                 ));
             }
             if let Some(paths) = paths {
-                crate::data::source::reserve_source(&mut line, 1)?;
-                line.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    paths,
+                    PreparedFamily::Line {
+                        kind: source.kind(),
+                        marks: paths,
+                    },
                 ));
             }
             if let Some(marks) = marks {
-                crate::data::source::reserve_source(&mut scatter, 1)?;
-                scatter.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Scatter(marks),
                 ));
             }
             retained.push((Some(scope), axes));
@@ -997,7 +973,10 @@ pub(crate) fn prepare_plot(
         for ((_, marks), (_, axes)) in waterfall.iter_mut().zip(&retained) {
             marks.prepare_totals(axes, false)?;
         }
-        for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
+        for ((_, family), (_, axes)) in families.iter().zip(&retained) {
+            let PreparedFamily::Qq(quantiles) = family else {
+                continue;
+            };
             quantiles.validate_ranges(axes.ranges)?;
         }
         for (_, axes) in &retained {
@@ -1114,54 +1093,10 @@ pub(crate) fn prepare_plot(
         } else {
             None
         },
-        qq: if source.kind() == PlotKind::Qq {
-            Some(crate::data::source::source_arc(
-                crate::plots::qq::PreparedQqInputs { panels: qq },
-            )?)
-        } else {
-            None
-        },
-        regression: if source.kind() == PlotKind::Regression {
-            Some(crate::data::source::source_arc(
-                crate::plots::regression::PreparedRegressionInputs { panels: regression },
-            )?)
-        } else {
-            None
-        },
-        histogram: if source.kind() == PlotKind::Histogram {
-            Some(crate::data::source::source_arc(
-                crate::plots::histogram::PreparedHistogramInputs { panels: histogram },
-            )?)
-        } else {
-            None
-        },
-        density: if source.kind() == PlotKind::Density {
-            Some(crate::data::source::source_arc(
-                crate::plots::density::PreparedDensityInputs { panels: density },
-            )?)
-        } else {
-            None
-        },
+        families: crate::data::source::source_arc(families)?,
         route: InteriorRoute::classify(source.kind()),
         axes: crate::data::source::source_arc(retained)?,
         matrix,
-        line: if matches!(
-            source.kind(),
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
-        ) {
-            Some(crate::data::source::source_arc(
-                crate::plots::line::PreparedLineInputs { panels: line },
-            )?)
-        } else {
-            None
-        },
-        scatter: if source.kind() == PlotKind::Scatter {
-            Some(crate::data::source::source_arc(
-                crate::plots::scatter::PreparedScatterInputs { panels: scatter },
-            )?)
-        } else {
-            None
-        },
     })
 }
 
@@ -1201,7 +1136,7 @@ pub(crate) fn prepare_scatter_plot(
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((scope()?, marks));
+    panels.push((scope()?, PreparedFamily::Scatter(marks)));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(PlotKind::Scatter),
         discrete_guides: std::sync::OnceLock::new(),
@@ -1214,16 +1149,9 @@ pub(crate) fn prepare_scatter_plot(
         distributions: None,
         estimate: None,
         dumbbell: None,
-        qq: None,
-        regression: None,
-        histogram: None,
-        density: None,
         axes: crate::data::source::source_arc(retained_axes)?,
         matrix: None,
-        line: None,
-        scatter: Some(crate::data::source::source_arc(
-            crate::plots::scatter::PreparedScatterInputs { panels },
-        )?),
+        families: crate::data::source::source_arc(panels)?,
     })
 }
 
@@ -1261,7 +1189,13 @@ pub(crate) fn prepare_line_plot(
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
-    panels.push((scope()?, marks));
+    panels.push((
+        scope()?,
+        PreparedFamily::Line {
+            kind: source.kind(),
+            marks,
+        },
+    ));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         discrete_guides: std::sync::OnceLock::new(),
@@ -1275,15 +1209,8 @@ pub(crate) fn prepare_line_plot(
         estimate: None,
         dumbbell: None,
         axes: crate::data::source::source_arc(retained_axes)?,
-        histogram: None,
-        qq: None,
-        regression: None,
-        density: None,
         matrix: None,
-        scatter: None,
-        line: Some(crate::data::source::source_arc(
-            crate::plots::line::PreparedLineInputs { panels },
-        )?),
+        families: crate::data::source::source_arc(panels)?,
     })
 }
 

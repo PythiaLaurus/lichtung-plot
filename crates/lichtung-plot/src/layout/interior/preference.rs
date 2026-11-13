@@ -1,6 +1,7 @@
 //! Bottom-up standard-panel soft sizes; exact root assignment remains separate.
 
 use crate::layout::PhysicalTextAlignment;
+use crate::orchestrator::registration::PreparedFamily as F;
 use crate::{Error, Plot, PlotKind};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -210,6 +211,23 @@ pub(crate) fn mark_preference(
     hard: (f64, f64),
 ) -> Result<StandardSizePreference, Error> {
     let scope = plot.axis_scope();
+    macro_rules! standard {
+        ($owner:literal, $pattern:pat => $marks:ident) => {{
+            if plot.prepared_families.is_empty() {
+                return Err(Error::Render(format!(
+                    "{} mark preference lacks preparation",
+                    $owner
+                )));
+            }
+            let $pattern = panel(&plot.prepared_families, scope, $owner)? else {
+                return Err(Error::Render(format!(
+                    "{} mark preference lacks preparation",
+                    $owner
+                )));
+            };
+            $marks
+        }};
+    }
     let point_ink = |radius| -> Result<f64, Error> {
         let point = plot.description().point_style(theme, (0, 0, 0), radius);
         let (x, y) = crate::render::geometry::point_ink_dimensions(&point)?;
@@ -217,22 +235,14 @@ pub(crate) fn mark_preference(
     };
     let (count, primary_ink) = match plot.kind() {
         PlotKind::Scatter => {
-            let inputs = plot
-                .prepared_scatter
-                .as_deref()
-                .ok_or_else(|| Error::Render("Scatter mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Scatter")?;
+            let marks = standard!("Scatter", F::Scatter(marks) => marks);
             (
                 marks.checked_primary_mark_count()?,
                 point_ink(theme.marks.get_points().get_radii().get_scatter())?,
             )
         }
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let inputs = plot
-                .prepared_line
-                .as_deref()
-                .ok_or_else(|| Error::Render("Line mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Line")?;
+            let marks = standard!("Line", F::Line { marks, .. } => marks);
             let stroke = if plot.kind() == PlotKind::Line {
                 theme.marks.get_data_lines().get_series_line()
             } else {
@@ -252,10 +262,7 @@ pub(crate) fn mark_preference(
             (marks.checked_primary_mark_count()?, line.max(marker))
         }
         PlotKind::Histogram => {
-            let inputs = plot.prepared_histogram.as_deref().ok_or_else(|| {
-                Error::Render("Histogram mark preference lacks preparation".into())
-            })?;
-            let marks = panel(&inputs.panels, scope, "Histogram")?;
+            let marks = standard!("Histogram", F::Histogram(marks) => marks);
             let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
                 &theme
                     .marks
@@ -267,11 +274,7 @@ pub(crate) fn mark_preference(
             (marks.primary_mark_count(), x.max(y))
         }
         PlotKind::Density => {
-            let inputs = plot
-                .prepared_density
-                .as_deref()
-                .ok_or_else(|| Error::Render("Density mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Density")?;
+            let marks = standard!("Density", F::Density(marks) => marks);
             let line = crate::render::geometry::line_ink_width(
                 &theme
                     .marks
@@ -290,21 +293,14 @@ pub(crate) fn mark_preference(
             (marks.primary_mark_count(), line.max(x).max(y))
         }
         PlotKind::Qq => {
-            let inputs = plot
-                .prepared_qq
-                .as_deref()
-                .ok_or_else(|| Error::Render("Qq mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Qq")?;
+            let marks = standard!("Qq", F::Qq(marks) => marks);
             (
                 marks.primary_mark_count(),
                 point_ink(theme.marks.get_points().get_radii().get_qq())?,
             )
         }
         PlotKind::Regression => {
-            let inputs = plot.prepared_regression.as_deref().ok_or_else(|| {
-                Error::Render("Regression mark preference lacks preparation".into())
-            })?;
-            let marks = panel(&inputs.panels, scope, "Regression")?;
+            let marks = standard!("Regression", F::Regression(marks) => marks);
             (
                 marks.primary_mark_count(),
                 point_ink(theme.marks.get_points().get_radii().get_regression())?,

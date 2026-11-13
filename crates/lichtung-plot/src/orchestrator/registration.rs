@@ -13,6 +13,32 @@ impl PartialEq for RootIdentity {
 
 impl Eq for RootIdentity {}
 
+#[derive(Debug)]
+pub(crate) enum PreparedFamily {
+    Scatter(crate::plots::scatter::PreparedScatter),
+    Line {
+        kind: crate::PlotKind,
+        marks: crate::plots::line::PreparedLine,
+    },
+    Histogram(crate::plots::histogram::HistogramSemantics),
+    Density(crate::plots::density::PreparedDensity),
+    Qq(crate::plots::qq::PreparedQq),
+    Regression(crate::plots::regression::PreparedRegression),
+}
+
+impl PreparedFamily {
+    pub(crate) const fn kind(&self) -> crate::PlotKind {
+        match self {
+            Self::Scatter(_) => crate::PlotKind::Scatter,
+            Self::Line { kind, .. } => *kind,
+            Self::Histogram(_) => crate::PlotKind::Histogram,
+            Self::Density(_) => crate::PlotKind::Density,
+            Self::Qq(_) => crate::PlotKind::Qq,
+            Self::Regression(_) => crate::PlotKind::Regression,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum FacetRole {
     Row,

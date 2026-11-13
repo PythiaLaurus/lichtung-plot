@@ -32,11 +32,6 @@ thread_local! {
 }
 
 #[derive(Debug)]
-pub(crate) struct PreparedScatterInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedScatter)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct PreparedScatter {
     pub(crate) ranges: [(f64, f64); 2],
     groups: Vec<ScatterGroup>,
@@ -69,15 +64,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_scatter
-        .as_ref()
-        .and_then(|panels| {
-            panels
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Scatter(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Scatter intrinsic requires root-prepared marks".into()))?;
     // This identity is independent of visibility, coincidence, and clipping.
 
@@ -434,15 +425,11 @@ pub(crate) fn measure_marks(
     });
     let theme = context.theme;
     let prepared = chart
-        .prepared_scatter
-        .as_ref()
-        .and_then(|panels| {
-            panels
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Scatter(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render(
                 "Scatter measurement requires root-prepared semantics for its component".into(),

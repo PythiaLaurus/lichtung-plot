@@ -25,11 +25,6 @@ use crate::Plot;
 const BAND_POINTS: usize = 40;
 
 #[derive(Debug)]
-pub(crate) struct PreparedRegressionInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedRegression)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct PreparedRegression {
     pub(crate) ranges: [(f64, f64); 2],
     mark_ranges: [(f64, f64); 2],
@@ -46,15 +41,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_regression
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Regression(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Regression intrinsic requires root-prepared marks".into()))?;
     if prepared.points.is_empty() {
         return Err(Error::Render(
@@ -330,15 +321,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_regression
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Regression(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render(
                 "Regression measurement requires root-prepared semantics for its component".into(),

@@ -1180,6 +1180,15 @@ impl<K: crate::kind::Marker> Plot<K> {
             .map(|(_, axes)| axes)
     }
 
+    pub(crate) fn prepared_family(
+        &self,
+    ) -> Option<&crate::orchestrator::registration::PreparedFamily> {
+        self.prepared_families
+            .iter()
+            .find(|(scope, _)| scope == &self.render_scope)
+            .map(|(_, family)| family)
+    }
+
     pub(crate) fn prepared_discrete_guide(
         &self,
     ) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error>

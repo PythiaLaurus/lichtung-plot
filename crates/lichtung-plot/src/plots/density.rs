@@ -39,11 +39,6 @@ pub(crate) struct PreparedDensity {
     curves: Vec<DensityCurve>,
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedDensityInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedDensity)>,
-}
-
 /// Group curves, rather than their generated KDE vertices, are the semantic
 /// primary marks. The resolved stroke is measured before parent assignment.
 pub(crate) fn intrinsic_body_minimum(
@@ -51,15 +46,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_density
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Density(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Density intrinsic requires root-prepared curves".into()))?;
     if prepared.curves.is_empty() {
         return Err(Error::Render("Density has no retained group curves".into()));
@@ -348,15 +339,11 @@ pub(crate) fn measure_marks(
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_density
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Density(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render(
                 "Density measurement requires root-prepared semantics for its component".into(),
@@ -1176,12 +1163,16 @@ mod tests {
         let text_service = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_density.as_ref().unwrap().panels;
+        let panels = &chart.prepared_families;
         assert_eq!(panels.len(), 2);
-        for ((scope, prepared), (expected, fills)) in panels
+        for ((scope, family), (expected, fills)) in panels
             .iter()
             .zip([([0, 128], [230, 0]), ([230, 0], [64, 128])])
         {
+            let crate::orchestrator::registration::PreparedFamily::Density(prepared) = family
+            else {
+                panic!("prepared Density")
+            };
             assert_eq!(
                 prepared
                     .curves

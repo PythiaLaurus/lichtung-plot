@@ -134,13 +134,12 @@ pub(crate) struct PreparedInteriorInputs {
     pub(crate) route: InteriorRoute,
     pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
-    pub(crate) scatter: Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
-    pub(crate) line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
-    pub(crate) qq: Option<std::sync::Arc<crate::plots::qq::PreparedQqInputs>>,
-    pub(crate) regression:
-        Option<std::sync::Arc<crate::plots::regression::PreparedRegressionInputs>>,
-    pub(crate) histogram: Option<std::sync::Arc<crate::plots::histogram::PreparedHistogramInputs>>,
-    pub(crate) density: Option<std::sync::Arc<crate::plots::density::PreparedDensityInputs>>,
+    pub(crate) families: std::sync::Arc<
+        Vec<(
+            Option<String>,
+            crate::orchestrator::registration::PreparedFamily,
+        )>,
+    >,
 }
 
 impl PreparedInteriorInputs {
@@ -205,16 +204,11 @@ impl PreparedInteriorInputs {
         plot.prepared_marginal.clone_from(&self.marginal);
         plot.prepared_interaction.clone_from(&self.interaction);
         plot.prepared_matrix_axes.clone_from(&self.matrix);
-        plot.prepared_scatter.clone_from(&self.scatter);
-        plot.prepared_line.clone_from(&self.line);
-        plot.prepared_histogram.clone_from(&self.histogram);
-        plot.prepared_density.clone_from(&self.density);
-        plot.prepared_qq.clone_from(&self.qq);
+        plot.prepared_families.clone_from(&self.families);
         plot.prepared_dumbbell.clone_from(&self.dumbbell);
         plot.prepared_estimate.clone_from(&self.estimate);
         plot.prepared_bars.clone_from(&self.bars);
         plot.prepared_distributions.clone_from(&self.distributions);
-        plot.prepared_regression.clone_from(&self.regression);
         Ok(plot)
     }
 }

@@ -18,11 +18,6 @@ use crate::{Error, Plot, PlotKind};
 mod tests;
 
 #[derive(Debug)]
-pub(crate) struct PreparedLineInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedLine)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct PreparedLine {
     pub(crate) ranges: [(f64, f64); 2],
     mark_ranges: [(f64, f64); 2],
@@ -72,15 +67,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_line
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Line { marks, .. } => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Line intrinsic requires root-prepared paths".into()))?;
 
     let count = prepared.groups.iter().try_fold(0_u128, |total, group| {
@@ -836,15 +827,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_line
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Line { marks, .. } => Some(marks),
+            _ => None,
         })
-        .map(|(_, inputs)| inputs)
         .ok_or_else(|| {
             Error::Render(
                 "line measurement requires root-prepared semantics for its component".into(),

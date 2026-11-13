@@ -46,11 +46,6 @@ struct RugSegment {
 }
 
 #[derive(Debug)]
-pub(crate) struct PreparedHistogramInputs {
-    pub(crate) panels: Vec<(Option<String>, HistogramSemantics)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct HistogramSemantics {
     pub(crate) ranges: [(f64, f64); 2],
     source_ranges: [(f64, f64); 2],
@@ -66,15 +61,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_histogram
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Histogram(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Histogram intrinsic requires root-prepared bins".into()))?;
     if prepared.bins.is_empty() {
         return Err(Error::Render(
@@ -335,15 +326,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_histogram
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Histogram(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render(
                 "Histogram measurement requires root-prepared semantics for its component".into(),
@@ -1186,12 +1173,16 @@ mod tests {
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_histogram.as_ref().unwrap().panels;
+        let panels = &chart.prepared_families;
         assert_eq!(panels.len(), 2);
-        for ((scope, prepared), (edges, alphas)) in panels.iter().zip([
+        for ((scope, family), (edges, alphas)) in panels.iter().zip([
             ([1.0_f64, 4.5, 8.0], [128, 64]),
             ([11.0_f64, 14.5, 18.0], [230, 0]),
         ]) {
+            let crate::orchestrator::registration::PreparedFamily::Histogram(prepared) = family
+            else {
+                panic!("prepared Histogram")
+            };
             assert_eq!(
                 prepared
                     .bins

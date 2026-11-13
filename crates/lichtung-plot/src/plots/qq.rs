@@ -29,25 +29,16 @@ pub(crate) struct PreparedQq {
     line_alpha: Option<ResolvedAlpha>,
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedQqInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedQq)>,
-}
-
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_qq
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Qq(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Qq intrinsic requires root-prepared marks".into()))?;
     if prepared.theoretical.len() != prepared.observed.len() || prepared.theoretical.is_empty() {
         return Err(Error::Render(
@@ -218,15 +209,11 @@ pub(crate) fn measure_marks(
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = chart
-        .prepared_qq
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Qq(marks) => Some(marks),
+            _ => None,
         })
-        .map(|(_, prepared)| prepared)
         .ok_or_else(|| {
             Error::Render(
                 "Qq measurement requires root-prepared semantics for its component".into(),

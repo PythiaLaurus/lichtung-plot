@@ -5,6 +5,7 @@ use super::PreparedInteriorInputs;
 use crate::data::PlotData;
 use crate::decorations::legend::discrete::{PreparedGuide, PreparedGuides, ScopedGuide};
 use crate::decorations::legend::GuideSourceKey;
+use crate::orchestrator::registration::PreparedFamily as F;
 use crate::{Error, Plot, PlotKind};
 
 /// One measured mandatory right guide beside the flexible scientific body.
@@ -123,6 +124,19 @@ fn panel<'a, T>(
 }
 
 impl PreparedInteriorInputs {
+    fn family<'a, T>(
+        &'a self,
+        scope: Option<&str>,
+        kind: PlotKind,
+        select: impl FnOnce(&'a crate::orchestrator::registration::PreparedFamily) -> Option<&'a T>,
+    ) -> Result<&'a T, Error> {
+        select(panel(Some(self.families.as_slice()), scope, kind)?).ok_or_else(|| {
+            Error::Render(format!(
+                "{kind:?} guide is missing prepared semantics for {scope:?}"
+            ))
+        })
+    }
+
     /// Scientific color membership is independent of guide visibility, display
     /// aliases and eventual section projection. No body probe participates.
     pub(crate) fn observed_color_levels(&self, chart: &Plot) -> Result<Vec<String>, Error> {
@@ -138,18 +152,19 @@ impl PreparedInteriorInputs {
             }
             Ok(())
         };
-        if let Some(inputs) = &self.scatter {
-            for (_, marks) in &inputs.panels {
-                for value in marks.hue_levels() {
-                    include(value)?;
+        for (_, family) in self.families.iter() {
+            match family {
+                F::Scatter(marks) => {
+                    for value in marks.hue_levels() {
+                        include(value)?;
+                    }
                 }
-            }
-        }
-        if let Some(inputs) = &self.line {
-            for (_, marks) in &inputs.panels {
-                for value in marks.hue_levels() {
-                    include(value)?;
+                F::Line { marks, .. } => {
+                    for value in marks.hue_levels() {
+                        include(value)?;
+                    }
                 }
+                _ => {}
             }
         }
         if let Some(inputs) = &self.bars {
@@ -166,8 +181,8 @@ impl PreparedInteriorInputs {
                 }
             }
         }
-        if let Some(inputs) = &self.density {
-            for (_, marks) in &inputs.panels {
+        for (_, family) in self.families.iter() {
+            if let crate::orchestrator::registration::PreparedFamily::Density(marks) = family {
                 for value in marks.hue_levels() {
                     include(value)?;
                 }
@@ -239,19 +254,12 @@ impl PreparedInteriorInputs {
         if let Some(global) = global_hues {
             include_keys(&mut keys, global.iter().map(String::as_str))?;
         }
-        if let Some(inputs) = &self.scatter {
-            for (_, marks) in &inputs.panels {
-                include_keys(&mut keys, marks.hue_levels())?;
-            }
-        }
-        if let Some(inputs) = &self.line {
-            for (_, marks) in &inputs.panels {
-                include_keys(&mut keys, marks.hue_levels())?;
-            }
-        }
-        if let Some(inputs) = &self.density {
-            for (_, marks) in &inputs.panels {
-                include_keys(&mut keys, marks.hue_levels())?;
+        for (_, family) in self.families.iter() {
+            match family {
+                F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
+                F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
+                F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
+                _ => {}
             }
         }
         if let Some(inputs) = &self.bars {
@@ -294,16 +302,18 @@ impl PreparedInteriorInputs {
         let kind = chart.kind();
         match kind {
             PlotKind::Scatter => {
-                let marks = panel(
-                    self.scatter.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Scatter(marks) => Some(marks),
+                    _ => None,
+                })?;
                 let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                let marks = panel(self.line.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Line { marks, .. } => Some(marks),
+                    _ => None,
+                })?;
                 let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
@@ -324,11 +334,10 @@ impl PreparedInteriorInputs {
                 marks.guide_entries(chart, theme, data)
             }
             PlotKind::Density => {
-                let marks = panel(
-                    self.density.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                let marks = self.family(scope, kind, |family| match family {
+                    F::Density(marks) => Some(marks),
+                    _ => None,
+                })?;
                 let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
@@ -348,11 +357,10 @@ impl PreparedInteriorInputs {
                 })?
                 .guide_entries(chart, theme, data),
             PlotKind::Regression => {
-                panel(
-                    self.regression.as_ref().map(|p| p.panels.as_slice()),
-                    scope,
-                    kind,
-                )?;
+                self.family(scope, kind, |family| match family {
+                    F::Regression(marks) => Some(marks),
+                    _ => None,
+                })?;
                 let color =
                     crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?;
                 crate::plots::regression::PreparedRegression::guide_entries(chart, theme, color)
@@ -528,16 +536,30 @@ impl PreparedInteriorInputs {
                 .alpha_guide(chart, theme, &mut guide)?
             };
         }
+        macro_rules! standard {
+            ($pattern:pat => $marks:ident) => {
+                self.family(scope, chart.kind(), |family| {
+                    if let $pattern = family {
+                        Some($marks)
+                    } else {
+                        None
+                    }
+                })?
+                .alpha_guide(chart, theme, &mut guide)?
+            };
+        }
         match chart.kind() {
-            PlotKind::Scatter => scoped!(scatter),
-            PlotKind::Qq => scoped!(qq),
-            PlotKind::Regression => scoped!(regression),
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => scoped!(line),
-            PlotKind::Density => scoped!(density),
+            PlotKind::Scatter => standard!(F::Scatter(marks) => marks),
+            PlotKind::Qq => standard!(F::Qq(marks) => marks),
+            PlotKind::Regression => standard!(F::Regression(marks) => marks),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                standard!(F::Line { marks, .. } => marks);
+            }
+            PlotKind::Density => standard!(F::Density(marks) => marks),
             PlotKind::Interaction => scoped!(interaction),
             PlotKind::Dumbbell => scoped!(dumbbell),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => scoped!(estimate),
-            PlotKind::Histogram => scoped!(histogram),
+            PlotKind::Histogram => standard!(F::Histogram(marks) => marks),
             PlotKind::Bar
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
