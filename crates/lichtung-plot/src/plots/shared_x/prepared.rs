@@ -14,11 +14,11 @@ use crate::{Error, Plot};
 /// before registration publication; no range helper or formatter runs here.
 pub(crate) fn prepare_pair_axes(
     build: &PlotRegistrationBuild<'_>,
-    ranges: [(f64, f64); 2],
+    ranges: [Option<(f64, f64)>; 2],
     categories: [Option<Vec<String>>; 2],
 ) -> Result<PreparedAxesOwner, Error> {
     let policies = crate::layout::range_policies(build.source.kind());
-    let [x, y] = ranges.map(|(lower, upper)| Some(DisplayExtent { lower, upper }));
+    let [x, y] = ranges.map(|range| range.map(|(lower, upper)| DisplayExtent { lower, upper }));
     let [x_categories, y_categories] = categories.map(|raw| {
         raw.map(|raw| PreparedCategorySource {
             raw,
@@ -167,7 +167,7 @@ pub(crate) fn prepare_plot_registration(
             let slots = (0.0, labels.len() as f64);
             panel.axes = Some(prepare_pair_axes(
                 panel,
-                [marks.range, slots],
+                [marks.range, slots].map(Some),
                 [None, Some(labels)],
             )?);
             Ok(PreparedFamily::Waterfall(marks))
@@ -186,7 +186,7 @@ pub(crate) fn prepare_plot_registration(
             let slots = (0.0, levels.len() as f64);
             panel.axes = Some(prepare_pair_axes(
                 panel,
-                [marks.x_data, slots],
+                [marks.x_data, slots].map(Some),
                 [None, Some(levels)],
             )?);
             Ok(PreparedFamily::Beeswarm(marks))
@@ -208,7 +208,11 @@ pub(crate) fn prepare_plot_registration(
                 reason = "category lengths are admitted source rows"
             )]
             let ranges = levels.each_ref().map(|levels| (0.0, levels.len() as f64));
-            panel.axes = Some(prepare_pair_axes(panel, ranges, levels.map(Some))?);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                ranges.map(Some),
+                levels.map(Some),
+            )?);
             Ok(PreparedFamily::Heatmap(marks))
         }
         PlotKind::Interaction => {
@@ -220,7 +224,7 @@ pub(crate) fn prepare_plot_registration(
             let slots = (0.0, conditions.len() as f64);
             panel.axes = Some(prepare_pair_axes(
                 panel,
-                [slots, marks.range],
+                [slots, marks.range].map(Some),
                 [Some(conditions), None],
             )?);
             Ok(PreparedFamily::Interaction(marks))
@@ -246,14 +250,25 @@ pub(crate) fn prepare_plot_registration(
             )?,
         }),
         PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            let (marks, range, labels) = crate::plots::interval_estimate::PreparedEstimate::new(
+                source,
+                data,
+                source.description().significance_annotations(),
+                numeric,
+            )?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, labels.len() as f64);
+            panel.axes = Some(prepare_pair_axes(
+                panel,
+                [range, Some(slots)],
+                [None, Some(labels)],
+            )?);
             Ok(PreparedFamily::Estimate {
                 kind: source.kind(),
-                marks: crate::plots::interval_estimate::PreparedEstimate::new(
-                    source,
-                    data,
-                    source.description().significance_annotations(),
-                    numeric,
-                )?,
+                marks,
             })
         }
         PlotKind::Dumbbell => {
@@ -265,7 +280,7 @@ pub(crate) fn prepare_plot_registration(
             let slots = (0.0, categories.len() as f64);
             panel.axes = Some(prepare_pair_axes(
                 panel,
-                [marks.range, slots],
+                [marks.range, slots].map(Some),
                 [None, Some(categories)],
             )?);
             Ok(PreparedFamily::Dumbbell(marks))
@@ -276,7 +291,7 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 owner,
             )?;
-            panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
+            panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
             Ok(PreparedFamily::Histogram(marks))
         }
         PlotKind::Density => Ok(PreparedFamily::Density(
@@ -289,7 +304,7 @@ pub(crate) fn prepare_plot_registration(
         PlotKind::Regression => {
             let (marks, ranges) =
                 crate::plots::regression::PreparedRegression::new(source.description(), data)?;
-            panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
+            panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
             Ok(PreparedFamily::Regression(marks))
         }
         _ => Err(Error::Render(
@@ -351,7 +366,12 @@ impl PreparedFamily {
                     (0.0, marks.categories.len() as f64)
                 }
             }
-            Self::Estimate { kind, marks } => marks.x_range(*kind)?,
+            Self::Estimate { kind, .. } => crate::plots::interval_estimate::x_range(
+                *kind,
+                axes.expect("prepared Estimate axes").sources()[0]
+                    .base_seed
+                    .map(DisplayExtent::pair),
+            )?,
             Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
                 marks.range,
                 source.description().x_axis_spec(),
@@ -514,7 +534,7 @@ pub(crate) fn prepare_plot<'src>(
         )?;
         registry.panels[0].axes = Some(prepare_pair_axes(
             &registry.panels[0],
-            ranges,
+            ranges.map(Some),
             [None, None],
         )?);
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
@@ -536,7 +556,7 @@ pub(crate) fn prepare_plot<'src>(
         )?;
         registry.panels[0].axes = Some(prepare_pair_axes(
             &registry.panels[0],
-            ranges,
+            ranges.map(Some),
             [conditions, None],
         )?);
         registry.panels[0].family = Some(PreparedFamily::Line {
@@ -559,16 +579,27 @@ pub(crate) fn prepare_plot<'src>(
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
         ) {
             for panel in &mut registry.panels {
-                let marks = crate::plots::interval_estimate::PreparedEstimate::new(
-                    source,
-                    panel.data(resources)?,
-                    panel.significance_annotations(),
-                    panel.scope.numeric_binding(
-                        source.description(),
-                        &panel.row_source,
-                        resources,
-                    )?,
-                )?;
+                let (marks, range, labels) =
+                    crate::plots::interval_estimate::PreparedEstimate::new(
+                        source,
+                        panel.data(resources)?,
+                        panel.significance_annotations(),
+                        panel.scope.numeric_binding(
+                            source.description(),
+                            &panel.row_source,
+                            resources,
+                        )?,
+                    )?;
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "category lengths are admitted source rows"
+                )]
+                let slots = (0.0, labels.len() as f64);
+                panel.axes = Some(prepare_pair_axes(
+                    panel,
+                    [range, Some(slots)],
+                    [None, Some(labels)],
+                )?);
                 panel.family = Some(PreparedFamily::Estimate {
                     kind: source.kind(),
                     marks,
@@ -581,10 +612,17 @@ pub(crate) fn prepare_plot<'src>(
             FacetScales::Fixed | FacetScales::FreeY
         ) {
             for panel in &registry.panels {
-                let Some(PreparedFamily::Estimate { marks, .. }) = &panel.family else {
+                let Some(PreparedFamily::Estimate { .. }) = &panel.family else {
                     continue;
                 };
-                if let Some(range) = marks.range {
+                if let Some(range) = panel
+                    .axes
+                    .as_ref()
+                    .expect("prepared Estimate axes")
+                    .sources()[0]
+                    .base_seed
+                    .map(DisplayExtent::pair)
+                {
                     estimate_fallback = Some(
                         estimate_fallback
                             .map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
@@ -678,13 +716,17 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::Scatter => {
                     let (marks, ranges) =
                         crate::plots::scatter::PreparedScatter::new(source.description(), data)?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Scatter(marks)
                 }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     let (marks, ranges, conditions) =
                         crate::plots::line::PreparedLine::new(source, data, facet.conditions)?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges, [conditions, None])?);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        ranges.map(Some),
+                        [conditions, None],
+                    )?);
                     PreparedFamily::Line {
                         kind: source.kind(),
                         marks,
@@ -696,7 +738,7 @@ pub(crate) fn prepare_plot<'src>(
                         data,
                         owner,
                     )?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Histogram(marks)
                 }
                 PlotKind::Density => PreparedFamily::Density(
@@ -711,7 +753,7 @@ pub(crate) fn prepare_plot<'src>(
                         source.description(),
                         data,
                     )?;
-                    panel.axes = Some(prepare_pair_axes(panel, ranges, [None, None])?);
+                    panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Regression(marks)
                 }
                 PlotKind::Dumbbell => {
@@ -724,7 +766,7 @@ pub(crate) fn prepare_plot<'src>(
                     let slots = (0.0, categories.len() as f64);
                     panel.axes = Some(prepare_pair_axes(
                         panel,
-                        [marks.range, slots],
+                        [marks.range, slots].map(Some),
                         [None, Some(categories)],
                     )?);
                     PreparedFamily::Dumbbell(marks)
@@ -748,7 +790,11 @@ pub(crate) fn prepare_plot<'src>(
                         reason = "category lengths are admitted source rows"
                     )]
                     let ranges = levels.each_ref().map(|levels| (0.0, levels.len() as f64));
-                    panel.axes = Some(prepare_pair_axes(panel, ranges, levels.map(Some))?);
+                    panel.axes = Some(prepare_pair_axes(
+                        panel,
+                        ranges.map(Some),
+                        levels.map(Some),
+                    )?);
                     PreparedFamily::Heatmap(marks)
                 }
                 PlotKind::Beeswarm => {
@@ -769,7 +815,7 @@ pub(crate) fn prepare_plot<'src>(
                     let slots = (0.0, levels.len() as f64);
                     panel.axes = Some(prepare_pair_axes(
                         panel,
-                        [marks.x_data, slots],
+                        [marks.x_data, slots].map(Some),
                         [None, Some(levels)],
                     )?);
                     PreparedFamily::Beeswarm(marks)
@@ -783,7 +829,7 @@ pub(crate) fn prepare_plot<'src>(
                     let slots = (0.0, labels.len() as f64);
                     panel.axes = Some(prepare_pair_axes(
                         panel,
-                        [marks.range, slots],
+                        [marks.range, slots].map(Some),
                         [None, Some(labels)],
                     )?);
                     PreparedFamily::Waterfall(marks)
@@ -801,7 +847,7 @@ pub(crate) fn prepare_plot<'src>(
                     let slots = (0.0, conditions.len() as f64);
                     panel.axes = Some(prepare_pair_axes(
                         panel,
-                        [slots, marks.range],
+                        [slots, marks.range].map(Some),
                         [Some(conditions), None],
                     )?);
                     PreparedFamily::Interaction(marks)
@@ -1266,18 +1312,14 @@ fn prepare(
             let config = reference_config.as_ref().ok_or_else(|| {
                 Error::Render("estimate axes require root-prepared semantics".into())
             })?;
-            let marks = marks!(family, PreparedFamily::Estimate { marks, .. } => marks, "estimate axes require retained rows");
-            categories[1] = Some(crate::data::source::collect_source(
-                marks
-                    .labels
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?);
-            let range = marks
-                .range
-                .or(config.estimate_fallback)
-                .map_or_else(|| marks.x_range(chart.kind()), Ok)?;
-            [range, (0.0, marks.labels.len() as f64)]
+            marks!(family, PreparedFamily::Estimate { marks, .. } => marks, "estimate axes require retained rows");
+            let axes = prepared_axes.as_mut().expect("prepared Estimate axes");
+            let levels = axes.sources_mut()[1].categories.take().expect("prepared Estimate categories").raw;
+            let slots = (0.0, levels.len() as f64);
+            categories[1] = Some(levels);
+            let range = crate::plots::interval_estimate::x_range(chart.kind(),
+                axes.sources()[0].base_seed.map(DisplayExtent::pair).or(config.estimate_fallback))?;
+            [range, slots]
         }
         PlotKind::Interaction => {
             let marks = marks!(reference, PreparedFamily::Interaction(marks) => marks, "interaction axes require retained semantics");

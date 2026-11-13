@@ -65,7 +65,13 @@ pub(crate) fn categorical_preference(
             let marks = family!("estimate preference lacks preparation", "Estimate", F::Estimate { marks, .. } => marks);
             (
                 crate::layout::AxisSide::Left,
-                marks.labels.len(),
+                registered
+                    .expect("prepared Estimate occurrence")
+                    .axes
+                    .categories(1)
+                    .expect("prepared Estimate categories")
+                    .raw
+                    .len(),
                 marks.primary_mark_count(),
             )
         }

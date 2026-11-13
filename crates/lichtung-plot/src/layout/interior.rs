@@ -254,7 +254,18 @@ impl Plot {
                     .ok_or_else(|| {
                         Error::Render("estimate intrinsic requires root-prepared rows".into())
                     })?;
-                Some(prepared.mark_intrinsic(self, theme)?)
+                Some(
+                    prepared.mark_intrinsic(
+                        self,
+                        &registered
+                            .expect("prepared Estimate occurrence")
+                            .axes
+                            .categories(1)
+                            .expect("prepared Estimate categories")
+                            .raw,
+                        theme,
+                    )?,
+                )
             }
             PlotKind::Dumbbell => Some(crate::plots::dumbbell::intrinsic_body_minimum(
                 self, registered, theme,

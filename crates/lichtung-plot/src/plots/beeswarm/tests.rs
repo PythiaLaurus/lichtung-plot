@@ -265,7 +265,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             let slots = (0.0, levels.len() as f64);
             panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
                 panel,
-                [prepared.x_data, slots],
+                [prepared.x_data, slots].map(Some),
                 [None, Some(levels)],
             )?);
             registry.panels[id.slot].family = Some(

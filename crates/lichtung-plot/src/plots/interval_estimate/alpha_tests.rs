@@ -46,7 +46,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     .unwrap();
     let row_source =
         crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
-    let prepared = PreparedEstimate::new(
+    let (prepared, _, labels) = PreparedEstimate::new(
         &source,
         crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
             .unwrap(),
@@ -56,7 +56,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(prepared.labels, ["A", "B", "C"]);
+    assert_eq!(labels, ["A", "B", "C"]);
     assert_eq!(
         prepared
             .alphas

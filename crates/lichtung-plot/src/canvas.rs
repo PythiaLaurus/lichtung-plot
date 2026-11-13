@@ -1346,7 +1346,7 @@ impl Canvas {
                         crate::plots::line::PreparedLine::new(plot, panel.data(&resources)?, None)?;
                     panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
                         panel,
-                        ranges,
+                        ranges.map(Some),
                         [conditions, None],
                     )?);
                     crate::orchestrator::registration::PreparedFamily::Line {
@@ -1362,7 +1362,7 @@ impl Canvas {
                     )?;
                     panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
                         panel,
-                        ranges,
+                        ranges.map(Some),
                         [None, None],
                     )?);
                     crate::orchestrator::registration::PreparedFamily::Scatter(marks)

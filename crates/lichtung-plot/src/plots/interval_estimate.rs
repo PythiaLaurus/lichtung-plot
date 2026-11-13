@@ -16,13 +16,11 @@ mod alpha_tests;
 
 #[derive(Debug)]
 pub(crate) struct PreparedEstimate {
-    pub(crate) labels: Vec<String>,
     estimates: Vec<Option<EstimateTuple>>,
     alphas: Vec<ObservationAlpha>,
     line_alphas: Vec<ObservationAlpha>,
     adjacent: Vec<Option<(String, bool)>>,
     reference: Option<f64>,
-    pub(crate) range: Option<(f64, f64)>,
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
@@ -141,9 +139,10 @@ impl PreparedEstimate {
     pub(crate) fn mark_intrinsic(
         &self,
         chart: &Plot,
+        labels: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
-        if self.labels.len() != self.estimates.len() {
+        if labels.len() != self.estimates.len() {
             return Err(Error::Render(
                 "estimate categories and prepared rows differ".into(),
             ));
@@ -263,7 +262,7 @@ impl PreparedEstimate {
                     .1,
             );
         }
-        let count = u32::try_from(self.labels.len()).map_err(|_| {
+        let count = u32::try_from(labels.len()).map_err(|_| {
             Error::Render("estimate category count exceeds coordinate range".into())
         })?;
         let height = pitch * f64::from(count);
@@ -282,12 +281,16 @@ impl PreparedEstimate {
         ))
     }
 
+    #[expect(
+        clippy::type_complexity,
+        reason = "the original optional seed and raw categories move directly to the registration without a second retained record"
+    )]
     pub(crate) fn new<'a>(
         chart: &Plot,
         data: crate::data::PlotData<'_, '_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
         numeric: crate::numeric::source::NumericBinding<'_>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, Option<(f64, f64)>, Vec<String>), Error> {
         data.validate_row_source()?;
         if chart.kind() != crate::PlotKind::PointInterval {
             return prepare_model(chart, data, annotations, numeric)
@@ -318,26 +321,31 @@ impl PreparedEstimate {
             alphas.push(row.alpha);
             line_alphas.push(row.line_alpha);
         }
-        Ok(Self {
-            labels,
-            estimates,
-            alphas,
-            line_alphas,
-            adjacent: Vec::new(),
-            reference: chart.description().zero_line_visible().then_some(0.0),
+        Ok((
+            Self {
+                estimates,
+                alphas,
+                line_alphas,
+                adjacent: Vec::new(),
+                reference: chart.description().zero_line_visible().then_some(0.0),
+                value_presentation: None,
+            },
             range,
-            value_presentation: None,
-        })
+            labels,
+        ))
     }
+}
 
-    pub(crate) fn x_range(&self, kind: crate::PlotKind) -> Result<(f64, f64), Error> {
-        self.range.ok_or_else(|| {
-            Error::Data(format!(
-                "{}: all rows are not_estimable; set explicit x-axis limits",
-                family(kind)
-            ))
-        })
-    }
+pub(crate) fn x_range(
+    kind: crate::PlotKind,
+    seed: Option<(f64, f64)>,
+) -> Result<(f64, f64), Error> {
+    seed.ok_or_else(|| {
+        Error::Data(format!(
+            "{}: all rows are not_estimable; set explicit x-axis limits",
+            family(kind)
+        ))
+    })
 }
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
@@ -686,6 +694,7 @@ pub(crate) fn axis_categories(
 
 #[expect(
     clippy::too_many_lines,
+    clippy::type_complexity,
     reason = "model semantics validate tuples, attached labels, and transformed domains before fonts"
 )]
 fn prepare_model<'a>(
@@ -693,7 +702,7 @@ fn prepare_model<'a>(
     data: crate::data::PlotData<'_, '_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     numeric: crate::numeric::source::NumericBinding<'_>,
-) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
+) -> Result<(PreparedEstimate, Option<(f64, f64)>, Vec<String>), crate::layout::fit::PlanError> {
     let alpha =
         chart
             .description()
@@ -913,16 +922,18 @@ fn prepare_model<'a>(
                 }
             },
         ))?;
-    Ok(PreparedEstimate {
-        labels,
-        estimates: transformed_estimates,
-        alphas,
-        line_alphas,
-        adjacent,
-        reference: Some(transformed_reference),
+    Ok((
+        PreparedEstimate {
+            estimates: transformed_estimates,
+            alphas,
+            line_alphas,
+            adjacent,
+            reference: Some(transformed_reference),
+            value_presentation,
+        },
         range,
-        value_presentation,
-    })
+        labels,
+    ))
 }
 
 pub(crate) fn measure_marks(
@@ -955,7 +966,13 @@ fn project(
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let labels = &prepared.labels;
+    let labels = &context
+        .registered
+        .expect("prepared Estimate occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Estimate categories")
+        .raw;
     let estimates = &prepared.estimates;
     let family = family(chart.kind());
     let point_interval = chart.kind() == crate::PlotKind::PointInterval;
