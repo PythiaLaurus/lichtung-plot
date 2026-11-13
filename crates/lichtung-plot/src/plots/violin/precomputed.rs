@@ -243,9 +243,8 @@ thread_local! {
     static HUE_LOOKUP_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
+pub(crate) fn prepare(chart: &crate::builder::PlotDescription) -> Result<PreparedRaincloud, Error> {
     let input = chart
-        .description()
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
     let membership = input.membership()?;
@@ -255,18 +254,10 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(input.category_dimension.as_str());
     fields.extend(input.hue_dimension.as_deref());
-    let line_alpha = chart.prepare_scoped_alpha(
-        AlphaTarget::Line,
-        AlphaUnitKind::Aggregate,
-        &fields,
-        chart.data(),
-    )?;
-    let fill_alpha = chart.prepare_scoped_alpha(
-        AlphaTarget::Fill,
-        AlphaUnitKind::Aggregate,
-        &fields,
-        chart.data(),
-    )?;
+    let line_alpha =
+        chart.prepare_scoped_alpha(AlphaTarget::Line, AlphaUnitKind::Aggregate, &fields, None)?;
+    let fill_alpha =
+        chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, None)?;
     let categories = crate::data::source::collect_source((0..input.category.len()).map(|row| {
         crate::data::source::copy_source_string(category_value(
             &input.category,

@@ -751,11 +751,17 @@ fn prepare_model<'a>(
     data: crate::data::PlotData<'_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
 ) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let alphas = crate::data::source::collect_source(
         (0..data.height()).map(|row| ObservationAlpha::resolve(data, &alpha, row)),
     )?;
-    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
+    let line_alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     let line_alphas = crate::data::source::collect_source(
         (0..data.height()).map(|row| ObservationAlpha::resolve(data, &line_alpha, row)),
     )?;

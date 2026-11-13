@@ -56,7 +56,10 @@ pub(crate) fn prepare_scoped(
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<DistributionSample, Error> {
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_column = chart
         .description()
         .x_col()
@@ -164,10 +167,18 @@ pub(crate) fn prepare_scoped(
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(category);
     fields.extend(chart.description().group_name());
-    let line_alpha =
-        chart.prepare_scoped_alpha(AlphaTarget::Line, AlphaUnitKind::Aggregate, &fields, data)?;
-    let fill_alpha =
-        chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
+    let line_alpha = chart.description().prepare_scoped_alpha(
+        AlphaTarget::Line,
+        AlphaUnitKind::Aggregate,
+        &fields,
+        data.facet_selector()?,
+    )?;
+    let fill_alpha = chart.description().prepare_scoped_alpha(
+        AlphaTarget::Fill,
+        AlphaUnitKind::Aggregate,
+        &fields,
+        data.facet_selector()?,
+    )?;
     for group in &mut groups {
         let key = (category, group.label.as_str());
         let series = chart

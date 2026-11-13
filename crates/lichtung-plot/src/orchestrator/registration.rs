@@ -2,6 +2,56 @@
 
 use crate::{builder::PlotDescription, Error};
 
+#[derive(Clone, Copy)]
+pub(crate) enum FacetRole {
+    Row,
+    Column,
+    Wrap,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FacetSelector<'src, 'op> {
+    schema: &'src crate::FacetSpec,
+    levels: &'op crate::FacetCell,
+}
+
+impl<'src, 'op> FacetSelector<'src, 'op> {
+    pub(crate) fn checked(
+        schema: &'src crate::FacetSpec,
+        levels: &'op crate::FacetCell,
+    ) -> Result<Self, Error> {
+        let dimensions = schema.values().count();
+        if dimensions != levels.dimensions() {
+            return Err(Error::Render(
+                "significance FacetCell shape does not match the configured facet layout".into(),
+            ));
+        }
+        Ok(Self { schema, levels })
+    }
+
+    pub(crate) fn fields(&self) -> Vec<(FacetRole, &'src crate::CategoryValues, &'op str)> {
+        if let Some((row, column)) = self.levels.grid_levels() {
+            [
+                (FacetRole::Row, self.schema.row_values(), row),
+                (FacetRole::Column, self.schema.column_values(), column),
+            ]
+            .into_iter()
+            .filter_map(|(role, values, level)| values.map(|values| (role, values, level)))
+            .collect()
+        } else {
+            let level = self.levels.single_level().expect("checked single facet");
+            [
+                (FacetRole::Row, self.schema.row_values()),
+                (FacetRole::Column, self.schema.column_values()),
+                (FacetRole::Wrap, self.schema.wrap_values()),
+            ]
+            .into_iter()
+            .filter_map(|(role, values)| values.map(|values| (role, values, level)))
+            .collect()
+        }
+    }
+}
+
 pub(crate) enum RowSelection {
     Selected {
         input_slots: Vec<usize>,

@@ -175,13 +175,12 @@ impl HistogramSemantics {
     }
 
     pub(crate) fn new(
-        chart: &Plot,
+        source: &crate::builder::PlotDescription,
         data: PlotData<'_>,
         owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
-        let source = chart.description();
-        let curve_alpha = chart
+        let curve_alpha = source
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
         let (range, bins, curve, rugs) = if let Some(input) =
@@ -255,7 +254,12 @@ impl HistogramSemantics {
             (range, bins, curve, rugs)
         };
 
-        let alpha = chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Bin, &[], data)?;
+        let alpha = source.prepare_scoped_alpha(
+            AlphaTarget::Fill,
+            AlphaUnitKind::Bin,
+            &[],
+            data.facet_selector()?,
+        )?;
         let bin_alphas = crate::data::source::collect_source(
             bins.iter().map(|bin| alpha.bin((bin.lower, bin.upper))),
         )?;
@@ -1018,6 +1022,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one source-to-selected contract keeps rug geometry independent of bin and curve paint"
+    )]
     fn sampled_rugs_use_the_owner_without_changing_bins_or_density() {
         let source = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
             "sample",
@@ -1036,8 +1044,10 @@ mod tests {
             .unwrap();
         let marks = original.marks().clone().extents(extents).unwrap();
         let edited = original.customize().marks(marks).build().unwrap();
-        let before = HistogramSemantics::new(&source, source.data(), Some(&original)).unwrap();
-        let after = HistogramSemantics::new(&source, source.data(), Some(&edited)).unwrap();
+        let before =
+            HistogramSemantics::new(source.description(), source.data(), Some(&original)).unwrap();
+        let after =
+            HistogramSemantics::new(source.description(), source.data(), Some(&edited)).unwrap();
         assert_eq!(before.bins, after.bins);
         assert_eq!(before.curve, after.curve);
         let scientific_maximum = before
@@ -1080,7 +1090,8 @@ mod tests {
                 )
                 .unwrap(),
             );
-        let prepared = HistogramSemantics::new(&mapped, mapped.data(), Some(&original)).unwrap();
+        let prepared =
+            HistogramSemantics::new(mapped.description(), mapped.data(), Some(&original)).unwrap();
         assert_eq!(prepared.bins, before.bins);
         assert_eq!(prepared.curve, before.curve);
         assert_eq!(prepared.rugs, before.rugs);

@@ -1,4 +1,4 @@
-use super::Plot;
+use super::{Plot, PlotDescription};
 use crate::alpha::{
     AlphaEncoding, AlphaInputs, AlphaTarget, AlphaUnitKind, PreparedAlpha, ResolvedAlpha,
 };
@@ -30,14 +30,11 @@ impl ScopedAlpha<'_> {
 
     pub(crate) fn collective(
         &self,
-        chart: &Plot,
+        chart: &PlotDescription,
         identity: &crate::data::CollectivePair,
     ) -> crate::Result<Option<ResolvedAlpha>> {
-        let group = chart
-            .description()
-            .group_name()
-            .zip(identity.group.as_deref());
-        let hue = chart.description().hue_name().zip(identity.hue.as_deref());
+        let group = chart.group_name().zip(identity.group.as_deref());
+        let hue = chart.hue_name().zip(identity.hue.as_deref());
         match (group, hue) {
             (Some(group), Some(hue)) => self.keyed(&[group, hue]),
             (Some(group), None) => self.keyed(&[group]),
@@ -60,10 +57,6 @@ impl ScopedAlpha<'_> {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
-    pub(crate) fn alpha_inputs(&self) -> &AlphaInputs {
-        &self.description.payload.alpha
-    }
-
     /// Replace point-fill alpha using original observations or explicit Single.
     ///
     /// Outlines and supplemental layers remain independently owned. Repeated
@@ -182,6 +175,12 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.description.payload_mut().alpha.set(target, encoding);
         self
     }
+}
+
+impl PlotDescription {
+    pub(crate) fn alpha_inputs(&self) -> &AlphaInputs {
+        &self.payload.alpha
+    }
 
     pub(crate) fn prepare_alpha(
         &self,
@@ -190,21 +189,19 @@ impl<K: crate::kind::Marker> Plot<K> {
         required_fields: &[&str],
     ) -> Result<PreparedAlpha, crate::Error> {
         let mut facets = Vec::new();
-        if let Some(facet) = &self.description.payload.facet {
+        if let Some(facet) = &self.payload.facet {
             crate::data::source::reserve_source(&mut facets, 3)?;
             facets.extend(facet.values().map(crate::CategoryValues::name));
         }
-        let original_len = if let Some(geometry) = self.description().raincloud_geometry_input() {
+        let original_len = if let Some(geometry) = self.raincloud_geometry_input() {
             geometry.point_y.len()
         } else {
-            self.description().row_count()
+            self.row_count()
         };
-        self.description.payload.alpha.get(target).prepare(
-            unit,
-            original_len,
-            required_fields,
-            &facets,
-        )
+        self.payload
+            .alpha
+            .get(target)
+            .prepare(unit, original_len, required_fields, &facets)
     }
 
     pub(crate) fn prepare_scoped_alpha<'a>(
@@ -212,34 +209,18 @@ impl<K: crate::kind::Marker> Plot<K> {
         target: AlphaTarget,
         unit: AlphaUnitKind,
         required_fields: &[&str],
-        data: crate::data::PlotData<'a>,
+        facet: Option<crate::orchestrator::registration::FacetSelector<'a, 'a>>,
     ) -> crate::Result<ScopedAlpha<'a>> {
         let prepared = self.prepare_alpha(target, unit, required_fields)?;
         let mut facets = Vec::new();
-        if let Some(facet) = &self.description.payload.facet {
-            for values in facet.values() {
-                if data.height() == 0
-                    || !prepared
-                        .selector_fields()
-                        .iter()
-                        .any(|field| field == values.name())
+        if let Some(facet) = facet {
+            for (_, values, raw) in facet.fields() {
+                if !prepared
+                    .selector_fields()
+                    .iter()
+                    .any(|field| field == values.name())
                 {
                     continue;
-                }
-                let raw = values.get(data.row_index(0)).flatten().ok_or_else(|| {
-                    crate::Error::Data(format!(
-                        "alpha owning facet {:?} has no value at original slot {}",
-                        values.name(),
-                        data.row_index(0)
-                    ))
-                })?;
-                if (1..data.height())
-                    .any(|row| values.get(data.row_index(row)).flatten() != Some(raw))
-                {
-                    return Err(crate::Error::Data(format!(
-                        "alpha owning facet {:?} does not identify one actual prepared scope",
-                        values.name()
-                    )));
                 }
                 crate::data::source::reserve_source(&mut facets, 1)?;
                 facets.push((values.name(), raw));
@@ -253,14 +234,14 @@ impl<K: crate::kind::Marker> Plot<K> {
         target: AlphaTarget,
         unit: AlphaUnitKind,
         include_hue: bool,
-        data: crate::data::PlotData<'a>,
+        facet: Option<crate::orchestrator::registration::FacetSelector<'a, 'a>>,
     ) -> crate::Result<ScopedAlpha<'a>> {
         let mut fields = Vec::new();
         crate::data::source::reserve_source(&mut fields, 2)?;
-        fields.extend(self.description().group_name());
+        fields.extend(self.group_name());
         if include_hue {
-            fields.extend(self.description().hue_name());
+            fields.extend(self.hue_name());
         }
-        self.prepare_scoped_alpha(target, unit, &fields, data)
+        self.prepare_scoped_alpha(target, unit, &fields, facet)
     }
 }

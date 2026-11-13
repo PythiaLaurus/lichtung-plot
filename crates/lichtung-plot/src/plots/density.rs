@@ -272,13 +272,21 @@ impl PreparedDensity {
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
         let mut prepared = prepare_density_for_chart(chart, data, column)?;
-        let alpha =
-            chart.prepare_collective_alpha(AlphaTarget::Line, AlphaUnitKind::Series, true, data)?;
-        let fill_alpha =
-            chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)?;
+        let alpha = chart.description().prepare_collective_alpha(
+            AlphaTarget::Line,
+            AlphaUnitKind::Series,
+            true,
+            data.facet_selector()?,
+        )?;
+        let fill_alpha = chart.description().prepare_collective_alpha(
+            AlphaTarget::Fill,
+            AlphaUnitKind::Series,
+            true,
+            data.facet_selector()?,
+        )?;
         for curve in &mut prepared.curves {
-            curve.line_alpha = alpha.collective(chart, &curve.identity)?;
-            curve.fill_alpha = fill_alpha.collective(chart, &curve.identity)?;
+            curve.line_alpha = alpha.collective(chart.description(), &curve.identity)?;
+            curve.fill_alpha = fill_alpha.collective(chart.description(), &curve.identity)?;
         }
         if let Some(exact) = chart.description().categorical_map_spec() {
             for hue in prepared.hue_levels() {
@@ -292,18 +300,13 @@ impl PreparedDensity {
         Ok(prepared)
     }
 
-    pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
+    pub(crate) fn ranges(
+        &self,
+        chart: &crate::builder::PlotDescription,
+    ) -> Result<[(f64, f64); 2], Error> {
         Ok([
-            chart
-                .description()
-                .x_axis_spec()
-                .limits
-                .unwrap_or(self.x_range),
-            crate::layout::anchored_auto_range(
-                (0.0, self.maximum),
-                chart.description().y_axis_spec(),
-                0.0,
-            )?,
+            chart.x_axis_spec().limits.unwrap_or(self.x_range),
+            crate::layout::anchored_auto_range((0.0, self.maximum), chart.y_axis_spec(), 0.0)?,
         ])
     }
 }

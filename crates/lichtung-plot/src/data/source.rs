@@ -210,6 +210,7 @@ mod tests {
             (2, 302, 0, 300)
         );
         let alpha = source
+            .description()
             .prepare_alpha(
                 crate::alpha::AlphaTarget::Point,
                 crate::alpha::AlphaUnitKind::Observation,

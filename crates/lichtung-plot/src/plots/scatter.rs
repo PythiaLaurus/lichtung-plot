@@ -160,7 +160,10 @@ impl PreparedScatter {
             .filter_map(|group| group.label.as_deref())
     }
 
-    pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        chart: &crate::builder::PlotDescription,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         #[cfg(test)]
@@ -170,11 +173,9 @@ impl PreparedScatter {
             stages.set(counts);
         });
         let x_col = chart
-            .description()
             .x_col()
             .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;
         let y_col = chart
-            .description()
             .y_col()
             .ok_or_else(|| Error::Data("scatter: y column not set".into()))?;
         let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "scatter")?;
@@ -187,7 +188,7 @@ impl PreparedScatter {
             crate::data::min_max(rows.iter().map(|(_, _, y)| *y), "scatter")?,
         ];
         let mut groups = Vec::new();
-        if let Some(hue_col) = chart.description().hue_col() {
+        if let Some(hue_col) = chart.hue_col() {
             let hues = crate::data::strict_strings(data, hue_col, "scatter")?;
             let retained_hues = crate::data::source::collect_source(
                 rows.iter()
@@ -228,7 +229,7 @@ impl PreparedScatter {
                 }))?,
             });
         }
-        if let Some(exact) = chart.description().categorical_map_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for group in &groups {
                 if let Some(label) = &group.label {
                     if exact.color_in(label).is_none() {

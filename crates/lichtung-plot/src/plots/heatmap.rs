@@ -1455,7 +1455,10 @@ pub(crate) fn prepare<'a>(
 ) -> Result<HeatmapData, Error> {
     let data = data.into();
     validate_options(chart)?;
-    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
         .description()
         .x_col()
@@ -1703,7 +1706,11 @@ pub(crate) fn prepare<'a>(
         y_levels,
         cells,
         fills: resolved_fills,
-        fill_binding: chart.alpha_inputs().get(AlphaTarget::Fill).clone(),
+        fill_binding: chart
+            .description()
+            .alpha_inputs()
+            .get(AlphaTarget::Fill)
+            .clone(),
         fill_alphas: crate::data::source::source_arc(fill_alphas)?,
         highlighted,
         null_row_annotations,

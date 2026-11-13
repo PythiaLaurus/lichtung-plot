@@ -41,8 +41,14 @@ pub(crate) fn prepare<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
     let data = data.into();
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
-    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let line_alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     if chart.description().y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "point_interval: categorical y-axis limits are not supported".into(),

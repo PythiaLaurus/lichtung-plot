@@ -124,7 +124,12 @@ fn packing_radius(
     );
     // A data-alpha binding retains every observation's full glyph in the
     // scientific packing input, independent of which bytes are transparent.
-    if !chart.alpha_inputs().get(AlphaTarget::Point).is_theme() {
+    if !chart
+        .description()
+        .alpha_inputs()
+        .get(AlphaTarget::Point)
+        .is_theme()
+    {
         style.color = style.color.alpha(255);
     }
     packing::radius(&style)
@@ -135,7 +140,10 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_>,
     selection: crate::theme::ContinuousColorScale,
 ) -> Result<PreparedBeeswarm, Error> {
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let category_col = chart
         .description()
         .y_col()

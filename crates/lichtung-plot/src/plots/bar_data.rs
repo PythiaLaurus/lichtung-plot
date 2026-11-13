@@ -925,16 +925,20 @@ pub(crate) fn prepare_scoped<'a>(
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(category);
     fields.extend(chart.description().group_name());
-    let fill_alpha =
-        chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
+    let fill_alpha = chart.description().prepare_scoped_alpha(
+        AlphaTarget::Fill,
+        AlphaUnitKind::Aggregate,
+        &fields,
+        data.facet_selector()?,
+    )?;
     let line_alpha = if mode == BarMode::Stacked {
         None
     } else {
-        Some(chart.prepare_scoped_alpha(
+        Some(chart.description().prepare_scoped_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Aggregate,
             &fields,
-            data,
+            data.facet_selector()?,
         )?)
     };
     for bar in &mut prepared.bars {

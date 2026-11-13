@@ -18,6 +18,10 @@ impl<K: crate::kind::Marker> Plot<K> {
 }
 
 impl PlotDescription {
+    pub(crate) fn facet_spec(&self) -> Option<&FacetSpec> {
+        self.payload.facet.as_ref()
+    }
+
     pub(crate) fn facet_scales_spec(&self) -> FacetScales {
         match &self.payload.facet {
             Some(facet) => facet.scale_policy(),

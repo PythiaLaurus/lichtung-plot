@@ -222,7 +222,10 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
         else {
             panic!("explicit aggregate fill binding")
         };
-        assert_eq!(input, mapped.alpha_inputs().get(AlphaTarget::Fill));
+        assert_eq!(
+            input,
+            mapped.description().alpha_inputs().get(AlphaTarget::Fill)
+        );
         assert!(
             PreparedGuide::merge([&constant, &data], &[], "alpha-context compatibility")
                 .unwrap_err()

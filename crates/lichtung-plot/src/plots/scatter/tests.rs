@@ -30,7 +30,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     let data = source
         .data()
         .map_source_rows(source.description().source_row_map().unwrap());
-    let prepared = PreparedScatter::new(&source, data).unwrap();
+    let prepared = PreparedScatter::new(source.description(), data).unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 3);
     assert_eq!(
         prepared.groups[0]
@@ -52,7 +52,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         .alpha_for_scope(None)
         .unwrap();
     assert!(chart.prepared_discrete_guide().unwrap().is_none());
-    assert_eq!(hidden_alpha.inputs, *source.alpha_inputs());
+    assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
     assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

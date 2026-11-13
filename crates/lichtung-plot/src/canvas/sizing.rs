@@ -167,7 +167,7 @@ impl HeightInputs {
             legend: plot.description().legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
-            alpha: plot.alpha_inputs().clone(),
+            alpha: plot.description().alpha_inputs().clone(),
             guides: ScopedGuideInputs::new(plot, use_kind, local.as_ref(), dependencies)?,
             scope: plot
                 .axis_scope()

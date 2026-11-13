@@ -608,7 +608,10 @@ pub(crate) fn prepare(
     // Category slots, connectors, and the two named total targets survive
     // caller-window clipping. Bar records are the original row slots above.
 
-    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let (spans, range) = prepare_spans(base, &deltas, data, &alpha)?;
     let running = spans.last().map_or(base, |span| span.end);
     let [base_label, terminal_label] = chart.description().waterfall_labels_spec().map_or_else(

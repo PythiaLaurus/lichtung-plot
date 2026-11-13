@@ -141,23 +141,25 @@ impl PreparedQq {
         Ok(())
     }
 
-    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        chart: &crate::builder::PlotDescription,
+        data: PlotData<'_>,
+    ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         let line_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
-        if let Some(hue) = chart.description().hue_col() {
+        if let Some(hue) = chart.hue_col() {
             return Err(Error::Data(format!(
                 "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
             )));
         }
         let column = chart
-            .description()
             .x_col()
             .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
         let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
-        let mut prepared = prepare_qq(&values, chart.description().qq_line_spec())?;
+        let mut prepared = prepare_qq(&values, chart.qq_line_spec())?;
         prepared.line_alpha = line_alpha;
         for source in &mut prepared.alphas {
             *source = ObservationAlpha::resolve(data, &alpha, source.slot)?;
@@ -165,19 +167,22 @@ impl PreparedQq {
         Ok(prepared)
     }
 
-    pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
+    pub(crate) fn ranges(
+        &self,
+        chart: &crate::builder::PlotDescription,
+    ) -> Result<[(f64, f64); 2], Error> {
         Ok([
             qq_display_range(
                 (
                     self.theoretical[0],
                     self.theoretical[self.theoretical.len() - 1],
                 ),
-                chart.description().x_axis_spec(),
+                chart.x_axis_spec(),
                 "x-axis",
             )?,
             qq_display_range(
                 (self.observed[0], self.observed[self.observed.len() - 1]),
-                chart.description().y_axis_spec(),
+                chart.y_axis_spec(),
                 "y-axis",
             )?,
         ])
@@ -761,7 +766,7 @@ mod tests {
             .x_limits(-2.0, 2.0)
             .y_limits(0.0, 4.0)
             .erase();
-        let prepared = PreparedQq::new(&source, source.data()).unwrap();
+        let prepared = PreparedQq::new(source.description(), source.data()).unwrap();
         assert_eq!(prepared.observed, [1.0, 1.0, 2.0, 3.0]);
         assert_eq!(
             prepared

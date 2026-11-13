@@ -276,7 +276,12 @@ impl<'a> AlphaGuideBuilder<'a> {
     }
 
     pub(crate) fn enabled(&self, target: AlphaTarget) -> bool {
-        self.plot.alpha_inputs().get(target).values().is_some()
+        self.plot
+            .description()
+            .alpha_inputs()
+            .get(target)
+            .values()
+            .is_some()
     }
 
     pub(crate) fn any_enabled(&self) -> bool {
@@ -482,7 +487,7 @@ impl<'a> AlphaGuideBuilder<'a> {
                     current -= 1;
                 }
             }
-            let input = self.plot.alpha_inputs().get(target);
+            let input = self.plot.description().alpha_inputs().get(target);
             let glyphs = collect_source(pending.glyphs.into_iter().map(|glyph| {
                 Ok(AlphaGlyphSource {
                     role: glyph.role,
@@ -502,7 +507,7 @@ impl<'a> AlphaGuideBuilder<'a> {
             });
         }
         source_arc(PreparedAlphaInputs {
-            inputs: self.plot.alpha_inputs().clone(),
+            inputs: self.plot.description().alpha_inputs().clone(),
             sources: shared_slice(sources)?,
         })
     }

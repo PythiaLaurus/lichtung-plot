@@ -191,9 +191,11 @@ impl PreparedDistribution {
             PlotKind::Boxplot => Ok(Self::Boxplot(crate::plots::boxplot::prepare(
                 chart, data, facet,
             )?)),
-            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => Ok(
-                Self::Supplied(crate::plots::violin::precomputed::prepare(chart)?),
-            ),
+            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => {
+                Ok(Self::Supplied(crate::plots::violin::precomputed::prepare(
+                    chart.description(),
+                )?))
+            }
             PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Violin(
                 crate::plots::violin::prepare(chart, data, facet)?,
             )),

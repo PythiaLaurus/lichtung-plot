@@ -261,7 +261,10 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
     .with_alpha(AlphaTarget::Line, single.clone())
     .with_alpha(AlphaTarget::Fill, single.clone());
     let erased = source.clone().erase();
-    assert_eq!(erased.alpha_inputs(), source.alpha_inputs());
+    assert_eq!(
+        erased.description().alpha_inputs(),
+        source.description().alpha_inputs()
+    );
     let retained = erased
         .retain_composed_inputs(
             crate::decorations::legend::discrete::scoped::ScopedGuideInputs::for_test(&erased),
@@ -285,14 +288,9 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
     .unwrap();
     let prepared = faceted
         .with_alpha(AlphaTarget::Line, keyed)
+        .description()
         .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Series, &[])
         .unwrap();
-    assert_eq!(
-        prepared
-            .keyed(&[("experiment", "left")])
-            .unwrap()
-            .unwrap()
-            .alpha,
-        90
-    );
+    let resolved = prepared.keyed(&[("experiment", "left")]).unwrap().unwrap();
+    assert_eq!(resolved.alpha, 90);
 }

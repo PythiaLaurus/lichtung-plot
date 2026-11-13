@@ -195,17 +195,25 @@ impl PreparedReference {
                 )?),
             ),
             PlotKind::Dumbbell => Ok(Self::Dumbbell(crate::plots::dumbbell::prepare(
-                source, data,
+                source.description(),
+                data,
             )?)),
             PlotKind::Histogram => Ok(Self::Histogram(
-                crate::plots::histogram::HistogramSemantics::new(source, data, owner)?,
+                crate::plots::histogram::HistogramSemantics::new(
+                    source.description(),
+                    data,
+                    owner,
+                )?,
             )),
             PlotKind::Density => Ok(Self::Density(crate::plots::density::PreparedDensity::new(
                 source, data,
             )?)),
-            PlotKind::Qq => Ok(Self::Qq(crate::plots::qq::PreparedQq::new(source, data)?)),
+            PlotKind::Qq => Ok(Self::Qq(crate::plots::qq::PreparedQq::new(
+                source.description(),
+                data,
+            )?)),
             PlotKind::Regression => Ok(Self::Regression(
-                crate::plots::regression::PreparedRegression::new(source, data)?,
+                crate::plots::regression::PreparedRegression::new(source.description(), data)?,
             )),
             _ => Err(Error::Render(
                 "shared semantics require an extracted reference or paired-endpoint family".into(),
@@ -251,8 +259,8 @@ impl PreparedReference {
                 source.description().x_axis_spec(),
             )?,
             Self::Histogram(marks) => marks.ranges[0],
-            Self::Density(marks) => marks.ranges(source)?[0],
-            Self::Qq(marks) => marks.ranges(source)?[0],
+            Self::Density(marks) => marks.ranges(source.description())?[0],
+            Self::Qq(marks) => marks.ranges(source.description())?[0],
             Self::Regression(marks) => marks.ranges[0],
         })
     }
@@ -601,7 +609,7 @@ pub(crate) fn prepare_plot(
     if source.kind() == PlotKind::Scatter && !source.description().has_facets() {
         return prepare_scatter_plot(
             source,
-            crate::plots::scatter::PreparedScatter::new(source, source_data)?,
+            crate::plots::scatter::PreparedScatter::new(source.description(), source_data)?,
             resources,
         );
     }
@@ -751,7 +759,10 @@ pub(crate) fn prepare_plot(
                 conditions: conditions.as_deref(),
             };
             let marks = if source.kind() == PlotKind::Scatter {
-                Some(crate::plots::scatter::PreparedScatter::new(source, data)?)
+                Some(crate::plots::scatter::PreparedScatter::new(
+                    source.description(),
+                    data,
+                )?)
             } else {
                 None
             };
@@ -768,19 +779,27 @@ pub(crate) fn prepare_plot(
                 None
             };
             let bins = (source.kind() == PlotKind::Histogram)
-                .then(|| crate::plots::histogram::HistogramSemantics::new(source, data, owner))
+                .then(|| {
+                    crate::plots::histogram::HistogramSemantics::new(
+                        source.description(),
+                        data,
+                        owner,
+                    )
+                })
                 .transpose()?;
             let curves = (source.kind() == PlotKind::Density)
                 .then(|| crate::plots::density::PreparedDensity::new(source, data))
                 .transpose()?;
             let quantiles = (source.kind() == PlotKind::Qq)
-                .then(|| crate::plots::qq::PreparedQq::new(source, data))
+                .then(|| crate::plots::qq::PreparedQq::new(source.description(), data))
                 .transpose()?;
             let fit = (source.kind() == PlotKind::Regression)
-                .then(|| crate::plots::regression::PreparedRegression::new(source, data))
+                .then(|| {
+                    crate::plots::regression::PreparedRegression::new(source.description(), data)
+                })
                 .transpose()?;
             let pairs = (source.kind() == PlotKind::Dumbbell)
-                .then(|| crate::plots::dumbbell::prepare(source, data))
+                .then(|| crate::plots::dumbbell::prepare(source.description(), data))
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
             let heatmap_marks = (source.kind() == PlotKind::Heatmap)
@@ -1400,10 +1419,10 @@ fn prepare(
         }
         PlotKind::Density => density
             .ok_or_else(|| Error::Render("Density axes require prepared semantics".into()))?
-            .ranges(chart)?,
+            .ranges(chart.description())?,
         PlotKind::Qq => qq
             .ok_or_else(|| Error::Render("Qq axes require prepared semantics".into()))?
-            .ranges(chart)?,
+            .ranges(chart.description())?,
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
             let line = line.ok_or_else(|| {
                 Error::Render("line axis inputs require prepared semantics".into())

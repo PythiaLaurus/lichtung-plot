@@ -128,6 +128,22 @@ impl<'a> PlotData<'a> {
         self.numeric_facet
     }
 
+    pub(crate) fn facet_selector(
+        self,
+    ) -> Result<Option<crate::orchestrator::registration::FacetSelector<'a, 'a>>, Error> {
+        if self.height() == 0 {
+            return Ok(None);
+        }
+        self.plot
+            .description()
+            .facet_spec()
+            .zip(self.numeric_facet)
+            .map(|(schema, levels)| {
+                crate::orchestrator::registration::FacetSelector::checked(schema, levels)
+            })
+            .transpose()
+    }
+
     pub(crate) fn source_resources(
         self,
     ) -> Result<&'a crate::font::canonical::OperationContext, Error> {

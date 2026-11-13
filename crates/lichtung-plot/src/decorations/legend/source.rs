@@ -676,7 +676,7 @@ fn bind_alpha(
         | MarkPaintRole::FillOutline(_) => None,
     };
     if let Some((target, unit)) = selected {
-        let input = plot.alpha_inputs().get(target);
+        let input = plot.description().alpha_inputs().get(target);
         if !input.is_theme() {
             let paint = paint.ok_or_else(|| invalid("data-alpha binding has no actual paint"))?;
             *paint = paint.alpha(255);

@@ -440,27 +440,32 @@ impl PreparedLine {
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
                 && chart.description().line_path_style_spec() == LinePathStyle::Hue);
-        let alpha = chart.prepare_collective_alpha(
+        let alpha = chart.description().prepare_collective_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Series,
             include_hue,
-            data,
+            data.facet_selector()?,
         )?;
         let fill_alpha = (chart.kind() == PlotKind::Line)
             .then(|| {
-                chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)
+                chart.description().prepare_collective_alpha(
+                    AlphaTarget::Fill,
+                    AlphaUnitKind::Series,
+                    true,
+                    data.facet_selector()?,
+                )
             })
             .transpose()?;
         for group in &mut prepared.groups {
             let identity = group.identity.as_ref().ok_or_else(|| {
                 Error::Render("prepared line series has no scientific identity".into())
             })?;
-            group.line_alpha = alpha.collective(chart, identity)?;
+            group.line_alpha = alpha.collective(chart.description(), identity)?;
             if let Some(alpha) = fill_alpha
                 .as_ref()
                 .filter(|_| group.points.iter().all(|point| point.interval.is_some()))
             {
-                group.fill_alpha = alpha.collective(chart, identity)?;
+                group.fill_alpha = alpha.collective(chart.description(), identity)?;
             }
         }
         Ok(prepared)
@@ -477,7 +482,11 @@ impl PreparedLine {
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
-        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+        let alpha = chart.description().prepare_alpha(
+            AlphaTarget::Point,
+            AlphaUnitKind::Observation,
+            &[],
+        )?;
         let kind = chart.kind();
         let family = match kind {
             PlotKind::Line => "line",

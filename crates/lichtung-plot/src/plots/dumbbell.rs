@@ -398,12 +398,12 @@ pub(crate) fn shared_x_domain(
 }
 
 pub(crate) fn prepare<'a>(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
     data.validate_row_source()?;
-    let source = chart.description();
+    let source = chart;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     if source.y_axis_spec() != &AxisSpec::default() {

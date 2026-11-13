@@ -1338,7 +1338,10 @@ impl Canvas {
                         .configured_source_rows()?
                         .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                         .with_operation(&resources);
-                    Some(crate::plots::scatter::PreparedScatter::new(plot, data)?)
+                    Some(crate::plots::scatter::PreparedScatter::new(
+                        plot.description(),
+                        data,
+                    )?)
                 }
                 None => None,
             });

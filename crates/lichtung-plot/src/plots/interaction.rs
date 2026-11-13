@@ -340,7 +340,10 @@ pub(crate) fn prepare(
     parent: Option<&ObservedCollectives>,
 ) -> Result<PreparedInteraction, Error> {
     data.validate_row_source()?;
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
         .description()
         .x_col()
@@ -391,8 +394,12 @@ pub(crate) fn prepare(
         .global_collective_pairs()
         .unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
-    let line_alpha =
-        chart.prepare_collective_alpha(AlphaTarget::Line, AlphaUnitKind::Series, true, data)?;
+    let line_alpha = chart.description().prepare_collective_alpha(
+        AlphaTarget::Line,
+        AlphaUnitKind::Series,
+        true,
+        data.facet_selector()?,
+    )?;
 
     for row in 0..x.len() {
         if lower[row] > estimate[row] || estimate[row] > upper[row] {
@@ -454,7 +461,7 @@ pub(crate) fn prepare(
                 .as_ref()
                 .map_or_else(TraceStyle::default, |styles| styles[index]),
             cells,
-            line_alpha: line_alpha.collective(chart, identity)?,
+            line_alpha: line_alpha.collective(chart.description(), identity)?,
         });
     }
     if let Some(exact) = chart.description().categorical_map_spec() {

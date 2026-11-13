@@ -415,10 +415,14 @@ pub(crate) fn prepare_axes(
         .description()
         .resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (mut groups, hues) = build_groups(chart, &cols, data)?;
-    let fill_alpha =
-        chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)?;
+    let fill_alpha = chart.description().prepare_collective_alpha(
+        AlphaTarget::Fill,
+        AlphaUnitKind::Series,
+        true,
+        data.facet_selector()?,
+    )?;
     for group in &mut groups {
-        group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
+        group.fill_alpha = fill_alpha.collective(chart.description(), &group.identity)?;
     }
     if let Some(exact) = chart.description().categorical_map_spec() {
         for hue in &hues {
@@ -1177,7 +1181,10 @@ fn build_groups(
     cols: &[&str],
     data: crate::data::PlotData<'_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha =
+        chart
+            .description()
+            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,

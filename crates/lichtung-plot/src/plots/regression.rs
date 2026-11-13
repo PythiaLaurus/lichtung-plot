@@ -211,7 +211,10 @@ impl PreparedRegression {
         Ok(entries)
     }
 
-    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        chart: &crate::builder::PlotDescription,
+        data: PlotData<'_>,
+    ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         let line_alpha = chart
@@ -219,11 +222,9 @@ impl PreparedRegression {
             .single()?;
         let fill_alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Single, &[])?;
         let x_col = chart
-            .description()
             .x_col()
             .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
         let y_col = chart
-            .description()
             .y_col()
             .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
         let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "regression")?;
@@ -234,7 +235,7 @@ impl PreparedRegression {
         )?;
         let x = crate::data::source::collect_source(points.iter().map(|p| Ok(p.0)))?;
         let y = crate::data::source::collect_source(points.iter().map(|p| Ok(p.1)))?;
-        let band = chart.description().regression_band_spec();
+        let band = chart.regression_band_spec();
         let minimum = match band {
             RegressionBand::PointwiseMean95 => 3,
             RegressionBand::Hidden => 2,
@@ -279,14 +280,8 @@ impl PreparedRegression {
         }
         let mark_ranges = [(x_min, x_max), (y_min, y_max)];
 
-        let x_range = crate::layout::continuous_auto_range(
-            (x_min, x_max),
-            chart.description().x_axis_spec(),
-        )?;
-        let y_range = crate::layout::continuous_auto_range(
-            (y_min, y_max),
-            chart.description().y_axis_spec(),
-        )?;
+        let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec())?;
+        let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
         Ok(Self {
             ranges: [x_range, y_range],
             mark_ranges,
@@ -553,8 +548,8 @@ mod style_tests {
                 )
                 .unwrap(),
             );
-        let prepared = PreparedRegression::new(&source, source.data()).unwrap();
-        let baseline = PreparedRegression::new(&base, base.data()).unwrap();
+        let prepared = PreparedRegression::new(source.description(), source.data()).unwrap();
+        let baseline = PreparedRegression::new(base.description(), base.data()).unwrap();
         assert_eq!(prepared.fit_line, baseline.fit_line);
         assert_eq!(
             prepared
