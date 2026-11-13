@@ -23,7 +23,7 @@ pub use panel::AxisTick;
 pub(crate) use panel::NumericTickPlan;
 pub(crate) use panel::TickSource;
 pub(crate) use panel::LABEL_CLEARANCE;
-pub(crate) use panel::{anchored_auto_range, continuous_auto_range, display_axis_spec};
+pub(crate) use panel::{anchored_auto_range, continuous_auto_range};
 pub(crate) use panel::{
     range_policies, AxisSemanticInputs, CoordinateLayoutInputs, RangePolicy, RangeProvenance,
 };

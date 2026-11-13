@@ -269,7 +269,14 @@ impl HistogramSemantics {
                 .x_axis_spec()
                 .window
                 .map_or(range, crate::layout::RawWindow::pair),
-            crate::layout::anchored_auto_range((0.0, maximum), source.y_axis_spec(), 0.0)?,
+            crate::layout::anchored_auto_range(
+                (0.0, maximum),
+                source
+                    .y_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
+                0.0,
+            )?,
         ];
         Ok((
             Self {

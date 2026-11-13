@@ -766,7 +766,14 @@ pub(crate) fn measure(
     let base = prepared.total_candidates[0].0;
     let terminal = prepared.total_candidates[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        crate::layout::continuous_auto_range(range, chart.description().x_axis_spec())
+        crate::layout::continuous_auto_range(
+            range,
+            chart
+                .description()
+                .x_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+        )
     })?;
     let panel = context.panel;
     let y_range = context.axis_range(crate::layout::AxisSide::Left, || {

@@ -338,11 +338,19 @@ impl PreparedFamily {
         Ok(match self {
             Self::Waterfall(marks) => crate::layout::continuous_auto_range(
                 marks.range,
-                source.description().x_axis_spec(),
+                source
+                    .description()
+                    .x_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
             )?,
             Self::Beeswarm(marks) => crate::layout::continuous_auto_range(
                 marks.x_data,
-                source.description().x_axis_spec(),
+                source
+                    .description()
+                    .x_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
             )?,
             Self::Marginal(_) => axes.expect("prepared Marginal axes").ranges()[0],
             Self::Heatmap(_) => (
@@ -376,7 +384,11 @@ impl PreparedFamily {
                 ) {
                     crate::layout::anchored_auto_range(
                         marks.value_range,
-                        source.description().x_axis_spec(),
+                        source
+                            .description()
+                            .x_axis_spec()
+                            .window
+                            .map(crate::layout::RawWindow::pair),
                         0.0,
                     )?
                 } else {
@@ -398,7 +410,11 @@ impl PreparedFamily {
             )?,
             Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
                 marks.range,
-                source.description().x_axis_spec(),
+                source
+                    .description()
+                    .x_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
             )?,
             Self::Histogram(_) => axes.expect("prepared Histogram axes").ranges()[0],
             Self::Density(marks) => marks.ranges(source.description())?[0],
@@ -1256,8 +1272,8 @@ fn prepare(
             marks!(family, PreparedFamily::Scatter(marks) => marks, "Scatter axis inputs require prepared semantics");
             let ranges = prepared_axes.as_ref().expect("prepared Scatter axes").ranges();
             [
-                crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec())?,
-                crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?,
+                crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec().window.map(crate::layout::RawWindow::pair))?,
+                crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec().window.map(crate::layout::RawWindow::pair))?,
             ]
         }
         PlotKind::Histogram => {
@@ -1312,11 +1328,11 @@ fn prepare(
             categories[usize::from(horizontal)] = Some(levels);
             let values = crate::layout::anchored_auto_range(
                 range,
-                if horizontal {
+                (if horizontal {
                     chart.description().x_axis_spec()
                 } else {
                     chart.description().y_axis_spec()
-                },
+                }).window.map(crate::layout::RawWindow::pair),
                 0.0,
             )?;
             if horizontal {
@@ -1334,7 +1350,7 @@ fn prepare(
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(values, chart.description().y_axis_spec())?,
+                crate::layout::continuous_auto_range(values, chart.description().y_axis_spec().window.map(crate::layout::RawWindow::pair))?,
             ]
         }
         PlotKind::Dumbbell => {
@@ -1346,7 +1362,7 @@ fn prepare(
             [
                 crate::layout::continuous_auto_range(
                     marks.range,
-                    chart.description().x_axis_spec(),
+                    chart.description().x_axis_spec().window.map(crate::layout::RawWindow::pair),
                 )?,
                 slots,
             ]
@@ -1374,7 +1390,7 @@ fn prepare(
                 slots,
                 crate::layout::continuous_auto_range(
                     marks.range,
-                    chart.description().y_axis_spec(),
+                    chart.description().y_axis_spec().window.map(crate::layout::RawWindow::pair),
                 )?,
             ]
         }
@@ -1390,7 +1406,7 @@ fn prepare(
             [
                 crate::layout::continuous_auto_range(
                     marks.x_data,
-                    chart.description().x_axis_spec(),
+                    chart.description().x_axis_spec().window.map(crate::layout::RawWindow::pair),
                 )?,
                 slots,
             ]
@@ -1407,7 +1423,7 @@ fn prepare(
             [
                 crate::layout::continuous_auto_range(
                     marks.range,
-                    chart.description().x_axis_spec(),
+                    chart.description().x_axis_spec().window.map(crate::layout::RawWindow::pair),
                 )?,
                 slots,
             ]

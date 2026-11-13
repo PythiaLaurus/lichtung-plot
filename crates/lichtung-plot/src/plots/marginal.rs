@@ -28,6 +28,7 @@ use crate::alpha::{
 };
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::fit::PlanError;
 use crate::layout::{self, AxisSpec, PixelRect};
 use crate::orchestrator::registration::{
     AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, MarginalStrip, PlotOccurrenceId,
@@ -593,26 +594,85 @@ pub(crate) fn measure(
     let curves = &prepared.curves;
 
     // --- Build Layout for the central scatter ---
-    let layout = (|| {
-        context.layout_with_axis_specs(
-            (x_low, x_high),
-            (y_low, y_high),
-            crate::layout::PixelRect::new(central_x0, central_x1, central_y0, central_y1),
-            context
-                .registered
-                .and_then(|registered| registered.axes.coordinate())
-                .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                .copy_label(registered, 0)?,
-            context
-                .registered
-                .and_then(|registered| registered.axes.coordinate())
-                .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                .copy_label(registered, 1)?,
-            &layout::display_axis_spec(chart.description().x_axis_spec(), (x_low, x_high)),
-            &layout::display_axis_spec(chart.description().y_axis_spec(), (y_low, y_high)),
+    let axes = registered
+        .axes
+        .coordinate()
+        .ok_or_else(|| Error::Render("Marginal axes missing".into()))?;
+    let labels = [
+        axes.copy_label(registered, 0)?,
+        axes.copy_label(registered, 1)?,
+    ];
+    let specs = [
+        chart.description().x_axis_spec(),
+        chart.description().y_axis_spec(),
+    ];
+    let numeric = registered.axis_numeric_binding(context.data.source_resources())?;
+    // The old temporary specs had these already selected limits. Keep the
+    // original two range-helper calls, without cloning an authored axis owner.
+    let central_ranges = [
+        layout::continuous_auto_range((x_low, x_high), Some((x_low, x_high)))?,
+        layout::continuous_auto_range((y_low, y_high), Some((y_low, y_high)))?,
+    ];
+    let projection = layout::Projection::new(
+        central_ranges[0],
+        central_ranges[1],
+        (central_x0, central_x1, central_y0, central_y1),
+    );
+    let domains = std::array::from_fn::<_, 2, _>(|side| {
+        crate::orchestrator::assignment::AxisDomainAssignment {
+            extent: DisplayExtent {
+                lower: central_ranges[side].0,
+                upper: central_ranges[side].1,
+            },
+            provenance: specs[side].provenance,
+        }
+    });
+    let ticks = [layout::AxisSide::Bottom, layout::AxisSide::Left].map(|side| {
+        let index = usize::from(side == layout::AxisSide::Left);
+        crate::orchestrator::assignment::AssignedAxisRef {
+            base: axes.axis(registered.source, index),
+            domain: &domains[index],
+        }
+        .layout_ticks(
+            Vec::new(),
+            &projection,
+            side,
             theme,
+            context.fit_scope(),
+            numeric,
         )
-    })()?;
+    });
+    let [x_ticks, y_ticks] = ticks;
+    // Both siblings run before the original later-fatal/least-fit decision.
+    let (x_ticks, y_ticks) = match (x_ticks, y_ticks) {
+        (Err(error @ PlanError::Fatal(_)), _)
+        | (_, Err(error @ PlanError::Fatal(_)))
+        | (Err(error), Ok(_))
+        | (Ok(_), Err(error)) => return Err(error),
+        (Err(PlanError::Fit(x)), Err(PlanError::Fit(y))) => {
+            return Err(PlanError::Fit(if x.reason <= y.reason { x } else { y }));
+        }
+        (Ok(x), Ok(y)) => (x, y),
+    };
+    let make_axis = |spec: &AxisSpec, label, ticks: layout::NumericTickPlan| layout::Axis {
+        label,
+        ticks: ticks.ticks,
+        tick_labels_visible: true,
+        category_labels: spec.category_labels.clone(),
+        explicit_ticks: spec.exact_ticks.is_some(),
+        assigned_tick_width: None,
+        assigned_cells: None,
+        source: ticks.source,
+        numeric: ticks.numeric,
+    };
+    let [x_label, y_label] = labels;
+    let x_axis = make_axis(specs[0], x_label, x_ticks);
+    let y_axis = make_axis(specs[1], y_label, y_ticks);
+    let layout = layout::Layout {
+        projection,
+        x_axis,
+        y_axis,
+    };
 
     let proj = &layout.projection;
 

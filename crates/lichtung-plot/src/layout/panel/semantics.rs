@@ -208,7 +208,6 @@ impl CoordinateLayoutInputs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::AxisSpec;
 
     #[test]
     fn standard_panel_stack_matching_includes_the_complete_utf8_name() {
@@ -222,12 +221,27 @@ mod tests {
 
     #[test]
     fn automatic_display_and_planned_limits_preserve_semantics() {
-        let automatic = AxisSpec::default();
-        let displayed = super::super::display_axis_spec(&automatic, (-1.0, 11.0));
-        let configured = AxisSpec::default().limits(-1.0, 11.0);
-        assert_eq!(displayed.window, configured.window);
-        assert_eq!(displayed.provenance, RangeProvenance::Automatic);
-        assert_eq!(configured.provenance, RangeProvenance::Configured);
+        let automatic = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 10.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        );
+        let displayed = automatic
+            .clone()
+            .erase()
+            .with_planned_x_limits((-1.0, 11.0));
+        let configured = automatic.x_limits(-1.0, 11.0).erase();
+        assert_eq!(
+            displayed.description().x_axis_spec().window,
+            configured.description().x_axis_spec().window
+        );
+        assert_eq!(
+            displayed.axis_semantic_inputs([AxisDomain::Continuous; 2])[0].provenance,
+            RangeProvenance::Automatic
+        );
+        assert_eq!(
+            configured.axis_semantic_inputs([AxisDomain::Continuous; 2])[0].provenance,
+            RangeProvenance::Configured
+        );
         let forest = crate::Plot::forest(
             crate::CategoryValues::new("term", ["a"]).unwrap(),
             crate::NumericValues::new("estimate", [1.0]),

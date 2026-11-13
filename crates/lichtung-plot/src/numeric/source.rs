@@ -177,33 +177,52 @@ impl<'v> AxisRequest<'v> {
         }))
     }
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the actual constructor preserves the common fallible request boundary without re-reading a base seed or adding validation"
+    )]
     pub(crate) fn actual(
         binding: NumericBinding<'v>,
         axis: crate::orchestrator::assignment::AssignedAxisRef<'v>,
         projection: &crate::layout::Projection,
         side: crate::layout::AxisSide,
     ) -> Result<Option<Self>> {
-        let Some(mut request) = Self::base(binding, axis.base, side)? else {
+        let Some(authored) = axis.base.authored() else {
             return Ok(None);
         };
         let range = axis.domain.extent.pair();
-        request.domain = DomainInfo::axis(
-            range,
-            request.domain.scale,
-            axis.domain.provenance,
-            if request.domain.scale == crate::AxisScale::Log10 {
-                axis.base.raw_window().map(|window| window.pair())
-            } else {
-                Some(range)
-            },
-        );
-        request.phase = AxisNumericPhase::Actual {
-            parallel_span: match side {
-                crate::layout::AxisSide::Bottom => projection.panel_box().width(),
-                crate::layout::AxisSide::Left => projection.panel_box().height(),
-            },
+        let scale = match axis.base.witness().space {
+            crate::orchestrator::registration::AxisSpace::Categorical => crate::AxisScale::Linear,
+            crate::orchestrator::registration::AxisSpace::Continuous(scale) => scale,
         };
-        Ok(Some(request))
+        Ok(Some(Self {
+            binding: NumericBinding {
+                plot_id: Some(&axis.base.witness().plot_id),
+                ..binding
+            },
+            format: authored.format.as_deref(),
+            generation: &authored.generation,
+            axis: match side {
+                crate::layout::AxisSide::Bottom => CoordinateAxis::X,
+                crate::layout::AxisSide::Left => CoordinateAxis::Y,
+            },
+            domain: DomainInfo::axis(
+                range,
+                scale,
+                axis.domain.provenance,
+                if scale == crate::AxisScale::Log10 {
+                    axis.base.raw_window().map(|window| window.pair())
+                } else {
+                    Some(range)
+                },
+            ),
+            phase: AxisNumericPhase::Actual {
+                parallel_span: match side {
+                    crate::layout::AxisSide::Bottom => projection.panel_box().width(),
+                    crate::layout::AxisSide::Left => projection.panel_box().height(),
+                },
+            },
+        }))
     }
 
     pub(crate) fn empty_fixed_source(&self) -> Result<bool> {

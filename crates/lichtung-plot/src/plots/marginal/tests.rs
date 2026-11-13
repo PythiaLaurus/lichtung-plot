@@ -2,6 +2,79 @@ use super::*;
 use crate::orchestrator::registration::{PlotRegistryBuilder, PreparedFamily, RowSelection, Scope};
 
 #[test]
+fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_fit() {
+    use std::sync::{Arc, Mutex};
+    let actual = Arc::new(Mutex::new(Vec::new()));
+    let x_calls = Arc::clone(&actual);
+    let y_calls = Arc::clone(&actual);
+    let source = Plot::marginal(
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0]),
+        crate::NumericValues::new("y", [2.0, 4.0, 3.0]),
+    )
+    .x_limits(0.0, 4.0)
+    .y_limits(0.0, 5.0)
+    .x_tick_generation(crate::TickGeneration::exact_count(
+        1,
+        crate::TickSpace::Data,
+    ))
+    .x_tick_format(
+        crate::NumericFormat::default().set_function(move |context| {
+            if context.purpose() == crate::NumericPurpose::IntrinsicProbe {
+                return context.format_builtin();
+            }
+            assert_eq!(context.role(), crate::NumericRole::XAxis);
+            assert_eq!(context.domain().unwrap().data_limits(), Some((0.0, 4.0)));
+            assert_eq!(context.values().len(), 1);
+            x_calls.lock().unwrap().push("x");
+            Ok(crate::NumericLabels::new(vec!["W".repeat(200)]))
+        }),
+    )
+    .y_tick_format(
+        crate::NumericFormat::default().set_function(move |context| {
+            if context.purpose() == crate::NumericPurpose::IntrinsicProbe {
+                return context.format_builtin();
+            }
+            assert_eq!(context.role(), crate::NumericRole::YAxis);
+            assert_eq!(context.domain().unwrap().data_limits(), Some((0.0, 5.0)));
+            y_calls.lock().unwrap().push("y");
+            Err(Error::Data("Marginal later y-axis callback failure".into()))
+        }),
+    )
+    .erase();
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = crate::text::TextRequestContext::new(&appearance, &text);
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &request,
+        |plot, inputs, request, operation| {
+            let registered = &inputs.plots[0];
+            let error = plot
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        registered.data(operation).unwrap(),
+                        PixelRect::new(0.0, 800.0, 0.0, 600.0),
+                        request,
+                    )
+                    .with_registration(registered, inputs.intrinsic(registered)),
+                )
+                .unwrap_err();
+            let PlanError::Fatal(error) = error else {
+                panic!("later y-axis failure must outrank x-axis fit: {error:?}")
+            };
+            assert!(
+                error
+                    .to_string()
+                    .contains("Marginal later y-axis callback failure"),
+                "{error}"
+            );
+            assert_eq!(*actual.lock().unwrap(), ["x", "y"]);
+        },
+    )
+    .unwrap();
+}
+
+#[test]
 fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
     let source = Plot::marginal(
         crate::NumericValues::new("x", [1.0, 2.0, 3.0]),

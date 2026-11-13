@@ -374,7 +374,10 @@ pub(super) fn qq_display_range(
             data_range.0
         )));
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec)?;
+    let display = crate::layout::continuous_auto_range(
+        data_range,
+        spec.window.map(crate::layout::RawWindow::pair),
+    )?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         Ok(display)
     } else if data_range.0.is_finite() && data_range.1.is_finite() && data_range.0 < data_range.1 {

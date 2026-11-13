@@ -271,8 +271,20 @@ impl PreparedRegression {
         }
         let mark_ranges = [(x_min, x_max), (y_min, y_max)];
 
-        let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec())?;
-        let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
+        let x_range = crate::layout::continuous_auto_range(
+            (x_min, x_max),
+            chart
+                .x_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+        )?;
+        let y_range = crate::layout::continuous_auto_range(
+            (y_min, y_max),
+            chart
+                .y_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+        )?;
         Ok((
             Self {
                 mark_ranges,

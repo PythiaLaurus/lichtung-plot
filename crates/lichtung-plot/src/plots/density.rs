@@ -301,7 +301,14 @@ impl PreparedDensity {
                 .x_axis_spec()
                 .window
                 .map_or(self.x_range, crate::layout::RawWindow::pair),
-            crate::layout::anchored_auto_range((0.0, self.maximum), chart.y_axis_spec(), 0.0)?,
+            crate::layout::anchored_auto_range(
+                (0.0, self.maximum),
+                chart
+                    .y_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
+                0.0,
+            )?,
         ])
     }
 }

@@ -6,7 +6,7 @@ use crate::alpha::{
 };
 use crate::Error;
 
-use crate::layout::{AxisSpec, Layout, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{Layout, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor};
 use crate::spec::{AxisScale, EstimateStatus, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
@@ -865,7 +865,7 @@ fn prepare_model<'a>(
                         lower.min(transformed_reference),
                         upper.max(transformed_reference),
                     ),
-                    &AxisSpec::default(),
+                    None,
                 )
             })
             .transpose()?

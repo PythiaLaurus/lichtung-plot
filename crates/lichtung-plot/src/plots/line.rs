@@ -776,10 +776,23 @@ impl PreparedLine {
         ranges[0] = if let Some(levels) = &conditions {
             (0.0, categorical_index(levels.len())?)
         } else {
-            crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec())?
+            crate::layout::continuous_auto_range(
+                ranges[0],
+                chart
+                    .description()
+                    .x_axis_spec()
+                    .window
+                    .map(crate::layout::RawWindow::pair),
+            )?
         };
-        ranges[1] =
-            crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?;
+        ranges[1] = crate::layout::continuous_auto_range(
+            ranges[1],
+            chart
+                .description()
+                .y_axis_spec()
+                .window
+                .map(crate::layout::RawWindow::pair),
+        )?;
         let primary_accent_slots = usize::from(chart.description().hue_col().is_none());
         Ok((
             Self {

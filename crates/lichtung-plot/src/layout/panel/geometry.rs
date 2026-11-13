@@ -1,5 +1,10 @@
+#[cfg(test)]
 use super::range_ticks::resolve_range;
+#[cfg(test)]
 use super::{Axis, AxisSide, AxisSpec, AxisTick, Layout, NumericTickPlan, Projection, TickSource};
+#[cfg(not(test))]
+use super::{Axis, AxisSide, AxisTick, Layout, NumericTickPlan, Projection, TickSource};
+#[cfg(test)]
 use crate::layout::fit::PlanError;
 use crate::layout::PixelRect;
 #[cfg(test)]
@@ -89,6 +94,7 @@ impl Layout {
     }
 
     /// Create a new layout with explicit ticks and axis specs inside an explicit panel box.
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_ticks_and_axis_specs_in_panel_box(
         x_range: (f64, f64),
@@ -191,6 +197,7 @@ impl Layout {
     }
 }
 
+#[cfg(test)]
 impl AxisSpec {
     pub(crate) fn layout_ticks(
         &self,

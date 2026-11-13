@@ -62,7 +62,7 @@ fn projected_span_validation_preserves_source_intent_without_reprojection_or_req
 
 #[test]
 fn continuous_auto_range_preserves_finite_extreme_endpoints_when_padding_overflows() {
-    let range = continuous_auto_range((-f64::MAX, f64::MAX), &AxisSpec::default()).unwrap();
+    let range = continuous_auto_range((-f64::MAX, f64::MAX), None).unwrap();
 
     assert_eq!(range, (-f64::MAX, f64::MAX));
     let projection = Projection::new(range, range, (0.0, 100.0, 0.0, 100.0));
@@ -71,7 +71,7 @@ fn continuous_auto_range_preserves_finite_extreme_endpoints_when_padding_overflo
 
 #[test]
 fn anchored_auto_range_keeps_zero_side_exact_for_positive_data() {
-    let range = anchored_auto_range((0.0, 10.0), &AxisSpec::default(), 0.0).unwrap();
+    let range = anchored_auto_range((0.0, 10.0), None, 0.0).unwrap();
 
     assert_eq!(range, (0.0, 10.5));
 }
@@ -80,7 +80,7 @@ fn anchored_auto_range_keeps_zero_side_exact_for_positive_data() {
 fn anchored_auto_range_uses_relative_padding_for_tiny_positive_density() {
     let maximum = 2.4e-294;
 
-    let range = anchored_auto_range((0.0, maximum), &AxisSpec::default(), 0.0).unwrap();
+    let range = anchored_auto_range((0.0, maximum), None, 0.0).unwrap();
 
     assert!(range.0.total_cmp(&0.0).is_eq());
     assert!(range.1 > maximum && range.1 < 1e-292, "{range:?}");
@@ -90,14 +90,14 @@ fn anchored_auto_range_uses_relative_padding_for_tiny_positive_density() {
 fn anchored_auto_range_advances_adjacent_subnormal_density_endpoint() {
     let maximum = f64::from_bits(1);
 
-    let range = anchored_auto_range((0.0, maximum), &AxisSpec::default(), 0.0).unwrap();
+    let range = anchored_auto_range((0.0, maximum), None, 0.0).unwrap();
 
     assert_eq!(range, (0.0, maximum.next_up()));
 }
 
 #[test]
 fn continuous_auto_range_keeps_nice_ticks_inside_limits() {
-    let range = continuous_auto_range((0.0, 10.0), &AxisSpec::default()).unwrap();
+    let range = continuous_auto_range((0.0, 10.0), None).unwrap();
     let ticks = nice_ticks(range.0, range.1, 5);
 
     assert!(

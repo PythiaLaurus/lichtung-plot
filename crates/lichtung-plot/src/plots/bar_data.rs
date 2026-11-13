@@ -805,8 +805,7 @@ pub(crate) fn domain_expansion(
     // Bracket bisection gives the minimum for this projection's pixel clearances.
     // Reuse the bar's anchored automatic padding so reprojected attached marks
     // do not chase that boundary asymptotically across parent feedback rounds.
-    let expanded =
-        crate::layout::anchored_auto_range(limits, &crate::layout::AxisSpec::default(), 0.0)?;
+    let expanded = crate::layout::anchored_auto_range(limits, None, 0.0)?;
     Ok(Some(crate::layout::interior::DomainExpansion {
         axis,
         limits: (range.0.min(expanded.0), range.1.max(expanded.1)),

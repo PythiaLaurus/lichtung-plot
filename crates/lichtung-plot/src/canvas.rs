@@ -1165,6 +1165,10 @@ impl Canvas {
         PreparedGuide::merge(&contributions, &[], "shared canvas legend")
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the original heterogeneous shared-range ordering retains scalar window projections at each old helper call"
+    )]
     fn prepare_shared_x(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
@@ -1213,7 +1217,10 @@ impl Canvas {
                             .and_then(|panel| panel.axes.as_ref())
                             .expect("prepared Scatter axes")
                             .ranges()[0],
-                        plot.description().x_axis_spec(),
+                        plot.description()
+                            .x_axis_spec()
+                            .window
+                            .map(crate::layout::RawWindow::pair),
                     )?
                 } else if matches!(
                     plot.kind(),

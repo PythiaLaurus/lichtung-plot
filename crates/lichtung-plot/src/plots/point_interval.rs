@@ -199,7 +199,10 @@ pub(crate) fn point_interval_display_range(
     if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return Ok(limits);
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec)?;
+    let display = crate::layout::continuous_auto_range(
+        data_range,
+        spec.window.map(crate::layout::RawWindow::pair),
+    )?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         return Ok(display);
     }

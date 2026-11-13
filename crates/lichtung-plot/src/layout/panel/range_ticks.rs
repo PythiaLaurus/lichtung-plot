@@ -1,25 +1,25 @@
-use super::AxisSpec;
 #[cfg(test)]
-use super::{AxisSide, AxisTick, Projection};
+use super::{AxisSide, AxisSpec, AxisTick, Projection};
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_RANGE_SEED_COUNT: usize = 5;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
 
+#[cfg(test)]
 pub(super) fn resolve_range(range: (f64, f64), spec: &AxisSpec) -> Result<(f64, f64), Error> {
-    continuous_auto_range(range, spec)
+    continuous_auto_range(range, spec.window.map(super::RawWindow::pair))
 }
 
 pub(crate) fn continuous_auto_range(
     range: (f64, f64),
-    spec: &AxisSpec,
+    limits: Option<(f64, f64)>,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.window.map(super::RawWindow::pair) {
+    if let Some(limits) = limits {
         Ok(limits)
     } else {
         broaden_nice_range(range, NICE_RANGE_SEED_COUNT, DEFAULT_RANGE_MARGIN_FRACTION)
@@ -28,14 +28,14 @@ pub(crate) fn continuous_auto_range(
 
 pub(crate) fn anchored_auto_range(
     range: (f64, f64),
-    spec: &AxisSpec,
+    limits: Option<(f64, f64)>,
     anchor: f64,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if let Some(limits) = spec.window.map(super::RawWindow::pair) {
+    if let Some(limits) = limits {
         return Ok(limits);
     }
     if !(range.0.is_finite() && range.1.is_finite() && anchor.is_finite()) {
@@ -107,20 +107,6 @@ fn pad_down(value: f64, padding: f64) -> f64 {
         } else {
             value
         }
-    }
-}
-
-pub(crate) fn display_axis_spec(spec: &AxisSpec, range: (f64, f64)) -> AxisSpec {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AxisSpecPreparation,
-    );
-    if spec.window.is_some() {
-        spec.clone()
-    } else {
-        let mut display = spec.clone();
-        display.window = Some(super::RawWindow::from_pair(range));
-        display
     }
 }
 

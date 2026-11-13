@@ -658,7 +658,6 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     pub(crate) axis_label_width: f64,
     prepared_axes: Option<&'a crate::orchestrator::registration::PreparedAxesOwner>,
     prepared_limits: [Option<(f64, f64)>; 2],
-    prepared_kind: Option<PlotKind>,
     prepared_family: Option<crate::orchestrator::registration::FamilyRef<'a>>,
     pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
     facet_scales: Option<FacetScales>,
@@ -693,7 +692,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             axis_label_width: panel.width().max(0.0),
             prepared_axes: None,
             prepared_limits: [None; 2],
-            prepared_kind: None,
             prepared_family: None,
             theme,
             facet_scales: None,
@@ -763,10 +761,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             .registered
             .and_then(|registered| registered.axes.coordinate());
         self.prepared_family = self.registered.map(|registered| registered.family.as_ref());
-        self.prepared_kind = Some(self.prepared_family.map_or(
-            plot.kind(),
-            crate::orchestrator::registration::FamilyRef::kind,
-        ));
         self.prepared_limits = [
             plot.description()
                 .x_axis_spec()
@@ -805,125 +799,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         self.registered = Some(registered);
         self.intrinsic = Some(intrinsic);
         self
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "same closed axis construction inputs as Layout"
-    )]
-    pub(crate) fn layout_with_axis_specs(
-        self,
-        x: (f64, f64),
-        y: (f64, f64),
-        panel: PixelRect,
-        x_label: Option<crate::Text>,
-        y_label: Option<crate::Text>,
-        x_spec: &crate::layout::AxisSpec,
-        y_spec: &crate::layout::AxisSpec,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-    ) -> Result<Layout, crate::layout::fit::PlanError> {
-        if self.prepared_kind.is_some_and(|kind| {
-            crate::layout::interior::InteriorRoute::classify(kind).is_coordinate()
-        }) {
-            return Err(Error::Render("native axes require the coordinate producer".into()).into());
-        }
-        self.layout_with_ticks(
-            x,
-            y,
-            panel,
-            x_label,
-            y_label,
-            Vec::new(),
-            Vec::new(),
-            x_spec,
-            y_spec,
-            theme,
-        )
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "same closed axis construction inputs as Layout"
-    )]
-    pub(crate) fn layout_with_ticks(
-        self,
-        mut x: (f64, f64),
-        mut y: (f64, f64),
-        panel: PixelRect,
-        x_label: Option<crate::Text>,
-        y_label: Option<crate::Text>,
-        mut x_ticks: Vec<crate::layout::AxisTick>,
-        mut y_ticks: Vec<crate::layout::AxisTick>,
-        x_spec: &crate::layout::AxisSpec,
-        y_spec: &crate::layout::AxisSpec,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-    ) -> Result<Layout, crate::layout::fit::PlanError> {
-        let mut specs = [
-            crate::layout::AxisSpec::default(),
-            crate::layout::AxisSpec::default(),
-        ];
-        for (target, source) in specs.iter_mut().zip([x_spec, y_spec]) {
-            *target = crate::layout::AxisSpec {
-                provenance: source.provenance,
-                window: source.window,
-                generation: source.generation.clone(),
-                category_labels: source.category_labels.clone(),
-                format: source.format.clone(),
-                exact_ticks: source
-                    .exact_ticks
-                    .as_ref()
-                    .map(|ticks| {
-                        crate::data::source::collect_source(ticks.iter().map(|tick| {
-                            Ok(crate::layout::AxisTick::new(
-                                tick.position,
-                                crate::data::source::copy_source_string(&tick.label)?,
-                            ))
-                        }))
-                    })
-                    .transpose()?,
-            };
-        }
-        if let Some(axes) = self.prepared_axes {
-            for (side, (range, ticks)) in [(&mut x, &mut x_ticks), (&mut y, &mut y_ticks)]
-                .into_iter()
-                .enumerate()
-            {
-                if let Some(categories) = axes.categories(side) {
-                    *ticks = crate::data::source::collect_source(
-                        categories
-                            .raw
-                            .iter()
-                            .zip(&categories.ticks)
-                            .map(|(label, tick)| {
-                                Ok(crate::layout::AxisTick::new(
-                                    tick.position,
-                                    crate::data::source::copy_source_string(label)?,
-                                ))
-                            }),
-                    )?;
-                    *range = axes.ranges()[side];
-                } else {
-                    *range = self.prepared_limits[side].unwrap_or(axes.ranges()[side]);
-                }
-                specs[side].window = Some(crate::layout::RawWindow::from_pair(*range));
-            }
-        }
-        Layout::new_with_ticks_and_axis_specs_in_panel_box(
-            x,
-            y,
-            panel,
-            x_label,
-            y_label,
-            x_ticks,
-            y_ticks,
-            &specs[0],
-            &specs[1],
-            theme,
-            self.fit_scope,
-            self.registered
-                .map(|registered| registered.axis_numeric_binding(self.data.source_resources()))
-                .transpose()?,
-        )
     }
 
     pub(crate) fn prepared_category_labels(
