@@ -274,10 +274,7 @@ pub(super) fn native_parent(
         })
         .transpose()?;
     for (index, facet) in panels.iter().enumerate() {
-        let mut panel_plot = plot
-            .clone()
-            .with_render_scope(facet.render_scope()?)
-            .with_significance_subset(facet.significance_selectors());
+        let mut panel_plot = plot.clone().with_render_scope(facet.render_scope()?);
         let domain_address = ComponentAddress::root().child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,

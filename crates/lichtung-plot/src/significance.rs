@@ -64,8 +64,13 @@ struct ResolvedComparison {
     label: DeferredAnnotationTextPlan,
 }
 
-pub(crate) fn plan(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "scoped annotation references are independent of the original range and geometry inputs"
+)]
+pub(crate) fn plan<'a>(
     chart: &Plot,
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
@@ -76,7 +81,7 @@ pub(crate) fn plan(
     let effective =
         theme.effective_significance(chart.description().significance_mark_style_override())?;
     plan_comparisons_with_label(
-        chart.description().significance_annotations(),
+        annotations,
         categories,
         rendered_maxima,
         y_range,
@@ -111,7 +116,7 @@ fn plan_comparisons(
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let effective = theme.effective_significance(Some(mark_style))?;
     plan_comparisons_with_label(
-        annotations,
+        annotations.iter(),
         categories,
         rendered_maxima,
         y_range,
@@ -130,8 +135,8 @@ fn plan_comparisons(
     clippy::too_many_arguments,
     reason = "the wrapper preserves the existing validated significance planner inputs"
 )]
-fn plan_comparisons_with_label(
-    annotations: &[SignificanceAnnotation],
+fn plan_comparisons_with_label<'a>(
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
@@ -167,8 +172,8 @@ fn plan_comparisons_with_label(
     clippy::cast_precision_loss,
     reason = "the private planner keeps validated anchors, ranges, and panel geometry together"
 )]
-fn plan_comparisons_at_with_label(
-    annotations: &[SignificanceAnnotation],
+fn plan_comparisons_at_with_label<'a>(
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     rendered_maxima: &[f64],
     anchor_positions: Option<&[f64]>,
@@ -234,12 +239,12 @@ fn plan_comparisons_at_with_label(
     let mut comparison_pairs = Vec::new();
     let eligible = crate::data::source::collect_source(
         annotations
-            .iter()
+            .clone()
             .enumerate()
             .filter(|(_, annotation)| annotation.endpoints().is_some())
             .map(|(index, _)| Ok(index)),
     )?;
-    for (source_index, annotation) in annotations.iter().enumerate() {
+    for (source_index, annotation) in annotations.enumerate() {
         let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
             continue;
         };
@@ -636,8 +641,9 @@ fn label_footprint(
     clippy::too_many_arguments,
     reason = "grouped anchors require explicit data, geometry, and legend constraints"
 )]
-pub(crate) fn plan_grouped(
+pub(crate) fn plan_grouped<'a>(
     chart: &Plot,
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
     rendered_maxima: &[Vec<f64>],
@@ -650,6 +656,7 @@ pub(crate) fn plan_grouped(
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
         chart,
+        annotations,
         categories,
         groups,
         rendered_maxima,
@@ -669,8 +676,9 @@ pub(crate) fn plan_grouped(
     clippy::too_many_arguments,
     reason = "horizontal anchors require explicit data, geometry, and stacking policy"
 )]
-pub(crate) fn plan_horizontal(
+pub(crate) fn plan_horizontal<'a>(
     chart: &Plot,
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
     rendered_maxima: &[Vec<f64>],
@@ -683,6 +691,7 @@ pub(crate) fn plan_horizontal(
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
         chart,
+        annotations,
         categories,
         groups,
         rendered_maxima,
@@ -723,8 +732,9 @@ pub(crate) fn plan_horizontal(
     clippy::cast_precision_loss,
     reason = "grouped vertical and horizontal planners share one exact-anchor implementation"
 )]
-fn plan_grouped_oriented(
+fn plan_grouped_oriented<'a>(
     chart: &Plot,
+    annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
     rendered_maxima: &[Vec<f64>],
@@ -791,7 +801,7 @@ fn plan_grouped_oriented(
         .iter()
         .map(|index| positions[*index])
         .collect::<Vec<_>>();
-    for annotation in chart.description().significance_annotations() {
+    for annotation in annotations.clone() {
         if let Some((endpoint_a, endpoint_b)) = annotation.endpoints() {
             if stacked && (endpoint_a.series_name().is_some() || endpoint_b.series_name().is_some())
             {
@@ -807,7 +817,7 @@ fn plan_grouped_oriented(
     let effective =
         theme.effective_significance(chart.description().significance_mark_style_override())?;
     let mut result = plan_comparisons_at_with_label(
-        chart.description().significance_annotations(),
+        annotations,
         &labels,
         &maxima,
         Some(&positions),

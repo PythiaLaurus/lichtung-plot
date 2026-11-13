@@ -1,6 +1,7 @@
 //! Occurrence policy is separate from authored intent and prepared axis storage.
 
 pub(crate) struct PlotScopePolicy {
+    pub(crate) significance_indices: Vec<usize>,
     pub(crate) axis_text: AxisTextVisibility,
     pub(crate) coordinated: CoordinatedDomains,
 }
@@ -16,8 +17,21 @@ pub(crate) struct AxisTextVisibility {
 }
 
 impl PlotScopePolicy {
-    pub(crate) fn for_source(source: &crate::builder::PlotDescription) -> Self {
+    pub(crate) fn for_source(
+        source: &crate::builder::PlotDescription,
+        facet: Option<&crate::FacetCell>,
+    ) -> Self {
         Self {
+            significance_indices: source
+                .significance_annotations()
+                .iter()
+                .enumerate()
+                .filter(|(_, annotation)| match facet {
+                    Some(facet) => annotation.facet_cell() == Some(facet),
+                    None => true,
+                })
+                .map(|(index, _)| index)
+                .collect(),
             axis_text: AxisTextVisibility {
                 titles: [!source.has_facets(); 2],
             },

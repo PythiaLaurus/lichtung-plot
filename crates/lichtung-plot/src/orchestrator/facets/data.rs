@@ -58,11 +58,6 @@ impl FacetPanel {
         }
         Ok(scope)
     }
-    pub(super) fn significance_selectors(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.cell
-            .iter()
-            .map(|selector| (selector.variable.as_str(), selector.level.as_str()))
-    }
 }
 
 #[expect(

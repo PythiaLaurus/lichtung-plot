@@ -125,6 +125,15 @@ impl std::fmt::Debug for PlotRegistration<'_> {
 }
 
 impl<'src> PlotRegistration<'src> {
+    pub(crate) fn significance_annotations(
+        &self,
+    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> + Clone {
+        self.policy
+            .significance_indices
+            .iter()
+            .map(|&index| &self.source.significance_annotations()[index])
+    }
+
     pub(crate) fn raw_windows(&self) -> [Option<&crate::layout::RawWindow>; 2] {
         [self.source.x_axis_spec(), self.source.y_axis_spec()].map(|axis| {
             axis.window
@@ -168,15 +177,11 @@ impl<'src> PlotRegistrationBuild<'src> {
 
     pub(crate) fn significance_annotations(
         &self,
-    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
-        self.source
-            .significance_annotations()
+    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> + Clone {
+        self.policy
+            .significance_indices
             .iter()
-            .filter(|annotation| {
-                annotation
-                    .facet_cell()
-                    .is_some_and(|cell| Some(cell) == self.scope.numeric_owner.facet.as_ref())
-            })
+            .map(|&index| &self.source.significance_annotations()[index])
     }
 }
 
@@ -209,11 +214,12 @@ impl<'src> PlotRegistryBuilder<'src> {
         row_source.check(source, &scope, operation)?;
         let id = scope.id.clone();
         crate::data::source::reserve_source(&mut self.panels, 1)?;
+        let policy = PlotScopePolicy::for_source(source, scope.numeric_owner.facet.as_ref());
         self.panels.push(PlotRegistrationBuild {
             source,
             scope,
             row_source,
-            policy: PlotScopePolicy::for_source(source),
+            policy,
             family: None,
             axes: None,
         });

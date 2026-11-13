@@ -126,6 +126,10 @@ pub(crate) fn measure_marks(
     let significance = if series.is_empty() {
         crate::significance::plan(
             chart,
+            context
+                .registered
+                .expect("prepared Bar occurrence")
+                .significance_annotations(),
             categories,
             &rendered_maxima,
             base_y_range,
@@ -136,6 +140,10 @@ pub(crate) fn measure_marks(
     } else {
         crate::significance::plan_grouped(
             chart,
+            context
+                .registered
+                .expect("prepared Bar occurrence")
+                .significance_annotations(),
             categories,
             series,
             &grouped_maxima,

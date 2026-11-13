@@ -509,6 +509,10 @@ pub(crate) fn measure_marks(
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
+            context
+                .registered
+                .expect("prepared distribution occurrence")
+                .significance_annotations(),
             x_levels,
             &rendered_maxima,
             base_display_range,
@@ -528,6 +532,10 @@ pub(crate) fn measure_marks(
         }
         crate::significance::plan_grouped(
             chart,
+            context
+                .registered
+                .expect("prepared distribution occurrence")
+                .significance_annotations(),
             x_levels,
             group_levels,
             &grouped_maxima,

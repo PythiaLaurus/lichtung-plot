@@ -34,6 +34,7 @@ fn significance_case(count: usize) -> [Duration; 2] {
         let start = Instant::now();
         let plan = crate::significance::plan(
             &plot,
+            plot.description().significance_annotations().iter(),
             &categories,
             &vec![10.0; categories.len()],
             (0.0, 10.0),

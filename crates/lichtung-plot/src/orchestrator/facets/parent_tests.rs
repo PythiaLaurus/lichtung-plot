@@ -1,6 +1,69 @@
 use super::*;
 
 #[test]
+fn scoped_annotation_indices_locate_sources_without_renumbering_filtered_occurrences() {
+    use crate::{
+        BarInput, CategoryValues, FacetCell, FacetSpec, NumericValues, Significance,
+        SignificanceMark,
+    };
+    let source = Plot::bar(
+        CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0, 2.0, 3.0, 4.0])),
+    )
+    .facet(FacetSpec::column(
+        CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+    ))
+    .significance([
+        Significance::at("a", SignificanceMark::TwoStars).facet(FacetCell::single("left")),
+        Significance::at("a", SignificanceMark::OneStar).facet(FacetCell::single("right")),
+    ])
+    .significance([
+        Significance::between("a", "b", SignificanceMark::FourStars)
+            .facet(FacetCell::single("left")),
+        Significance::between("a", "b", SignificanceMark::ThreeStars)
+            .facet(FacetCell::single("right")),
+    ])
+    .erase();
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = TextRequestContext::new(&appearance, &text);
+    super::super::with_prepared_plot_for_test(
+        &source,
+        &request,
+        |plot, inputs, request, operation| {
+            let registered = &inputs.plots[1];
+            assert_eq!(registered.policy.significance_indices, [1, 3]);
+            let super::super::registration::PreparedFamily::Bars { marks, .. } = &registered.family
+            else {
+                panic!("prepared Bar family")
+            };
+            assert_eq!(marks.significance.len(), 1);
+            assert_eq!(marks.significance[0].source_index, 0);
+            let plot = plot
+                .clone()
+                .without_facets()
+                .with_render_scope(registered.scope.render_name.clone().unwrap());
+            let result = plot
+                .measure_selected_interior(
+                    crate::spec::PlotRenderContext::new(
+                        registered.data(operation).unwrap(),
+                        crate::layout::PixelRect::new(50.0, 750.0, 50.0, 550.0),
+                        request,
+                    )
+                    .with_registration(registered, inputs.intrinsic(registered)),
+                )
+                .unwrap();
+            let brackets = &result.significance.as_ref().unwrap().brackets;
+            assert_eq!(brackets.len(), 1);
+            assert_eq!(brackets[0].source_index, 1);
+            assert_eq!(brackets[0].label.plan.source, "***");
+            assert_eq!(source.description().significance_annotations().len(), 4);
+        },
+    )
+    .unwrap();
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one owning facet guide preserves independent parent domains and actual alpha members before fonts"

@@ -14,6 +14,10 @@ fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceA
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one selected significance operand retains its theme and exact-precedence checks through canonical capture"
+)]
 fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_precedence() {
     let chart = Plot::bar(
         crate::CategoryValues::new("group", ["a", "b", "c", "d"]).unwrap(),
@@ -53,6 +57,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let selected = plan(
         &chart,
+        chart.description().significance_annotations().iter(),
         &categories(),
         &[1.0, 2.0, 3.0, 4.0],
         (0.0, 10.0),
@@ -160,7 +165,7 @@ fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() 
     let minimum = 2.0 * label.height() + 42.0 + 2.0 * quantum;
     let plan_at = |height| {
         plan_comparisons_with_label(
-            &annotations,
+            annotations.iter(),
             &categories(),
             &[0.0; 4],
             (0.0, 10.0),

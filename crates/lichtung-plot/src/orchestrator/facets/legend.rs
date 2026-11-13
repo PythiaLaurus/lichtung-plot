@@ -125,10 +125,7 @@ fn preflight_panels(
     let mut preflight = Vec::new();
     crate::data::source::reserve_source(&mut preflight, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
-        let panel_plot = base_plot
-            .clone()
-            .with_render_scope(facet.render_scope()?)
-            .with_significance_subset(facet.significance_selectors());
+        let panel_plot = base_plot.clone().with_render_scope(facet.render_scope()?);
         let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
             .with_registration(registered, inputs.intrinsic(registered))

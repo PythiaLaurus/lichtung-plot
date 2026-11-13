@@ -124,6 +124,10 @@ pub(crate) fn measure_marks(
     }
     let significance = crate::significance::plan_horizontal(
         chart,
+        context
+            .registered
+            .expect("prepared Bar occurrence")
+            .significance_annotations(),
         categories,
         series,
         &rendered_maxima,

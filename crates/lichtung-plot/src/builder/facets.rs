@@ -71,22 +71,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn with_significance_subset<'a>(
-        mut self,
-        selectors: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> Self {
-        let selectors = selectors.into_iter().collect::<Vec<_>>();
-        self.description
-            .payload_mut()
-            .significance
-            .retain(|annotation| {
-                annotation
-                    .facet_cell()
-                    .is_some_and(|cell| cell.matches(selectors.iter().map(|(_, level)| *level)))
-            });
-        self
-    }
-
     pub(crate) fn with_resolved_facet_ranges(
         mut self,
         kind: PlotKind,
