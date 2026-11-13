@@ -334,6 +334,9 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
         &source,
         &operation,
         0,
+        crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::PlotBody, 0)
+            .unwrap(),
         crate::orchestrator::registration::RowSelection::Selected {
             input_slots: vec![3, 2, 0, 1],
             diagnostic_rows: vec![400, 300, 100, 200],

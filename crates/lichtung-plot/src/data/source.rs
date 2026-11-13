@@ -215,11 +215,25 @@ mod tests {
         .source_rows(crate::SourceRows::new([9001, 70]).unwrap())
         .erase();
         let operation = OperationContext::new();
-        let first = Scope::new(&source, &operation, 0, RowSelection::Full, None, None).unwrap();
+        let first = Scope::new(
+            &source,
+            &operation,
+            0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)
+                .unwrap(),
+            RowSelection::Full,
+            None,
+            None,
+        )
+        .unwrap();
         let second = Scope::new(
             &source,
             &operation,
             1,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::CanvasCell, 1)
+                .unwrap(),
             RowSelection::Full,
             None,
             Some("panel-1".into()),
@@ -275,6 +289,9 @@ mod tests {
                 &source,
                 &operation,
                 0,
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::PlotBody, 0)
+                    .unwrap(),
                 RowSelection::Selected {
                     input_slots: vec![2, 0],
                     diagnostic_rows: vec![9001, 700],
@@ -303,7 +320,18 @@ mod tests {
             30.0_f64.to_bits()
         );
         let foreign = OperationContext::new();
-        let scope = Scope::new(&source, &foreign, 0, RowSelection::Full, None, None).unwrap();
+        let scope = Scope::new(
+            &source,
+            &foreign,
+            0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)
+                .unwrap(),
+            RowSelection::Full,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(PlotData::checked(source.description(), &scope, &binding, &foreign).is_err());
         assert!(!alive());
     }
@@ -326,6 +354,9 @@ mod tests {
             &source,
             &operation,
             0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)
+                .unwrap(),
             RowSelection::Selected {
                 input_slots: vec![2, 0],
                 diagnostic_rows: vec![302, 300],

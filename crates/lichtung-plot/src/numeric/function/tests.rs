@@ -20,6 +20,9 @@ fn with_source<T>(visit: impl FnOnce(NumericBinding<'_>) -> T) -> T {
         &plot,
         &operation,
         0,
+        crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::PlotBody, 0)
+            .unwrap(),
         crate::orchestrator::registration::RowSelection::Full,
         None,
         None,

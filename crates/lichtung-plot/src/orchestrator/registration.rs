@@ -32,6 +32,7 @@ pub(crate) struct PlotOccurrenceId {
 
 pub(crate) struct Scope {
     pub(crate) id: PlotOccurrenceId,
+    pub(crate) address: crate::layout::ComponentAddress,
     pub(crate) numeric_owner: crate::numeric::context::OwnerInfo,
     pub(crate) axis_numeric_owner: crate::numeric::context::OwnerInfo,
     pub(crate) rows: RowSelection,
@@ -50,6 +51,7 @@ impl Scope {
         plot: &crate::Plot,
         operation: &crate::font::canonical::OperationContext,
         slot: usize,
+        address: crate::layout::ComponentAddress,
         rows: RowSelection,
         facet: Option<&crate::FacetCell>,
         render_name: Option<String>,
@@ -65,6 +67,7 @@ impl Scope {
                 root: operation.root_identity(),
                 slot,
             },
+            address,
             numeric_owner,
             axis_numeric_owner,
             rows,

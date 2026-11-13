@@ -26,7 +26,16 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     let operation = crate::font::canonical::OperationContext::new();
     let prepare = |source: &Plot, rows| {
         use crate::orchestrator::registration::{PlotRegistryBuilder, Scope};
-        let scope = Scope::new(source, &operation, 0, rows, None, None)?;
+        let scope = Scope::new(
+            source,
+            &operation,
+            0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)?,
+            rows,
+            None,
+            None,
+        )?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
         let id = registry.reserve(source.description(), scope, &operation)?;
         prepare_axes(source, registry.data(&id, &operation)?, &id, None)

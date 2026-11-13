@@ -1321,6 +1321,11 @@ impl Canvas {
                 plot,
                 &resources,
                 index,
+                crate::layout::ComponentAddress::root().child(
+                    crate::layout::AddressRole::CanvasCell,
+                    u32::try_from(index)
+                        .map_err(|_| Error::Render("canvas address overflowed".into()))?,
+                )?,
                 crate::orchestrator::registration::RowSelection::Full,
                 None,
                 plot.axis_scope()
@@ -2895,11 +2900,7 @@ impl Canvas {
                     FitFailure::retain_least(&mut child_miss, reason);
                 }
             }
-            let owner = crate::layout::ComponentAddress::root().child(
-                crate::layout::AddressRole::CanvasCell,
-                u32::try_from(index)
-                    .map_err(|_| Error::Render("canvas address overflowed".into()))?,
-            )?;
+            let owner = &registered.scope.address;
             plot.description().configured_source_rows()?;
             let dependencies =
                 self.consumed_guide_dependencies(index, cell.width(), shared_allocation, round)?;
@@ -2934,7 +2935,7 @@ impl Canvas {
                     .map(|descriptor| {
                         crate::decorations::legend::discrete::GuideSlot::new(
                             descriptor,
-                            &owner,
+                            owner,
                             plot.description().legend_position_spec(),
                         )
                     })
@@ -2943,7 +2944,7 @@ impl Canvas {
                 None
             };
             let panel_plan =
-                match children.plan(plot, role, context, guide.as_ref(), round, &owner)? {
+                match children.plan(plot, role, context, guide.as_ref(), round, owner)? {
                     FitOutcome::Measured(result) => result,
                     FitOutcome::Miss(failure) => {
                         FitFailure::retain_least(&mut child_miss, failure);
@@ -2965,7 +2966,7 @@ impl Canvas {
                     &panel_plan,
                     cell.height() - local.body.height(),
                     round,
-                    &owner,
+                    owner,
                     theme,
                 )?;
                 if let Some(measurements) = measurements.as_deref_mut() {
@@ -2982,7 +2983,7 @@ impl Canvas {
                     )?;
                 }
                 let request = round.request_insets(
-                    &owner,
+                    owner,
                     &target,
                     FeedbackKind::ContentHeight,
                     [cell.width(), 0.0, preferred, 0.0],

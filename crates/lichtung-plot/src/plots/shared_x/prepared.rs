@@ -547,6 +547,8 @@ pub(crate) fn prepare_plot<'src>(
                 source,
                 resources,
                 0,
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::PlotBody, 0)?,
                 RowSelection::Full,
                 None,
                 source

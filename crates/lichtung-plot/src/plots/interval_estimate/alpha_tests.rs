@@ -39,6 +39,9 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         &source,
         &operation,
         0,
+        crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::PlotBody, 0)
+            .unwrap(),
         crate::orchestrator::registration::RowSelection::Full,
         None,
         None,

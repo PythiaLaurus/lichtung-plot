@@ -167,6 +167,8 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 &source,
                 &operation,
                 0,
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::PlotBody, 0)?,
                 crate::orchestrator::registration::RowSelection::Full,
                 None,
                 None,

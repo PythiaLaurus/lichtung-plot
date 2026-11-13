@@ -90,7 +90,16 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
         },
         |stage| {
             let operation = stage.operation();
-            let scope = Scope::new(&source, &operation, 0, RowSelection::Full, None, None)?;
+            let scope = Scope::new(
+                &source,
+                &operation,
+                0,
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::PlotBody, 0)?,
+                RowSelection::Full,
+                None,
+                None,
+            )?;
             let mut registry = PlotRegistryBuilder::new(operation.root_identity());
             let id = registry.reserve(source.description(), scope, &operation)?;
             let panel = &mut registry.panels[id.slot];

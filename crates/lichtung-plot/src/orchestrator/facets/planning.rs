@@ -278,20 +278,18 @@ pub(super) fn native_parent(
         .transpose()?;
     for (index, facet) in panels.iter().enumerate() {
         let mut panel_plot = plot.clone().with_render_scope(facet.render_scope()?);
-        let domain_address = ComponentAddress::root().child(
-            AddressRole::FacetCell,
-            u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-        )?;
+        let registered = &inputs.plots[index];
+        let domain_address = &registered.scope.address;
         if matches!(facet_scales, FacetScales::Free | FacetScales::FreeX) {
             if let Some(range) =
-                round.feedback_domain(&domain_address, FeedbackKind::AutomaticDomainX)
+                round.feedback_domain(domain_address, FeedbackKind::AutomaticDomainX)
             {
                 panel_plot = panel_plot.with_planned_x_limits(range);
             }
         }
         if matches!(facet_scales, FacetScales::Free | FacetScales::FreeY) {
             if let Some(range) =
-                round.feedback_domain(&domain_address, FeedbackKind::AutomaticDomainY)
+                round.feedback_domain(domain_address, FeedbackKind::AutomaticDomainY)
             {
                 panel_plot = panel_plot.with_planned_y_limits(range);
             }
@@ -356,7 +354,6 @@ pub(super) fn native_parent(
             dependencies: dependency.as_slice(),
             ..SUPPRESSED_GUIDES
         };
-        let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, cell, theme)
             .with_registration(registered, inputs.intrinsic(registered))
             .with_fit_scope(&cell_scope)
@@ -371,7 +368,7 @@ pub(super) fn native_parent(
                 None
             },
             round,
-            &domain_address,
+            domain_address,
         )? {
             FitOutcome::Measured(result) => result,
             FitOutcome::Miss(failure) => {

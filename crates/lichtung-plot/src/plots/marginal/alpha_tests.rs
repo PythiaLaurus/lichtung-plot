@@ -30,7 +30,16 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     let operation = crate::font::canonical::OperationContext::new();
     let prepare_source = |source: &Plot| {
         use crate::orchestrator::registration::{PlotRegistryBuilder, RowSelection, Scope};
-        let scope = Scope::new(source, &operation, 0, RowSelection::Full, None, None)?;
+        let scope = Scope::new(
+            source,
+            &operation,
+            0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)?,
+            RowSelection::Full,
+            None,
+            None,
+        )?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
         let id = registry.reserve(source.description(), scope, &operation)?;
         let (marks, mut axes, _) = prepare(source, registry.data(&id, &operation)?, &id)?;

@@ -140,11 +140,8 @@ fn preflight_panels(
         let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
             .with_registration(registered, inputs.intrinsic(registered));
-        let owner = crate::layout::ComponentAddress::root().child(
-            crate::layout::AddressRole::FacetCell,
-            u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-        )?;
-        let result = children.measure(&panel_plot, context, &owner, phase, round, || {
+        let owner = &registered.scope.address;
+        let result = children.measure(&panel_plot, context, owner, phase, round, || {
             crate::layout::fit::outcome(panel_plot.measure_panel(kind, context))
         })?;
         preflight.push(crate::layout::fit::measured(Ok(result))?);

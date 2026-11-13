@@ -209,8 +209,15 @@ pub(crate) fn with_source_data_for_test<'src, T>(
     rows: crate::orchestrator::registration::RowSelection,
     visit: impl FnOnce(PlotData<'src, '_>) -> T,
 ) -> Result<T, Error> {
-    let scope =
-        crate::orchestrator::registration::Scope::new(source, operation, 0, rows, None, None)?;
+    let scope = crate::orchestrator::registration::Scope::new(
+        source,
+        operation,
+        0,
+        crate::layout::ComponentAddress::root().child(crate::layout::AddressRole::PlotBody, 0)?,
+        rows,
+        None,
+        None,
+    )?;
     let mut registry =
         crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
     let id = registry.reserve(source.description(), scope, operation)?;

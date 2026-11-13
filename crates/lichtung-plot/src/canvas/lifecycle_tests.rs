@@ -620,6 +620,19 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
         .build_preflight_plan(|prepared, _| {
             assert!(prepared.interiors[2].is_none());
             assert_eq!(prepared.interiors.iter().flatten().count(), 3);
+            for (slot, anchor) in [0, 1, 3].into_iter().enumerate() {
+                let registered = &prepared.interiors[anchor].as_ref().unwrap().plots[0];
+                assert_eq!(registered.scope.id.slot, slot);
+                assert_eq!(
+                    registered.scope.address,
+                    crate::layout::ComponentAddress::root()
+                        .child(
+                            crate::layout::AddressRole::CanvasCell,
+                            u32::try_from(anchor).unwrap()
+                        )
+                        .unwrap()
+                );
+            }
         })
         .unwrap();
     assert!(root.dimensions().0 <= 1001);

@@ -628,6 +628,9 @@ mod tests {
                 &plot,
                 &operation,
                 0,
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::FacetCell, 0)
+                    .unwrap(),
                 crate::orchestrator::registration::RowSelection::Selected {
                     input_slots: rows.to_vec(),
                     diagnostic_rows: ids.to_vec(),

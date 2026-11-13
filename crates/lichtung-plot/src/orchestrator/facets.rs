@@ -126,6 +126,11 @@ pub(crate) fn prepare_facet_scopes<'src>(
             plot,
             operation,
             slot,
+            crate::layout::ComponentAddress::root().child(
+                crate::layout::AddressRole::FacetCell,
+                u32::try_from(slot)
+                    .map_err(|_| Error::Render("facet address overflowed".into()))?,
+            )?,
             panel.rows,
             cell.as_ref(),
             Some(render_name),
@@ -947,9 +952,20 @@ mod feedback_tests {
                         let MeasuredRootContent::Facets(content) = &plan.content else {
                             panic!("measured facet content")
                         };
-                        for (child, registered) in content.children.iter().zip(&inputs.plots) {
+                        for (index, (child, registered)) in
+                            content.children.iter().zip(&inputs.plots).enumerate()
+                        {
                             assert_eq!(child.plot.plot_id, registered.scope.id);
                             assert_eq!(child.plot.selected.plot_id, child.plot.plot_id);
+                            assert_eq!(
+                                registered.scope.address,
+                                crate::layout::ComponentAddress::root()
+                                    .child(
+                                        crate::layout::AddressRole::FacetCell,
+                                        u32::try_from(index).unwrap()
+                                    )
+                                    .unwrap()
+                            );
                         }
                         if calls == 2 {
                             retained_neighbor =
