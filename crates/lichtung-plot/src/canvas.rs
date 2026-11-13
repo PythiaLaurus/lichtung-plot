@@ -1121,7 +1121,7 @@ impl Canvas {
         crate::data::source::reserve_source(&mut contributions, self.placements.len())?;
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(source) = plot else { continue };
-            let mut plot = self.cell_visibility(source.clone(), index);
+            let mut plot = self.cell_visibility(source.clone());
             if let Some(labels) = &self.labels {
                 plot = plot.labels(labels.clone());
             }
@@ -1349,6 +1349,9 @@ impl Canvas {
             let id = registry.reserve(source.description(), scope, &resources)?;
             let panel = &mut registry.panels[id.slot];
             panel.policy.gutter_owner = crate::orchestrator::registration::GutterOwner::Composition;
+            panel.policy.axis_text.tick_labels[1] = self.category_labels
+                != CanvasCategoryLabels::FirstColumnPerRow
+                || index.is_multiple_of(self.columns);
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
@@ -1694,7 +1697,7 @@ impl Canvas {
         for (index, inputs) in interiors.iter().enumerate() {
             if let Some(inputs) = inputs {
                 let source = self.placements.plot(index).expect("prepared Canvas panel");
-                let plot = self.cell_visibility(source.clone(), index);
+                let plot = self.cell_visibility(source.clone());
                 inputs.prepare_intrinsics(
                     &plot,
                     &themes
@@ -1912,7 +1915,7 @@ impl Canvas {
             if let Some(labels) = &self.labels {
                 plot = plot.labels(labels.clone());
             }
-            let mut plot = self.cell_visibility(plot, index);
+            let mut plot = self.cell_visibility(plot);
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 plot = plot.with_suppressed_legend();
             }
@@ -2190,7 +2193,7 @@ impl Canvas {
                 let kind = plot.kind();
                 plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
             }
-            plot = self.cell_visibility(plot, index);
+            plot = self.cell_visibility(plot);
             plots.push(Some(plot));
         }
         let hue_groups: &[(String, Vec<String>)] =
@@ -2253,7 +2256,7 @@ impl Canvas {
         })
     }
 
-    fn cell_visibility(&self, mut plot: Plot, index: usize) -> Plot {
+    fn cell_visibility(&self, mut plot: Plot) -> Plot {
         if self.legend_policy == CanvasLegendPolicy::Shared {
             plot = plot.with_parent_legend_composition(self.legend_composition);
         }
@@ -2265,11 +2268,6 @@ impl Canvas {
             && matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
         {
             plot = plot.with_suppressed_continuous_guide();
-        }
-        if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow
-            && !index.is_multiple_of(self.columns)
-        {
-            plot = plot.with_y_tick_labels_visible(false);
         }
         plot
     }
@@ -2341,7 +2339,7 @@ impl Canvas {
             if let Some(range) = round.feedback_domain(&address, FeedbackKind::AutomaticDomainY) {
                 plot = plot.with_planned_y_limits(range);
             }
-            *slot = Some(self.cell_visibility(plot, index));
+            *slot = Some(self.cell_visibility(plot));
         }
         Ok(())
     }
@@ -2737,9 +2735,6 @@ impl Canvas {
                             "canvas row {row} category domains differ across panels"
                         )));
                     }
-                    plots[index] = plots[index]
-                        .take()
-                        .map(|plot| plot.with_y_tick_labels_visible(false));
                 }
             }
         }

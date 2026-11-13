@@ -866,9 +866,12 @@ mod tests {
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 inputs.plots[0].policy.gutter_owner =
                     crate::orchestrator::registration::GutterOwner::Composition;
-                Ok((operation, inputs))
+                let mut hidden =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                hidden.plots[0].policy.axis_text.tick_labels[1] = false;
+                Ok((operation, inputs, hidden))
             },
-            |(operation, inputs), assigned, round| {
+            |(operation, inputs, hidden), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -890,6 +893,11 @@ mod tests {
                             PlotRenderContext::new(registered.data(operation)?, panel, &theme)
                                 .with_registration(registered, inputs.intrinsic(registered));
                         assert!(!key.matches(&source, composed, &owner, round)?);
+                        let registered = &hidden.plots[0];
+                        let suppressed =
+                            PlotRenderContext::new(registered.data(operation)?, panel, &theme)
+                                .with_registration(registered, hidden.intrinsic(registered));
+                        assert!(!key.matches(&source, suppressed, &owner, round)?);
                         assert!(!key.matches(
                             &source,
                             context.with_axis_label_width(context.axis_label_width + 1.0),
@@ -926,7 +934,6 @@ mod tests {
                                 .clone()
                                 .with_global_line_condition_levels(vec!["new condition".into()]),
                             source.clone().with_global_collective_pairs(Vec::new()),
-                            source.clone().with_y_tick_labels_visible(false),
                             source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(

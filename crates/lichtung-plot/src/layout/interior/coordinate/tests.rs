@@ -117,7 +117,9 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
                         .unwrap(),
                 )
                 .unwrap()
-                .minimum(plot.y_tick_labels_visible());
+                .minimum(
+                    crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
+                );
                 let minimum = plot
                     .intrinsic_body_minimum(registered, intrinsic, &operation, theme)
                     .unwrap();

@@ -301,7 +301,7 @@ pub(crate) fn horizontal_gutter_preference(
     };
     if let Some(axes) = registered
         .and_then(|registered| registered.axes.coordinate())
-        .filter(|_| plot.y_tick_labels_visible())
+        .filter(|_| crate::orchestrator::registration::axis_tick_labels_visible(registered, 1))
     {
         let base = axes.axis(registered.expect("prepared axis occurrence").source, 1);
         if let Some(categories) = axes.categories(1) {

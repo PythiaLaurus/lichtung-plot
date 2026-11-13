@@ -522,7 +522,9 @@ pub(crate) fn intrinsic_body_minimum(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        registered, 1,
+    ));
     let prepared = retained(chart, registered)?;
 
     let mut height = 0.0_f64;
@@ -646,7 +648,9 @@ pub(crate) fn natural_body_height(
                 intrinsic,
                 &chart.intrinsic_inputs(registered, theme, operation)?,
             )?
-            .minimum(chart.y_tick_labels_visible())
+            .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+                registered, 1,
+            ))
             .1,
         );
     Ok(hard
@@ -798,7 +802,10 @@ pub(crate) fn measure(
         context.intrinsic(),
         &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        context.registered,
+        1,
+    ));
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",
@@ -823,7 +830,7 @@ pub(crate) fn measure(
     let mut pitch = mark_minimum.1 / labels.len() as f64;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
-    if chart.y_tick_labels_visible()
+    if crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
         && !tick_appearance.hidden()
         && !tick_appearance.layout.is_some_and(|request| {
             request
@@ -940,7 +947,10 @@ pub(crate) fn measure(
                 1,
             )?,
             ticks,
-            tick_labels_visible: chart.y_tick_labels_visible(),
+            tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
+                context.registered,
+                1,
+            ),
             category_labels: pair[1]
                 .authored()
                 .expect("coordinate authored intent")

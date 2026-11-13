@@ -227,7 +227,9 @@ pub(crate) fn intrinsic_body_minimum(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        registered, 1,
+    ));
 
     for group in &prepared.groups {
         let style = chart.description().point_style(
@@ -415,7 +417,9 @@ pub(crate) fn natural_body_preference(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        registered, 1,
+    ));
     let central = (
         (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
         (hard.1 - gap - (2.0 * ink.1).max(1.0 / 1024.0)).max(axes.1),
@@ -452,7 +456,9 @@ pub(crate) fn natural_body_height(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        registered, 1,
+    ));
     let central_hard = (
         (hard.0 - gap - right_hard).max(axes.0),
         (hard.1 - gap - top_hard).max(axes.1),
@@ -535,7 +541,7 @@ pub(crate) fn measure(
         context.intrinsic(),
         &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(registered.policy.axis_text.tick_labels[1]);
     let central_hard = (
         (hard.0 - gap - right_hard).max(axes_hard.0),
         (hard.1 - gap - top_hard).max(axes_hard.1),

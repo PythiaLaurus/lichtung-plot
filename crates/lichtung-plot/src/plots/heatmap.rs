@@ -684,7 +684,7 @@ pub(crate) fn intrinsic_body_minimum(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?;
-    if chart.y_tick_labels_visible() {
+    if crate::orchestrator::registration::axis_tick_labels_visible(registered, 1) {
         Ok(minimum)
     } else {
         Ok(without_y_labels)
@@ -1265,7 +1265,7 @@ pub(crate) fn measure(
                 .map(Ok),
         )?;
         for (_, label) in y_labels.iter().enumerate().filter(|(index, _)| {
-            chart.y_tick_labels_visible()
+            crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
                 && theme
                     .tick_text_appearance(crate::layout::AxisSide::Left)
                     .includes(*index, &eligible)
@@ -1334,7 +1334,7 @@ pub(crate) fn measure(
             column_edges,
             &y_labels,
             &chart.description().y_axis_spec().category_labels,
-            chart.y_tick_labels_visible(),
+            crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1),
             tick_width,
             context.with_panel(panel),
         )?;
@@ -1435,7 +1435,10 @@ pub(crate) fn measure(
                 label: axes
                     .copy_label(context.registered.expect("prepared Heatmap occurrence"), 1)?,
                 ticks: y_ticks,
-                tick_labels_visible: chart.y_tick_labels_visible(),
+                tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
+                    context.registered,
+                    1,
+                ),
                 category_labels: axes
                     .axis(
                         context

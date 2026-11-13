@@ -173,7 +173,7 @@ impl HeightInputs {
                 .map(|range| [range.0.to_bits(), range.1.to_bits()]),
             own_insets,
             parent_insets,
-            y_labels: plot.y_tick_labels_visible(),
+            y_labels: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
             legend: plot.description().legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot, registered, Some(canvas))?,

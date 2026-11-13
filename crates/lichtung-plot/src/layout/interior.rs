@@ -192,7 +192,7 @@ impl<'src> PreparedInteriorInputs<'src> {
                     request: *theme,
                     operation,
                     diagnostic_scope: scope.as_deref(),
-                    y_visible: plot.y_tick_labels_visible(),
+                    y_visible: registered.policy.axis_text.tick_labels[1],
                 },
             )?;
         }
@@ -219,7 +219,9 @@ impl Plot {
                 intrinsic,
                 &self.intrinsic_inputs(registered, theme, operation)?,
             )?
-            .minimum(self.y_tick_labels_visible())
+            .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+                registered, 1,
+            ))
         } else {
             (1.0 / 1024.0, 1.0 / 1024.0)
         };

@@ -1253,15 +1253,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.suppress_continuous_guide
     }
 
-    pub(crate) const fn y_tick_labels_visible(&self) -> bool {
-        self.y_tick_labels_visible
-    }
-
-    pub(crate) const fn with_y_tick_labels_visible(mut self, visible: bool) -> Self {
-        self.y_tick_labels_visible = visible;
-        self
-    }
-
     pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
         self.description.payload_mut().axes[1].window =
             Some(crate::layout::RawWindow::from_pair(limits));

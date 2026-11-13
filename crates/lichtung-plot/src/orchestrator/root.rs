@@ -81,7 +81,7 @@ impl crate::Plot {
             })?,
             request: *request,
             operation,
-            y_visible: self.y_tick_labels_visible(),
+            y_visible: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
             diagnostic_scope: self.axis_scope(),
         })
     }
@@ -136,14 +136,18 @@ mod tests {
                     panic!("native coordinate slot")
                 };
                 assert!(value.get().is_none(), "post-font preparation must remain lazy");
-                let plot = plot.clone().with_y_tick_labels_visible(plot.kind() != PlotKind::Beeswarm);
-                plot.intrinsic_body_minimum(Some(registered), intrinsic, operation, request).unwrap();
+                let mut input = plot.intrinsic_inputs(Some(registered), request, operation).unwrap();
+                input.y_visible = plot.kind() != PlotKind::Beeswarm;
+                if plot.kind() == PlotKind::Beeswarm {
+                    coordinate_intrinsic(intrinsic, &input).unwrap();
+                } else {
+                    plot.intrinsic_body_minimum(Some(registered), intrinsic, operation, request).unwrap();
+                }
                 let initialized = value.get().unwrap();
-                let same = coordinate_intrinsic(intrinsic, &plot.intrinsic_inputs(Some(registered), request, operation).unwrap()).unwrap();
+                let same = coordinate_intrinsic(intrinsic, &input).unwrap();
                 assert!(std::ptr::eq(initialized, same));
                 if plot.kind() == PlotKind::Beeswarm {
-                    let visible = plot.with_y_tick_labels_visible(true);
-                    let error = coordinate_intrinsic(intrinsic, &visible.intrinsic_inputs(Some(registered), request, operation).unwrap()).unwrap_err();
+                    let error = plot.intrinsic_body_minimum(Some(registered), intrinsic, operation, request).unwrap_err();
                     assert_eq!(error.to_string(), "render error: previously suppressed axis text cannot become active in prepared intrinsics");
                 }
             }).unwrap();

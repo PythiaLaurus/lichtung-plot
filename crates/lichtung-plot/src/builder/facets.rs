@@ -177,7 +177,8 @@ impl<K: crate::kind::Marker> Plot<K> {
                 crate::orchestrator::registration::GutterOwner::Root,
                 |registered| registered.policy.gutter_owner,
             ) == other.axis_gutter_owner
-            && self.y_tick_labels_visible == other.y_tick_labels_visible
+            && crate::orchestrator::registration::axis_tick_labels_visible(registered, 1)
+                == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.description.payload.legend_policy == other.legend_policy
             && self.suppress_continuous_guide == other.suppress_continuous_guide
@@ -283,7 +284,9 @@ impl<K: crate::kind::Marker> Plot<K> {
                 crate::orchestrator::registration::GutterOwner::Root,
                 |registered| registered.policy.gutter_owner,
             ),
-            y_tick_labels_visible: self.y_tick_labels_visible,
+            y_tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
+                registered, 1,
+            ),
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.description.payload.legend_policy,
             suppress_continuous_guide: self.suppress_continuous_guide,

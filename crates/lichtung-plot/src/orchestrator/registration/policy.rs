@@ -20,6 +20,7 @@ pub(crate) struct CoordinatedDomains {
 }
 
 pub(crate) struct AxisTextVisibility {
+    pub(crate) tick_labels: [bool; 2],
     pub(crate) titles: [bool; 2],
 }
 
@@ -40,6 +41,7 @@ impl PlotScopePolicy {
                 .map(|(index, _)| index)
                 .collect(),
             axis_text: AxisTextVisibility {
+                tick_labels: [true; 2],
                 titles: [!source.has_facets(); 2],
             },
             gutter_owner: if source.has_facets() {

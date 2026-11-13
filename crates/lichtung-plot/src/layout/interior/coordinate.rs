@@ -494,7 +494,11 @@ impl InteriorRoute {
                         side,
                     )?,
                     ticks: ticks.ticks,
-                    tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
+                    tick_labels_visible: side == 0
+                        || crate::orchestrator::registration::axis_tick_labels_visible(
+                            context.registered,
+                            1,
+                        ),
                     category_labels: base
                         .authored()
                         .expect("coordinate authored intent")
@@ -667,7 +671,7 @@ mod intrinsic_tests {
                             .unwrap(),
                     )
                     .unwrap()
-                    .minimum(chart.y_tick_labels_visible());
+                    .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);
                     let projection = Projection::new(
                         (-1.0, 1.0),
                         (-1.0, 1.0),
@@ -752,7 +756,7 @@ mod intrinsic_tests {
                             .unwrap(),
                     )
                     .unwrap()
-                    .minimum(chart.y_tick_labels_visible());
+                    .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);
                     assert_eq!(
                         minimum.0.to_bits(),
                         crate::layout::kernel::required_length(

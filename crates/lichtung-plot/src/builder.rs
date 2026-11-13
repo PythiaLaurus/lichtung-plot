@@ -448,10 +448,6 @@ use crate::{
 /// ));
 /// ```
 #[derive(Clone)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "independent chart visibility and rendering switches are typed builder options"
-)]
 pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     description: PlotDescription,
     pub(crate) output_dimensions: Option<(u32, u32)>,
@@ -468,7 +464,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     render_scope: Option<String>,
     pub(crate) prepared_discrete_guides:
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
-    y_tick_labels_visible: bool,
     marker: PhantomData<K>,
 }
 
@@ -540,7 +535,6 @@ impl Plot<crate::kind::Any> {
             global_line_condition_levels: None,
             render_scope: None,
             prepared_discrete_guides: None,
-            y_tick_labels_visible: true,
             marker: PhantomData,
         }
     }
@@ -871,7 +865,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             render_scope,
-            y_tick_labels_visible,
             marker: _,
             prepared_discrete_guides,
         } = self;
@@ -889,7 +882,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             render_scope,
-            y_tick_labels_visible,
             marker: PhantomData,
         }
     }

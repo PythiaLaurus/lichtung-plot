@@ -115,7 +115,9 @@ pub(crate) fn intrinsic_body_minimum(
         intrinsic,
         &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
-    .minimum(chart.y_tick_labels_visible());
+    .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+        registered, 1,
+    ));
     Ok((
         axes.0.max(if chart.user_x_limits().is_none() {
             numeric
@@ -477,7 +479,7 @@ pub(crate) fn measure(
     let mut hard_pitch = packed.hard_pitch;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
-    if chart.y_tick_labels_visible()
+    if crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
         && !tick_appearance.hidden()
         && !tick_appearance.layout.is_some_and(|request| {
             request
@@ -567,7 +569,10 @@ pub(crate) fn measure(
         y_axis: crate::layout::Axis {
             label: axes.copy_label(context.registered.expect("prepared Beeswarm occurrence"), 1)?,
             ticks,
-            tick_labels_visible: chart.y_tick_labels_visible(),
+            tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
+                context.registered,
+                1,
+            ),
             category_labels: pair[1]
                 .authored()
                 .expect("coordinate authored intent")

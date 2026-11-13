@@ -1467,7 +1467,7 @@ fn push_plot_axis_ticks(
                 {
                     continue;
                 }
-                if side == 1 && !plot.y_tick_labels_visible() {
+                if side == 1 && !registered.policy.axis_text.tick_labels[1] {
                     continue;
                 }
                 let address = owner.child(
@@ -1513,9 +1513,6 @@ fn push_plot_axis_ticks(
         .into_iter()
         .enumerate()
         {
-            if side == 1 && !plot.y_tick_labels_visible() {
-                continue;
-            }
             if plot.description().text_layouts().ticks[side]
                 .as_ref()
                 .is_some_and(crate::TextLayout::hidden)

@@ -114,6 +114,13 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) family: PreparedFamily,
 }
 
+pub(crate) fn axis_tick_labels_visible(
+    registered: Option<&PlotRegistration<'_>>,
+    side: usize,
+) -> bool {
+    registered.is_none_or(|registered| registered.policy.axis_text.tick_labels[side])
+}
+
 impl std::fmt::Debug for PlotRegistration<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
