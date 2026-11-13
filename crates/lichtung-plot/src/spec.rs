@@ -660,7 +660,6 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     prepared: bool,
     prepared_limits: [Option<(f64, f64)>; 2],
     pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
-    facet_scales: Option<FacetScales>,
     pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
@@ -694,15 +693,9 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             prepared: false,
             prepared_limits: [None; 2],
             theme,
-            facet_scales: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
-    }
-
-    pub(crate) const fn with_facet_scales(mut self, facet_scales: FacetScales) -> Self {
-        self.facet_scales = Some(facet_scales);
-        self
     }
 
     pub(crate) const fn with_canvas(mut self, canvas: &'src crate::Canvas) -> Self {
@@ -741,7 +734,10 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     }
 
     pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
-        self.facet_scales
+        match self.registered {
+            Some(registered) => registered.policy.facet_scales,
+            None => None,
+        }
     }
 
     /// Annotation geometry may read the selected range but must not resolve it again.

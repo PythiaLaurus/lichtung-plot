@@ -6,6 +6,7 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) gutter_owner: GutterOwner,
     pub(crate) guide_composition: crate::LegendComposition,
     pub(crate) continuous_materialization: ContinuousMaterialization,
+    pub(crate) facet_scales: Option<crate::FacetScales>,
     pub(crate) coordinated: CoordinatedDomains,
 }
 
@@ -61,6 +62,7 @@ impl PlotScopePolicy {
             },
             guide_composition: source.legend_composition_spec(),
             continuous_materialization: ContinuousMaterialization::Local,
+            facet_scales: source.has_facets().then(|| source.facet_scales_spec()),
             coordinated: CoordinatedDomains::default(),
         }
     }

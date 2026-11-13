@@ -100,13 +100,11 @@ pub(super) fn preflight_coordinated_panels(
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
 ) -> Result<(Plot, Vec<std::sync::Arc<PlotRenderResult>>), crate::layout::fit::PlanError> {
-    let facet_scales = source.description().facet_scales_spec();
     let preflight = preflight_panels(
         &base_plot,
         kind,
         panels,
         inputs,
-        facet_scales,
         theme,
         children,
         round,
@@ -128,7 +126,6 @@ fn preflight_panels(
     kind: PlotKind,
     panels: &[FacetPanel],
     inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
-    facet_scales: crate::FacetScales,
     theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
@@ -142,8 +139,7 @@ fn preflight_panels(
         let panel_plot = base_plot.clone().with_render_scope(facet.render_scope()?);
         let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
-            .with_registration(registered, inputs.intrinsic(registered))
-            .with_facet_scales(facet_scales);
+            .with_registration(registered, inputs.intrinsic(registered));
         let owner = crate::layout::ComponentAddress::root().child(
             crate::layout::AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,

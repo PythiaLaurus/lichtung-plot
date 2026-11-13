@@ -880,9 +880,12 @@ mod tests {
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 collectives.plots[0].policy.coordinated.collectives =
                     Some(crate::data::source::source_arc(Vec::new())?);
-                Ok((operation, inputs, hidden, collectives))
+                let mut scales =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                scales.plots[0].policy.facet_scales = Some(FacetScales::Free);
+                Ok((operation, inputs, hidden, collectives, scales))
             },
-            |(operation, inputs, hidden, collectives), assigned, round| {
+            |(operation, inputs, hidden, collectives, scales), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -965,7 +968,11 @@ mod tests {
                         )?);
                         assert!(!key.matches(
                             &source,
-                            context.with_facet_scales(FacetScales::Free),
+                            PlotRenderContext::new(scales.plots[0].data(operation)?, panel, &theme)
+                                .with_registration(
+                                    &scales.plots[0],
+                                    scales.intrinsic(&scales.plots[0])
+                                ),
                             &owner,
                             round
                         )?);
