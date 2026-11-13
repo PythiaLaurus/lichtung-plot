@@ -192,8 +192,10 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Beeswarm(marks))
         }
         PlotKind::Marginal => {
-            let (marks, axes) = crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
+            let (marks, axes, hues) =
+                crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
             panel.axes = Some(axes);
+            panel.policy.coordinated.colors = Some(crate::data::source::source_arc(hues)?);
             Ok(PreparedFamily::Marginal(marks))
         }
         PlotKind::Heatmap => {
@@ -1056,13 +1058,14 @@ pub(crate) fn prepare_plot<'src>(
             )?;
         }
     } else if source.kind() == PlotKind::Matrix {
-        let (marks, axes) = crate::plots::matrix::prepare_axes(
+        let (marks, axes, hues) = crate::plots::matrix::prepare_axes(
             source,
             source_data.expect("single plot data"),
             &registry.panels[0].scope.id,
         )?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
         registry.panels[0].axes = Some(axes);
+        registry.panels[0].policy.coordinated.colors = Some(crate::data::source::source_arc(hues)?);
     } else {
         let axes = prepare(source, &registry.panels[0].scope.id, None, None, None, None)?;
         registry.panels[0].axes = Some(axes);

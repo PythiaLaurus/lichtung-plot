@@ -2,6 +2,12 @@
 
 pub(crate) struct PlotScopePolicy {
     pub(crate) axis_text: AxisTextVisibility,
+    pub(crate) coordinated: CoordinatedDomains,
+}
+
+#[derive(Default)]
+pub(crate) struct CoordinatedDomains {
+    pub(crate) colors: Option<std::sync::Arc<Vec<String>>>,
 }
 
 pub(crate) struct AxisTextVisibility {
@@ -14,6 +20,7 @@ impl PlotScopePolicy {
             axis_text: AxisTextVisibility {
                 titles: [!source.has_facets(); 2],
             },
+            coordinated: CoordinatedDomains::default(),
         }
     }
 }

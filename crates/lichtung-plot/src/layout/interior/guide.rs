@@ -151,8 +151,8 @@ impl PreparedInteriorInputs<'_> {
             }
             Ok(())
         };
-        for family in self.plots.iter().map(|registered| &registered.family) {
-            match family {
+        for registered in &self.plots {
+            match &registered.family {
                 F::Scatter(marks) => {
                     for value in marks.hue_levels() {
                         include(value)?;
@@ -188,8 +188,14 @@ impl PreparedInteriorInputs<'_> {
                         include(value)?;
                     }
                 }
-                F::Matrix(marks) => {
-                    for value in marks.hue_levels() {
+                F::Matrix(_) => {
+                    for value in registered
+                        .policy
+                        .coordinated
+                        .colors
+                        .as_deref()
+                        .expect("prepared Matrix color domain")
+                    {
                         include(value)?;
                     }
                 }
@@ -278,8 +284,18 @@ impl PreparedInteriorInputs<'_> {
                 }
                 F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
                 F::Marginal(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Matrix(marks) => {
-                    include_keys(&mut keys, marks.hue_levels().iter().map(String::as_str))?;
+                F::Matrix(_) => {
+                    include_keys(
+                        &mut keys,
+                        registered
+                            .policy
+                            .coordinated
+                            .colors
+                            .as_deref()
+                            .expect("prepared Matrix color domain")
+                            .iter()
+                            .map(String::as_str),
+                    )?;
                 }
                 _ => {}
             }
@@ -375,7 +391,17 @@ impl PreparedInteriorInputs<'_> {
                 .ok_or_else(|| {
                     Error::Render("Marginal guide is missing prepared semantics".into())
                 })?
-                .guide_entries(chart, theme, data),
+                .guide_entries(
+                    chart,
+                    registered
+                        .policy
+                        .coordinated
+                        .colors
+                        .as_deref()
+                        .expect("prepared Marginal color domain"),
+                    theme,
+                    data,
+                ),
             PlotKind::Regression => {
                 Self::family(registered, kind, |family| match family {
                     F::Regression(marks) => Some(marks),
@@ -453,7 +479,17 @@ impl PreparedInteriorInputs<'_> {
                             _ => None,
                         })
                         .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
-                        .guide_sources(&scoped, theme, data)?
+                        .guide_sources(
+                            &scoped,
+                            registered
+                                .policy
+                                .coordinated
+                                .colors
+                                .as_deref()
+                                .expect("prepared Matrix color domain"),
+                            theme,
+                            data,
+                        )?
                 } else {
                     self.guide_sources(&scoped, theme, data, registered)?
                 };

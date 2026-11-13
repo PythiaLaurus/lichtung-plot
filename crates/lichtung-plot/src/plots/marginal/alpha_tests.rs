@@ -33,7 +33,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         let scope = Scope::new(source, &operation, 0, RowSelection::Full, None, None)?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
         let id = registry.reserve(source.description(), scope, &operation)?;
-        let (marks, mut axes) = prepare(source, registry.data(&id, &operation)?, &id)?;
+        let (marks, mut axes, _) = prepare(source, registry.data(&id, &operation)?, &id)?;
         Ok::<_, Error>((finish(marks, &mut axes, None)?, axes))
     };
     let (prepared, prepared_axes) = prepare_source(&source).unwrap();

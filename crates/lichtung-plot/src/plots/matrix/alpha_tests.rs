@@ -31,7 +31,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         let id = registry.reserve(source.description(), scope, &operation)?;
         prepare_axes(source, registry.data(&id, &operation)?, &id)
     };
-    let (prepared, _) = prepare(
+    let (prepared, _, _) = prepare(
         &source,
         crate::orchestrator::registration::RowSelection::Selected {
             input_slots: vec![2, 0, 1],
@@ -47,7 +47,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             .collect::<Vec<_>>(),
         [(2, 300, 0), (0, 100, 0), (1, 200, 128)]
     );
-    let (before, before_axes) = prepare(
+    let (before, before_axes, _) = prepare(
         &source,
         crate::orchestrator::registration::RowSelection::Full,
     )
@@ -62,7 +62,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             AlphaTarget::Fill,
             AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
         );
-    let (after, after_axes) = prepare(
+    let (after, after_axes, _) = prepare(
         &control,
         crate::orchestrator::registration::RowSelection::Full,
     )

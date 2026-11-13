@@ -135,16 +135,28 @@ impl PreparedGuide {
         let data = inputs.plots[0].data(&operation)?;
         let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
-        } else if let Some(matrix) =
+        } else if let Some((matrix, registered)) =
             inputs
                 .plots
                 .iter()
                 .find_map(|registered| match &registered.family {
-                    crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+                    crate::orchestrator::registration::PreparedFamily::Matrix(marks) => {
+                        Some((marks, registered))
+                    }
                     _ => None,
                 })
         {
-            matrix.guide_sources(plot, theme, data)?
+            matrix.guide_sources(
+                plot,
+                registered
+                    .policy
+                    .coordinated
+                    .colors
+                    .as_deref()
+                    .expect("prepared Matrix color domain"),
+                theme,
+                data,
+            )?
         } else {
             inputs.guide_sources(plot, theme, data, &inputs.plots[0])?
         };

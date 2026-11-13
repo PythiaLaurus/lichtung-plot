@@ -60,7 +60,6 @@ struct HueGroup {
 #[derive(Debug)]
 pub(crate) struct PreparedMatrixAxes {
     groups: Vec<HueGroup>,
-    hues: Vec<String>,
     diagonals: Vec<MatrixDensity>,
 }
 
@@ -132,19 +131,16 @@ impl PreparedMatrixAxes {
         .map_or((0.0, 0.0), |ink| ink.dimensions()))
     }
 
-    pub(crate) fn hue_levels(&self) -> &[String] {
-        &self.hues
-    }
-
     fn resolved_colors(
         &self,
         chart: &Plot,
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
         let colors = CategoryColors::resolve(
-            chart.global_hue_levels().unwrap_or(&self.hues),
+            chart.global_hue_levels().unwrap_or(hues),
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
             resources,
@@ -294,10 +290,11 @@ impl PreparedMatrixAxes {
     pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(chart, theme, data)?;
+        let (colors, accents) = self.resolved_colors(chart, hues, theme, data)?;
         let mapped = crate::data::source::collect_source(
             self.groups
                 .iter()
@@ -439,7 +436,7 @@ pub(crate) fn prepare_axes(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     plot_id: &PlotOccurrenceId,
-) -> Result<(PreparedMatrixAxes, PreparedAxesOwner), Error> {
+) -> Result<(PreparedMatrixAxes, PreparedAxesOwner, Vec<String>), Error> {
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
@@ -516,15 +513,12 @@ pub(crate) fn prepare_axes(
             },
         ))?;
     Ok((
-        PreparedMatrixAxes {
-            groups,
-            hues,
-            diagonals,
-        },
+        PreparedMatrixAxes { groups, diagonals },
         PreparedAxesOwner::Matrix {
             variables,
             diagonal_density,
         },
+        hues,
     ))
 }
 
@@ -547,7 +541,19 @@ pub(crate) fn measure(
     let n = variables.len();
 
     let groups = &prepared.groups;
-    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let (colors, accents) = prepared.resolved_colors(
+        chart,
+        context
+            .registered
+            .expect("prepared Matrix occurrence")
+            .policy
+            .coordinated
+            .colors
+            .as_deref()
+            .expect("prepared Matrix color domain"),
+        theme,
+        data,
+    )?;
     let group_colors = crate::data::source::collect_source(
         groups
             .iter()

@@ -61,7 +61,6 @@ struct HueGroup {
 #[derive(Debug)]
 pub(crate) struct PreparedMarginal {
     groups: Vec<HueGroup>,
-    hues: Vec<String>,
     curves: MarginalCurves,
 }
 
@@ -113,11 +112,12 @@ impl PreparedMarginal {
     fn resolved_colors(
         &self,
         chart: &Plot,
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
-        let keys = chart.global_hue_levels().unwrap_or(&self.hues);
+        let keys = chart.global_hue_levels().unwrap_or(hues);
         let colors = CategoryColors::resolve(
             keys,
             theme.color_scales.get_qualitative(),
@@ -152,10 +152,11 @@ impl PreparedMarginal {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
+        hues: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(chart, theme, data)?;
+        let (colors, accents) = self.resolved_colors(chart, hues, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors, &accents)
     }
 
@@ -737,7 +738,17 @@ pub(crate) fn measure(
     ];
     let mut selected = Vec::new();
     crate::data::source::reserve_source(&mut selected, groups.len())?;
-    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let (colors, accents) = prepared.resolved_colors(
+        chart,
+        registered
+            .policy
+            .coordinated
+            .colors
+            .as_deref()
+            .expect("prepared Marginal color domain"),
+        theme,
+        data,
+    )?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
@@ -937,7 +948,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     plot_id: &PlotOccurrenceId,
-) -> Result<(PreparedMarginal, PreparedAxesOwner), Error> {
+) -> Result<(PreparedMarginal, PreparedAxesOwner, Vec<String>), Error> {
     let (mut groups, hues) = build_groups(chart, data)?;
     let fill_alpha = chart.description().prepare_collective_alpha(
         AlphaTarget::Fill,
@@ -1006,13 +1017,13 @@ pub(crate) fn prepare(
     Ok((
         PreparedMarginal {
             groups,
-            hues,
             curves: MarginalCurves::default(),
         },
         PreparedAxesOwner::Marginal {
             central,
             strip_density,
         },
+        hues,
     ))
 }
 
