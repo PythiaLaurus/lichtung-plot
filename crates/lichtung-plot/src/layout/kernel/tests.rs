@@ -122,12 +122,37 @@ fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
     .unwrap();
     assert_eq!((prepares.get(), measures.get(), finalizes.get()), (1, 1, 1));
     assert_eq!(root.dimensions(), (317, 211));
-    assert_eq!(*root.prepared(), 23);
     assert_eq!(**root.plan(), 17);
     assert_eq!(
         std::ptr::from_ref(root.plan().as_ref()),
         measured_address.get()
     );
+}
+
+#[test]
+fn frozen_root_releases_preparation_and_operation_before_return() {
+    let mut operation = None;
+    let prepared = std::sync::Arc::new(());
+    let weak = std::sync::Arc::downgrade(&prepared);
+    let root = plan_root(
+        RootRequest::ExactSize {
+            width: 100,
+            height: 100,
+        },
+        |stage| {
+            operation = Some(stage.operation().liveness_probe());
+            Ok(prepared)
+        },
+        |_, assigned, _| Ok(MeasuredLayout::new(assigned.assigned_size()?, 17)),
+        |_, _, plan, _| {
+            assert_eq!(weak.strong_count(), 1);
+            Ok(plan)
+        },
+    )
+    .unwrap();
+    assert_eq!(*root.plan(), 17);
+    assert_eq!(weak.strong_count(), 0);
+    assert!(!operation.unwrap()());
 }
 
 #[test]

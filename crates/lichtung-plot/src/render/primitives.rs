@@ -21,13 +21,13 @@ thread_local! {
     pub(crate) static TEXT_PLACEMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CanonicalTextRun {
     pub(crate) origin: Option<CanonicalPoint>,
     pub(crate) glyphs: Vec<CanonicalPoint>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CanonicalTextLine {
     pub(crate) origin: CanonicalPoint,
     pub(crate) runs: Vec<CanonicalTextRun>,
@@ -35,9 +35,9 @@ pub(crate) struct CanonicalTextLine {
     pub(crate) isolate_runs: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CanonicalTextPayload {
-    pub(crate) plan: ResolvedTextPlan,
+    pub(crate) text: crate::layout::text::FrozenText,
     pub(crate) center: CanonicalPoint,
     pub(crate) rotation: coordinates::CanonicalAngle,
     pub(crate) rotation_sin_cos: (f64, f64),
@@ -46,7 +46,7 @@ pub(crate) struct CanonicalTextPayload {
     pub(crate) suppressed: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CanonicalPlannedText(pub(crate) Arc<CanonicalTextPayload>);
 
 impl CanonicalPlannedText {
@@ -199,7 +199,7 @@ impl CanonicalPlannedText {
             })
             .transpose()?;
         Ok(Self(Arc::new(CanonicalTextPayload {
-            plan: plan.clone(),
+            text: plan.freeze_selected(),
             center: canonical.position.inverted(height)?,
             rotation: canonical.rotation,
             rotation_sin_cos: canonical.rotation.value().to_radians().sin_cos(),

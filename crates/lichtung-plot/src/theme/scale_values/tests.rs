@@ -289,7 +289,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
         700,
         500,
-        theme.prepared_font_environment().unwrap().clone(),
+        theme.prepared_font_environment().unwrap(),
     );
     backend.begin(700, 500).unwrap();
     payload.draw(&mut backend).unwrap();

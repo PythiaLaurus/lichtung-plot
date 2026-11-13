@@ -985,8 +985,7 @@ impl Drop for DiscoveryFontHandle {
 #[derive(Debug)]
 pub(crate) struct CanonicalFontCore {
     database: Database,
-    files: Vec<RetainedFontFile>,
-    faces: Vec<FaceMetadata>,
+    fonts: Arc<FrozenFontRegistry>,
     scalar_presence: Vec<u64>,
     prepared_pairs: Vec<PreparedPair>,
     prepared_pairs_sealed: bool,
@@ -1086,6 +1085,41 @@ impl<'a> PairPreparation<'a> {
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedFontEnvironment {
     core: Arc<RwLock<CanonicalFontCore>>,
+    fonts: Arc<FrozenFontRegistry>,
+}
+
+/// The original complete retained file/face collection, without operation state.
+#[derive(Debug)]
+pub(crate) struct FrozenFontRegistry {
+    files: Vec<RetainedFontFile>,
+    faces: Vec<FaceMetadata>,
+}
+
+pub(crate) struct SealedTextVerifier<'a> {
+    environment: &'a PreparedFontEnvironment,
+}
+
+impl<'a> SealedTextVerifier<'a> {
+    pub(crate) fn new(environment: &'a PreparedFontEnvironment) -> Self {
+        Self { environment }
+    }
+}
+
+impl SealedTextVerifier<'_> {
+    pub(crate) fn validate_measured(
+        &self,
+        text: &crate::layout::ResolvedTextPlan,
+    ) -> Result<(), FontError> {
+        self.environment.validate_admitted_text(
+            &text.style.stack,
+            &text.pair_provenance,
+            &text.source,
+        )
+    }
+
+    pub(crate) fn retain_fonts(&self) -> Arc<FrozenFontRegistry> {
+        Arc::clone(&self.environment.fonts)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1105,6 +1139,20 @@ struct FontOperation {
 }
 
 impl OperationContext {
+    #[cfg(test)]
+    pub(crate) fn liveness_probe(&self) -> impl Fn() -> bool + use<> {
+        let palettes = Arc::downgrade(&self.palette_cache);
+        let fonts = Arc::downgrade(&self.fonts);
+        let numbers = Arc::downgrade(&self.numeric_presentations);
+        let positions = Arc::downgrade(&self.tick_positions);
+        move || {
+            palettes.strong_count() != 0
+                || fonts.strong_count() != 0
+                || numbers.strong_count() != 0
+                || positions.strong_count() != 0
+        }
+    }
+
     pub(crate) fn seal_fonts(&self) -> Result<(), FontError> {
         self.tick_positions
             .lock()
@@ -1146,6 +1194,12 @@ impl OperationContext {
 }
 
 impl PreparedFontEnvironment {
+    #[cfg(test)]
+    pub(crate) fn liveness_probe(&self) -> impl Fn() -> bool + use<> {
+        let core = Arc::downgrade(&self.core);
+        move || core.strong_count() != 0
+    }
+
     /// Verify frozen source coverage and pair provenance without adding fonts,
     /// copying selections, probing faces or shaping text.
     pub(crate) fn validate_admitted_text(
@@ -1260,6 +1314,7 @@ impl PreparedFontEnvironment {
 
     fn for_core(core: CanonicalFontCore) -> Result<Self, FontError> {
         let operation = core.operation.clone();
+        let retained = Arc::clone(&core.fonts);
         let core = Arc::new(RwLock::new(core));
         let mut fonts = operation
             .fonts
@@ -1273,7 +1328,10 @@ impl PreparedFontEnvironment {
             .try_reserve(1)
             .map_err(|_| FontError::Allocation("operation font environments"))?;
         fonts.environments.push(Arc::downgrade(&core));
-        Ok(Self { core })
+        Ok(Self {
+            core,
+            fonts: retained,
+        })
     }
 
     #[cfg(test)]
@@ -1432,7 +1490,7 @@ impl CanonicalFontCore {
             let mut selected = None;
             for identity in &pair.provenance.candidates {
                 let mut metadata = None;
-                for face in &self.faces {
+                for face in &self.fonts.faces {
                     if face.identity == *identity {
                         metadata = Some(face);
                         break;
@@ -1441,7 +1499,7 @@ impl CanonicalFontCore {
                 let metadata = metadata.ok_or(FontError::InvalidMetrics {
                     identity: *identity,
                 })?;
-                let file = &self.files[metadata.file_ordinal];
+                let file = &self.fonts.files[metadata.file_ordinal];
                 let parsed =
                     ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|error| {
                         FontError::ParseFace {
@@ -1554,12 +1612,7 @@ impl PreparedFontEnvironment {
         glyph_id: u16,
         builder: &mut dyn ttf_parser::OutlineBuilder,
     ) -> Result<(DesignMetrics, Option<GlyphInk>), FontError> {
-        #[cfg(test)]
-        FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().push((identity, glyph_id)));
-        self.core
-            .read()
-            .map_err(|_| FontError::Synchronization)?
-            .outline_glyph(identity, glyph_id, builder)
+        self.fonts.outline_glyph(identity, glyph_id, builder)
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
@@ -1674,11 +1727,11 @@ impl CanonicalFontCore {
     }
 
     pub(crate) fn files(&self) -> &[RetainedFontFile] {
-        &self.files
+        &self.fonts.files
     }
 
     pub(crate) fn faces(&self) -> &[FaceMetadata] {
-        &self.faces
+        &self.fonts.faces
     }
 
     #[expect(
@@ -1768,9 +1821,9 @@ impl CanonicalFontCore {
                 prepared_stage.as_deref_mut(),
             )?;
             preparation.raw_candidate_count =
-                count_candidate_occurrences(&self.faces, &preparation.resolved_names)?;
+                count_candidate_occurrences(&self.fonts.faces, &preparation.resolved_names)?;
             preparation.candidate_count =
-                count_unique_candidate_survivors(&self.faces, &preparation.resolved_names)?;
+                count_unique_candidate_survivors(&self.fonts.faces, &preparation.resolved_names)?;
             if preparation.candidate_count == 0 {
                 return Err(FontError::MissingFamily {
                     pair_ordinal: preparation.request.pair_ordinal,
@@ -1835,7 +1888,7 @@ impl CanonicalFontCore {
         for mut preparation in preparations {
             let request = preparation.request;
             materialize_candidate_occurrences(
-                &self.faces,
+                &self.fonts.faces,
                 &preparation.resolved_names,
                 request.weight,
                 &mut preparation.candidates,
@@ -1870,8 +1923,8 @@ impl CanonicalFontCore {
                     "font scalar capacity/materialization mismatch",
                 ));
             }
-            let files = &self.files;
-            let faces = &self.faces;
+            let files = &self.fonts.files;
+            let faces = &self.fonts.faces;
             materialize_scalar_selection(
                 request.pair_ordinal,
                 &preparation.candidates,
@@ -1986,8 +2039,8 @@ impl CanonicalFontCore {
             }
         }
         if !missing.is_empty() {
-            let files = &self.files;
-            let faces = &self.faces;
+            let files = &self.fonts.files;
+            let faces = &self.fonts.faces;
             let selected = select_scalar_faces_with_stage(
                 cached.resolved.provenance.pair_ordinal,
                 &cached.candidates,
@@ -2046,7 +2099,7 @@ impl CanonicalFontCore {
             identity,
             reason: "identity is not retained",
         })?;
-        let file = &self.files[metadata.file_ordinal];
+        let file = &self.fonts.files[metadata.file_ordinal];
         shape_retained_run(file, metadata, text, direction, script, context)
     }
 
@@ -2060,7 +2113,8 @@ impl CanonicalFontCore {
     }
 
     fn find_face(&self, identity: FaceIdentity) -> Option<&FaceMetadata> {
-        self.faces
+        self.fonts
+            .faces
             .iter()
             .find(|&face| face.identity == identity)
             .map(|v| v as _)
@@ -2072,28 +2126,7 @@ impl CanonicalFontCore {
         glyph_id: u16,
         builder: &mut dyn ttf_parser::OutlineBuilder,
     ) -> Result<(DesignMetrics, Option<GlyphInk>), FontError> {
-        let metadata = self.find_face(identity).ok_or(FontError::Outline {
-            identity,
-            glyph_id,
-            reason: "identity is not retained",
-        })?;
-        let file = &self.files[metadata.file_ordinal];
-        let face = ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|_| {
-            FontError::Outline {
-                identity,
-                glyph_id,
-                reason: "ttf-parser rejected the retained face",
-            }
-        })?;
-        let ink = face
-            .outline_glyph(ttf_parser::GlyphId(glyph_id), builder)
-            .map(|bounds| GlyphInk {
-                x_min: bounds.x_min,
-                y_min: bounds.y_min,
-                x_max: bounds.x_max,
-                y_max: bounds.y_max,
-            });
-        Ok((metadata.metrics, ink))
+        self.fonts.outline_glyph(identity, glyph_id, builder)
     }
 
     fn from_retained(
@@ -2175,14 +2208,51 @@ impl CanonicalFontCore {
 
         Ok(Self {
             database,
-            files,
-            faces,
+            fonts: Arc::new(FrozenFontRegistry { files, faces }),
             scalar_presence,
             prepared_pairs: Vec::new(),
             prepared_pairs_sealed: false,
             operation,
             preparation,
         })
+    }
+}
+
+impl FrozenFontRegistry {
+    pub(crate) fn outline_glyph(
+        &self,
+        identity: FaceIdentity,
+        glyph_id: u16,
+        builder: &mut dyn ttf_parser::OutlineBuilder,
+    ) -> Result<(DesignMetrics, Option<GlyphInk>), FontError> {
+        #[cfg(test)]
+        FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().push((identity, glyph_id)));
+        let metadata = self
+            .faces
+            .iter()
+            .find(|face| face.identity == identity)
+            .ok_or(FontError::Outline {
+                identity,
+                glyph_id,
+                reason: "identity is not retained",
+            })?;
+        let file = &self.files[metadata.file_ordinal];
+        let face = ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|_| {
+            FontError::Outline {
+                identity,
+                glyph_id,
+                reason: "ttf-parser rejected the retained face",
+            }
+        })?;
+        let ink = face
+            .outline_glyph(ttf_parser::GlyphId(glyph_id), builder)
+            .map(|bounds| GlyphInk {
+                x_min: bounds.x_min,
+                y_min: bounds.y_min,
+                x_max: bounds.x_max,
+                y_max: bounds.y_max,
+            });
+        Ok((metadata.metrics, ink))
     }
 }
 
@@ -4147,7 +4217,7 @@ mod tests {
                     face_index: 0,
                 }
             } else {
-                environment.core.read().unwrap().faces[target].identity
+                environment.fonts.faces[target].identity
             };
             for route in 0..3 {
                 let mut outline = Outline(0);
@@ -5457,13 +5527,14 @@ mod tests {
 
     #[test]
     fn decoder_may_admit_zero_faces_from_a_retained_file() {
-        let mut files = generated_core().files;
+        let mut files = Arc::try_unwrap(generated_core().fonts).unwrap().files;
         files.push(RetainedFontFile {
             root_ordinal: 0,
             canonical_path: PathBuf::from("unsupported.ttf"),
             bytes: Arc::new(vec![0; 16]),
             sha256: [0; 32],
         });
+        let file_storage = files.as_ptr();
         let core = CanonicalFontCore::from_retained(
             files,
             &HostGenericNames::default(),
@@ -5471,7 +5542,25 @@ mod tests {
             scalar_presence_map(),
         )
         .unwrap();
-        assert_eq!(core.faces.len(), 1);
+        assert_eq!(core.fonts.faces.len(), 1);
+        assert_eq!(core.fonts.files.as_ptr(), file_storage);
+        let environment = PreparedFontEnvironment::for_core(core).unwrap();
+        let alive = environment.liveness_probe();
+        let operation = environment.operation().liveness_probe();
+        let registry = SealedTextVerifier::new(&environment).retain_fonts();
+        assert!(Arc::ptr_eq(
+            &registry,
+            &environment.core.read().unwrap().fonts
+        ));
+        assert_eq!(
+            registry.files.len(),
+            2,
+            "keep the complete collection, including files with no admitted faces"
+        );
+        assert_eq!(registry.files.as_ptr(), file_storage);
+        drop(environment);
+        assert!(!alive() && !operation());
+        assert_eq!(registry.files[1].bytes.as_slice(), &[0; 16]);
     }
 
     #[test]
@@ -5503,14 +5592,17 @@ mod tests {
             scalar_presence_map(),
         )
         .unwrap();
-        assert_eq!(core.faces.len(), 1);
-        assert_eq!(core.faces[0].identity.face_index, 1);
+        assert_eq!(core.fonts.faces.len(), 1);
+        assert_eq!(core.fonts.faces[0].identity.face_index, 1);
         assert_eq!(
-            core.database.face(core.faces[0].database_id).unwrap().index,
+            core.database
+                .face(core.fonts.faces[0].database_id)
+                .unwrap()
+                .index,
             1
         );
         core.shape_run(
-            core.faces[0].identity,
+            core.fonts.faces[0].identity,
             "A",
             ShapingDirection::LeftToRight,
             rustybuzz::script::LATIN,

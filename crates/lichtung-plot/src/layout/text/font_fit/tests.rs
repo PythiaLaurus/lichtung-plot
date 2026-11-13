@@ -240,6 +240,27 @@ fn uniform_roles_use_the_common_interval_without_coupling_independent_or_contras
     assert_eq!(plans[3].style.font_size.to_bits(), 14.0_f64.to_bits());
     assert_eq!(plans[0].fit_group, plans[1].fit_group);
     assert_ne!(plans[0].fit_group, plans[3].fit_group);
+    let core = theme.prepared_font_environment().unwrap().liveness_probe();
+    let frozen = plans
+        .iter()
+        .map(ResolvedTextPlan::freeze_selected)
+        .collect::<Vec<_>>();
+    for (plan, selected) in plans.iter().zip(&frozen) {
+        assert!(selected.shares_content(plan));
+        assert!(Arc::ptr_eq(
+            plan.fit_input.as_ref().unwrap(),
+            selected.fit_input.as_ref().unwrap()
+        ));
+        match (&plan.fit_group, &selected.fit_group) {
+            (Some(original), Some(frozen)) => assert!(Arc::ptr_eq(original, frozen)),
+            (original, frozen) => assert!(original.is_none() && frozen.is_none()),
+        }
+        assert_eq!(plan.request, selected.request);
+    }
+    drop(plans);
+    drop(theme);
+    assert!(!core());
+    assert_eq!(frozen[0].source, "Short");
 }
 
 #[test]

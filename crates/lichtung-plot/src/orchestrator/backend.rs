@@ -3,7 +3,7 @@
 use crate::Error;
 use std::cell::RefCell;
 
-use crate::font::canonical::PreparedFontEnvironment;
+use crate::font::canonical::SealedTextVerifier;
 #[cfg(test)]
 use crate::layout::{DeferredAnnotationTextPlan, PhysicalTextAlignment};
 use crate::layout::{PanelBox, ResolvedTextPlan};
@@ -262,11 +262,15 @@ impl TextReplayPlan {
     }
 
     #[cfg(test)]
-    pub(crate) fn retained_text(&self) -> Vec<(PlannedTextPlacement, &ResolvedTextPlan)> {
+    pub(crate) fn retained_text(
+        &self,
+    ) -> Vec<(CanonicalPlannedText, &crate::layout::text::FrozenText)> {
         self.calls
             .iter()
             .filter_map(|call| match call {
-                PlannedCall::PlannedText(text) => Some((text.placement, &text.plan)),
+                PlannedCall::PlannedText(text) => {
+                    Some((text.canonical.clone(), &text.canonical.0.text))
+                }
                 _ => None,
             })
             .collect()
@@ -426,10 +430,6 @@ impl PlannedCall {
 #[derive(Debug)]
 struct PlannedTextCall {
     canonical: CanonicalPlannedText,
-    #[cfg(test)]
-    placement: PlannedTextPlacement,
-    #[cfg(test)]
-    plan: ResolvedTextPlan,
 }
 
 #[derive(Debug)]
@@ -437,27 +437,27 @@ struct PlannedBracketCall {
     canonical: CanonicalPlannedBracket,
 }
 
-pub(super) struct TextPlanningBackend<'a, 'b> {
+pub(super) struct TextPlanningBackend<'v, 'env, 'a, 'b> {
     height: u32,
-    font_environment: PreparedFontEnvironment,
+    verifier: &'v SealedTextVerifier<'env>,
     calls: Vec<PlannedCall>,
     final_stage: &'a mut crate::layout::kernel::FinalStage<'b>,
 }
 
-impl<'a, 'b> TextPlanningBackend<'a, 'b> {
+impl<'v, 'env, 'a, 'b> TextPlanningBackend<'v, 'env, 'a, 'b> {
     fn new(
-        theme: &crate::theme::ResolvedTheme,
+        verifier: &'v SealedTextVerifier<'env>,
         final_stage: &'a mut crate::layout::kernel::FinalStage<'b>,
         height: u32,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         #[cfg(test)]
         TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(calls.get() + 1));
-        Ok(Self {
+        Self {
             height,
-            font_environment: theme.prepared_font_environment()?.clone(),
+            verifier,
             calls: Vec::new(),
             final_stage,
-        })
+        }
     }
 
     fn into_plan(self, width: u32, height: u32) -> Result<TextReplayPlan, Error> {
@@ -488,7 +488,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         let svg = crate::render::svg_backend::SvgStorage::prepare(
             width,
             height,
-            self.font_environment,
+            self.verifier.retain_fonts(),
             crate::render::svg_backend::SvgStorageRequirements { scopes },
             self.final_stage,
             |serializer| {
@@ -553,14 +553,15 @@ pub(crate) fn capture_text_replay_plan(
             "prepared scene dimensions must be positive".into(),
         ));
     }
-    let mut backend = TextPlanningBackend::new(theme, final_stage, height)?;
+    let verifier = SealedTextVerifier::new(theme.prepared_font_environment()?);
+    let mut backend = TextPlanningBackend::new(&verifier, final_stage, height);
     #[cfg(test)]
     super::measurements::producer();
     capture(&mut backend)?;
     backend.into_plan(width, height)
 }
 
-impl Backend for TextPlanningBackend<'_, '_> {
+impl Backend for TextPlanningBackend<'_, '_, '_, '_> {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         if width == 0 || height == 0 {
             return Err(Error::Render(
@@ -692,19 +693,14 @@ impl Backend for TextPlanningBackend<'_, '_> {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
-        self.font_environment
-            .validate_admitted_text(&plan.style.stack, &plan.pair_provenance, &plan.source)
+        self.verifier
+            .validate_measured(plan)
             .map_err(|error| Error::Render(format!("frozen text capture: {error}")))?;
         self.reserve_call()?;
         let canonical =
             CanonicalPlannedText::new(placement, plan, self.height, Some(self.final_stage))?;
-        self.calls.push(PlannedCall::PlannedText(PlannedTextCall {
-            canonical,
-            #[cfg(test)]
-            placement,
-            #[cfg(test)]
-            plan: plan.clone(),
-        }));
+        self.calls
+            .push(PlannedCall::PlannedText(PlannedTextCall { canonical }));
         Ok(())
     }
 
@@ -738,8 +734,8 @@ impl Backend for TextPlanningBackend<'_, '_> {
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
         let plan = &call.label.plan;
-        self.font_environment
-            .validate_admitted_text(&plan.style.stack, &plan.pair_provenance, &plan.source)
+        self.verifier
+            .validate_measured(plan)
             .map_err(|error| Error::Render(format!("frozen bracket capture: {error}")))?;
         self.reserve_call()?;
         let canonical = CanonicalPlannedBracket::new(call, self.height, Some(self.final_stage))?;
@@ -1413,7 +1409,7 @@ mod tests {
         let PlannedCall::PlannedText(first) = &plan.calls[0] else {
             panic!("canonical text")
         };
-        assert_eq!(first.canonical.0.plan.source, source);
+        assert_eq!(first.canonical.0.text.source, source);
         assert_eq!(first.canonical.0.center.x.units(), 0);
         assert_eq!(first.canonical.0.center.y.units(), 70_398);
         assert_eq!(
@@ -1684,11 +1680,8 @@ mod tests {
         crate::render::svg_backend::SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         assert_eq!(addresses, output.storage_addresses());
         SVG_RAW_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-        let mut reference = SvgBackend::in_memory_with_fonts(
-            100,
-            100,
-            theme.prepared_font_environment().unwrap().clone(),
-        );
+        let mut reference =
+            SvgBackend::in_memory_with_fonts(100, 100, theme.prepared_font_environment().unwrap());
         plan.replay(100, 100, &mut reference, "reference SVG")
             .unwrap();
         let reference = reference.into_output().unwrap();

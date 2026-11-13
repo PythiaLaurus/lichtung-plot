@@ -780,10 +780,9 @@ impl Canvas {
     }
 
     fn render_preflighted(
-        root: &crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
+        root: &crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan>,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        let _ = &root.prepared().text_census;
         let (width, height) = root.dimensions();
         root.plan()
             .replay(width, height, backend, "prepared canvas scene replay")
@@ -1441,16 +1440,23 @@ impl Canvas {
         Ok((interiors, shared_x))
     }
 
+    fn preflight_plan(
+        &self,
+    ) -> Result<crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan>, Error> {
+        self.build_preflight_plan(
+            #[cfg(test)]
+            |_, _| {},
+        )
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "one ordered semantic, font, intrinsic, allocation, and capture lifecycle"
     )]
-    fn preflight_plan(
+    fn build_preflight_plan(
         &self,
-    ) -> Result<
-        crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
-        Error,
-    > {
+        #[cfg(test)] inspect: impl FnOnce(&PreparedCanvasInputs, &crate::orchestrator::TextReplayPlan),
+    ) -> Result<crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan>, Error> {
         let sizing_request = self.root_size;
         let mut children = crate::decorations::plan::children::ChildPlans::canvas(self);
         let measurements = sizing::HeightMeasurements::default();
@@ -1555,6 +1561,7 @@ impl Canvas {
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, plan, final_stage| {
+                let _ = &prepared.text_census;
                 let (width, height) = assigned.dimensions()?;
                 #[cfg(test)]
                 let before = lifecycle_tests::capture_counters();
@@ -1581,6 +1588,8 @@ impl Canvas {
                     panel_measurements,
                     "Canvas capture must not enter the panel measurement path"
                 );
+                #[cfg(test)]
+                inspect(prepared, &replay);
                 Ok(replay)
             },
         )?;

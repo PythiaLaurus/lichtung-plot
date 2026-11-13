@@ -19,9 +19,12 @@ use super::primitives::{
     self, CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
     CanonicalPlannedBracket, CanonicalPlannedText, CanonicalScatter, PathKind,
 };
-use crate::font::canonical::{PreparedFontEnvironment, ShapingDirection};
+use crate::font::canonical::{FrozenFontRegistry, ShapingDirection};
+#[cfg(test)]
+use crate::font::canonical::{PreparedFontEnvironment, SealedTextVerifier};
 use crate::layout::{PanelBox, ResolvedTextPlan};
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
+use std::sync::Arc;
 
 #[cfg(test)]
 thread_local! {
@@ -89,7 +92,7 @@ impl SvgBackend {
             next_clip_id: 0,
             next_gradient_id: 0,
             state: SvgCanvasState::Fresh,
-            font_environment: None,
+            fonts: None,
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: false,
@@ -102,10 +105,10 @@ impl SvgBackend {
     pub(crate) fn in_memory_with_fonts(
         width: u32,
         height: u32,
-        font_environment: PreparedFontEnvironment,
+        font_environment: &PreparedFontEnvironment,
     ) -> Self {
         let mut backend = Self::in_memory(width, height);
-        backend.font_environment = Some(font_environment);
+        backend.fonts = Some(SealedTextVerifier::new(font_environment).retain_fonts());
         backend
     }
 
@@ -225,15 +228,15 @@ impl<S: SvgSink> SvgSerializer<S> {
 
 impl SvgBackend {
     fn outline_planned_line<S: SvgSink>(
-        environment: &PreparedFontEnvironment,
+        fonts: &FrozenFontRegistry,
         outline: &PlannedLineOutline,
         outlined: &mut S,
     ) -> Result<(), Error> {
         let text = &outline.text.0;
-        let line = &text.plan.lines[outline.line_index];
+        let line = &text.text.lines[outline.line_index];
         let geometry = &text.lines[outline.line_index];
         let rotation_center = (text.center.x.value(), text.center.y.value());
-        let fill = SvgPaint::from(text.plan.style.paint).attributes("fill");
+        let fill = SvgPaint::from(text.text.style.paint).attributes("fill");
 
         for (run, geometry) in line.runs.iter().zip(&geometry.runs) {
             for (glyph, origin) in run.glyphs.iter().zip(&geometry.glyphs) {
@@ -243,7 +246,7 @@ impl SvgBackend {
                     ));
                 }
                 let mut builder = SvgGlyphPath::<S>::default();
-                let (metrics, retained_ink) = environment
+                let (metrics, retained_ink) = fonts
                     .outline_glyph(glyph.face, glyph.glyph_id, &mut builder)
                     .map_err(|error| Error::Render(format!("planned glyph outlining: {error}")))?;
                 if metrics.units_per_em != run.units_per_em
@@ -277,7 +280,7 @@ impl SvgBackend {
                 }
                 if builder.data.len() != 0 {
                     let path_origin = (origin.x.value(), origin.y.value());
-                    let scale = text.plan.style.font_size / f64::from(run.units_per_em);
+                    let scale = text.text.style.font_size / f64::from(run.units_per_em);
                     let transform = glyph_transform(
                         scale,
                         path_origin.0,
@@ -327,7 +330,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         reason = "one serializer emits original-source metadata, retained bidi runs and the matching frozen outline replacement ranges"
     )]
     fn draw_planned_lines(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
-        let plan = &text.0.plan;
+        let plan = &text.0.text;
         let fill = SvgPaint::from(plan.style.paint).attributes("fill");
         let family = Self::escape_text(&plan.style.stack_source);
         let weight = FontWeight(plan.style.weight);
@@ -562,14 +565,14 @@ impl SvgOutlinePlan {
             &source.grid,
             TextBuffer::Grid,
             &source.replacements,
-            source.font_environment.as_ref(),
+            source.fonts.as_deref(),
             output,
         )?;
         apply_text_replacements(
             &source.body,
             TextBuffer::Body,
             &source.replacements,
-            source.font_environment.as_ref(),
+            source.fonts.as_deref(),
             output,
         )?;
         let _ = output.write_str("</svg>\n");
@@ -586,7 +589,7 @@ impl SvgOutlinePlan {
 }
 
 pub(crate) struct SvgOutlineSource {
-    font_environment: Option<PreparedFontEnvironment>,
+    fonts: Option<Arc<FrozenFontRegistry>>,
     root_surfaces: String,
     panel_surfaces: String,
     grid: String,
@@ -1269,7 +1272,7 @@ pub struct SvgSerializer<S: SvgSink> {
     next_clip_id: usize,
     next_gradient_id: usize,
     state: SvgCanvasState,
-    font_environment: Option<PreparedFontEnvironment>,
+    fonts: Option<Arc<FrozenFontRegistry>>,
     text_replacements: Vec<TextReplacement>,
     replacement_count: usize,
     fixed: bool,
@@ -1293,7 +1296,7 @@ impl SvgStorage {
     pub(crate) fn prepare(
         width: u32,
         height: u32,
-        environment: PreparedFontEnvironment,
+        fonts: Arc<FrozenFontRegistry>,
         requirements: SvgStorageRequirements,
         stage: &mut crate::layout::kernel::FinalStage<'_>,
         visit: impl FnOnce(&mut SvgSerializer<CountBuffer>) -> Result<(), Error>,
@@ -1319,7 +1322,7 @@ impl SvgStorage {
             next_clip_id: 0,
             next_gradient_id: 0,
             state: SvgCanvasState::Open,
-            font_environment: None,
+            fonts: None,
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: true,
@@ -1387,7 +1390,7 @@ impl SvgStorage {
                 next_clip_id: 0,
                 next_gradient_id: 0,
                 state: SvgCanvasState::Fresh,
-                font_environment: Some(environment),
+                fonts: Some(fonts),
                 text_replacements: replacements,
                 replacement_count: 0,
                 fixed: true,
@@ -2019,7 +2022,7 @@ impl SvgBackend {
             ));
         }
         let outline_plan = SvgOutlinePlan::Ready(SvgOutlineSource {
-            font_environment: self.font_environment.clone(),
+            fonts: self.fonts.clone(),
             root_surfaces: std::mem::take(&mut self.root_surfaces).text,
             panel_surfaces: std::mem::take(&mut self.panel_surfaces).text,
             grid: std::mem::take(&mut self.grid_buf).text,
@@ -2043,7 +2046,7 @@ fn apply_text_replacements<S: SvgSink>(
     source: &str,
     buffer: TextBuffer,
     replacements: &[TextReplacement],
-    font_environment: Option<&PreparedFontEnvironment>,
+    fonts: Option<&FrozenFontRegistry>,
     outlined: &mut S,
 ) -> Result<(), String> {
     let mut cursor = 0_usize;
@@ -2060,7 +2063,7 @@ fn apply_text_replacements<S: SvgSink>(
         let _ = outlined.write_str(&source[cursor..replacement.range.start]);
         outlined.check().map_err(|error| error.to_string())?;
         if let Some(outline) = &replacement.outline {
-            let environment = font_environment.ok_or_else(|| {
+            let environment = fonts.ok_or_else(|| {
                 "planned SVG text was serialized without its retained font environment".to_owned()
             })?;
             SvgBackend::outline_planned_line(environment, outline, outlined)
@@ -2213,13 +2216,17 @@ mod tests {
             fixed: true,
             ..WriteBuffer::default()
         };
-        let error =
-            SvgBackend::outline_planned_line(&environment, &outline, &mut buffer).unwrap_err();
+        let error = SvgBackend::outline_planned_line(
+            &SealedTextVerifier::new(&environment).retain_fonts(),
+            &outline,
+            &mut buffer,
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("reserved storage"));
         assert!(buffer.failed);
         assert_eq!(buffer.text.capacity(), 0);
 
-        let mut svg = SvgBackend::in_memory_with_fonts(100, 40, environment);
+        let mut svg = SvgBackend::in_memory_with_fonts(100, 40, &environment);
         Backend::begin(&mut svg, 100, 40).unwrap();
         Backend::draw_planned_text(&mut svg, placement, &plan).unwrap();
         Backend::end(&mut svg).unwrap();

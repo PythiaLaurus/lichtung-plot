@@ -437,7 +437,7 @@ fn frozen_svg(measured: &Legend, theme: &ResolvedTheme) -> Vec<u8> {
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
         600,
         600,
-        theme.prepared_font_environment().unwrap().clone(),
+        theme.prepared_font_environment().unwrap(),
     );
     backend.begin(600, 600).unwrap();
     let (x, y) = measured.box_at(20.0, 30.0).anchor();

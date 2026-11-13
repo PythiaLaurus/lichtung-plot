@@ -403,6 +403,15 @@ reenter body measurement or find producer text by owner/source lookup. Standalon
 and facet prose retain their interleaved source-check/draw order; Canvas prose
 continues drawing its retained requests without a new whole-owner validation pass.
 
+Frozen roots retain only their request, accepted size and final commands, not the
+preparation owner. Selected text shares its immutable content and pure fit metadata
+without retaining text analysis. SVG storage and publication share the complete
+original retained font file/face registry, not a font service or operation. Glyph
+identity, metrics and outline checks remain at outlining; freezing does not add an
+earlier check or filter the registry to used faces. Final storage reservation stays
+after sealing and before finalization, and preparation is released before final
+Null validation.
+
 Terminal Plot/Canvas calls borrow the owner, render one canonical scene through
 one balanced concrete lifecycle, publish one file and return Output. Canvas uses
 one begin/end for all panels. Scientific marks use their panel clip; required

@@ -281,6 +281,50 @@ pub(crate) struct ResolvedTextPayload {
     pub(crate) paint_region: Option<[u64; 4]>,
 }
 
+/// Selected text and pure fit metadata, without operational analysis or fonts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FrozenText {
+    content: std::sync::Arc<ResolvedTextContent>,
+    pub(crate) original_source: Option<std::sync::Arc<String>>,
+    pub(crate) display_map: Option<std::sync::Arc<Vec<DisplayFragment>>>,
+    pub(crate) request: Option<crate::TextLayout>,
+    pub(crate) fit_input: Option<std::sync::Arc<font_fit::FitInput>>,
+    pub(crate) fit_group:
+        Option<std::sync::Arc<(crate::layout::ComponentAddress, Vec<font_fit::GroupMember>)>>,
+    pub(crate) selected_rotation: Option<crate::TextRotation>,
+    pub(crate) clip_size: Option<(i64, i64)>,
+    pub(crate) paint_region: Option<[u64; 4]>,
+}
+
+impl std::ops::Deref for FrozenText {
+    type Target = ResolvedTextContent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+impl FrozenText {
+    pub(crate) fn original_source(&self) -> &str {
+        self.original_source
+            .as_ref()
+            .map_or(&self.content.source, |source| source.as_str())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_content(&self, plan: &ResolvedTextPlan) -> bool {
+        std::sync::Arc::ptr_eq(&self.content, &plan.content)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn line_texts(&self) -> Vec<&str> {
+        self.lines
+            .iter()
+            .map(|line| &self.source[line.source_span.range()])
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DisplayFragment {
     pub(crate) display: std::ops::Range<usize>,
@@ -324,6 +368,30 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    #[cfg(test)]
+    pub(crate) fn analysis_liveness_probe(&self) -> impl Fn() -> bool + use<> {
+        let analysis = self.1.as_ref().map(std::sync::Arc::downgrade);
+        move || {
+            analysis
+                .as_ref()
+                .is_some_and(|analysis| analysis.strong_count() != 0)
+        }
+    }
+
+    pub(crate) fn freeze_selected(&self) -> FrozenText {
+        FrozenText {
+            content: std::sync::Arc::clone(&self.content),
+            original_source: self.original_source.clone(),
+            display_map: self.display_map.clone(),
+            request: self.request.clone(),
+            fit_input: self.fit_input.clone(),
+            fit_group: self.fit_group.clone(),
+            selected_rotation: self.selected_rotation,
+            clip_size: self.clip_size,
+            paint_region: self.paint_region,
+        }
+    }
+
     pub(crate) fn original_source(&self) -> &str {
         self.original_source
             .as_ref()
@@ -2501,6 +2569,47 @@ impl TextBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frozen_text_shares_selected_backings_and_releases_analysis() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let plan = environment
+            .plan_text(input("A A", i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap();
+        let analysis = plan.analysis_liveness_probe();
+        assert!(analysis());
+        let plan = plan
+            .with_display(
+                "original",
+                vec![DisplayFragment {
+                    display: 0..3,
+                    original: Some(0..8),
+                }],
+            )
+            .unwrap();
+        let frozen = plan.freeze_selected();
+        assert!(frozen.shares_content(&plan));
+        assert!(std::sync::Arc::ptr_eq(
+            frozen.original_source.as_ref().unwrap(),
+            plan.original_source.as_ref().unwrap()
+        ));
+        assert!(std::sync::Arc::ptr_eq(
+            frozen.display_map.as_ref().unwrap(),
+            plan.display_map.as_ref().unwrap()
+        ));
+        assert_eq!(frozen.original_source(), "original");
+        assert!(frozen.fit_input.is_none());
+        assert!(frozen.fit_group.is_none());
+        drop(plan);
+        assert!(!analysis());
+        assert_eq!(frozen.source, "A A");
+        assert_eq!(frozen.line_texts(), ["A A"]);
+        let unchanged = environment
+            .plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap()
+            .freeze_selected();
+        assert_eq!(unchanged.original_source(), "A");
+    }
 
     #[test]
     fn represented_title_leading_uses_the_exact_local_product_on_plan_and_reflow() {

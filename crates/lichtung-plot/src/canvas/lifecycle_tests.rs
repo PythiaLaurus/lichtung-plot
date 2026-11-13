@@ -231,59 +231,61 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         .unwrap()
         .text_panel(0, 1, crate::TextPanel::new("Right", "Body").unwrap())
         .unwrap();
-    let root = canvas.preflight_plan().unwrap();
-    let prepared = root.prepared();
-    let outer = PanelBox::new(0.0, 650.0, 0.0, 500.0);
-    let plan = crate::layout::fit::measured(tracks::allocate(
-        outer,
-        &canvas.placements,
-        &[None, None],
-        &prepared.text_panel_intrinsics,
-        &prepared.plot_intrinsics,
-        &canvas.column_headers,
-        &canvas.row_headers,
-        &canvas.row_titles,
-        &[],
-        &prepared.themes,
-        &FitScope::root(),
-        None,
-    ))
-    .unwrap();
-    let column = &plan.headers[0].text.plan;
-    let row = &plan.headers[1].text.plan;
-    let title = &plan.row_titles[0].text.plan;
-    for (text, size, alignment) in [
-        (column, 25, crate::layout::PhysicalTextAlignment::Start),
-        (row, 17, crate::layout::PhysicalTextAlignment::End),
-        (title, 21, crate::layout::PhysicalTextAlignment::Center),
-    ] {
-        assert_eq!(text.style.font_size.to_bits(), f64::from(size).to_bits());
-        assert_eq!(text.style.alignment, alignment);
-        assert!(text.style.exact_override);
-        assert_eq!(text.lines.len(), 2);
-    }
-    let cell = plan.owners[0].unwrap();
-    let quanta = crate::layout::kernel::nearest_spatial_quanta;
-    assert_eq!(
-        quanta(cell.x0 - outer.x0).unwrap(),
-        row.width_quanta + 17 * 1024
-    );
-    assert_eq!(
-        quanta(outer.y1 - cell.y1).unwrap(),
-        column.height_quanta + 25 * 1024 + title.height_quanta + 21 * 1024,
-    );
-    assert_eq!(
-        quanta(cell.y1).unwrap(),
-        quanta(plan.owners[1].unwrap().y1).unwrap()
-    );
-    assert_eq!(
-        plan.headers[0].text.placement.anchor,
-        crate::render::backend::TextAnchor::Start
-    );
-    assert_eq!(
-        plan.headers[1].text.placement.anchor,
-        crate::render::backend::TextAnchor::End
-    );
+    canvas
+        .build_preflight_plan(|prepared, _| {
+            let outer = PanelBox::new(0.0, 650.0, 0.0, 500.0);
+            let plan = crate::layout::fit::measured(tracks::allocate(
+                outer,
+                &canvas.placements,
+                &[None, None],
+                &prepared.text_panel_intrinsics,
+                &prepared.plot_intrinsics,
+                &canvas.column_headers,
+                &canvas.row_headers,
+                &canvas.row_titles,
+                &[],
+                &prepared.themes,
+                &FitScope::root(),
+                None,
+            ))
+            .unwrap();
+            let column = &plan.headers[0].text.plan;
+            let row = &plan.headers[1].text.plan;
+            let title = &plan.row_titles[0].text.plan;
+            for (text, size, alignment) in [
+                (column, 25, crate::layout::PhysicalTextAlignment::Start),
+                (row, 17, crate::layout::PhysicalTextAlignment::End),
+                (title, 21, crate::layout::PhysicalTextAlignment::Center),
+            ] {
+                assert_eq!(text.style.font_size.to_bits(), f64::from(size).to_bits());
+                assert_eq!(text.style.alignment, alignment);
+                assert!(text.style.exact_override);
+                assert_eq!(text.lines.len(), 2);
+            }
+            let cell = plan.owners[0].unwrap();
+            let quanta = crate::layout::kernel::nearest_spatial_quanta;
+            assert_eq!(
+                quanta(cell.x0 - outer.x0).unwrap(),
+                row.width_quanta + 17 * 1024
+            );
+            assert_eq!(
+                quanta(outer.y1 - cell.y1).unwrap(),
+                column.height_quanta + 25 * 1024 + title.height_quanta + 21 * 1024,
+            );
+            assert_eq!(
+                quanta(cell.y1).unwrap(),
+                quanta(plan.owners[1].unwrap().y1).unwrap()
+            );
+            assert_eq!(
+                plan.headers[0].text.placement.anchor,
+                crate::render::backend::TextAnchor::Start
+            );
+            assert_eq!(
+                plan.headers[1].text.placement.anchor,
+                crate::render::backend::TextAnchor::End
+            );
+        })
+        .unwrap();
 }
 
 #[test]
@@ -308,10 +310,13 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
         .unwrap()
         .row_header(1, 1, "Lower")
         .unwrap();
-    let root = canvas.preflight_plan().unwrap();
+    let root = canvas
+        .build_preflight_plan(|prepared, _| {
+            assert!(prepared.interiors[2].is_none());
+            assert_eq!(prepared.interiors.iter().flatten().count(), 3);
+        })
+        .unwrap();
     assert!(root.dimensions().0 <= 1001);
-    assert!(root.prepared().interiors[2].is_none());
-    assert_eq!(root.prepared().interiors.iter().flatten().count(), 3);
     let evidence = CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| evidence.borrow().clone());
     let assignments = &evidence[evidence.len() - 3..];
     let tall = assignments[0].0;
@@ -456,72 +461,74 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
         )
         .panel(0, 0, plot)
         .unwrap();
-    let root = canvas.preflight_plan().unwrap();
-    let prepared = root.prepared();
-    assert!(prepared
-        .text_census
-        .requirements
-        .iter()
-        .all(|text| !text.source.contains('\u{10ffff}')));
-    let retained = root.plan().retained_text();
-    for (source, alignment, exact) in [
-        ("Canvas heading\nshort", End, Some(&title_style)),
-        ("Canvas subtitle", End, None),
-        ("Canvas caption", Center, Some(&caption_style)),
-        ("Child heading\nshort", Center, Some(&title_style)),
-        ("Child subtitle", End, None),
-        ("Child caption", Center, Some(&caption_style)),
-    ] {
-        let text = retained
-            .iter()
-            .find(|(_, text)| text.source == source)
-            .unwrap()
-            .1;
-        assert_eq!(text.style.alignment, alignment, "{source}");
-        assert_eq!(text.style.exact_override, exact.is_some());
-        if let Some(style) = exact {
-            assert_eq!(
-                text.style.font_size.to_bits(),
-                style.get_font_size().to_bits()
-            );
-            assert_eq!(text.style.paint, style.get_color());
-            assert_eq!(text.style.weight, style.get_weight());
-            assert_eq!(&text.style.stack, style.get_stack());
-            let requirement = prepared
+    let root = canvas
+        .build_preflight_plan(|prepared, replay| {
+            assert!(prepared
                 .text_census
                 .requirements
                 .iter()
-                .find(|text| text.source == source)
-                .unwrap();
-            assert_eq!(requirement.weight, style.get_weight());
-        }
-    }
-    let frame = crate::layout::RootFramePlan::measure(
-        (650, 900),
-        prepared.themes.root(),
-        canvas.prose(),
-        crate::decorations::title_block::plan::RootAlignments::resolve(
-            prepared.themes.root(),
-            canvas.prose_alignments(),
-            [None; 2],
-        ),
-        (1.0, 1.0),
-    )
-    .unwrap();
-    let prose: Vec<_> = frame
-        .root_text
-        .placed_text()
-        .map(|(_, text)| text)
-        .collect();
-    let quanta = crate::layout::kernel::nearest_spatial_quanta;
-    assert_eq!(
-        quanta(frame.insets.top).unwrap(),
-        prose[0].height_quanta + prose[1].height_quanta + 2 * 27 * 1024
-    );
-    assert_eq!(
-        quanta(frame.insets.bottom).unwrap(),
-        prose[2].height_quanta + 19 * 1024
-    );
+                .all(|text| !text.source.contains('\u{10ffff}')));
+            let retained = replay.retained_text();
+            for (source, alignment, exact) in [
+                ("Canvas heading\nshort", End, Some(&title_style)),
+                ("Canvas subtitle", End, None),
+                ("Canvas caption", Center, Some(&caption_style)),
+                ("Child heading\nshort", Center, Some(&title_style)),
+                ("Child subtitle", End, None),
+                ("Child caption", Center, Some(&caption_style)),
+            ] {
+                let text = retained
+                    .iter()
+                    .find(|(_, text)| text.source == source)
+                    .unwrap()
+                    .1;
+                assert_eq!(text.style.alignment, alignment, "{source}");
+                assert_eq!(text.style.exact_override, exact.is_some());
+                if let Some(style) = exact {
+                    assert_eq!(
+                        text.style.font_size.to_bits(),
+                        style.get_font_size().to_bits()
+                    );
+                    assert_eq!(text.style.paint, style.get_color());
+                    assert_eq!(text.style.weight, style.get_weight());
+                    assert_eq!(&text.style.stack, style.get_stack());
+                    let requirement = prepared
+                        .text_census
+                        .requirements
+                        .iter()
+                        .find(|text| text.source == source)
+                        .unwrap();
+                    assert_eq!(requirement.weight, style.get_weight());
+                }
+            }
+            let frame = crate::layout::RootFramePlan::measure(
+                (650, 900),
+                prepared.themes.root(),
+                canvas.prose(),
+                crate::decorations::title_block::plan::RootAlignments::resolve(
+                    prepared.themes.root(),
+                    canvas.prose_alignments(),
+                    [None; 2],
+                ),
+                (1.0, 1.0),
+            )
+            .unwrap();
+            let prose: Vec<_> = frame
+                .root_text
+                .placed_text()
+                .map(|(_, text)| text)
+                .collect();
+            let quanta = crate::layout::kernel::nearest_spatial_quanta;
+            assert_eq!(
+                quanta(frame.insets.top).unwrap(),
+                prose[0].height_quanta + prose[1].height_quanta + 2 * 27 * 1024
+            );
+            assert_eq!(
+                quanta(frame.insets.bottom).unwrap(),
+                prose[2].height_quanta + 19 * 1024
+            );
+        })
+        .unwrap();
     let counters = capture_counters();
     let mut backend = root.plan().take_svg_backend().unwrap();
     Canvas::render_preflighted(&root, &mut backend).unwrap();
@@ -611,88 +618,90 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
         .text_panel(0, 0, panel.clone())
         .unwrap();
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-    let root = canvas.preflight_plan().unwrap();
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        discoveries + 1
-    );
-    let prepared = root.prepared();
-    for (source, appearance) in [(TITLE, &title_style), (BODY, &body_style)] {
-        let requirement = prepared
-            .text_census
-            .requirements
-            .iter()
-            .find(|text| text.source == source)
+    let root = canvas
+        .build_preflight_plan(|prepared, replay| {
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                discoveries + 1
+            );
+            for (source, appearance) in [(TITLE, &title_style), (BODY, &body_style)] {
+                let requirement = prepared
+                    .text_census
+                    .requirements
+                    .iter()
+                    .find(|text| text.source == source)
+                    .unwrap();
+                assert_eq!(&requirement.stack, appearance.get_stack());
+                assert_eq!(requirement.weight, appearance.get_weight());
+                assert!(prepared
+                    .text_census
+                    .requirements
+                    .iter()
+                    .any(|text| text.source == "0"
+                        && text.stack == requirement.stack
+                        && text.weight == requirement.weight));
+            }
+            let retained = replay.retained_text();
+            for (source, appearance, alignment) in [
+                (TITLE, &title_style, PhysicalTextAlignment::End),
+                (BODY, &body_style, PhysicalTextAlignment::Center),
+            ] {
+                let text = retained
+                    .iter()
+                    .find(|(_, text)| text.source == source)
+                    .unwrap()
+                    .1;
+                assert_eq!(text.style.stack, *appearance.get_stack());
+                assert_eq!(text.style.paint, appearance.get_color());
+                assert_eq!(
+                    text.style.font_size.to_bits(),
+                    appearance.get_font_size().to_bits()
+                );
+                assert_eq!(text.style.weight, appearance.get_weight());
+                assert_eq!(text.style.alignment, alignment);
+                assert!(text.style.exact_override);
+                assert_eq!(text.line_texts().concat(), source.replace('\n', ""));
+            }
+            let theme = prepared.themes.root();
+            let wide = text_panel::natural_height(&panel, 600.0, theme).unwrap();
+            let narrow = text_panel::natural_height(&panel, 280.0, theme).unwrap();
+            assert!(
+                narrow > wide,
+                "selected styles participate in width-dependent height"
+            );
+            let measured = crate::layout::fit::measured(TextPanelPlan::measure(
+                &panel,
+                0,
+                PanelBox::new(0.0, 600.0, 0.0, 900.0),
+                theme,
+                prepared.text_panel_intrinsics[0].unwrap(),
+                &crate::layout::fit::FitScope::root(),
+            ))
             .unwrap();
-        assert_eq!(&requirement.stack, appearance.get_stack());
-        assert_eq!(requirement.weight, appearance.get_weight());
-        assert!(prepared
-            .text_census
-            .requirements
-            .iter()
-            .any(|text| text.source == "0"
-                && text.stack == requirement.stack
-                && text.weight == requirement.weight));
-    }
-    let retained = root.plan().retained_text();
-    for (source, appearance, alignment) in [
-        (TITLE, &title_style, PhysicalTextAlignment::End),
-        (BODY, &body_style, PhysicalTextAlignment::Center),
-    ] {
-        let text = retained
-            .iter()
-            .find(|(_, text)| text.source == source)
-            .unwrap()
-            .1;
-        assert_eq!(text.style.stack, *appearance.get_stack());
-        assert_eq!(text.style.paint, appearance.get_color());
-        assert_eq!(
-            text.style.font_size.to_bits(),
-            appearance.get_font_size().to_bits()
-        );
-        assert_eq!(text.style.weight, appearance.get_weight());
-        assert_eq!(text.style.alignment, alignment);
-        assert!(text.style.exact_override);
-        assert_eq!(text.line_texts().concat(), source.replace('\n', ""));
-    }
-    let theme = prepared.themes.root();
-    let wide = text_panel::natural_height(&panel, 600.0, theme).unwrap();
-    let narrow = text_panel::natural_height(&panel, 280.0, theme).unwrap();
-    assert!(
-        narrow > wide,
-        "selected styles participate in width-dependent height"
-    );
-    let measured = crate::layout::fit::measured(TextPanelPlan::measure(
-        &panel,
-        0,
-        PanelBox::new(0.0, 600.0, 0.0, 900.0),
-        theme,
-        prepared.text_panel_intrinsics[0].unwrap(),
-        &crate::layout::fit::FitScope::root(),
-    ))
-    .unwrap();
-    let quanta = crate::layout::kernel::nearest_spatial_quanta;
-    assert_eq!(
-        quanta(measured.title_placement.position.x).unwrap(),
-        600 * 1024 - 17 * 1024 - 512
-    );
-    assert_eq!(
-        quanta(measured.body_placement.position.x).unwrap(),
-        300 * 1024
-    );
-    let title = measured.title.plan();
-    let body = measured.body.plan();
-    let title_bottom = quanta(measured.title_placement.position.y).unwrap()
-        + title.first_baseline_quanta.unwrap()
-        - title.height_quanta;
-    let body_top =
-        quanta(measured.body_placement.position.y).unwrap() + body.first_baseline_quanta.unwrap();
-    assert_eq!(
-        title_bottom - body_top,
-        31 * 1024 + 256,
-        "gap uses the selected maximum font size"
-    );
-    assert!(title.lines[1].translation_x_quanta > title.lines[0].translation_x_quanta);
+            let quanta = crate::layout::kernel::nearest_spatial_quanta;
+            assert_eq!(
+                quanta(measured.title_placement.position.x).unwrap(),
+                600 * 1024 - 17 * 1024 - 512
+            );
+            assert_eq!(
+                quanta(measured.body_placement.position.x).unwrap(),
+                300 * 1024
+            );
+            let title = measured.title.plan();
+            let body = measured.body.plan();
+            let title_bottom = quanta(measured.title_placement.position.y).unwrap()
+                + title.first_baseline_quanta.unwrap()
+                - title.height_quanta;
+            let body_top = quanta(measured.body_placement.position.y).unwrap()
+                + body.first_baseline_quanta.unwrap();
+            assert_eq!(
+                title_bottom - body_top,
+                31 * 1024 + 256,
+                "gap uses the selected maximum font size"
+            );
+            assert!(title.lines[1].translation_x_quanta > title.lines[0].translation_x_quanta);
+        })
+        .unwrap();
     let counters = capture_counters();
     let mut backend = root.plan().take_svg_backend().unwrap();
     Canvas::render_preflighted(&root, &mut backend).unwrap();
@@ -777,67 +786,69 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                 .panel(0, 1, layers.clone())
                 .unwrap()
         };
-        let root = canvas.preflight_plan().unwrap();
-        let Some(descriptor) = &root.prepared().shared_guide else {
-            panic!("prepared Shared discrete descriptor");
-        };
-        assert_eq!(descriptor.composition, composition);
-        assert_eq!(
-            descriptor.counts.sections,
-            if composition == Combined { 1 } else { 2 }
-        );
-        assert_eq!(descriptor.counts.entries, 3);
-        assert_eq!(descriptor.counts.points, 3);
-        assert_eq!(descriptor.counts.lines, 0);
-        assert_eq!(descriptor.counts.fills, 0);
-        assert_eq!(descriptor.counts.primary_source_keys, 2);
-        assert_eq!(descriptor.counts.labeled_layer_source_keys, 1);
-        assert_eq!(descriptor.counts.source_occurrences, 3);
-        let owner = crate::layout::ComponentAddress::root()
-            .child(crate::layout::AddressRole::CanvasSharedLegend, 0)
-            .unwrap();
-        let guide_text = root
-            .prepared()
-            .text_census
-            .requirements
-            .iter()
-            .filter(|requirement| {
-                matches!(
-                    requirement.text_role,
-                    crate::layout::PreparedTextRole::LegendTitle
-                        | crate::layout::PreparedTextRole::LegendLabel
-                )
+        let root = canvas
+            .build_preflight_plan(|prepared, _| {
+                let Some(descriptor) = &prepared.shared_guide else {
+                    panic!("prepared Shared discrete descriptor");
+                };
+                assert_eq!(descriptor.composition, composition);
+                assert_eq!(
+                    descriptor.counts.sections,
+                    if composition == Combined { 1 } else { 2 }
+                );
+                assert_eq!(descriptor.counts.entries, 3);
+                assert_eq!(descriptor.counts.points, 3);
+                assert_eq!(descriptor.counts.lines, 0);
+                assert_eq!(descriptor.counts.fills, 0);
+                assert_eq!(descriptor.counts.primary_source_keys, 2);
+                assert_eq!(descriptor.counts.labeled_layer_source_keys, 1);
+                assert_eq!(descriptor.counts.source_occurrences, 3);
+                let owner = crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::CanvasSharedLegend, 0)
+                    .unwrap();
+                let guide_text = prepared
+                    .text_census
+                    .requirements
+                    .iter()
+                    .filter(|requirement| {
+                        matches!(
+                            requirement.text_role,
+                            crate::layout::PreparedTextRole::LegendTitle
+                                | crate::layout::PreparedTextRole::LegendLabel
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let addresses = if composition == Combined {
+                    vec![(0, None), (0, Some(0)), (0, Some(1)), (0, Some(2))]
+                } else {
+                    vec![
+                        (0, None),
+                        (0, Some(0)),
+                        (0, Some(1)),
+                        (1, None),
+                        (1, Some(0)),
+                    ]
+                };
+                assert_eq!(guide_text.len(), addresses.len());
+                for (text, (section, entry)) in guide_text.iter().zip(addresses) {
+                    let section = owner
+                        .child(crate::layout::AddressRole::LegendSection, section)
+                        .unwrap();
+                    let expected = if let Some(entry) = entry {
+                        section
+                            .child(crate::layout::AddressRole::LegendEntry, entry)
+                            .unwrap()
+                            .child(crate::layout::AddressRole::LegendLabel, 0)
+                            .unwrap()
+                    } else {
+                        section
+                            .child(crate::layout::AddressRole::LegendTitle, 0)
+                            .unwrap()
+                    };
+                    assert_eq!(text.component_address, expected,);
+                }
             })
-            .collect::<Vec<_>>();
-        let addresses = if composition == Combined {
-            vec![(0, None), (0, Some(0)), (0, Some(1)), (0, Some(2))]
-        } else {
-            vec![
-                (0, None),
-                (0, Some(0)),
-                (0, Some(1)),
-                (1, None),
-                (1, Some(0)),
-            ]
-        };
-        assert_eq!(guide_text.len(), addresses.len());
-        for (text, (section, entry)) in guide_text.iter().zip(addresses) {
-            let section = owner
-                .child(crate::layout::AddressRole::LegendSection, section)
-                .unwrap();
-            let expected = if let Some(entry) = entry {
-                section
-                    .child(crate::layout::AddressRole::LegendEntry, entry)
-                    .unwrap()
-                    .child(crate::layout::AddressRole::LegendLabel, 0)
-                    .unwrap()
-            } else {
-                section
-                    .child(crate::layout::AddressRole::LegendTitle, 0)
-                    .unwrap()
-            };
-            assert_eq!(text.component_address, expected,);
-        }
+            .unwrap();
         let texts = root.plan().retained_text();
         for source in ["Treatment", "Control", "Treated", "chosen raw"] {
             assert_eq!(
@@ -878,22 +889,25 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
         );
         if composition == Separate && layer_first {
             canvas.legend_policy = CanvasLegendPolicy::PerPlot;
-            let per_plot = canvas.preflight_plan().unwrap();
-            assert!(per_plot.prepared().shared_guide.is_none());
-            let composition = |index: usize| {
-                per_plot.prepared().interiors[index]
-                    .as_ref()
-                    .unwrap()
-                    .discrete_guides
-                    .get()
-                    .unwrap()
-                    .root
-                    .as_ref()
-                    .unwrap()
-                    .composition
-            };
-            assert_eq!(composition(0), Separate);
-            assert_eq!(composition(1), Combined);
+            canvas
+                .build_preflight_plan(|prepared, _| {
+                    assert!(prepared.shared_guide.is_none());
+                    let composition = |index: usize| {
+                        prepared.interiors[index]
+                            .as_ref()
+                            .unwrap()
+                            .discrete_guides
+                            .get()
+                            .unwrap()
+                            .root
+                            .as_ref()
+                            .unwrap()
+                            .composition
+                    };
+                    assert_eq!(composition(0), Separate);
+                    assert_eq!(composition(1), Combined);
+                })
+                .unwrap();
         }
     }
 }
@@ -940,7 +954,16 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
             .unwrap()
     };
     let source = canvas(title.clone());
-    let root = source.preflight_plan().unwrap();
+    let root = source
+        .build_preflight_plan(|prepared, _| {
+            let descriptor = prepared.shared_guide.as_ref().unwrap();
+            assert_eq!(
+                descriptor.sections[0].entries()[0].identity,
+                crate::decorations::legend::GuideEntryIdentity::supplemental("Selected\nshort")
+                    .unwrap()
+            );
+        })
+        .unwrap();
     let retained = root.plan().retained_text();
     let text: Vec<_> = retained
         .iter()
@@ -953,11 +976,11 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
         text[0].1.style.alignment,
         crate::layout::PhysicalTextAlignment::End
     );
-    assert_eq!(text[0].0.anchor, crate::render::backend::TextAnchor::End);
-    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
+    let geometry = &text[0].0 .0;
     assert_eq!(
-        descriptor.sections[0].entries()[0].identity,
-        crate::decorations::legend::GuideEntryIdentity::supplemental("Selected\nshort").unwrap()
+        geometry.lines[0].origin.x.units(),
+        geometry.center.x.units() - text[0].1.width_quanta
+            + text[0].1.lines[0].translation_x_quanta
     );
     for changed in [
         title.clone().layout(TextLayout::default()),
@@ -1186,6 +1209,10 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "checks independent numeric owners and the actual frozen, clipped text ink before publication"
+)]
 fn common_numeric_text_has_distinct_measured_owners_and_frozen_contained_output() {
     use crate::{
         NumericExplanation, NumericFactor, NumericFormat, NumericNotation, NumericPrecision,
@@ -1255,20 +1282,51 @@ fn common_numeric_text_has_distinct_measured_owners_and_frozen_contained_output(
             .filter(|(_, text)| text.source == source)
             .collect();
         assert_eq!(texts.len(), 1, "{source}");
-        let (placement, plan) = texts[0];
-        let ink = crate::render::geometry::planned_text_ink_bounds(
-            plan,
-            placement.position,
-            placement.anchor,
-            placement.rotation,
-            placement.origin,
-            placement.reverse_lines,
-        )
-        .unwrap();
-        assert!(
-            ink.left >= 0.0 && ink.bottom >= 0.0 && ink.right <= 1400.0 && ink.top <= 1100.0,
-            "{source}: {ink:?}"
-        );
+        let (placement, plan) = &texts[0];
+        let geometry = &placement.0;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "test inspects selected text quanta in CSS pixels"
+        )]
+        let pixels = |value: i64| value as f64 / 1024.0;
+        let (sine, cosine) = geometry.rotation_sin_cos;
+        let center = geometry.center;
+        for (line, placed) in plan.lines.iter().zip(&geometry.lines) {
+            let Some(ink) = line.ink_quanta else { continue };
+            let mut bounds = [
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ];
+            for (x, y) in [
+                (ink.left, ink.bottom),
+                (ink.left, ink.top),
+                (ink.right, ink.bottom),
+                (ink.right, ink.top),
+            ] {
+                let x = placed.origin.x.value() + pixels(x) - center.x.value();
+                let y = placed.origin.y.value() - pixels(y) - center.y.value();
+                let point = (
+                    center.x.value() + x * cosine - y * sine,
+                    center.y.value() + x * sine + y * cosine,
+                );
+                bounds[0] = bounds[0].min(point.0);
+                bounds[1] = bounds[1].max(point.0);
+                bounds[2] = bounds[2].min(point.1);
+                bounds[3] = bounds[3].max(point.1);
+            }
+            if let Some(clip) = geometry.clip {
+                bounds[0] = bounds[0].max(clip.x.value());
+                bounds[1] = bounds[1].min(clip.x.value() + clip.width.value());
+                bounds[2] = bounds[2].max(clip.y.value());
+                bounds[3] = bounds[3].min(clip.y.value() + clip.height.value());
+            }
+            assert!(
+                bounds[0] >= 0.0 && bounds[1] <= 1400.0 && bounds[2] >= 0.0 && bounds[3] <= 1100.0,
+                "{source}: {bounds:?}"
+            );
+        }
     }
     let counters = capture_counters();
     let mut backend = root.plan().take_svg_backend().unwrap();
@@ -1966,29 +2024,30 @@ fn assert_shared_alpha_declarations() {
         scatter(values.select([0]).unwrap()),
         scatter(values.select([1]).unwrap()),
     )
-    .preflight_plan()
+    .build_preflight_plan(|prepared, _| {
+        let descriptor = prepared.shared_guide.as_ref().unwrap();
+        assert_eq!(descriptor.sections.len(), 1);
+        assert_eq!(
+            descriptor.sections[0]
+                .entries()
+                .iter()
+                .map(|entry| entry.display_label.as_str())
+                .collect::<Vec<_>>(),
+            ["low", "high"]
+        );
+        let GuideSectionBody::Alpha(body) = &descriptor.sections[0].body else {
+            panic!("Shared alpha body")
+        };
+        assert_eq!(body.sources.len(), 2);
+        assert_eq!(
+            body.sources
+                .iter()
+                .map(|source| source.glyphs[0].members[0].value.alpha)
+                .collect::<Vec<_>>(),
+            [0, 230]
+        );
+    })
     .unwrap();
-    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
-    assert_eq!(descriptor.sections.len(), 1);
-    assert_eq!(
-        descriptor.sections[0]
-            .entries()
-            .iter()
-            .map(|entry| entry.display_label.as_str())
-            .collect::<Vec<_>>(),
-        ["low", "high"]
-    );
-    let GuideSectionBody::Alpha(body) = &descriptor.sections[0].body else {
-        panic!("Shared alpha body")
-    };
-    assert_eq!(body.sources.len(), 2);
-    assert_eq!(
-        body.sources
-            .iter()
-            .map(|source| source.glyphs[0].members[0].value.alpha)
-            .collect::<Vec<_>>(),
-        [0, 230]
-    );
     assert!(root
         .plan()
         .retained_text()
@@ -2104,33 +2163,34 @@ fn assert_shared_color_and_alpha_sections() {
         .unwrap()
         .panel(0, 1, cells)
         .unwrap()
-        .preflight_plan()
-        .unwrap();
-    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
-    assert_eq!(descriptor.sections.len(), 3);
-    assert!(matches!(
-        descriptor.sections[0].body,
-        GuideSectionBody::ContinuousColor(_)
-    ));
-    let targets = descriptor.sections[1..]
-        .iter()
-        .map(|section| {
-            let GuideSectionIdentity::Alpha(identity) = &section.identity else {
-                panic!("alpha follows color content")
-            };
-            identity.target
+        .build_preflight_plan(|prepared, _| {
+            let descriptor = prepared.shared_guide.as_ref().unwrap();
+            assert_eq!(descriptor.sections.len(), 3);
+            assert!(matches!(
+                descriptor.sections[0].body,
+                GuideSectionBody::ContinuousColor(_)
+            ));
+            let targets = descriptor.sections[1..]
+                .iter()
+                .map(|section| {
+                    let GuideSectionIdentity::Alpha(identity) = &section.identity else {
+                        panic!("alpha follows color content")
+                    };
+                    identity.target
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(targets, [AlphaTarget::Point, AlphaTarget::Fill]);
+            for section in &descriptor.sections[1..] {
+                let GuideSectionBody::Alpha(alpha) = &section.body else {
+                    unreachable!()
+                };
+                assert!(alpha
+                    .sources
+                    .iter()
+                    .all(|source| source.neutral == crate::OpaqueColor::rgb(11, 22, 33)));
+            }
         })
-        .collect::<Vec<_>>();
-    assert_eq!(targets, [AlphaTarget::Point, AlphaTarget::Fill]);
-    for section in &descriptor.sections[1..] {
-        let GuideSectionBody::Alpha(alpha) = &section.body else {
-            unreachable!()
-        };
-        assert!(alpha
-            .sources
-            .iter()
-            .all(|source| source.neutral == crate::OpaqueColor::rgb(11, 22, 33)));
-    }
+        .unwrap();
     let before = capture_counters();
     let mut svg = root.plan().take_svg_backend().unwrap();
     root.plan()

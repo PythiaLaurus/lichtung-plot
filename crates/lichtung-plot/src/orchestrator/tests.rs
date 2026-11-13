@@ -89,7 +89,7 @@ impl Backend for RecordingBackend {
         &mut self,
         text: &crate::render::primitives::CanonicalPlannedText,
     ) -> Result<(), Error> {
-        let plan = &text.0.plan;
+        let plan = &text.0.text;
         let anchor = match plan.style.alignment {
             crate::layout::PhysicalTextAlignment::Start => {
                 crate::render::backend::TextAnchor::Start

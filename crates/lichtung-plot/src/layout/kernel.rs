@@ -697,19 +697,18 @@ impl<Plan> MeasuredLayout<Plan> {
     }
 }
 
-struct RootAllocation<Plan, Prepared> {
+struct RootAllocation<Plan> {
     request: RootRequest,
     size: RootSize,
-    prepared: Prepared,
     plan: Plan,
 }
 
 /// One result frozen after parent feedback. Final admission remains a separate stage.
-pub(crate) struct FrozenRoot<Plan, Prepared = ()> {
-    allocation: Box<[RootAllocation<Plan, Prepared>; 1]>,
+pub(crate) struct FrozenRoot<Plan> {
+    allocation: Box<[RootAllocation<Plan>; 1]>,
 }
 
-impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
+impl<Plan> FrozenRoot<Plan> {
     pub(crate) fn dimensions(&self) -> (u32, u32) {
         self.allocation[0]
             .request
@@ -722,9 +721,6 @@ impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
     }
     pub(crate) fn plan(&self) -> &Plan {
         &self.allocation[0].plan
-    }
-    pub(crate) fn prepared(&self) -> &Prepared {
-        &self.allocation[0].prepared
     }
 }
 
@@ -777,7 +773,7 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
         &mut FeedbackRound,
     ) -> Result<MeasuredLayout<Plan>, Error>,
     finalize: impl FnOnce(&Prepared, RootSize, Plan, &mut FinalStage<'_>) -> Result<FinalPlan, Error>,
-) -> Result<FrozenRoot<FinalPlan, Prepared>, Error> {
+) -> Result<FrozenRoot<FinalPlan>, Error> {
     request.validate()?;
     let width = request.exact_width();
     let height = request.exact_height();
@@ -920,10 +916,12 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
     };
     final_stage.reserve_final(&mut allocation, 1, "frozen root plan")?;
     let plan = finalize(&prepared, assigned, measured.plan, &mut final_stage)?;
+    drop(prepared);
+    drop(history);
+    drop(resources);
     allocation.push(RootAllocation {
         request,
         size: assigned,
-        prepared,
         plan,
     });
     let allocation = allocation

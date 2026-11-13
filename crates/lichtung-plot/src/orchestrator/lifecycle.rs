@@ -11,7 +11,7 @@ use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult}
 use crate::theme::ResolvedTheme;
 
 pub(super) struct PlotPlan {
-    root: crate::layout::FrozenRoot<TextReplayPlan, PreparedPlotInputs>,
+    root: crate::layout::FrozenRoot<TextReplayPlan>,
 }
 
 struct PreparedPlotInputs {
@@ -69,6 +69,57 @@ enum PlotLayoutPlan {
 
 #[cfg(test)]
 #[test]
+fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 0.0]),
+    )
+    .title("Independent frozen title")
+    .size(640, 480)
+    .erase();
+    let mut probes = None;
+    let plan = PlotPlan::new_with_theme_factory(
+        &source,
+        source.kind(),
+        || Ok(Box::new(source.resolve_theme()?)),
+        |prepared, replay| {
+            let environment = prepared.theme.prepared_font_environment().unwrap();
+            let core = environment.liveness_probe();
+            let operation = environment.operation().liveness_probe();
+            let frame = prepared.root_frame.borrow();
+            let (_, title) = frame
+                .as_ref()
+                .unwrap()
+                .frame
+                .root_text
+                .placed_text()
+                .next()
+                .unwrap();
+            let analysis = title.analysis_liveness_probe();
+            assert!(core() && operation() && analysis());
+            assert!(replay
+                .retained_text()
+                .iter()
+                .any(|(_, text)| text.shares_content(title)));
+            probes = Some((core, operation, analysis));
+        },
+    )
+    .unwrap();
+    let (core, operation, analysis) = probes.unwrap();
+    assert!(!core() && !operation() && !analysis());
+    drop(source);
+    let mut backend = plan.take_svg_backend().unwrap();
+    plan.render(&mut backend).unwrap();
+    let scene = crate::scene::RenderedScene::new(640, 480, backend.into_output()).unwrap();
+    drop(plan);
+    let outline = scene.svg_with_text_as_paths().unwrap();
+    assert!(!std::str::from_utf8(&outline).unwrap().contains("<text"));
+    assert!(scene.png_bytes(&crate::PngOptions::default()).is_ok());
+    assert!(!core() && !operation() && !analysis());
+}
+
+#[cfg(test)]
+#[test]
 fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_its_operation() {
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -79,78 +130,85 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
     .caption("Immutable caption")
     .size(640, 480)
     .erase();
-    let plan = PlotPlan::new(&source, source.kind()).unwrap();
-    let prepared = plan.root.prepared();
-    let source = prepared.axes.attach(source).unwrap();
+    PlotPlan::new_with_theme_factory(
+        &source,
+        source.kind(),
+        || Ok(Box::new(source.resolve_theme()?)),
+        |prepared, _| {
+            let source = prepared.axes.attach(source.clone()).unwrap();
 
-    prepared.root_frame.borrow_mut().take();
-    let original = prepared.root_frame(&source).unwrap();
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+            prepared.root_frame.borrow_mut().take();
+            let original = prepared.root_frame(&source).unwrap();
+            let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
 
-    let repeated = prepared.root_frame(&source).unwrap();
-    assert_eq!(original, repeated);
+            let repeated = prepared.root_frame(&source).unwrap();
+            assert_eq!(original, repeated);
 
-    assert_eq!(
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
-        shapes
-    );
-    for ((_, left), (_, right)) in original
-        .root_text
-        .placed_text()
-        .zip(repeated.root_text.placed_text())
-    {
-        assert!(left.shares_payload(right));
-    }
-    let changed = prepared
-        .root_frame(&source.clone().with_canvas_size(641, 480))
-        .unwrap();
-    assert_ne!(changed.panel_box, repeated.panel_box);
+            assert_eq!(
+                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                shapes
+            );
+            for ((_, left), (_, right)) in original
+                .root_text
+                .placed_text()
+                .zip(repeated.root_text.placed_text())
+            {
+                assert!(left.shares_payload(right));
+            }
+            let changed = prepared
+                .root_frame(&source.clone().with_canvas_size(641, 480))
+                .unwrap();
+            assert_ne!(changed.panel_box, repeated.panel_box);
 
-    assert_eq!(
-        changed
-            .root_text
-            .placed_text()
-            .map(|(_, text)| text.source.as_str())
-            .collect::<Vec<_>>(),
-        ["Root title", "Independent subtitle", "Immutable caption"]
-    );
+            assert_eq!(
+                changed
+                    .root_text
+                    .placed_text()
+                    .map(|(_, text)| text.source.as_str())
+                    .collect::<Vec<_>>(),
+                ["Root title", "Independent subtitle", "Immutable caption"]
+            );
 
-    let repeated_changed = prepared
-        .root_frame(&source.clone().with_canvas_size(641, 480))
-        .unwrap();
-    assert!(std::sync::Arc::ptr_eq(&changed, &repeated_changed));
+            let repeated_changed = prepared
+                .root_frame(&source.clone().with_canvas_size(641, 480))
+                .unwrap();
+            assert!(std::sync::Arc::ptr_eq(&changed, &repeated_changed));
 
-    let styled = source.clone().title(
-        crate::Text::new("Root title").style(
-            prepared
-                .theme
-                .typography
-                .root
-                .title
-                .clone()
-                .font_size(27.0)
-                .unwrap(),
-        ),
-    );
-    let styled_frame = prepared.root_frame(&styled).unwrap();
-    assert!(!std::sync::Arc::ptr_eq(&original, &styled_frame));
-    assert!(styled_frame.insets.top > original.insets.top);
-    let repeated_style = prepared.root_frame(&styled).unwrap();
-    assert!(std::sync::Arc::ptr_eq(&styled_frame, &repeated_style));
-    let reset = styled.title(crate::Text::new("Root title").layout(crate::TextLayout::default()));
-    let reset_frame = prepared.root_frame(&reset).unwrap();
-    assert!(!std::sync::Arc::ptr_eq(&styled_frame, &reset_frame));
-    assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
-    let error = styled_frame
-        .root_text
-        .draw(reset.prose(), &mut super::backend::NullBackend::default())
-        .unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("does not match its configured source"),
-        "{error}"
-    );
+            let styled = source.clone().title(
+                crate::Text::new("Root title").style(
+                    prepared
+                        .theme
+                        .typography
+                        .root
+                        .title
+                        .clone()
+                        .font_size(27.0)
+                        .unwrap(),
+                ),
+            );
+            let styled_frame = prepared.root_frame(&styled).unwrap();
+            assert!(!std::sync::Arc::ptr_eq(&original, &styled_frame));
+            assert!(styled_frame.insets.top > original.insets.top);
+            let repeated_style = prepared.root_frame(&styled).unwrap();
+            assert!(std::sync::Arc::ptr_eq(&styled_frame, &repeated_style));
+            let reset =
+                styled.title(crate::Text::new("Root title").layout(crate::TextLayout::default()));
+            let reset_frame = prepared.root_frame(&reset).unwrap();
+            assert!(!std::sync::Arc::ptr_eq(&styled_frame, &reset_frame));
+            assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
+            let error = styled_frame
+                .root_text
+                .draw(reset.prose(), &mut super::backend::NullBackend::default())
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("does not match its configured source"),
+                "{error}"
+            );
+        },
+    )
+    .unwrap();
 }
 
 #[cfg(all(test, unix, not(any(target_os = "macos", target_os = "android"))))]
@@ -158,6 +216,10 @@ mod soft_hyphen_tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "checks the production census, sealed pair and both final soft-hyphen renderings"
+    )]
     fn production_title_census_prepares_soft_hyphen_for_unwrapped_and_wrapped_svg() {
         const SOURCE: &str = "A\u{00AD}AA";
         for (width, wrapped) in [(800, false), (450, true)] {
@@ -179,47 +241,54 @@ mod soft_hyphen_tests {
                 theme.typography.root.title.weight,
                 theme.typography.axes.tick_label.weight
             );
-            let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme)
-                .unwrap_or_else(|error| panic!("width {width}: {error}"));
-            let prepared = plan.root.prepared();
-            let captured = plan.root.plan().retained_text();
-            let title_plan = captured
-                .iter()
-                .find(|(_, text)| text.source == SOURCE)
-                .unwrap()
-                .1;
-            assert_eq!(title_plan.lines[0].selected_soft_hyphen.is_some(), wrapped);
-            let census = &prepared.text_census;
-            assert!(census
-                .requirements
-                .iter()
-                .all(|requirement| requirement.generated_alphabet.is_empty()));
-            let title = census
-                .requirements
-                .iter()
-                .find(|requirement| requirement.text_role == crate::layout::PreparedTextRole::Title)
-                .unwrap();
-            assert_eq!(title.source, SOURCE);
-            let pair = &census.pairs[title.pair_ordinal as usize];
-            assert!(pair.required_scalars.contains(&'-'));
-            assert!(census
-                .pairs
-                .iter()
-                .filter(|pair| pair.pair_ordinal != title.pair_ordinal)
-                .all(|pair| !pair.required_scalars.contains(&'-')));
-            let environment = prepared.theme.prepared_font_environment().unwrap();
-            assert!(environment.prepared_pairs_are_sealed().unwrap());
-            let resolved = environment
-                .prepared_pair(&pair.stack, crate::font::canonical::RequestedWeight::Bold)
-                .unwrap()
-                .unwrap();
-            assert!(resolved.selected_scalars.iter().any(|selected| {
-                selected.scalar == '-'
-                    && matches!(
-                        selected.selection,
-                        crate::font::canonical::ScalarFaceSelection::Face(_)
-                    )
-            }));
+            let plan = PlotPlan::new_with_theme_factory(
+                &plot,
+                PlotKind::Scatter,
+                || Ok(Box::new(theme)),
+                |prepared, replay| {
+                    let captured = replay.retained_text();
+                    let title_plan = captured
+                        .iter()
+                        .find(|(_, text)| text.source == SOURCE)
+                        .unwrap()
+                        .1;
+                    assert_eq!(title_plan.lines[0].selected_soft_hyphen.is_some(), wrapped);
+                    let census = &prepared.text_census;
+                    assert!(census
+                        .requirements
+                        .iter()
+                        .all(|requirement| requirement.generated_alphabet.is_empty()));
+                    let title = census
+                        .requirements
+                        .iter()
+                        .find(|requirement| {
+                            requirement.text_role == crate::layout::PreparedTextRole::Title
+                        })
+                        .unwrap();
+                    assert_eq!(title.source, SOURCE);
+                    let pair = &census.pairs[title.pair_ordinal as usize];
+                    assert!(pair.required_scalars.contains(&'-'));
+                    assert!(census
+                        .pairs
+                        .iter()
+                        .filter(|pair| pair.pair_ordinal != title.pair_ordinal)
+                        .all(|pair| !pair.required_scalars.contains(&'-')));
+                    let environment = prepared.theme.prepared_font_environment().unwrap();
+                    assert!(environment.prepared_pairs_are_sealed().unwrap());
+                    let resolved = environment
+                        .prepared_pair(&pair.stack, crate::font::canonical::RequestedWeight::Bold)
+                        .unwrap()
+                        .unwrap();
+                    assert!(resolved.selected_scalars.iter().any(|selected| {
+                        selected.scalar == '-'
+                            && matches!(
+                                selected.selection,
+                                crate::font::canonical::ScalarFaceSelection::Face(_)
+                            )
+                    }));
+                },
+            )
+            .unwrap_or_else(|error| panic!("width {width}: {error}"));
             let mut backend = plan.take_svg_backend().unwrap();
             plan.render(&mut backend).unwrap();
             let svg = backend.into_bytes().unwrap();
@@ -281,11 +350,16 @@ mod natural_sizing_tests {
         edit: impl FnOnce(&mut ResolvedTheme) -> Result<(), Error>,
     ) -> Result<NaturalScene, Error> {
         let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
-        let plan = PlotPlan::new_with_theme_factory(&source, source.kind(), || {
-            let mut theme = crate::Theme::publication().resolve()?;
-            edit(&mut theme)?;
-            Ok(Box::new(theme))
-        })?;
+        let plan = PlotPlan::new_with_theme_factory(
+            &source,
+            source.kind(),
+            || {
+                let mut theme = crate::Theme::publication().resolve()?;
+                edit(&mut theme)?;
+                Ok(Box::new(theme))
+            },
+            |_, _| {},
+        )?;
         let dimensions = plan.dimensions();
         let mut backend = plan.take_svg_backend()?;
         plan.render(&mut backend)?;
@@ -453,19 +527,22 @@ mod natural_sizing_tests {
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.root.title.weight = crate::TextWeight::Bold;
-        let plan =
-            PlotPlan::new_with_theme_factory(&plot, plot.kind(), || Ok(Box::new(theme))).unwrap();
-        assert!(plan
-            .root
-            .prepared()
-            .text_census
-            .requirements
-            .iter()
-            .any(
-                |entry| entry.text_role == crate::layout::PreparedTextRole::PreferenceMetric
-                    && entry.weight == crate::TextWeight::Bold
-                    && entry.source == "0"
-            ));
+        PlotPlan::new_with_theme_factory(
+            &plot,
+            plot.kind(),
+            || Ok(Box::new(theme)),
+            |prepared, _| {
+                assert!(prepared
+                    .text_census
+                    .requirements
+                    .iter()
+                    .any(|entry| entry.text_role
+                        == crate::layout::PreparedTextRole::PreferenceMetric
+                        && entry.weight == crate::TextWeight::Bold
+                        && entry.source == "0"));
+            },
+        )
+        .unwrap();
     }
 
     #[test]
@@ -674,7 +751,13 @@ mod natural_sizing_tests {
 
 impl PlotPlan {
     pub(super) fn new(source: &Plot, kind: PlotKind) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, || Ok(Box::new(source.resolve_theme()?)))
+        Self::new_with_theme_factory(
+            source,
+            kind,
+            || Ok(Box::new(source.resolve_theme()?)),
+            #[cfg(test)]
+            |_, _| {},
+        )
     }
 
     #[cfg(test)]
@@ -683,7 +766,7 @@ impl PlotPlan {
         kind: PlotKind,
         theme: ResolvedTheme,
     ) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, || Ok(Box::new(theme)))
+        Self::new_with_theme_factory(source, kind, || Ok(Box::new(theme)), |_, _| {})
     }
 
     #[expect(
@@ -694,6 +777,7 @@ impl PlotPlan {
         source: &Plot,
         kind: PlotKind,
         resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
+        #[cfg(test)] inspect: impl FnOnce(&PreparedPlotInputs, &TextReplayPlan),
     ) -> Result<Self, Error> {
         let sizing = source.sizing_request();
         #[cfg(test)]
@@ -866,6 +950,7 @@ impl PlotPlan {
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, layout, final_stage| {
+                let _ = &prepared.text_census;
                 let (width, height) = assigned.dimensions()?;
                 #[cfg(test)]
                 let fonts = crate::font::canonical::planning_counts();
@@ -893,6 +978,8 @@ impl PlotPlan {
                     fonts,
                     "Plot capture must not discover, resolve, probe, admit, seal or shape fonts"
                 );
+                #[cfg(test)]
+                inspect(prepared, &replay);
                 Ok(replay)
             },
         )?;
@@ -904,7 +991,6 @@ impl PlotPlan {
     pub(super) fn render(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         #[cfg(test)]
         super::FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let _ = &self.root.prepared().text_census;
         let (width, height) = self.dimensions();
         self.root
             .plan()
@@ -1281,10 +1367,19 @@ mod root_title_tests {
                 let (placement, text) = roles[0];
                 assert_eq!(text.style.alignment, alignment);
                 assert_eq!(text.lines.len(), 2);
-                let canonical =
-                    crate::render::backend::validate_planned_text(*placement, text).unwrap();
-                assert!((canonical.position.x.value() - placement.position.x).abs() < 0.000_001);
-                assert!((canonical.position.y.value() - placement.position.y).abs() < 0.000_001);
+                let anchor = match alignment {
+                    crate::layout::PhysicalTextAlignment::Start => 0,
+                    crate::layout::PhysicalTextAlignment::Center => {
+                        crate::render::backend::nearest_even_text_half(text.width_quanta).unwrap()
+                    }
+                    crate::layout::PhysicalTextAlignment::End => text.width_quanta,
+                };
+                for (line, geometry) in text.lines.iter().zip(&placement.0.lines) {
+                    assert_eq!(
+                        geometry.origin.x.units(),
+                        placement.0.center.x.units() - anchor + line.translation_x_quanta
+                    );
+                }
             }
             let mut backend = plan.take_svg_backend().unwrap();
             plan.render(&mut backend).unwrap();

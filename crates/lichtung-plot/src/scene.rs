@@ -344,7 +344,7 @@ mod tests {
                 exact_override: false,
             })
             .unwrap();
-        let mut backend = SvgBackend::in_memory_with_fonts(320, 40, environment);
+        let mut backend = SvgBackend::in_memory_with_fonts(320, 40, &environment);
         backend.begin(320, 40).unwrap();
         backend
             .draw_planned_text(

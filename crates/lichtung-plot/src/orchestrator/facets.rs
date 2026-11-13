@@ -1181,11 +1181,17 @@ mod feedback_tests {
                 );
                 let captured = replay.retained_text();
                 for text in expected {
+                    let canonical = crate::render::primitives::CanonicalPlannedText::new(
+                        text.placement,
+                        &text.plan,
+                        height,
+                        None,
+                    )?;
                     assert!(captured
                         .iter()
-                        .any(|(placement, actual)| *placement == text.placement
-                            && actual.shares_payload(&text.plan)
-                            && **actual == text.plan));
+                        .any(|(placement, actual)| *placement == canonical
+                            && actual.shares_content(&text.plan)
+                            && **actual == text.plan.freeze_selected()));
                 }
                 Ok(())
             },
