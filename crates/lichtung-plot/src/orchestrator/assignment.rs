@@ -20,6 +20,7 @@ pub(crate) struct AssignedAxisRef<'v> {
 /// The selected allocation remains distinct from its completed root frame.
 pub(crate) struct PlotMeasureAssignment {
     pub(crate) dimensions: PlotMeasureDimensions,
+    pub(crate) cell: PixelRect,
     pub(crate) frame: PixelRect,
     pub(crate) content_height: bool,
     pub(crate) fill_content_height: bool,
@@ -128,6 +129,7 @@ mod tests {
                 canvas: RootSize::new(800, 600),
                 output_override: None,
             },
+            cell: frame,
             frame,
             content_height: true,
             fill_content_height: true,

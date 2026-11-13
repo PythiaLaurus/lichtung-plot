@@ -777,6 +777,7 @@ mod tests {
                                 result: Arc::new(MeasuredPlotPlan {
                                     selected: crate::orchestrator::assignment::PlotMeasureAssignment {
                                         dimensions: crate::orchestrator::assignment::PlotMeasureDimensions { canvas: assigned.assigned_size()?, output_override: None },
+                                        cell: context.cell,
                                         frame: context.panel,
                                         content_height: context.content_height,
                                         fill_content_height: context.fill_content_height,

@@ -646,6 +646,7 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     pub(crate) registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) intrinsic: Option<&'a crate::orchestrator::root::PlotIntrinsics>,
     pub(crate) data: crate::data::PlotData<'src, 'a>,
+    pub(crate) cell: PixelRect,
     pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
     // An embedded content-sized child still fills its parent's arranged row.
@@ -656,9 +657,8 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     // Parent-owned perpendicular capacity; axis feedback must not shrink it a
     // second time merely because the assigned mark panel became narrower.
     pub(crate) axis_label_width: f64,
-    prepared_axes: Option<&'a crate::orchestrator::registration::PreparedAxesOwner>,
+    prepared: bool,
     prepared_limits: [Option<(f64, f64)>; 2],
-    prepared_family: Option<crate::orchestrator::registration::FamilyRef<'a>>,
     pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
     facet_scales: Option<FacetScales>,
     pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
@@ -685,14 +685,14 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             registered: None,
             intrinsic: None,
             data,
+            cell: panel,
             panel,
             content_height: false,
             fill_content_height: false,
             content_preference: None,
             axis_label_width: panel.width().max(0.0),
-            prepared_axes: None,
+            prepared: false,
             prepared_limits: [None; 2],
-            prepared_family: None,
             theme,
             facet_scales: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
@@ -751,16 +751,13 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         prepare: impl FnOnce() -> Result<(f64, f64), Error>,
     ) -> Result<(f64, f64), Error> {
         let index = usize::from(side == crate::layout::AxisSide::Left);
-        self.prepared_axes.map_or_else(prepare, |axes| {
+        self.prepared_axes().map_or_else(prepare, |axes| {
             Ok(self.prepared_limits[index].unwrap_or(axes.ranges()[index]))
         })
     }
 
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
-        self.prepared_axes = self
-            .registered
-            .and_then(|registered| registered.axes.coordinate());
-        self.prepared_family = self.registered.map(|registered| registered.family.as_ref());
+        self.prepared = true;
         self.prepared_limits = [
             plot.description()
                 .x_axis_spec()
@@ -785,10 +782,14 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         Ok(self)
     }
 
-    pub(crate) const fn prepared_family(
+    fn prepared_axes(self) -> Option<&'a crate::orchestrator::registration::PreparedAxesOwner> {
+        self.registered.filter(|_| self.prepared)?.axes.coordinate()
+    }
+
+    pub(crate) fn prepared_family(
         self,
     ) -> Option<crate::orchestrator::registration::FamilyRef<'a>> {
-        self.prepared_family
+        Some(self.registered.filter(|_| self.prepared)?.family.as_ref())
     }
 
     pub(crate) const fn with_registration(
@@ -805,7 +806,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         self,
         side: usize,
     ) -> Option<&'a [crate::layout::AxisTick]> {
-        Some(&self.prepared_axes?.categories(side)?.ticks)
+        Some(&self.prepared_axes()?.categories(side)?.ticks)
     }
 }
 

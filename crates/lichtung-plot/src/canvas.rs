@@ -39,16 +39,15 @@ thread_local! {
     pub(crate) static CANVAS_ASSIGNED_PANEL_EVIDENCE: std::cell::RefCell<Vec<(PixelRect, PixelRect)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-struct PlannedCanvasPanel {
-    index: usize,
+struct OwnedCanvasPlot {
+    anchor: crate::orchestrator::root::GridSlot,
     kind: PlotKind,
     surface: crate::Color,
-    canvas_cell: PixelRect,
-    panel_plan: Arc<crate::decorations::plan::MeasuredPlotPlan>,
-    local_text: plot_text::PlotLocalTextPlan,
-    header_layer: String,
-    legend: Option<crate::decorations::legend::LegendDrawPlan>,
-    layers: [String; 3],
+    plot: Arc<crate::decorations::plan::MeasuredPlotPlan>,
+    prose: crate::decorations::title_block::plan::RootTitleBlockPlan,
+    prose_layer: String,
+    legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
+    layers: [String; 2],
 }
 
 type PreparedColorDomains = Vec<(String, Vec<String>)>;
@@ -58,11 +57,14 @@ struct CanvasPlan {
     dimensions: (u32, u32),
     root_paint: crate::Color,
     canvas_layout: RootFramePlan,
-    shared_legend_draw: Option<crate::decorations::legend::LegendDrawPlan>,
-    panels: Vec<PlannedCanvasPanel>,
+    content: OwnedCanvasPlan,
+}
+
+struct OwnedCanvasPlan {
+    grid: tracks::CanvasGridAssignment,
+    plots: Vec<OwnedCanvasPlot>,
     text_panels: Vec<TextPanelPlan>,
-    headers: Vec<CanvasHeaderPlan>,
-    row_titles: Vec<CanvasHeaderPlan>,
+    shared_guide: Option<crate::decorations::legend::LegendDrawPlan>,
 }
 
 struct PreparedCanvasInputs<'src> {
@@ -2829,10 +2831,10 @@ impl Canvas {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         grid.tracks.observe(round)?;
-        let cells = grid.owners;
-        let content_insets = grid.content_insets;
-        let headers = grid.headers;
-        let row_titles = grid.row_titles;
+        let cells = &grid.owners;
+        let content_insets = &grid.content_insets;
+        let headers = &grid.headers;
+        let row_titles = &grid.row_titles;
         let mut measured = Vec::new();
         let mut requirements = Vec::new();
         fit::reserve(&mut measured, plots.len(), "Canvas measured children")?;
@@ -2996,6 +2998,7 @@ impl Canvas {
             }
             #[cfg(test)]
             CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| {
+                assert_eq!(panel_plan.selected.cell, local.body);
                 evidence
                     .borrow_mut()
                     .push((local.body, panel_plan.result.layout.projection.panel_box()));
@@ -3105,7 +3108,7 @@ impl Canvas {
             round.observe_text_block(&text_panel.title)?;
             round.observe_text_block(&text_panel.body)?;
         }
-        for header in headers.iter().chain(&row_titles) {
+        for header in headers.iter().chain(row_titles) {
             round.observe_authored_text(&header.request)?;
             round.observe_text(&header.text.plan)?;
             round.observe_number(header.text.placement.position.x)?;
@@ -3119,34 +3122,36 @@ impl Canvas {
         let mut panels = Vec::new();
         fit::reserve(&mut panels, measured.len(), "Canvas selected panels")?;
         for (index, kind, panel_plan, local) in measured {
-            let cell = cells[index].expect("measured owner assignment");
+            let _ = cells[index].expect("measured owner assignment");
             let mut layers = [String::new(), String::new(), String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
                 crate::data::source::reserve_source_string(layer, 40)?;
                 write!(layer, "panel-{index}-{suffix}").expect("admitted Canvas layer name");
             }
             let [grid, axes, legend, header_layer] = layers;
-            panels.push(PlannedCanvasPanel {
-                index,
+            let surface = themes
+                .plot(index)
+                .expect("configured panel theme")
+                .surfaces
+                .plot_panel;
+            let legend = panel_plan
+                .legend
+                .as_ref()
+                .map(|guide| {
+                    let (x, y) = guide.bounds.anchor();
+                    guide.legend.select(x, y)
+                })
+                .transpose()?
+                .map(|draw| (legend, draw));
+            panels.push(OwnedCanvasPlot {
+                anchor: crate::orchestrator::root::GridSlot(index),
                 kind,
-                surface: themes
-                    .plot(index)
-                    .expect("configured panel theme")
-                    .surfaces
-                    .plot_panel,
-                canvas_cell: cell,
-                legend: panel_plan
-                    .legend
-                    .as_ref()
-                    .map(|legend| {
-                        let (x, y) = legend.bounds.anchor();
-                        legend.legend.select(x, y)
-                    })
-                    .transpose()?,
-                panel_plan,
-                local_text: local,
-                header_layer,
-                layers: [grid, axes, legend],
+                surface,
+                plot: panel_plan,
+                prose: local.text,
+                prose_layer: header_layer,
+                legend,
+                layers: [grid, axes],
             });
         }
         let plan = CanvasPlan {
@@ -3158,17 +3163,18 @@ impl Canvas {
             ),
             root_paint: themes.root().surfaces.canvas_root,
             canvas_layout,
-            shared_legend_draw: shared_legend
-                .as_ref()
-                .map(|legend| {
-                    let (x, y) = legend.bounds.anchor();
-                    legend.legend.select(x, y)
-                })
-                .transpose()?,
-            panels,
-            text_panels,
-            headers,
-            row_titles,
+            content: OwnedCanvasPlan {
+                grid,
+                plots: panels,
+                text_panels,
+                shared_guide: shared_legend
+                    .as_ref()
+                    .map(|legend| {
+                        let (x, y) = legend.bounds.anchor();
+                        legend.legend.select(x, y)
+                    })
+                    .transpose()?,
+            },
         };
         Self::observe_arranged(&plan, round)?;
         Ok(FitOutcome::Measured(plan))
@@ -3179,25 +3185,28 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        for panel in &plan.text_panels {
+        let content = &plan.content;
+        for panel in &content.text_panels {
             geometry.text(panel.title_placement, panel.title.plan(), None)?;
             geometry.text(panel.body_placement, panel.body.plan(), None)?;
         }
-        for header in plan.row_titles.iter().chain(&plan.headers) {
+        for header in content.grid.row_titles.iter().chain(&content.grid.headers) {
             geometry.text(header.text.placement, &header.text.plan, None)?;
         }
-        if let Some(legend) = &plan.shared_legend_draw {
+        if let Some(legend) = &content.shared_guide {
             legend.geometry(&mut geometry)?;
         }
         geometry.observe_feedback(round)?;
-        for panel in &plan.panels {
-            round.observe_box(panel.canvas_cell)?;
-            round.observe_box(panel.local_text.body)?;
-            panel.local_text.text.observe(round)?;
+        for panel in &content.plots {
+            round.observe_box(
+                content.grid.owners[panel.anchor.0].expect("measured owner assignment"),
+            )?;
+            round.observe_box(panel.plot.selected.cell)?;
+            panel.prose.observe(round)?;
 
             let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-            panel.local_text.text.geometry(&mut geometry)?;
-            if let Some(legend) = &panel.legend {
+            panel.prose.geometry(&mut geometry)?;
+            if let Some((_, legend)) = &panel.legend {
                 legend.geometry(&mut geometry)?;
             }
             geometry.observe_feedback(round)?;
@@ -3217,21 +3226,18 @@ impl Canvas {
             plan.root_paint,
             SurfaceRole::CanvasRoot,
         )?;
-        for panel in &plan.panels {
-            backend.draw_surface(
-                panel.panel_plan.panel_box,
-                panel.surface,
-                SurfaceRole::PlotPanel,
-            )?;
+        let content = &plan.content;
+        for panel in &content.plots {
+            backend.draw_surface(panel.plot.panel_box, panel.surface, SurfaceRole::PlotPanel)?;
         }
-        for panel in &plan.panels {
+        for panel in &content.plots {
             crate::render::backend::with_layer_role(
                 backend,
                 &panel.layers[0],
                 crate::render::backend::LayerRole::Grid,
                 |backend| {
                     panel
-                        .panel_plan
+                        .plot
                         .result
                         .axes
                         .as_ref()
@@ -3242,41 +3248,41 @@ impl Canvas {
                 },
             )?;
         }
-        for panel in &plan.panels {
-            let plot = self.placements.plot(panel.index).ok_or_else(|| {
+        for panel in &content.plots {
+            let plot = self.placements.plot(panel.anchor.0).ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
             plot.description().configured_source_rows()?;
             crate::layout::interior::InteriorRoute::classify(panel.kind)
                 .validate(plot.description())?;
-            panel.panel_plan.result.draw_body(backend)?;
-            crate::significance::render_selected(&panel.panel_plan.result, backend)?;
+            panel.plot.result.draw_body(backend)?;
+            crate::significance::render_selected(&panel.plot.result, backend)?;
             with_layer(backend, &panel.layers[1], |backend| {
                 panel
-                    .panel_plan
+                    .plot
                     .result
                     .axes
                     .as_ref()
                     .ok_or_else(|| Error::Render("Canvas plan is missing immutable axes".into()))?
                     .draw(backend)
             })?;
-            if let Some(legend) = &panel.legend {
-                with_layer(backend, &panel.layers[2], |backend| legend.draw(backend))?;
+            if let Some((layer, legend)) = &panel.legend {
+                with_layer(backend, layer, |backend| legend.draw(backend))?;
             }
-            with_layer(backend, &panel.header_layer, |backend| {
-                panel.local_text.text.draw_retained(backend)
+            with_layer(backend, &panel.prose_layer, |backend| {
+                panel.prose.draw_retained(backend)
             })?;
         }
-        for panel in &plan.text_panels {
+        for panel in &content.text_panels {
             draw_text_panel(panel, backend)?;
         }
-        if !plan.row_titles.is_empty() {
-            draw_canvas_row_titles(&plan.row_titles, backend)?;
+        if !content.grid.row_titles.is_empty() {
+            draw_canvas_row_titles(&content.grid.row_titles, backend)?;
         }
-        if !plan.headers.is_empty() {
-            draw_canvas_headers(&plan.headers, backend)?;
+        if !content.grid.headers.is_empty() {
+            draw_canvas_headers(&content.grid.headers, backend)?;
         }
-        if let Some(legend) = &plan.shared_legend_draw {
+        if let Some(legend) = &content.shared_guide {
             with_layer(backend, "canvas-shared-legend", |backend| {
                 legend.draw(backend)
             })?;

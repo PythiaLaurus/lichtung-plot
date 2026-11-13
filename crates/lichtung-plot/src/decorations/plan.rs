@@ -1574,6 +1574,7 @@ fn plan_panel_attempt(
     geometry.observe_feedback(round)?;
     let selected = crate::orchestrator::assignment::PlotMeasureAssignment {
         dimensions: plot.measure_dimensions()?,
+        cell: context.cell,
         frame: cell,
         content_height: context.content_height,
         fill_content_height: context.fill_content_height,
