@@ -135,18 +135,27 @@ impl PreparedGuide {
         let data = plot.data().with_operation(&operation);
         let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
-        } else if let Some(matrix) = inputs.families.iter().find_map(|(_, family)| match family {
-            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
-            _ => None,
-        }) {
+        } else if let Some(matrix) =
+            inputs
+                .plots
+                .iter()
+                .find_map(|registered| match &registered.family {
+                    crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+                    _ => None,
+                })
+        {
             matrix.guide_sources(plot, theme, data)?
         } else {
-            inputs.guide_sources(plot, theme, data, plot.axis_scope())?
+            inputs.guide_sources(plot, theme, data, &inputs.plots[0])?
         };
         let continuous = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             None
         } else {
-            inputs.continuous_source(plot, theme, plot.axis_scope())?
+            crate::layout::interior::PreparedInteriorInputs::continuous_source(
+                plot,
+                theme,
+                &inputs.plots[0],
+            )?
         };
         let alpha = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
@@ -155,7 +164,7 @@ impl PreparedGuide {
                 .alpha_sources(
                     plot,
                     theme,
-                    plot.axis_scope(),
+                    &inputs.plots[0],
                     &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
                 )?
                 .sections(plot)?

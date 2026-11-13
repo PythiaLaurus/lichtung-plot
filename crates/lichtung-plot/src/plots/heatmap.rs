@@ -463,18 +463,17 @@ fn assigned_rows(
     Ok(edges)
 }
 
-fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
-    if chart.prepared_families.is_empty() {
+fn retained_in<'v>(
+    chart: &Plot,
+    registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
+) -> Result<&'v HeatmapData, Error> {
+    if registered.is_none() {
         return Err(Error::Render(
             "heatmap requires root-prepared semantics".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(
-        &chart.prepared_families,
-        chart.axis_scope(),
-        "Heatmap",
-    )?
-    .as_ref()
+    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Heatmap")?
+        .as_ref()
     {
         crate::orchestrator::registration::FamilyRef::Heatmap(marks) => Ok(marks),
         _ => Err(Error::Render(
@@ -644,13 +643,18 @@ impl HeatmapIntrinsicCache {
 /// frame, or cell is assigned. Category packing and elision remain T5e.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let axes = chart
-        .prepared_axis_inputs()
+    let axes = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
-    let (minimum, without_y_labels) =
-        analyze_intrinsics(retained_in(chart)?, axes, theme, chart.axis_scope())?;
+    let (minimum, without_y_labels) = analyze_intrinsics(
+        retained_in(chart, registered)?,
+        axes,
+        theme,
+        chart.axis_scope(),
+    )?;
     if chart.y_tick_labels_visible() {
         Ok(minimum)
     } else {
@@ -660,10 +664,11 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let marks = retained_in(chart)?;
-    let hard = intrinsic_body_minimum(chart, theme)?;
+    let marks = retained_in(chart, registered)?;
+    let hard = intrinsic_body_minimum(chart, registered, theme)?;
     let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
         hard.0.max(pitch * marks.x_levels.len() as f64),
@@ -673,12 +678,13 @@ pub(crate) fn natural_body_preference(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    let marks = retained_in(chart)?;
-    let axes = chart
-        .prepared_axis_inputs()
+    let marks = retained_in(chart, registered)?;
+    let axes = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
     theme.text.prepared_font_environment()?;
     let labels = axes.display_categories[0]
@@ -1118,10 +1124,10 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained_in(chart)?;
+    let prepared = retained_in(chart, context.registered)?;
     let theme = context.theme;
 
-    let minimum = intrinsic_body_minimum(chart, theme)?;
+    let minimum = intrinsic_body_minimum(chart, context.registered, theme)?;
     let (body, colorbar) = if chart.continuous_guide_suppressed()
         || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -1135,7 +1141,9 @@ pub(crate) fn measure(
             &context
                 .fit_scope()
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
-            context.content_height.then_some(chart),
+            context
+                .content_height
+                .then_some((chart, context.registered)),
         )?;
         (body, Some(guide))
     };
@@ -1304,8 +1312,9 @@ pub(crate) fn measure(
                 Ok(AxisTick::new(y, label))
             },
         ))?;
-        let axes = chart
-            .prepared_axis_inputs()
+        let axes = context
+            .registered
+            .and_then(|registered| registered.axes.as_ref())
             .ok_or_else(|| Error::Render("Heatmap requires prepared native axes".into()))?;
         let mut layout = Layout {
             projection: crate::layout::Projection::new(

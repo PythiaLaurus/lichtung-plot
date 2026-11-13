@@ -196,6 +196,7 @@ impl ChildPlans {
         )?;
         self.measure(plot, context, &owner, phase, round, || {
             plot.preflight_measurement(
+                context.registered,
                 plot.kind(),
                 context.panel,
                 context.theme,

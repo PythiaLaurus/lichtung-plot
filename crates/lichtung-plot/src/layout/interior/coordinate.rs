@@ -28,12 +28,15 @@ impl Intrinsics {
     /// The prepared axis scope is the owner identity. Parent widths, domain
     /// feedback, and hidden shared-axis labels cannot invalidate its analysis.
     pub(crate) fn prepared<'a>(
-        plot: &'a Plot,
+        plot: &Plot,
+        registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'_>>,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<&'a Self, Error> {
-        let axes = plot.prepared_axis_inputs().ok_or_else(|| {
-            Error::Render("native coordinate panel requires root-prepared axes".into())
-        })?;
+        let axes = registered
+            .and_then(|registered| registered.axes.as_ref())
+            .ok_or_else(|| {
+                Error::Render("native coordinate panel requires root-prepared axes".into())
+            })?;
         Self::prepare(axes, theme, plot.axis_scope(), plot.y_tick_labels_visible())
     }
 
@@ -291,9 +294,12 @@ impl InteriorRoute {
             _ => crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
         });
         self.validate(plot.description())?;
-        let inputs = plot.prepared_axis_inputs().ok_or_else(|| {
-            Error::Render("native coordinate panel requires root-prepared axes".into())
-        })?;
+        let inputs = context
+            .registered
+            .and_then(|registered| registered.axes.as_ref())
+            .ok_or_else(|| {
+                Error::Render("native coordinate panel requires root-prepared axes".into())
+            })?;
         let valid = match self {
             Self::StandardCoordinate(family) => {
                 !inputs.logarithmic
@@ -327,7 +333,7 @@ impl InteriorRoute {
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
-        let minimum = plot.intrinsic_body_minimum(context.theme)?;
+        let minimum = plot.intrinsic_body_minimum(context.registered, context.theme)?;
         let panel = context.panel;
         if ![panel.x0, panel.x1, panel.y0, panel.y1]
             .into_iter()
@@ -505,10 +511,11 @@ impl InteriorRoute {
 /// Facet/Canvas track allocation remains with the existing parent adapters.
 pub(crate) fn canvas_layout(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<crate::layout::RootFramePlan, PlanError> {
     use crate::decorations::title_block::plan::RootAlignments;
-    let minimum = plot.intrinsic_body_minimum(theme)?;
+    let minimum = plot.intrinsic_body_minimum(registered, theme)?;
     // Only root-owned padding and text are hard reservations. Axis gutters are
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
@@ -522,7 +529,7 @@ pub(crate) fn canvas_layout(
     root.native_preference = match super::InteriorRoute::classify(plot.kind()) {
         super::InteriorRoute::StandardCoordinate(_) => {
             Some(super::preference::CoordinateSizePreference::Standard(
-                super::preference::mark_preference(plot, theme, minimum)?,
+                super::preference::mark_preference(plot, registered, theme, minimum)?,
             ))
         }
         super::InteriorRoute::OneCategoricalAxis(
@@ -539,7 +546,7 @@ pub(crate) fn canvas_layout(
             | super::OneCategoricalAxis::Raincloud
             | super::OneCategoricalAxis::Interaction,
         ) => Some(super::preference::CoordinateSizePreference::Categorical(
-            super::preference::categorical_preference(plot, theme, minimum)?,
+            super::preference::categorical_preference(plot, registered, theme, minimum)?,
         )),
         _ => None,
     };
@@ -565,42 +572,44 @@ mod intrinsic_tests {
             .x_label("")
             .y_label("")
             .erase();
-            let resources = crate::font::canonical::OperationContext::new();
-            let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
-                .unwrap()
-                .attach(source)
-                .unwrap();
             let mut theme = crate::Theme::publication().resolve().unwrap();
             if tight_lines {
                 theme.typography.axes.tick_label.line_height_multiplier = 0.1;
             }
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let minimum = Intrinsics::prepared(&chart, &theme)
-                .unwrap()
-                .minimum(&chart);
-            let projection = Projection::new(
-                (-1.0, 1.0),
-                (-1.0, 1.0),
-                (0.25, 0.25 + minimum.0, 0.25, 0.25 + minimum.1),
-            );
-            for side in [AxisSide::Bottom, AxisSide::Left] {
-                let selected = crate::layout::numeric_tick_plan(
-                    (-1.0, 1.0),
-                    crate::TickGeneration::automatic(),
-                    false,
-                    &projection,
-                    side,
-                    &theme,
-                    None,
-                    &fit::ROOT_SCOPE,
-                )
-                .unwrap();
-                assert_eq!(selected.ticks.len(), 1);
-                assert_eq!(selected.ticks[0].label, "0");
-            }
-            assert_eq!(chart.user_x_limits(), Some((-1.0, 1.0)));
-            assert_eq!(chart.user_y_limits(), Some((-1.0, 1.0)));
+            crate::orchestrator::with_prepared_plot_for_test(
+                &source,
+                &theme,
+                |chart, inputs, theme| {
+                    let minimum = Intrinsics::prepared(chart, inputs.plots.first(), theme)
+                        .unwrap()
+                        .minimum(chart);
+                    let projection = Projection::new(
+                        (-1.0, 1.0),
+                        (-1.0, 1.0),
+                        (0.25, 0.25 + minimum.0, 0.25, 0.25 + minimum.1),
+                    );
+                    for side in [AxisSide::Bottom, AxisSide::Left] {
+                        let selected = crate::layout::numeric_tick_plan(
+                            (-1.0, 1.0),
+                            crate::TickGeneration::automatic(),
+                            false,
+                            &projection,
+                            side,
+                            theme,
+                            None,
+                            &fit::ROOT_SCOPE,
+                        )
+                        .unwrap();
+                        assert_eq!(selected.ticks.len(), 1);
+                        assert_eq!(selected.ticks[0].label, "0");
+                    }
+                    assert_eq!(chart.user_x_limits(), Some((-1.0, 1.0)));
+                    assert_eq!(chart.user_y_limits(), Some((-1.0, 1.0)));
+                },
+            )
+            .unwrap();
         }
     }
 
@@ -637,49 +646,56 @@ mod intrinsic_tests {
                 .unwrap(),
             )
             .erase();
-            let resources = crate::font::canonical::OperationContext::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-            let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let measured = theme
-                .measure_text(
-                    label,
-                    &theme.typography.axes.tick_label,
-                    crate::layout::PhysicalTextAlignment::Center,
-                    "independent numeric terminal source",
-                    false,
-                )
-                .unwrap();
-            let minimum = Intrinsics::prepared(&chart, &theme)
-                .unwrap()
-                .minimum(&chart);
-            assert_eq!(
-                minimum.0.to_bits(),
-                crate::layout::kernel::required_length(
-                    measured.width().max(measured.fit_width())
-                        + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
-                )
-                .unwrap()
-                .to_bits()
-            );
-            assert_eq!(chart.prepared_axis_inputs().unwrap().ranges[0], range);
-            let widest_probe = theme
-                .measure_text(
-                    "0.5",
-                    &theme.typography.axes.tick_label,
-                    crate::layout::PhysicalTextAlignment::End,
-                    "independent distinct midpoint gutter probe",
-                    false,
-                )
-                .unwrap();
-            assert!(
-                crate::layout::interior::sizing::horizontal_gutter_preference(&chart, &theme)
-                    .unwrap()
-                    .0
-                    >= widest_probe.width()
-            );
+            crate::orchestrator::with_prepared_plot_for_test(
+                &source,
+                &theme,
+                |chart, inputs, theme| {
+                    let measured = theme
+                        .measure_text(
+                            label,
+                            &theme.typography.axes.tick_label,
+                            crate::layout::PhysicalTextAlignment::Center,
+                            "independent numeric terminal source",
+                            false,
+                        )
+                        .unwrap();
+                    let minimum = Intrinsics::prepared(chart, inputs.plots.first(), theme)
+                        .unwrap()
+                        .minimum(chart);
+                    assert_eq!(
+                        minimum.0.to_bits(),
+                        crate::layout::kernel::required_length(
+                            measured.width().max(measured.fit_width())
+                                + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
+                        )
+                        .unwrap()
+                        .to_bits()
+                    );
+                    assert_eq!(inputs.plots[0].axes.as_ref().unwrap().ranges[0], range);
+                    let widest_probe = theme
+                        .measure_text(
+                            "0.5",
+                            &theme.typography.axes.tick_label,
+                            crate::layout::PhysicalTextAlignment::End,
+                            "independent distinct midpoint gutter probe",
+                            false,
+                        )
+                        .unwrap();
+                    assert!(
+                        crate::layout::interior::sizing::horizontal_gutter_preference(
+                            chart,
+                            inputs.plots.first(),
+                            theme
+                        )
+                        .unwrap()
+                        .0 >= widest_probe.width()
+                    );
+                },
+            )
+            .unwrap();
         }
     }
 }

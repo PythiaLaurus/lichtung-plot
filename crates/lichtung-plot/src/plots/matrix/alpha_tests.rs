@@ -72,13 +72,15 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     theme.marks = theme.marks.clone().points(points).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
+    let chart = chart.clone();
+    let operation = theme.text.prepared_font_environment().unwrap().operation();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+            inputs.plots[0].data(&operation).unwrap(),
             PixelRect::new(20.0, 800.0, 20.0, 620.0),
-            &theme,
-        ))
+            theme,
+        ).with_registration(&inputs.plots[0]))
         .unwrap();
     let layout::interior::MarkPayload::Matrix(payload) = &selected.marks.as_ref().unwrap().payload
     else {
@@ -109,4 +111,5 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             matches!(&payload.cells[index].marks[0], MatrixPrimitive::Polygon(_, style) if style.color.get_alpha() == 64 && style.stroke.get_alpha() == 255)
         );
     }
+    }).unwrap();
 }

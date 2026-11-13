@@ -29,7 +29,7 @@ fn checked(value: i128) -> Result<i64, Error> {
 
 pub(super) struct ContentSizing<'a> {
     pub plot: &'a crate::Plot,
-    pub inputs: &'a crate::layout::interior::PreparedInteriorInputs,
+    pub inputs: &'a crate::layout::interior::PreparedInteriorInputs<'a>,
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub natural_width: bool,
     pub natural_height: bool,
@@ -164,13 +164,16 @@ fn measure(
         // Initial root width owns the same external axis columns as assigned
         // layout. Feedback can refine those requirements, but cannot grow a
         // root whose natural selection omitted them entirely.
-        for panel in panels {
+        for (index, panel) in panels.iter().enumerate() {
             let plot = content
                 .plot
                 .clone()
                 .with_render_scope(panel.render_scope()?);
-            let (left, right) =
-                crate::layout::interior::sizing::horizontal_gutter_preference(&plot, theme)?;
+            let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
+                &plot,
+                content.inputs.plots.get(index),
+                theme,
+            )?;
             let insets = column_insets.get_mut(panel.column).ok_or_else(|| {
                 Error::Render("facet child is outside declared Grid topology".into())
             })?;
@@ -212,14 +215,18 @@ fn measure(
     let mut heights = Vec::new();
     crate::data::source::reserve_source(&mut widths, panels.len())?;
     crate::data::source::reserve_source(&mut heights, panels.len())?;
-    for ((panel, minimum), address) in panels.iter().zip(minima).zip(&owners) {
+    for (index, ((panel, minimum), address)) in panels.iter().zip(minima).zip(&owners).enumerate() {
         let preferred = if let Some(content) = content {
             let plot = content
                 .plot
                 .clone()
                 .with_render_scope(panel.render_scope()?);
-            let preference =
-                crate::layout::interior::sizing::body_preference(&plot, theme, *minimum)?;
+            let preference = crate::layout::interior::sizing::body_preference(
+                &plot,
+                content.inputs.plots.get(index),
+                theme,
+                *minimum,
+            )?;
             let guided = if matches!(
                 plot.kind(),
                 crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
@@ -371,8 +378,12 @@ fn measure(
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
                 plot = plot.with_planned_y_limits(domain);
             }
-            let preference =
-                crate::layout::interior::sizing::body_preference(&plot, theme, *minimum)?;
+            let preference = crate::layout::interior::sizing::body_preference(
+                &plot,
+                content.inputs.plots.get(index),
+                theme,
+                *minimum,
+            )?;
             let width = pixels(columns[panel.column]);
             let guide = if matches!(
                 plot.kind(),
@@ -385,13 +396,19 @@ fn measure(
             let mut height = if guide.is_some() {
                 crate::layout::interior::sizing::guided_body_height(
                     &plot,
+                    content.inputs.plots.get(index),
                     theme,
                     width,
                     guide.as_ref(),
                     scope,
                 )?
             } else {
-                plot.natural_body_height(theme, width, preference.1)?
+                plot.natural_body_height(
+                    content.inputs.plots.get(index),
+                    theme,
+                    width,
+                    preference.1,
+                )?
             };
             if row_insets[panel.row][1] == 0 {
                 let strips =

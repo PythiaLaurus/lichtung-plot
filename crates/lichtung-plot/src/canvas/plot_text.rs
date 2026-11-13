@@ -17,6 +17,7 @@ pub(super) struct PlotLocalTextPlan {
 impl PlotLocalTextPlan {
     pub(super) fn measure(
         plot: &Plot,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         cell: PixelRect,
         theme: &crate::text::TextRequestContext<'_, '_>,
         panel_alignments: [Option<TextAlignment>; 2],
@@ -50,7 +51,7 @@ impl PlotLocalTextPlan {
         {
             return Ok(FitOutcome::Miss(reason));
         }
-        let minimum = plot.intrinsic_body_minimum(theme)?;
+        let minimum = plot.intrinsic_body_minimum(registered, theme)?;
         let alignments = RootAlignments::resolve(
             theme,
             plot.description().prose_alignments(),

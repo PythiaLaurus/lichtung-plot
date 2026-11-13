@@ -68,43 +68,50 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
-            crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
-            &theme,
-        ))
-        .unwrap();
-    let crate::layout::interior::MarkPayload::Interaction(payload) =
-        &selected.marks.as_ref().unwrap().payload
-    else {
-        panic!("Interaction payload")
-    };
-    assert_eq!(payload.traces[0].markers[0].1.color.get_alpha(), 0);
-    assert_eq!(payload.traces[1].markers[0].1.color.get_alpha(), 230);
-    assert_eq!(payload.traces[0].interval.color.get_alpha(), 0);
-    assert_eq!(
-        payload.traces[0]
-            .connector
-            .as_ref()
-            .unwrap()
-            .color
-            .get_alpha(),
-        0
-    );
-    assert_eq!(payload.traces[1].interval.color.get_alpha(), 64);
-    assert_eq!(
-        payload.traces[1]
-            .connector
-            .as_ref()
-            .unwrap()
-            .color
-            .get_alpha(),
-        64
-    );
-    assert_eq!(
-        payload.traces[1].connector.as_ref().unwrap().pattern,
-        LinePattern::Dashed.stroke_pattern()
-    );
+    crate::orchestrator::with_prepared_plot_for_test(&chart, &theme, |chart, inputs, theme| {
+        let chart = chart.clone();
+        let operation = theme.text.prepared_font_environment().unwrap().operation();
+        let selected = chart
+            .measure_selected_interior(
+                PlotRenderContext::new(
+                    inputs.plots[0].data(&operation).unwrap(),
+                    crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
+                    theme,
+                )
+                .with_registration(&inputs.plots[0]),
+            )
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Interaction(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Interaction payload")
+        };
+        assert_eq!(payload.traces[0].markers[0].1.color.get_alpha(), 0);
+        assert_eq!(payload.traces[1].markers[0].1.color.get_alpha(), 230);
+        assert_eq!(payload.traces[0].interval.color.get_alpha(), 0);
+        assert_eq!(
+            payload.traces[0]
+                .connector
+                .as_ref()
+                .unwrap()
+                .color
+                .get_alpha(),
+            0
+        );
+        assert_eq!(payload.traces[1].interval.color.get_alpha(), 64);
+        assert_eq!(
+            payload.traces[1]
+                .connector
+                .as_ref()
+                .unwrap()
+                .color
+                .get_alpha(),
+            64
+        );
+        assert_eq!(
+            payload.traces[1].connector.as_ref().unwrap().pattern,
+            LinePattern::Dashed.stroke_pattern()
+        );
+    })
+    .unwrap();
 }

@@ -270,15 +270,15 @@ struct ReferenceAxisConfig<'a> {
     labels: Option<&'a crate::Labels>,
 }
 
-pub(crate) fn prepare_reference_plot(
-    source: &Plot,
+pub(crate) fn prepare_reference_plot<'src>(
+    source: &'src Plot,
 
     family: PreparedFamily,
     scope: Scope,
     x_limits: Option<(f64, f64)>,
     labels: Option<&crate::Labels>,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs, Error> {
+) -> Result<PreparedInteriorInputs<'src>, Error> {
     let mut family = match family {
         PreparedFamily::Beeswarm(mut marks) => {
             if labels.is_some() {
@@ -338,24 +338,25 @@ pub(crate) fn prepare_reference_plot(
     let mut families = Vec::new();
     crate::data::source::reserve_source(&mut families, 1)?;
     families.push((scope_name()?, family));
-    Ok(PreparedInteriorInputs {
-        scopes: crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        discrete_guides: std::sync::OnceLock::new(),
+    PreparedInteriorInputs::from_panels(
+        source.description(),
         route,
-        axes: crate::data::source::source_arc(retained)?,
-        families: crate::data::source::source_arc(families)?,
-    })
+        retained,
+        families,
+        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
+        resources,
+    )
 }
 
 #[expect(
     clippy::too_many_lines,
     reason = "root preparation retains per-component scientific axes and admitted point/path semantics before fonts"
 )]
-pub(crate) fn prepare_plot(
-    source: &Plot,
+pub(crate) fn prepare_plot<'src>(
+    source: &'src Plot,
     resources: &crate::font::canonical::OperationContext,
     owner: Option<&crate::theme::Theme>,
-) -> Result<PreparedInteriorInputs, Error> {
+) -> Result<PreparedInteriorInputs<'src>, Error> {
     let mut retained = Vec::new();
     let mut families = Vec::new();
     let mut scopes = Vec::new();
@@ -431,6 +432,7 @@ pub(crate) fn prepare_plot(
     if source.kind() == PlotKind::Scatter && !source.description().has_facets() {
         return prepare_scatter_plot(
             source,
+            source.description(),
             crate::plots::scatter::PreparedScatter::new(
                 source.description(),
                 source_data.expect("single plot data"),
@@ -446,6 +448,7 @@ pub(crate) fn prepare_plot(
     {
         return prepare_line_plot(
             source,
+            source.description(),
             crate::plots::line::PreparedLine::new(
                 source,
                 source_data.expect("single plot data"),
@@ -840,13 +843,14 @@ pub(crate) fn prepare_plot(
         ));
         scopes.push(source_scope.expect("single plot scope"));
     }
-    Ok(PreparedInteriorInputs {
+    PreparedInteriorInputs::from_panels(
+        source.description(),
+        InteriorRoute::classify(source.kind()),
+        retained,
+        families,
         scopes,
-        discrete_guides: std::sync::OnceLock::new(),
-        families: crate::data::source::source_arc(families)?,
-        route: InteriorRoute::classify(source.kind()),
-        axes: crate::data::source::source_arc(retained)?,
-    })
+        resources,
+    )
 }
 
 fn facet_source_strings(
@@ -872,13 +876,14 @@ fn facet_source_strings(
 }
 
 /// Complete one already prepared Scatter component after root range coordination.
-pub(crate) fn prepare_scatter_plot(
+pub(crate) fn prepare_scatter_plot<'src>(
     source: &Plot,
+    registered_source: &'src crate::builder::PlotDescription,
 
     marks: crate::plots::scatter::PreparedScatter,
     scope: Scope,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs, Error> {
+) -> Result<PreparedInteriorInputs<'src>, Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
     let family = PreparedFamily::Scatter(marks);
     let mut axes = prepare(source, None, Some(&family), None)?;
@@ -900,23 +905,25 @@ pub(crate) fn prepare_scatter_plot(
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
     panels.push((scope_name()?, family));
-    Ok(PreparedInteriorInputs {
-        scopes: crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        route: InteriorRoute::classify(PlotKind::Scatter),
-        discrete_guides: std::sync::OnceLock::new(),
-        axes: crate::data::source::source_arc(retained_axes)?,
-        families: crate::data::source::source_arc(panels)?,
-    })
+    PreparedInteriorInputs::from_panels(
+        registered_source,
+        InteriorRoute::classify(PlotKind::Scatter),
+        retained_axes,
+        panels,
+        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
+        resources,
+    )
 }
 
 /// Complete one retained line component after the parent's range coordination.
-pub(crate) fn prepare_line_plot(
+pub(crate) fn prepare_line_plot<'src>(
     source: &Plot,
+    registered_source: &'src crate::builder::PlotDescription,
 
     marks: crate::plots::line::PreparedLine,
     scope: Scope,
     resources: &crate::font::canonical::OperationContext,
-) -> Result<PreparedInteriorInputs, Error> {
+) -> Result<PreparedInteriorInputs<'src>, Error> {
     let family = PreparedFamily::Line {
         kind: source.kind(),
         marks,
@@ -940,13 +947,14 @@ pub(crate) fn prepare_line_plot(
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, 1)?;
     panels.push((scope_name()?, family));
-    Ok(PreparedInteriorInputs {
-        scopes: crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
-        route: InteriorRoute::classify(source.kind()),
-        discrete_guides: std::sync::OnceLock::new(),
-        axes: crate::data::source::source_arc(retained_axes)?,
-        families: crate::data::source::source_arc(panels)?,
-    })
+    PreparedInteriorInputs::from_panels(
+        registered_source,
+        InteriorRoute::classify(source.kind()),
+        retained_axes,
+        panels,
+        crate::data::source::collect_source(std::iter::once(Ok(scope)))?,
+        resources,
+    )
 }
 
 fn reconcile_facet_axis(

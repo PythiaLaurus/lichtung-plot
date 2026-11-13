@@ -40,13 +40,12 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     theme.marks = theme.marks.clone().points(points).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let measured = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let measured = source
+        .preflight_panel(
+            source.kind(),
             crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
-        ))
+        )
         .unwrap();
     let crate::layout::interior::MarkPayload::Dumbbell(payload) =
         &measured.marks.as_ref().unwrap().payload
@@ -83,7 +82,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 2);
     let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
-        &chart,
+        &source,
         &theme,
         crate::LegendComposition::Separate,
     )
@@ -129,13 +128,12 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
                 crate::alpha::AlphaValues::new("pair confidence", [0, 191]).unwrap(),
             ),
         );
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let selected = mapped
+        .preflight_panel(
+            mapped.kind(),
             crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
-        ))
+        )
         .unwrap();
     let crate::layout::interior::MarkPayload::Dumbbell(payload) =
         &selected.marks.as_ref().unwrap().payload

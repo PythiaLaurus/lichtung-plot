@@ -63,11 +63,16 @@ pub(super) fn prepare_discrete_guide(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same prepared occurrence inventory accompanies the existing facet probe inputs"
+)]
 pub(super) fn preflight_coordinated_panels(
     source: &Plot,
     base_plot: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
+    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
@@ -77,6 +82,7 @@ pub(super) fn preflight_coordinated_panels(
         &base_plot,
         kind,
         panels,
+        inputs,
         facet_scales,
         theme,
         children,
@@ -98,6 +104,7 @@ fn preflight_panels(
     base_plot: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
+    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
     facet_scales: crate::FacetScales,
     theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
@@ -113,14 +120,10 @@ fn preflight_panels(
             .clone()
             .with_render_scope(facet.render_scope()?)
             .with_significance_subset(facet.significance_selectors());
-        let (rows, diagnostic_rows) = facet.rows.selected().expect("selected facet rows");
-        let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(panel_plot.description(), rows, diagnostic_rows)
-                .with_operation(&resources),
-            facet.panel,
-            theme,
-        )
-        .with_facet_scales(facet_scales);
+        let registered = &inputs.plots[index];
+        let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
+            .with_registration(registered)
+            .with_facet_scales(facet_scales);
         let owner = crate::layout::ComponentAddress::root().child(
             crate::layout::AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,

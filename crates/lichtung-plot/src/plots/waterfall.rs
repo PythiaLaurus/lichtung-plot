@@ -69,18 +69,17 @@ struct WaterfallSpan {
     delta: f64,
 }
 
-fn retained(chart: &Plot) -> Result<&PreparedWaterfall, Error> {
-    if chart.prepared_families.is_empty() {
+fn retained<'v>(
+    chart: &Plot,
+    registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
+) -> Result<&'v PreparedWaterfall, Error> {
+    if registered.is_none() {
         return Err(Error::Render(
             "Waterfall requires root-prepared spans".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(
-        &chart.prepared_families,
-        chart.axis_scope(),
-        "Waterfall",
-    )?
-    .as_ref()
+    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Waterfall")?
+        .as_ref()
     {
         crate::orchestrator::registration::FamilyRef::Waterfall(marks) => Ok(marks),
         _ => Err(Error::Render(
@@ -141,42 +140,58 @@ mod geometry_tests {
         let resolved = theme.resolve().unwrap();
         let text = crate::text::TextService::default();
         let resolved = crate::text::TextRequestContext::new(&resolved, &text);
-        let chart =
-            crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
-        let marks = retained(&chart).unwrap();
-        let panel = PixelRect::new(0.0, 800.0, 0.0, 400.0);
-        let projection = crate::layout::Projection::new((0.0, 20.0), (0.0, 1.0), panel.as_tuple());
-        let totals = marks.selected_totals(&projection).unwrap();
-        assert!(totals
-            .totals
-            .iter()
-            .all(|(_, text)| text.as_ref().unwrap().as_str() == "Endpoint\nshort 10"));
-        let shelf = plan_annotations(
-            &projection,
-            panel,
-            1.0,
-            &totals.totals,
-            PlotRenderContext::new(chart.data(), panel, &resolved),
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source.erase(),
+            &resolved,
+            |chart, inputs, resolved| {
+                let operation = resolved
+                    .text
+                    .prepared_font_environment()
+                    .unwrap()
+                    .operation();
+                let marks = retained(chart, inputs.plots.first()).unwrap();
+                let panel = PixelRect::new(0.0, 800.0, 0.0, 400.0);
+                let projection =
+                    crate::layout::Projection::new((0.0, 20.0), (0.0, 1.0), panel.as_tuple());
+                let totals = marks.selected_totals(&projection).unwrap();
+                assert!(totals
+                    .totals
+                    .iter()
+                    .all(|(_, text)| text.as_ref().unwrap().as_str() == "Endpoint\nshort 10"));
+                let shelf = plan_annotations(
+                    &projection,
+                    panel,
+                    1.0,
+                    &totals.totals,
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        panel,
+                        resolved,
+                    )
+                    .with_registration(&inputs.plots[0]),
+                )
+                .unwrap();
+                assert_eq!(shelf.items.len(), 2);
+                assert_ne!(shelf.items[0].row, shelf.items[1].row);
+                assert_eq!(
+                    shelf.items[0].text_plan.style.font_size.to_bits(),
+                    23.0_f64.to_bits()
+                );
+                assert_eq!(
+                    shelf.items[1].text_plan.style.font_size.to_bits(),
+                    17.0_f64.to_bits()
+                );
+                assert_eq!(shelf.items[0].placement.anchor, TextAnchor::Start);
+                assert_eq!(shelf.items[1].placement.anchor, TextAnchor::End);
+                assert!(shelf
+                    .items
+                    .iter()
+                    .all(|item| item.text_plan.style.exact_override));
+                let text_height: f64 = shelf.items.iter().map(|item| item.text_plan.height()).sum();
+                assert!((shelf.height - text_height - 3.0 * 23.0).abs() <= 1.0 / 1024.0);
+            },
         )
         .unwrap();
-        assert_eq!(shelf.items.len(), 2);
-        assert_ne!(shelf.items[0].row, shelf.items[1].row);
-        assert_eq!(
-            shelf.items[0].text_plan.style.font_size.to_bits(),
-            23.0_f64.to_bits()
-        );
-        assert_eq!(
-            shelf.items[1].text_plan.style.font_size.to_bits(),
-            17.0_f64.to_bits()
-        );
-        assert_eq!(shelf.items[0].placement.anchor, TextAnchor::Start);
-        assert_eq!(shelf.items[1].placement.anchor, TextAnchor::End);
-        assert!(shelf
-            .items
-            .iter()
-            .all(|item| item.text_plan.style.exact_override));
-        let text_height: f64 = shelf.items.iter().map(|item| item.text_plan.height()).sum();
-        assert!((shelf.height - text_height - 3.0 * 23.0).abs() <= 1.0 / 1024.0);
     }
 
     #[test]
@@ -195,170 +210,190 @@ mod geometry_tests {
         )
         .x_limits(0.0, 20.0)
         .erase();
-        let operation = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-        let mut theme = crate::theme::Theme::publication().resolve().unwrap();
+        let theme = crate::theme::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
-        let chart = inputs
-            .attach_with_guides_for_test(
-                source,
-                &crate::text::TextRequestContext::new(&theme, &text_service),
-            )
-            .unwrap();
-        let default =
-            BodyGeometry::new(&crate::text::TextRequestContext::new(&theme, &text_service));
-        assert_eq!(
-            [
-                default.breadth,
-                default.low,
-                default.high,
-                default.connector_room
-            ]
-            .map(f64::to_bits),
-            [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
-        );
-        let panel = crate::layout::PixelRect::new(10.0, 810.0, 20.0, 620.0);
-        let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
-            chart
-                .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, theme))
-                .unwrap()
-        };
-        let original = measure(&crate::text::TextRequestContext::new(&theme, &text_service));
-        let crate::layout::interior::MarkPayload::Waterfall(original_payload) =
-            &original.marks.as_ref().unwrap().payload
-        else {
-            panic!("Waterfall payload")
-        };
-        assert_eq!(original_payload.source_rows, [400, 100]);
-        assert_eq!(
-            original_payload
-                .bars
-                .iter()
-                .map(|(_, style)| style.color.get_alpha())
-                .collect::<Vec<_>>(),
-            [0, 230]
-        );
-        assert_eq!(
-            original_payload.connectors[0].1,
-            theme
-                .marks
-                .get_strokes()
-                .get_connectors()
-                .get_waterfall_connector()
-                .backend_style()
-        );
-        assert!(original_payload.references.iter().all(|(_, style)| *style
-            == theme
-                .marks
-                .get_strokes()
-                .get_references()
-                .get_waterfall_reference()
-                .backend_style()));
-        let prepared = retained(&chart).unwrap();
-        assert_eq!(
-            prepared
-                .spans
-                .iter()
-                .map(|span| (
-                    span.alpha.slot,
-                    span.alpha.source_row,
-                    span.start.to_bits(),
-                    span.end.to_bits()
-                ))
-                .collect::<Vec<_>>(),
-            [
-                (0, 400, 10.0_f64.to_bits(), 12.0_f64.to_bits()),
-                (1, 100, 12.0_f64.to_bits(), 11.0_f64.to_bits())
-            ]
-        );
-        let extents = theme
-            .marks
-            .get_extents()
-            .clone()
-            .waterfall_body_category_breadth(crate::theme::RelativeSpacing::new(0.3).unwrap())
-            .unwrap();
-        theme.marks = theme.marks.clone().extents(extents).unwrap();
-        let narrower = measure(&crate::text::TextRequestContext::new(&theme, &text_service));
-        let payload = |plan: &PlotRenderResult| {
-            let crate::layout::interior::MarkPayload::Waterfall(payload) =
-                &plan.marks.as_ref().unwrap().payload
-            else {
-                panic!("Waterfall payload")
-            };
-            (payload.bars.clone(), payload.connectors.clone())
-        };
-        let (before, _) = payload(&original);
-        let (after, connectors) = payload(&narrower);
-        assert_eq!(after.len(), 2);
-        assert_eq!(connectors.len(), 1);
-        for ((before, _), (after, _)) in before.iter().zip(&after) {
-            assert_eq!(before[0].x.to_bits(), after[0].x.to_bits());
-            assert_eq!(before[1].x.to_bits(), after[1].x.to_bits());
-            assert!(after[2].y - after[0].y < before[2].y - before[0].y);
-        }
-        assert_eq!(connectors[0].0[0].y.to_bits(), after[0].0[2].y.to_bits());
-        assert_eq!(connectors[0].0[1].y.to_bits(), after[1].0[0].y.to_bits());
-        let extents = theme
-            .marks
-            .get_extents()
-            .clone()
-            .waterfall_body_category_breadth(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
-            .unwrap();
-        theme.marks = theme.marks.clone().extents(extents).unwrap();
-        assert!(mark_intrinsic_body_minimum(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service)
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &crate::text::TextRequestContext::new(&theme, &text_service),
+            |chart, inputs, request| {
+                let mut theme = request.theme.clone();
+                let text_service = request.text;
+                let operation = request
+                    .text
+                    .prepared_font_environment()
+                    .unwrap()
+                    .operation();
+                let default =
+                    BodyGeometry::new(&crate::text::TextRequestContext::new(&theme, text_service));
+                assert_eq!(
+                    [
+                        default.breadth,
+                        default.low,
+                        default.high,
+                        default.connector_room
+                    ]
+                    .map(f64::to_bits),
+                    [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
+                );
+                let panel = crate::layout::PixelRect::new(10.0, 810.0, 20.0, 620.0);
+                let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
+                    chart
+                        .measure_selected_interior(
+                            PlotRenderContext::new(
+                                inputs.plots[0].data(&operation).unwrap(),
+                                panel,
+                                theme,
+                            )
+                            .with_registration(&inputs.plots[0]),
+                        )
+                        .unwrap()
+                };
+                let original = measure(&crate::text::TextRequestContext::new(&theme, text_service));
+                let crate::layout::interior::MarkPayload::Waterfall(original_payload) =
+                    &original.marks.as_ref().unwrap().payload
+                else {
+                    panic!("Waterfall payload")
+                };
+                assert_eq!(original_payload.source_rows, [400, 100]);
+                assert_eq!(
+                    original_payload
+                        .bars
+                        .iter()
+                        .map(|(_, style)| style.color.get_alpha())
+                        .collect::<Vec<_>>(),
+                    [0, 230]
+                );
+                assert_eq!(
+                    original_payload.connectors[0].1,
+                    theme
+                        .marks
+                        .get_strokes()
+                        .get_connectors()
+                        .get_waterfall_connector()
+                        .backend_style()
+                );
+                assert!(original_payload.references.iter().all(|(_, style)| *style
+                    == theme
+                        .marks
+                        .get_strokes()
+                        .get_references()
+                        .get_waterfall_reference()
+                        .backend_style()));
+                let prepared = retained(chart, inputs.plots.first()).unwrap();
+                assert_eq!(
+                    prepared
+                        .spans
+                        .iter()
+                        .map(|span| (
+                            span.alpha.slot,
+                            span.alpha.source_row,
+                            span.start.to_bits(),
+                            span.end.to_bits()
+                        ))
+                        .collect::<Vec<_>>(),
+                    [
+                        (0, 400, 10.0_f64.to_bits(), 12.0_f64.to_bits()),
+                        (1, 100, 12.0_f64.to_bits(), 11.0_f64.to_bits())
+                    ]
+                );
+                let extents = theme
+                    .marks
+                    .get_extents()
+                    .clone()
+                    .waterfall_body_category_breadth(
+                        crate::theme::RelativeSpacing::new(0.3).unwrap(),
+                    )
+                    .unwrap();
+                theme.marks = theme.marks.clone().extents(extents).unwrap();
+                let narrower = measure(&crate::text::TextRequestContext::new(&theme, text_service));
+                let payload = |plan: &PlotRenderResult| {
+                    let crate::layout::interior::MarkPayload::Waterfall(payload) =
+                        &plan.marks.as_ref().unwrap().payload
+                    else {
+                        panic!("Waterfall payload")
+                    };
+                    (payload.bars.clone(), payload.connectors.clone())
+                };
+                let (before, _) = payload(&original);
+                let (after, connectors) = payload(&narrower);
+                assert_eq!(after.len(), 2);
+                assert_eq!(connectors.len(), 1);
+                for ((before, _), (after, _)) in before.iter().zip(&after) {
+                    assert_eq!(before[0].x.to_bits(), after[0].x.to_bits());
+                    assert_eq!(before[1].x.to_bits(), after[1].x.to_bits());
+                    assert!(after[2].y - after[0].y < before[2].y - before[0].y);
+                }
+                assert_eq!(connectors[0].0[0].y.to_bits(), after[0].0[2].y.to_bits());
+                assert_eq!(connectors[0].0[1].y.to_bits(), after[1].0[0].y.to_bits());
+                let extents = theme
+                    .marks
+                    .get_extents()
+                    .clone()
+                    .waterfall_body_category_breadth(
+                        crate::theme::RelativeSpacing::ratio(1, 1).unwrap(),
+                    )
+                    .unwrap();
+                theme.marks = theme.marks.clone().extents(extents).unwrap();
+                assert!(mark_intrinsic_body_minimum(
+                    chart,
+                    inputs.plots.first(),
+                    &crate::text::TextRequestContext::new(&theme, text_service)
+                )
+                .is_err());
+                let body = theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_waterfall_bar()
+                    .clone()
+                    .outline(None)
+                    .unwrap();
+                let bodies = theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .clone()
+                    .waterfall_bar(body)
+                    .unwrap();
+                let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+                theme.marks = theme.marks.clone().fills(fills).unwrap();
+                assert!(mark_intrinsic_body_minimum(
+                    chart,
+                    inputs.plots.first(),
+                    &crate::text::TextRequestContext::new(&theme, text_service)
+                )
+                .is_err());
+                let connector = theme
+                    .marks
+                    .get_strokes()
+                    .get_connectors()
+                    .get_waterfall_connector()
+                    .clone()
+                    .color(crate::theme::Color::rgba(0, 0, 0, 0))
+                    .unwrap();
+                let connectors = theme
+                    .marks
+                    .get_strokes()
+                    .get_connectors()
+                    .clone()
+                    .waterfall_connector(connector)
+                    .unwrap();
+                let strokes = theme
+                    .marks
+                    .get_strokes()
+                    .clone()
+                    .connectors(connectors)
+                    .unwrap();
+                theme.marks = theme.marks.clone().strokes(strokes).unwrap();
+                assert!(mark_intrinsic_body_minimum(
+                    chart,
+                    inputs.plots.first(),
+                    &crate::text::TextRequestContext::new(&theme, text_service)
+                )
+                .is_ok());
+            },
         )
-        .is_err());
-        let body = theme
-            .marks
-            .get_fills()
-            .get_bodies()
-            .get_waterfall_bar()
-            .clone()
-            .outline(None)
-            .unwrap();
-        let bodies = theme
-            .marks
-            .get_fills()
-            .get_bodies()
-            .clone()
-            .waterfall_bar(body)
-            .unwrap();
-        let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().fills(fills).unwrap();
-        assert!(mark_intrinsic_body_minimum(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service)
-        )
-        .is_err());
-        let connector = theme
-            .marks
-            .get_strokes()
-            .get_connectors()
-            .get_waterfall_connector()
-            .clone()
-            .color(crate::theme::Color::rgba(0, 0, 0, 0))
-            .unwrap();
-        let connectors = theme
-            .marks
-            .get_strokes()
-            .get_connectors()
-            .clone()
-            .waterfall_connector(connector)
-            .unwrap();
-        let strokes = theme
-            .marks
-            .get_strokes()
-            .clone()
-            .connectors(connectors)
-            .unwrap();
-        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        assert!(mark_intrinsic_body_minimum(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service)
-        )
-        .is_ok());
+        .unwrap();
     }
 }
 
@@ -383,9 +418,10 @@ impl BodyGeometry {
 
 fn mark_intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart)?;
+    let prepared = retained(chart, registered)?;
     if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
         return Err(Error::Render(
             "Waterfall categories and scientific spans differ".into(),
@@ -468,16 +504,17 @@ fn mark_intrinsic_body_minimum(
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let marks = mark_intrinsic_body_minimum(chart, theme)?;
-    let axes =
-        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
-    let prepared = retained(chart)?;
+    let marks = mark_intrinsic_body_minimum(chart, registered, theme)?;
+    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+        .minimum(chart);
+    let prepared = retained(chart, registered)?;
 
     let mut height = 0.0_f64;
-    let input = chart
-        .prepared_axis_inputs()
+    let input = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("Waterfall total axes missing".into()))?;
     let projection = crate::layout::Projection::new(
         chart
@@ -537,16 +574,17 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let resources = theme.text.prepared_font_environment()?.operation();
-    if chart.prepared_families.is_empty() {
+    if registered.is_none() {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     }
     let crate::orchestrator::registration::FamilyRef::Waterfall(marks) =
         crate::layout::interior::preference::panel(
-            &chart.prepared_families,
+            registered,
             chart.axis_scope(),
             "natural Waterfall",
         )?
@@ -554,8 +592,8 @@ pub(crate) fn natural_body_height(
     else {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     };
-    let axes = chart
-        .prepared_axis_inputs()
+    let axes = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
     let range = chart
         .description()
@@ -581,11 +619,13 @@ pub(crate) fn natural_body_height(
         PlotRenderContext::new(data, panel, theme),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    let hard = mark_intrinsic_body_minimum(chart, theme)?.1.max(
-        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?
-            .minimum(chart)
-            .1,
-    );
+    let hard = mark_intrinsic_body_minimum(chart, registered, theme)?
+        .1
+        .max(
+            crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+                .minimum(chart)
+                .1,
+        );
     Ok(hard
         .max(2.0 * theme.typography.axes.tick_label.font_size * marks.labels.len() as f64)
         .max(3.0 * width / 4.0)
@@ -688,7 +728,7 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained(chart)?;
+    let prepared = retained(chart, context.registered)?;
     let theme = context.theme;
 
     let labels = &prepared.labels;
@@ -717,9 +757,13 @@ pub(crate) fn measure(
         &selected_totals.totals,
         context,
     )?;
-    let mark_minimum = mark_intrinsic_body_minimum(chart, theme)?;
-    let axes_minimum =
-        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let mark_minimum = mark_intrinsic_body_minimum(chart, context.registered, theme)?;
+    let axes_minimum = crate::layout::interior::coordinate::Intrinsics::prepared(
+        chart,
+        context.registered,
+        theme,
+    )?
+    .minimum(chart);
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",
@@ -728,8 +772,9 @@ pub(crate) fn measure(
     }
     let mut mark_panel = panel;
     mark_panel.y1 -= annotations.height;
-    let axes = chart
-        .prepared_axis_inputs()
+    let axes = context
+        .registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("Waterfall native axes missing".into()))?;
     let display = axes.display_categories[1]
         .as_ref()

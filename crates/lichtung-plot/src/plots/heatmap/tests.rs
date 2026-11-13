@@ -60,23 +60,37 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
     let resolved = theme.resolve().unwrap();
     let text = crate::text::TextService::default();
     let resolved = crate::text::TextRequestContext::new(&resolved, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
-    let result = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
-            PixelRect::new(0.0, 500.0, 0.0, 200.0),
-            &resolved,
-        ))
-        .unwrap();
-    let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
-    assert_eq!(plan.source, "Unavailable\nshort");
-    assert_eq!(plan.style.font_size.to_bits(), 23.0_f64.to_bits());
-    assert!(plan.style.exact_override);
-    assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
-    assert_eq!(plan.lines.len(), 2);
-    let minimum = intrinsic_body_minimum(&chart, &resolved).unwrap();
-    assert!(minimum.1 >= plan.height() + 23.0);
-    assert!(minimum.0 >= plan.width() + 23.0);
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source.erase(),
+        &resolved,
+        |chart, inputs, resolved| {
+            let operation = resolved
+                .text
+                .prepared_font_environment()
+                .unwrap()
+                .operation();
+            let result = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        PixelRect::new(0.0, 500.0, 0.0, 200.0),
+                        resolved,
+                    )
+                    .with_registration(&inputs.plots[0]),
+                )
+                .unwrap();
+            let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
+            assert_eq!(plan.source, "Unavailable\nshort");
+            assert_eq!(plan.style.font_size.to_bits(), 23.0_f64.to_bits());
+            assert!(plan.style.exact_override);
+            assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
+            assert_eq!(plan.lines.len(), 2);
+            let minimum = intrinsic_body_minimum(chart, inputs.plots.first(), resolved).unwrap();
+            assert!(minimum.1 >= plan.height() + 23.0);
+            assert!(minimum.0 >= plan.width() + 23.0);
+        },
+    )
+    .unwrap();
 }
 
 #[test]
@@ -103,25 +117,16 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     )
     .unwrap();
     let original_source = source(policy.clone());
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(
-        &original_source,
-        &operation,
-        Some(&crate::theme::Theme::publication()),
-    )
-    .unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 22.0;
     theme.typography.annotations.contrast.dark.font_size = 11.0;
     let text = crate::text::TextService::default();
     let mut appearance = theme;
-    let theme = crate::text::TextRequestContext::new(&appearance, &text);
-    let chart = inputs
-        .attach_with_guides_for_test(original_source, &theme)
-        .unwrap();
+    let baseline_appearance = appearance.clone();
+    let theme = crate::text::TextRequestContext::new(&baseline_appearance, &text);
     let panel = PixelRect::new(0.0, 400.0, 0.0, 300.0);
-    let opaque = chart
-        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+    let opaque = original_source
+        .preflight_panel(original_source.kind(), panel, &theme)
         .unwrap();
     assert_eq!(
         payload(&opaque).cells[0]
@@ -134,118 +139,124 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .to_bits(),
         22.0_f64.to_bits()
     );
-    let mapped = chart.clone().with_alpha(
+    let mapped = original_source.clone().with_alpha(
         AlphaTarget::Fill,
         crate::alpha::AlphaEncoding::observations(
             crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
         ),
     );
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
-    let transparent = chart
-        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
-        .unwrap();
-    let cell = &payload(&transparent).cells[0];
-    assert_eq!(cell.fill.color.get_alpha(), 0);
-    let plan = &cell.text.as_ref().unwrap().plan;
-    assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
-    let marks = retained_in(&chart).unwrap();
-    let axes = chart.prepared_axis_inputs().unwrap();
-    let original = prepare_intrinsics(marks, axes, &theme, None).unwrap();
-    let same_paint = source(policy.clone()).with_alpha(
-        AlphaTarget::Fill,
-        crate::alpha::AlphaEncoding::single(
-            crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
-        )
-        .unwrap(),
-    );
-    let same_paint_inputs = crate::plots::shared_x::prepare_plot(
-        &same_paint,
-        &operation,
-        Some(&crate::Theme::publication()),
-    )
-    .unwrap();
-    let crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks) =
-        &same_paint_inputs.families[0].1
-    else {
-        panic!("prepared Heatmap")
-    };
-    assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
-    assert!(!axes
-        .heatmap_intrinsics
-        .get()
-        .unwrap()
-        .matches_inputs(same_paint_marks, axes, &theme));
-    let changed_source = source(
-        policy
-            .try_copy()
-            .unwrap()
-            .negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
+    crate::orchestrator::with_prepared_plot_for_test(&mapped, &theme, |chart, inputs, theme| {
+        let operation = theme.text.prepared_font_environment().unwrap().operation();
+        let transparent = chart
+            .measure_selected_interior(
+                PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
+                    .with_registration(&inputs.plots[0]),
+            )
+            .unwrap();
+        let cell = &payload(&transparent).cells[0];
+        assert_eq!(cell.fill.color.get_alpha(), 0);
+        let plan = &cell.text.as_ref().unwrap().plan;
+        assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
+        let marks = retained_in(chart, inputs.plots.first()).unwrap();
+        let axes = inputs.plots[0].axes.as_ref().unwrap();
+        let original = prepare_intrinsics(marks, axes, theme, None).unwrap();
+        let same_paint = source(policy.clone()).with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::single(
+                crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
+            )
             .unwrap(),
-    )
-    .with_alpha(
-        AlphaTarget::Fill,
-        crate::alpha::AlphaEncoding::observations(
-            crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
-        ),
-    );
-    let changed_inputs = crate::plots::shared_x::prepare_plot(
-        &changed_source,
-        &operation,
-        Some(&crate::Theme::publication()),
-    )
-    .unwrap();
-    let crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks) =
-        &changed_inputs.families[0].1
-    else {
-        panic!("prepared Heatmap")
-    };
-    assert_eq!(marks.value_labels, changed_marks.value_labels);
-    assert!(!axes
-        .heatmap_intrinsics
-        .get()
-        .unwrap()
-        .matches_inputs(changed_marks, axes, &theme));
-    let padding = theme
-        .annotations
-        .get_cells()
-        .clone()
-        .value_horizontal_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
-        .unwrap()
-        .value_vertical_padding(crate::theme::RelativeSpacing::ratio(2, 1).unwrap())
+        );
+        let same_paint_inputs = crate::plots::shared_x::prepare_plot(
+            &same_paint,
+            &operation,
+            Some(&crate::Theme::publication()),
+        )
         .unwrap();
-    appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
-    let theme = crate::text::TextRequestContext::new(&appearance, &text);
-    assert!(!axes
-        .heatmap_intrinsics
-        .get()
-        .unwrap()
-        .matches_inputs(marks, axes, &theme));
-    let edited = prepare_intrinsics(marks, axes, &theme, None).unwrap();
-    let required = (plan.width() + 11.0, plan.height() + 22.0);
-    assert!(edited.0 >= original.0 && edited.1 >= original.1);
-    assert!(edited.0 >= required.0 && edited.1 >= required.1);
-    let annotations = AnnotationPlans {
-        values: vec![Some(plan.clone())],
-        rows: vec![None],
-    };
-    check_annotation_tracks(
-        marks,
-        &annotations,
-        &[0.0, required.0],
-        &[required.1, 0.0],
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE,
-    )
+        let crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks) =
+            &same_paint_inputs.plots[0].family
+        else {
+            panic!("prepared Heatmap")
+        };
+        assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
+        assert!(!axes.heatmap_intrinsics.get().unwrap().matches_inputs(
+            same_paint_marks,
+            axes,
+            theme
+        ));
+        let changed_source = source(
+            policy
+                .try_copy()
+                .unwrap()
+                .negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
+                .unwrap(),
+        )
+        .with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
+            ),
+        );
+        let changed_inputs = crate::plots::shared_x::prepare_plot(
+            &changed_source,
+            &operation,
+            Some(&crate::Theme::publication()),
+        )
+        .unwrap();
+        let crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks) =
+            &changed_inputs.plots[0].family
+        else {
+            panic!("prepared Heatmap")
+        };
+        assert_eq!(marks.value_labels, changed_marks.value_labels);
+        assert!(!axes
+            .heatmap_intrinsics
+            .get()
+            .unwrap()
+            .matches_inputs(changed_marks, axes, theme));
+        let padding = theme
+            .annotations
+            .get_cells()
+            .clone()
+            .value_horizontal_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
+            .unwrap()
+            .value_vertical_padding(crate::theme::RelativeSpacing::ratio(2, 1).unwrap())
+            .unwrap();
+        appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
+        let theme = crate::text::TextRequestContext::new(&appearance, theme.text);
+        assert!(!axes
+            .heatmap_intrinsics
+            .get()
+            .unwrap()
+            .matches_inputs(marks, axes, &theme));
+        let edited = prepare_intrinsics(marks, axes, &theme, None).unwrap();
+        let required = (plan.width() + 11.0, plan.height() + 22.0);
+        assert!(edited.0 >= original.0 && edited.1 >= original.1);
+        assert!(edited.0 >= required.0 && edited.1 >= required.1);
+        let annotations = AnnotationPlans {
+            values: vec![Some(plan.clone())],
+            rows: vec![None],
+        };
+        check_annotation_tracks(
+            marks,
+            &annotations,
+            &[0.0, required.0],
+            &[required.1, 0.0],
+            &theme,
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+        .unwrap();
+        assert!(check_annotation_tracks(
+            marks,
+            &annotations,
+            &[0.0, required.0 - 1.0 / 1024.0],
+            &[required.1, 0.0],
+            &theme,
+            &crate::layout::fit::ROOT_SCOPE
+        )
+        .is_err());
+    })
     .unwrap();
-    assert!(check_annotation_tracks(
-        marks,
-        &annotations,
-        &[0.0, required.0 - 1.0 / 1024.0],
-        &[required.1, 0.0],
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE
-    )
-    .is_err());
 }
 
 #[test]
@@ -336,13 +347,12 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let selected = source
+        .preflight_panel(
+            source.kind(),
             PixelRect::new(20.0, 800.0, 20.0, 620.0),
             &theme,
-        ))
+        )
         .unwrap();
     let cells = &payload(&selected).cells;
     assert_eq!(

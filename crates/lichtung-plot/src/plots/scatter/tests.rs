@@ -44,95 +44,104 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let hidden_alpha = chart
-        .prepared_discrete_guides
-        .as_ref()
-        .unwrap()
-        .alpha_for_scope(None)
-        .unwrap();
-    assert!(chart.prepared_discrete_guide().unwrap().is_none());
-    assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
-    assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
-            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
-            &theme,
-        ))
-        .unwrap();
-    let crate::layout::interior::MarkPayload::Scatter(payload) =
-        &selected.marks.as_ref().unwrap().payload
-    else {
-        panic!("Scatter payload")
-    };
-    assert_eq!(
-        payload
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
+        let chart = chart.clone();
+        let operation = theme.text.prepared_font_environment().unwrap().operation();
+        let hidden_alpha = chart
+            .prepared_discrete_guides
+            .as_ref()
+            .unwrap()
+            .alpha_for_scope(None)
+            .unwrap();
+        assert!(chart.prepared_discrete_guide().unwrap().is_none());
+        assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
+        assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
+        let selected = chart
+            .measure_selected_interior(
+                PlotRenderContext::new(
+                    inputs.plots[0].data(&operation).unwrap(),
+                    crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
+                    theme,
+                )
+                .with_registration(&inputs.plots[0]),
+            )
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Scatter(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Scatter payload")
+        };
+        assert_eq!(
+            payload
+                .groups
+                .iter()
+                .map(|(points, style)| (points.len(), style.color.get_alpha()))
+                .collect::<Vec<_>>(),
+            [(1, 0), (1, 128), (1, 0)]
+        );
+        let outline = chart
+            .description()
+            .point_style(
+                theme,
+                (0, 0, 0),
+                theme.marks.get_points().get_radii().get_scatter(),
+            )
+            .outline;
+        assert!(payload
             .groups
             .iter()
-            .map(|(points, style)| (points.len(), style.color.get_alpha()))
-            .collect::<Vec<_>>(),
-        [(1, 0), (1, 128), (1, 0)]
-    );
-    let outline = chart
-        .description()
-        .point_style(
-            &theme,
-            (0, 0, 0),
-            theme.marks.get_points().get_radii().get_scatter(),
+            .all(|(_, style)| style.outline == outline));
+        let first = payload.groups[0].0[0];
+        assert!(payload.groups.iter().all(|(points, _)| points[0] == first));
+        let visible = source
+            .clone()
+            .with_legend_position(crate::LegendPosition::OutsideRight)
+            .labels(crate::Labels::raw());
+        let descriptor = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
+            &visible,
+            theme,
+            crate::LegendComposition::Combined,
         )
-        .outline;
-    assert!(payload
-        .groups
-        .iter()
-        .all(|(_, style)| style.outline == outline));
-    let first = payload.groups[0].0[0];
-    assert!(payload.groups.iter().all(|(points, _)| points[0] == first));
-    let visible = source
-        .clone()
-        .with_legend_position(crate::LegendPosition::OutsideRight)
-        .labels(crate::Labels::raw());
-    let descriptor = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
-        &visible,
-        &theme,
-        crate::LegendComposition::Combined,
-    )
-    .unwrap()
+        .unwrap()
+        .unwrap();
+        let section = &descriptor.sections[0];
+        assert_eq!(
+            section
+                .entries()
+                .iter()
+                .map(|entry| entry.display_label.as_str())
+                .collect::<Vec<_>>(),
+            ["low", "mid"]
+        );
+        let crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) = &section.body
+        else {
+            panic!("declared point alpha body")
+        };
+        assert_eq!(
+            alpha.sources[0].glyphs[0]
+                .members
+                .iter()
+                .map(|member| member.value.alpha)
+                .collect::<Vec<_>>(),
+            [0, 128, 0]
+        );
+        assert_eq!(alpha.sources[0].input.values().unwrap().len(), 4);
+        assert_eq!(hidden_alpha.sources[0].glyphs, alpha.sources[0].glyphs);
+        assert_eq!(hidden_alpha.sources[0].input, alpha.sources[0].input);
+        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let error = source
+            .clone()
+            .with_alpha(
+                AlphaTarget::Point,
+                AlphaEncoding::observations(AlphaValues::new("confidence", [0; 3]).unwrap()),
+            )
+            .preflight()
+            .unwrap_err();
+        assert!(matches!(error, Error::Data(_)));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            calls
+        );
+    })
     .unwrap();
-    let section = &descriptor.sections[0];
-    assert_eq!(
-        section
-            .entries()
-            .iter()
-            .map(|entry| entry.display_label.as_str())
-            .collect::<Vec<_>>(),
-        ["low", "mid"]
-    );
-    let crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) = &section.body else {
-        panic!("declared point alpha body")
-    };
-    assert_eq!(
-        alpha.sources[0].glyphs[0]
-            .members
-            .iter()
-            .map(|member| member.value.alpha)
-            .collect::<Vec<_>>(),
-        [0, 128, 0]
-    );
-    assert_eq!(alpha.sources[0].input.values().unwrap().len(), 4);
-    assert_eq!(hidden_alpha.sources[0].glyphs, alpha.sources[0].glyphs);
-    assert_eq!(hidden_alpha.sources[0].input, alpha.sources[0].input);
-    let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-    let error = source
-        .with_alpha(
-            AlphaTarget::Point,
-            AlphaEncoding::observations(AlphaValues::new("confidence", [0; 3]).unwrap()),
-        )
-        .preflight()
-        .unwrap_err();
-    assert!(matches!(error, Error::Data(_)));
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        calls
-    );
 }

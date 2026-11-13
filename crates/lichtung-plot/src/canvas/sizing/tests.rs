@@ -62,6 +62,7 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
                 PixelRect::new(0.0, 0.0, 0.0, 0.0),
                 &source.placements,
                 &plots,
+                &interiors,
                 &text,
                 &prose,
                 &[],
@@ -83,10 +84,14 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
     .unwrap();
 }
 
-fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item = Plot>) {
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache contract compares complete scalar assignment inputs and declared guide dependencies"
+)]
+fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item = Plot>) {
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
-        &source,
+        source,
         &operation,
         Some(&crate::Theme::publication()),
     )
@@ -96,7 +101,7 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
     let request = crate::text::TextRequestContext::new(&appearance, &text);
     inputs
         .prepare_discrete_guides(
-            &source,
+            source,
             &request,
             &operation,
             &ComponentAddress::root(),
@@ -107,7 +112,7 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
         .into_iter()
         .map(|variant| inputs.attach(variant).unwrap())
         .collect::<Vec<_>>();
-    let source = inputs.attach(source).unwrap();
+    let source = inputs.attach(source.clone()).unwrap();
     let mut measurements = HeightMeasurements::default();
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
@@ -124,11 +129,37 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
                 GuideAllocation::width(400.0)?,
                 round,
             )?];
-            measurements.record(&source, 400.0, 120.0, [0; 4], round, &owner, &dependencies)?;
-            let same =
-                HeightInputs::new(&source, 400.0, [0; 4], round, &owner, true, &dependencies)?;
+            measurements.record(
+                &source,
+                inputs.plots.first(),
+                400.0,
+                120.0,
+                [0; 4],
+                round,
+                &owner,
+                &dependencies,
+            )?;
+            let same = HeightInputs::new(
+                &source,
+                inputs.plots.first(),
+                400.0,
+                [0; 4],
+                round,
+                &owner,
+                true,
+                &dependencies,
+            )?;
             assert_eq!(measurements.measured(&same, &owner, round)?, Some(120.0));
-            let undeclared = HeightInputs::new(&source, 400.0, [0; 4], round, &owner, true, &[])?;
+            let undeclared = HeightInputs::new(
+                &source,
+                inputs.plots.first(),
+                400.0,
+                [0; 4],
+                round,
+                &owner,
+                true,
+                &[],
+            )?;
             assert_eq!(measurements.measured(&undeclared, &owner, round)?, None);
             let narrower = [ConsumedGuideDependency::new(
                 ancestor,
@@ -136,17 +167,42 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
                 GuideAllocation::width(400.0 - 1.0 / 1024.0)?,
                 round,
             )?];
-            let different =
-                HeightInputs::new(&source, 400.0, [0; 4], round, &owner, true, &narrower)?;
+            let different = HeightInputs::new(
+                &source,
+                inputs.plots.first(),
+                400.0,
+                [0; 4],
+                round,
+                &owner,
+                true,
+                &narrower,
+            )?;
             assert_eq!(same.width, different.width);
             assert_eq!(measurements.measured(&different, &owner, round)?, None);
             for changed in &variants {
-                let different =
-                    HeightInputs::new(changed, 400.0, [0; 4], round, &owner, true, &dependencies)?;
+                let different = HeightInputs::new(
+                    changed,
+                    inputs.plots.first(),
+                    400.0,
+                    [0; 4],
+                    round,
+                    &owner,
+                    true,
+                    &dependencies,
+                )?;
                 assert_eq!(same.width, different.width);
                 assert_eq!(same.ranges, different.ranges);
                 assert_eq!(measurements.measured(&different, &owner, round)?, None);
-                measurements.record(changed, 400.0, 120.0, [0; 4], round, &owner, &dependencies)?;
+                measurements.record(
+                    changed,
+                    inputs.plots.first(),
+                    400.0,
+                    120.0,
+                    [0; 4],
+                    round,
+                    &owner,
+                    &dependencies,
+                )?;
                 assert_eq!(
                     measurements.measured(&different, &owner, round)?,
                     Some(120.0)
@@ -188,7 +244,7 @@ fn recorded_heights_require_complete_text_requests_even_when_geometry_can_match(
             .clone()
             .x_label(crate::Text::new("Horizontal").layout(crate::TextLayout::default())),
     ];
-    assert_changed_height_inputs(source, variants);
+    assert_changed_height_inputs(&source, variants);
 }
 
 #[test]
@@ -215,7 +271,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
     let mut spanning = make(format.clone(), format.clone()).erase();
     spanning.canvas_owner = Some(crate::data::source::source_arc([2, 2, 0, 0, 2, 1]).unwrap());
     assert_changed_height_inputs(
-        make(format.clone(), format.clone()).erase(),
+        &make(format.clone(), format.clone()).erase(),
         vec![
             spanning,
             make(format.clone(), format.clone())
@@ -257,7 +313,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             .y_tick_generation(crate::TickGeneration::maximum(5).unwrap())
             .erase(),
     ];
-    assert_changed_height_inputs(source.erase(), variants);
+    assert_changed_height_inputs(&source.erase(), variants);
 
     let source = crate::Plot::line(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -300,5 +356,5 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             )
             .erase(),
     ];
-    assert_changed_height_inputs(source.erase(), variants);
+    assert_changed_height_inputs(&source.erase(), variants);
 }

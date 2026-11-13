@@ -94,87 +94,99 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&supplied.erase(), &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(crate::spec::PlotRenderContext::new(
-            chart.data(),
-            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-            &theme,
-        ))
-        .unwrap();
-    let crate::layout::interior::MarkPayload::Distribution(payload) =
-        &selected.marks.as_ref().unwrap().payload
-    else {
-        panic!("Raincloud payload")
-    };
-    let alphas = payload
-        .marks
-        .iter()
-        .filter_map(|mark| match mark {
-            crate::plots::categorical_distribution::Mark::Scatter(points, style) => {
-                Some((points.len(), style.color.get_alpha()))
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    // Summary order is a/b; original point rows are b/a. Alpha follows point rows.
-    assert_eq!(alphas, [(1, 230), (1, 0)]);
-    let inner_alpha = theme
-        .marks
-        .get_fills()
-        .get_bodies()
-        .get_inner_summary()
-        .backend_style()
-        .color
-        .get_alpha();
-    assert_eq!(
-        payload
-            .marks
-            .iter()
-            .filter_map(|mark| match mark {
-                crate::plots::categorical_distribution::Mark::Polygon(_, style) =>
-                    Some(style.color.get_alpha()),
-                _ => None,
-            })
-            .collect::<Vec<_>>(),
-        [191, inner_alpha, 0, inner_alpha]
-    );
-    assert_eq!(
-        payload
-            .marks
-            .iter()
-            .filter_map(|mark| match mark {
-                crate::plots::categorical_distribution::Mark::Line(_, style) =>
-                    Some(style.color.get_alpha()),
-                _ => None,
-            })
-            .collect::<Vec<_>>(),
-        [128, 64]
-    );
-    let sections = selected
-        .discrete_guide
-        .as_ref()
-        .unwrap()
-        .sections
-        .iter()
-        .filter_map(|section| match &section.body {
-            crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) => Some(alpha),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(sections.len(), 3);
-    assert!(sections.iter().all(
-        |section| section.entries.len() == 5 && section.sources[0].glyphs[0].members.len() == 2
-    ));
-    let mut invalid_histogram = histogram;
-    invalid_histogram.bin_lower = NumericValues::new("lower", [f64::INFINITY]);
-    let mut invalid_raincloud = raincloud;
-    invalid_raincloud.density_y = NumericValues::new("y", [f64::INFINITY, -2.0, 2.0, 2.0]);
-    assert!(matches!(invalid_histogram.validate(), Err(Error::Data(_))));
-    assert!(matches!(
-        invalid_raincloud.membership(),
-        Err(Error::Data(_))
-    ));
+    crate::orchestrator::with_prepared_plot_for_test(
+        &supplied.erase(),
+        &theme,
+        |chart, inputs, theme| {
+            let chart = chart.clone();
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let selected = chart
+                .measure_selected_interior(
+                    crate::spec::PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0]),
+                )
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Raincloud payload")
+            };
+            let alphas = payload
+                .marks
+                .iter()
+                .filter_map(|mark| match mark {
+                    crate::plots::categorical_distribution::Mark::Scatter(points, style) => {
+                        Some((points.len(), style.color.get_alpha()))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            // Summary order is a/b; original point rows are b/a. Alpha follows point rows.
+            assert_eq!(alphas, [(1, 230), (1, 0)]);
+            let inner_alpha = theme
+                .marks
+                .get_fills()
+                .get_bodies()
+                .get_inner_summary()
+                .backend_style()
+                .color
+                .get_alpha();
+            assert_eq!(
+                payload
+                    .marks
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        crate::plots::categorical_distribution::Mark::Polygon(_, style) =>
+                            Some(style.color.get_alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [191, inner_alpha, 0, inner_alpha]
+            );
+            assert_eq!(
+                payload
+                    .marks
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        crate::plots::categorical_distribution::Mark::Line(_, style) =>
+                            Some(style.color.get_alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [128, 64]
+            );
+            let sections = selected
+                .discrete_guide
+                .as_ref()
+                .unwrap()
+                .sections
+                .iter()
+                .filter_map(|section| match &section.body {
+                    crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) => {
+                        Some(alpha)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(sections.len(), 3);
+            assert!(sections.iter().all(|section| section.entries.len() == 5
+                && section.sources[0].glyphs[0].members.len() == 2));
+            let mut invalid_histogram = histogram;
+            invalid_histogram.bin_lower = NumericValues::new("lower", [f64::INFINITY]);
+            let mut invalid_raincloud = raincloud;
+            invalid_raincloud.density_y = NumericValues::new("y", [f64::INFINITY, -2.0, 2.0, 2.0]);
+            assert!(matches!(invalid_histogram.validate(), Err(Error::Data(_))));
+            assert!(matches!(
+                invalid_raincloud.membership(),
+                Err(Error::Data(_))
+            ));
+        },
+    )
+    .unwrap();
 }
 
 #[test]

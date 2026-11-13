@@ -96,10 +96,11 @@ fn interior_insets(insets: &[[i64; 2]], start: usize, span: usize, rows: bool) -
 
 fn plot_minimum(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let mut hard = plot.intrinsic_body_minimum(theme)?;
+    let mut hard = plot.intrinsic_body_minimum(registered, theme)?;
     let sources = plot.description().prose();
     hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
         theme, sources, hard.1,
@@ -116,6 +117,7 @@ fn plot_minimum(
 pub(super) fn minimum(
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
+    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
     text: &[Option<TextPanelIntrinsics>],
     titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     themes: &ResolvedCanvasThemes,
@@ -137,6 +139,10 @@ pub(super) fn minimum(
         let hard = if let Some(plot) = &plots[index] {
             plot_minimum(
                 plot,
+                interiors
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .and_then(|input| input.plots.first()),
                 titles[index].expect("Plot title intrinsics"),
                 &themes.plot_request(index).expect("Plot theme"),
             )?
@@ -236,7 +242,7 @@ impl DeclaredTracks {
 
 pub(super) struct ContentSizing<'a> {
     pub source: &'a super::Canvas,
-    pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
+    pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub measurements: Option<&'a super::sizing::HeightMeasurements>,
     pub shared_allocation: Option<GuideAllocation>,
@@ -252,6 +258,7 @@ pub(super) fn allocate(
     outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
+    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
@@ -267,6 +274,7 @@ pub(super) fn allocate(
             outer,
             placements,
             plots,
+            interiors,
             text_panels,
             plot_titles,
             column_headers,
@@ -313,6 +321,7 @@ pub(super) fn natural_width(
             PixelRect::new(0.0, 0.0, 0.0, 0.0),
             placements,
             plots,
+            content.interiors,
             text_panels,
             plot_titles,
             column_headers,
@@ -352,6 +361,7 @@ fn measure(
     outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
+    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
@@ -444,8 +454,13 @@ fn measure(
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
             let theme = &themes.plot_request(index).expect("prepared Plot theme");
-            let (left, right) =
-                crate::layout::interior::sizing::horizontal_gutter_preference(plot, theme)?;
+            let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
+                plot,
+                interiors[index]
+                    .as_ref()
+                    .and_then(|input| input.plots.first()),
+                theme,
+            )?;
             let footprint = placements.footprint(index).expect("Plot owner");
             column_insets[footprint.column][0] =
                 column_insets[footprint.column][0].max(required(left)?);
@@ -509,11 +524,15 @@ fn measure(
     crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
+            let registered = interiors[index]
+                .as_ref()
+                .and_then(|input| input.plots.first());
             let child_theme = &themes
                 .plot_request(index)
                 .expect("configured Plot retains its theme");
             let hard = plot_minimum(
                 plot,
+                registered,
                 plot_titles[index].expect("Plot text intrinsics"),
                 child_theme,
             )?;
@@ -525,8 +544,9 @@ fn measure(
             let preferred = if content.is_some() {
                 let body = crate::layout::interior::sizing::body_preference(
                     plot,
+                    registered,
                     child_theme,
-                    plot.intrinsic_body_minimum(child_theme)?,
+                    plot.intrinsic_body_minimum(registered, child_theme)?,
                 )?;
                 let mut width = body.0;
                 if let Some(content) = content.filter(|content| {

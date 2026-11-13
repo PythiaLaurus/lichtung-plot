@@ -6,10 +6,11 @@ use crate::layout::RootFramePlan;
 impl Plot {
     pub(crate) fn measured_canvas_layout(
         &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<RootFramePlan, Error> {
         if !self.description().has_facets() {
-            return crate::layout::interior::coordinate::canvas_layout(self, theme)
+            return crate::layout::interior::coordinate::canvas_layout(self, registered, theme)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         RootFramePlan::measure(

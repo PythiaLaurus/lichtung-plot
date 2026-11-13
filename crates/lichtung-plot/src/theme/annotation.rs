@@ -277,9 +277,7 @@ mod tests {
             10.0,
         )
         .erase();
-        let operation = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let shelf = theme
             .annotations
@@ -290,7 +288,7 @@ mod tests {
         theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
         let text = crate::text::TextService::default();
         let unpadded = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text))
             .unwrap();
         // Each edge contributes exactly 1/4 quantum at the selected 14px role.
         // The combined 1/2 quantum reserves one quantum, rather than two.
@@ -302,7 +300,7 @@ mod tests {
             .unwrap();
         theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
         let padded = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text))
             .unwrap();
         assert_eq!(padded.0.to_bits(), unpadded.0.to_bits());
         assert_eq!(

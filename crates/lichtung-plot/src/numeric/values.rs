@@ -3,7 +3,7 @@
 use super::slot::ExplanationPlan;
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::layout::interior::preference::panel;
-use crate::orchestrator::registration::PreparedFamily;
+use crate::orchestrator::registration::{PlotRegistration, PreparedFamily};
 use crate::render::backend::PlacedText;
 use crate::spec::PlotRenderContext;
 use crate::{Error, Plot, PlotKind, Result, Text, TextTheme};
@@ -19,10 +19,14 @@ fn role<'a>(
     }
 }
 
-fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()> {
+fn sources(
+    plot: &Plot,
+    registered: Option<&PlotRegistration<'_>>,
+    mut visit: impl FnMut(&Text) -> Result<()>,
+) -> Result<()> {
     match plot.kind() {
         PlotKind::Heatmap => {
-            if let Some(marks) = family(plot, "Heatmap", |family| match family {
+            if let Some(marks) = family(plot, registered, "Heatmap", |family| match family {
                 PreparedFamily::Heatmap(marks) => Some(marks),
                 _ => None,
             })? {
@@ -32,7 +36,7 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
             }
         }
         PlotKind::Coefficient => {
-            if let Some(marks) = family(plot, "Coefficient", |family| match family {
+            if let Some(marks) = family(plot, registered, "Coefficient", |family| match family {
                 PreparedFamily::Estimate { marks, .. } => Some(marks),
                 _ => None,
             })? {
@@ -42,7 +46,7 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
             }
         }
         PlotKind::Waterfall => {
-            if let Some(marks) = family(plot, "Waterfall", |family| match family {
+            if let Some(marks) = family(plot, registered, "Waterfall", |family| match family {
                 PreparedFamily::Waterfall(marks) => Some(marks),
                 _ => None,
             })? {
@@ -57,51 +61,54 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
 }
 
 fn family<'a, T>(
-    plot: &'a Plot,
+    plot: &Plot,
+    registered: Option<&'a PlotRegistration<'_>>,
     owner: &str,
     select: impl Fn(&'a PreparedFamily) -> Option<&'a T>,
 ) -> Result<Option<&'a T>> {
-    if !plot
-        .prepared_families
-        .iter()
-        .any(|(_, family)| select(family).is_some())
-    {
+    if registered.is_none_or(|registered| select(&registered.family).is_none()) {
         return Ok(None);
     }
-    Ok(select(panel(
-        &plot.prepared_families,
-        plot.axis_scope(),
-        owner,
-    )?))
+    Ok(select(panel(registered, plot.axis_scope(), owner)?))
 }
 
-fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_, '_>) -> Result<Option<&'a Text>> {
+fn source<'a>(plot: &Plot, context: PlotRenderContext<'a, '_>) -> Result<Option<&'a Text>> {
     match plot.kind() {
-        PlotKind::Heatmap => Ok(family(plot, "Heatmap", |family| match family {
-            PreparedFamily::Heatmap(marks) => Some(marks),
-            _ => None,
-        })?
-        .and_then(crate::plots::heatmap::HeatmapData::numeric_explanation)),
-        PlotKind::Coefficient => Ok(family(plot, "Coefficient", |family| match family {
-            PreparedFamily::Estimate { marks, .. } => Some(marks),
-            _ => None,
-        })?
-        .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation)),
+        PlotKind::Heatmap => {
+            Ok(
+                family(plot, context.registered, "Heatmap", |family| match family {
+                    PreparedFamily::Heatmap(marks) => Some(marks),
+                    _ => None,
+                })?
+                .and_then(crate::plots::heatmap::HeatmapData::numeric_explanation),
+            )
+        }
+        PlotKind::Coefficient => {
+            Ok(family(
+                plot,
+                context.registered,
+                "Coefficient",
+                |family| match family {
+                    PreparedFamily::Estimate { marks, .. } => Some(marks),
+                    _ => None,
+                },
+            )?
+            .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation))
+        }
         PlotKind::Waterfall => {
-            if !plot
-                .prepared_families
-                .iter()
-                .any(|(_, family)| matches!(family, PreparedFamily::Waterfall(_)))
-            {
+            if !context.registered.is_some_and(|registered| {
+                matches!(&registered.family, PreparedFamily::Waterfall(_))
+            }) {
                 return Ok(None);
             }
-            let axes = plot
-                .prepared_axis_inputs()
+            let axes = context
+                .registered
+                .and_then(|registered| registered.axes.as_ref())
                 .ok_or_else(|| Error::Render("total explanation lacks prepared axes".into()))?;
             let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges[0]))?;
             let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges[1]))?;
             let PreparedFamily::Waterfall(marks) =
-                panel(&plot.prepared_families, plot.axis_scope(), "Waterfall")?
+                panel(context.registered, plot.axis_scope(), "Waterfall")?
             else {
                 return Ok(None);
             };
@@ -123,10 +130,11 @@ fn gap(theme: &crate::text::TextRequestContext<'_, '_>) -> Result<f64> {
 
 pub(crate) fn preferred_width(
     plot: &Plot,
+    registered: Option<&PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64> {
     let mut width = 0.0_f64;
-    sources(plot, |text| {
+    sources(plot, registered, |text| {
         width = width.max(super::slot::preferred_width(
             text,
             role(plot, theme)?,
@@ -134,17 +142,17 @@ pub(crate) fn preferred_width(
         )?);
         Ok(())
     })?;
-    Ok(width.max(axis_preferences(plot, theme)?.0))
+    Ok(width.max(axis_preferences(registered, theme)?.0))
 }
 
 pub(crate) fn axis_preferences(
-    plot: &Plot,
+    registered: Option<&PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64)> {
     let mut preferred = [0.0_f64; 2];
     // The axis owner later measures the actual selected set. Intrinsic probes
     // include common explanations without inventing scientific tick positions.
-    if let Some(axes) = plot.prepared_axis_inputs() {
+    if let Some(axes) = registered.and_then(|registered| registered.axes.as_ref()) {
         for (side, preferred) in preferred.iter_mut().enumerate() {
             if axes.specs[side].exact_ticks.is_some() || axes.categories[side].is_some() {
                 continue;
@@ -166,11 +174,12 @@ pub(crate) fn axis_preferences(
 
 pub(crate) fn natural_height(
     plot: &Plot,
+    registered: Option<&PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64> {
     let mut height = 0.0_f64;
-    sources(plot, |text| {
+    sources(plot, registered, |text| {
         let plan = ExplanationPlan::measure(
             text,
             role(plot, theme)?,

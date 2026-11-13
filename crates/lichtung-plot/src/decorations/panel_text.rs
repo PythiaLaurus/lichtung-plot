@@ -128,6 +128,7 @@ fn corner_anchor(corner: DataAreaCorner) -> TextAnchor {
 
 pub(crate) fn measure_plans(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     layout: &Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
@@ -140,7 +141,7 @@ pub(crate) fn measure_plans(
             .enumerate()
             .map(|(index, annotation)| {
                 let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-                measure(annotation, plot, layout, theme, &scope)
+                measure(annotation, plot, registered, layout, theme, &scope)
             }),
     )?;
     check_collisions(&plans, scope)?;
@@ -154,6 +155,7 @@ pub(crate) fn measure_plans(
 fn measure(
     annotation: &crate::PlotTextAnnotation,
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     layout: &Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
@@ -163,7 +165,7 @@ fn measure(
         theme: &appearance,
         ..*theme
     };
-    let directional = request.with_text_projection(plot, layout);
+    let directional = request.with_text_projection(plot, registered, layout);
     let theme = &directional;
     let panel = layout.projection.panel_box();
     let appearance = annotation
@@ -184,6 +186,7 @@ fn measure(
         PlotTextAnnotationReference::Axes(resolve::resolve(
             annotation.position(),
             plot,
+            registered,
             layout,
             theme,
         )?)

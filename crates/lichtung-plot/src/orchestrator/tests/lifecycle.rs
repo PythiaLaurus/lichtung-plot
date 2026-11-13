@@ -803,7 +803,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 .as_ref()
                 .unwrap(),
         );
-        let prepared = prepared.attach(plot.clone()).unwrap();
         if matches!(
             kind,
             PlotKind::Interaction
@@ -820,7 +819,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             let range = domain.unwrap_or_else(|error| panic!("{kind:?}: {error}"));
             assert_eq!(
                 range,
-                prepared.prepared_axis_inputs().unwrap().ranges[0],
+                prepared.plots[0].axes.as_ref().unwrap().ranges[0],
                 "{kind:?}: shared/standalone parity"
             );
             assert!(
@@ -834,7 +833,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             "{kind:?}"
         );
         if kind != PlotKind::Matrix {
-            let axes = prepared.prepared_axis_inputs().unwrap();
+            let axes = prepared.plots[0].axes.as_ref().unwrap();
             for side in 0..2 {
                 if axes.categories[side].is_some() {
                     continue;
@@ -863,16 +862,33 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-            let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
-            prepared
-                .preflight_panel(kind, panel, &theme)
-                .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
-            assert_eq!(
-                crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
-                preparations,
-                "{kind:?}: measurement must consume retained preparation"
-            );
+            crate::orchestrator::with_prepared_plot_for_test(
+                &plot,
+                &theme,
+                |plot, inputs, theme| {
+                    let preparations =
+                        crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
+                    let registered = inputs.plots.first();
+                    let panel = plot
+                        .measured_canvas_layout(registered, theme)
+                        .unwrap()
+                        .panel_box;
+                    crate::layout::fit::measured(plot.preflight_measurement(
+                        registered,
+                        kind,
+                        panel,
+                        theme,
+                        &crate::layout::fit::ROOT_SCOPE,
+                    ))
+                    .unwrap_or_else(|error| panic!("{kind:?}: {error:?}"));
+                    assert_eq!(
+                        crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
+                        preparations,
+                        "{kind:?}: measurement must consume retained preparation"
+                    );
+                },
+            )
+            .unwrap();
         }
         let mut backend = RecordingBackend::default();
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
@@ -1133,10 +1149,13 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
                 );
                 assert_eq!(descriptor.sections.len(), 1);
                 let color = descriptor.continuous().expect("actual native color body");
-                let source = inputs
-                    .continuous_source(&plot, &theme, plot.axis_scope())
-                    .unwrap()
-                    .unwrap();
+                let source = crate::layout::interior::PreparedInteriorInputs::continuous_source(
+                    &plot,
+                    &theme,
+                    &inputs.plots[0],
+                )
+                .unwrap()
+                .unwrap();
                 assert_eq!(color, &source);
                 assert!(!color.numeric.labels.is_empty());
                 assert!(!color.stops.is_empty());

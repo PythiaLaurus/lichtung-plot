@@ -65,7 +65,7 @@ struct CanvasPlan {
     row_titles: Vec<CanvasHeaderPlan>,
 }
 
-struct PreparedCanvasInputs {
+struct PreparedCanvasInputs<'src> {
     caches: std::cell::RefCell<crate::orchestrator::root::RootLayoutCaches>,
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
@@ -73,14 +73,14 @@ struct PreparedCanvasInputs {
     shared_x: Vec<Option<(f64, f64)>>,
     color_domains: Option<Arc<PreparedColorDomains>>,
     shared_guide: Option<Arc<PreparedGuide>>,
-    interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
+    interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs<'src>>>,
     text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
     plot_intrinsics: Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
 }
 
 struct PreparedCanvasRound<'a> {
     content_sizing: bool,
-    interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
+    interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
     themes: Arc<ResolvedCanvasThemes>,
     canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
@@ -972,21 +972,6 @@ impl Canvas {
 
         let mut contributors = Vec::new();
         crate::data::source::reserve_source(&mut contributors, self.placements.len())?;
-        let row_sources = crate::data::source::collect_source(
-            self.placements.plots().enumerate().map(|(index, plot)| {
-                Ok(plot
-                    .zip(interiors.get(index).and_then(Option::as_ref))
-                    .and_then(|(plot, inputs)| {
-                        inputs.scopes.first().map(|scope| {
-                            crate::data::source::RowSourceContext::new(
-                                plot.description(),
-                                scope,
-                                operation,
-                            )
-                        })
-                    }))
-            }),
-        )?;
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
             if !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
@@ -1002,19 +987,15 @@ impl Canvas {
             let theme = &themes.plot_request(index).ok_or_else(|| {
                 Error::Render("shared continuous guide has no owning Plot theme".into())
             })?;
-            let (scope, rows) = inputs
-                .scopes
-                .first()
-                .zip(row_sources[index].as_ref())
-                .ok_or_else(|| {
-                    Error::Render("continuous guide lacks its operation-bound owner".into())
-                })?;
+            let registered = inputs.plots.first().ok_or_else(|| {
+                Error::Render("continuous guide lacks its operation-bound owner".into())
+            })?;
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
                     plot,
                     inputs,
                     theme,
-                    scope.axis_numeric_binding(plot.description(), rows, operation)?,
+                    registered.axis_numeric_binding(operation)?,
                 )?
                 .ok_or_else(|| {
                     Error::Render("shared continuous guide has no color identity".into())
@@ -1040,33 +1021,28 @@ impl Canvas {
             };
             match plot.kind() {
                 PlotKind::Heatmap => {
-                    if input.families.is_empty() {
+                    if input.plots.is_empty() {
                         return Err(Error::Render(
                             "shared Heatmap has no prepared inputs".into(),
                         ));
                     }
-                    let panels = Arc::get_mut(&mut input.families)
-                        .ok_or_else(|| Error::Render("shared Heatmap inputs are aliased".into()))?;
-                    for (_, family) in panels {
+                    for registered in &mut input.plots {
                         if let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-                            family
+                            &mut registered.family
                         {
                             marks.install_shared_domain(descriptor)?;
                         }
                     }
                 }
                 PlotKind::Beeswarm => {
-                    if input.families.is_empty() {
+                    if input.plots.is_empty() {
                         return Err(Error::Render(
                             "shared Beeswarm has no prepared inputs".into(),
                         ));
                     }
-                    let panels = Arc::get_mut(&mut input.families).ok_or_else(|| {
-                        Error::Render("shared Beeswarm inputs are aliased".into())
-                    })?;
-                    for (_, family) in panels {
+                    for registered in &mut input.plots {
                         if let crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) =
-                            family
+                            &mut registered.family
                         {
                             marks.install_shared_domain(descriptor)?;
                         }
@@ -1275,7 +1251,7 @@ impl Canvas {
         themes: Option<&ResolvedCanvasThemes>,
     ) -> Result<
         (
-            Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
+            Vec<Option<crate::layout::interior::PreparedInteriorInputs<'_>>>,
             Vec<Option<(f64, f64)>>,
         ),
         Error,
@@ -1493,6 +1469,10 @@ impl Canvas {
                         Some(if plot.kind() == PlotKind::Scatter {
                             crate::plots::shared_x::prepare_scatter_plot(
                                 &plot,
+                                self.placements
+                                    .plot(index)
+                                    .expect("Canvas source")
+                                    .description(),
                                 scatter[index].take().expect("prepared Scatter component"),
                                 registered_scope,
                                 &resources,
@@ -1500,6 +1480,10 @@ impl Canvas {
                         } else {
                             crate::plots::shared_x::prepare_line_plot(
                                 &plot,
+                                self.placements
+                                    .plot(index)
+                                    .expect("Canvas source")
+                                    .description(),
                                 line[index].take().expect("prepared line component"),
                                 registered_scope,
                                 &resources,
@@ -1522,42 +1506,32 @@ impl Canvas {
                 let Some(inputs) = interiors[index].as_mut() else {
                     continue;
                 };
-                if !inputs.families.iter().any(|(_, family)| {
+                if !inputs.plots.iter().any(|registered| {
                     matches!(
-                        family,
+                        &registered.family,
                         crate::orchestrator::registration::PreparedFamily::Waterfall(_)
                     )
                 }) {
                     continue;
                 }
-                let families = Arc::get_mut(&mut inputs.families).ok_or_else(|| {
-                    Error::Render("Waterfall totals were aliased before window preparation".into())
-                })?;
-                for (panel_index, (scope, family)) in families.iter_mut().enumerate() {
+                for registered in &mut inputs.plots {
+                    let numeric = registered.scope.numeric_binding(
+                        registered.source,
+                        &registered.row_source,
+                        &resources,
+                    )?;
                     let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
-                        family
+                        &mut registered.family
                     else {
                         continue;
                     };
-                    let axes = inputs
-                        .axes
-                        .iter()
-                        .find(|(candidate, _)| candidate == scope)
-                        .map(|(_, axes)| axes)
-                        .ok_or_else(|| {
-                            Error::Render("Waterfall total window scope missing".into())
-                        })?;
-                    let source = self
-                        .placements
-                        .plot(index)
-                        .expect("Waterfall source")
-                        .description();
-                    let scope = &inputs.scopes[panel_index];
-                    let row_source =
-                        crate::data::source::RowSourceContext::new(source, scope, &resources);
+                    let axes = registered.axes.as_ref().ok_or_else(|| {
+                        Error::Render("Waterfall total window scope missing".into())
+                    })?;
+                    let source = registered.source;
                     marks.prepare_totals(
                         crate::plots::waterfall::WaterfallTotalsPrepare {
-                            numeric: scope.numeric_binding(source, &row_source, &resources)?,
+                            numeric,
                             axes,
                             format: source.total_format_spec(),
                         },
@@ -2293,6 +2267,7 @@ impl Canvas {
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
             Self::preflight_shared_legend(
                 &plots,
+                interiors,
                 &themes,
                 full_outer,
                 children,
@@ -2417,6 +2392,7 @@ impl Canvas {
     fn complete_cell_gutters(
         &self,
         plots: &[Option<Plot>],
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
         cells: &[Option<PixelRect>],
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans,
@@ -2441,13 +2417,19 @@ impl Canvas {
                 dependencies: &dependencies,
                 ..SUPPRESSED_GUIDES
             };
+            let registered = &interiors[index]
+                .as_ref()
+                .expect("prepared Canvas plot")
+                .plots[0];
+            let operation = theme.text.prepared_font_environment()?.operation();
             let probe = match children.canvas_probe(
                 plot,
                 crate::spec::PlotRenderContext::new(
-                    plot.data(),
+                    registered.data(&operation)?,
                     cells[index].expect("configured owner assignment"),
                     theme,
                 )
+                .with_registration(registered)
                 .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
@@ -2519,6 +2501,7 @@ impl Canvas {
                 PixelRect::new(0.0, width, 0.0, 0.0),
                 &self.placements,
                 &plots,
+                prepared.interiors,
                 prepared.text_panel_intrinsics,
                 prepared.plot_intrinsics,
                 &self.column_headers,
@@ -2553,6 +2536,7 @@ impl Canvas {
             let minimum = match tracks::minimum(
                 &self.placements,
                 &plots,
+                prepared.interiors,
                 prepared.text_panel_intrinsics,
                 prepared.plot_intrinsics,
                 &themes,
@@ -2647,6 +2631,7 @@ impl Canvas {
             outer,
             &self.placements,
             &plots,
+            prepared.interiors,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
@@ -2695,13 +2680,19 @@ impl Canvas {
                     dependencies: &dependencies,
                     ..SUPPRESSED_GUIDES
                 };
+                let registered = &prepared.interiors[first_index]
+                    .as_ref()
+                    .expect("prepared Canvas plot")
+                    .plots[0];
+                let operation = expected_theme.text.prepared_font_environment()?.operation();
                 let expected = plot_category_domain(
                     first,
                     crate::spec::PlotRenderContext::new(
-                        first.data(),
+                        registered.data(&operation)?,
                         provisional[first_index].expect("configured owner assignment"),
                         expected_theme,
                     )
+                    .with_registration(registered)
                     .with_guides(&guides),
                     children,
                     first_index,
@@ -2736,13 +2727,19 @@ impl Canvas {
                         dependencies: &dependencies,
                         ..SUPPRESSED_GUIDES
                     };
+                    let registered = &prepared.interiors[index]
+                        .as_ref()
+                        .expect("prepared Canvas plot")
+                        .plots[0];
+                    let operation = theme.text.prepared_font_environment()?.operation();
                     if plot_category_domain(
                         plot,
                         crate::spec::PlotRenderContext::new(
-                            plot.data(),
+                            registered.data(&operation)?,
                             provisional[index].expect("configured owner assignment"),
                             theme,
                         )
+                        .with_registration(registered)
                         .with_guides(&guides),
                         children,
                         index,
@@ -2804,6 +2801,7 @@ impl Canvas {
         if !prepared.content_sizing {
             if let FitOutcome::Miss(failure) = self.complete_cell_gutters(
                 &plots,
+                prepared.interiors,
                 &provisional,
                 &themes,
                 children,
@@ -2818,6 +2816,7 @@ impl Canvas {
             outer,
             &self.placements,
             &plots,
+            prepared.interiors,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
@@ -2858,6 +2857,10 @@ impl Canvas {
         let mut child_miss = None;
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
+            let registered = &prepared.interiors[index]
+                .as_ref()
+                .expect("prepared Canvas plot")
+                .plots[0];
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = plot.kind();
@@ -2871,6 +2874,7 @@ impl Canvas {
             }
             let local = match plot_text::PlotLocalTextPlan::measure(
                 plot,
+                Some(registered),
                 cell,
                 theme,
                 [self.panel_title_alignment, self.panel_subtitle_alignment],
@@ -2889,6 +2893,7 @@ impl Canvas {
                     .expect("shared guide body probe");
                 if let FitOutcome::Miss(reason) = crate::decorations::plan::check_assigned_body(
                     plot,
+                    Some(registered),
                     base,
                     full_outer,
                     local.body,
@@ -2903,27 +2908,22 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
-            let source_rows = plot.description().configured_source_rows()?;
+            plot.description().configured_source_rows()?;
             let dependencies =
                 self.consumed_guide_dependencies(index, cell.width(), shared_allocation, round)?;
             let guides = GuideConsumption {
                 dependencies: &dependencies,
                 ..SUPPRESSED_GUIDES
             };
-            let mut context = source_rows
-                .map_or_else(
-                    || crate::spec::PlotRenderContext::new(plot.data(), local.body, theme),
-                    |rows| {
-                        crate::spec::PlotRenderContext::with_source_rows(
-                            plot.data(),
-                            rows,
-                            local.body,
-                            theme,
-                        )
-                    },
-                )
-                .with_fit_scope(&child_scope)
-                .with_guides(&guides);
+            let operation = theme.text.prepared_font_environment()?.operation();
+            let mut context = crate::spec::PlotRenderContext::new(
+                registered.data(&operation)?,
+                local.body,
+                theme,
+            )
+            .with_registration(registered)
+            .with_fit_scope(&child_scope)
+            .with_guides(&guides);
             if prepared.content_sizing
                 && self.legend_policy == CanvasLegendPolicy::PerPlot
                 && !matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
@@ -2966,6 +2966,7 @@ impl Canvas {
                 )?;
                 let preferred = sizing::measured_preference(
                     plot,
+                    Some(registered),
                     &panel_plan,
                     cell.height() - local.body.height(),
                     round,
@@ -2975,6 +2976,7 @@ impl Canvas {
                 if let Some(measurements) = measurements.as_deref_mut() {
                     measurements.record(
                         plot,
+                        Some(registered),
                         cell.width(),
                         preferred,
                         content_insets[index],
@@ -3294,6 +3296,7 @@ impl Canvas {
     )]
     fn preflight_shared_legend(
         plots: &[Option<Plot>],
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
         themes: &ResolvedCanvasThemes,
         panel: PixelRect,
         children: &mut crate::decorations::plan::children::ChildPlans,
@@ -3315,13 +3318,21 @@ impl Canvas {
             let theme = &themes
                 .plot_request(index)
                 .expect("configured canvas panel has a resolved theme");
-            let result = crate::layout::fit::measured(children.canvas_probe(
-                plot,
-                crate::spec::PlotRenderContext::new(plot.data(), panel, theme),
-                index,
-                MeasurementPhase::Legend,
-                round,
-            ))
+            let registered = &interiors[index]
+                .as_ref()
+                .expect("prepared Canvas plot")
+                .plots[0];
+            let operation = theme.text.prepared_font_environment()?.operation();
+            let result = crate::layout::fit::measured(
+                children.canvas_probe(
+                    plot,
+                    crate::spec::PlotRenderContext::new(registered.data(&operation)?, panel, theme)
+                        .with_registration(registered),
+                    index,
+                    MeasurementPhase::Legend,
+                    round,
+                ),
+            )
             .map_err(crate::layout::fit::PlanError::into_error)?;
             probes[index] = Some(result);
         }

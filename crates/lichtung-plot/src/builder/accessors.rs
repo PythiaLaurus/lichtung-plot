@@ -1173,22 +1173,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.description
     }
 
-    pub(crate) fn prepared_axis_inputs(&self) -> Option<&crate::plots::shared_x::PreparedAxes> {
-        self.prepared_axes
-            .iter()
-            .find(|(scope, _)| scope == &self.render_scope)
-            .map(|(_, axes)| axes)
-    }
-
-    pub(crate) fn prepared_family(
-        &self,
-    ) -> Option<crate::orchestrator::registration::FamilyRef<'_>> {
-        self.prepared_families
-            .iter()
-            .find(|(scope, _)| scope == &self.render_scope)
-            .map(|(_, family)| family.as_ref())
-    }
-
     pub(crate) fn prepared_discrete_guide(
         &self,
     ) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error>

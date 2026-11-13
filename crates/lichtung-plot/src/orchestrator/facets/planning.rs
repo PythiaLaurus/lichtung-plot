@@ -198,7 +198,7 @@ pub(super) fn native_parent(
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
-    inputs: Option<&crate::layout::interior::PreparedInteriorInputs>,
+    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
 ) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
@@ -237,9 +237,9 @@ pub(super) fn native_parent(
             },
         ));
     }
-    let track_sizing = content_sizing.then(|| super::tracks::ContentSizing {
+    let track_sizing = content_sizing.then_some(super::tracks::ContentSizing {
         plot,
-        inputs: inputs.expect("content facet root retains prepared inputs"),
+        inputs,
         round,
         natural_width: false,
         natural_height: false,
@@ -298,6 +298,7 @@ pub(super) fn native_parent(
         if containing_trial {
             if let FitOutcome::Miss(reason) = crate::decorations::plan::check_assigned_body(
                 &panel_plot,
+                inputs.plots.get(index),
                 &probes[index],
                 probe_cells[facet.row * columns + facet.column],
                 cell,
@@ -354,15 +355,12 @@ pub(super) fn native_parent(
             dependencies: dependency.as_slice(),
             ..SUPPRESSED_GUIDES
         };
-        let (rows, diagnostic_rows) = facet.rows.selected().expect("selected facet rows");
-        let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(panel_plot.description(), rows, diagnostic_rows),
-            cell,
-            theme,
-        )
-        .with_facet_scales(facet_scales)
-        .with_fit_scope(&cell_scope)
-        .with_guides(&guides);
+        let registered = &inputs.plots[index];
+        let context = PlotRenderContext::new(registered.data(&resources)?, cell, theme)
+            .with_registration(registered)
+            .with_facet_scales(facet_scales)
+            .with_fit_scope(&cell_scope)
+            .with_guides(&guides);
         let result = match children.plan(
             &panel_plot,
             role,

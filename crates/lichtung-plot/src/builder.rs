@@ -469,14 +469,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     pub(crate) canvas_owner: Option<Arc<[usize; 6]>>,
     pub(crate) prepared_discrete_guides:
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
-    pub(crate) prepared_axes:
-        std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
-    pub(crate) prepared_families: std::sync::Arc<
-        Vec<(
-            Option<String>,
-            crate::orchestrator::registration::PreparedFamily,
-        )>,
-    >,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     marker: PhantomData<K>,
@@ -539,8 +531,6 @@ impl Plot<crate::kind::Any> {
             render_scope: None,
             canvas_owner: None,
             prepared_discrete_guides: None,
-            prepared_axes: std::sync::Arc::new(Vec::new()),
-            prepared_families: std::sync::Arc::new(Vec::new()),
             axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
             marker: PhantomData,
@@ -877,13 +867,9 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             axis_gutter_owner,
             y_tick_labels_visible,
             marker: _,
-            prepared_axes,
             prepared_discrete_guides,
-            prepared_families,
         } = self;
         Plot {
-            prepared_families,
-            prepared_axes,
             prepared_discrete_guides,
             description,
             output_dimensions,

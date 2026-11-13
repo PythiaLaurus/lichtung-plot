@@ -171,10 +171,11 @@ impl PreparedMatrixAxes {
 /// determine the hard area of each variable's native tracks.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
             _ => None,
@@ -220,16 +221,17 @@ pub(crate) fn intrinsic_body_minimum(
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let marks = chart
-        .prepared_family()
+    let marks = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
-    let hard = intrinsic_body_minimum(chart, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, theme)?;
 
     let point = marks.point_dimensions(chart, theme)?;
     let ink = marks.density_ink(theme)?;
@@ -515,7 +517,7 @@ pub(crate) fn measure(
         0.0
     };
     if context.content_height {
-        let hard = intrinsic_body_minimum(chart, theme)?;
+        let hard = intrinsic_body_minimum(chart, context.registered, theme)?;
         let height = (outer.width() - legend_reserve).max(hard.1).max(
             legend
                 .as_ref()

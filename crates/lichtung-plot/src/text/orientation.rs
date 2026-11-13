@@ -88,7 +88,8 @@ impl TextOrientation {
 
 #[derive(Clone, Copy)]
 pub(crate) struct TextReferenceResolver<'v, 'src> {
-    pub(crate) plot: &'src crate::Plot,
+    pub(crate) plot: &'v crate::Plot,
+    pub(crate) registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) layout: &'v crate::layout::Layout,
 }
 impl std::fmt::Debug for TextReferenceResolver<'_, '_> {
@@ -157,7 +158,13 @@ impl TextReferenceResolver<'_, '_> {
                 crate::TextCoordinate::data(point.y.clone()),
             );
             Ok::<_, Error>(crate::text::position::resolve::point(
-                crate::text::position::resolve::resolve(&position, self.plot, self.layout, theme)?,
+                crate::text::position::resolve::resolve(
+                    &position,
+                    self.plot,
+                    self.registered,
+                    self.layout,
+                    theme,
+                )?,
                 self.layout.projection.panel_box(),
             ))
         };

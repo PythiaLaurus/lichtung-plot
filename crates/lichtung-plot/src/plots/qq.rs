@@ -31,10 +31,11 @@ pub(crate) struct PreparedQq {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Qq(marks) => Some(marks),
             _ => None,
@@ -614,19 +615,17 @@ mod tests {
         let source = Plot::qq(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
             .x_limits(-2.0, 2.0)
             .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let before = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         let radii = theme.marks.get_points().get_radii().clone().qq(54).unwrap();
         let points = theme.marks.get_points().clone().radii(radii).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
         let sized = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(sized.0.to_bits(), before.0.to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
@@ -637,10 +636,7 @@ mod tests {
         theme.marks = theme.marks.clone().points(points).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             before
         );
@@ -667,7 +663,7 @@ mod tests {
             .unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         let reference = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(reference.0.to_bits(), before.0.to_bits());
         assert_eq!(reference.1.to_bits(), 140.0_f64.to_bits());
@@ -695,10 +691,7 @@ mod tests {
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             before
         );
@@ -709,15 +702,13 @@ mod tests {
             )
             .unwrap(),
         );
-        let mapped = crate::plots::shared_x::prepare_panel_for_test(
-            &mapped,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         assert_eq!(
-            intrinsic_body_minimum(
+            crate::orchestrator::with_prepared_plot_for_test(
                 &mapped,
-                &crate::text::TextRequestContext::new(&theme, &text_service)
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+                |mapped, inputs, request| {
+                    intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
+                }
             )
             .unwrap()
             .1
@@ -725,11 +716,11 @@ mod tests {
             140.0_f64.to_bits()
         );
         let selected = mapped
-            .measure_selected_interior(PlotRenderContext::new(
-                mapped.data(),
+            .preflight_panel(
+                mapped.kind(),
                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let crate::layout::interior::MarkPayload::Qq(payload) =
             &selected.marks.as_ref().unwrap().payload
@@ -770,13 +761,12 @@ mod tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let selected = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+        let selected = source
+            .preflight_panel(
+                source.kind(),
                 crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
                 &theme,
-            ))
+            )
             .unwrap();
         let crate::layout::interior::MarkPayload::Qq(payload) =
             &selected.marks.as_ref().unwrap().payload

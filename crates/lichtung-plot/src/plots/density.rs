@@ -43,10 +43,11 @@ pub(crate) struct PreparedDensity {
 /// primary marks. The resolved stroke is measured before parent assignment.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Density(marks) => Some(marks),
             _ => None,
@@ -902,13 +903,11 @@ mod tests {
         let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
             .x_limits(0.0, 5.0)
             .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let original = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         let line = theme
             .marks
@@ -925,7 +924,7 @@ mod tests {
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         let thick = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(thick.0.to_bits(), original.0.to_bits());
         assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
@@ -945,10 +944,7 @@ mod tests {
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             original
         );
@@ -977,7 +973,7 @@ mod tests {
             .unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
         let area = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(area.0.to_bits(), original.0.to_bits());
         assert!(area.1 >= 140.0);
@@ -1009,23 +1005,35 @@ mod tests {
             ]);
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
+        let selected = crate::orchestrator::with_prepared_plot_for_test(
             &chart,
             &crate::text::TextRequestContext::new(&theme, &text_service),
+            |chart, inputs, request| {
+                let registered = &inputs.plots[0];
+                let operation = request
+                    .text
+                    .prepared_font_environment()
+                    .unwrap()
+                    .operation();
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let selected = chart
+                    .measure_selected_interior(
+                        PlotRenderContext::new(
+                            registered.data(&operation).unwrap(),
+                            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
+                            request,
+                        )
+                        .with_registration(registered),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                selected
+            },
         )
         .unwrap();
-        let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-        let selected = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
-                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
-            .unwrap();
-        assert_eq!(
-            crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-            reads
-        );
         let crate::layout::interior::MarkPayload::Density(payload) =
             &selected.marks.as_ref().unwrap().payload
         else {
@@ -1056,17 +1064,12 @@ mod tests {
             .density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let changed = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+            .preflight_panel(
+                chart.kind(),
                 crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let crate::layout::interior::MarkPayload::Density(changed_payload) =
             &changed.marks.as_ref().unwrap().payload
@@ -1162,103 +1165,115 @@ mod tests {
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         let text_service = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text_service);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_families;
-        assert_eq!(panels.len(), 2);
-        for ((scope, family), (expected, fills)) in panels
-            .iter()
-            .zip([([0, 128], [230, 0]), ([230, 0], [64, 128])])
-        {
-            let crate::orchestrator::registration::PreparedFamily::Density(prepared) = family
-            else {
-                panic!("prepared Density")
-            };
-            assert_eq!(
-                prepared
-                    .curves
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, theme| {
+                let operation = theme.text.prepared_font_environment().unwrap().operation();
+                let panels = &inputs.plots;
+                assert_eq!(panels.len(), 2);
+                for (registered, (expected, fills)) in panels
                     .iter()
-                    .map(|curve| curve.fill_alpha.unwrap().alpha)
-                    .collect::<Vec<_>>(),
-                fills
-            );
-            assert_eq!(
-                prepared
-                    .curves
-                    .iter()
-                    .map(|curve| curve.line_alpha.unwrap().alpha)
-                    .collect::<Vec<_>>(),
-                expected
-            );
-            let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
-            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-            let selected = chart
-                .measure_selected_interior(PlotRenderContext::new(
-                    chart.data(),
-                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                    &theme,
-                ))
-                .unwrap();
-            assert_eq!(
-                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-                reads
-            );
-            let crate::layout::interior::MarkPayload::Density(payload) =
-                &selected.marks.as_ref().unwrap().payload
-            else {
-                panic!("Density payload")
-            };
-            assert_eq!(
-                payload
-                    .curves
-                    .iter()
-                    .map(|curve| curve.fill_style.color.get_alpha())
-                    .collect::<Vec<_>>(),
-                fills
-            );
-            assert_eq!(
-                payload
-                    .curves
-                    .iter()
-                    .map(|curve| curve.line_style.color.get_alpha())
-                    .collect::<Vec<_>>(),
-                expected
-            );
-            let descriptor = selected.discrete_guide.as_ref().unwrap();
-            let sections = descriptor
-                .sections
-                .iter()
-                .filter_map(|section| match &section.body {
-                    crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) => {
-                        Some(alpha)
-                    }
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(sections.len(), 2);
-            assert!(sections.iter().all(|section| section.entries.len() == 5
-                && section.sources[0].scope.as_deref() == scope.as_deref()
-                && section.sources[0].glyphs[0].members.len() == 2));
-        }
-        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-        let incomplete = source.with_alpha(
-            AlphaTarget::Line,
-            crate::alpha::AlphaEncoding::keyed(
-                [
-                    CategoryValues::new("cohort", ["a"]).unwrap(),
-                    CategoryValues::new("panel", ["left"]).unwrap(),
-                ],
-                crate::alpha::AlphaValues::new("confidence", [0]).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(matches!(
-            incomplete.preflight().unwrap_err(),
-            Error::Data(_)
-        ));
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            calls
-        );
+                    .zip([([0, 128], [230, 0]), ([230, 0], [64, 128])])
+                {
+                    let crate::orchestrator::registration::PreparedFamily::Density(prepared) =
+                        &registered.family
+                    else {
+                        panic!("prepared Density")
+                    };
+                    assert_eq!(
+                        prepared
+                            .curves
+                            .iter()
+                            .map(|curve| curve.fill_alpha.unwrap().alpha)
+                            .collect::<Vec<_>>(),
+                        fills
+                    );
+                    assert_eq!(
+                        prepared
+                            .curves
+                            .iter()
+                            .map(|curve| curve.line_alpha.unwrap().alpha)
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                    let scope = &registered.scope.render_name;
+                    let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
+                    let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                    let selected = chart
+                        .measure_selected_interior(
+                            PlotRenderContext::new(
+                                registered.data(&operation).unwrap(),
+                                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                                theme,
+                            )
+                            .with_registration(registered),
+                        )
+                        .unwrap();
+                    assert_eq!(
+                        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                        reads
+                    );
+                    let crate::layout::interior::MarkPayload::Density(payload) =
+                        &selected.marks.as_ref().unwrap().payload
+                    else {
+                        panic!("Density payload")
+                    };
+                    assert_eq!(
+                        payload
+                            .curves
+                            .iter()
+                            .map(|curve| curve.fill_style.color.get_alpha())
+                            .collect::<Vec<_>>(),
+                        fills
+                    );
+                    assert_eq!(
+                        payload
+                            .curves
+                            .iter()
+                            .map(|curve| curve.line_style.color.get_alpha())
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                    let descriptor = selected.discrete_guide.as_ref().unwrap();
+                    let sections = descriptor
+                        .sections
+                        .iter()
+                        .filter_map(|section| match &section.body {
+                            crate::decorations::legend::discrete::GuideSectionBody::Alpha(
+                                alpha,
+                            ) => Some(alpha),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    assert_eq!(sections.len(), 2);
+                    assert!(sections.iter().all(|section| section.entries.len() == 5
+                        && section.sources[0].scope.as_deref() == scope.as_deref()
+                        && section.sources[0].glyphs[0].members.len() == 2));
+                }
+                let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+                let incomplete = source.clone().with_alpha(
+                    AlphaTarget::Line,
+                    crate::alpha::AlphaEncoding::keyed(
+                        [
+                            CategoryValues::new("cohort", ["a"]).unwrap(),
+                            CategoryValues::new("panel", ["left"]).unwrap(),
+                        ],
+                        crate::alpha::AlphaValues::new("confidence", [0]).unwrap(),
+                    )
+                    .unwrap(),
+                );
+                assert!(matches!(
+                    incomplete.preflight().unwrap_err(),
+                    Error::Data(_)
+                ));
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    calls
+                );
+            },
+        )
+        .unwrap();
     }
 
     fn density_values(values: &[f64], labels: Option<&[&str]>) -> DensityValues {

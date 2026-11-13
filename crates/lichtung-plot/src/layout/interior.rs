@@ -113,38 +113,45 @@ impl CompositionChildPolicy {
     }
 }
 
-/// Root-owned scientific axes plus extracted mark semantics. Attachment shares
-/// storage; no prepared Plot clone or alternate preparation route is retained.
-/// Trajectory retains its condition order.
-pub(crate) struct PreparedInteriorInputs {
-    pub(crate) scopes: Vec<crate::orchestrator::registration::Scope>,
+/// Root-owned occurrences hold their scientific axes and extracted semantics.
+/// Attachment transports only guides, never scientific storage.
+pub(crate) struct PreparedInteriorInputs<'src> {
+    pub(crate) plots: Vec<crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) discrete_guides:
         std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) route: InteriorRoute,
-    pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
-    pub(crate) families: std::sync::Arc<
-        Vec<(
+}
+
+impl<'src> PreparedInteriorInputs<'src> {
+    pub(crate) fn from_panels(
+        source: &'src crate::builder::PlotDescription,
+        route: InteriorRoute,
+        axes: Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>,
+        families: Vec<(
             Option<String>,
             crate::orchestrator::registration::PreparedFamily,
         )>,
-    >,
-}
-
-impl PreparedInteriorInputs {
-    #[cfg(test)]
-    pub(crate) fn attach_with_guides_for_test(
-        &self,
-        plot: Plot,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-    ) -> Result<Plot, Error> {
-        self.prepare_discrete_guides(
-            &plot,
-            theme,
-            &crate::font::canonical::OperationContext::new(),
-            &ComponentAddress::root(),
-            false,
-        )?;
-        self.attach(plot)
+        scopes: Vec<crate::orchestrator::registration::Scope>,
+        operation: &crate::font::canonical::OperationContext,
+    ) -> Result<Self, Error> {
+        let mut registry =
+            crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
+        let mut axes = axes.into_iter();
+        let mut families = families.into_iter();
+        for scope in scopes {
+            registry.reserve(source, scope, operation)?;
+            let panel = registry
+                .panels
+                .last_mut()
+                .expect("reserved plot occurrence");
+            panel.axes = axes.next().map(|(_, axes)| axes);
+            panel.family = families.next().map(|(_, family)| family);
+        }
+        Ok(Self {
+            plots: registry.finish()?,
+            route,
+            discrete_guides: std::sync::OnceLock::new(),
+        })
     }
 
     /// Semantic attachment does not discover fonts. Each attached panel obtains
@@ -155,7 +162,11 @@ impl PreparedInteriorInputs {
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(), Error> {
         self.route.validate(plot.description())?;
-        for (index, (scope, axes)) in self.axes.iter().enumerate() {
+        for registered in &self.plots {
+            let Some(axes) = &registered.axes else {
+                continue;
+            };
+            let scope = &registered.scope.render_name;
             if self.route.is_coordinate() {
                 coordinate::Intrinsics::prepare(
                     axes,
@@ -164,19 +175,13 @@ impl PreparedInteriorInputs {
                     plot.y_tick_labels_visible(),
                 )?;
             } else if self.route.kind() == PlotKind::Heatmap {
-                let prepared = self
-                    .families
-                    .get(index)
-                    .filter(|(owner, _)| owner == scope)
-                    .and_then(|(_, family)| match family {
-                        crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
-                            Some(marks)
-                        }
-                        _ => None,
-                    })
-                    .ok_or_else(|| {
-                        Error::Render("prepared heatmap intrinsic scope missing".into())
-                    })?;
+                let prepared = match &registered.family {
+                    crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
+                        Some(marks)
+                    }
+                    _ => None,
+                }
+                .ok_or_else(|| Error::Render("prepared heatmap intrinsic scope missing".into()))?;
                 crate::plots::heatmap::prepare_intrinsics(prepared, axes, theme, scope.as_deref())?;
             }
         }
@@ -186,8 +191,6 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(plot.description())?;
         plot.prepared_discrete_guides = self.discrete_guides.get().cloned();
-        plot.prepared_axes = self.axes.clone();
-        plot.prepared_families.clone_from(&self.families);
         Ok(plot)
     }
 }
@@ -195,29 +198,36 @@ impl PreparedInteriorInputs {
 impl Plot {
     pub(crate) fn intrinsic_body_minimum(
         &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
-            coordinate::Intrinsics::prepared(self, theme)?.minimum(self)
+            coordinate::Intrinsics::prepared(self, registered, theme)?.minimum(self)
         } else {
             (1.0 / 1024.0, 1.0 / 1024.0)
         };
         let mark = match self.kind() {
-            PlotKind::Scatter => Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?),
-            PlotKind::Qq => Some(crate::plots::qq::intrinsic_body_minimum(self, theme)?),
-            PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
-                self, theme,
+            PlotKind::Scatter => Some(crate::plots::scatter::intrinsic_body_minimum(
+                self, registered, theme,
             )?),
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                Some(crate::plots::line::intrinsic_body_minimum(self, theme)?)
-            }
-            PlotKind::Density => Some(crate::plots::density::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Qq => Some(crate::plots::qq::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
+            PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => Some(
+                crate::plots::line::intrinsic_body_minimum(self, registered, theme)?,
+            ),
+            PlotKind::Density => Some(crate::plots::density::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
             PlotKind::Histogram => Some(crate::plots::histogram::intrinsic_body_minimum(
-                self, theme,
+                self, registered, theme,
             )?),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
-                let prepared = self
-                    .prepared_family()
+                let prepared = registered
+                    .map(|registered| registered.family.as_ref())
                     .and_then(|family| match family {
                         crate::orchestrator::registration::FamilyRef::Estimate {
                             marks, ..
@@ -229,36 +239,42 @@ impl Plot {
                     })?;
                 Some(prepared.mark_intrinsic(self, theme)?)
             }
-            PlotKind::Dumbbell => {
-                Some(crate::plots::dumbbell::intrinsic_body_minimum(self, theme)?)
-            }
+            PlotKind::Dumbbell => Some(crate::plots::dumbbell::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
             PlotKind::Bar
             | PlotKind::StackedBar
             | PlotKind::HorizontalBar
-            | PlotKind::StackedHorizontalBar => {
-                Some(crate::plots::bar_data::intrinsic_body_minimum(self, theme)?)
-            }
-            PlotKind::Boxplot => Some(crate::plots::boxplot::intrinsic_body_minimum(self, theme)?),
-            PlotKind::Raincloud if self.description().raincloud_geometry_input().is_some() => Some(
-                crate::plots::violin::precomputed::intrinsic_body_minimum(self, theme)?,
+            | PlotKind::StackedHorizontalBar => Some(
+                crate::plots::bar_data::intrinsic_body_minimum(self, registered, theme)?,
             ),
-            PlotKind::Violin | PlotKind::Raincloud => {
-                Some(crate::plots::violin::intrinsic_body_minimum(self, theme)?)
-            }
+            PlotKind::Boxplot => Some(crate::plots::boxplot::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
+            PlotKind::Raincloud if self.description().raincloud_geometry_input().is_some() => Some(
+                crate::plots::violin::precomputed::intrinsic_body_minimum(self, registered, theme)?,
+            ),
+            PlotKind::Violin | PlotKind::Raincloud => Some(
+                crate::plots::violin::intrinsic_body_minimum(self, registered, theme)?,
+            ),
             PlotKind::Interaction => Some(crate::plots::interaction::intrinsic_body_minimum(
-                self, theme,
+                self, registered, theme,
             )?),
-            PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(self, theme)?),
-            PlotKind::Beeswarm => {
-                Some(crate::plots::beeswarm::intrinsic_body_minimum(self, theme)?)
-            }
+            PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
+            PlotKind::Beeswarm => Some(crate::plots::beeswarm::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
             PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
-                self, theme,
+                self, registered, theme,
             )?),
-            PlotKind::Marginal => {
-                Some(crate::plots::marginal::intrinsic_body_minimum(self, theme)?)
-            }
-            PlotKind::Matrix => Some(crate::plots::matrix::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Marginal => Some(crate::plots::marginal::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
+            PlotKind::Matrix => Some(crate::plots::matrix::intrinsic_body_minimum(
+                self, registered, theme,
+            )?),
         };
         if let Some(mark) = mark {
             minimum.0 = minimum.0.max(mark.0);

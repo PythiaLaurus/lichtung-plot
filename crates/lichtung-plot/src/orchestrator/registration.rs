@@ -96,6 +96,102 @@ impl Scope {
     }
 }
 
+pub(crate) struct PlotRegistration<'src> {
+    pub(crate) source: &'src PlotDescription,
+    pub(crate) scope: Scope,
+    pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
+    pub(crate) axes: Option<crate::plots::shared_x::PreparedAxes>,
+    pub(crate) family: PreparedFamily,
+}
+
+impl std::fmt::Debug for PlotRegistration<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PlotRegistration")
+            .field("kind", &self.source.kind())
+            .field("id", &self.scope.id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'src> PlotRegistration<'src> {
+    pub(crate) fn data<'op>(
+        &'op self,
+        operation: &'op crate::font::canonical::OperationContext,
+    ) -> Result<crate::data::PlotData<'src, 'op>, Error> {
+        crate::data::PlotData::checked(self.source, &self.scope, &self.row_source, operation)
+    }
+
+    pub(crate) fn axis_numeric_binding<'v>(
+        &'v self,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::numeric::source::NumericBinding<'v>, Error> {
+        self.scope
+            .axis_numeric_binding(self.source, &self.row_source, operation)
+    }
+}
+
+pub(crate) struct PlotRegistrationBuild<'src> {
+    pub(crate) source: &'src PlotDescription,
+    pub(crate) scope: Scope,
+    pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
+    pub(crate) family: Option<PreparedFamily>,
+    pub(crate) axes: Option<crate::plots::shared_x::PreparedAxes>,
+}
+
+pub(crate) struct PlotRegistryBuilder<'src> {
+    identity: RootIdentity,
+    pub(crate) panels: Vec<PlotRegistrationBuild<'src>>,
+}
+
+impl<'src> PlotRegistryBuilder<'src> {
+    pub(crate) fn new(identity: RootIdentity) -> Self {
+        Self {
+            identity,
+            panels: Vec::new(),
+        }
+    }
+
+    pub(crate) fn reserve(
+        &mut self,
+        source: &'src PlotDescription,
+        scope: Scope,
+        operation: &crate::font::canonical::OperationContext,
+    ) -> Result<PlotOccurrenceId, Error> {
+        let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
+        row_source.check(source, &scope, operation)?;
+        if scope.id.root != self.identity {
+            return Err(Error::Render(
+                "row source belongs to a different source or operation".into(),
+            ));
+        }
+        let id = scope.id.clone();
+        crate::data::source::reserve_source(&mut self.panels, 1)?;
+        self.panels.push(PlotRegistrationBuild {
+            source,
+            scope,
+            row_source,
+            family: None,
+            axes: None,
+        });
+        Ok(id)
+    }
+
+    pub(crate) fn finish(self) -> Result<Vec<PlotRegistration<'src>>, Error> {
+        crate::data::source::collect_source(self.panels.into_iter().map(|panel| {
+            Ok(PlotRegistration {
+                source: panel.source,
+                scope: panel.scope,
+                row_source: panel.row_source,
+                axes: panel.axes,
+                family: panel
+                    .family
+                    .ok_or_else(|| Error::Render("prepared family is missing".into()))?,
+            })
+        }))
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum PreparedFamily {
     Scatter(crate::plots::scatter::PreparedScatter),

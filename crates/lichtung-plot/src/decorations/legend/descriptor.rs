@@ -93,9 +93,9 @@ impl<'v> ContinuousContributor<'v> {
         let (title, semantics, samples) = match plot.kind() {
             crate::PlotKind::Heatmap => {
                 let marks = input
-                    .families
+                    .plots
                     .first()
-                    .and_then(|(_, family)| match family {
+                    .and_then(|registered| match &registered.family {
                         crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
                             Some(marks)
                         }
@@ -113,9 +113,9 @@ impl<'v> ContinuousContributor<'v> {
             }
             crate::PlotKind::Beeswarm => {
                 let marks = input
-                    .families
+                    .plots
                     .first()
-                    .and_then(|(_, family)| match family {
+                    .and_then(|registered| match &registered.family {
                         crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) => {
                             Some(marks)
                         }

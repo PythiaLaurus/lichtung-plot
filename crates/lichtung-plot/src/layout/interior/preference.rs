@@ -44,16 +44,17 @@ fn ceil_ratio(numerator: i128, denominator: i128) -> Result<i64, Error> {
 )]
 pub(crate) fn categorical_preference(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<CategoricalSizePreference, Error> {
     let scope = plot.axis_scope();
     macro_rules! family {
         ($missing:literal, $owner:literal, $pattern:pat => $marks:ident) => {{
-            if plot.prepared_families.is_empty() {
+            if registered.is_none() {
                 return Err(Error::Render($missing.into()));
             }
-            let $pattern = panel(&plot.prepared_families, scope, $owner)? else {
+            let $pattern = panel(registered, scope, $owner)? else {
                 return Err(Error::Render($missing.into()));
             };
             $marks
@@ -162,15 +163,15 @@ pub(crate) fn categorical_preference(
     })
 }
 
-pub(crate) fn panel<'a, T>(
-    panels: &'a [(Option<String>, T)],
+pub(crate) fn panel<'a>(
+    registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'_>>,
     scope: Option<&str>,
     owner: &str,
-) -> Result<&'a T, Error> {
-    for (key, marks) in panels {
-        if key.as_deref() == scope {
-            return Ok(marks);
-        }
+) -> Result<&'a crate::orchestrator::registration::PreparedFamily, Error> {
+    if let Some(registered) =
+        registered.filter(|registered| registered.scope.render_name.as_deref() == scope)
+    {
+        return Ok(&registered.family);
     }
     Err(Error::Render(format!(
         "{owner} primary-mark scope is not prepared"
@@ -200,19 +201,20 @@ fn ceil_sqrt(value: u128) -> Result<u32, Error> {
 )]
 pub(crate) fn mark_preference(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<StandardSizePreference, Error> {
     let scope = plot.axis_scope();
     macro_rules! standard {
         ($owner:literal, $pattern:pat => $marks:ident) => {{
-            if plot.prepared_families.is_empty() {
+            if registered.is_none() {
                 return Err(Error::Render(format!(
                     "{} mark preference lacks preparation",
                     $owner
                 )));
             }
-            let $pattern = panel(&plot.prepared_families, scope, $owner)? else {
+            let $pattern = panel(registered, scope, $owner)? else {
                 return Err(Error::Render(format!(
                     "{} mark preference lacks preparation",
                     $owner
@@ -300,8 +302,8 @@ pub(crate) fn mark_preference(
             )
         }
         PlotKind::Marginal => {
-            let marks = plot
-                .prepared_family()
+            let marks = registered
+                .map(|registered| registered.family.as_ref())
                 .and_then(|family| match family {
                     crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),
                     _ => None,
@@ -352,8 +354,17 @@ pub(crate) fn mark_preference(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
+
+    fn frame(
+        plot: &Plot,
+        theme: &crate::text::TextRequestContext<'_, '_>,
+    ) -> crate::layout::RootFramePlan {
+        crate::orchestrator::with_prepared_plot_for_test(plot, theme, |plot, inputs, request| {
+            super::super::coordinate::canvas_layout(plot, inputs.plots.first(), request).unwrap()
+        })
+        .unwrap()
+    }
 
     fn standard(root: &crate::layout::RootFramePlan) -> &StandardSizePreference {
         let Some(CoordinateSizePreference::Standard(preference)) = root.native_preference.as_ref()
@@ -426,13 +437,11 @@ mod tests {
             (grouped(false), crate::layout::AxisSide::Bottom, 2),
             (grouped(true), crate::layout::AxisSide::Left, 2),
         ] {
-            let resources = OperationContext::new();
-            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-            let chart = prepared.attach(source).unwrap();
+            let chart = source;
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+            let root = frame(&chart, &theme);
             let preference = categorical(&root);
             assert_eq!(preference.axis, axis);
             assert_eq!(preference.slots, 2);
@@ -502,13 +511,11 @@ mod tests {
             .map(|plot| (plot, 2, 2))
             .chain([(supplied, 2, 2), (interaction, 3, 4)])
         {
-            let resources = OperationContext::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-            let chart = inputs.attach(source).unwrap();
+            let chart = source;
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+            let root = frame(&chart, &theme);
             let preference = categorical(&root);
             assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
             assert_eq!(preference.slots, slots);
@@ -547,16 +554,10 @@ mod tests {
         )
         .size(800, 600)
         .erase();
-        let resources = OperationContext::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = prepared.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
-        let original = super::super::coordinate::canvas_layout(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text),
-        )
-        .unwrap();
+        let original = frame(&chart, &crate::text::TextRequestContext::new(&theme, &text));
         let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
         assert_eq!(preference.mark_pitch.to_bits(), 16.0_f64.to_bits());
@@ -576,11 +577,7 @@ mod tests {
             .unwrap();
         let points = theme.marks.get_points().clone().radii(radii).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        let styled = super::super::coordinate::canvas_layout(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text),
-        )
-        .unwrap();
+        let styled = frame(&chart, &crate::text::TextRequestContext::new(&theme, &text));
         let preference = standard(&styled);
         assert_eq!(preference.primary_marks, 25);
         assert!(preference.mark_pitch > 160.0);
@@ -593,11 +590,7 @@ mod tests {
         primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
         let points = theme.marks.get_points().clone().primary(primary).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
-        let invisible = super::super::coordinate::canvas_layout(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text),
-        )
-        .unwrap();
+        let invisible = frame(&chart, &crate::text::TextRequestContext::new(&theme, &text));
         assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(
             standard(&invisible).mark_pitch.to_bits(),
@@ -611,14 +604,11 @@ mod tests {
         .x_limits(10.0, 11.0)
         .size(800, 600)
         .erase();
-        let resources = OperationContext::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let clipped = prepared.attach(source).unwrap();
-        let exact = super::super::coordinate::canvas_layout(
+        let clipped = source;
+        let exact = frame(
             &clipped,
             &crate::text::TextRequestContext::new(&theme, &text),
-        )
-        .unwrap();
+        );
         assert_eq!(standard(&exact).primary_marks, 25);
     }
 }

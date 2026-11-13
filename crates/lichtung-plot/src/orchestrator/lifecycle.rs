@@ -16,8 +16,8 @@ pub(super) struct PlotPlan {
     root: crate::layout::FrozenRoot<TextReplayPlan>,
 }
 
-struct PreparedPlotInputs {
-    axes: crate::layout::interior::PreparedInteriorInputs,
+struct PreparedPlotInputs<'src> {
+    axes: crate::layout::interior::PreparedInteriorInputs<'src>,
     facet_guide: Option<super::facets::PreparedFacetGuide>,
     theme: Box<ResolvedTheme>,
     text: TextService,
@@ -26,7 +26,151 @@ struct PreparedPlotInputs {
     caches: std::cell::RefCell<RootLayoutCaches>,
 }
 
-impl PreparedPlotInputs {
+impl<'src> PreparedPlotInputs<'src> {
+    fn prepare(
+        source: &'src Plot,
+        kind: PlotKind,
+        resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
+        caches: std::cell::RefCell<RootLayoutCaches>,
+        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<Self, Error> {
+        let theme = resolve_theme()?;
+        let text = TextService::default();
+        let request = TextRequestContext::new(&theme, &text);
+        source.description().validate_configuration(kind)?;
+        let axes = crate::plots::shared_x::prepare_plot(
+            source,
+            &prepared_stage.operation(),
+            Some(&theme),
+        )?;
+        axes.validate_categorical_scale(source, &request, None)?;
+        let facet_guide = source
+            .description()
+            .has_facets()
+            .then(|| {
+                super::facets::prepare_discrete_guide(
+                    source,
+                    kind,
+                    &request,
+                    &axes,
+                    &prepared_stage.operation(),
+                )
+            })
+            .transpose()?;
+        if !source.description().has_facets() {
+            axes.prepare_discrete_guides(
+                source,
+                &request,
+                &prepared_stage.operation(),
+                &crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::PlotBody, 0)?,
+                false,
+            )?;
+        }
+        let mut requirements = crate::layout::foundational_plot_requirements(
+            Some(&axes),
+            source,
+            kind,
+            &request,
+            &crate::layout::ComponentAddress::root(),
+            true,
+            true,
+            true,
+            Some(prepared_stage),
+        )?;
+        crate::layout::PreparedTextRequirement::append_preference_metrics(
+            &mut requirements,
+            &request,
+            &crate::layout::ComponentAddress::root(),
+            prepared_stage,
+        )?;
+        let text_topology =
+            crate::layout::PreparedTextCensus::structural_address_count(&requirements)
+                .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
+        let mut scalar_presence = prepared_stage.reserve_scalar_presence_map()?;
+        let mut census = crate::layout::PreparedTextCensus::materialize(
+            requirements,
+            Some(prepared_stage),
+            Some(&mut scalar_presence),
+        )
+        .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
+        if census.counts.structural_addresses != text_topology {
+            return Err(Error::Render(format!(
+                "prepared text topology counted {text_topology} addresses but materialized {}",
+                census.counts.structural_addresses
+            )));
+        }
+        text.prepare_font_environment_from_census(&mut census, scalar_presence, prepared_stage)?;
+        // Scientific preparation and the font census are complete. No
+        // parent width has been allocated when these summaries are retained.
+        axes.prepare_intrinsics(source, &request)?;
+        let root_text =
+            crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
+                &request,
+                source.description().prose(),
+                None,
+            )?;
+        Ok(Self {
+            axes,
+            facet_guide,
+            theme,
+            text,
+            text_census: census,
+            root_text,
+            caches,
+        })
+    }
+}
+
+/// Keep producer fixtures inside the production prepare/font/measure operation.
+/// Only owning results, scalar observations and liveness witnesses may escape.
+#[cfg(test)]
+pub(crate) fn with_prepared_plot_for_test<T>(
+    source: &Plot,
+    appearance: &TextRequestContext<'_, '_>,
+    visit: impl FnOnce(
+        &Plot,
+        &crate::layout::interior::PreparedInteriorInputs<'_>,
+        &TextRequestContext<'_, '_>,
+    ) -> T,
+) -> Result<T, Error> {
+    let mut visit = Some(visit);
+    let mut result = None;
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 1,
+            height: 1,
+        },
+        |stage| {
+            PreparedPlotInputs::prepare(
+                source,
+                source.kind(),
+                || Ok(Box::new(appearance.theme.clone())),
+                std::cell::RefCell::new(RootLayoutCaches::new(
+                    crate::decorations::plan::children::ChildPlans::facets(),
+                )),
+                stage,
+            )
+        },
+        |prepared, assigned, _| {
+            let plot = prepared.axes.attach(source.clone())?;
+            let request = TextRequestContext::new(&prepared.theme, &prepared.text);
+            result = Some(visit.take().expect("one feedback-free producer fixture")(
+                &plot,
+                &prepared.axes,
+                &request,
+            ));
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
+        },
+        |_, _, (), _| Ok(()),
+    )?;
+    Ok(result.expect("producer fixture was measured"))
+}
+
+impl PreparedPlotInputs<'_> {
     /// This prepared owner freezes its source, theme, fonts and instructions for
     /// one operation. Only root constraints and traced body minima can change.
     fn root_frame(
@@ -36,7 +180,7 @@ impl PreparedPlotInputs {
     ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
         let dimensions = source.canvas_dimensions()?;
         let request = TextRequestContext::new(&self.theme, &self.text);
-        let minimum = source.intrinsic_body_minimum(&request)?;
+        let minimum = source.intrinsic_body_minimum(self.axes.plots.first(), &request)?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
         if let Some(cached) = frames.as_ref() {
@@ -47,7 +191,7 @@ impl PreparedPlotInputs {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
         }
-        let frame = source.measured_canvas_layout(&request)?;
+        let frame = source.measured_canvas_layout(self.axes.plots.first(), &request)?;
 
         let frame = frame.into_shared();
         *frames = Some(CachedRootFrame {
@@ -792,95 +936,7 @@ impl PlotPlan {
         let root = crate::layout::plan_root(
             sizing,
             |prepared_stage| {
-                let theme = resolve_theme()?;
-                let text = TextService::default();
-                let request = TextRequestContext::new(&theme, &text);
-                source.description().validate_configuration(kind)?;
-                let axes = crate::plots::shared_x::prepare_plot(
-                    source,
-                    &prepared_stage.operation(),
-                    Some(&theme),
-                )?;
-                axes.validate_categorical_scale(source, &request, None)?;
-                let facet_guide = source
-                    .description()
-                    .has_facets()
-                    .then(|| {
-                        super::facets::prepare_discrete_guide(
-                            source,
-                            kind,
-                            &request,
-                            &axes,
-                            &prepared_stage.operation(),
-                        )
-                    })
-                    .transpose()?;
-                if !source.description().has_facets() {
-                    axes.prepare_discrete_guides(
-                        source,
-                        &request,
-                        &prepared_stage.operation(),
-                        &crate::layout::ComponentAddress::root()
-                            .child(crate::layout::AddressRole::PlotBody, 0)?,
-                        false,
-                    )?;
-                }
-                let mut requirements = crate::layout::foundational_plot_requirements(
-                    Some(&axes),
-                    source,
-                    kind,
-                    &request,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(prepared_stage),
-                )?;
-                crate::layout::PreparedTextRequirement::append_preference_metrics(
-                    &mut requirements,
-                    &request,
-                    &crate::layout::ComponentAddress::root(),
-                    prepared_stage,
-                )?;
-                let text_topology =
-                    crate::layout::PreparedTextCensus::structural_address_count(&requirements)
-                        .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
-                let mut scalar_presence = prepared_stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(prepared_stage),
-                    Some(&mut scalar_presence),
-                )
-                .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
-                if census.counts.structural_addresses != text_topology {
-                    return Err(Error::Render(format!(
-                        "prepared text topology counted {text_topology} addresses but materialized {}",
-                        census.counts.structural_addresses
-                    )));
-                }
-                text.prepare_font_environment_from_census(
-                    &mut census,
-                    scalar_presence,
-                    prepared_stage,
-                )?;
-                // Scientific preparation and the font census are complete. No
-                // parent width has been allocated when these summaries are retained.
-                axes.prepare_intrinsics(source, &request)?;
-                let root_text =
-                    crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-                        &request,
-                        source.description().prose(),
-                        None,
-                    )?;
-                Ok(PreparedPlotInputs {
-                    axes,
-                    facet_guide,
-                    theme,
-                    text,
-                    text_census: census,
-                    root_text,
-                    caches,
-                })
+                PreparedPlotInputs::prepare(source, kind, resolve_theme, caches, prepared_stage)
             },
             |prepared, assigned, round| {
                 let mut caches = prepared.caches.borrow_mut();
@@ -938,13 +994,14 @@ impl PlotPlan {
                                 .as_ref()
                                 .expect("faceted root guide was prepared"),
                             sizing.automatic_height(),
-                            Some(&prepared.axes),
+                            &prepared.axes,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?,
                     ))
                 } else {
                     PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
                         &source,
+                        prepared.axes.plots.first(),
                         kind,
                         &request,
                         prepared.root_frame(&source, frames)?,
@@ -1035,8 +1092,13 @@ fn render_plot_scene(
 }
 
 impl UnfacetedPlotPlan {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one selected standalone panel retains its original frame completion and legend checks"
+    )]
     fn new(
         source: &Plot,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         kind: PlotKind,
         theme: &TextRequestContext<'_, '_>,
         mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
@@ -1044,12 +1106,18 @@ impl UnfacetedPlotPlan {
         content_height: bool,
     ) -> Result<Self, Error> {
         let cell = canvas_layout.panel_box;
-        let mut context = source.description().configured_source_rows()?.map_or_else(
-            || PlotRenderContext::new(source.data(), cell, theme),
-            |rows| PlotRenderContext::with_source_rows(source.data(), rows, cell, theme),
-        );
+        source.description().configured_source_rows()?;
+        let operation = theme.text.prepared_font_environment()?.operation();
+        let mut context = PlotRenderContext::new(
+            registered
+                .expect("prepared standalone plot")
+                .data(&operation)?,
+            cell,
+            theme,
+        )
+        .with_registration(registered.expect("prepared standalone plot"));
         context.content_height = content_height;
-        source.validate_interior_preparation()?;
+        source.validate_interior_preparation(registered)?;
         let discrete_guide = if kind == PlotKind::Matrix {
             None
         } else {
@@ -1084,7 +1152,7 @@ impl UnfacetedPlotPlan {
                 canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
             )?;
             plot = plot.with_canvas_size(source.canvas_dimensions()?.0, height);
-            let mut resized = plot.measured_canvas_layout(theme)?;
+            let mut resized = plot.measured_canvas_layout(registered, theme)?;
             resized.panel_box = panel_plan.frame_box;
             canvas_layout = resized.into_shared();
         }
@@ -1185,6 +1253,16 @@ impl UnfacetedPlotPlan {
 
 impl Plot {
     #[cfg(test)]
+    pub(crate) fn intrinsic_for_test(
+        &self,
+        theme: &TextRequestContext<'_, '_>,
+    ) -> Result<(f64, f64), Error> {
+        with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
+            plot.intrinsic_body_minimum(inputs.plots.first(), request)
+        })?
+    }
+
+    #[cfg(test)]
     pub(super) fn render_kind_erased(
         &self,
         kind: PlotKind,
@@ -1200,17 +1278,21 @@ impl Plot {
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, Error> {
-        crate::layout::fit::measured(self.preflight_measurement(
-            kind,
-            panel,
-            theme,
-            &crate::layout::fit::ROOT_SCOPE,
-        ))
-        .map_err(crate::layout::fit::PlanError::into_error)
+        with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
+            crate::layout::fit::measured(plot.preflight_measurement(
+                inputs.plots.first(),
+                kind,
+                panel,
+                request,
+                &crate::layout::fit::ROOT_SCOPE,
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)
+        })?
     }
 
     pub(crate) fn preflight_measurement(
         &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         kind: PlotKind,
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
@@ -1227,11 +1309,18 @@ impl Plot {
             )));
         }
         let source_rows = self.description().configured_source_rows()?;
-        let context = source_rows.map_or_else(
-            || PlotRenderContext::new(self.data(), panel, theme),
-            |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
-        );
-        crate::layout::fit::outcome(self.measure_panel(kind, context.with_fit_scope(scope)))
+        let operation = theme.text.prepared_font_environment()?.operation();
+        let mut context = if let Some(registered) = registered {
+            PlotRenderContext::new(registered.data(&operation)?, panel, theme)
+                .with_registration(registered)
+        } else {
+            source_rows.map_or_else(
+                || PlotRenderContext::new(self.data(), panel, theme),
+                |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
+            )
+        };
+        context = context.with_fit_scope(scope);
+        crate::layout::fit::outcome(self.measure_panel(kind, context))
     }
 }
 
@@ -1241,6 +1330,10 @@ mod root_title_tests {
     use crate::TextAlignment::{Center, End, Start};
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the same root operation prepares fonts and measures independent caption and native-axis reserves"
+    )]
     fn specialized_axis_feedback_cannot_spend_the_root_caption_reserve() {
         let source = Plot::beeswarm(
             crate::CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
@@ -1274,15 +1367,36 @@ mod root_title_tests {
                         &crate::layout::ComponentAddress::root(),
                         false,
                     )?;
+                    let requirements = crate::layout::foundational_plot_requirements(
+                        Some(&inputs),
+                        &source,
+                        source.kind(),
+                        &theme,
+                        &crate::layout::ComponentAddress::root(),
+                        true,
+                        true,
+                        true,
+                        Some(stage),
+                    )?;
+                    let mut presence = stage.reserve_scalar_presence_map()?;
+                    let mut census = crate::layout::PreparedTextCensus::materialize(
+                        requirements,
+                        Some(stage),
+                        Some(&mut presence),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                    text.prepare_font_environment_from_census(&mut census, presence, stage)?;
                     Ok(inputs)
                 },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?;
                     let plan = UnfacetedPlotPlan::new(
                         &plot,
+                        inputs.plots.first(),
                         plot.kind(),
                         &theme,
-                        plot.measured_canvas_layout(&theme)?.into_shared(),
+                        plot.measured_canvas_layout(inputs.plots.first(), &theme)?
+                            .into_shared(),
                         round,
                         false,
                     )?;
@@ -1466,9 +1580,11 @@ mod retained_legend_tests {
                     assigned.assigned_size()?,
                     UnfacetedPlotPlan::new(
                         &plot,
+                        inputs.plots.first(),
                         plot.kind(),
                         &theme,
-                        plot.measured_canvas_layout(&theme)?.into_shared(),
+                        plot.measured_canvas_layout(inputs.plots.first(), &theme)?
+                            .into_shared(),
                         round,
                         false,
                     )?,

@@ -28,18 +28,17 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) color_label: crate::Text,
 }
 
-fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
-    if chart.prepared_families.is_empty() {
+fn retained<'v>(
+    chart: &Plot,
+    registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'_>>,
+) -> Result<&'v PreparedBeeswarm, Error> {
+    if registered.is_none() {
         return Err(Error::Render(
             "Beeswarm requires root-prepared source rows".into(),
         ));
     }
-    match crate::layout::interior::preference::panel(
-        &chart.prepared_families,
-        chart.axis_scope(),
-        "Beeswarm",
-    )?
-    .as_ref()
+    match crate::layout::interior::preference::panel(registered, chart.axis_scope(), "Beeswarm")?
+        .as_ref()
     {
         crate::orchestrator::registration::FamilyRef::Beeswarm(marks) => Ok(marks),
         _ => Err(Error::Render(
@@ -50,9 +49,10 @@ fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart)?;
+    let prepared = retained(chart, registered)?;
     if prepared.levels.is_empty()
         || prepared.rows.is_empty()
         || prepared.rows.len() != prepared.colors.len()
@@ -104,8 +104,8 @@ pub(crate) fn intrinsic_body_minimum(
                 .backend_style(),
         )?);
     }
-    let axes =
-        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+        .minimum(chart);
     Ok((
         axes.0.max(if chart.user_x_limits().is_none() {
             numeric
@@ -327,15 +327,16 @@ impl PreparedBeeswarm {
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    if chart.prepared_families.is_empty() {
+    if registered.is_none() {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     }
     let crate::orchestrator::registration::FamilyRef::Beeswarm(marks) =
         crate::layout::interior::preference::panel(
-            &chart.prepared_families,
+            registered,
             chart.axis_scope(),
             "natural Beeswarm",
         )?
@@ -343,8 +344,8 @@ pub(crate) fn natural_body_height(
     else {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     };
-    let axes = chart
-        .prepared_axis_inputs()
+    let axes = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
     let range = chart
         .description()
@@ -361,7 +362,7 @@ pub(crate) fn natural_body_height(
         &projection,
         radius,
     )?;
-    let hard = intrinsic_body_minimum(chart, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
         .max(2.0 * theme.typography.axes.tick_label.font_size)
         * marks.levels.len() as f64;
@@ -372,10 +373,10 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained(chart)?;
+    let prepared = retained(chart, context.registered)?;
     let theme = context.theme;
 
-    let minimum = intrinsic_body_minimum(chart, theme)?;
+    let minimum = intrinsic_body_minimum(chart, context.registered, theme)?;
     let (panel, colorbar) = if chart.continuous_guide_suppressed()
         || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -393,12 +394,15 @@ pub(crate) fn measure(
             minimum.0,
             theme,
             &guide_scope,
-            context.content_height.then_some(chart),
+            context
+                .content_height
+                .then_some((chart, context.registered)),
         )?;
         (body, Some(guide))
     };
-    let axes = chart
-        .prepared_axis_inputs()
+    let axes = context
+        .registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("Beeswarm axes require preparation".into()))?;
     let range = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(prepared.x_data))?;
     let projection = crate::layout::Projection::new(

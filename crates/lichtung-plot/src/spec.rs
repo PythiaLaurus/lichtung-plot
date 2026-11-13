@@ -642,6 +642,7 @@ use crate::Error;
 /// Shared immutable inputs for one plot renderer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a, 'src> {
+    pub(crate) registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) data: crate::data::PlotData<'src, 'a>,
     pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
@@ -679,6 +680,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
         Self {
+            registered: None,
             data,
             panel,
             content_height: false,
@@ -703,6 +705,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
         Self {
+            registered: None,
             data: data.map_source_rows(source_rows),
             panel,
             content_height: false,
@@ -768,8 +771,10 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     }
 
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
-        self.prepared_axes = plot.prepared_axis_inputs();
-        self.prepared_family = plot.prepared_family();
+        self.prepared_axes = self
+            .registered
+            .and_then(|registered| registered.axes.as_ref());
+        self.prepared_family = self.registered.map(|registered| registered.family.as_ref());
         self.prepared_kind = Some(self.prepared_family.map_or(
             plot.kind(),
             crate::orchestrator::registration::FamilyRef::kind,
@@ -796,6 +801,14 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         self,
     ) -> Option<crate::orchestrator::registration::FamilyRef<'a>> {
         self.prepared_family
+    }
+
+    pub(crate) const fn with_registration(
+        mut self,
+        registered: &'a crate::orchestrator::registration::PlotRegistration<'src>,
+    ) -> Self {
+        self.registered = Some(registered);
+        self
     }
 
     #[expect(

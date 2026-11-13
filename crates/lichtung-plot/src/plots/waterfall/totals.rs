@@ -281,7 +281,7 @@ mod tests {
                 .with_planned_y_limits(y_limits);
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None).unwrap();
             let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
-                &inputs.families[0].1
+                &inputs.plots[0].family
             else {
                 panic!("prepared Waterfall")
             };
@@ -352,21 +352,21 @@ mod tests {
             .x_limits(1.0, 1.015)
             .erase();
         let mut inputs = crate::plots::shared_x::prepare_plot(&limited, &operation, None).unwrap();
+        let registered = &mut inputs.plots[0];
         let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
-            &mut std::sync::Arc::get_mut(&mut inputs.families).unwrap()[0].1
+            &mut registered.family
         else {
             panic!("prepared Waterfall")
         };
-        let scope = &inputs.scopes[0];
-        let row_source =
-            crate::data::source::RowSourceContext::new(limited.description(), scope, &operation);
+        let scope = &registered.scope;
+        let row_source = &registered.row_source;
         marks
             .prepare_totals(
                 super::super::WaterfallTotalsPrepare {
                     numeric: scope
-                        .numeric_binding(limited.description(), &row_source, &operation)
+                        .numeric_binding(limited.description(), row_source, &operation)
                         .unwrap(),
-                    axes: &inputs.axes[0].1,
+                    axes: registered.axes.as_ref().unwrap(),
                     format: limited.description().total_format_spec(),
                 },
                 true,

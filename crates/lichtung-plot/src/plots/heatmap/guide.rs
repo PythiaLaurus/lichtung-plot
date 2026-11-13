@@ -12,7 +12,10 @@ pub(super) fn measure(
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 
-    content_plot: Option<&crate::Plot>,
+    content_plot: Option<(
+        &crate::Plot,
+        Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    )>,
 ) -> Result<(PixelRect, Legend), PlanError> {
     let descriptor = chart
         .prepared_discrete_guide()?

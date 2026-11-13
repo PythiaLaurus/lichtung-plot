@@ -77,52 +77,59 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     theme.marks = theme.marks.clone().points(points).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
-            PixelRect::new(20.0, 800.0, 20.0, 620.0),
-            &theme,
-        ))
-        .unwrap();
-    let layout::interior::MarkPayload::Marginal(payload) =
-        &selected.marks.as_ref().unwrap().payload
-    else {
-        panic!("Marginal payload")
-    };
-    assert_eq!(payload.groups.len(), 2);
-    assert_eq!(payload.groups[0].source_rows, [100, 300, 400]);
-    assert_eq!(
-        payload.groups[0]
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
+        let chart = chart.clone();
+        let operation = theme.text.prepared_font_environment().unwrap().operation();
+        let selected = chart
+            .measure_selected_interior(
+                PlotRenderContext::new(
+                    inputs.plots[0].data(&operation).unwrap(),
+                    PixelRect::new(20.0, 800.0, 20.0, 620.0),
+                    theme,
+                )
+                .with_registration(&inputs.plots[0]),
+            )
+            .unwrap();
+        let layout::interior::MarkPayload::Marginal(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Marginal payload")
+        };
+        assert_eq!(payload.groups.len(), 2);
+        assert_eq!(payload.groups[0].source_rows, [100, 300, 400]);
+        assert_eq!(
+            payload.groups[0]
+                .point_batches
+                .iter()
+                .map(|(points, style)| (points.len(), style.color.get_alpha()))
+                .collect::<Vec<_>>(),
+            [(1, 0), (1, 128), (1, 0)]
+        );
+        assert!(payload.groups[0]
             .point_batches
             .iter()
-            .map(|(points, style)| (points.len(), style.color.get_alpha()))
-            .collect::<Vec<_>>(),
-        [(1, 0), (1, 128), (1, 0)]
-    );
-    assert!(payload.groups[0]
-        .point_batches
-        .iter()
-        .all(|(_, style)| style.outline.is_none()));
-    assert_eq!(
-        payload
+            .all(|(_, style)| style.outline.is_none()));
+        assert_eq!(
+            payload
+                .groups
+                .iter()
+                .map(|group| group.fill.color.get_alpha())
+                .collect::<Vec<_>>(),
+            [230, 0]
+        );
+        assert_eq!(payload.groups[1].source_rows, [500, 600, 700]);
+        assert_eq!(
+            payload.groups[1]
+                .point_batches
+                .iter()
+                .map(|(points, style)| (points.len(), style.color.get_alpha()))
+                .collect::<Vec<_>>(),
+            [(1, 0), (1, 64), (1, 230)]
+        );
+        assert!(payload
             .groups
             .iter()
-            .map(|group| group.fill.color.get_alpha())
-            .collect::<Vec<_>>(),
-        [230, 0]
-    );
-    assert_eq!(payload.groups[1].source_rows, [500, 600, 700]);
-    assert_eq!(
-        payload.groups[1]
-            .point_batches
-            .iter()
-            .map(|(points, style)| (points.len(), style.color.get_alpha()))
-            .collect::<Vec<_>>(),
-        [(1, 0), (1, 64), (1, 230)]
-    );
-    assert!(payload
-        .groups
-        .iter()
-        .all(|group| group.fill.stroke.get_alpha() == 255));
+            .all(|group| group.fill.stroke.get_alpha() == 255));
+    })
+    .unwrap();
 }

@@ -58,10 +58,11 @@ pub(crate) struct HistogramSemantics {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Histogram(marks) => Some(marks),
             _ => None,
@@ -896,13 +897,11 @@ mod tests {
             .x_limits(0.0, 5.0)
         };
         let source = sample().erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let baseline = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         let curve = theme
             .marks
@@ -933,10 +932,7 @@ mod tests {
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             baseline
         );
@@ -959,7 +955,7 @@ mod tests {
         let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
         let styled = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
@@ -985,10 +981,7 @@ mod tests {
         theme.marks = theme.marks.clone().fills(fills).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             baseline
         );
@@ -998,11 +991,9 @@ mod tests {
                 crate::HistogramKde::Internal,
             ))
             .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let overlay = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(overlay.0.to_bits(), baseline.0.to_bits());
         assert_eq!(overlay.1.to_bits(), 140.0_f64.to_bits());
@@ -1085,13 +1076,12 @@ mod tests {
         let theme = original.resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
-        let selected = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+        let selected = mapped
+            .preflight_panel(
+                mapped.kind(),
                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                 &theme,
-            ))
+            )
             .unwrap();
         let crate::layout::interior::MarkPayload::Histogram(payload) =
             &selected.marks.as_ref().unwrap().payload
@@ -1172,83 +1162,96 @@ mod tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_families;
-        assert_eq!(panels.len(), 2);
-        for ((scope, family), (edges, alphas)) in panels.iter().zip([
-            ([1.0_f64, 4.5, 8.0], [128, 64]),
-            ([11.0_f64, 14.5, 18.0], [230, 0]),
-        ]) {
-            let crate::orchestrator::registration::PreparedFamily::Histogram(prepared) = family
-            else {
-                panic!("prepared Histogram")
-            };
-            assert_eq!(
-                prepared
-                    .bins
-                    .iter()
-                    .map(|bin| (
-                        bin.lower.to_bits(),
-                        bin.upper.to_bits(),
-                        bin.density.to_bits()
-                    ))
-                    .collect::<Vec<_>>(),
-                [
-                    (edges[0].to_bits(), edges[1].to_bits(), 4.0_f64.to_bits()),
-                    (edges[1].to_bits(), edges[2].to_bits(), 4.0_f64.to_bits()),
-                ]
-            );
-            assert_eq!(
-                prepared
-                    .bin_alphas
-                    .iter()
-                    .map(|alpha| alpha.unwrap().alpha)
-                    .collect::<Vec<_>>(),
-                alphas
-            );
-            let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
-            let selected = chart
-                .measure_selected_interior(PlotRenderContext::new(
-                    chart.data(),
-                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                    &theme,
-                ))
-                .unwrap();
-            let crate::layout::interior::MarkPayload::Histogram(payload) =
-                &selected.marks.as_ref().unwrap().payload
-            else {
-                panic!("Histogram payload")
-            };
-            assert_eq!(
-                payload
-                    .bins
-                    .iter()
-                    .map(|(_, fill)| fill.color.get_alpha())
-                    .collect::<Vec<_>>(),
-                alphas
-            );
-        }
-        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-        let incomplete = source.with_alpha(
-            AlphaTarget::Fill,
-            crate::alpha::AlphaEncoding::bins(
-                crate::Bounds::new(
-                    crate::NumericValues::new("lower", [1.0]),
-                    crate::NumericValues::new("upper", [4.5]),
-                ),
-                [crate::CategoryValues::new("panel", ["left"]).unwrap()],
-                crate::alpha::AlphaValues::new("bin confidence", [0]).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(matches!(
-            incomplete.preflight().unwrap_err(),
-            Error::Data(_)
-        ));
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            calls
-        );
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, theme| {
+                let operation = theme.text.prepared_font_environment().unwrap().operation();
+                let panels = &inputs.plots;
+                assert_eq!(panels.len(), 2);
+                for (registered, (edges, alphas)) in panels.iter().zip([
+                    ([1.0_f64, 4.5, 8.0], [128, 64]),
+                    ([11.0_f64, 14.5, 18.0], [230, 0]),
+                ]) {
+                    let crate::orchestrator::registration::PreparedFamily::Histogram(prepared) =
+                        &registered.family
+                    else {
+                        panic!("prepared Histogram")
+                    };
+                    assert_eq!(
+                        prepared
+                            .bins
+                            .iter()
+                            .map(|bin| (
+                                bin.lower.to_bits(),
+                                bin.upper.to_bits(),
+                                bin.density.to_bits()
+                            ))
+                            .collect::<Vec<_>>(),
+                        [
+                            (edges[0].to_bits(), edges[1].to_bits(), 4.0_f64.to_bits()),
+                            (edges[1].to_bits(), edges[2].to_bits(), 4.0_f64.to_bits()),
+                        ]
+                    );
+                    assert_eq!(
+                        prepared
+                            .bin_alphas
+                            .iter()
+                            .map(|alpha| alpha.unwrap().alpha)
+                            .collect::<Vec<_>>(),
+                        alphas
+                    );
+                    let chart = chart
+                        .clone()
+                        .with_render_scope(registered.scope.render_name.as_deref().unwrap());
+                    let selected = chart
+                        .measure_selected_interior(
+                            PlotRenderContext::new(
+                                registered.data(&operation).unwrap(),
+                                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                                theme,
+                            )
+                            .with_registration(registered),
+                        )
+                        .unwrap();
+                    let crate::layout::interior::MarkPayload::Histogram(payload) =
+                        &selected.marks.as_ref().unwrap().payload
+                    else {
+                        panic!("Histogram payload")
+                    };
+                    assert_eq!(
+                        payload
+                            .bins
+                            .iter()
+                            .map(|(_, fill)| fill.color.get_alpha())
+                            .collect::<Vec<_>>(),
+                        alphas
+                    );
+                }
+                let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+                let incomplete = source.clone().with_alpha(
+                    AlphaTarget::Fill,
+                    crate::alpha::AlphaEncoding::bins(
+                        crate::Bounds::new(
+                            crate::NumericValues::new("lower", [1.0]),
+                            crate::NumericValues::new("upper", [4.5]),
+                        ),
+                        [crate::CategoryValues::new("panel", ["left"]).unwrap()],
+                        crate::alpha::AlphaValues::new("bin confidence", [0]).unwrap(),
+                    )
+                    .unwrap(),
+                );
+                assert!(matches!(
+                    incomplete.preflight().unwrap_err(),
+                    Error::Data(_)
+                ));
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    calls
+                );
+            },
+        )
+        .unwrap();
     }
 
     #[test]

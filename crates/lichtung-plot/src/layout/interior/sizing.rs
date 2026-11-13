@@ -83,22 +83,25 @@ pub(crate) fn guided_preference(
 
 pub(crate) fn guided_body_height(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     guide: Option<&GuidedPreference>,
     scope: &FitScope,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(theme)?;
-    let preference = body_preference(plot, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, theme)?;
+    let preference = body_preference(plot, registered, theme, hard)?;
     let Some(guide) = guide else {
-        return plot.natural_body_height(theme, width, preference.1);
+        return plot.natural_body_height(registered, theme, width, preference.1);
     };
     let natural = guide.preference(theme)?;
     if guide.horizontal() {
         let measured = guide.at_width(width, theme, scope)?;
-        return Ok(plot.natural_body_height(theme, width, preference.1)?
-            + measured.1
-            + theme.legend_outside_gap()?);
+        return Ok(
+            plot.natural_body_height(registered, theme, width, preference.1)?
+                + measured.1
+                + theme.legend_outside_gap()?,
+        );
     }
     let available = width - hard.0 - theme.legend_outside_gap()?;
     if available <= 0.0
@@ -107,13 +110,14 @@ pub(crate) fn guided_body_height(
         // This proposal does not select an Auto edge. The existing containing
         // frame trials report the selected width-dependent content height.
         return Ok(plot
-            .natural_body_height(theme, width, preference.1)?
+            .natural_body_height(registered, theme, width, preference.1)?
             .max(natural.1));
     }
     let allocated = natural.0.min(available);
     let measured = guide.at_width(allocated, theme, scope)?;
     Ok(plot
         .natural_body_height(
+            registered,
             theme,
             width - measured.0 - theme.legend_outside_gap()?,
             preference.1,
@@ -154,33 +158,35 @@ pub(crate) fn text_width<'a>(
 
 pub(crate) fn body_preference(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<(f64, f64), Error> {
     use super::{InteriorRoute, SpecializedGrid};
     let preference = match InteriorRoute::classify(plot.kind()) {
         InteriorRoute::StandardCoordinate(_) => {
-            let preference = super::preference::mark_preference(plot, theme, hard)?;
+            let preference = super::preference::mark_preference(plot, registered, theme, hard)?;
             Ok((
                 pixels(preference.body_quanta.0),
                 pixels(preference.body_quanta.1),
             ))
         }
         InteriorRoute::OneCategoricalAxis(_) => {
-            let preference = super::preference::categorical_preference(plot, theme, hard)?;
+            let preference =
+                super::preference::categorical_preference(plot, registered, theme, hard)?;
             Ok((
                 pixels(preference.body_quanta.0),
                 pixels(preference.body_quanta.1),
             ))
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Marginal) => {
-            crate::plots::marginal::natural_body_preference(plot, theme)
+            crate::plots::marginal::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Matrix) => {
-            crate::plots::matrix::natural_body_preference(plot, theme)
+            crate::plots::matrix::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Heatmap) => {
-            crate::plots::heatmap::natural_body_preference(plot, theme)
+            crate::plots::heatmap::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Beeswarm | SpecializedGrid::Waterfall) => {
             let ch = theme
@@ -192,8 +198,8 @@ pub(crate) fn body_preference(
                     false,
                 )?
                 .width();
-            let count = plot
-                .prepared_axis_inputs()
+            let count = registered
+                .and_then(|registered| registered.axes.as_ref())
                 .and_then(|axes| axes.categories[1].as_ref())
                 .map_or(0, Vec::len);
             let count = u32::try_from(count).map_err(|_| {
@@ -207,19 +213,20 @@ pub(crate) fn body_preference(
         }
     }?;
     Ok((
-        preference
-            .0
-            .max(crate::numeric::values::preferred_width(plot, theme)?),
+        preference.0.max(crate::numeric::values::preferred_width(
+            plot, registered, theme,
+        )?),
         preference.1,
     ))
 }
 
 fn axis_title_style<'a>(
-    plot: &'a Plot,
+    registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &'a crate::text::TextRequestContext<'_, '_>,
     side: usize,
 ) -> &'a crate::TextTheme {
-    plot.prepared_axis_inputs()
+    registered
+        .and_then(|registered| registered.axes.as_ref())
         .and_then(|axes| axes.labels[side].as_ref())
         .map_or(&theme.typography.axes.axis_title, |text| {
             text.appearance(&theme.typography.axes.axis_title).theme
@@ -230,9 +237,10 @@ fn axis_title_style<'a>(
 /// Actual selected-source gutters subsequently replace this estimate via feedback.
 pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let title = axis_title_style(plot, theme, 1);
+    let title = axis_title_style(registered, theme, 1);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         title.get_font_size(),
@@ -255,8 +263,8 @@ pub(crate) fn horizontal_gutter_preference(
         }
         Ok(())
     };
-    if let Some(axes) = plot
-        .prepared_axis_inputs()
+    if let Some(axes) = registered
+        .and_then(|registered| registered.axes.as_ref())
         .filter(|_| plot.y_tick_labels_visible())
     {
         if let Some(labels) = &axes.display_categories[1] {
@@ -339,9 +347,10 @@ pub(crate) fn plot_size(
         return Ok(RootSize::new(width, height));
     }
 
-    let hard = plot.intrinsic_body_minimum(theme)?;
-    let preference = body_preference(plot, theme, hard)?;
-    let title = axis_title_style(plot, theme, 0);
+    let registered = inputs.plots.first();
+    let hard = plot.intrinsic_body_minimum(registered, theme)?;
+    let preference = body_preference(plot, registered, theme, hard)?;
+    let title = axis_title_style(registered, theme, 0);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         title.get_font_size(),
@@ -353,7 +362,7 @@ pub(crate) fn plot_size(
     };
     let panel_edge = theme.panel_edge_length()?;
     let bottom_outward = common_chrome.outward(crate::layout::AxisSide::Bottom, true)?;
-    let (initial_left, initial_right) = horizontal_gutter_preference(plot, theme)?;
+    let (initial_left, initial_right) = horizontal_gutter_preference(plot, registered, theme)?;
     let guide = guided_preference(plot, inputs, theme)?;
     let (guide_width, guide_height) = if plot.kind() == PlotKind::Matrix {
         crate::plots::matrix::natural_guide_preference(plot, theme)?
@@ -398,7 +407,7 @@ pub(crate) fn plot_size(
     // trial derives its height from the selected guide edge at this fixed width.
     let body_width =
         (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
-    let body_height = plot.natural_body_height(theme, body_width, preference.1)?;
+    let body_height = plot.natural_body_height(registered, theme, body_width, preference.1)?;
     let sources = plot.description().prose();
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
         theme,
@@ -460,25 +469,36 @@ fn outer_width(
 impl Plot {
     pub(crate) fn natural_body_height(
         &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         theme: &crate::text::TextRequestContext<'_, '_>,
         width: f64,
         preference: f64,
     ) -> Result<f64, Error> {
-        let hard = self.intrinsic_body_minimum(theme)?;
+        let hard = self.intrinsic_body_minimum(registered, theme)?;
         let height = match self.kind() {
-            PlotKind::Heatmap => crate::plots::heatmap::natural_body_height(self, theme, width),
-            PlotKind::Beeswarm => crate::plots::beeswarm::natural_body_height(self, theme, width),
-            PlotKind::Waterfall => crate::plots::waterfall::natural_body_height(self, theme, width),
+            PlotKind::Heatmap => {
+                crate::plots::heatmap::natural_body_height(self, registered, theme, width)
+            }
+            PlotKind::Beeswarm => {
+                crate::plots::beeswarm::natural_body_height(self, registered, theme, width)
+            }
+            PlotKind::Waterfall => {
+                crate::plots::waterfall::natural_body_height(self, registered, theme, width)
+            }
             PlotKind::Matrix => Ok(width.max(hard.1)),
-            PlotKind::Marginal => crate::plots::marginal::natural_body_height(self, theme, width),
+            PlotKind::Marginal => {
+                crate::plots::marginal::natural_body_height(self, registered, theme, width)
+            }
             _ => {
                 let density = match super::InteriorRoute::classify(self.kind()) {
                     super::InteriorRoute::StandardCoordinate(_) => {
-                        super::preference::mark_preference(self, theme, hard)?.density_side
+                        super::preference::mark_preference(self, registered, theme, hard)?
+                            .density_side
                     }
                     super::InteriorRoute::OneCategoricalAxis(_) => {
-                        let categorical =
-                            super::preference::categorical_preference(self, theme, hard)?;
+                        let categorical = super::preference::categorical_preference(
+                            self, registered, theme, hard,
+                        )?;
                         if categorical.axis == crate::layout::AxisSide::Left {
                             pixels(categorical.body_quanta.1)
                         } else {
@@ -491,8 +511,8 @@ impl Plot {
             }
         }?;
         crate::layout::kernel::required_length(
-            height.max(crate::numeric::values::axis_preferences(self, theme)?.1)
-                + crate::numeric::values::natural_height(self, theme, width)?,
+            height.max(crate::numeric::values::axis_preferences(registered, theme)?.1)
+                + crate::numeric::values::natural_height(self, registered, theme, width)?,
         )
     }
 }

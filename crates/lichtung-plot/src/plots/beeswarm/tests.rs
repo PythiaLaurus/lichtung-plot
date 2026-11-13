@@ -34,16 +34,23 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let select = |source: &Plot| {
-        let chart = crate::plots::shared_x::prepare_panel_for_test(source, &theme).unwrap();
-        let selected = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
-                PixelRect::new(20.0, 700.0, 20.0, 420.0),
-                &theme,
-            ))
-            .unwrap();
-        assert!(selected.discrete_guide.is_none());
-        selected
+        crate::orchestrator::with_prepared_plot_for_test(source, &theme, |chart, inputs, theme| {
+            let chart = chart.clone();
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let selected = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        PixelRect::new(20.0, 700.0, 20.0, 420.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0]),
+                )
+                .unwrap();
+            assert!(selected.discrete_guide.is_none());
+            selected
+        })
+        .unwrap()
     };
     let varied = select(&source);
     let layout::interior::MarkPayload::Beeswarm(varied) = &varied.marks.as_ref().unwrap().payload
@@ -141,134 +148,195 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     .x_limits(-1.0, 5.0)
     .color_label_format(format.clone())
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let scope = crate::orchestrator::registration::Scope::new(
-        &source,
-        &operation,
-        0,
-        crate::orchestrator::registration::RowSelection::Full,
-        None,
-        None,
-    )
-    .unwrap();
-    let row_source =
-        crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
-    let mut prepared = prepare(
-        &source,
-        crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
-            .unwrap(),
-        selection.clone(),
-        scope
-            .numeric_binding(source.description(), &row_source, &operation)
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(prepared.colors, colors);
-    assert_eq!(
-        prepared.values.as_ref().unwrap().labels,
-        ["-200%", "0%", "200%"]
-    );
-    let contributor = ContinuousContributor {
-        field: "color".into(),
-        title: "color".into(),
-        selection: selection.clone(),
-        samples: prepared.guide_samples().unwrap(),
-        missing: None,
-        domain: prepared.scale.domain(),
-        exact: false,
-        format: Some(std::sync::Arc::new(format.clone())),
-        numeric: scope
-            .numeric_binding(source.description(), &row_source, &operation)
-            .unwrap(),
-        raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
-    };
-    let sibling = ContinuousContributor {
-        field: "color".into(),
-        title: "color".into(),
-        selection: selection
-            .domain(Some(ColorDomain::exact(-4.0, 12.0).unwrap()))
-            .unwrap(),
-        samples: vec![-4.0, 6.0, 12.0],
-        missing: None,
-        domain: (-4.0, 12.0),
-        exact: true,
-        format: Some(std::sync::Arc::new(format)),
-        numeric: scope
-            .numeric_binding(source.description(), &row_source, &operation)
-            .unwrap(),
-        raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
-    };
-    let shared = crate::decorations::legend::descriptor::merge_continuous(
-        &operation.root_identity(),
-        &operation,
-        [contributor, sibling],
-    )
-    .unwrap()
-    .unwrap();
-    prepared.install_shared_domain(&shared).unwrap();
-    assert_eq!(
-        prepared.values.as_ref().unwrap().labels,
-        ["-400%", "0%", "1200%"]
-    );
-    assert_eq!(prepared.colors[0], colors[1]);
-    assert_eq!(prepared.colors[2], colors[2]);
-    assert_eq!(prepared.rows.len(), 5);
-    assert!(shared.stops.iter().any(
-        |stop| stop.offset.to_bits() == 0.125_f64.to_bits() && stop.color == colors[1].as_rgb()
-    ));
-    assert!(shared.stops.iter().any(
-        |stop| stop.offset.to_bits() == 0.625_f64.to_bits() && stop.color == colors[3].as_rgb()
-    ));
-    for (&(_, _, value, _), color) in prepared.rows.iter().zip(&prepared.colors) {
-        let offset = crate::numeric::mapping::normalized_fraction(shared.domain, value).unwrap();
-        assert!(shared
-            .stops
-            .iter()
-            .any(|stop| stop.offset.to_bits() == offset.to_bits() && stop.color == color.as_rgb()));
-    }
-    let expected = prepared.colors.clone();
-    let inputs = crate::plots::shared_x::prepare_reference_plot(
-        &source,
-        crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
-        scope,
-        None,
-        None,
-        &operation,
-    )
-    .unwrap();
-    let theme = crate::Theme::publication().resolve().unwrap();
+    let appearance = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
-    let measured = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
-            PixelRect::new(0.0, 700.0, 0.0, 400.0),
-            &theme,
-        ))
-        .unwrap();
-    let crate::layout::interior::MarkPayload::Beeswarm(payload) =
-        &measured.marks.as_ref().unwrap().payload
-    else {
-        panic!("Beeswarm payload")
-    };
-    assert_eq!(payload.points.len(), 5);
-    for ((_, style), color) in payload.points.iter().zip(expected) {
-        assert_eq!(
-            (style.color.red(), style.color.green(), style.color.blue()),
-            color.as_rgb()
-        );
-        assert_eq!(
-            style.color.get_alpha(),
-            theme.marks.get_points().get_primary().get_fill_alpha()
-        );
-    }
-    assert!(payload
-        .colorbar
-        .as_ref()
-        .unwrap()
-        .calls
-        .iter()
-        .any(|call| matches!(call,
+    let theme = crate::text::TextRequestContext::new(&appearance, &text);
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 700,
+            height: 400,
+        },
+        |stage| {
+            let operation = stage.operation();
+            let scope = crate::orchestrator::registration::Scope::new(
+                &source,
+                &operation,
+                0,
+                crate::orchestrator::registration::RowSelection::Full,
+                None,
+                None,
+            )
+            .unwrap();
+            let row_source = crate::data::source::RowSourceContext::new(
+                source.description(),
+                &scope,
+                &operation,
+            );
+            let mut prepared = prepare(
+                &source,
+                crate::data::PlotData::checked(
+                    source.description(),
+                    &scope,
+                    &row_source,
+                    &operation,
+                )
+                .unwrap(),
+                selection.clone(),
+                scope
+                    .numeric_binding(source.description(), &row_source, &operation)
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(prepared.colors, colors);
+            assert_eq!(
+                prepared.values.as_ref().unwrap().labels,
+                ["-200%", "0%", "200%"]
+            );
+            let contributor = ContinuousContributor {
+                field: "color".into(),
+                title: "color".into(),
+                selection: selection.clone(),
+                samples: prepared.guide_samples().unwrap(),
+                missing: None,
+                domain: prepared.scale.domain(),
+                exact: false,
+                format: Some(std::sync::Arc::new(format.clone())),
+                numeric: scope
+                    .numeric_binding(source.description(), &row_source, &operation)
+                    .unwrap(),
+                raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
+            };
+            let sibling = ContinuousContributor {
+                field: "color".into(),
+                title: "color".into(),
+                selection: selection
+                    .domain(Some(ColorDomain::exact(-4.0, 12.0).unwrap()))
+                    .unwrap(),
+                samples: vec![-4.0, 6.0, 12.0],
+                missing: None,
+                domain: (-4.0, 12.0),
+                exact: true,
+                format: Some(std::sync::Arc::new(format)),
+                numeric: scope
+                    .numeric_binding(source.description(), &row_source, &operation)
+                    .unwrap(),
+                raw_windows: [source.description().x_axis_spec().limits.as_ref(), None],
+            };
+            let shared = crate::decorations::legend::descriptor::merge_continuous(
+                &operation.root_identity(),
+                &operation,
+                [contributor, sibling],
+            )
+            .unwrap()
+            .unwrap();
+            prepared.install_shared_domain(&shared).unwrap();
+            assert_eq!(
+                prepared.values.as_ref().unwrap().labels,
+                ["-400%", "0%", "1200%"]
+            );
+            assert_eq!(prepared.colors[0], colors[1]);
+            assert_eq!(prepared.colors[2], colors[2]);
+            assert_eq!(prepared.rows.len(), 5);
+            assert!(shared
+                .stops
+                .iter()
+                .any(|stop| stop.offset.to_bits() == 0.125_f64.to_bits()
+                    && stop.color == colors[1].as_rgb()));
+            assert!(shared
+                .stops
+                .iter()
+                .any(|stop| stop.offset.to_bits() == 0.625_f64.to_bits()
+                    && stop.color == colors[3].as_rgb()));
+            for (&(_, _, value, _), color) in prepared.rows.iter().zip(&prepared.colors) {
+                let offset =
+                    crate::numeric::mapping::normalized_fraction(shared.domain, value).unwrap();
+                assert!(shared
+                    .stops
+                    .iter()
+                    .any(|stop| stop.offset.to_bits() == offset.to_bits()
+                        && stop.color == color.as_rgb()));
+            }
+            let expected = prepared.colors.clone();
+            let inputs = crate::plots::shared_x::prepare_reference_plot(
+                &source,
+                crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
+                scope,
+                None,
+                None,
+                &operation,
+            )
+            .unwrap();
+            inputs.prepare_discrete_guides(
+                &source,
+                &theme,
+                &operation,
+                &crate::layout::ComponentAddress::root(),
+                false,
+            )?;
+            let requirements = crate::layout::foundational_plot_requirements(
+                Some(&inputs),
+                &source,
+                source.kind(),
+                &theme,
+                &crate::layout::ComponentAddress::root(),
+                true,
+                true,
+                true,
+                Some(stage),
+            )?;
+            let mut presence = stage.reserve_scalar_presence_map()?;
+            let mut census = crate::layout::PreparedTextCensus::materialize(
+                requirements,
+                Some(stage),
+                Some(&mut presence),
+            )
+            .map_err(|error| Error::Render(error.to_string()))?;
+            text.prepare_font_environment_from_census(&mut census, presence, stage)?;
+            Ok((inputs, expected))
+        },
+        |(inputs, expected), assigned, _| {
+            let chart = inputs.attach(source.clone())?;
+            let operation = text.prepared_font_environment()?.operation();
+            let measured = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation)?,
+                        PixelRect::new(0.0, 700.0, 0.0, 400.0),
+                        &theme,
+                    )
+                    .with_registration(&inputs.plots[0]),
+                )
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Beeswarm(payload) =
+                &measured.marks.as_ref().unwrap().payload
+            else {
+                panic!("Beeswarm payload")
+            };
+            assert_eq!(payload.points.len(), 5);
+            for ((_, style), color) in payload.points.iter().zip(expected) {
+                assert_eq!(
+                    (style.color.red(), style.color.green(), style.color.blue()),
+                    color.as_rgb()
+                );
+                assert_eq!(
+                    style.color.get_alpha(),
+                    theme.marks.get_points().get_primary().get_fill_alpha()
+                );
+            }
+            assert!(payload
+                .colorbar
+                .as_ref()
+                .unwrap()
+                .calls
+                .iter()
+                .any(|call| matches!(call,
         crate::decorations::legend::LegendCall::Text(text) if text.plan.source == "0%")));
+            Ok(crate::layout::MeasuredLayout::new(
+                assigned.assigned_size()?,
+                (),
+            ))
+        },
+        |_, _, (), _| Ok(()),
+    )
+    .unwrap();
 }

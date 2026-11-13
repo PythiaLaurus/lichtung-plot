@@ -164,10 +164,12 @@ pub(crate) fn raincloud_strip_pitch(
 /// grammar consumed by their selected polygons, without KDE-vertex counting.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let PreparedDistribution::Violin(prepared) =
-        categorical_distribution::retained(chart.prepared_family())?
+    let PreparedDistribution::Violin(prepared) = categorical_distribution::retained(
+        registered.map(|registered| registered.family.as_ref()),
+    )?
     else {
         return Err(Error::Render(
             "sampled distribution intrinsic requires retained KDE groups".into(),

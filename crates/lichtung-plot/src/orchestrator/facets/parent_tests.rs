@@ -235,7 +235,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &mut children,
                     guide,
                     false,
-                    None,
+                    inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
                 if !round.child_stable(&[ComponentAddress::root()]) {
@@ -254,7 +254,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &mut children,
                     guide,
                     false,
-                    None,
+                    inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
                 for (first, repeated) in original.panel_plans.iter().zip(&same.panel_plans) {
@@ -268,7 +268,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &mut children,
                     changed_guide,
                     false,
-                    None,
+                    inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
                 for (first, replacement) in same.panel_plans.iter().zip(&changed.panel_plans) {
@@ -303,7 +303,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &mut children,
                     changed_guide,
                     false,
-                    None,
+                    inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
                 assert!(!std::sync::Arc::ptr_eq(

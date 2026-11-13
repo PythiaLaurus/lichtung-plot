@@ -38,10 +38,11 @@ pub(crate) struct PreparedRegression {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Regression(marks) => Some(marks),
             _ => None,
@@ -510,7 +511,6 @@ pub(crate) fn project(
 #[cfg(test)]
 mod style_tests {
     use super::*;
-    use crate::font::canonical::OperationContext;
 
     #[test]
     fn observation_alpha_keeps_joint_finite_members_fit_and_theme_zero_visibility_consistent() {
@@ -555,19 +555,40 @@ mod style_tests {
         theme.marks = theme.marks.clone().points(points).unwrap();
         let text_service = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text_service);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let baseline = crate::plots::shared_x::prepare_panel_for_test(&base, &theme).unwrap();
-        assert!(
-            intrinsic_body_minimum(&chart, &theme).unwrap().0
-                > intrinsic_body_minimum(&baseline, &theme).unwrap().0
-        );
-        let selected = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
-                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
-                &theme,
-            ))
-            .unwrap();
+        let (minimum, selected) = crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, request| {
+                let registered = &inputs.plots[0];
+                let operation = request
+                    .text
+                    .prepared_font_environment()
+                    .unwrap()
+                    .operation();
+                let minimum = intrinsic_body_minimum(chart, Some(registered), request).unwrap();
+                let selected = chart
+                    .measure_selected_interior(
+                        PlotRenderContext::new(
+                            registered.data(&operation).unwrap(),
+                            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
+                            request,
+                        )
+                        .with_registration(registered),
+                    )
+                    .unwrap();
+                (minimum, selected)
+            },
+        )
+        .unwrap();
+        let baseline = crate::orchestrator::with_prepared_plot_for_test(
+            &base,
+            &theme,
+            |chart, inputs, request| {
+                intrinsic_body_minimum(chart, inputs.plots.first(), request).unwrap()
+            },
+        )
+        .unwrap();
+        assert!(minimum.0 > baseline.0);
         let crate::layout::interior::MarkPayload::Regression(payload) =
             &selected.marks.as_ref().unwrap().payload
         else {
@@ -596,13 +617,11 @@ mod style_tests {
             crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
         )
         .erase();
-        let resources = OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let before = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         let radii = theme
             .marks
@@ -614,7 +633,7 @@ mod style_tests {
         let points = theme.marks.get_points().clone().radii(radii).unwrap();
         theme.marks = theme.marks.clone().points(points).unwrap();
         let sized = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert_eq!(sized.0.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
@@ -625,10 +644,7 @@ mod style_tests {
         theme.marks = theme.marks.clone().points(points).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             before
         );
@@ -651,10 +667,7 @@ mod style_tests {
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             (140.0, 140.0)
         );
@@ -677,10 +690,7 @@ mod style_tests {
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(
             chart
-                .intrinsic_body_minimum(&crate::text::TextRequestContext::new(
-                    &theme,
-                    &text_service
-                ))
+                .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
                 .unwrap(),
             before
         );
@@ -691,15 +701,13 @@ mod style_tests {
             )
             .unwrap(),
         );
-        let mapped = crate::plots::shared_x::prepare_panel_for_test(
-            &mapped,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         assert_eq!(
-            intrinsic_body_minimum(
+            crate::orchestrator::with_prepared_plot_for_test(
                 &mapped,
-                &crate::text::TextRequestContext::new(&theme, &text_service)
+                &crate::text::TextRequestContext::new(&theme, &text_service),
+                |mapped, inputs, request| {
+                    intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
+                }
             )
             .unwrap(),
             (140.0, 140.0)
@@ -724,7 +732,7 @@ mod style_tests {
         let fills = theme.marks.get_fills().clone().bands(bands).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
         let band = chart
-            .intrinsic_body_minimum(&crate::text::TextRequestContext::new(&theme, &text_service))
+            .intrinsic_for_test(&crate::text::TextRequestContext::new(&theme, &text_service))
             .unwrap();
         assert!(band.0 >= 140.0 && band.1 >= 140.0);
     }
@@ -743,23 +751,16 @@ mod style_tests {
             crate::LegendPosition::OutsideRight,
         ))
         .erase();
-        let resources = OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let old = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+            .preflight_panel(
+                chart.kind(),
                 panel,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let band = theme
             .marks
@@ -782,17 +783,12 @@ mod style_tests {
             .unwrap();
         let fills = theme.marks.get_fills().clone().bands(bands).unwrap();
         theme.marks = theme.marks.clone().fills(fills).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let changed = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+            .preflight_panel(
+                chart.kind(),
                 panel,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let payload = |result: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Regression(payload) =
@@ -815,17 +811,12 @@ mod style_tests {
             )
             .unwrap(),
         );
-        let mapped = crate::plots::shared_x::prepare_panel_for_test(
-            &mapped,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let mapped = mapped
-            .measure_selected_interior(PlotRenderContext::new(
-                mapped.data(),
+            .preflight_panel(
+                mapped.kind(),
                 panel,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let (mapped_polygon, mapped_fill) = payload(&mapped);
         assert_eq!(mapped_polygon, new_polygon);
@@ -875,23 +866,16 @@ mod style_tests {
             crate::LegendPosition::OutsideRight,
         ))
         .erase();
-        let resources = OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
+        let chart = source;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
         let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let old = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+            .preflight_panel(
+                chart.kind(),
                 panel,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let fit = theme
             .marks
@@ -912,17 +896,12 @@ mod style_tests {
             .unwrap();
         let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
         theme.marks = theme.marks.clone().strokes(strokes).unwrap();
-        let chart = crate::plots::shared_x::prepare_panel_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-        )
-        .unwrap();
         let changed = chart
-            .measure_selected_interior(PlotRenderContext::new(
-                chart.data(),
+            .preflight_panel(
+                chart.kind(),
                 panel,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
-            ))
+            )
             .unwrap();
         let payload = |result: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Regression(payload) =

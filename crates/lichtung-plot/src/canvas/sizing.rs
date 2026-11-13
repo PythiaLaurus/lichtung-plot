@@ -86,8 +86,13 @@ impl HeightInputs {
             _ => false,
         }
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "capture the selected scientific owner and its complete consumed assignment inputs"
+    )]
     fn new(
         plot: &Plot,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         width: f64,
         parent_insets: [i64; 4],
         round: &FeedbackRound,
@@ -95,9 +100,11 @@ impl HeightInputs {
         per_plot: bool,
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<Self, Error> {
-        let axes = plot.prepared_axis_inputs().ok_or_else(|| {
-            Error::Render("height measurement requires prepared cell axes".into())
-        })?;
+        let axes = registered
+            .and_then(|registered| registered.axes.as_ref())
+            .ok_or_else(|| {
+                Error::Render("height measurement requires prepared cell axes".into())
+            })?;
         let ranges = [
             plot.description()
                 .x_axis_spec()
@@ -205,6 +212,7 @@ impl HeightMeasurements {
     pub(super) fn record(
         &mut self,
         plot: &Plot,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         width: f64,
         height: f64,
         parent_insets: [i64; 4],
@@ -212,8 +220,16 @@ impl HeightMeasurements {
         owner: &ComponentAddress,
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<(), Error> {
-        let inputs =
-            HeightInputs::new(plot, width, parent_insets, round, owner, true, dependencies)?;
+        let inputs = HeightInputs::new(
+            plot,
+            registered,
+            width,
+            parent_insets,
+            round,
+            owner,
+            true,
+            dependencies,
+        )?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
         let entries = &mut self.records;
@@ -236,15 +252,17 @@ impl HeightMeasurements {
 
 pub(super) fn measured_preference(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     plan: &crate::decorations::plan::PanelPlan,
     local_text_height: f64,
     round: &FeedbackRound,
     owner: &ComponentAddress,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(theme)?;
-    let preference = body_preference(plot, theme, hard)?;
-    let mut height = plot.natural_body_height(theme, plan.panel_box.width(), preference.1)?;
+    let hard = plot.intrinsic_body_minimum(registered, theme)?;
+    let preference = body_preference(plot, registered, theme, hard)?;
+    let mut height =
+        plot.natural_body_height(registered, theme, plan.panel_box.width(), preference.1)?;
     if let Some(guide) = &plan.legend {
         let panel = plan.panel_box;
         if guide.bounds.bottom >= panel.y1 || guide.bounds.top <= panel.y0 {
@@ -280,8 +298,9 @@ pub(super) fn cell_height(
     measurements: Option<&HeightMeasurements>,
     dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(theme)?;
-    let preference = body_preference(plot, theme, hard)?;
+    let registered = inputs.plots.first();
+    let hard = plot.intrinsic_body_minimum(registered, theme)?;
+    let preference = body_preference(plot, registered, theme, hard)?;
     let sources = plot.description().prose();
     let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
@@ -298,6 +317,7 @@ pub(super) fn cell_height(
     .map_err(fit::PlanError::into_error)?;
     let identity = HeightInputs::new(
         plot,
+        registered,
         width,
         parent_insets,
         round,
@@ -332,13 +352,14 @@ pub(super) fn cell_height(
     let height = if guide.is_some() {
         crate::layout::interior::sizing::guided_body_height(
             plot,
+            registered,
             theme,
             body_width,
             guide.as_ref(),
             &FitScope::new(owner, 0),
         )?
     } else {
-        plot.natural_body_height(theme, body_width, preference.1)?
+        plot.natural_body_height(registered, theme, body_width, preference.1)?
     };
 
     let height = prose.height_with_body(height + local[2] + local[3])?;
@@ -462,9 +483,9 @@ pub(super) fn measure(
             plot = plot.labels(labels.clone());
         }
         let scope = input
-            .axes
+            .plots
             .first()
-            .and_then(|(scope, _)| scope.as_deref())
+            .and_then(|registered| registered.scope.render_name.as_deref())
             .ok_or_else(|| {
                 Error::Render("Canvas content child requires its prepared scope".into())
             })?;
@@ -524,6 +545,7 @@ pub(super) fn measure(
             PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             &source.placements,
             &plots,
+            &prepared.interiors,
             &prepared.text_panel_intrinsics,
             &prepared.plot_intrinsics,
             &source.column_headers,

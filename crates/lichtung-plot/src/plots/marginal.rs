@@ -206,17 +206,19 @@ impl PreparedMarginal {
 /// parent's hard input; the fixed strip/gap packing remains local until T5e3.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
     let mut central =
-        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+            .minimum(chart);
 
     for group in &prepared.groups {
         let style = chart.description().point_style(
@@ -239,7 +241,7 @@ pub(crate) fn intrinsic_body_minimum(
             central.1 = central.1.max(y);
         }
     }
-    let (out_x, out_y) = density_ink(chart, theme)?;
+    let (out_x, out_y) = density_ink(registered, theme)?;
     // Each filled KDE strip has a positive extent even when its paint is
     // transparent. Its stroke is measured by the same canonical geometry as
     // selection, not inferred from the nominal line width.
@@ -250,11 +252,11 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 fn density_ink(
-    chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_family()
+    let prepared = registered
+        .map(|registered| registered.family.as_ref())
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),
             _ => None,
@@ -392,17 +394,20 @@ impl MarginalPayload {
 
 pub(crate) fn natural_body_preference(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let hard = intrinsic_body_minimum(chart, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, theme)?;
     let gap = theme.composition_grid_gap()?;
-    let ink = density_ink(chart, theme)?;
-    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let ink = density_ink(registered, theme)?;
+    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+        .minimum(chart);
     let central = (
         (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
         (hard.1 - gap - (2.0 * ink.1).max(1.0 / 1024.0)).max(axes.1),
     );
-    let preference = layout::interior::preference::mark_preference(chart, theme, central)?;
+    let preference =
+        layout::interior::preference::mark_preference(chart, registered, theme, central)?;
     let width = preference.body_quanta.0 as f64 / 1024.0;
     let height = preference.body_quanta.1 as f64 / 1024.0;
     let quarter = |value: i64| -> Result<f64, Error> {
@@ -418,20 +423,23 @@ pub(crate) fn natural_body_preference(
 
 pub(crate) fn natural_body_height(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let gap = theme.composition_grid_gap()?;
-    let hard = intrinsic_body_minimum(chart, theme)?;
-    let ink = density_ink(chart, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, theme)?;
+    let ink = density_ink(registered, theme)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
-    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
+        .minimum(chart);
     let central_hard = (
         (hard.0 - gap - right_hard).max(axes.0),
         (hard.1 - gap - top_hard).max(axes.1),
     );
-    let preference = layout::interior::preference::mark_preference(chart, theme, central_hard)?;
+    let preference =
+        layout::interior::preference::mark_preference(chart, registered, theme, central_hard)?;
     let track = |min: f64, preferred: i64| -> Result<_, Error> {
         let min = layout::kernel::ceil_spatial_quanta(min)?;
         Ok(layout::kernel::TrackSpec {
@@ -486,23 +494,29 @@ pub(crate) fn measure(
     // --- Layout geometry ---
     let outer = context.panel;
     let gap = theme.composition_grid_gap()?;
-    let hard = intrinsic_body_minimum(chart, theme)?;
+    let hard = intrinsic_body_minimum(chart, context.registered, theme)?;
     if outer.width() < hard.0 || outer.height() < hard.1 {
         return Err(context.fit_scope().failure(
             crate::layout::fit::FitKind::SpecializedGeometry,
             "marginal linked strips leave less than the prepared central mark and density ink minimum",
         ).into());
     }
-    let ink = density_ink(chart, theme)?;
+    let ink = density_ink(context.registered, theme)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes_hard =
-        layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+        layout::interior::coordinate::Intrinsics::prepared(chart, context.registered, theme)?
+            .minimum(chart);
     let central_hard = (
         (hard.0 - gap - right_hard).max(axes_hard.0),
         (hard.1 - gap - top_hard).max(axes_hard.1),
     );
-    let preference = layout::interior::preference::mark_preference(chart, theme, central_hard)?;
+    let preference = layout::interior::preference::mark_preference(
+        chart,
+        context.registered,
+        theme,
+        central_hard,
+    )?;
     let track = |min: f64, preferred: i64| -> Result<_, Error> {
         let min = layout::kernel::ceil_spatial_quanta(min)?;
         Ok(layout::kernel::TrackSpec {
@@ -557,12 +571,14 @@ pub(crate) fn measure(
             (x_low, x_high),
             (y_low, y_high),
             crate::layout::PixelRect::new(central_x0, central_x1, central_y0, central_y1),
-            chart
-                .prepared_axis_inputs()
+            context
+                .registered
+                .and_then(|registered| registered.axes.as_ref())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                 .copy_label(0)?,
-            chart
-                .prepared_axis_inputs()
+            context
+                .registered
+                .and_then(|registered| registered.axes.as_ref())
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                 .copy_label(1)?,
             &layout::display_axis_spec(chart.description().x_axis_spec(), (x_low, x_high)),

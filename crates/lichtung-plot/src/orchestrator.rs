@@ -14,6 +14,8 @@ pub(crate) use facets::text_census_panels;
 pub(crate) mod layers;
 mod lifecycle;
 #[cfg(test)]
+pub(crate) use lifecycle::with_prepared_plot_for_test;
+#[cfg(test)]
 pub(crate) mod measurements;
 mod output;
 pub(crate) mod registration;
@@ -29,26 +31,30 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
     )
     .erase();
     for prepared in [false, true] {
-        let plot = if prepared {
-            crate::plots::shared_x::prepare_plot(
-                &source,
-                &crate::font::canonical::OperationContext::new(),
-                None,
+        let inputs = if prepared {
+            Some(
+                crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &crate::font::canonical::OperationContext::new(),
+                    None,
+                )
+                .unwrap(),
             )
-            .unwrap()
-            .attach(source.clone())
-            .unwrap()
         } else {
-            source.clone()
+            None
         };
+        let plot = &source;
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let context = PlotRenderContext::new(
+        let mut context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
             &theme,
         );
+        if let Some(registered) = inputs.as_ref().and_then(|inputs| inputs.plots.first()) {
+            context = context.with_registration(registered);
+        }
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         RENDER_PANEL_CALLS.with(|calls| calls.set(0));
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(0));
@@ -79,6 +85,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         }
         assert!(matches!(
             plot.preflight_measurement(
+                context.registered,
                 PlotKind::Line,
                 context.panel,
                 &theme,
@@ -182,7 +189,7 @@ impl Plot {
             theme: &appearance,
             ..*context.theme
         };
-        let directional = request.with_text_projection(self, &frame);
+        let directional = request.with_text_projection(self, context.registered, &frame);
         let context = context.with_theme(&directional);
         match kind {
             PlotKind::Scatter
@@ -213,9 +220,14 @@ impl Plot {
         }
     }
 
-    fn validate_interior_preparation(&self) -> Result<(), Error> {
+    fn validate_interior_preparation(
+        &self,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    ) -> Result<(), Error> {
         if crate::layout::interior::InteriorRoute::classify(self.kind()).is_coordinate()
-            && self.prepared_axes.is_empty()
+            && registered
+                .and_then(|registered| registered.axes.as_ref())
+                .is_none()
         {
             return Err(Error::Render(
                 "native coordinate panel requires root-prepared axes".into(),
@@ -229,7 +241,7 @@ impl Plot {
         context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         use crate::layout::interior::{InteriorRoute as R, SpecializedGrid as G};
-        self.validate_interior_preparation()?;
+        self.validate_interior_preparation(context.registered)?;
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         let context = context.with_prepared_axes(self)?;
@@ -267,6 +279,7 @@ impl Plot {
         validate_frozen_axes_and_guides(self, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             self,
+            context.registered,
             &result.layout,
             context.theme,
             context.fit_scope(),

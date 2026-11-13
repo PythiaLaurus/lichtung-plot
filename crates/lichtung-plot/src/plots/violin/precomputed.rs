@@ -24,10 +24,13 @@ pub(crate) struct PreparedRaincloud {
 
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let crate::plots::categorical_distribution::PreparedDistribution::Supplied(prepared) =
-        crate::plots::categorical_distribution::retained(chart.prepared_family())?
+        crate::plots::categorical_distribution::retained(
+            registered.map(|registered| registered.family.as_ref()),
+        )?
     else {
         return Err(Error::Render(
             "supplied Raincloud intrinsic requires retained groups".into(),

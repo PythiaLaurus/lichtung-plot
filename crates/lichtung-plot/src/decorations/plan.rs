@@ -264,8 +264,13 @@ impl PanelPlan {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit scientific owner accompanies the original test panel assignment"
+)]
 pub(crate) fn plan_panel(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     kind: PlotKind,
     cell: PixelRect,
     role: LegendRole,
@@ -273,11 +278,11 @@ pub(crate) fn plan_panel(
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
-    let source_rows = plot.description().configured_source_rows()?;
-    let context = source_rows.map_or_else(
-        || PlotRenderContext::new(plot.data(), cell, theme),
-        |rows| PlotRenderContext::with_source_rows(plot.data(), rows, cell, theme),
-    );
+    plot.description().configured_source_rows()?;
+    let registered = registered.expect("prepared test panel");
+    let operation = theme.text.prepared_font_environment()?.operation();
+    let context = PlotRenderContext::new(registered.data(&operation)?, cell, theme)
+        .with_registration(registered);
     let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
         plot.prepared_discrete_guide()?
             .map(|descriptor| {
@@ -317,7 +322,7 @@ pub(crate) fn plan_panel_with_context(
     } else {
         discrete_guide
     };
-    let minimum = plot.intrinsic_body_minimum(context.theme)?;
+    let minimum = plot.intrinsic_body_minimum(context.registered, context.theme)?;
     let position = plot.description().legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
         || discrete_guide.is_none()
@@ -491,6 +496,7 @@ pub(crate) fn plan_panel_with_context(
             };
             if let FitOutcome::Miss(reason) = check_assigned_body(
                 plot,
+                context.registered,
                 &discovered,
                 context.panel,
                 panel,
@@ -577,8 +583,13 @@ fn content_frame(
     {
         *inset += ink;
     }
-    let hard = plot.intrinsic_body_minimum(context.theme)?;
-    let preference = crate::layout::interior::sizing::body_preference(&plot, context.theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(context.registered, context.theme)?;
+    let preference = crate::layout::interior::sizing::body_preference(
+        &plot,
+        context.registered,
+        context.theme,
+        hard,
+    )?;
     let mut width = context.panel.width() - insets[0] - insets[1];
     if let Some((false, (guide_width, _), gap)) = guide {
         width -= guide_width + gap;
@@ -588,7 +599,8 @@ fn content_frame(
             "content frame cannot preserve the scientific body width".into(),
         ));
     }
-    let mut height = plot.natural_body_height(context.theme, width, preference.1)?;
+    let mut height =
+        plot.natural_body_height(context.registered, context.theme, width, preference.1)?;
     if let Some((horizontal, (_, guide_height), gap)) = guide {
         height = if horizontal {
             height + guide_height + gap
@@ -619,6 +631,7 @@ fn content_frame(
 )]
 pub(crate) fn check_assigned_body(
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     discovered: &PlotRenderResult,
     cell: PixelRect,
     assigned: PixelRect,
@@ -674,6 +687,7 @@ pub(crate) fn check_assigned_body(
     }
     let annotations = match fit::outcome(crate::decorations::panel_text::measure_plans(
         plot,
+        registered,
         &discovered.layout,
         theme,
         scope,
@@ -745,7 +759,7 @@ fn plan_panel_attempt(
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address));
     let context = context.with_fit_scope(&scope);
-    let minimum = plot.intrinsic_body_minimum(context.theme)?;
+    let minimum = plot.intrinsic_body_minimum(context.registered, context.theme)?;
     let cell = context.panel;
     round.begin_owner(address)?;
     round.observe_box(cell)?;
@@ -1275,6 +1289,7 @@ fn plan_panel_attempt(
             let annotations =
                 match crate::layout::fit::outcome(crate::decorations::panel_text::measure_plans(
                     &planning_plot,
+                    context.registered,
                     &result.layout,
                     context.theme,
                     &scope,

@@ -1,6 +1,6 @@
 use super::{measure_case, measure_pair, CaseMeasurement};
 use crate::orchestrator::measurements::{Counter, GuideOutcome};
-use crate::{CategoryValues, LegendPolicy, LegendPosition, NumericValues, Plot};
+use crate::{CategoryValues, Error, LegendPolicy, LegendPosition, NumericValues, Plot};
 
 fn scatter(entries: u32, long: bool) -> Plot<crate::kind::Scatter> {
     let count = entries * 2;
@@ -430,12 +430,38 @@ fn shared_legend_child_cache_replay_contract() {
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
                 inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &owner, false)?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    Some(&inputs),
+                    &plot,
+                    plot.kind(),
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok(inputs)
             },
             |inputs, assigned, round| {
                 let plot = inputs.attach(plot.clone())?;
                 let panel = PixelRect::new(100.0, 1100.0, 100.0, 620.0);
-                let context = crate::spec::PlotRenderContext::new(plot.data(), panel, &theme);
+                let registered = &inputs.plots[0];
+                let operation = text.prepared_font_environment()?.operation();
+                let context = crate::spec::PlotRenderContext::new(
+                    registered.data(&operation)?,
+                    panel,
+                    &theme,
+                )
+                .with_registration(registered);
                 let first = children.measure(
                     &plot,
                     context,
@@ -444,6 +470,7 @@ fn shared_legend_child_cache_replay_contract() {
                     round,
                     || {
                         plot.preflight_measurement(
+                            inputs.plots.first(),
                             plot.kind(),
                             panel,
                             &theme,
@@ -803,27 +830,30 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
         } else {
             outside("historical_reflow_640x400", LegendPosition::OutsideRight).erase()
         };
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let scopes = inputs
-            .axes
-            .iter()
-            .map(|(scope, _)| scope.clone())
-            .collect::<Vec<_>>();
-        let chart = inputs.attach(source).unwrap();
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let minimums = scopes
-            .into_iter()
-            .map(|scope| {
-                let panel = scope.map_or_else(
-                    || chart.clone(),
-                    |scope| chart.clone().with_render_scope(scope),
-                );
-                panel.intrinsic_body_minimum(&theme).unwrap()
-            })
-            .collect::<Vec<_>>();
+        let minimums = crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, theme| {
+                inputs
+                    .plots
+                    .iter()
+                    .map(|registered| {
+                        let scope = registered.scope.render_name.clone();
+                        let panel = scope.map_or_else(
+                            || chart.clone(),
+                            |scope| chart.clone().with_render_scope(scope),
+                        );
+                        panel
+                            .intrinsic_body_minimum(Some(registered), theme)
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>()
+            },
+        )
+        .unwrap();
         let panels = document
             .descendants()
             .filter(|node| node.has_tag_name("clipPath"))
@@ -900,13 +930,33 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
         |stage| {
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
             inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &address, false)?;
+            let requirements = crate::layout::foundational_plot_requirements(
+                Some(&inputs),
+                &plot,
+                plot.kind(),
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                Some(stage),
+            )?;
+            let mut presence = stage.reserve_scalar_presence_map()?;
+            let mut census = crate::layout::PreparedTextCensus::materialize(
+                requirements,
+                Some(stage),
+                Some(&mut presence),
+            )
+            .map_err(|error| Error::Render(error.to_string()))?;
+            text.prepare_font_environment_from_census(&mut census, presence, stage)?;
             Ok(inputs)
         },
         |inputs, assigned, round| {
             let plot = inputs.attach(plot.clone())?;
-            let canvas = plot.measured_canvas_layout(&theme)?;
+            let canvas = plot.measured_canvas_layout(inputs.plots.first(), &theme)?;
             let FitOutcome::Measured(plan) = crate::decorations::plan::plan_panel(
                 &plot,
+                inputs.plots.first(),
                 plot.kind(),
                 canvas.panel_box,
                 crate::decorations::plan::LegendRole::Panel,

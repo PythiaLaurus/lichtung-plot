@@ -123,6 +123,7 @@ impl<'src, 'op> PlotData<'src, 'op> {
         self
     }
 
+    #[cfg(test)]
     pub(crate) const fn with_rows(
         source: &'src crate::builder::PlotDescription,
         rows: &'op [usize],

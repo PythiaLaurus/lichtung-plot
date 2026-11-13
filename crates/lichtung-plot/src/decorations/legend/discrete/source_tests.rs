@@ -8,7 +8,8 @@ use crate::{CategoryValues, Color, NumericValues, Plot};
 fn prepare(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
-) -> crate::layout::interior::PreparedInteriorInputs {
+    inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
+) -> Arc<PreparedGuides> {
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
     inputs
@@ -22,22 +23,24 @@ fn prepare(
             false,
         )
         .unwrap();
-    inputs
+    inspect(&inputs);
+    inputs.discrete_guides.get().unwrap().clone()
 }
 
-fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<PreparedGuide> {
-    inputs.discrete_guides.get().unwrap().root.as_ref().unwrap()
+fn guide(inputs: &Arc<PreparedGuides>) -> &Arc<PreparedGuide> {
+    inputs.root.as_ref().unwrap()
 }
 
 fn separate_inputs(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
-) -> crate::layout::interior::PreparedInteriorInputs {
+) -> Arc<PreparedGuides> {
     prepare(
         &plot
             .clone()
             .with_parent_legend_composition(LegendComposition::Separate),
         theme,
+        |_| (),
     )
 }
 
@@ -76,7 +79,22 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     bar_fill(&mut theme, fill);
     let text = crate::text::TextService::default();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &crate::text::TextRequestContext::new(&theme, &text));
+    let inputs = prepare(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        |inputs| {
+            let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
+                &inputs.plots[0].family
+            else {
+                panic!("prepared Bars")
+            };
+            assert_eq!(bars.series, ["absent", "seen"]);
+            assert!(bars
+                .bars
+                .iter()
+                .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
+        },
+    );
     let projected_mapped = PreparedGuide::prepare_for_test(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
@@ -87,16 +105,6 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     let projected_inputs =
         separate_inputs(&plot, &crate::text::TextRequestContext::new(&theme, &text));
     assert_eq!(self::guide(&projected_inputs), &projected_mapped);
-    let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
-        &inputs.families[0].1
-    else {
-        panic!("prepared Bars")
-    };
-    assert_eq!(bars.series, ["absent", "seen"]);
-    assert!(bars
-        .bars
-        .iter()
-        .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
     let guide = guide(&inputs);
     assert_eq!(guide.counts.entries, 1);
     assert_eq!(guide.counts.primary_source_keys, 1);
@@ -133,7 +141,11 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         .outline(Some(fixed))
         .unwrap();
     bar_fill(&mut theme, body);
-    let fixed_inputs = prepare(&plot, &crate::text::TextRequestContext::new(&theme, &text));
+    let fixed_inputs = prepare(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        |_| (),
+    );
     let projected_fixed = PreparedGuide::prepare_for_test(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
@@ -553,7 +565,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &theme);
+    let inputs = prepare(&plot, &theme, |_| ());
     assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
     let projected = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
         .unwrap()

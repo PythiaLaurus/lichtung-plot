@@ -28,13 +28,12 @@ fn measure_layer(
     .y_limits(-2.0, 4.0)
     .point_layer(layer)
     .erase();
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, theme).unwrap();
-    chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    source
+        .preflight_panel(
+            source.kind(),
             crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             theme,
-        ))
+        )
         .unwrap()
 }
 
@@ -99,13 +98,12 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let selected = source
+        .preflight_panel(
+            source.kind(),
             crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
-        ))
+        )
         .unwrap();
     let crate::layout::interior::MarkPayload::Line(payload) =
         &selected.marks.as_ref().unwrap().payload
@@ -261,13 +259,12 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let selected = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let selected = source
+        .preflight_panel(
+            source.kind(),
             crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
-        ))
+        )
         .unwrap();
     let crate::layout::interior::MarkPayload::Line(payload) =
         &selected.marks.as_ref().unwrap().payload
@@ -400,13 +397,12 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         .unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-    let measured = chart
-        .measure_selected_interior(PlotRenderContext::new(
-            chart.data(),
+    let measured = source
+        .preflight_panel(
+            source.kind(),
             crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
-        ))
+        )
         .unwrap();
     let crate::layout::interior::MarkPayload::Line(payload) =
         &measured.marks.as_ref().unwrap().payload

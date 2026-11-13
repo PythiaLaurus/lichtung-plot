@@ -1125,15 +1125,19 @@ fn push_deferred_plot_requirements(
     } else if kind == PlotKind::Waterfall {
         let waterfall = interiors
             .filter(|inputs| inputs.route.kind() == PlotKind::Waterfall)
-            .map(|inputs| inputs.families.as_slice())
+            .map(|inputs| inputs.plots.as_slice())
             .ok_or_else(|| {
                 Error::Render("waterfall census requires root-prepared semantics".into())
             })?;
-        for (scope, family) in waterfall {
-            let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) = family else {
+        for registered in waterfall {
+            let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+                &registered.family
+            else {
                 continue;
             };
-            if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
+            if plot.axis_scope().is_some()
+                && registered.scope.render_name.as_deref() != plot.axis_scope()
+            {
                 continue;
             }
             for label in marks.total_font_sources(theme.text_layouts.total.as_ref()) {
@@ -1156,12 +1160,14 @@ fn push_deferred_plot_requirements(
     } else if kind == PlotKind::Heatmap {
         let heatmap = interiors
             .filter(|inputs| inputs.route.kind() == PlotKind::Heatmap)
-            .map(|inputs| inputs.families.as_slice())
+            .map(|inputs| inputs.plots.as_slice())
             .ok_or_else(|| {
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
-        for (_, family) in heatmap {
-            let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) = family else {
+        for registered in heatmap {
+            let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+                &registered.family
+            else {
                 continue;
             };
             if let Some(text) = marks.numeric_explanation() {
@@ -1243,16 +1249,19 @@ fn push_deferred_plot_requirements(
                     PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
                 )
             })
-            .map(|inputs| inputs.families.as_slice())
+            .map(|inputs| inputs.plots.as_slice())
             .ok_or_else(|| {
                 Error::Render("estimate detail census requires root-prepared semantics".into())
             })?;
-        for (scope, family) in estimates {
-            let crate::orchestrator::registration::PreparedFamily::Estimate { marks, .. } = family
+        for registered in estimates {
+            let crate::orchestrator::registration::PreparedFamily::Estimate { marks, .. } =
+                &registered.family
             else {
                 continue;
             };
-            if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
+            if plot.axis_scope().is_some()
+                && registered.scope.render_name.as_deref() != plot.axis_scope()
+            {
                 continue;
             }
             if let Some(text) = marks.numeric_explanation() {
@@ -1409,6 +1418,10 @@ impl PreparedTextRequirement {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "retain the original ordered scope, visibility and category/number census branches"
+)]
 fn push_plot_axis_ticks(
     interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
     requirements: &mut Vec<PreparedTextRequirement>,
@@ -1420,8 +1433,13 @@ fn push_plot_axis_ticks(
 ) -> Result<(), Error> {
     let alphabet = None;
     if let Some(interiors) = interiors {
-        for (index, (scope, axes)) in interiors.axes.iter().enumerate() {
-            if plot.axis_scope().is_some() && plot.axis_scope() != scope.as_deref() {
+        for (index, registered) in interiors.plots.iter().enumerate() {
+            let Some(axes) = &registered.axes else {
+                continue;
+            };
+            if plot.axis_scope().is_some()
+                && plot.axis_scope() != registered.scope.render_name.as_deref()
+            {
                 continue;
             }
             let owner = if plot.description().has_facets() {
@@ -2676,7 +2694,7 @@ mod tests {
             .unwrap(),
         };
         let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-            &mut std::sync::Arc::get_mut(&mut inputs.families).unwrap()[0].1
+            &mut inputs.plots[0].family
         else {
             panic!("prepared Heatmap")
         };
@@ -2743,7 +2761,7 @@ mod tests {
         .unwrap();
         let crate::orchestrator::registration::PreparedFamily::Estimate {
             marks: prepared, ..
-        } = &inputs.families[0].1
+        } = &inputs.plots[0].family
         else {
             panic!("prepared Estimate")
         };
@@ -2851,13 +2869,13 @@ mod tests {
                         stage,
                     )?;
                     let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-                        &inputs.families[0].1
+                        &inputs.plots[0].family
                     else {
                         panic!("prepared Heatmap")
                     };
                     let minimum = crate::plots::heatmap::prepare_intrinsics(
                         marks,
-                        &inputs.axes[0].1,
+                        inputs.plots[0].axes.as_ref().unwrap(),
                         &theme,
                         None,
                     )?;

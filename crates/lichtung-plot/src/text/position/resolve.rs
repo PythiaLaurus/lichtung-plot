@@ -22,6 +22,7 @@ impl ReferenceAxis {
 pub(crate) fn resolve(
     position: &TextPosition,
     plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     layout: &Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<[ReferenceAxis; 2]> {
@@ -42,9 +43,11 @@ pub(crate) fn resolve(
             )),
             Coordinate::Data(value) => {
                 if let DataValue::Category(raw) = &value.0 {
-                    let axes = plot.prepared_axis_inputs().ok_or_else(|| {
-                        Error::Render("data text reference requires actual axes".into())
-                    })?;
+                    let axes = registered
+                        .and_then(|registered| registered.axes.as_ref())
+                        .ok_or_else(|| {
+                            Error::Render("data text reference requires actual axes".into())
+                        })?;
                     let index = axes.categories[side]
                         .as_ref()
                         .and_then(|ticks| ticks.iter().position(|tick| &tick.label == raw))
@@ -68,7 +71,7 @@ pub(crate) fn resolve(
                         }));
                     }
                 }
-                let value = data(value, side, plot, theme)?;
+                let value = data(value, side, registered, theme)?;
                 let (x, y) = if side == 0 {
                     layout
                         .projection
@@ -105,11 +108,11 @@ pub(crate) fn point(reference: [ReferenceAxis; 2], panel: PixelRect) -> Point2D 
 pub(crate) fn data(
     coordinate: &DataCoordinate,
     side: usize,
-    plot: &Plot,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64> {
-    let axes = plot
-        .prepared_axis_inputs()
+    let axes = registered
+        .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("data text reference requires prepared actual axes".into()))?;
     let categories = axes.categories[side].as_deref();
     match &coordinate.0 {
@@ -145,14 +148,14 @@ pub(crate) fn data(
                     "category-series reference requires the categorical axis".into(),
                 ));
             }
-            if plot.prepared_families.iter().any(|(_, family)| {
+            if registered.is_some_and(|registered| {
                 matches!(
-                    family,
+                    &registered.family,
                     crate::orchestrator::registration::PreparedFamily::Distribution { .. }
                 )
             }) {
-                let marks = plot
-                    .prepared_family()
+                let marks = registered
+                    .map(|registered| registered.family.as_ref())
                     .and_then(|family| match family {
                         crate::orchestrator::registration::FamilyRef::Distribution {
                             marks,
@@ -163,7 +166,7 @@ pub(crate) fn data(
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
                 return marks.series_center(category, series);
             }
-            let (mode, bars) = plot.prepared_family().and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
+            let (mode, bars) = registered.map(|registered| registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
             let category = bars
                 .categories

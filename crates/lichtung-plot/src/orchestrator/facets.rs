@@ -223,7 +223,7 @@ impl FacetPlan {
         children: &mut crate::decorations::plan::children::ChildPlans,
         prepared_guide: &PreparedFacetGuide,
         content_sizing: bool,
-        inputs: Option<&crate::layout::interior::PreparedInteriorInputs>,
+        inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         if !source.description().significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
@@ -260,13 +260,13 @@ impl FacetPlan {
         data::validate_significance_facet_anchors(source.description(), &panels)?;
         let mut minima = Vec::new();
         crate::data::source::reserve_source(&mut minima, panels.len())?;
-        for facet in &panels {
+        for (index, facet) in panels.iter().enumerate() {
             let scoped = base_plot.clone().with_render_scope(facet.render_scope()?);
-            minima.push(scoped.intrinsic_body_minimum(theme)?);
+            minima.push(scoped.intrinsic_body_minimum(inputs.plots.get(index), theme)?);
         }
-        let provisional_content = content_sizing.then(|| tracks::ContentSizing {
+        let provisional_content = content_sizing.then_some(tracks::ContentSizing {
             plot: &base_plot,
-            inputs: inputs.expect("content facet root retains prepared inputs"),
+            inputs,
             round,
             natural_width: false,
             natural_height: false,
@@ -289,7 +289,7 @@ impl FacetPlan {
         let facet_scales = source.description().facet_scales_spec();
 
         let (base_plot, preflight) = legend::preflight_coordinated_panels(
-            source, base_plot, kind, &panels, theme, children, round,
+            source, base_plot, kind, &panels, inputs, theme, children, round,
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
@@ -443,7 +443,7 @@ impl FacetPlan {
                             theme,
                             round,
                             grid_width,
-                            inputs.expect("content facet root retains prepared inputs"),
+                            inputs,
                         )? {
                             FitOutcome::Measured(height) => height,
                             FitOutcome::Miss(reason) => {
@@ -497,7 +497,7 @@ impl FacetPlan {
                             theme,
                             round,
                             canvas_layout.panel_box.width(),
-                            inputs.expect("content facet root retains prepared inputs"),
+                            inputs,
                         ))?;
                         let height = crate::layout::kernel::root_dimension(
                             canvas_layout.height_for_body(height, theme)?,
@@ -955,7 +955,7 @@ mod feedback_tests {
                             &mut children,
                             guide,
                             false,
-                            None,
+                            inputs,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?;
                         if calls == 2 {
@@ -1159,7 +1159,7 @@ mod feedback_tests {
                         &mut crate::decorations::plan::children::ChildPlans::facets(),
                         guide,
                         false,
-                        None,
+                        inputs,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
@@ -1305,7 +1305,7 @@ mod feedback_tests {
                         &mut crate::decorations::plan::children::ChildPlans::facets(),
                         guide,
                         false,
-                        None,
+                        inputs,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))

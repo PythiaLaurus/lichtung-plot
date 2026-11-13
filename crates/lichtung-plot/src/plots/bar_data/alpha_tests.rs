@@ -100,109 +100,122 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         theme.marks = theme.marks.clone().fills(fills).unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let panels = &chart.prepared_families;
-        assert_eq!(panels.len(), 2);
-        for ((scope, family), (expected, ends, fills)) in panels.iter().zip([
-            ([128, 64], [2.0_f64, 3.0], [0, 230]),
-            ([0, 230], [6.0, 7.0], [64, 0]),
-        ]) {
-            let crate::orchestrator::registration::PreparedFamily::Bars {
-                marks: prepared, ..
-            } = family
-            else {
-                panic!("prepared Bars")
-            };
-            assert_eq!(
-                prepared
-                    .bars
-                    .iter()
-                    .map(|bar| bar.line_alpha.unwrap().alpha)
-                    .collect::<Vec<_>>(),
-                expected
-            );
-            assert_eq!(
-                prepared
-                    .bars
-                    .iter()
-                    .map(|bar| bar.fill_alpha.unwrap().alpha)
-                    .collect::<Vec<_>>(),
-                fills
-            );
-            assert_eq!(
-                prepared
-                    .bars
-                    .iter()
-                    .map(|bar| bar.end.to_bits())
-                    .collect::<Vec<_>>(),
-                ends.map(f64::to_bits)
-            );
-            assert!(prepared.bars.iter().all(|bar| bar.interval.is_some()));
-            let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
-            let minimum = intrinsic_body_minimum(&chart, &theme).unwrap();
-            assert_eq!(
-                (if horizontal { minimum.0 } else { minimum.1 }).to_bits(),
-                40.0_f64.to_bits()
-            );
-            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-            let selected = chart
-                .measure_selected_interior(crate::spec::PlotRenderContext::new(
-                    chart.data(),
-                    crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
-                    &theme,
-                ))
-                .unwrap();
-            assert_eq!(
-                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-                reads
-            );
-            let crate::layout::interior::MarkPayload::Bars(payload) =
-                &selected.marks.as_ref().unwrap().payload
-            else {
-                panic!("Bar payload")
-            };
-            assert_eq!(
-                payload
-                    .bars
-                    .iter()
-                    .map(|bar| bar.interval_style.color)
-                    .collect::<Vec<_>>(),
-                expected.map(|alpha| crate::Color::rgba(17, 41, 67, alpha))
-            );
-            assert_eq!(
-                payload
-                    .bars
-                    .iter()
-                    .map(|bar| bar.fill.color.get_alpha())
-                    .collect::<Vec<_>>(),
-                fills
-            );
-            assert!(payload
-                .bars
-                .iter()
-                .all(|bar| bar.fill.stroke.get_alpha() == 61));
-        }
-        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-        let incomplete = source.with_alpha(
-            AlphaTarget::Line,
-            AlphaEncoding::keyed(
-                [
-                    CategoryValues::new("category", ["B"]).unwrap(),
-                    CategoryValues::new("cohort", ["u"]).unwrap(),
-                    CategoryValues::new("panel", ["L"]).unwrap(),
-                ],
-                AlphaValues::new("uncertainty confidence", [0]).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(matches!(
-            incomplete.preflight().unwrap_err(),
-            Error::Data(_)
-        ));
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            calls
-        );
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, theme| {
+                let operation = theme.text.prepared_font_environment().unwrap().operation();
+                let panels = &inputs.plots;
+                assert_eq!(panels.len(), 2);
+                for (registered, (expected, ends, fills)) in panels.iter().zip([
+                    ([128, 64], [2.0_f64, 3.0], [0, 230]),
+                    ([0, 230], [6.0, 7.0], [64, 0]),
+                ]) {
+                    let crate::orchestrator::registration::PreparedFamily::Bars {
+                        marks: prepared,
+                        ..
+                    } = &registered.family
+                    else {
+                        panic!("prepared Bars")
+                    };
+                    assert_eq!(
+                        prepared
+                            .bars
+                            .iter()
+                            .map(|bar| bar.line_alpha.unwrap().alpha)
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                    assert_eq!(
+                        prepared
+                            .bars
+                            .iter()
+                            .map(|bar| bar.fill_alpha.unwrap().alpha)
+                            .collect::<Vec<_>>(),
+                        fills
+                    );
+                    assert_eq!(
+                        prepared
+                            .bars
+                            .iter()
+                            .map(|bar| bar.end.to_bits())
+                            .collect::<Vec<_>>(),
+                        ends.map(f64::to_bits)
+                    );
+                    assert!(prepared.bars.iter().all(|bar| bar.interval.is_some()));
+                    let chart = chart
+                        .clone()
+                        .with_render_scope(registered.scope.render_name.as_deref().unwrap());
+                    let minimum = intrinsic_body_minimum(&chart, Some(registered), theme).unwrap();
+                    assert_eq!(
+                        (if horizontal { minimum.0 } else { minimum.1 }).to_bits(),
+                        40.0_f64.to_bits()
+                    );
+                    let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                    let selected = chart
+                        .measure_selected_interior(
+                            crate::spec::PlotRenderContext::new(
+                                registered.data(&operation).unwrap(),
+                                crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
+                                theme,
+                            )
+                            .with_registration(registered),
+                        )
+                        .unwrap();
+                    assert_eq!(
+                        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                        reads
+                    );
+                    let crate::layout::interior::MarkPayload::Bars(payload) =
+                        &selected.marks.as_ref().unwrap().payload
+                    else {
+                        panic!("Bar payload")
+                    };
+                    assert_eq!(
+                        payload
+                            .bars
+                            .iter()
+                            .map(|bar| bar.interval_style.color)
+                            .collect::<Vec<_>>(),
+                        expected.map(|alpha| crate::Color::rgba(17, 41, 67, alpha))
+                    );
+                    assert_eq!(
+                        payload
+                            .bars
+                            .iter()
+                            .map(|bar| bar.fill.color.get_alpha())
+                            .collect::<Vec<_>>(),
+                        fills
+                    );
+                    assert!(payload
+                        .bars
+                        .iter()
+                        .all(|bar| bar.fill.stroke.get_alpha() == 61));
+                }
+                let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+                let incomplete = source.clone().with_alpha(
+                    AlphaTarget::Line,
+                    AlphaEncoding::keyed(
+                        [
+                            CategoryValues::new("category", ["B"]).unwrap(),
+                            CategoryValues::new("cohort", ["u"]).unwrap(),
+                            CategoryValues::new("panel", ["L"]).unwrap(),
+                        ],
+                        AlphaValues::new("uncertainty confidence", [0]).unwrap(),
+                    )
+                    .unwrap(),
+                );
+                assert!(matches!(
+                    incomplete.preflight().unwrap_err(),
+                    Error::Data(_)
+                ));
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    calls
+                );
+            },
+        )
+        .unwrap();
     }
 
     let source = Plot::bar(
@@ -256,52 +269,63 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let prepared = retained(chart.prepared_family()).unwrap();
-        assert_eq!(prepared.primary_mark_count(), 5);
-        assert_eq!(
-            prepared
-                .bars
-                .iter()
-                .map(|bar| (bar.start.to_bits(), bar.end.to_bits(), bar.nonzero))
-                .collect::<Vec<_>>(),
-            [
-                (0.0_f64.to_bits(), 1.0_f64.to_bits(), true),
-                (0.0_f64.to_bits(), 2.0_f64.to_bits(), true),
-                (1.0_f64.to_bits(), 1.0_f64.to_bits(), false),
-                (2.0_f64.to_bits(), 6.0_f64.to_bits(), true),
-                (0.0_f64.to_bits(), (-2.0_f64).to_bits(), true),
-            ]
-        );
-        let selected = chart
-            .measure_selected_interior(crate::spec::PlotRenderContext::new(
-                chart.data(),
-                crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
-                &theme,
-            ))
-            .unwrap();
-        let crate::layout::interior::MarkPayload::Bars(payload) =
-            &selected.marks.as_ref().unwrap().payload
-        else {
-            panic!("stacked Bar payload")
-        };
-        assert_eq!(
-            payload
-                .bars
-                .iter()
-                .map(|bar| bar.fill.color.get_alpha())
-                .collect::<Vec<_>>(),
-            [128, 230, 0, 64, 17]
-        );
-        assert!(payload.bars.iter().all(|bar| bar.interval.is_none()));
-        assert!(payload.bars.iter().all(|bar| bar.fill.stroke.get_alpha()
-            == theme
-                .marks
-                .get_fills()
-                .get_bodies()
-                .get_bar_body()
-                .backend_style((0, 0, 0))
-                .stroke
-                .get_alpha()));
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &theme,
+            |chart, inputs, theme| {
+                let operation = theme.text.prepared_font_environment().unwrap().operation();
+                let registered = &inputs.plots[0];
+                let prepared = retained(Some(registered.family.as_ref())).unwrap();
+                assert_eq!(prepared.primary_mark_count(), 5);
+                assert_eq!(
+                    prepared
+                        .bars
+                        .iter()
+                        .map(|bar| (bar.start.to_bits(), bar.end.to_bits(), bar.nonzero))
+                        .collect::<Vec<_>>(),
+                    [
+                        (0.0_f64.to_bits(), 1.0_f64.to_bits(), true),
+                        (0.0_f64.to_bits(), 2.0_f64.to_bits(), true),
+                        (1.0_f64.to_bits(), 1.0_f64.to_bits(), false),
+                        (2.0_f64.to_bits(), 6.0_f64.to_bits(), true),
+                        (0.0_f64.to_bits(), (-2.0_f64).to_bits(), true),
+                    ]
+                );
+                let selected = chart
+                    .measure_selected_interior(
+                        crate::spec::PlotRenderContext::new(
+                            registered.data(&operation).unwrap(),
+                            crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
+                            theme,
+                        )
+                        .with_registration(registered),
+                    )
+                    .unwrap();
+                let crate::layout::interior::MarkPayload::Bars(payload) =
+                    &selected.marks.as_ref().unwrap().payload
+                else {
+                    panic!("stacked Bar payload")
+                };
+                assert_eq!(
+                    payload
+                        .bars
+                        .iter()
+                        .map(|bar| bar.fill.color.get_alpha())
+                        .collect::<Vec<_>>(),
+                    [128, 230, 0, 64, 17]
+                );
+                assert!(payload.bars.iter().all(|bar| bar.interval.is_none()));
+                assert!(payload.bars.iter().all(|bar| bar.fill.stroke.get_alpha()
+                    == theme
+                        .marks
+                        .get_fills()
+                        .get_bodies()
+                        .get_bar_body()
+                        .backend_style((0, 0, 0))
+                        .stroke
+                        .get_alpha()));
+            },
+        )
+        .unwrap();
     }
 }
