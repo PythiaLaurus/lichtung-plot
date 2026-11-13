@@ -15,7 +15,7 @@ pub(crate) struct NumericInputs {
     cells: Option<NumericFormat>,
     estimates: Option<NumericFormat>,
     totals: Option<Arc<NumericFormat>>,
-    owner: Option<Arc<[usize; 6]>>,
+    owner: Option<[usize; 6]>,
 }
 
 fn cells<K: crate::kind::Marker>(plot: &Plot<K>) -> Option<&NumericFormat> {
@@ -26,7 +26,18 @@ fn cells<K: crate::kind::Marker>(plot: &Plot<K>) -> Option<&NumericFormat> {
 }
 
 impl NumericInputs {
-    pub(crate) fn new<K: crate::kind::Marker>(plot: &Plot<K>) -> Result<Self> {
+    fn owner(
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: Option<&crate::Canvas>,
+    ) -> Option<[usize; 6]> {
+        canvas?.owner_topology_at(registered?.scope.numeric_owner.canvas?)
+    }
+
+    pub(crate) fn new<K: crate::kind::Marker>(
+        plot: &Plot<K>,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: Option<&crate::Canvas>,
+    ) -> Result<Self> {
         Ok(Self {
             scale: plot.description().axis_scale_spec(),
             axes: [
@@ -41,13 +52,18 @@ impl NumericInputs {
                 .map(NumericFormat::try_copy)
                 .transpose()?,
             totals: plot.description().total_format_spec().cloned(),
-            owner: plot.canvas_owner.clone(),
+            owner: Self::owner(registered, canvas),
         })
     }
 
-    pub(crate) fn matches<K: crate::kind::Marker>(&self, plot: &Plot<K>) -> bool {
+    pub(crate) fn matches<K: crate::kind::Marker>(
+        &self,
+        plot: &Plot<K>,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: Option<&crate::Canvas>,
+    ) -> bool {
         self.scale == plot.description().axis_scale_spec()
-            && self.owner == plot.canvas_owner
+            && self.owner == Self::owner(registered, canvas)
             && self.axes[0] == plot.description().x_axis_spec().format
             && self.axes[1] == plot.description().y_axis_spec().format
             && self.color.as_ref() == plot.description().color_label_format_spec()

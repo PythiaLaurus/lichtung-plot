@@ -472,6 +472,7 @@ fn shared_legend_child_cache_replay_contract() {
                         plot.preflight_measurement(
                             inputs.plots.first(),
                             Some(inputs.intrinsic(&inputs.plots[0])),
+                            None,
                             plot.kind(),
                             panel,
                             &theme,

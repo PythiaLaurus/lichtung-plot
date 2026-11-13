@@ -268,15 +268,17 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
     let retained = erased
         .retain_composed_inputs(
             crate::decorations::legend::discrete::scoped::ScopedGuideInputs::for_test(&erased),
+            None,
+            None,
         )
         .unwrap();
-    assert!(erased.same_composed_inputs(&retained, &retained.guides));
+    assert!(erased.same_composed_inputs(&retained, &retained.guides, None, None));
     for target in [AlphaTarget::Point, AlphaTarget::Line, AlphaTarget::Fill] {
         let changed = source
             .clone()
             .with_alpha(target, AlphaEncoding::theme())
             .erase();
-        assert!(!changed.same_composed_inputs(&retained, &retained.guides));
+        assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
     }
     let faceted = source.facet(crate::FacetSpec::row(
         CategoryValues::new("experiment", ["left", "right", "left"]).unwrap(),

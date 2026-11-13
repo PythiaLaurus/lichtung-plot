@@ -110,7 +110,7 @@ impl Placements {
     fn place(
         &mut self,
         footprint: Footprint,
-        mut payload: Payload,
+        payload: Payload,
         overlap: Overlap,
     ) -> Result<(), Error> {
         let row_end = footprint
@@ -138,16 +138,6 @@ impl Placements {
             }
         }
         let anchor = footprint.row * self.columns + footprint.column;
-        if let Payload::Plot(plot) = &mut payload {
-            Arc::make_mut(plot).canvas_owner = Some(crate::data::source::source_arc([
-                self.rows,
-                self.columns,
-                footprint.row,
-                footprint.column,
-                footprint.row_span,
-                footprint.column_span,
-            ])?);
-        }
         // All validation and fallible resources precede mutation. Removing a
         // whole owner clears repeated occupancy hits without a second index.
         if matches!(overlap, Overlap::Replace) {

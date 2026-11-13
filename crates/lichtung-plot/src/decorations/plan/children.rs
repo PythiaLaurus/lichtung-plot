@@ -69,12 +69,16 @@ impl Inputs {
             axis_label_width: context.axis_label_width.to_bits(),
             content_height: context.content_height,
             fill_content_height: context.fill_content_height,
-            plot: plot.retain_composed_inputs(ScopedGuideInputs::new(
-                plot,
-                context.guides.use_kind,
-                context.guides.local_guide,
-                context.guides.dependencies,
-            )?)?,
+            plot: plot.retain_composed_inputs(
+                ScopedGuideInputs::new(
+                    plot,
+                    context.guides.use_kind,
+                    context.guides.local_guide,
+                    context.guides.dependencies,
+                )?,
+                context.registered,
+                context.canvas,
+            )?,
             theme,
             direction,
             scales: context.facet_scales(),
@@ -100,7 +104,12 @@ impl Inputs {
                 context.guides.local_guide,
                 context.guides.dependencies,
             )
-            && plot.same_composed_inputs(&self.plot, &self.plot.guides)
+            && plot.same_composed_inputs(
+                &self.plot,
+                &self.plot.guides,
+                context.registered,
+                context.canvas,
+            )
             && self.plot.guides.stable(round)
             && self.theme.same_validated(
                 context.theme.theme,
@@ -198,6 +207,7 @@ impl ChildPlans {
             plot.preflight_measurement(
                 context.registered,
                 context.intrinsic,
+                context.canvas,
                 plot.kind(),
                 context.panel,
                 context.theme,
@@ -699,7 +709,12 @@ mod tests {
                                 assert!(!Arc::ptr_eq(&first, &changed));
                                 assert!(Arc::ptr_eq(&changed, &hit));
                                 let inputs = &children.measurements[0].inputs.plot;
-                                assert!(!source.same_composed_inputs(inputs, &inputs.guides));
+                                assert!(!source.same_composed_inputs(
+                                    inputs,
+                                    &inputs.guides,
+                                    context.registered,
+                                    context.canvas
+                                ));
                             }
                             Ok(crate::layout::MeasuredLayout::new(
                                 assigned.assigned_size()?,

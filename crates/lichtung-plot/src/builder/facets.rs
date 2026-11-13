@@ -128,6 +128,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self,
         other: &ComposedInputs,
         guides: &crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: Option<&crate::Canvas>,
     ) -> bool {
         fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
             match (a, b) {
@@ -183,7 +185,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.description.payload.legend_policy == other.legend_policy
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.description.root_size == other.root_size
-            && other.numeric.matches(self)
+            && other.numeric.matches(self, registered, canvas)
             && self.description.payload.alpha == other.alpha
             && self.description.payload.text_layouts == other.text_layouts
             && self.output_dimensions == other.output_dimensions
@@ -194,6 +196,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn retain_composed_inputs(
         &self,
         guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: Option<&crate::Canvas>,
     ) -> Result<ComposedInputs, crate::Error> {
         if !guides.matches_source(self) {
             return Err(crate::Error::Render(
@@ -281,7 +285,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             legend_policy: self.description.payload.legend_policy,
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.description.root_size,
-            numeric: crate::numeric::inputs::NumericInputs::new(self)?,
+            numeric: crate::numeric::inputs::NumericInputs::new(self, registered, canvas)?,
             alpha: self.description.payload.alpha.clone(),
             guides,
         })

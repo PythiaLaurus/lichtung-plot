@@ -93,6 +93,7 @@ impl HeightInputs {
     fn new(
         plot: &Plot,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: &Canvas,
         width: f64,
         parent_insets: [i64; 4],
         round: &FeedbackRound,
@@ -175,7 +176,7 @@ impl HeightInputs {
             y_labels: plot.y_tick_labels_visible(),
             legend: plot.description().legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
-            numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
+            numeric: crate::numeric::inputs::NumericInputs::new(plot, registered, Some(canvas))?,
             alpha: plot.description().alpha_inputs().clone(),
             guides: ScopedGuideInputs::new(plot, use_kind, local.as_ref(), dependencies)?,
             scope: plot
@@ -213,6 +214,7 @@ impl HeightMeasurements {
         &mut self,
         plot: &Plot,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        canvas: &Canvas,
         width: f64,
         height: f64,
         parent_insets: [i64; 4],
@@ -223,6 +225,7 @@ impl HeightMeasurements {
         let inputs = HeightInputs::new(
             plot,
             registered,
+            canvas,
             width,
             parent_insets,
             round,
@@ -298,6 +301,7 @@ pub(super) fn measured_preference(
 )]
 pub(super) fn cell_height(
     plot: &Plot,
+    canvas: &Canvas,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
@@ -329,6 +333,7 @@ pub(super) fn cell_height(
     let identity = HeightInputs::new(
         plot,
         registered,
+        canvas,
         width,
         parent_insets,
         round,

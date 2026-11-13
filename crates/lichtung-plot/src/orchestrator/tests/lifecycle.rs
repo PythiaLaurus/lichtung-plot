@@ -854,6 +854,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     crate::layout::fit::measured(plot.preflight_measurement(
                         registered,
                         Some(inputs.intrinsic(registered.unwrap())),
+                        None,
                         kind,
                         panel,
                         theme,

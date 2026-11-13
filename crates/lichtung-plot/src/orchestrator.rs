@@ -90,6 +90,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                     plot.preflight_measurement(
                         context.registered,
                         context.intrinsic,
+                        context.canvas,
                         PlotKind::Line,
                         context.panel,
                         &theme,

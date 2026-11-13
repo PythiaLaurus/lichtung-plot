@@ -104,10 +104,7 @@ fn region_replacement_removes_whole_owners_and_commits_only_valid_topology() {
         placements.occupancy,
         [None, None, Some(2), None, Some(4), Some(5)]
     );
-    assert_eq!(
-        placements.plot(4).unwrap().canvas_owner.as_deref(),
-        Some(&[2, 3, 1, 1, 1, 1])
-    );
+    assert_eq!(placements.footprint(4), Some(Footprint::cell(1, 1)));
     assert!(placements.text(0).is_none());
     assert_eq!(placements.text(2).unwrap().title(), "B");
     assert_eq!(placements.text(5).unwrap().title(), "C");

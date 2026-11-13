@@ -1299,6 +1299,7 @@ impl Plot {
             crate::layout::fit::measured(plot.preflight_measurement(
                 inputs.plots.first(),
                 Some(inputs.intrinsic(&inputs.plots[0])),
+                None,
                 kind,
                 panel,
                 request,
@@ -1308,10 +1309,15 @@ impl Plot {
         })?
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the probe borrows its occurrence, intrinsic slot and containing Canvas without storing owner data in Plot"
+    )]
     pub(crate) fn preflight_measurement(
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: Option<&crate::orchestrator::root::PlotIntrinsics>,
+        canvas: Option<&crate::Canvas>,
         kind: PlotKind,
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
@@ -1330,9 +1336,10 @@ impl Plot {
         self.description().configured_source_rows()?;
         let operation = theme.text.prepared_font_environment()?.operation();
         let registered = registered.expect("prepared plot measurement");
-        let context = PlotRenderContext::new(registered.data(&operation)?, panel, theme)
+        let mut context = PlotRenderContext::new(registered.data(&operation)?, panel, theme)
             .with_registration(registered, intrinsic.expect("prepared plot intrinsic slot"))
             .with_fit_scope(scope);
+        context.canvas = canvas;
         crate::layout::fit::outcome(self.measure_panel(kind, context))
     }
 }

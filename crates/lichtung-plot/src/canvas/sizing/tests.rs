@@ -1,6 +1,7 @@
 use super::*;
 use crate::decorations::legend::discrete::scoped::{DependencyUse, GuideAllocation};
 use crate::numeric::{decimal::NegativeZero, format::NumericFormat};
+use std::sync::Arc;
 
 #[test]
 fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
@@ -88,39 +89,68 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
     clippy::too_many_lines,
     reason = "one cache contract compares complete scalar assignment inputs and declared guide dependencies"
 )]
-fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item = Plot>) {
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(
-        source,
-        &operation,
-        Some(&crate::Theme::publication()),
-    )
-    .unwrap();
+fn assert_changed_height_inputs(
+    source: &Plot,
+    variants: impl IntoIterator<Item = Plot>,
+    include_spanning: bool,
+) {
+    let mut canvas = Canvas::grid(2, 2).unwrap();
+    Arc::make_mut(&mut canvas.placements)
+        .insert(
+            super::super::placement::Footprint::cell(0, 0),
+            super::super::placement::Payload::Plot(Arc::new(source.clone())),
+        )
+        .unwrap();
+    let spanning = include_spanning.then(|| {
+        let mut spanning = canvas.clone();
+        Arc::make_mut(&mut spanning.placements)
+            .replace(
+                super::super::placement::Footprint {
+                    row: 0,
+                    column: 0,
+                    row_span: 2,
+                    column_span: 1,
+                },
+                super::super::placement::Payload::Plot(Arc::new(source.clone())),
+            )
+            .unwrap();
+        spanning
+    });
     let appearance = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let request = crate::text::TextRequestContext::new(&appearance, &text);
-    inputs
-        .prepare_discrete_guides(
-            source,
-            &request,
-            &operation,
-            &ComponentAddress::root(),
-            false,
-        )
-        .unwrap();
-    let variants = variants
-        .into_iter()
-        .map(|variant| inputs.attach(variant).unwrap())
-        .collect::<Vec<_>>();
-    let source = inputs.attach(source.clone()).unwrap();
+    let themes = super::super::ResolvedCanvasThemes::new(
+        &canvas.theme,
+        &canvas.placements,
+        &canvas.guide_text_layouts,
+    )
+    .unwrap();
+    let variants = variants.into_iter().collect::<Vec<_>>();
     let mut measurements = HeightMeasurements::default();
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
             width: 800,
             height: 600,
         },
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| {
+            let (mut interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
+            let inputs = interiors[0].take().expect("prepared Canvas occurrence");
+            inputs.prepare_discrete_guides(
+                source,
+                &request,
+                &stage.operation(),
+                &ComponentAddress::root(),
+                false,
+            )?;
+            Ok(inputs)
+        },
+        |inputs, assigned, round| {
+            let scope = inputs.plots[0]
+                .scope
+                .render_name
+                .as_deref()
+                .expect("Canvas scope");
+            let source = inputs.attach(source.clone().with_render_scope(scope.to_owned()))?;
             let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
             let ancestor = ComponentAddress::root().child(AddressRole::CanvasSharedLegend, 0)?;
             let dependencies = [ConsumedGuideDependency::new(
@@ -132,6 +162,7 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
             measurements.record(
                 &source,
                 inputs.plots.first(),
+                &canvas,
                 400.0,
                 120.0,
                 [0; 4],
@@ -142,6 +173,7 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
             let same = HeightInputs::new(
                 &source,
                 inputs.plots.first(),
+                &canvas,
                 400.0,
                 [0; 4],
                 round,
@@ -153,6 +185,7 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
             let undeclared = HeightInputs::new(
                 &source,
                 inputs.plots.first(),
+                &canvas,
                 400.0,
                 [0; 4],
                 round,
@@ -170,6 +203,7 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
             let different = HeightInputs::new(
                 &source,
                 inputs.plots.first(),
+                &canvas,
                 400.0,
                 [0; 4],
                 round,
@@ -180,9 +214,11 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
             assert_eq!(same.width, different.width);
             assert_eq!(measurements.measured(&different, &owner, round)?, None);
             for changed in &variants {
+                let changed = inputs.attach(changed.clone().with_render_scope(scope.to_owned()))?;
                 let different = HeightInputs::new(
-                    changed,
+                    &changed,
                     inputs.plots.first(),
+                    &canvas,
                     400.0,
                     [0; 4],
                     round,
@@ -194,8 +230,52 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
                 assert_eq!(same.ranges, different.ranges);
                 assert_eq!(measurements.measured(&different, &owner, round)?, None);
                 measurements.record(
-                    changed,
+                    &changed,
                     inputs.plots.first(),
+                    &canvas,
+                    400.0,
+                    120.0,
+                    [0; 4],
+                    round,
+                    &owner,
+                    &dependencies,
+                )?;
+                assert_eq!(
+                    measurements.measured(&different, &owner, round)?,
+                    Some(120.0)
+                );
+                assert_eq!(measurements.measured(&same, &owner, round)?, None);
+            }
+            if let Some(spanning) = &spanning {
+                measurements.record(
+                    &source,
+                    inputs.plots.first(),
+                    &canvas,
+                    400.0,
+                    120.0,
+                    [0; 4],
+                    round,
+                    &owner,
+                    &dependencies,
+                )?;
+                let different = HeightInputs::new(
+                    &source,
+                    inputs.plots.first(),
+                    spanning,
+                    400.0,
+                    [0; 4],
+                    round,
+                    &owner,
+                    true,
+                    &dependencies,
+                )?;
+                assert_eq!(same.width, different.width);
+                assert_eq!(same.ranges, different.ranges);
+                assert_eq!(measurements.measured(&different, &owner, round)?, None);
+                measurements.record(
+                    &source,
+                    inputs.plots.first(),
+                    spanning,
                     400.0,
                     120.0,
                     [0; 4],
@@ -214,7 +294,7 @@ fn assert_changed_height_inputs(source: &Plot, variants: impl IntoIterator<Item 
                 (),
             ))
         },
-        |(), _, (), _| Ok(()),
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
 }
@@ -244,14 +324,10 @@ fn recorded_heights_require_complete_text_requests_even_when_geometry_can_match(
             .clone()
             .x_label(crate::Text::new("Horizontal").layout(crate::TextLayout::default())),
     ];
-    assert_changed_height_inputs(&source, variants);
+    assert_changed_height_inputs(&source, variants, false);
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one identity witness contrasts complete numeric, guide and footprint inputs at equal width/domain"
-)]
 fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and_domain() {
     let format = NumericFormat::default();
     let make = |guide, values| {
@@ -268,12 +344,9 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
         .clone()
         .negative_zero(NegativeZero::Normalize)
         .unwrap();
-    let mut spanning = make(format.clone(), format.clone()).erase();
-    spanning.canvas_owner = Some(crate::data::source::source_arc([2, 2, 0, 0, 2, 1]).unwrap());
     assert_changed_height_inputs(
         &make(format.clone(), format.clone()).erase(),
         vec![
-            spanning,
             make(format.clone(), format.clone())
                 .x_category_labels(crate::CategoryLabelSelection::every(2).unwrap())
                 .erase(),
@@ -286,6 +359,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
                 .color_label(crate::Text::new("Value").layout(crate::TextLayout::default()))
                 .erase(),
         ],
+        true,
     );
 
     let source = crate::Plot::scatter(
@@ -313,7 +387,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             .y_tick_generation(crate::TickGeneration::maximum(5).unwrap())
             .erase(),
     ];
-    assert_changed_height_inputs(&source.erase(), variants);
+    assert_changed_height_inputs(&source.erase(), variants, false);
 
     let source = crate::Plot::line(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -356,5 +430,5 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             )
             .erase(),
     ];
-    assert_changed_height_inputs(&source.erase(), variants);
+    assert_changed_height_inputs(&source.erase(), variants, false);
 }

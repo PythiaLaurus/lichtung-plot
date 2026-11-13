@@ -925,6 +925,7 @@ fn measure(
                 )?;
                 super::sizing::cell_height(
                     plot,
+                    content.source,
                     &themes.plot_request(index).expect("prepared Plot theme"),
                     width,
                     content.interiors[index]

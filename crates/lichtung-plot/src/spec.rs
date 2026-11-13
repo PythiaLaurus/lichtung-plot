@@ -640,8 +640,9 @@ pub(crate) enum LegendClearance {
 use crate::Error;
 
 /// Shared immutable inputs for one plot renderer.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a, 'src> {
+    pub(crate) canvas: Option<&'src crate::Canvas>,
     pub(crate) registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'src>>,
     pub(crate) intrinsic: Option<&'a crate::orchestrator::root::PlotIntrinsics>,
     pub(crate) data: crate::data::PlotData<'src, 'a>,
@@ -681,6 +682,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
         Self {
+            canvas: None,
             registered: None,
             intrinsic: None,
             data,
@@ -702,6 +704,11 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
 
     pub(crate) const fn with_facet_scales(mut self, facet_scales: FacetScales) -> Self {
         self.facet_scales = Some(facet_scales);
+        self
+    }
+
+    pub(crate) const fn with_canvas(mut self, canvas: &'src crate::Canvas) -> Self {
+        self.canvas = Some(canvas);
         self
     }
 

@@ -477,6 +477,10 @@ impl Canvas {
         ])
     }
 
+    pub(crate) fn owner_topology_at(&self, (row, column): (usize, usize)) -> Option<[usize; 6]> {
+        self.owner_topology(row * self.columns + column)
+    }
+
     fn category_bands(&self) -> Result<Vec<Vec<usize>>, Error> {
         let mut bands = Vec::new();
         let mut row = 0;
@@ -1310,7 +1314,7 @@ impl Canvas {
                 plot
             };
             let plot = plot.expect("configured Canvas source");
-            let scope = crate::orchestrator::registration::Scope::new(
+            let mut scope = crate::orchestrator::registration::Scope::new(
                 plot,
                 &resources,
                 index,
@@ -1320,6 +1324,8 @@ impl Canvas {
                     .map(crate::data::source::copy_source_string)
                     .transpose()?,
             )?;
+            scope.numeric_owner.canvas = Some((index / self.columns, index % self.columns));
+            scope.axis_numeric_owner.canvas = scope.numeric_owner.canvas;
             if plot.kind() == PlotKind::Matrix {
                 slots.push(None);
                 continue;
@@ -2188,7 +2194,7 @@ impl Canvas {
             }
         }
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::preflight_shared_legend(
+            self.preflight_shared_legend(
                 &plots,
                 interiors,
                 &themes,
@@ -2359,6 +2365,7 @@ impl Canvas {
                         .expect("prepared Canvas plot")
                         .intrinsic(registered),
                 )
+                .with_canvas(self)
                 .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
@@ -2628,6 +2635,7 @@ impl Canvas {
                             .expect("prepared Canvas plot")
                             .intrinsic(registered),
                     )
+                    .with_canvas(self)
                     .with_guides(&guides),
                     children,
                     first_index,
@@ -2681,6 +2689,7 @@ impl Canvas {
                                 .expect("prepared Canvas plot")
                                 .intrinsic(registered),
                         )
+                        .with_canvas(self)
                         .with_guides(&guides),
                         children,
                         index,
@@ -2865,6 +2874,7 @@ impl Canvas {
                 theme,
             )
             .with_registration(registered, intrinsic)
+            .with_canvas(self)
             .with_fit_scope(&child_scope)
             .with_guides(&guides);
             if prepared.content_sizing
@@ -2921,6 +2931,7 @@ impl Canvas {
                     measurements.record(
                         plot,
                         Some(registered),
+                        self,
                         cell.width(),
                         preferred,
                         content_insets[index],
@@ -3236,9 +3247,11 @@ impl Canvas {
 
     #[expect(
         clippy::type_complexity,
+        clippy::too_many_arguments,
         reason = "shared descriptor preparation also retains the exact full-body probes used by frame attempts"
     )]
     fn preflight_shared_legend(
+        &self,
         plots: &[Option<Plot>],
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
         themes: &ResolvedCanvasThemes,
@@ -3277,7 +3290,8 @@ impl Canvas {
                                 .as_ref()
                                 .expect("prepared Canvas plot")
                                 .intrinsic(registered),
-                        ),
+                        )
+                        .with_canvas(self),
                     index,
                     MeasurementPhase::Legend,
                     round,
