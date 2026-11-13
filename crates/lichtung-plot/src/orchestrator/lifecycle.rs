@@ -1635,10 +1635,12 @@ mod retained_legend_tests {
                     )?,
                 ))
             },
-            |_, _, mut plan, stage| {
+            |(inputs, _), _, mut plan, stage| {
                 let MeasuredRootContent::Single { plot, legend } = &mut plan.content else {
                     panic!("measured single plot")
                 };
+                assert_eq!(plot.plot_id, inputs.plots[0].scope.id);
+                assert_eq!(plot.selected.plot_id, plot.plot_id);
                 let (layer, draw) = legend.as_ref().unwrap();
                 assert_eq!(layer, "legend");
                 let mut geometry = crate::render::geometry::GeometrySnapshot::new();

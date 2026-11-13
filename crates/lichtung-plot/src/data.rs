@@ -130,6 +130,10 @@ impl<'src, 'op> PlotData<'src, 'op> {
         self.operation
     }
 
+    pub(crate) const fn plot_id(self) -> &'op crate::orchestrator::registration::PlotOccurrenceId {
+        self.row_source.owner()
+    }
+
     pub(crate) fn column(self, key: &str) -> Result<DataColumn<'src>, Error> {
         #[cfg(test)]
         SOURCE_COLUMN_READS.with(|calls| calls.set(calls.get() + 1));

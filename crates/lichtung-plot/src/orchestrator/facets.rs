@@ -947,6 +947,10 @@ mod feedback_tests {
                         let MeasuredRootContent::Facets(content) = &plan.content else {
                             panic!("measured facet content")
                         };
+                        for (child, registered) in content.children.iter().zip(&inputs.plots) {
+                            assert_eq!(child.plot.plot_id, registered.scope.id);
+                            assert_eq!(child.plot.selected.plot_id, child.plot.plot_id);
+                        }
                         if calls == 2 {
                             retained_neighbor =
                                 Some(std::sync::Arc::clone(&content.children[1].plot));

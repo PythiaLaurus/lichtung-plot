@@ -24,6 +24,7 @@ thread_local! {
 // configuration and prepared fonts are fixed by the borrowed root and cell;
 // coordination's computed replacements are compared by value, not pointers.
 struct PlotEntryInputs {
+    plot_id: crate::orchestrator::registration::PlotOccurrenceId,
     owners: [ComponentAddress; 2],
     geometry: [u64; 4],
     axis_label_width: u64,
@@ -49,6 +50,7 @@ impl PlotEntryInputs {
     fn new(
         plot: &Plot,
         context: PlotRenderContext<'_, '_>,
+        plot_id: &crate::orchestrator::registration::PlotOccurrenceId,
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<Self, Error> {
@@ -65,6 +67,7 @@ impl PlotEntryInputs {
         let grid_owner = owner.under_grid(grid_role)?;
         let owners = [owner.clone(), grid_owner];
         Ok(Self {
+            plot_id: plot_id.clone(),
             geometry: geometry(context.panel),
             axis_label_width: context.axis_label_width.to_bits(),
             content_height: context.content_height,
@@ -96,6 +99,7 @@ impl PlotEntryInputs {
         round: &FeedbackRound,
     ) -> Result<bool, Error> {
         Ok(self.owners[0] == *owner
+            && self.plot_id == *context.data.plot_id()
             && self.geometry == geometry(context.panel)
             && self.axis_label_width == context.axis_label_width.to_bits()
             && self.content_height == context.content_height
@@ -284,7 +288,7 @@ impl ChildPlans {
             .retain(|entry| entry.inputs.owners[0] != *owner || entry.phase != phase);
         crate::render::backend::reserve_text_records(&mut self.measurements, 1)?;
         self.measurements.push(Measurement {
-            inputs: PlotEntryInputs::new(plot, context, owner, round)?,
+            inputs: PlotEntryInputs::new(plot, context, context.data.plot_id(), owner, round)?,
             phase,
             result: Arc::clone(&result),
         });
@@ -352,7 +356,7 @@ impl ChildPlans {
         }
         self.panels.retain(|entry| entry.inputs.owners[0] != *owner);
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
-            let inputs = PlotEntryInputs::new(plot, context, owner, round)?;
+            let inputs = PlotEntryInputs::new(plot, context, &result.plot_id, owner, round)?;
             if round.child_stable(&inputs.owners) {
                 crate::render::backend::reserve_text_records(&mut self.panels, 1)?;
                 self.panels.push(CompleteChildCacheEntry {
@@ -410,7 +414,8 @@ mod tests {
                             crate::layout::PixelRect::new(20.0, 400.0, 20.0, 500.0),
                             &theme,
                         );
-                        let key = PlotEntryInputs::new(&source, context, &owner, round)?;
+                        let key =
+                            PlotEntryInputs::new(&source, context, data.plot_id(), &owner, round)?;
                         assert!(key.matches(&source, context, &owner, round)?);
                         for (content_height, fill_content_height) in
                             [(true, false), (false, true), (true, true)]
@@ -785,10 +790,12 @@ mod tests {
                             round.observe_number(1.0)?;
                             // Seed a successful immutable panel to isolate the replay boundary.
                             children.panels.push(CompleteChildCacheEntry {
-                                inputs: PlotEntryInputs::new(&source, context, &owner, round)?,
+                                inputs: PlotEntryInputs::new(&source, context, data.plot_id(), &owner, round)?,
                                 role: LegendRole::Suppressed,
                                 result: Arc::new(MeasuredPlotPlan {
+                                    plot_id: data.plot_id().clone(),
                                     selected: crate::orchestrator::assignment::PlotMeasureAssignment {
+                                        plot_id: data.plot_id().clone(),
                                         dimensions: crate::orchestrator::assignment::PlotMeasureDimensions { canvas: assigned.assigned_size()?, output_override: None },
                                         cell: context.cell,
                                         frame: context.panel,
@@ -904,11 +911,13 @@ mod tests {
                         assert!(PlotEntryInputs::new(
                             &source,
                             context,
+                            data.plot_id(),
                             &owner.child(AddressRole::CanvasCell, 1)?,
                             round
                         )
                         .is_err());
-                        let key = PlotEntryInputs::new(&source, context, &owner, round)?;
+                        let key =
+                            PlotEntryInputs::new(&source, context, data.plot_id(), &owner, round)?;
                         assert!(key.matches(&source, context, &owner, round)?);
                         let registered = &inputs.plots[0];
                         let composed =

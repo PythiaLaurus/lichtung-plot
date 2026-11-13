@@ -184,6 +184,7 @@ impl ResolvedLegend {
 }
 
 pub(crate) struct MeasuredPlotPlan {
+    pub(crate) plot_id: crate::orchestrator::registration::PlotOccurrenceId,
     pub(crate) selected: crate::orchestrator::assignment::PlotMeasureAssignment,
     pub(crate) preference:
         Option<std::sync::Arc<crate::orchestrator::assignment::PlotFrameHeightPreference>>,
@@ -1632,6 +1633,7 @@ fn plan_panel_attempt(
     }
     geometry.observe_feedback(round)?;
     let selected = crate::orchestrator::assignment::PlotMeasureAssignment {
+        plot_id: context.data.plot_id().clone(),
         dimensions: plot.measure_dimensions()?,
         cell: context.cell,
         frame: cell,
@@ -1647,6 +1649,7 @@ fn plan_panel_attempt(
         })
     });
     Ok(FitOutcome::Measured(MeasuredPlotPlan {
+        plot_id: selected.plot_id.clone(),
         selected,
         preference,
         panel_box,

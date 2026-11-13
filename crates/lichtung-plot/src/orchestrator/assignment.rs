@@ -19,6 +19,7 @@ pub(crate) struct AssignedAxisRef<'v> {
 
 /// The selected allocation remains distinct from its completed root frame.
 pub(crate) struct PlotMeasureAssignment {
+    pub(crate) plot_id: crate::orchestrator::registration::PlotOccurrenceId,
     pub(crate) dimensions: PlotMeasureDimensions,
     pub(crate) cell: PixelRect,
     pub(crate) frame: PixelRect,
@@ -119,54 +120,69 @@ mod tests {
 
     #[test]
     fn completion_keeps_the_selected_origin_and_original_fill_and_native_top_branches() {
-        let frame = PixelRect::new(5.0, 105.0, 20.0, 220.0);
-        let result = crate::spec::PlotRenderResult::new(
-            crate::layout::Layout::envelope(PixelRect::new(10.0, 100.0, 30.0, 80.0)),
-            None,
-        );
-        let mut selected = PlotMeasureAssignment {
-            dimensions: PlotMeasureDimensions {
-                canvas: RootSize::new(800, 600),
-                output_override: None,
+        let source = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .erase();
+        let operation = crate::font::canonical::OperationContext::new();
+        crate::data::with_source_data_for_test(
+            &source,
+            &operation,
+            crate::orchestrator::registration::RowSelection::Full,
+            |data| {
+                let frame = PixelRect::new(5.0, 105.0, 20.0, 220.0);
+                let result = crate::spec::PlotRenderResult::new(
+                    crate::layout::Layout::envelope(PixelRect::new(10.0, 100.0, 30.0, 80.0)),
+                    None,
+                );
+                let mut selected = PlotMeasureAssignment {
+                    plot_id: data.plot_id().clone(),
+                    dimensions: PlotMeasureDimensions {
+                        canvas: RootSize::new(800, 600),
+                        output_override: None,
+                    },
+                    cell: frame,
+                    frame,
+                    content_height: true,
+                    fill_content_height: true,
+                    content_preference: Some(25.5),
+                    insets: ParentInsets {
+                        axis_gutter: [0, 0, 0, 3328],
+                        owned_ink: [0, 0, 0, 1536],
+                    },
+                };
+                assert_eq!(
+                    completion_frame(crate::PlotKind::Scatter, &selected, &result),
+                    PixelRect::new(5.0, 105.0, 20.0, 45.5)
+                );
+                selected.content_preference = None;
+                assert_eq!(
+                    completion_frame(crate::PlotKind::Heatmap, &selected, &result),
+                    frame
+                );
+                selected.fill_content_height = false;
+                for kind in [
+                    crate::PlotKind::Heatmap,
+                    crate::PlotKind::Beeswarm,
+                    crate::PlotKind::Matrix,
+                ] {
+                    assert_eq!(
+                        completion_frame(kind, &selected, &result),
+                        PixelRect::new(5.0, 105.0, 20.0, 84.75)
+                    );
+                }
+                assert_eq!(
+                    completion_frame(crate::PlotKind::Scatter, &selected, &result),
+                    frame
+                );
+                selected.content_height = false;
+                assert_eq!(
+                    completion_frame(crate::PlotKind::Heatmap, &selected, &result),
+                    frame
+                );
             },
-            cell: frame,
-            frame,
-            content_height: true,
-            fill_content_height: true,
-            content_preference: Some(25.5),
-            insets: ParentInsets {
-                axis_gutter: [0, 0, 0, 3328],
-                owned_ink: [0, 0, 0, 1536],
-            },
-        };
-        assert_eq!(
-            completion_frame(crate::PlotKind::Scatter, &selected, &result),
-            PixelRect::new(5.0, 105.0, 20.0, 45.5)
-        );
-        selected.content_preference = None;
-        assert_eq!(
-            completion_frame(crate::PlotKind::Heatmap, &selected, &result),
-            frame
-        );
-        selected.fill_content_height = false;
-        for kind in [
-            crate::PlotKind::Heatmap,
-            crate::PlotKind::Beeswarm,
-            crate::PlotKind::Matrix,
-        ] {
-            assert_eq!(
-                completion_frame(kind, &selected, &result),
-                PixelRect::new(5.0, 105.0, 20.0, 84.75)
-            );
-        }
-        assert_eq!(
-            completion_frame(crate::PlotKind::Scatter, &selected, &result),
-            frame
-        );
-        selected.content_height = false;
-        assert_eq!(
-            completion_frame(crate::PlotKind::Heatmap, &selected, &result),
-            frame
-        );
+        )
+        .unwrap();
     }
 }
