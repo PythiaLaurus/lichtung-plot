@@ -48,18 +48,14 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         plot.description().y_axis_spec().format
     );
     assert!(plot.same_composed_inputs(&retained, &retained.guides, None, None));
-    plot.description.payload_mut().x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
+    plot.description.payload_mut().axes[0].generation = TickGeneration::additive(3.0).unwrap();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
-    plot.description
-        .payload_mut()
-        .x_axis_spec
+    plot.description.payload_mut().axes[0]
         .generation
         .clone_from(&retained.x_axis_spec.generation);
-    plot.description.payload_mut().y_axis_spec.generation = TickGeneration::automatic();
+    plot.description.payload_mut().axes[1].generation = TickGeneration::automatic();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
-    plot.description
-        .payload_mut()
-        .y_axis_spec
+    plot.description.payload_mut().axes[1]
         .generation
         .clone_from(&retained.y_axis_spec.generation);
     for selection in [
@@ -67,26 +63,26 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         TickGeneration::maximum(5).unwrap(),
     ] {
         let mut changed = plot.clone();
-        changed.description.payload_mut().x_axis_spec.generation = selection.clone();
+        changed.description.payload_mut().axes[0].generation = selection.clone();
         assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
         let counted = changed
             .retain_composed_inputs(ScopedGuideInputs::for_test(&changed), None, None)
             .unwrap();
         assert!(changed.same_composed_inputs(&counted, &counted.guides, None, None));
-        changed.description.payload_mut().x_axis_spec.generation =
-            if selection.target_count().is_some() {
-                TickGeneration::maximum(5).unwrap()
-            } else {
-                TickGeneration::target(5).unwrap()
-            };
+        changed.description.payload_mut().axes[0].generation = if selection.target_count().is_some()
+        {
+            TickGeneration::maximum(5).unwrap()
+        } else {
+            TickGeneration::target(5).unwrap()
+        };
         assert!(!changed.same_composed_inputs(&counted, &counted.guides, None, None));
     }
     for side in 0..2 {
         let mut changed = plot.clone();
         if side == 0 {
-            changed.description.payload_mut().x_axis_spec.format = None;
+            changed.description.payload_mut().axes[0].format = None;
         } else {
-            changed.description.payload_mut().y_axis_spec.format = None;
+            changed.description.payload_mut().axes[1].format = None;
         }
         assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
     }

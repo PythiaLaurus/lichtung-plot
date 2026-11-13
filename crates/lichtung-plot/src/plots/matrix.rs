@@ -824,11 +824,19 @@ pub(crate) fn measure(
                 x_axis,
                 y_axis,
             };
-            let cell_axes = cell_layout.measure_axes(
-                &axis_theme,
-                &scope,
-                chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
-            )?;
+            let mut semantics = [col, row].map(|index| {
+                registered
+                    .axes
+                    .axis_at(registered.source, AxisSlot::MatrixVariable(index))
+                    .semantic_inputs()
+            });
+            for (semantic, tick_layout) in semantics
+                .iter_mut()
+                .zip(&chart.description().text_layouts().ticks)
+            {
+                semantic.text_layout.clone_from(tick_layout);
+            }
+            let cell_axes = cell_layout.measure_axes(&axis_theme, &scope, semantics)?;
             let mut cell = MatrixCellPayload {
                 address: scope.address,
                 clip: cell_panel,

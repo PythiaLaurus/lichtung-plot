@@ -347,7 +347,8 @@ impl Layout {
     pub(crate) fn test_semantics(&self) -> [super::AxisSemanticInputs; 2] {
         [&self.x_axis, &self.y_axis].map(|axis| {
             super::AxisSemanticInputs::new(
-                &AxisSpec::default(),
+                crate::orchestrator::registration::AxisIntentRef::MatrixVariable,
+                super::RangeProvenance::Automatic,
                 crate::spec::AxisScale::Linear,
                 if axis.source == TickSource::SUPPLIED {
                     super::RangePolicy::CategorySlots

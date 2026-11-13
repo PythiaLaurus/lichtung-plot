@@ -1074,19 +1074,19 @@ impl PlotDescription {
     /// Borrow x-axis scale configuration.
     #[must_use]
     pub(crate) fn x_axis_spec(&self) -> &AxisSpec {
-        &self.payload.x_axis_spec
+        &self.payload.axes[0]
     }
 
     pub(crate) fn explicit_x_ticks(&self) -> Option<&[AxisTick]> {
-        self.payload.x_axis_spec.exact_ticks.as_deref()
+        self.payload.axes[0].exact_ticks.as_deref()
     }
 
     pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
-        &self.payload.y_axis_spec
+        &self.payload.axes[1]
     }
 
     pub(crate) fn explicit_y_ticks(&self) -> Option<&[AxisTick]> {
-        self.payload.y_axis_spec.exact_ticks.as_deref()
+        self.payload.axes[1].exact_ticks.as_deref()
     }
 
     pub(crate) fn guides(&self) -> &[GuideSpec] {
@@ -1181,9 +1181,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[cfg(test)]
     pub(crate) fn with_test_axis_ticks(mut self, side: usize, ticks: Vec<crate::AxisTick>) -> Self {
         if side == 0 {
-            self.description.payload_mut().x_axis_spec.exact_ticks = Some(ticks);
+            self.description.payload_mut().axes[0].exact_ticks = Some(ticks);
         } else {
-            self.description.payload_mut().y_axis_spec.exact_ticks = Some(ticks);
+            self.description.payload_mut().axes[1].exact_ticks = Some(ticks);
         }
         self
     }
@@ -1267,18 +1267,18 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().y_axis_spec.limits = Some(limits);
+        self.description.payload_mut().axes[1].limits = Some(limits);
         self
     }
 
     pub(crate) fn with_planned_x_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().x_axis_spec.limits = Some(limits);
+        self.description.payload_mut().axes[0].limits = Some(limits);
         self
     }
 
     pub(crate) fn user_x_limits(&self) -> Option<(f64, f64)> {
         if self.x_limits_user_explicit {
-            self.description.payload.x_axis_spec.limits
+            self.description.payload.axes[0].limits
         } else {
             None
         }
@@ -1286,7 +1286,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn user_y_limits(&self) -> Option<(f64, f64)> {
         if self.y_limits_user_explicit {
-            self.description.payload.y_axis_spec.limits
+            self.description.payload.axes[1].limits
         } else {
             None
         }

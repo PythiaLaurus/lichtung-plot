@@ -1,6 +1,6 @@
 //! Closed axis inputs, separate from selected ticks and pixel geometry.
 
-use super::AxisSpec;
+use crate::orchestrator::registration::AxisIntentRef;
 use crate::spec::{AxisDomain, AxisScale, PlotKind};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -35,19 +35,36 @@ pub(crate) struct AxisSemanticInputs {
 }
 
 impl AxisSemanticInputs {
-    pub(crate) fn new(spec: &AxisSpec, scale: AxisScale, policy: RangePolicy) -> Self {
+    pub(crate) fn new(
+        intent: AxisIntentRef<'_>,
+        provenance: RangeProvenance,
+        scale: AxisScale,
+        policy: RangePolicy,
+    ) -> Self {
+        let (generation, category_labels, format) = match intent {
+            AxisIntentRef::Authored(spec) => (
+                spec.generation.clone(),
+                spec.category_labels.clone(),
+                if spec.exact_ticks.is_some() || policy == RangePolicy::CategorySlots {
+                    None
+                } else {
+                    spec.format.clone()
+                },
+            ),
+            AxisIntentRef::MatrixVariable | AxisIntentRef::NativeAmplitude => (
+                crate::TickGeneration::automatic(),
+                crate::CategoryLabelSelection::all(),
+                None,
+            ),
+        };
         Self {
             text_layout: None,
-            provenance: spec.provenance,
+            provenance,
             scale,
             policy,
-            generation: spec.generation.clone(),
-            category_labels: spec.category_labels.clone(),
-            format: if spec.exact_ticks.is_some() || policy == RangePolicy::CategorySlots {
-                None
-            } else {
-                spec.format.clone()
-            },
+            generation,
+            category_labels,
+            format,
         }
     }
 
@@ -72,12 +89,14 @@ impl crate::Plot {
     pub(crate) fn axis_semantic_inputs(&self, domains: [AxisDomain; 2]) -> [AxisSemanticInputs; 2] {
         let policies = range_policies(self.kind());
         std::array::from_fn(|index| {
+            let spec = if index == 0 {
+                self.description().x_axis_spec()
+            } else {
+                self.description().y_axis_spec()
+            };
             let mut inputs = AxisSemanticInputs::new(
-                if index == 0 {
-                    self.description().x_axis_spec()
-                } else {
-                    self.description().y_axis_spec()
-                },
+                AxisIntentRef::Authored(spec),
+                spec.provenance,
                 if index == 0 && self.kind() == PlotKind::Forest {
                     self.description().axis_scale_spec()
                 } else {
@@ -189,6 +208,7 @@ impl CoordinateLayoutInputs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::AxisSpec;
 
     #[test]
     fn standard_panel_stack_matching_includes_the_complete_utf8_name() {

@@ -94,26 +94,26 @@ impl<K: crate::kind::Marker> Plot<K> {
         y_range: Option<(f64, f64)>,
     ) -> Self {
         if let Some(range) = x_range {
-            if self.description.payload.x_axis_spec.provenance
+            if self.description.payload.axes[0].provenance
                 != crate::layout::RangeProvenance::Configured
             {
-                self.description.payload_mut().x_axis_spec.provenance =
+                self.description.payload_mut().axes[0].provenance =
                     crate::layout::RangeProvenance::Shared;
             }
             if kind == PlotKind::Forest && self.description.payload.axis_scale == AxisScale::Log10 {
                 self.resolved_facet_x_range = Some(range);
             } else {
-                self.description.payload_mut().x_axis_spec.limits = Some(range);
+                self.description.payload_mut().axes[0].limits = Some(range);
             }
         }
         if let Some(range) = y_range {
-            if self.description.payload.y_axis_spec.provenance
+            if self.description.payload.axes[1].provenance
                 != crate::layout::RangeProvenance::Configured
             {
-                self.description.payload_mut().y_axis_spec.provenance =
+                self.description.payload_mut().axes[1].provenance =
                     crate::layout::RangeProvenance::Shared;
             }
-            self.description.payload_mut().y_axis_spec.limits = Some(range);
+            self.description.payload_mut().axes[1].limits = Some(range);
         }
         self
     }
@@ -146,8 +146,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             }
         }
         for (axis, other) in [
-            (&self.description.payload.x_axis_spec, &other.x_axis_spec),
-            (&self.description.payload.y_axis_spec, &other.y_axis_spec),
+            (&self.description.payload.axes[0], &other.x_axis_spec),
+            (&self.description.payload.axes[1], &other.y_axis_spec),
         ] {
             if axis.limits != other.limits
                 || axis.provenance != other.provenance
@@ -160,8 +160,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
         self.description().same_prose(&other.prose)
             && self.description().same_axis_titles(&other.axis_titles)
-            && range(self.description.payload.x_axis_spec.limits) == range(other.x_axis_spec.limits)
-            && range(self.description.payload.y_axis_spec.limits) == range(other.y_axis_spec.limits)
+            && range(self.description.payload.axes[0].limits) == range(other.x_axis_spec.limits)
+            && range(self.description.payload.axes[1].limits) == range(other.y_axis_spec.limits)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
             && same_values(
                 self.global_hue_levels.as_deref(),
@@ -216,10 +216,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             crate::layout::AxisSpec::default(),
             crate::layout::AxisSpec::default(),
         ];
-        for (target, source) in axes.iter_mut().zip([
-            &self.description.payload.x_axis_spec,
-            &self.description.payload.y_axis_spec,
-        ]) {
+        for (target, source) in axes.iter_mut().zip(&self.description.payload.axes) {
             target.limits = source.limits;
             target.provenance = source.provenance;
             target.generation.clone_from(&source.generation);

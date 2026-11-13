@@ -330,19 +330,18 @@ impl<'a> BaseAxisRef<'a> {
     }
 
     pub(crate) fn semantic_inputs(self) -> crate::layout::AxisSemanticInputs {
-        let mut input = crate::layout::AxisSemanticInputs::new(
-            self.authored().expect("coordinate authored intent"),
+        crate::layout::AxisSemanticInputs::new(
+            self.intent,
+            match self.intent {
+                AxisIntentRef::Authored(spec) => spec.provenance,
+                AxisIntentRef::MatrixVariable | AxisIntentRef::NativeAmplitude => self.provenance(),
+            },
             match self.source.witness.space {
                 AxisSpace::Categorical => AxisScale::Linear,
                 AxisSpace::Continuous(scale) => scale,
             },
             self.source.range_policy,
-        );
-        input.provenance = self
-            .authored()
-            .expect("coordinate authored intent")
-            .provenance;
-        input
+        )
     }
 
     pub(crate) fn numeric_request(

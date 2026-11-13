@@ -5,8 +5,8 @@ use crate::{builder::PlotDescription, Error};
 mod axes;
 mod policy;
 pub(crate) use axes::{
-    axis_label, prepare_axis_source, AxisSlot, AxisSourceWitness, AxisSpace, BaseAxisRef,
-    DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
+    axis_label, prepare_axis_source, AxisIntentRef, AxisSlot, AxisSourceWitness, AxisSpace,
+    BaseAxisRef, DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
     PreparedAxisSource, PreparedCategorySource,
 };
 pub(crate) use policy::{CoordinatedDomains, PlotScopePolicy};

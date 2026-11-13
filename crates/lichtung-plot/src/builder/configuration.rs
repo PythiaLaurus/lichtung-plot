@@ -252,7 +252,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoricalX,
     {
-        self.description.payload_mut().x_axis_spec.category_labels = value;
+        self.description.payload_mut().axes[0].category_labels = value;
         self
     }
 
@@ -262,7 +262,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::CategoricalY,
     {
-        self.description.payload_mut().y_axis_spec.category_labels = value;
+        self.description.payload_mut().axes[1].category_labels = value;
         self
     }
 
@@ -272,7 +272,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        let axis = &mut self.description.payload_mut().x_axis_spec;
+        let axis = &mut self.description.payload_mut().axes[0];
         *axis = std::mem::take(axis).limits(min, max);
         self.x_limits_user_explicit = true;
         self
@@ -284,7 +284,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        let axis = &mut self.description.payload_mut().y_axis_spec;
+        let axis = &mut self.description.payload_mut().axes[1];
         *axis = std::mem::take(axis).limits(min, max);
         self.y_limits_user_explicit = true;
         self
@@ -296,7 +296,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.description.payload_mut().x_axis_spec.exact_ticks = Some(ticks);
+        self.description.payload_mut().axes[0].exact_ticks = Some(ticks);
         self
     }
 
@@ -306,7 +306,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.description.payload_mut().y_axis_spec.exact_ticks = Some(ticks);
+        self.description.payload_mut().axes[1].exact_ticks = Some(ticks);
         self
     }
 
@@ -356,7 +356,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.description.payload_mut().x_axis_spec.generation = generation;
+        self.description.payload_mut().axes[0].generation = generation;
         self
     }
 
@@ -394,7 +394,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.description.payload_mut().y_axis_spec.generation = generation;
+        self.description.payload_mut().axes[1].generation = generation;
         self
     }
 
@@ -412,7 +412,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.description.payload_mut().x_axis_spec.format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().axes[0].format = Some(std::sync::Arc::new(format));
         self
     }
 
@@ -429,7 +429,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.description.payload_mut().y_axis_spec.format = Some(std::sync::Arc::new(format));
+        self.description.payload_mut().axes[1].format = Some(std::sync::Arc::new(format));
         self
     }
 
