@@ -15,10 +15,22 @@ fn source() -> NumericSource {
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
     .erase();
-    NumericSource::for_plot(
+    let operation = crate::font::canonical::OperationContext::new();
+    let scope = crate::orchestrator::registration::Scope::new(
         &plot,
-        &crate::font::canonical::OperationContext::new(),
+        &operation,
+        0,
+        crate::orchestrator::registration::RowSelection::Full,
         None,
+        None,
+    )
+    .unwrap();
+    let rows = crate::data::source::RowSourceContext::new(plot.description(), &scope, &operation);
+    NumericSource::from_binding(
+        scope
+            .numeric_binding(plot.description(), &rows, &operation)
+            .unwrap(),
+        [plot.user_x_limits(), plot.user_y_limits()],
     )
     .unwrap()
 }

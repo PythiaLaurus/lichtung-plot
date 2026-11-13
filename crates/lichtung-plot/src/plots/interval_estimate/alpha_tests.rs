@@ -34,7 +34,28 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     )
     .x_limits(0.0, 4.0)
     .erase();
-    let prepared = PreparedEstimate::new(&source, source.data(), []).unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let scope = crate::orchestrator::registration::Scope::new(
+        &source,
+        &operation,
+        0,
+        crate::orchestrator::registration::RowSelection::Full,
+        None,
+        None,
+    )
+    .unwrap();
+    let row_source =
+        crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
+    let prepared = PreparedEstimate::new(
+        &source,
+        crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
+            .unwrap(),
+        [],
+        scope
+            .numeric_binding(source.description(), &row_source, &operation)
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(prepared.labels, ["A", "B", "C"]);
     assert_eq!(
         prepared

@@ -142,10 +142,25 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     .color_label_format(format.clone())
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
+    let scope = crate::orchestrator::registration::Scope::new(
+        &source,
+        &operation,
+        0,
+        crate::orchestrator::registration::RowSelection::Full,
+        None,
+        None,
+    )
+    .unwrap();
+    let row_source =
+        crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
     let mut prepared = prepare(
         &source,
-        source.data().with_operation(&operation),
+        crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
+            .unwrap(),
         selection.clone(),
+        scope
+            .numeric_binding(source.description(), &row_source, &operation)
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(prepared.colors, colors);
@@ -162,8 +177,13 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: prepared.scale.domain(),
         exact: false,
         format: Some(std::sync::Arc::new(format.clone())),
-        numeric_source: crate::numeric::source::NumericSource::for_plot(&source, &operation, None)
-            .unwrap(),
+        numeric_source: crate::numeric::source::NumericSource::from_binding(
+            scope
+                .numeric_binding(source.description(), &row_source, &operation)
+                .unwrap(),
+            [source.user_x_limits(), source.user_y_limits()],
+        )
+        .unwrap(),
     };
     let sibling = ContinuousContributor {
         field: "color".into(),
@@ -176,8 +196,13 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         domain: (-4.0, 12.0),
         exact: true,
         format: Some(std::sync::Arc::new(format)),
-        numeric_source: crate::numeric::source::NumericSource::for_plot(&source, &operation, None)
-            .unwrap(),
+        numeric_source: crate::numeric::source::NumericSource::from_binding(
+            scope
+                .numeric_binding(source.description(), &row_source, &operation)
+                .unwrap(),
+            [source.user_x_limits(), source.user_y_limits()],
+        )
+        .unwrap(),
     };
     let shared = ContinuousContributor::merge([contributor, sibling])
         .unwrap()
@@ -207,10 +232,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     let inputs = crate::plots::shared_x::prepare_reference_plot(
         &source,
         crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
+        scope,
         None,
         None,
-        None,
-        &crate::font::canonical::OperationContext::new(),
+        &operation,
     )
     .unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();

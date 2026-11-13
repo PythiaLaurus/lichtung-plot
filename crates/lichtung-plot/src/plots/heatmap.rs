@@ -1458,6 +1458,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     selection: ContinuousColorScale,
+    numeric: crate::numeric::source::NumericBinding<'_>,
 ) -> Result<HeatmapData, Error> {
     validate_options(chart)?;
     let alpha =
@@ -1610,7 +1611,7 @@ pub(crate) fn prepare(
         chart.description().heatmap_annotations_spec()
     {
         let format = crate::data::source::source_arc(format.try_copy()?)?;
-        let source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+        numeric.check_data(data)?;
         let values = crate::numeric::source::collect_values(
             cells.iter().flatten().count(),
             cells
@@ -1631,14 +1632,14 @@ pub(crate) fn prepare(
                     })
                 }),
         )?;
-        let info = source.context(
+        let info = numeric.context(
             crate::NumericRole::HeatmapValues,
             crate::NumericPurpose::ActualSet,
             values,
             None,
         )?;
         let set = format
-            .materialize(&source.operation, info, false)?
+            .materialize(numeric.operation, info, false)?
             .ok_or_else(|| {
                 Error::Data("Heatmap value labels are not unique at configured precision".into())
             })?;
@@ -1679,7 +1680,7 @@ pub(crate) fn prepare(
         },
     ))?;
     let color_format = chart.description().color_label_format_spec().cloned();
-    let numeric_source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+    numeric.check_data(data)?;
     let colorbar_values = if chart.continuous_guide_suppressed() {
         None
     } else {
@@ -1689,7 +1690,7 @@ pub(crate) fn prepare(
             color_format.as_deref().map(|format| {
                 (
                     format,
-                    &numeric_source,
+                    numeric,
                     if color.selection.get_domain().is_some() {
                         crate::NumericRangeOrigin::Explicit
                     } else {

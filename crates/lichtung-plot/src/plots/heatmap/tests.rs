@@ -280,17 +280,30 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     .labels(crate::Labels::raw())
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
+    let scope = crate::orchestrator::registration::Scope::new(
+        &source,
+        &operation,
+        0,
+        crate::orchestrator::registration::RowSelection::Selected {
+            input_slots: vec![3, 2, 0, 1],
+            diagnostic_rows: vec![400, 300, 100, 200],
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let row_source =
+        crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
     let prepared = prepare(
         &source,
-        crate::data::PlotData::with_rows(
-            source.description(),
-            &[3, 2, 0, 1],
-            &[400, 300, 100, 200],
-        )
-        .with_operation(&operation),
+        crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
+            .unwrap(),
         source
             .description()
             .continuous_selection_in(crate::Theme::publication().color_scales())
+            .unwrap(),
+        scope
+            .numeric_binding(source.description(), &row_source, &operation)
             .unwrap(),
     )
     .unwrap();

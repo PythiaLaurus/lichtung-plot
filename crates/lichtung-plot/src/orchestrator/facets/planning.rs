@@ -354,7 +354,7 @@ pub(super) fn native_parent(
             dependencies: dependency.as_slice(),
             ..SUPPRESSED_GUIDES
         };
-        let (rows, diagnostic_rows) = facet.rows.selected();
+        let (rows, diagnostic_rows) = facet.rows.selected().expect("selected facet rows");
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(panel_plot.description(), rows, diagnostic_rows),
             cell,

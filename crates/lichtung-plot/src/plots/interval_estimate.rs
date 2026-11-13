@@ -286,10 +286,11 @@ impl PreparedEstimate {
         chart: &Plot,
         data: crate::data::PlotData<'_, '_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
+        numeric: crate::numeric::source::NumericBinding<'_>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         if chart.kind() != crate::PlotKind::PointInterval {
-            return prepare_model(chart, data, annotations)
+            return prepare_model(chart, data, annotations, numeric)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         let rows = crate::plots::point_interval::prepare(chart, data)?;
@@ -747,6 +748,7 @@ fn prepare_model<'a>(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
+    numeric: crate::numeric::source::NumericBinding<'_>,
 ) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
     let alpha =
         chart
@@ -908,7 +910,7 @@ fn prepare_model<'a>(
         .estimate_labels_spec()
         .map(|format| -> Result<_, Error> {
             let format = crate::data::source::source_arc(format.try_copy()?)?;
-            let source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+            numeric.check_data(data)?;
             let values = crate::numeric::source::collect_values(
                 estimates.iter().flatten().count(),
                 estimates
@@ -929,14 +931,14 @@ fn prepare_model<'a>(
                         })
                     }),
             )?;
-            let info = source.context(
+            let info = numeric.context(
                 crate::NumericRole::CoefficientLabels,
                 crate::NumericPurpose::ActualSet,
                 values,
                 None,
             )?;
             let set = format
-                .materialize(&source.operation, info, false)?
+                .materialize(numeric.operation, info, false)?
                 .ok_or_else(|| {
                     Error::Data(
                         "Coefficient estimate labels are not unique at configured precision".into(),

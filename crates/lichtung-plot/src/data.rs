@@ -86,6 +86,27 @@ impl std::fmt::Debug for PlotData<'_, '_> {
 }
 
 impl<'src, 'op> PlotData<'src, 'op> {
+    pub(crate) fn checked(
+        source: &'src crate::builder::PlotDescription,
+        scope: &'op crate::orchestrator::registration::Scope,
+        row_source: &'op source::RowSourceContext<'src>,
+        operation: &'op crate::font::canonical::OperationContext,
+    ) -> Result<Self, Error> {
+        row_source.check(source, scope, operation)?;
+        let (rows, diagnostic_rows) = scope.rows.selected().map_or_else(
+            || (None, DiagnosticRows::Native(source.source_row_map())),
+            |(rows, diagnostic_rows)| (Some(rows), DiagnosticRows::Selected(diagnostic_rows)),
+        );
+        Ok(Self {
+            source,
+            rows,
+            diagnostic_rows,
+            numeric_facet: scope.numeric_owner.facet.as_ref(),
+            operation: Some(operation),
+            row_source: Some(row_source),
+        })
+    }
+
     pub(crate) const fn new(source: &'src crate::builder::PlotDescription) -> Self {
         Self {
             source,
@@ -126,10 +147,6 @@ impl<'src, 'op> PlotData<'src, 'op> {
         self
     }
 
-    pub(crate) fn with_numeric_facet(mut self, facet: Option<&'op crate::FacetCell>) -> Self {
-        self.numeric_facet = facet;
-        self
-    }
     pub(crate) const fn numeric_facet(self) -> Option<&'op crate::FacetCell> {
         self.numeric_facet
     }
@@ -142,7 +159,7 @@ impl<'src, 'op> PlotData<'src, 'op> {
         }
         self.source
             .facet_spec()
-            .zip(self.numeric_facet)
+            .zip(self.numeric_facet())
             .map(|(schema, levels)| {
                 crate::orchestrator::registration::FacetSelector::checked(schema, levels)
             })

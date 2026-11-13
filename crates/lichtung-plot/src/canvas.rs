@@ -1266,6 +1266,8 @@ impl Canvas {
         let mut line = Vec::new();
         stage.reserve_prepared(&mut line, self.placements.len(), "Canvas line semantics")?;
         let mut reference = Vec::new();
+        let mut scopes = Vec::new();
+        crate::data::source::reserve_source(&mut scopes, self.placements.len())?;
         stage.reserve_prepared(
             &mut reference,
             self.placements.len(),
@@ -1286,6 +1288,23 @@ impl Canvas {
             } else {
                 plot
             };
+            let scope = plot
+                .map(|plot| {
+                    crate::orchestrator::registration::Scope::new(
+                        plot,
+                        &resources,
+                        index,
+                        crate::orchestrator::registration::RowSelection::Full,
+                        None,
+                        plot.axis_scope()
+                            .map(crate::data::source::copy_source_string)
+                            .transpose()?,
+                    )
+                })
+                .transpose()?;
+            let row_source = plot.zip(scope.as_ref()).map(|(plot, scope)| {
+                crate::data::source::RowSourceContext::new(plot.description(), scope, &resources)
+            });
             reference.push(
                 match plot.filter(|plot| {
                     matches!(
@@ -1313,17 +1332,22 @@ impl Canvas {
                     )
                 }) {
                     Some(plot) => {
-                        let data = plot
-                            .description()
-                            .configured_source_rows()?
-                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
-                            .with_operation(&resources);
+                        plot.description().configured_source_rows()?;
+                        let scope = scope.as_ref().expect("Canvas plot scope");
+                        let row_source = row_source.as_ref().expect("Canvas plot rows");
+                        let data = crate::data::PlotData::checked(
+                            plot.description(),
+                            scope,
+                            row_source,
+                            &resources,
+                        )?;
                         Some(crate::orchestrator::registration::PreparedFamily::new(
                             plot,
                             data,
                             themes
                                 .and_then(|themes| themes.plot(index))
                                 .map(|theme| &**theme),
+                            scope.numeric_binding(plot.description(), row_source, &resources)?,
                         )?)
                     }
                     None => None,
@@ -1337,11 +1361,13 @@ impl Canvas {
                     )
                 }) {
                     Some(plot) => {
-                        let data = plot
-                            .description()
-                            .configured_source_rows()?
-                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
-                            .with_operation(&resources);
+                        plot.description().configured_source_rows()?;
+                        let data = crate::data::PlotData::checked(
+                            plot.description(),
+                            scope.as_ref().expect("Canvas plot scope"),
+                            row_source.as_ref().expect("Canvas plot rows"),
+                            &resources,
+                        )?;
                         Some(crate::plots::line::PreparedLine::new(plot, data, None)?)
                     }
                     None => None,
@@ -1349,11 +1375,13 @@ impl Canvas {
             );
             scatter.push(match plot.filter(|plot| plot.kind() == PlotKind::Scatter) {
                 Some(plot) => {
-                    let data = plot
-                        .description()
-                        .configured_source_rows()?
-                        .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
-                        .with_operation(&resources);
+                    plot.description().configured_source_rows()?;
+                    let data = crate::data::PlotData::checked(
+                        plot.description(),
+                        scope.as_ref().expect("Canvas plot scope"),
+                        row_source.as_ref().expect("Canvas plot rows"),
+                        &resources,
+                    )?;
                     Some(crate::plots::scatter::PreparedScatter::new(
                         plot.description(),
                         data,
@@ -1361,6 +1389,7 @@ impl Canvas {
                 }
                 None => None,
             });
+            scopes.push(scope);
         }
         let shared_x = self.prepare_shared_x(stage, &scatter, &line, &reference)?;
         for (index, plot) in self.placements.plots().enumerate() {
@@ -1402,12 +1431,14 @@ impl Canvas {
                         crate::data::source::reserve_source_string(&mut scope, scope_bytes)?;
                         std::fmt::Write::write_fmt(&mut scope, format_args!("panel-{index}"))
                             .map_err(|error| Error::Render(format!("Canvas scope: {error}")))?;
+                        let mut registered_scope = scopes[index].take().expect("Canvas plot scope");
+                        registered_scope.set_render_name(scope)?;
                         Some(crate::plots::shared_x::prepare_reference_plot(
                             plot,
                             reference[index]
                                 .take()
                                 .expect("prepared reference component"),
-                            Some(&scope),
+                            registered_scope,
                             shared_x.get(index).copied().flatten(),
                             self.labels.as_ref(),
                             &resources,
@@ -1417,6 +1448,9 @@ impl Canvas {
                         let mut scope = String::new();
                         crate::data::source::reserve_source_string(&mut scope, 32)?;
                         write!(scope, "panel-{index}").expect("admitted scope");
+                        let mut registered_scope = scopes[index].take().expect("Canvas plot scope");
+                        registered_scope
+                            .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
                         let mut plot = plot.clone();
                         if let Some(labels) = &self.labels {
                             plot = plot.labels(labels.clone());
@@ -1430,12 +1464,14 @@ impl Canvas {
                             crate::plots::shared_x::prepare_scatter_plot(
                                 &plot,
                                 scatter[index].take().expect("prepared Scatter component"),
+                                registered_scope,
                                 &resources,
                             )?
                         } else {
                             crate::plots::shared_x::prepare_line_plot(
                                 &plot,
                                 line[index].take().expect("prepared line component"),
+                                registered_scope,
                                 &resources,
                             )?
                         })
@@ -1467,7 +1503,7 @@ impl Canvas {
                 let families = Arc::get_mut(&mut inputs.families).ok_or_else(|| {
                     Error::Render("Waterfall totals were aliased before window preparation".into())
                 })?;
-                for (scope, family) in families {
+                for (panel_index, (scope, family)) in families.iter_mut().enumerate() {
                     let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
                         family
                     else {
@@ -1481,7 +1517,22 @@ impl Canvas {
                         .ok_or_else(|| {
                             Error::Render("Waterfall total window scope missing".into())
                         })?;
-                    marks.prepare_totals(axes, true)?;
+                    let source = self
+                        .placements
+                        .plot(index)
+                        .expect("Waterfall source")
+                        .description();
+                    let scope = &inputs.scopes[panel_index];
+                    let row_source =
+                        crate::data::source::RowSourceContext::new(source, scope, &resources);
+                    marks.prepare_totals(
+                        crate::plots::waterfall::WaterfallTotalsPrepare {
+                            numeric: scope.numeric_binding(source, &row_source, &resources)?,
+                            axes,
+                            format: source.total_format_spec(),
+                        },
+                        true,
+                    )?;
                 }
             }
         }

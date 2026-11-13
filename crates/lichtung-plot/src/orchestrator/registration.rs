@@ -13,6 +13,89 @@ impl PartialEq for RootIdentity {
 
 impl Eq for RootIdentity {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PlotOccurrenceId {
+    pub(crate) root: RootIdentity,
+    pub(crate) slot: usize,
+}
+
+pub(crate) struct Scope {
+    pub(crate) id: PlotOccurrenceId,
+    pub(crate) numeric_owner: crate::numeric::context::OwnerInfo,
+    pub(crate) axis_numeric_owner: crate::numeric::context::OwnerInfo,
+    pub(crate) rows: RowSelection,
+    pub(crate) render_name: Option<String>,
+}
+
+impl Scope {
+    pub(crate) fn set_render_name(&mut self, render_name: String) -> Result<(), Error> {
+        self.axis_numeric_owner.scope =
+            Some(crate::data::source::copy_source_string(&render_name)?);
+        self.render_name = Some(render_name);
+        Ok(())
+    }
+
+    pub(crate) fn new(
+        plot: &crate::Plot,
+        operation: &crate::font::canonical::OperationContext,
+        slot: usize,
+        rows: RowSelection,
+        facet: Option<&crate::FacetCell>,
+        render_name: Option<String>,
+    ) -> Result<Self, Error> {
+        let numeric_owner = crate::numeric::context::OwnerInfo::for_plot(plot, facet)?;
+        let mut axis_numeric_owner = numeric_owner.try_copy()?;
+        axis_numeric_owner.scope = render_name
+            .as_deref()
+            .map(crate::data::source::copy_source_string)
+            .transpose()?;
+        Ok(Self {
+            id: PlotOccurrenceId {
+                root: operation.root_identity(),
+                slot,
+            },
+            numeric_owner,
+            axis_numeric_owner,
+            rows,
+            render_name,
+        })
+    }
+
+    pub(crate) fn numeric_binding<'src, 'v>(
+        &'v self,
+        source: &'src PlotDescription,
+        row_source: &'v crate::data::source::RowSourceContext<'src>,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::numeric::source::NumericBinding<'v>, Error>
+    where
+        'src: 'v,
+    {
+        row_source.check(source, self, operation)?;
+        Ok(crate::numeric::source::NumericBinding {
+            operation,
+            owner: &self.numeric_owner,
+            plot_id: Some(&self.id),
+        })
+    }
+
+    pub(crate) fn axis_numeric_binding<'src, 'v>(
+        &'v self,
+        source: &'src PlotDescription,
+        row_source: &'v crate::data::source::RowSourceContext<'src>,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::numeric::source::NumericBinding<'v>, Error>
+    where
+        'src: 'v,
+    {
+        row_source.check(source, self, operation)?;
+        Ok(crate::numeric::source::NumericBinding {
+            operation,
+            owner: &self.axis_numeric_owner,
+            plot_id: Some(&self.id),
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum PreparedFamily {
     Scatter(crate::plots::scatter::PreparedScatter),
@@ -184,6 +267,7 @@ impl<'src, 'op> FacetSelector<'src, 'op> {
 }
 
 pub(crate) enum RowSelection {
+    Full,
     Selected {
         input_slots: Vec<usize>,
         diagnostic_rows: Vec<usize>,
@@ -191,12 +275,13 @@ pub(crate) enum RowSelection {
 }
 
 impl RowSelection {
-    pub(crate) fn selected(&self) -> (&[usize], &[usize]) {
+    pub(crate) fn selected(&self) -> Option<(&[usize], &[usize])> {
         match self {
+            Self::Full => None,
             Self::Selected {
                 input_slots,
                 diagnostic_rows,
-            } => (input_slots, diagnostic_rows),
+            } => Some((input_slots, diagnostic_rows)),
         }
     }
 }

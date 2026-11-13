@@ -146,6 +146,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     selection: crate::theme::ContinuousColorScale,
+    numeric: crate::numeric::source::NumericBinding<'_>,
 ) -> Result<PreparedBeeswarm, Error> {
     let alpha =
         chart
@@ -201,7 +202,7 @@ pub(crate) fn prepare(
             .then_with(|| a.3.source_row.cmp(&b.3.source_row))
     });
     let format = chart.description().color_label_format_spec().cloned();
-    let numeric_source = crate::numeric::source::NumericSource::for_data(chart, data)?;
+    numeric.check_data(data)?;
     let values = if chart.continuous_guide_suppressed() {
         None
     } else {
@@ -211,7 +212,7 @@ pub(crate) fn prepare(
             format.as_deref().map(|format| {
                 (
                     format,
-                    &numeric_source,
+                    numeric,
                     if selection.get_domain().is_some() {
                         crate::NumericRangeOrigin::Explicit
                     } else {

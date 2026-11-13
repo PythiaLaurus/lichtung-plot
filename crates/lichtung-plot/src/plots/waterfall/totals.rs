@@ -39,11 +39,16 @@ impl PreparedWaterfall {
                 TotalVariant::Collision => None,
             })
     }
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "one preparation pass consumes its short-lived numeric, axis and format inputs"
+    )]
     pub(crate) fn prepare_totals(
         &mut self,
-        axes: &crate::plots::shared_x::PreparedAxes,
+        input: super::WaterfallTotalsPrepare<'_>,
         can_expand: bool,
     ) -> Result<()> {
+        let axes = input.axes;
         let x = axes.specs[0].limits.unwrap_or(axes.ranges[0]);
         let y = axes.specs[1].limits.unwrap_or(axes.ranges[1]);
         let projection = crate::layout::Projection::new(x, y, (0.0, 1.0, 0.0, 1.0));
@@ -55,7 +60,7 @@ impl PreparedWaterfall {
                 continue;
             }
             if self.total_variants[usize::from(mask)].is_none() {
-                self.total_variants[usize::from(mask)] = Some(self.prepare_variant(mask, axes)?);
+                self.total_variants[usize::from(mask)] = Some(self.prepare_variant(mask, &input)?);
             }
         }
         self.selected_totals(&projection)?;
@@ -101,8 +106,9 @@ impl PreparedWaterfall {
     fn prepare_variant(
         &self,
         mask: u8,
-        axes: &crate::plots::shared_x::PreparedAxes,
+        input: &super::WaterfallTotalsPrepare<'_>,
     ) -> Result<TotalVariant> {
+        let axes = input.axes;
         let mut members = [0.0; 2];
         let mut count = 0;
         for (index, (value, _)) in self.total_candidates.iter().enumerate() {
@@ -112,7 +118,7 @@ impl PreparedWaterfall {
             }
         }
         let members = &members[..count];
-        let set = if let Some(format) = &self.total_format {
+        let set = if let Some(format) = input.format {
             let values = crate::numeric::source::collect_values(
                 count,
                 self.total_candidates
@@ -137,7 +143,7 @@ impl PreparedWaterfall {
                 axes.specs[0].provenance,
                 Some(range),
             );
-            let mut info = self.numeric_source.context(
+            let mut info = input.numeric.context(
                 crate::NumericRole::WaterfallTotals,
                 crate::NumericPurpose::ActualSet,
                 values,
@@ -147,7 +153,7 @@ impl PreparedWaterfall {
                 let (a, b) = axes.specs[index].limits.unwrap_or(axes.ranges[index]);
                 (a.to_bits(), b.to_bits())
             }));
-            let Some(set) = format.materialize(&self.numeric_source.operation, info, false)? else {
+            let Some(set) = format.materialize(input.numeric.operation, info, false)? else {
                 return Ok(TotalVariant::Collision);
             };
             set
@@ -195,7 +201,7 @@ impl PreparedWaterfall {
         Ok(TotalVariant::Ready(PreparedTotals {
             totals,
             numeric: crate::data::source::source_arc(NumericPresentation {
-                format: self.total_format.clone(),
+                format: input.format.cloned(),
                 set,
             })?,
         }))
@@ -351,7 +357,21 @@ mod tests {
         else {
             panic!("prepared Waterfall")
         };
-        marks.prepare_totals(&inputs.axes[0].1, true).unwrap();
+        let scope = &inputs.scopes[0];
+        let row_source =
+            crate::data::source::RowSourceContext::new(limited.description(), scope, &operation);
+        marks
+            .prepare_totals(
+                super::super::WaterfallTotalsPrepare {
+                    numeric: scope
+                        .numeric_binding(limited.description(), &row_source, &operation)
+                        .unwrap(),
+                    axes: &inputs.axes[0].1,
+                    format: limited.description().total_format_spec(),
+                },
+                true,
+            )
+            .unwrap();
         assert!(matches!(
             marks.total_variants[3],
             Some(TotalVariant::Collision)

@@ -267,10 +267,13 @@ fn finish_shared(
     existing.numeric = domain_presentation(
         existing.domain,
         existing.center,
-        existing
-            .format
-            .as_deref()
-            .map(|format| (format, &*source, crate::NumericRangeOrigin::ParentResolved)),
+        existing.format.as_deref().map(|format| {
+            (
+                format,
+                source.binding(),
+                crate::NumericRangeOrigin::ParentResolved,
+            )
+        }),
     )?;
     Ok(())
 }
@@ -308,7 +311,7 @@ pub(crate) fn domain_presentation(
     center: Option<f64>,
     format: Option<(
         &NumericFormat,
-        &crate::numeric::source::NumericSource,
+        crate::numeric::source::NumericBinding<'_>,
         crate::NumericRangeOrigin,
     )>,
 ) -> Result<FormattedSet, Error> {

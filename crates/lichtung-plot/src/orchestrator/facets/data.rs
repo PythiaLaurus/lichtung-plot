@@ -410,8 +410,14 @@ mod tests {
             (panels[1].panel_index, panels[1].row, panels[1].column),
             (3, 1, 1)
         );
-        assert_eq!(panels[0].rows.selected(), (&[0, 2][..], &[91, 9001][..]));
-        assert_eq!(panels[1].rows.selected(), (&[1, 3][..], &[700, 32][..]));
+        assert_eq!(
+            panels[0].rows.selected(),
+            Some((&[0, 2][..], &[91, 9001][..]))
+        );
+        assert_eq!(
+            panels[1].rows.selected(),
+            Some((&[1, 3][..], &[700, 32][..]))
+        );
         assert_eq!(panels[0].render_scope().unwrap(), "facet row=B, column=C");
     }
 

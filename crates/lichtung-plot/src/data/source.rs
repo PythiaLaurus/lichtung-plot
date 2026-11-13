@@ -5,7 +5,40 @@ use crate::Error;
 
 pub(crate) struct RowSourceContext<'src> {
     source: &'src crate::builder::PlotDescription,
+    owner: crate::orchestrator::registration::PlotOccurrenceId,
     root_identity: crate::orchestrator::registration::RootIdentity,
+}
+
+impl<'src> RowSourceContext<'src> {
+    pub(crate) fn new(
+        source: &'src crate::builder::PlotDescription,
+        scope: &crate::orchestrator::registration::Scope,
+        operation: &crate::font::canonical::OperationContext,
+    ) -> Self {
+        Self {
+            source,
+            owner: scope.id.clone(),
+            root_identity: operation.root_identity(),
+        }
+    }
+
+    pub(crate) fn check(
+        &self,
+        source: &crate::builder::PlotDescription,
+        scope: &crate::orchestrator::registration::Scope,
+        operation: &crate::font::canonical::OperationContext,
+    ) -> Result<(), Error> {
+        if !std::ptr::eq(self.source, source)
+            || self.owner != scope.id
+            || self.root_identity != operation.root_identity()
+            || scope.id.root != self.root_identity
+        {
+            return Err(Error::Render(
+                "row source belongs to a different source or operation".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn sort_numeric_source(values: &mut [f64]) {
@@ -36,27 +69,7 @@ fn sift<T>(values: &mut [T], mut root: usize, compare: &impl Fn(&T, &T) -> std::
     }
 }
 
-impl<'src, 'op> PlotData<'src, 'op> {
-    pub(crate) fn bind_row_source(self) -> Result<RowSourceContext<'src>, Error> {
-        if !self.is_full_plot() {
-            return Err(Error::Render(
-                "row topology census requires the original source".into(),
-            ));
-        }
-        let operation = self
-            .operation
-            .ok_or_else(|| Error::Render("row topology census requires an operation".into()))?;
-        Ok(RowSourceContext {
-            source: self.source,
-            root_identity: operation.root_identity(),
-        })
-    }
-
-    pub(crate) fn with_row_source(mut self, source: Option<&'op RowSourceContext<'src>>) -> Self {
-        self.row_source = source;
-        self
-    }
-
+impl PlotData<'_, '_> {
     pub(crate) fn validate_row_source(self) -> Result<(), Error> {
         if let Some(source) = self.row_source {
             if !std::ptr::eq(self.source, source.source)
@@ -68,6 +81,25 @@ impl<'src, 'op> PlotData<'src, 'op> {
                     "row source belongs to a different source or operation".into(),
                 ));
             }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_numeric_binding(
+        self,
+        binding: crate::numeric::source::NumericBinding<'_>,
+    ) -> Result<(), Error> {
+        self.validate_row_source()?;
+        if self
+            .operation
+            .is_none_or(|operation| !operation.same_operation(binding.operation))
+            || binding
+                .plot_id
+                .is_some_and(|id| self.row_source.map(|source| &source.owner) != Some(id))
+        {
+            return Err(Error::Render(
+                "row source belongs to a different source or operation".into(),
+            ));
         }
         Ok(())
     }
@@ -173,6 +205,63 @@ pub(crate) fn normalize_source_string(source: &str) -> Result<String, Error> {
 mod tests {
     use super::*;
     use crate::font::canonical::OperationContext;
+    use crate::orchestrator::registration::{RowSelection, Scope};
+
+    #[test]
+    fn checked_full_rows_and_numeric_bindings_keep_occurrence_and_owner_identity() {
+        let source = crate::Plot::scatter(
+            crate::NumericValues::new("x", [10.0, 20.0]),
+            crate::NumericValues::new("y", [2.0, 1.0]),
+        )
+        .source_rows(crate::SourceRows::new([9001, 70]).unwrap())
+        .erase();
+        let operation = OperationContext::new();
+        let first = Scope::new(&source, &operation, 0, RowSelection::Full, None, None).unwrap();
+        let second = Scope::new(
+            &source,
+            &operation,
+            1,
+            RowSelection::Full,
+            None,
+            Some("panel-1".into()),
+        )
+        .unwrap();
+        let rows = RowSourceContext::new(source.description(), &first, &operation);
+        let other_rows = RowSourceContext::new(source.description(), &second, &operation);
+        let data = PlotData::checked(source.description(), &first, &rows, &operation).unwrap();
+        assert!(data.is_full_plot());
+        assert_eq!(
+            (data.height(), data.row_index(1), data.source_row(1)),
+            (2, 1, 70)
+        );
+        assert!(
+            data.rows.is_none(),
+            "Full does not allocate selected input slots"
+        );
+        let numeric = first
+            .numeric_binding(source.description(), &rows, &operation)
+            .unwrap();
+        numeric.check_data(data).unwrap();
+        assert!(PlotData::checked(source.description(), &second, &rows, &operation).is_err());
+        assert!(second
+            .numeric_binding(source.description(), &other_rows, &operation)
+            .unwrap()
+            .check_data(data)
+            .is_err());
+        assert!(
+            PlotData::checked(source.clone().description(), &first, &rows, &operation).is_err()
+        );
+        let foreign = OperationContext::new();
+        assert!(PlotData::checked(source.description(), &first, &rows, &foreign).is_err());
+        let ordinary = second
+            .numeric_binding(source.description(), &other_rows, &operation)
+            .unwrap();
+        let axis = second
+            .axis_numeric_binding(source.description(), &other_rows, &operation)
+            .unwrap();
+        assert!(ordinary.owner.scope.is_none());
+        assert_eq!(axis.owner.scope.as_deref(), Some("panel-1"));
+    }
 
     #[test]
     fn native_columns_outlive_selected_views_without_retaining_operation_resources() {
@@ -183,16 +272,21 @@ mod tests {
         .erase();
         let (column, binding, alive) = {
             let operation = OperationContext::new();
-            let binding = source
-                .data()
-                .with_operation(&operation)
-                .bind_row_source()
-                .unwrap();
-            let rows = vec![2, 0];
-            let diagnostic = vec![9001, 700];
-            let selected = PlotData::with_rows(source.description(), &rows, &diagnostic)
-                .with_operation(&operation)
-                .with_row_source(Some(&binding));
+            let scope = Scope::new(
+                &source,
+                &operation,
+                0,
+                RowSelection::Selected {
+                    input_slots: vec![2, 0],
+                    diagnostic_rows: vec![9001, 700],
+                },
+                None,
+                None,
+            )
+            .unwrap();
+            let binding = RowSourceContext::new(source.description(), &scope, &operation);
+            let selected =
+                PlotData::checked(source.description(), &scope, &binding, &operation).unwrap();
             selected.validate_row_source().unwrap();
             assert_eq!((selected.row_index(0), selected.source_row(0)), (2, 9001));
             (
@@ -210,12 +304,8 @@ mod tests {
             30.0_f64.to_bits()
         );
         let foreign = OperationContext::new();
-        assert!(source
-            .data()
-            .with_operation(&foreign)
-            .with_row_source(Some(&binding))
-            .validate_row_source()
-            .is_err());
+        let scope = Scope::new(&source, &foreign, 0, RowSelection::Full, None, None).unwrap();
+        assert!(PlotData::checked(source.description(), &scope, &binding, &foreign).is_err());
         assert!(!alive());
     }
 
@@ -233,17 +323,21 @@ mod tests {
         )
         .erase();
         let operation = OperationContext::new();
-        let binding = source
-            .data()
-            .with_operation(&operation)
-            .bind_row_source()
-            .unwrap();
+        let scope = Scope::new(
+            &source,
+            &operation,
+            0,
+            RowSelection::Selected {
+                input_slots: vec![2, 0],
+                diagnostic_rows: vec![302, 300],
+            },
+            None,
+            None,
+        )
+        .unwrap();
+        let binding = RowSourceContext::new(source.description(), &scope, &operation);
         let clone = operation.clone();
-        let rows = [2, 0];
-        let ids = [302, 300];
-        let data = PlotData::with_rows(source.description(), &rows, &ids)
-            .with_operation(&clone)
-            .with_row_source(Some(&binding));
+        let data = PlotData::checked(source.description(), &scope, &binding, &clone).unwrap();
         data.validate_row_source().unwrap();
         assert_eq!(
             (
@@ -279,12 +373,8 @@ mod tests {
         assert!(invalid_slot.to_string().contains("source row 999"));
         let other = OperationContext::new();
         assert!(data.with_operation(&other).validate_row_source().is_err());
-        assert!(source
-            .clone()
-            .data()
-            .with_operation(&operation)
-            .with_row_source(Some(&binding))
-            .validate_row_source()
-            .is_err());
+        assert!(
+            PlotData::checked(source.clone().description(), &scope, &binding, &operation).is_err()
+        );
     }
 }

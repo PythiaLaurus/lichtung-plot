@@ -117,6 +117,7 @@ impl CompositionChildPolicy {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) scopes: Vec<crate::orchestrator::registration::Scope>,
     pub(crate) discrete_guides:
         std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) route: InteriorRoute,

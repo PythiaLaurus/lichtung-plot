@@ -6,6 +6,71 @@ use super::context::{
 };
 use crate::{Error, Plot, Result};
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NumericBinding<'v> {
+    pub(crate) operation: &'v crate::font::canonical::OperationContext,
+    pub(crate) owner: &'v OwnerInfo,
+    pub(crate) plot_id: Option<&'v crate::orchestrator::registration::PlotOccurrenceId>,
+}
+
+impl NumericBinding<'_> {
+    pub(crate) fn check_data(self, data: crate::data::PlotData<'_, '_>) -> Result<()> {
+        data.check_numeric_binding(self)
+    }
+
+    pub(crate) fn context(
+        self,
+        role: NumericRole,
+        purpose: NumericPurpose,
+        values: Vec<ContextValue>,
+        domain: Option<DomainInfo>,
+    ) -> Result<ContextInfo> {
+        let owner = self.owner.try_copy()?;
+        Ok(ContextInfo {
+            owner,
+            role,
+            purpose,
+            values,
+            domain,
+            generation: None,
+            window: None,
+        })
+    }
+
+    pub(crate) fn indexed(
+        self,
+        values: &[super::operand::Operand],
+        role: NumericRole,
+        purpose: NumericPurpose,
+        domain: Option<DomainInfo>,
+    ) -> Result<ContextInfo> {
+        use super::context::CoordinateAxis;
+        let values = crate::data::source::collect_source(values.iter().enumerate().map(
+            |(index, value)| {
+                let identity = if purpose == NumericPurpose::IntrinsicProbe {
+                    Identity::Probe(index)
+                } else {
+                    match role {
+                        NumericRole::XAxis => Identity::Tick(CoordinateAxis::X, index),
+                        NumericRole::YAxis => Identity::Tick(CoordinateAxis::Y, index),
+                        NumericRole::ContinuousColor => Identity::GuideTick(index),
+                        _ => {
+                            return Err(Error::Render(
+                                "numeric indexed source has no occurrence identity".into(),
+                            ))
+                        }
+                    }
+                };
+                Ok(ContextValue {
+                    operand: value.clone(),
+                    identity,
+                })
+            },
+        ))?;
+        self.context(role, purpose, values, domain)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct NumericSource {
     pub(crate) operation: crate::font::canonical::OperationContext,
@@ -57,6 +122,23 @@ impl OwnerInfo {
 }
 
 impl NumericSource {
+    pub(crate) fn from_binding(
+        binding: NumericBinding<'_>,
+        raw_limits: [Option<(f64, f64)>; 2],
+    ) -> Result<Self> {
+        Ok(Self {
+            operation: binding.operation.clone(),
+            owner: binding.owner.try_copy()?,
+            raw_limits: raw_limits.map(|limits| limits.map(|(a, b)| (a.to_bits(), b.to_bits()))),
+        })
+    }
+    pub(crate) fn binding(&self) -> NumericBinding<'_> {
+        NumericBinding {
+            operation: &self.operation,
+            owner: &self.owner,
+            plot_id: None,
+        }
+    }
     pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
         self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
             .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
@@ -68,39 +150,6 @@ impl NumericSource {
             raw_limits: self.raw_limits,
         })
     }
-    pub(crate) fn for_data(plot: &Plot, data: crate::data::PlotData<'_, '_>) -> Result<Self> {
-        Self::for_plot(plot, data.source_resources()?, data.numeric_facet())
-    }
-    pub(crate) fn for_plot(
-        plot: &Plot,
-        operation: &crate::font::canonical::OperationContext,
-        facet: Option<&crate::FacetCell>,
-    ) -> Result<Self> {
-        Ok(Self {
-            operation: operation.clone(),
-            owner: OwnerInfo::for_plot(plot, facet)?,
-            raw_limits: [plot.user_x_limits(), plot.user_y_limits()]
-                .map(|limits| limits.map(|(a, b)| (a.to_bits(), b.to_bits()))),
-        })
-    }
-    pub(crate) fn context(
-        &self,
-        role: NumericRole,
-        purpose: NumericPurpose,
-        values: Vec<ContextValue>,
-        domain: Option<DomainInfo>,
-    ) -> Result<ContextInfo> {
-        let owner = self.owner.try_copy()?;
-        Ok(ContextInfo {
-            owner,
-            role,
-            purpose,
-            values,
-            domain,
-            generation: None,
-            window: None,
-        })
-    }
     pub(crate) fn indexed(
         &self,
         values: &[super::operand::Operand],
@@ -108,30 +157,7 @@ impl NumericSource {
         purpose: NumericPurpose,
         domain: Option<DomainInfo>,
     ) -> Result<ContextInfo> {
-        use super::context::CoordinateAxis;
-        let values = crate::data::source::collect_source(values.iter().enumerate().map(
-            |(index, value)| {
-                let identity = if purpose == NumericPurpose::IntrinsicProbe {
-                    Identity::Probe(index)
-                } else {
-                    match role {
-                        NumericRole::XAxis => Identity::Tick(CoordinateAxis::X, index),
-                        NumericRole::YAxis => Identity::Tick(CoordinateAxis::Y, index),
-                        NumericRole::ContinuousColor => Identity::GuideTick(index),
-                        _ => {
-                            return Err(Error::Render(
-                                "numeric indexed source has no occurrence identity".into(),
-                            ))
-                        }
-                    }
-                };
-                Ok(ContextValue {
-                    operand: value.clone(),
-                    identity,
-                })
-            },
-        ))?;
-        self.context(role, purpose, values, domain)
+        self.binding().indexed(values, role, purpose, domain)
     }
 }
 

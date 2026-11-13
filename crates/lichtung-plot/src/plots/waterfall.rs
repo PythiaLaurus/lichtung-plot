@@ -26,9 +26,13 @@ pub(crate) struct PreparedWaterfall {
     // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
     spans: Vec<WaterfallSpan>,
     total_candidates: [(f64, crate::Text); 2],
-    total_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     total_variants: Vec<Option<totals::TotalVariant>>,
-    numeric_source: crate::numeric::source::NumericSource,
+}
+
+pub(crate) struct WaterfallTotalsPrepare<'v> {
+    pub(crate) numeric: crate::numeric::source::NumericBinding<'v>,
+    pub(crate) axes: &'v crate::plots::shared_x::PreparedAxes,
+    pub(crate) format: Option<&'v std::sync::Arc<crate::numeric::format::NumericFormat>>,
 }
 
 impl PreparedWaterfall {
@@ -643,9 +647,7 @@ pub(crate) fn prepare(
         range,
         spans,
         total_candidates,
-        total_format: chart.description().total_format_spec().cloned(),
         total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
-        numeric_source: crate::numeric::source::NumericSource::for_data(chart, data)?,
     })
 }
 

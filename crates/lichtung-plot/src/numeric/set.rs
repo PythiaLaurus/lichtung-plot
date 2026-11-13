@@ -106,7 +106,7 @@ pub(crate) fn guide_presentation(
     values: &[f64],
     format: Option<(
         &NumericFormat,
-        &super::source::NumericSource,
+        super::source::NumericBinding<'_>,
         crate::NumericRangeOrigin,
     )>,
 ) -> Result<FormattedSet> {
@@ -135,7 +135,7 @@ pub(crate) fn guide_presentation(
             domain,
         )?;
         return format
-            .materialize(&source.operation, info, true)?
+            .materialize(source.operation, info, true)?
             .ok_or_else(|| {
                 Error::Data("numeric guide labels are not unique at configured precision".into())
             });

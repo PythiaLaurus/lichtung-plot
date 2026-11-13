@@ -89,22 +89,26 @@ pub(crate) fn text_census_labels(
 
 pub(crate) struct FacetTextCensusPanel<'src> {
     source: &'src PlotDescription,
-    panel: data::FacetPanel,
-    cell: Option<crate::FacetCell>,
+    pub(crate) scope: super::registration::Scope,
+    pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
 }
 
 impl<'src> FacetTextCensusPanel<'src> {
-    pub(crate) fn data(&self) -> crate::data::PlotData<'src, '_> {
-        let (rows, diagnostic_rows) = self.panel.rows.selected();
-        crate::data::PlotData::with_rows(self.source, rows, diagnostic_rows)
-            .with_numeric_facet(self.cell.as_ref())
+    pub(crate) fn data<'op>(
+        &'op self,
+        operation: &'op crate::font::canonical::OperationContext,
+    ) -> Result<crate::data::PlotData<'src, 'op>, Error> {
+        crate::data::PlotData::checked(self.source, &self.scope, &self.row_source, operation)
     }
 
-    pub(crate) fn scope(&self) -> Result<String, Error> {
-        self.panel.render_scope()
+    pub(crate) fn render_scope(&self) -> &str {
+        self.scope
+            .render_name
+            .as_deref()
+            .expect("facet render name")
     }
     pub(crate) fn numeric_cell(&self) -> Option<&crate::FacetCell> {
-        self.cell.as_ref()
+        self.scope.numeric_owner.facet.as_ref()
     }
 
     pub(crate) fn significance_annotations(
@@ -114,21 +118,18 @@ impl<'src> FacetTextCensusPanel<'src> {
             .significance_annotations()
             .iter()
             .filter(|annotation| {
-                annotation.facet_cell().is_some_and(|cell| {
-                    cell.matches(
-                        self.panel
-                            .cell
-                            .iter()
-                            .map(|selector| selector.level.as_str()),
-                    )
-                })
+                annotation
+                    .facet_cell()
+                    .is_some_and(|cell| Some(cell) == self.numeric_cell())
             })
     }
 }
 
-pub(crate) fn text_census_panels(
-    source: &PlotDescription,
-) -> Result<Vec<FacetTextCensusPanel<'_>>, Error> {
+pub(crate) fn text_census_panels<'src>(
+    plot: &'src Plot,
+    operation: &crate::font::canonical::OperationContext,
+) -> Result<Vec<FacetTextCensusPanel<'src>>, Error> {
+    let source = plot.description();
     if !source.significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
@@ -140,7 +141,7 @@ pub(crate) fn text_census_panels(
     let selectors = data::facet_selectors(source)?;
     let panels = data::extract_panels(source, &selectors, None)?;
     data::validate_significance_facet_anchors(source, &panels)?;
-    crate::data::source::collect_source(panels.into_iter().map(|panel| {
+    crate::data::source::collect_source(panels.into_iter().enumerate().map(|(slot, panel)| {
         let cell = match panel.cell.as_slice() {
             [one] => Some(crate::FacetCell::single(
                 crate::data::source::copy_source_string(&one.level)?,
@@ -156,10 +157,20 @@ pub(crate) fn text_census_panels(
                 ))
             }
         };
+        let render_name = panel.render_scope()?;
+        let scope = super::registration::Scope::new(
+            plot,
+            operation,
+            slot,
+            panel.rows,
+            cell.as_ref(),
+            Some(render_name),
+        )?;
+        let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
         Ok(FacetTextCensusPanel {
             source,
-            panel,
-            cell,
+            scope,
+            row_source,
         })
     }))
 }
