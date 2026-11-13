@@ -1211,7 +1211,7 @@ mod tests {
                                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                                 theme,
                             )
-                            .with_registration(registered),
+                            .with_registration(registered, inputs.intrinsic(registered)),
                         )
                         .unwrap();
                     let crate::layout::interior::MarkPayload::Histogram(payload) =

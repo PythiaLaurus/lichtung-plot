@@ -84,21 +84,22 @@ pub(crate) fn guided_preference(
 pub(crate) fn guided_body_height(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     guide: Option<&GuidedPreference>,
     scope: &FitScope,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(registered, theme)?;
-    let preference = body_preference(plot, registered, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
     let Some(guide) = guide else {
-        return plot.natural_body_height(registered, theme, width, preference.1);
+        return plot.natural_body_height(registered, intrinsic, theme, width, preference.1);
     };
     let natural = guide.preference(theme)?;
     if guide.horizontal() {
         let measured = guide.at_width(width, theme, scope)?;
         return Ok(
-            plot.natural_body_height(registered, theme, width, preference.1)?
+            plot.natural_body_height(registered, intrinsic, theme, width, preference.1)?
                 + measured.1
                 + theme.legend_outside_gap()?,
         );
@@ -110,7 +111,7 @@ pub(crate) fn guided_body_height(
         // This proposal does not select an Auto edge. The existing containing
         // frame trials report the selected width-dependent content height.
         return Ok(plot
-            .natural_body_height(registered, theme, width, preference.1)?
+            .natural_body_height(registered, intrinsic, theme, width, preference.1)?
             .max(natural.1));
     }
     let allocated = natural.0.min(available);
@@ -118,6 +119,7 @@ pub(crate) fn guided_body_height(
     Ok(plot
         .natural_body_height(
             registered,
+            intrinsic,
             theme,
             width - measured.0 - theme.legend_outside_gap()?,
             preference.1,
@@ -159,6 +161,7 @@ pub(crate) fn text_width<'a>(
 pub(crate) fn body_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<(f64, f64), Error> {
@@ -180,13 +183,13 @@ pub(crate) fn body_preference(
             ))
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Marginal) => {
-            crate::plots::marginal::natural_body_preference(plot, registered, theme)
+            crate::plots::marginal::natural_body_preference(plot, registered, intrinsic, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Matrix) => {
             crate::plots::matrix::natural_body_preference(plot, registered, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Heatmap) => {
-            crate::plots::heatmap::natural_body_preference(plot, registered, theme)
+            crate::plots::heatmap::natural_body_preference(plot, registered, intrinsic, theme)
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Beeswarm | SpecializedGrid::Waterfall) => {
             let ch = theme
@@ -348,8 +351,9 @@ pub(crate) fn plot_size(
     }
 
     let registered = inputs.plots.first();
-    let hard = plot.intrinsic_body_minimum(registered, theme)?;
-    let preference = body_preference(plot, registered, theme, hard)?;
+    let intrinsic = inputs.intrinsic(registered.expect("prepared standalone occurrence"));
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
     let title = axis_title_style(registered, theme, 0);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
@@ -407,7 +411,8 @@ pub(crate) fn plot_size(
     // trial derives its height from the selected guide edge at this fixed width.
     let body_width =
         (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
-    let body_height = plot.natural_body_height(registered, theme, body_width, preference.1)?;
+    let body_height =
+        plot.natural_body_height(registered, intrinsic, theme, body_width, preference.1)?;
     let sources = plot.description().prose();
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
         theme,
@@ -470,25 +475,26 @@ impl Plot {
     pub(crate) fn natural_body_height(
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         theme: &crate::text::TextRequestContext<'_, '_>,
         width: f64,
         preference: f64,
     ) -> Result<f64, Error> {
-        let hard = self.intrinsic_body_minimum(registered, theme)?;
+        let hard = self.intrinsic_body_minimum(registered, intrinsic, theme)?;
         let height = match self.kind() {
             PlotKind::Heatmap => {
                 crate::plots::heatmap::natural_body_height(self, registered, theme, width)
             }
-            PlotKind::Beeswarm => {
-                crate::plots::beeswarm::natural_body_height(self, registered, theme, width)
-            }
-            PlotKind::Waterfall => {
-                crate::plots::waterfall::natural_body_height(self, registered, theme, width)
-            }
+            PlotKind::Beeswarm => crate::plots::beeswarm::natural_body_height(
+                self, registered, intrinsic, theme, width,
+            ),
+            PlotKind::Waterfall => crate::plots::waterfall::natural_body_height(
+                self, registered, intrinsic, theme, width,
+            ),
             PlotKind::Matrix => Ok(width.max(hard.1)),
-            PlotKind::Marginal => {
-                crate::plots::marginal::natural_body_height(self, registered, theme, width)
-            }
+            PlotKind::Marginal => crate::plots::marginal::natural_body_height(
+                self, registered, intrinsic, theme, width,
+            ),
             _ => {
                 let density = match super::InteriorRoute::classify(self.kind()) {
                     super::InteriorRoute::StandardCoordinate(_) => {

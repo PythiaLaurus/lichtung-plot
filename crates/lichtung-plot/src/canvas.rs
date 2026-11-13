@@ -1450,8 +1450,12 @@ impl Canvas {
                 let registered = completed.next().expect("prepared Canvas occurrence");
                 let route =
                     crate::layout::interior::InteriorRoute::classify(registered.source.kind());
+                let plots = crate::data::source::collect_source(std::iter::once(Ok(registered)))?;
+                let plot_intrinsics =
+                    crate::layout::interior::PreparedInteriorInputs::intrinsic_slots(&plots)?;
                 Some(crate::layout::interior::PreparedInteriorInputs {
-                    plots: crate::data::source::collect_source(std::iter::once(Ok(registered)))?,
+                    plots,
+                    plot_intrinsics,
                     route,
                     discrete_guides: std::sync::OnceLock::new(),
                 })
@@ -2348,7 +2352,13 @@ impl Canvas {
                     cells[index].expect("configured owner assignment"),
                     theme,
                 )
-                .with_registration(registered)
+                .with_registration(
+                    registered,
+                    interiors[index]
+                        .as_ref()
+                        .expect("prepared Canvas plot")
+                        .intrinsic(registered),
+                )
                 .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
@@ -2611,7 +2621,13 @@ impl Canvas {
                         provisional[first_index].expect("configured owner assignment"),
                         expected_theme,
                     )
-                    .with_registration(registered)
+                    .with_registration(
+                        registered,
+                        prepared.interiors[first_index]
+                            .as_ref()
+                            .expect("prepared Canvas plot")
+                            .intrinsic(registered),
+                    )
                     .with_guides(&guides),
                     children,
                     first_index,
@@ -2658,7 +2674,13 @@ impl Canvas {
                             provisional[index].expect("configured owner assignment"),
                             theme,
                         )
-                        .with_registration(registered)
+                        .with_registration(
+                            registered,
+                            prepared.interiors[index]
+                                .as_ref()
+                                .expect("prepared Canvas plot")
+                                .intrinsic(registered),
+                        )
                         .with_guides(&guides),
                         children,
                         index,
@@ -2776,10 +2798,11 @@ impl Canvas {
         let mut child_miss = None;
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let registered = &prepared.interiors[index]
+            let inputs = prepared.interiors[index]
                 .as_ref()
-                .expect("prepared Canvas plot")
-                .plots[0];
+                .expect("prepared Canvas plot");
+            let registered = &inputs.plots[0];
+            let intrinsic = inputs.intrinsic(registered);
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = plot.kind();
@@ -2794,6 +2817,7 @@ impl Canvas {
             let local = match plot_text::PlotLocalTextPlan::measure(
                 plot,
                 Some(registered),
+                intrinsic,
                 cell,
                 theme,
                 [self.panel_title_alignment, self.panel_subtitle_alignment],
@@ -2840,7 +2864,7 @@ impl Canvas {
                 local.body,
                 theme,
             )
-            .with_registration(registered)
+            .with_registration(registered, intrinsic)
             .with_fit_scope(&child_scope)
             .with_guides(&guides);
             if prepared.content_sizing
@@ -2886,6 +2910,7 @@ impl Canvas {
                 let preferred = sizing::measured_preference(
                     plot,
                     Some(registered),
+                    intrinsic,
                     &panel_plan,
                     cell.height() - local.body.height(),
                     round,
@@ -3246,7 +3271,13 @@ impl Canvas {
                 children.canvas_probe(
                     plot,
                     crate::spec::PlotRenderContext::new(registered.data(&operation)?, panel, theme)
-                        .with_registration(registered),
+                        .with_registration(
+                            registered,
+                            interiors[index]
+                                .as_ref()
+                                .expect("prepared Canvas plot")
+                                .intrinsic(registered),
+                        ),
                     index,
                     MeasurementPhase::Legend,
                     round,

@@ -255,7 +255,7 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
                     panel,
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let plan = &result.panel_text[0];

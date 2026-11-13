@@ -217,6 +217,7 @@ fn measure(
             let preference = crate::layout::interior::sizing::body_preference(
                 &plot,
                 content.inputs.plots.get(index),
+                content.inputs.intrinsic(&content.inputs.plots[index]),
                 theme,
                 *minimum,
             )?;
@@ -374,6 +375,7 @@ fn measure(
             let preference = crate::layout::interior::sizing::body_preference(
                 &plot,
                 content.inputs.plots.get(index),
+                content.inputs.intrinsic(&content.inputs.plots[index]),
                 theme,
                 *minimum,
             )?;
@@ -390,6 +392,7 @@ fn measure(
                 crate::layout::interior::sizing::guided_body_height(
                     &plot,
                     content.inputs.plots.get(index),
+                    content.inputs.intrinsic(&content.inputs.plots[index]),
                     theme,
                     width,
                     guide.as_ref(),
@@ -398,6 +401,7 @@ fn measure(
             } else {
                 plot.natural_body_height(
                     content.inputs.plots.get(index),
+                    content.inputs.intrinsic(&content.inputs.plots[index]),
                     theme,
                     width,
                     preference.1,

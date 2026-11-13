@@ -44,7 +44,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
                         PixelRect::new(20.0, 700.0, 20.0, 420.0),
                         theme,
                     )
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
                 .unwrap();
             assert!(selected.discrete_guide.is_none());
@@ -309,7 +309,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                         PixelRect::new(0.0, 700.0, 0.0, 400.0),
                         &theme,
                     )
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
                 .unwrap();
             let crate::layout::interior::MarkPayload::Beeswarm(payload) =

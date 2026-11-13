@@ -76,7 +76,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
                         PixelRect::new(0.0, 500.0, 0.0, 200.0),
                         resolved,
                     )
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
                 .unwrap();
             let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
@@ -85,7 +85,13 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
             assert!(plan.style.exact_override);
             assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
             assert_eq!(plan.lines.len(), 2);
-            let minimum = intrinsic_body_minimum(chart, inputs.plots.first(), resolved).unwrap();
+            let minimum = intrinsic_body_minimum(
+                chart,
+                inputs.plots.first(),
+                inputs.intrinsic(&inputs.plots[0]),
+                resolved,
+            )
+            .unwrap();
             assert!(minimum.1 >= plan.height() + 23.0);
             assert!(minimum.0 >= plan.width() + 23.0);
         },
@@ -150,7 +156,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         let transparent = chart
             .measure_selected_interior(
                 PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let cell = &payload(&transparent).cells[0];
@@ -159,7 +165,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
         let marks = retained_in(chart, inputs.plots.first()).unwrap();
         let axes = inputs.plots[0].axes.as_ref().unwrap();
-        let original = prepare_intrinsics(marks, axes, theme, None).unwrap();
+        let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+        let original = heatmap_minima(intrinsic, marks, axes, theme, None)
+            .unwrap()
+            .0;
+        let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
+            panic!("Heatmap slot")
+        };
         let same_paint = source(policy.clone()).with_alpha(
             AlphaTarget::Fill,
             crate::alpha::AlphaEncoding::single(
@@ -179,11 +191,10 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             panic!("prepared Heatmap")
         };
         assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
-        assert!(!axes.heatmap_intrinsics.get().unwrap().matches_inputs(
-            same_paint_marks,
-            axes,
-            theme
-        ));
+        assert!(!value
+            .get()
+            .unwrap()
+            .matches_inputs(same_paint_marks, axes, theme));
         let changed_source = source(
             policy
                 .try_copy()
@@ -209,8 +220,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             panic!("prepared Heatmap")
         };
         assert_eq!(marks.value_labels, changed_marks.value_labels);
-        assert!(!axes
-            .heatmap_intrinsics
+        assert!(!value
             .get()
             .unwrap()
             .matches_inputs(changed_marks, axes, theme));
@@ -224,12 +234,12 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .unwrap();
         appearance.annotations = appearance.annotations.clone().cells(padding).unwrap();
         let theme = crate::text::TextRequestContext::new(&appearance, theme.text);
-        assert!(!axes
-            .heatmap_intrinsics
-            .get()
+        assert!(!value.get().unwrap().matches_inputs(marks, axes, &theme));
+        let edited = heatmap_minima(intrinsic, marks, axes, &theme, None)
             .unwrap()
-            .matches_inputs(marks, axes, &theme));
-        let edited = prepare_intrinsics(marks, axes, &theme, None).unwrap();
+            .0;
+        assert_eq!(value.get().unwrap().minimum, original);
+        assert!(!value.get().unwrap().matches_inputs(marks, axes, &theme));
         let required = (plan.width() + 11.0, plan.height() + 22.0);
         assert!(edited.0 >= original.0 && edited.1 >= original.1);
         assert!(edited.0 >= required.0 && edited.1 >= required.1);

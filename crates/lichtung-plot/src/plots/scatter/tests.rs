@@ -67,7 +67,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
                     crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let crate::layout::interior::MarkPayload::Scatter(payload) =

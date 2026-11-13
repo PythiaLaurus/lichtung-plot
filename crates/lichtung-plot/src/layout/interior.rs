@@ -117,6 +117,10 @@ impl CompositionChildPolicy {
 /// Attachment transports only guides, never scientific storage.
 pub(crate) struct PreparedInteriorInputs<'src> {
     pub(crate) plots: Vec<crate::orchestrator::registration::PlotRegistration<'src>>,
+    pub(crate) plot_intrinsics: Vec<(
+        crate::orchestrator::registration::PlotOccurrenceId,
+        crate::orchestrator::root::PlotIntrinsics,
+    )>,
     pub(crate) discrete_guides:
         std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) route: InteriorRoute,
@@ -127,11 +131,43 @@ impl<'src> PreparedInteriorInputs<'src> {
         registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
         route: InteriorRoute,
     ) -> Result<Self, Error> {
+        let plots = registry.finish()?;
+        let plot_intrinsics = Self::intrinsic_slots(&plots)?;
         Ok(Self {
-            plots: registry.finish()?,
+            plots,
+            plot_intrinsics,
             route,
             discrete_guides: std::sync::OnceLock::new(),
         })
+    }
+
+    pub(crate) fn intrinsic_slots(
+        plots: &[crate::orchestrator::registration::PlotRegistration<'_>],
+    ) -> Result<
+        Vec<(
+            crate::orchestrator::registration::PlotOccurrenceId,
+            crate::orchestrator::root::PlotIntrinsics,
+        )>,
+        Error,
+    > {
+        crate::data::source::collect_source(plots.iter().map(|registered| {
+            Ok((
+                registered.scope.id.clone(),
+                crate::orchestrator::root::PlotIntrinsics::for_kind(registered.family.kind()),
+            ))
+        }))
+    }
+
+    pub(crate) fn intrinsic(
+        &self,
+        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    ) -> &crate::orchestrator::root::PlotIntrinsics {
+        &self
+            .plot_intrinsics
+            .iter()
+            .find(|(id, _)| id == &registered.scope.id)
+            .expect("registered intrinsic slot")
+            .1
     }
 
     /// Semantic attachment does not discover fonts. Each attached panel obtains
@@ -147,8 +183,10 @@ impl<'src> PreparedInteriorInputs<'src> {
                 continue;
             };
             let scope = &registered.scope.render_name;
+            let intrinsic = self.intrinsic(registered);
             if self.route.is_coordinate() {
                 coordinate::Intrinsics::prepare(
+                    intrinsic,
                     axes,
                     theme,
                     scope.as_deref(),
@@ -162,7 +200,13 @@ impl<'src> PreparedInteriorInputs<'src> {
                     _ => None,
                 }
                 .ok_or_else(|| Error::Render("prepared heatmap intrinsic scope missing".into()))?;
-                crate::plots::heatmap::prepare_intrinsics(prepared, axes, theme, scope.as_deref())?;
+                crate::plots::heatmap::heatmap_minima(
+                    intrinsic,
+                    prepared,
+                    axes,
+                    theme,
+                    scope.as_deref(),
+                )?;
             }
         }
         Ok(())
@@ -179,10 +223,12 @@ impl Plot {
     pub(crate) fn intrinsic_body_minimum(
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
-            coordinate::Intrinsics::prepared(self, registered, theme)?.minimum(self)
+            coordinate::Intrinsics::prepared(self, registered, intrinsic, theme)?
+                .minimum(self.y_tick_labels_visible())
         } else {
             (1.0 / 1024.0, 1.0 / 1024.0)
         };
@@ -241,16 +287,16 @@ impl Plot {
                 self, registered, theme,
             )?),
             PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(
-                self, registered, theme,
+                self, registered, intrinsic, theme,
             )?),
             PlotKind::Beeswarm => Some(crate::plots::beeswarm::intrinsic_body_minimum(
-                self, registered, theme,
+                self, registered, intrinsic, theme,
             )?),
             PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
-                self, registered, theme,
+                self, registered, intrinsic, theme,
             )?),
             PlotKind::Marginal => Some(crate::plots::marginal::intrinsic_body_minimum(
-                self, registered, theme,
+                self, registered, intrinsic, theme,
             )?),
             PlotKind::Matrix => Some(crate::plots::matrix::intrinsic_body_minimum(
                 self, registered, theme,

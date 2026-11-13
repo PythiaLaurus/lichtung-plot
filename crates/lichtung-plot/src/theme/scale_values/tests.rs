@@ -288,7 +288,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
                     crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let crate::layout::interior::MarkPayload::Heatmap(payload) =

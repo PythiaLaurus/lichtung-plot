@@ -461,7 +461,7 @@ fn shared_legend_child_cache_replay_contract() {
                     panel,
                     &theme,
                 )
-                .with_registration(registered);
+                .with_registration(registered, inputs.intrinsic(registered));
                 let first = children.measure(
                     &plot,
                     context,
@@ -471,6 +471,7 @@ fn shared_legend_child_cache_replay_contract() {
                     || {
                         plot.preflight_measurement(
                             inputs.plots.first(),
+                            Some(inputs.intrinsic(&inputs.plots[0])),
                             plot.kind(),
                             panel,
                             &theme,
@@ -847,7 +848,11 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
                             |scope| chart.clone().with_render_scope(scope),
                         );
                         panel
-                            .intrinsic_body_minimum(Some(registered), theme)
+                            .intrinsic_body_minimum(
+                                Some(registered),
+                                inputs.intrinsic(registered),
+                                theme,
+                            )
                             .unwrap()
                     })
                     .collect::<Vec<_>>()
@@ -953,10 +958,15 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
         },
         |inputs, assigned, round| {
             let plot = inputs.attach(plot.clone())?;
-            let canvas = plot.measured_canvas_layout(inputs.plots.first(), &theme)?;
+            let canvas = plot.measured_canvas_layout(
+                inputs.plots.first(),
+                inputs.intrinsic(&inputs.plots[0]),
+                &theme,
+            )?;
             let FitOutcome::Measured(plan) = crate::decorations::plan::plan_panel(
                 &plot,
                 inputs.plots.first(),
+                inputs.intrinsic(&inputs.plots[0]),
                 plot.kind(),
                 canvas.panel_box,
                 crate::decorations::plan::LegendRole::Panel,

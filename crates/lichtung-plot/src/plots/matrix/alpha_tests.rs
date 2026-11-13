@@ -92,7 +92,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             inputs.plots[0].data(&operation).unwrap(),
             PixelRect::new(20.0, 800.0, 20.0, 620.0),
             theme,
-        ).with_registration(&inputs.plots[0]))
+        ).with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])))
         .unwrap();
     let layout::interior::MarkPayload::Matrix(payload) = &selected.marks.as_ref().unwrap().payload
     else {

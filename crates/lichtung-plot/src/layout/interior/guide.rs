@@ -19,6 +19,7 @@ pub(crate) fn native_right(
     content_plot: Option<(
         &Plot,
         Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        &crate::orchestrator::root::PlotIntrinsics,
     )>,
 ) -> Result<
     (crate::layout::PixelRect, crate::decorations::legend::Legend),
@@ -95,13 +96,20 @@ pub(crate) fn native_right(
         reason = "root-bounded spatial quanta convert exactly to CSS pixels"
     )]
     let body_right = edge as f64 / 1024.0;
-    let top = if let Some((plot, registered)) = content_plot {
-        let hard = plot.intrinsic_body_minimum(registered, theme)?;
-        let preference =
-            crate::layout::interior::sizing::body_preference(plot, registered, theme, hard)?;
+    let top = if let Some((plot, registered, intrinsic)) = content_plot {
+        let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+        let preference = crate::layout::interior::sizing::body_preference(
+            plot, registered, intrinsic, theme, hard,
+        )?;
         panel.y0
             + plot
-                .natural_body_height(registered, theme, body_right - panel.x0, preference.1)?
+                .natural_body_height(
+                    registered,
+                    intrinsic,
+                    theme,
+                    body_right - panel.x0,
+                    preference.1,
+                )?
                 .max(guide.compute_box_height())
     } else {
         panel.y1

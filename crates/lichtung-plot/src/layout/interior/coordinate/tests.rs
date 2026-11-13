@@ -54,7 +54,10 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
                                 panel,
                                 theme,
                             )
-                            .with_registration(&inputs.plots[0]),
+                            .with_registration(
+                                &inputs.plots[0],
+                                inputs.intrinsic(&inputs.plots[0]),
+                            ),
                         )
                         .unwrap();
                     let work = measurements::finish();
@@ -99,10 +102,13 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
         crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |plot, inputs, theme| {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let registered = inputs.plots.first();
-            let axes = Intrinsics::prepared(plot, registered, theme)
+            let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+            let axes = Intrinsics::prepared(plot, registered, intrinsic, theme)
                 .unwrap()
-                .minimum(plot);
-            let minimum = plot.intrinsic_body_minimum(registered, theme).unwrap();
+                .minimum(plot.y_tick_labels_visible());
+            let minimum = plot
+                .intrinsic_body_minimum(registered, intrinsic, theme)
+                .unwrap();
             assert!(minimum.0 >= axes.0 && minimum.1 >= axes.1);
             let scope = fit::FitScope::new(
                 &crate::layout::ComponentAddress::root()
@@ -119,7 +125,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
                         PixelRect::new(0.0, minimum.0 - 1.0 / 1024.0, 0.0, minimum.1),
                         theme,
                     )
-                    .with_registration(&inputs.plots[0])
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0]))
                     .with_fit_scope(&scope),
                 )
                 .unwrap_err();
@@ -174,7 +180,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         let selected = plot
             .measure_selected_interior(
                 PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         assert_eq!(selected.x_domain, AxisDomain::Categorical);
@@ -333,7 +339,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                             PixelRect::new(30.0, 610.0, 50.0, 440.0),
                             &theme,
                         )
-                        .with_registration(&inputs.plots[0])
+                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0]))
                         .with_fit_scope(&scope),
                     )
                     .unwrap_err();

@@ -15,6 +15,7 @@ pub(super) fn measure(
     content_plot: Option<(
         &crate::Plot,
         Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        &crate::orchestrator::root::PlotIntrinsics,
     )>,
 ) -> Result<(PixelRect, Legend), PlanError> {
     let descriptor = chart

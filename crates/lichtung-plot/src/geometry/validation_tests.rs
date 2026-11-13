@@ -107,7 +107,7 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
                         crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                         theme,
                     )
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
                 .unwrap();
             let crate::layout::interior::MarkPayload::Distribution(payload) =

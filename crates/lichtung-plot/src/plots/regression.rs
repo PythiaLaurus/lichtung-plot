@@ -590,7 +590,7 @@ mod style_tests {
                             crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
                             request,
                         )
-                        .with_registration(registered),
+                        .with_registration(registered, inputs.intrinsic(registered)),
                     )
                     .unwrap();
                 (minimum, selected)

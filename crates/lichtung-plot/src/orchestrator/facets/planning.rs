@@ -353,7 +353,7 @@ pub(super) fn native_parent(
         };
         let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, cell, theme)
-            .with_registration(registered)
+            .with_registration(registered, inputs.intrinsic(registered))
             .with_facet_scales(facet_scales)
             .with_fit_scope(&cell_scope)
             .with_guides(&guides);

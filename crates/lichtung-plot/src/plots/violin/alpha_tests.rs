@@ -75,7 +75,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
                     crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let crate::layout::interior::MarkPayload::Distribution(payload) =

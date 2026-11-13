@@ -844,11 +844,16 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                         crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
                     let registered = inputs.plots.first();
                     let panel = plot
-                        .measured_canvas_layout(registered, theme)
+                        .measured_canvas_layout(
+                            registered,
+                            inputs.intrinsic(registered.unwrap()),
+                            theme,
+                        )
                         .unwrap()
                         .panel_box;
                     crate::layout::fit::measured(plot.preflight_measurement(
                         registered,
+                        Some(inputs.intrinsic(registered.unwrap())),
                         kind,
                         panel,
                         theme,

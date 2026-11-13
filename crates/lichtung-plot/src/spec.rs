@@ -643,6 +643,7 @@ use crate::Error;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a, 'src> {
     pub(crate) registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'src>>,
+    pub(crate) intrinsic: Option<&'a crate::orchestrator::root::PlotIntrinsics>,
     pub(crate) data: crate::data::PlotData<'src, 'a>,
     pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
@@ -681,6 +682,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     ) -> Self {
         Self {
             registered: None,
+            intrinsic: None,
             data,
             panel,
             content_height: false,
@@ -727,6 +729,10 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     }
     pub(crate) const fn fit_scope(self) -> &'a crate::layout::fit::FitScope {
         self.fit_scope
+    }
+
+    pub(crate) fn intrinsic(self) -> &'a crate::orchestrator::root::PlotIntrinsics {
+        self.intrinsic.expect("prepared measurement intrinsic slot")
     }
 
     pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
@@ -781,8 +787,10 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     pub(crate) const fn with_registration(
         mut self,
         registered: &'a crate::orchestrator::registration::PlotRegistration<'src>,
+        intrinsic: &'a crate::orchestrator::root::PlotIntrinsics,
     ) -> Self {
         self.registered = Some(registered);
+        self.intrinsic = Some(intrinsic);
         self
     }
 

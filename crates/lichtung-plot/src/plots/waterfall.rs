@@ -168,7 +168,7 @@ mod geometry_tests {
                         panel,
                         resolved,
                     )
-                    .with_registration(&inputs.plots[0]),
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
                 .unwrap();
                 assert_eq!(shelf.items.len(), 2);
@@ -244,7 +244,10 @@ mod geometry_tests {
                                 panel,
                                 theme,
                             )
-                            .with_registration(&inputs.plots[0]),
+                            .with_registration(
+                                &inputs.plots[0],
+                                inputs.intrinsic(&inputs.plots[0]),
+                            ),
                         )
                         .unwrap()
                 };
@@ -505,11 +508,14 @@ fn mark_intrinsic_body_minimum(
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = mark_intrinsic_body_minimum(chart, registered, theme)?;
-    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
-        .minimum(chart);
+    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(
+        chart, registered, intrinsic, theme,
+    )?
+    .minimum(chart.y_tick_labels_visible());
     let prepared = retained(chart, registered)?;
 
     let mut height = 0.0_f64;
@@ -575,6 +581,7 @@ pub(crate) fn intrinsic_body_minimum(
 pub(crate) fn natural_body_height(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
@@ -617,15 +624,17 @@ pub(crate) fn natural_body_height(
         panel,
         marks.labels.len() as f64,
         &marks.selected_totals(&projection)?.totals,
-        PlotRenderContext::new(data, panel, theme).with_registration(registered_owner),
+        PlotRenderContext::new(data, panel, theme).with_registration(registered_owner, intrinsic),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let hard = mark_intrinsic_body_minimum(chart, registered, theme)?
         .1
         .max(
-            crate::layout::interior::coordinate::Intrinsics::prepared(chart, registered, theme)?
-                .minimum(chart)
-                .1,
+            crate::layout::interior::coordinate::Intrinsics::prepared(
+                chart, registered, intrinsic, theme,
+            )?
+            .minimum(chart.y_tick_labels_visible())
+            .1,
         );
     Ok(hard
         .max(2.0 * theme.typography.axes.tick_label.font_size * marks.labels.len() as f64)
@@ -760,9 +769,10 @@ pub(crate) fn measure(
     let axes_minimum = crate::layout::interior::coordinate::Intrinsics::prepared(
         chart,
         context.registered,
+        context.intrinsic(),
         theme,
     )?
-    .minimum(chart);
+    .minimum(chart.y_tick_labels_visible());
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",

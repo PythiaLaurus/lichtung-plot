@@ -53,7 +53,10 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                     &theme,
                 );
                 if let Some(registered) = inputs.as_ref().and_then(|inputs| inputs.plots.first()) {
-                    context = context.with_registration(registered);
+                    context = context.with_registration(
+                        registered,
+                        inputs.as_ref().unwrap().intrinsic(registered),
+                    );
                 }
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
                 RENDER_PANEL_CALLS.with(|calls| calls.set(0));
@@ -86,6 +89,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                 assert!(matches!(
                     plot.preflight_measurement(
                         context.registered,
+                        context.intrinsic,
                         PlotKind::Line,
                         context.panel,
                         &theme,

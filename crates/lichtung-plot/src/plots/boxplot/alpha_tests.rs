@@ -127,7 +127,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
                     crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let crate::layout::interior::MarkPayload::Distribution(payload) =

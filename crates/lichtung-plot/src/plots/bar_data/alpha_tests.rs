@@ -159,7 +159,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
                                 crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
                                 theme,
                             )
-                            .with_registration(registered),
+                            .with_registration(registered, inputs.intrinsic(registered)),
                         )
                         .unwrap();
                     assert_eq!(
@@ -311,7 +311,7 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
                             crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
                             theme,
                         )
-                        .with_registration(registered),
+                        .with_registration(registered, inputs.intrinsic(registered)),
                     )
                     .unwrap();
                 let crate::layout::interior::MarkPayload::Bars(payload) =

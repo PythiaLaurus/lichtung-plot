@@ -97,10 +97,11 @@ fn interior_insets(insets: &[[i64; 2]], start: usize, span: usize, rows: bool) -
 fn plot_minimum(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let mut hard = plot.intrinsic_body_minimum(registered, theme)?;
+    let mut hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
     let sources = plot.description().prose();
     hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
         theme, sources, hard.1,
@@ -137,12 +138,11 @@ pub(super) fn minimum(
             continue;
         };
         let hard = if let Some(plot) = &plots[index] {
+            let inputs = interiors[index].as_ref().expect("prepared Canvas plot");
             plot_minimum(
                 plot,
-                interiors
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .and_then(|input| input.plots.first()),
+                inputs.plots.first(),
+                inputs.intrinsic(&inputs.plots[0]),
                 titles[index].expect("Plot title intrinsics"),
                 &themes.plot_request(index).expect("Plot theme"),
             )?
@@ -524,15 +524,16 @@ fn measure(
     crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
-            let registered = interiors[index]
-                .as_ref()
-                .and_then(|input| input.plots.first());
+            let inputs = interiors[index].as_ref().expect("prepared Canvas plot");
+            let registered = inputs.plots.first();
+            let intrinsic = inputs.intrinsic(registered.expect("prepared Canvas plot"));
             let child_theme = &themes
                 .plot_request(index)
                 .expect("configured Plot retains its theme");
             let hard = plot_minimum(
                 plot,
                 registered,
+                intrinsic,
                 plot_titles[index].expect("Plot text intrinsics"),
                 child_theme,
             )?;
@@ -545,8 +546,9 @@ fn measure(
                 let body = crate::layout::interior::sizing::body_preference(
                     plot,
                     registered,
+                    intrinsic,
                     child_theme,
-                    plot.intrinsic_body_minimum(registered, child_theme)?,
+                    plot.intrinsic_body_minimum(registered, intrinsic, child_theme)?,
                 )?;
                 let mut width = body.0;
                 if let Some(content) = content.filter(|content| {

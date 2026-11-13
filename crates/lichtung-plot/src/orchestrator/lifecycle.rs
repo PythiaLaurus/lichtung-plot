@@ -188,7 +188,9 @@ impl PreparedPlotInputs<'_> {
     ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
         let dimensions = source.canvas_dimensions()?;
         let request = TextRequestContext::new(&self.theme, &self.text);
-        let minimum = source.intrinsic_body_minimum(self.axes.plots.first(), &request)?;
+        let intrinsic = self.axes.intrinsic(&self.axes.plots[0]);
+        let minimum =
+            source.intrinsic_body_minimum(self.axes.plots.first(), intrinsic, &request)?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
         if let Some(cached) = frames.as_ref() {
@@ -199,7 +201,7 @@ impl PreparedPlotInputs<'_> {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
         }
-        let frame = source.measured_canvas_layout(self.axes.plots.first(), &request)?;
+        let frame = source.measured_canvas_layout(self.axes.plots.first(), intrinsic, &request)?;
 
         let frame = frame.into_shared();
         *frames = Some(CachedRootFrame {
@@ -1010,6 +1012,7 @@ impl PlotPlan {
                     PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
                         &source,
                         prepared.axes.plots.first(),
+                        prepared.axes.intrinsic(&prepared.axes.plots[0]),
                         kind,
                         &request,
                         prepared.root_frame(&source, frames)?,
@@ -1102,11 +1105,13 @@ fn render_plot_scene(
 impl UnfacetedPlotPlan {
     #[expect(
         clippy::too_many_lines,
+        clippy::too_many_arguments,
         reason = "one selected standalone panel retains its original frame completion and legend checks"
     )]
     fn new(
         source: &Plot,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         kind: PlotKind,
         theme: &TextRequestContext<'_, '_>,
         mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
@@ -1123,7 +1128,7 @@ impl UnfacetedPlotPlan {
             cell,
             theme,
         )
-        .with_registration(registered.expect("prepared standalone plot"));
+        .with_registration(registered.expect("prepared standalone plot"), intrinsic);
         context.content_height = content_height;
         source.validate_interior_preparation(registered)?;
         let discrete_guide = if kind == PlotKind::Matrix {
@@ -1160,7 +1165,7 @@ impl UnfacetedPlotPlan {
                 canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
             )?;
             plot = plot.with_canvas_size(source.canvas_dimensions()?.0, height);
-            let mut resized = plot.measured_canvas_layout(registered, theme)?;
+            let mut resized = plot.measured_canvas_layout(registered, intrinsic, theme)?;
             resized.panel_box = panel_plan.frame_box;
             canvas_layout = resized.into_shared();
         }
@@ -1266,7 +1271,11 @@ impl Plot {
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
-            plot.intrinsic_body_minimum(inputs.plots.first(), request)
+            plot.intrinsic_body_minimum(
+                inputs.plots.first(),
+                inputs.intrinsic(&inputs.plots[0]),
+                request,
+            )
         })?
     }
 
@@ -1289,6 +1298,7 @@ impl Plot {
         with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
             crate::layout::fit::measured(plot.preflight_measurement(
                 inputs.plots.first(),
+                Some(inputs.intrinsic(&inputs.plots[0])),
                 kind,
                 panel,
                 request,
@@ -1301,6 +1311,7 @@ impl Plot {
     pub(crate) fn preflight_measurement(
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        intrinsic: Option<&crate::orchestrator::root::PlotIntrinsics>,
         kind: PlotKind,
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
@@ -1320,7 +1331,7 @@ impl Plot {
         let operation = theme.text.prepared_font_environment()?.operation();
         let registered = registered.expect("prepared plot measurement");
         let context = PlotRenderContext::new(registered.data(&operation)?, panel, theme)
-            .with_registration(registered)
+            .with_registration(registered, intrinsic.expect("prepared plot intrinsic slot"))
             .with_fit_scope(scope);
         crate::layout::fit::outcome(self.measure_panel(kind, context))
     }
@@ -1395,10 +1406,15 @@ mod root_title_tests {
                     let plan = UnfacetedPlotPlan::new(
                         &plot,
                         inputs.plots.first(),
+                        inputs.intrinsic(&inputs.plots[0]),
                         plot.kind(),
                         &theme,
-                        plot.measured_canvas_layout(inputs.plots.first(), &theme)?
-                            .into_shared(),
+                        plot.measured_canvas_layout(
+                            inputs.plots.first(),
+                            inputs.intrinsic(&inputs.plots[0]),
+                            &theme,
+                        )?
+                        .into_shared(),
                         round,
                         false,
                     )?;
@@ -1583,10 +1599,15 @@ mod retained_legend_tests {
                     UnfacetedPlotPlan::new(
                         &plot,
                         inputs.plots.first(),
+                        inputs.intrinsic(&inputs.plots[0]),
                         plot.kind(),
                         &theme,
-                        plot.measured_canvas_layout(inputs.plots.first(), &theme)?
-                            .into_shared(),
+                        plot.measured_canvas_layout(
+                            inputs.plots.first(),
+                            inputs.intrinsic(&inputs.plots[0]),
+                            &theme,
+                        )?
+                        .into_shared(),
                         round,
                         false,
                     )?,

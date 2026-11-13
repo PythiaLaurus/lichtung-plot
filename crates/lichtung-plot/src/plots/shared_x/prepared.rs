@@ -24,9 +24,6 @@ fn continuous_selection(
 /// initialized by the owning root before allocating its panel, never by preparation.
 #[derive(Debug)]
 pub(crate) struct PreparedAxes {
-    pub(crate) intrinsics: std::sync::OnceLock<crate::layout::interior::coordinate::Intrinsics>,
-    pub(crate) heatmap_intrinsics:
-        std::sync::OnceLock<crate::plots::heatmap::HeatmapIntrinsicCache>,
     pub(crate) ranges: [(f64, f64); 2],
     pub(crate) categories: [Option<Vec<AxisTick>>; 2],
     pub(crate) display_categories: [Option<Vec<String>>; 2],
@@ -1272,8 +1269,6 @@ fn prepare(
         chart.description().prepare_axis_labels(labels)?
     };
     Ok(PreparedAxes {
-        intrinsics: std::sync::OnceLock::new(),
-        heatmap_intrinsics: std::sync::OnceLock::new(),
         ranges,
         categories: ticks,
         display_categories,

@@ -94,7 +94,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
                     PixelRect::new(20.0, 800.0, 20.0, 620.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let layout::interior::MarkPayload::Marginal(payload) =

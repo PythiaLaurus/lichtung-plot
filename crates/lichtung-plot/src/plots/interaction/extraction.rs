@@ -89,7 +89,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
                     crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
                     theme,
                 )
-                .with_registration(&inputs.plots[0]),
+                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
             )
             .unwrap();
         let crate::layout::interior::MarkPayload::Interaction(payload) =

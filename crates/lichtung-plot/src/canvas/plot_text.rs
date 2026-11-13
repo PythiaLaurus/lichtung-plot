@@ -15,9 +15,14 @@ pub(super) struct PlotLocalTextPlan {
 }
 
 impl PlotLocalTextPlan {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "local prose retains its own title intrinsics while reading the same occurrence's body intrinsic slot"
+    )]
     pub(super) fn measure(
         plot: &Plot,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         cell: PixelRect,
         theme: &crate::text::TextRequestContext<'_, '_>,
         panel_alignments: [Option<TextAlignment>; 2],
@@ -51,7 +56,7 @@ impl PlotLocalTextPlan {
         {
             return Ok(FitOutcome::Miss(reason));
         }
-        let minimum = plot.intrinsic_body_minimum(registered, theme)?;
+        let minimum = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
         let alignments = RootAlignments::resolve(
             theme,
             plot.description().prose_alignments(),

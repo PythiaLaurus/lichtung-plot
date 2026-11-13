@@ -131,7 +131,7 @@ fn preflight_panels(
             .with_significance_subset(facet.significance_selectors());
         let registered = &inputs.plots[index];
         let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
-            .with_registration(registered)
+            .with_registration(registered, inputs.intrinsic(registered))
             .with_facet_scales(facet_scales);
         let owner = crate::layout::ComponentAddress::root().child(
             crate::layout::AddressRole::FacetCell,

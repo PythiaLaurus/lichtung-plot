@@ -250,19 +250,29 @@ impl HeightMeasurements {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "successful child height reads the same occurrence's intrinsic slot before recording the original height inputs"
+)]
 pub(super) fn measured_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     plan: &crate::decorations::plan::PanelPlan,
     local_text_height: f64,
     round: &FeedbackRound,
     owner: &ComponentAddress,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(registered, theme)?;
-    let preference = body_preference(plot, registered, theme, hard)?;
-    let mut height =
-        plot.natural_body_height(registered, theme, plan.panel_box.width(), preference.1)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
+    let mut height = plot.natural_body_height(
+        registered,
+        intrinsic,
+        theme,
+        plan.panel_box.width(),
+        preference.1,
+    )?;
     if let Some(guide) = &plan.legend {
         let panel = plan.panel_box;
         if guide.bounds.bottom >= panel.y1 || guide.bounds.top <= panel.y0 {
@@ -299,8 +309,9 @@ pub(super) fn cell_height(
     dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
     let registered = inputs.plots.first();
-    let hard = plot.intrinsic_body_minimum(registered, theme)?;
-    let preference = body_preference(plot, registered, theme, hard)?;
+    let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
     let sources = plot.description().prose();
     let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
@@ -353,13 +364,14 @@ pub(super) fn cell_height(
         crate::layout::interior::sizing::guided_body_height(
             plot,
             registered,
+            intrinsic,
             theme,
             body_width,
             guide.as_ref(),
             &FitScope::new(owner, 0),
         )?
     } else {
-        plot.natural_body_height(registered, theme, body_width, preference.1)?
+        plot.natural_body_height(registered, intrinsic, theme, body_width, preference.1)?
     };
 
     let height = prose.height_with_body(height + local[2] + local[3])?;

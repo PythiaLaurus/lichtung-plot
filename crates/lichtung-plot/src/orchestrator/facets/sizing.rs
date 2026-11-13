@@ -93,7 +93,11 @@ pub(in crate::orchestrator) fn natural_size(
     let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     for (index, panel) in panels.iter().enumerate() {
         let plot = base.clone().with_render_scope(panel.render_scope()?);
-        minima.push(plot.intrinsic_body_minimum(inputs.plots.get(index), theme)?);
+        minima.push(plot.intrinsic_body_minimum(
+            inputs.plots.get(index),
+            inputs.intrinsic(&inputs.plots[index]),
+            theme,
+        )?);
         let owner = grid_owner.child(
             AddressRole::FacetCell,
             u32::try_from(index)

@@ -220,7 +220,11 @@ impl FacetPlan {
         crate::data::source::reserve_source(&mut minima, panels.len())?;
         for (index, facet) in panels.iter().enumerate() {
             let scoped = base_plot.clone().with_render_scope(facet.render_scope()?);
-            minima.push(scoped.intrinsic_body_minimum(inputs.plots.get(index), theme)?);
+            minima.push(scoped.intrinsic_body_minimum(
+                inputs.plots.get(index),
+                inputs.intrinsic(&inputs.plots[index]),
+                theme,
+            )?);
         }
         let provisional_content = content_sizing.then_some(tracks::ContentSizing {
             plot: &base_plot,

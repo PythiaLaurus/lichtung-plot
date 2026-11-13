@@ -983,7 +983,7 @@ mod tests {
                             crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
                             request,
                         )
-                        .with_registration(registered),
+                        .with_registration(registered, inputs.intrinsic(registered)),
                     )
                     .unwrap();
                 assert_eq!(
@@ -1167,7 +1167,7 @@ mod tests {
                                 crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                                 theme,
                             )
-                            .with_registration(registered),
+                            .with_registration(registered, inputs.intrinsic(registered)),
                         )
                         .unwrap();
                     assert_eq!(

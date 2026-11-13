@@ -644,12 +644,14 @@ impl HeatmapIntrinsicCache {
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let axes = registered
         .and_then(|registered| registered.axes.as_ref())
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
-    let (minimum, without_y_labels) = analyze_intrinsics(
+    let (minimum, without_y_labels) = heatmap_minima(
+        intrinsic,
         retained_in(chart, registered)?,
         axes,
         theme,
@@ -665,10 +667,11 @@ pub(crate) fn intrinsic_body_minimum(
 pub(crate) fn natural_body_preference(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = retained_in(chart, registered)?;
-    let hard = intrinsic_body_minimum(chart, registered, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, intrinsic, theme)?;
     let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
         hard.0.max(pitch * marks.x_levels.len() as f64),
@@ -877,30 +880,25 @@ fn column_label_hard(
     Ok(hard + 2.0 * crate::layout::LABEL_CLEARANCE)
 }
 
-pub(crate) fn prepare_intrinsics(
-    prepared: &HeatmapData,
-    axes: &crate::plots::shared_x::PreparedAxes,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    scope: Option<&str>,
-) -> Result<(f64, f64), Error> {
-    Ok(analyze_intrinsics(prepared, axes, theme, scope)?.0)
-}
-
 #[expect(
     clippy::type_complexity,
     reason = "visible and hidden-y summaries share one appearance-keyed analysis"
 )]
-fn analyze_intrinsics(
+pub(crate) fn heatmap_minima(
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
     theme: &crate::text::TextRequestContext<'_, '_>,
     diagnostic_scope: Option<&str>,
 ) -> Result<((f64, f64), (f64, f64)), Error> {
     theme.text.prepared_font_environment()?;
+    let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
+        unreachable!("Heatmap intrinsic slot")
+    };
     #[cfg(not(test))]
     let _ = diagnostic_scope;
 
-    if let Some(cached) = axes.heatmap_intrinsics.get() {
+    if let Some(cached) = value.get() {
         if cached.matches_inputs(prepared, axes, theme) {
             return Ok((cached.minimum, cached.without_y_labels));
         }
@@ -1088,9 +1086,9 @@ fn analyze_intrinsics(
             without_y_labels.1 = without_y_labels.1.max(hard);
         }
     }
-    if axes.heatmap_intrinsics.get().is_none() {
+    if value.get().is_none() {
         let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, axes, theme)?;
-        let _ = axes.heatmap_intrinsics.set(cache);
+        let _ = value.set(cache);
     }
     Ok((minimum, without_y_labels))
 }
@@ -1127,7 +1125,7 @@ pub(crate) fn measure(
     let prepared = retained_in(chart, context.registered)?;
     let theme = context.theme;
 
-    let minimum = intrinsic_body_minimum(chart, context.registered, theme)?;
+    let minimum = intrinsic_body_minimum(chart, context.registered, context.intrinsic(), theme)?;
     let (body, colorbar) = if chart.continuous_guide_suppressed()
         || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -1143,7 +1141,7 @@ pub(crate) fn measure(
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
             context
                 .content_height
-                .then_some((chart, context.registered)),
+                .then_some((chart, context.registered, context.intrinsic())),
         )?;
         (body, Some(guide))
     };

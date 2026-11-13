@@ -2873,12 +2873,14 @@ mod tests {
                     else {
                         panic!("prepared Heatmap")
                     };
-                    let minimum = crate::plots::heatmap::prepare_intrinsics(
+                    let minimum = crate::plots::heatmap::heatmap_minima(
+                        inputs.intrinsic(&inputs.plots[0]),
                         marks,
                         inputs.plots[0].axes.as_ref().unwrap(),
                         &theme,
                         None,
-                    )?;
+                    )?
+                    .0;
                     assert!(
                         minimum.1 > 60.0 && minimum.0 > 100.0,
                         "selected complete text size owns row height: {minimum:?}"
