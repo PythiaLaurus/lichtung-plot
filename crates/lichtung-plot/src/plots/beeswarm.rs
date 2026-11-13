@@ -8,7 +8,7 @@
 )]
 
 use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
-use crate::layout::{Layout, PanelBox, PhysicalTextAlignment};
+use crate::layout::{Layout, PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
@@ -598,7 +598,7 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
         chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
-        || crate::layout::StandardPanelInputs::new(theme),
+        || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
     if let Some(bar) = &payload.colorbar {
         for call in &bar.calls {
@@ -619,7 +619,7 @@ pub(crate) fn measure(
 
 #[derive(Debug)]
 pub(crate) struct BeeswarmPayload {
-    clip: PanelBox,
+    clip: PixelRect,
     zero: Option<([Point2D; 2], LineStyle)>,
     points: Vec<(Point2D, crate::render::backend::PointStyle)>,
     source_rows: Vec<(usize, usize)>,
@@ -673,7 +673,7 @@ impl BeeswarmPayload {
 
 fn select_colorbar(
     guide: &crate::decorations::legend::Legend,
-    panel: PanelBox,
+    panel: PixelRect,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
     let bounds = guide.box_at(

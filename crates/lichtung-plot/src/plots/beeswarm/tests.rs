@@ -36,7 +36,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                PanelBox::new(20.0, 700.0, 20.0, 420.0),
+                PixelRect::new(20.0, 700.0, 20.0, 420.0),
                 &theme,
             ))
             .unwrap();
@@ -216,7 +216,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            PanelBox::new(0.0, 700.0, 0.0, 400.0),
+            PixelRect::new(0.0, 700.0, 0.0, 400.0),
             &theme,
         ))
         .unwrap();

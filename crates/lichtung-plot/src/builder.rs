@@ -23,7 +23,7 @@ use crate::layout::AxisSpec;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, DumbbellEndpoints, FacetSpec, HeatmapAnnotations,
     HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat,
-    LegendPolicy, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
+    LegendPolicy, LinePathStyle, PlotKind, PlotTextAnnotation, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
 use crate::theme::Theme;

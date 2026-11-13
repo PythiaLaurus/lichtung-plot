@@ -7,7 +7,7 @@ use super::descriptor::ContinuousDescriptor;
 use super::{LegendCall, LegendMetrics};
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::layout::kernel::{SpatialRounding, TrackSpec};
-use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{AddressRole, PhysicalTextAlignment, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{self, FillStyle, GradientStop, PlacedText, Point2D, TextAnchor};
 use crate::theme::spacing::ExactLength;
 use crate::theme::ResolvedTheme;
@@ -423,13 +423,13 @@ impl ColorContent {
         let thickness = metrics.handle_w;
         let (gradient, start, end) = if self.horizontal {
             (
-                PanelBox::new(first, first + length, -thickness, 0.0),
+                PixelRect::new(first, first + length, -thickness, 0.0),
                 Point2D::new(first, -thickness / 2.0),
                 Point2D::new(first + length, -thickness / 2.0),
             )
         } else {
             (
-                PanelBox::new(0.0, thickness, -last - length, -last),
+                PixelRect::new(0.0, thickness, -last - length, -last),
                 Point2D::new(thickness / 2.0, -last - length),
                 Point2D::new(thickness / 2.0, -last),
             )
@@ -466,7 +466,7 @@ impl ColorContent {
             labels.push(centered_text(plan, x, y)?);
         }
         let indices = crate::data::source::collect_source((0..labels.len()).map(Ok))?;
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             0.0,
             content_width.pixels_rounded(SpatialRounding::Floor)?,
             -occupied_height.pixels_rounded(SpatialRounding::Floor)?,
@@ -489,7 +489,7 @@ impl ColorContent {
                         .pixels_rounded(SpatialRounding::NearestEven)?;
                 let row_height = plan.height().max(thickness + self.missing_inset);
                 Ok::<_, Error>((
-                    PanelBox::new(0.0, thickness, bottom, bottom + thickness),
+                    PixelRect::new(0.0, thickness, bottom, bottom + thickness),
                     crate::theme::FixedFillTheme::new(key.fill, key.outline.clone())?
                         .backend_style(),
                     PlacedText::middle(
@@ -547,12 +547,12 @@ impl ColorContent {
 pub(super) struct MeasuredColorBody {
     pub(super) width: ExactLength,
     pub(super) height: ExactLength,
-    pub(super) gradient: PanelBox,
+    pub(super) gradient: PixelRect,
     start: Point2D,
     end: Point2D,
     stops: Vec<GradientStop>,
     labels: Vec<PlacedText>,
-    missing: Option<(PanelBox, FillStyle, PlacedText)>,
+    missing: Option<(PixelRect, FillStyle, PlacedText)>,
     explanation: Option<PlacedText>,
 }
 
@@ -596,7 +596,7 @@ impl MeasuredColorBody {
             LegendCall::Text(text)
         };
         let bounds = self.gradient;
-        let gradient = PanelBox::new(bounds.x0 + x, bounds.x1 + x, bounds.y0 + y, bounds.y1 + y);
+        let gradient = PixelRect::new(bounds.x0 + x, bounds.x1 + x, bounds.y0 + y, bounds.y1 + y);
         let stops = crate::data::source::collect_source(self.stops.iter().copied().map(Ok))?;
         emit(LegendCall::Gradient(
             gradient,

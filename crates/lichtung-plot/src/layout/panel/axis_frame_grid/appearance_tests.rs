@@ -27,7 +27,7 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
             .unwrap(),
         )
         .unwrap();
-    let panel = crate::layout::PanelBox::new(150.0, 650.0, 150.0, 650.0);
+    let panel = crate::layout::PixelRect::new(150.0, 650.0, 150.0, 650.0);
     let mut layout = Layout::envelope(panel);
     layout.x_axis.label = Some(
         crate::Text::new("Long horizontal title\nshort")
@@ -104,7 +104,7 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
 
 #[test]
 fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_reserve() {
-    let panel = crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0);
+    let panel = crate::layout::PixelRect::new(80.0, 480.0, 80.0, 480.0);
     for (sides, count, right) in [
         (
             Some(FrameSides::new(true, true, true, true).unwrap()),
@@ -177,7 +177,7 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
         .unwrap()
         .grid(None)
         .unwrap();
-    let layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
+    let layout = Layout::envelope(crate::layout::PixelRect::new(80.0, 480.0, 80.0, 480.0));
     let plan = layout.plan_axes(&theme).unwrap();
     assert!(plan.frame.is_none());
     assert_eq!(
@@ -224,7 +224,7 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
         .unwrap()
         .spacing(spacing)
         .unwrap();
-    let mut layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
+    let mut layout = Layout::envelope(crate::layout::PixelRect::new(80.0, 480.0, 80.0, 480.0));
     layout.x_axis.source = TickSource::EXACT;
     layout.x_axis.ticks = vec![AxisTick::new(0.5, "I")];
     layout.x_axis.label = Some("I".into());

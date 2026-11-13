@@ -60,7 +60,7 @@ struct PointLayer {
 
 #[derive(Debug)]
 pub(crate) struct LinePayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) marks: Vec<LineMark>,
     layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],

@@ -251,7 +251,7 @@ pub(crate) fn measure_marks(
 fn range_for_bar_marks(
     chart: &Plot,
     prepared: &PreparedBars,
-    panel: crate::layout::PanelBox,
+    panel: crate::layout::PixelRect,
     range: (f64, f64),
     text_plans: &[ResolvedTextPlan],
     attached: &bar_data::BarSignificance,

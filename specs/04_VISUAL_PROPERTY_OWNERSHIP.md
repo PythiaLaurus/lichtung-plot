@@ -123,7 +123,7 @@ uses the maximum selected size. Root padding remains owned by the root body role
 Text/TextPanel equality includes complete exact appearance and layout presence,
 including an explicit default reset.
 
-PanelTextAnnotation retains Text with complete appearance/request equality.
+PlotTextAnnotation retains Text with complete appearance/request equality.
 Its local TextTheme replaces the complete Plot panel-text role, including the
 font metric used by panel_text_padding. TextPosition owns its scientific/panel/root
 reference; TextLayout independently owns the measured block anchor, offset, bounds,

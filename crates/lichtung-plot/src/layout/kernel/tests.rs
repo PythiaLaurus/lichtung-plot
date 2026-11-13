@@ -315,7 +315,7 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
         |(), assigned, round| {
             let consumed = round.insets(&address, FeedbackKind::AxisGutter);
             let panel = crate::layout::fit::measured(frame.assign_fit(
-                crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
+                crate::layout::PixelRect::new(0.0, 100.0, 0.0, 100.0),
                 consumed,
                 &crate::layout::fit::FitScope::root(),
             ))
@@ -781,7 +781,7 @@ fn current_complete_plan_is_accepted_without_probing_callback_purity() {
         |(), assigned, round| {
             calls += 1;
             let panel =
-                crate::layout::PanelBox::new(if calls == 1 { 1.0 } else { 2.0 }, 90.0, 2.0, 90.0);
+                crate::layout::PixelRect::new(if calls == 1 { 1.0 } else { 2.0 }, 90.0, 2.0, 90.0);
             round.observe_box(panel)?;
             Ok(MeasuredLayout::new(assigned.assigned_size()?, panel))
         },

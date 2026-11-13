@@ -983,9 +983,11 @@ pub(super) fn labels_fit(
         let panel = projection.panel_box();
         let region = match side {
             AxisSide::Bottom => {
-                crate::layout::PanelBox::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
+                crate::layout::PixelRect::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
             }
-            AxisSide::Left => crate::layout::PanelBox::new(-f64::MAX, f64::MAX, panel.y0, panel.y1),
+            AxisSide::Left => {
+                crate::layout::PixelRect::new(-f64::MAX, f64::MAX, panel.y0, panel.y1)
+            }
         };
         let failure = appearance
             .layout

@@ -205,7 +205,7 @@ single-line restriction on these display slots.
 Present empty prose, titles and annotations retain one empty line's font metrics;
 structural absence is `None` or an explicit owner visibility policy. Exact tick
 empty labels deliberately suppress text/gap while keeping their positions.
-PanelTextAnnotation stores one typed TextPosition, exposed by position(); new
+PlotTextAnnotation stores one typed TextPosition, exposed by position(); new
 retains a corner's semantic inset and at accepts independently typed x/y data,
 panel-fraction or owning-output-fraction references. Raw category/series keys
 resolve against actual axes and native track centers. Multiple notes may share
@@ -241,7 +241,7 @@ Canvas headers retain declared span and overlap validation at insertion. Each
 local style replaces the complete Canvas header role; line alignment defaults to
 Center inside the centered block. Band padding uses each selected title size.
 
-PanelTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq;
+PlotTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq;
 its existing text reader returns `&str`. Local style replaces the Plot's panel-text
 role before the census. Local line alignment is independent of corner ownership,
 and the selected size determines the annotation's font-relative padding and fit.

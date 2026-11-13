@@ -30,7 +30,7 @@ A length constraint has nonnegative minimum and optional maximum>=minimum. None
 means no maximum, not infinity. Width/height constraints are independent.
 Invalid intervals reject before measurement; returned sizes satisfy them without
 clamping. Fill receives an exact assigned dimension; nonfill receives zero through
-the assigned extent and is aligned by the parent. An arranged PanelBox is not an
+the assigned extent and is aligned by the parent. An arranged PixelRect is not an
 incoming constraint or intrinsic summary.
 
 Summaries retain traced hard requirements, unwrapped natural text width, preferred

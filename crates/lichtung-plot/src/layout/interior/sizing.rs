@@ -525,7 +525,7 @@ mod tests {
         use crate::decorations::legend::{descriptor::ContinuousDescriptor, Legend};
         use crate::layout::{
             fit::{FitOutcome, FitScope},
-            PanelBox,
+            PixelRect,
         };
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let half = crate::theme::RelativeSpacing::ratio(1, 22_528).unwrap();
@@ -614,7 +614,7 @@ mod tests {
         let gap = theme.legend_outside_gap().unwrap();
         let (_, guide) = crate::layout::interior::guide::native_right(
             std::sync::Arc::clone(&descriptor),
-            PanelBox::new(0.0, 64.0 + gap + full + 128.0, 0.0, 500.0),
+            PixelRect::new(0.0, 64.0 + gap + full + 128.0, 0.0, 500.0),
             64.0,
             &theme,
             &scope,
@@ -625,7 +625,7 @@ mod tests {
         assert!(matches!(
             crate::layout::interior::guide::native_right(
                 std::sync::Arc::clone(&descriptor),
-                PanelBox::new(0.0, 64.0 + gap + below, 0.0, 500.0),
+                PixelRect::new(0.0, 64.0 + gap + below, 0.0, 500.0),
                 64.0,
                 &theme,
                 &scope,

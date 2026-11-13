@@ -200,7 +200,7 @@ pub(crate) struct PreparedDumbbellInputs {
 
 #[derive(Debug)]
 pub(crate) struct DumbbellPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) pairs: Vec<[Point2D; 2]>,
     connectors: Vec<LineStyle>,
     points: Vec<[crate::render::backend::PointStyle; 2]>,

@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use crate::font::canonical::SealedTextVerifier;
 #[cfg(test)]
 use crate::layout::{DeferredAnnotationTextPlan, PhysicalTextAlignment};
-use crate::layout::{PanelBox, ResolvedTextPlan};
+use crate::layout::{PixelRect, ResolvedTextPlan};
 #[cfg(test)]
 use crate::render::backend::TextAnchor;
 use crate::render::backend::{
@@ -125,7 +125,7 @@ impl Backend for DeferredBackend<'_> {
         self.backend.end_layer()
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         self.ensure_started()?;
         self.backend.begin_clip(region)
     }
@@ -137,7 +137,7 @@ impl Backend for DeferredBackend<'_> {
 
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -162,7 +162,7 @@ impl Backend for DeferredBackend<'_> {
 
     fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
@@ -591,7 +591,7 @@ impl Backend for TextPlanningBackend<'_, '_, '_, '_> {
         Ok(())
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         self.reserve_call()?;
         let region =
             CanonicalBox::from_bottom_up(backend::validate_clip_region(region)?, self.height)?;
@@ -607,7 +607,7 @@ impl Backend for TextPlanningBackend<'_, '_, '_, '_> {
 
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -663,7 +663,7 @@ impl Backend for TextPlanningBackend<'_, '_, '_, '_> {
 
     fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
@@ -893,7 +893,7 @@ impl Backend for ValidationRecorder {
         }
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         self.ensure_open("begin_clip")?;
         let region =
             CanonicalBox::from_bottom_up(backend::validate_clip_region(region)?, self.height)?;
@@ -924,7 +924,7 @@ impl Backend for ValidationRecorder {
 
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         _paint: crate::theme::Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -974,7 +974,7 @@ impl Backend for ValidationRecorder {
 
     fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
@@ -1083,13 +1083,13 @@ null_backend_methods! {
     fn begin_layer(name: &str);
     fn begin_layer_with_role(name: &str, role: LayerRole);
     fn end_layer();
-    fn begin_clip(region: PanelBox);
+    fn begin_clip(region: PixelRect);
     fn end_clip();
-    fn draw_surface(bounds: PanelBox, paint: crate::theme::Color, role: SurfaceRole);
+    fn draw_surface(bounds: PixelRect, paint: crate::theme::Color, role: SurfaceRole);
     fn draw_scatter(points: &[Point2D], style: &PointStyle);
     fn draw_line(points: &[Point2D], style: &LineStyle);
     fn draw_polygon(points: &[Point2D], style: &FillStyle);
-    fn draw_linear_gradient(bounds: PanelBox, start: Point2D, end: Point2D, stops: &[GradientStop]);
+    fn draw_linear_gradient(bounds: PixelRect, start: Point2D, end: Point2D, stops: &[GradientStop]);
     fn draw_text(position: Point2D, text: &str, style: &TextStyle);
     fn draw_planned_text(placement: PlannedTextPlacement, plan: &ResolvedTextPlan);
     fn draw_rounded_rect(x: f64, y: f64, width: f64, height: f64, radius: f64, style: &FillStyle);
@@ -1266,7 +1266,7 @@ mod tests {
                 &FillStyle::new(Color::rgba(10, 11, 12, 191), Color::rgb(13, 14, 15), 0.8),
             )?;
             backend.draw_linear_gradient(
-                PanelBox::new(-0.25, 4.5, -3.0, 5.75),
+                PixelRect::new(-0.25, 4.5, -3.0, 5.75),
                 points[0],
                 points[1],
                 &[
@@ -1508,7 +1508,7 @@ mod tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         let root = capture_test_plan(&theme, |backend| {
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
-            let bounds = PanelBox::new(-0.25, 50.125, -2.5, 80.25);
+            let bounds = PixelRect::new(-0.25, 50.125, -2.5, 80.25);
             backend.draw_surface(bounds, Color::rgb(1, 2, 3), SurfaceRole::PlotPanel)?;
             backend.begin_clip(bounds)?;
             backend.draw_rounded_rect(
@@ -1586,7 +1586,7 @@ mod tests {
         backend: &mut dyn Backend,
         labels: &(ResolvedTextPlan, DeferredAnnotationTextPlan),
     ) -> Result<(), Error> {
-        let bounds = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+        let bounds = PixelRect::new(0.0, 100.0, 0.0, 100.0);
         let points = [
             Point2D::new(10.0, 10.0),
             Point2D::new(30.0, 40.0),
@@ -1704,7 +1704,7 @@ mod tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         let root = capture_test_plan(&theme, |backend| {
             backend.draw_surface(
-                PanelBox::new(0.0, 100.0, 0.0, 100.0),
+                PixelRect::new(0.0, 100.0, 0.0, 100.0),
                 Color::rgb(255, 255, 255),
                 SurfaceRole::CanvasRoot,
             )?;
@@ -2043,7 +2043,7 @@ mod tests {
                             // exercises the payload allocation rather than call growth.
                             for _ in 0..3 {
                                 backend.draw_surface(
-                                    PanelBox::new(0.0, 10.0, 0.0, 10.0),
+                                    PixelRect::new(0.0, 10.0, 0.0, 10.0),
                                     Color::rgb(0, 0, 0),
                                     SurfaceRole::CanvasRoot,
                                 )?;
@@ -2080,7 +2080,7 @@ mod tests {
                                     &FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), 1.0),
                                 ),
                                 _ => backend.draw_linear_gradient(
-                                    PanelBox::new(0.0, 10.0, 0.0, 10.0),
+                                    PixelRect::new(0.0, 10.0, 0.0, 10.0),
                                     Point2D::new(0.0, 0.0),
                                     Point2D::new(10.0, 10.0),
                                     &[
@@ -2239,7 +2239,7 @@ mod tests {
 
     #[test]
     fn null_and_svg_share_gradient_geometry_and_stop_failures() {
-        let bounds = PanelBox::new(0.0, 10.0, 0.0, 10.0);
+        let bounds = PixelRect::new(0.0, 10.0, 0.0, 10.0);
         let start = Point2D::new(0.0, 0.0);
         let end = Point2D::new(10.0, 10.0);
         let stops = [
@@ -2248,7 +2248,7 @@ mod tests {
         ];
 
         assert_paired_rejection(|backend| {
-            backend.draw_linear_gradient(PanelBox::new(0.0, 0.0, 0.0, 10.0), start, end, &stops)
+            backend.draw_linear_gradient(PixelRect::new(0.0, 0.0, 0.0, 10.0), start, end, &stops)
         });
         assert_paired_rejection(|backend| {
             backend.draw_linear_gradient(bounds, start, start, &stops)
@@ -2287,16 +2287,16 @@ mod tests {
     fn null_and_svg_share_surface_geometry_validation() {
         assert_paired_success(|backend| {
             backend.draw_surface(
-                PanelBox::new(1.0, 99.0, 2.0, 98.0),
+                PixelRect::new(1.0, 99.0, 2.0, 98.0),
                 Color::rgba(1, 2, 3, 0),
                 SurfaceRole::PlotPanel,
             )
         });
         for bounds in [
-            PanelBox::new(f64::NAN, 10.0, 0.0, 10.0),
-            PanelBox::new(10.0, 10.0, 0.0, 10.0),
-            PanelBox::new(0.0, 0.0004, 0.0, 10.0),
-            PanelBox::new(-f64::MAX, f64::MAX, 0.0, 10.0),
+            PixelRect::new(f64::NAN, 10.0, 0.0, 10.0),
+            PixelRect::new(10.0, 10.0, 0.0, 10.0),
+            PixelRect::new(0.0, 0.0004, 0.0, 10.0),
+            PixelRect::new(-f64::MAX, f64::MAX, 0.0, 10.0),
         ] {
             assert_paired_rejection(|backend| {
                 backend.draw_surface(bounds, Color::rgb(1, 2, 3), SurfaceRole::CanvasRoot)
@@ -2401,7 +2401,7 @@ mod tests {
         assert!(backend.end_layer().is_err());
         backend.begin_layer("marks").unwrap();
         backend
-            .begin_clip(PanelBox::new(10.0, 90.0, 10.0, 90.0))
+            .begin_clip(PixelRect::new(10.0, 90.0, 10.0, 90.0))
             .unwrap();
         assert!(backend.end_layer().is_err());
         assert!(backend.end().is_err());

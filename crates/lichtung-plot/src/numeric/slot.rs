@@ -67,12 +67,12 @@ impl ExplanationPlan {
                 ..placement
             },
             &plan,
-            Some(crate::layout::PanelBox::new(0.0, width, -height, 0.0)),
+            Some(crate::layout::PixelRect::new(0.0, width, -height, 0.0)),
         )?;
         let plan = crate::layout::text::placement::contain(
             plan,
             placement,
-            crate::layout::PanelBox::new(0.0, width, -height, 0.0),
+            crate::layout::PixelRect::new(0.0, width, -height, 0.0),
             scope,
         )?;
         Ok(Self {

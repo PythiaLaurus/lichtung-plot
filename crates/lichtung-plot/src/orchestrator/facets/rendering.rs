@@ -5,7 +5,7 @@ use crate::Error;
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::layout::{PanelBox, PhysicalTextAlignment};
+use crate::layout::{PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
@@ -138,7 +138,7 @@ pub(super) fn plan_facet_strip(
             TextAnchor::Middle,
             0.0,
         );
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             facet.panel.x0,
             facet.panel.x1,
             top.after_pixels(facet.panel.y1)? - plan.occupied_size().1,
@@ -177,7 +177,7 @@ fn draw_facet_strip(
 pub(super) fn plan_shared_facet_axis_labels(
     horizontal_label: Option<&crate::Text>,
     vertical_label: Option<&crate::Text>,
-    grid: PanelBox,
+    grid: PixelRect,
     axis_origin: (f64, f64),
     theme: &ResolvedTheme,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
@@ -383,15 +383,16 @@ pub(super) fn strip_widths(
 }
 
 pub(super) fn strip_requirement(
-    axes: &crate::layout::PanelAxisPlan,
+    axes: &crate::layout::AxisSystemPlan,
     plot: &Plot,
     cell: &FacetCell,
     data: crate::data::PlotData<'_>,
     theme: &ResolvedTheme,
-    panel: PanelBox,
+    panel: PixelRect,
     scope: &crate::layout::fit::FitScope,
-) -> Result<crate::layout::canvas::PanelRequirements, crate::layout::fit::PlanError> {
-    let mut requirement = crate::layout::canvas::PanelRequirements::measure_header(axes, theme)?;
+) -> Result<crate::layout::canvas::EdgeSpaceRequirements, crate::layout::fit::PlanError> {
+    let mut requirement =
+        crate::layout::canvas::EdgeSpaceRequirements::measure_header(axes, theme)?;
     let plans = strip_plans(plot, cell, data, theme, panel.width(), scope)?;
     let height = plans.iter().map(|plan| plan.occupied_size().1).sum();
     requirement.top = requirement.top.max(crate::theme::composition::hard(
@@ -452,7 +453,7 @@ mod tests {
             .font_size(17.0)
             .unwrap();
         theme.typography.axes.axis_title.line_height_multiplier = 1.25;
-        let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);
+        let grid = PixelRect::new(71.25, 372.75, 83.25, 304.75);
         let facet = FacetPanel {
             panel_index: 0,
             row: 0,

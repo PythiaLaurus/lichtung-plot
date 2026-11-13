@@ -83,7 +83,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
         |(), assigned, round| {
             let mut children = ChildPlans::facets(&source);
             let produced = std::cell::Cell::new(0);
-            let panel = PanelBox::new(20.0, 400.0, 20.0, 500.0);
+            let panel = PixelRect::new(20.0, 400.0, 20.0, 500.0);
             let allocation = GuideAllocation::bounds(panel)?;
             let first = [ConsumedGuideDependency::new(
                 guide_owner.clone(),

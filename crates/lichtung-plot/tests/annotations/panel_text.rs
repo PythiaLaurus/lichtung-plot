@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    CategoryValues, FacetSpec, LegendPolicy, LegendPosition, NumericValues, PanelCorner,
-    PanelTextAnnotation, Plot, Theme,
+    CategoryValues, DataAreaCorner, FacetSpec, LegendPolicy, LegendPosition, NumericValues, Plot,
+    PlotTextAnnotation, Theme,
 };
 
 use super::render_svg;
@@ -31,7 +31,7 @@ fn svg<K: lichtung_plot::kind::Marker>(chart: &Plot<K>) -> String {
 #[test]
 fn panel_text_constructor_rejects_unsupported_controls() {
     for text in ["tab\there", "null\0here", "delete\u{7f}"] {
-        let error = PanelTextAnnotation::new(PanelCorner::TopLeft, text).unwrap_err();
+        let error = PlotTextAnnotation::new(DataAreaCorner::TopLeft, text).unwrap_err();
         assert!(error.to_string().contains("unsupported control"), "{error}");
     }
 }
@@ -51,17 +51,17 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
         .color(lichtung_plot::Color::rgb(80, 40, 110))
         .unwrap();
     let chart = scatter(&data)
-        .panel_text_annotation(
-            PanelTextAnnotation::new(
-                PanelCorner::TopLeft,
+        .text_annotation(
+            PlotTextAnnotation::new(
+                DataAreaCorner::TopLeft,
                 lichtung_plot::Text::new("Upper note\r\n\n next ")
                     .style(local)
                     .alignment(lichtung_plot::TextAlignment::Center),
             )
             .unwrap(),
         )
-        .panel_text_annotation(
-            PanelTextAnnotation::new(PanelCorner::BottomRight, "Lower note").unwrap(),
+        .text_annotation(
+            PlotTextAnnotation::new(DataAreaCorner::BottomRight, "Lower note").unwrap(),
         )
         .theme(Theme::nature());
     let output = svg(&chart);
@@ -108,8 +108,8 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
 fn same_corner_annotations_use_actual_overlap_policy_instead_of_a_corner_quota() {
     let data = scatter_data();
     let chart = scatter(&data)
-        .panel_text_annotation(PanelTextAnnotation::new(PanelCorner::TopLeft, "First").unwrap())
-        .panel_text_annotation(PanelTextAnnotation::new(PanelCorner::TopLeft, "Second").unwrap());
+        .text_annotation(PlotTextAnnotation::new(DataAreaCorner::TopLeft, "First").unwrap())
+        .text_annotation(PlotTextAnnotation::new(DataAreaCorner::TopLeft, "Second").unwrap());
 
     assert!(chart
         .preflight()
@@ -117,10 +117,10 @@ fn same_corner_annotations_use_actual_overlap_policy_instead_of_a_corner_quota()
         .to_string()
         .contains("required panel annotations overlap"));
     let chart = scatter(&data)
-        .panel_text_annotation(PanelTextAnnotation::new(PanelCorner::TopLeft, "First").unwrap())
-        .panel_text_annotation(
-            PanelTextAnnotation::new(
-                PanelCorner::TopLeft,
+        .text_annotation(PlotTextAnnotation::new(DataAreaCorner::TopLeft, "First").unwrap())
+        .text_annotation(
+            PlotTextAnnotation::new(
+                DataAreaCorner::TopLeft,
                 lichtung_plot::Text::new("Second").layout(
                     lichtung_plot::TextLayout::default().overlap(lichtung_plot::TextOverlap::Allow),
                 ),
@@ -134,9 +134,9 @@ fn same_corner_annotations_use_actual_overlap_policy_instead_of_a_corner_quota()
 #[test]
 fn panel_text_rejects_facets() {
     let data = scatter_data();
-    let annotation = || PanelTextAnnotation::new(PanelCorner::TopLeft, "Note").unwrap();
+    let annotation = || PlotTextAnnotation::new(DataAreaCorner::TopLeft, "Note").unwrap();
     let faceted = scatter(&data)
-        .panel_text_annotation(annotation())
+        .text_annotation(annotation())
         .facet(FacetSpec::row(data.group.clone()));
     assert!(faceted
         .preflight()
@@ -150,9 +150,7 @@ fn panel_text_rejects_colliding_inside_legend() {
     let data = scatter_data();
     let chart = scatter(&data)
         .hue(data.group.clone())
-        .panel_text_annotation(
-            PanelTextAnnotation::new(PanelCorner::TopRight, "Caller note").unwrap(),
-        )
+        .text_annotation(PlotTextAnnotation::new(DataAreaCorner::TopRight, "Caller note").unwrap())
         .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight));
 
     assert!(chart
@@ -163,9 +161,9 @@ fn panel_text_rejects_colliding_inside_legend() {
     let permitted = scatter(&data)
         .hue(data.group.clone())
         .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight))
-        .panel_text_annotation(
-            PanelTextAnnotation::new(
-                PanelCorner::TopRight,
+        .text_annotation(
+            PlotTextAnnotation::new(
+                DataAreaCorner::TopRight,
                 lichtung_plot::Text::new("Caller note").layout(
                     lichtung_plot::TextLayout::default().overlap(lichtung_plot::TextOverlap::Allow),
                 ),
@@ -179,16 +177,16 @@ fn panel_text_rejects_colliding_inside_legend() {
 fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
     let data = scatter_data();
     let chart = scatter(&data)
-        .panel_text_annotation(
-            PanelTextAnnotation::new(
-                PanelCorner::TopLeft,
+        .text_annotation(
+            PlotTextAnnotation::new(
+                DataAreaCorner::TopLeft,
                 "Left annotation extends far into this panel",
             )
             .unwrap(),
         )
-        .panel_text_annotation(
-            PanelTextAnnotation::new(
-                PanelCorner::TopRight,
+        .text_annotation(
+            PlotTextAnnotation::new(
+                DataAreaCorner::TopRight,
                 "Right annotation extends far into this panel",
             )
             .unwrap(),

@@ -140,7 +140,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             let selected = chart
                 .measure_selected_interior(crate::spec::PlotRenderContext::new(
                     chart.data(),
-                    crate::layout::PanelBox::new(20.0, 1000.0, 20.0, 800.0),
+                    crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
                     &theme,
                 ))
                 .unwrap();
@@ -266,7 +266,7 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
         let selected = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(20.0, 1000.0, 20.0, 800.0),
+                crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
                 &theme,
             ))
             .unwrap();

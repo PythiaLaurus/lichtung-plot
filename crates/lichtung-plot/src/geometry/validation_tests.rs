@@ -96,7 +96,7 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
     let selected = chart
         .measure_selected_interior(crate::spec::PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();

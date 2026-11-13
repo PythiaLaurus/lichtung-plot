@@ -28,7 +28,7 @@ use crate::alpha::{
 };
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
-use crate::layout::{self, AxisSpec, PanelBox};
+use crate::layout::{self, AxisSpec, PixelRect};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde, kde_support_range, strict_scott_bandwidth};
@@ -278,17 +278,17 @@ struct MarginalGroupPayload {
 }
 
 #[derive(Debug)]
-struct LinkedPanelPlan {
+struct MarginalRegionProjection {
     address: crate::layout::ComponentAddress,
     projection: layout::Projection,
 }
 
 fn measure_linked_panel(
-    panel: PanelBox,
+    panel: PixelRect,
     ranges: [(f64, f64); 2],
     role: layout::AddressRole,
     context: PlotRenderContext<'_>,
-) -> Result<LinkedPanelPlan, crate::layout::fit::PlanError> {
+) -> Result<MarginalRegionProjection, crate::layout::fit::PlanError> {
     if ![panel.x0, panel.x1, panel.y0, panel.y1]
         .into_iter()
         .all(f64::is_finite)
@@ -311,7 +311,7 @@ fn measure_linked_panel(
             )
             .into());
     }
-    Ok(LinkedPanelPlan {
+    Ok(MarginalRegionProjection {
         address,
         projection: layout::Projection::new(ranges[0], ranges[1], panel.as_tuple()),
     })
@@ -319,7 +319,7 @@ fn measure_linked_panel(
 
 #[derive(Debug)]
 pub(crate) struct MarginalPayload {
-    panels: [LinkedPanelPlan; 3],
+    panels: [MarginalRegionProjection; 3],
     ticks: Vec<[Point2D; 2]>,
     tick_style: Option<crate::render::backend::LineStyle>,
     groups: Vec<MarginalGroupPayload>,
@@ -327,7 +327,7 @@ pub(crate) struct MarginalPayload {
 }
 
 impl MarginalPayload {
-    fn clips(&self) -> [PanelBox; 3] {
+    fn clips(&self) -> [PixelRect; 3] {
         self.panels
             .each_ref()
             .map(|panel| panel.projection.panel_box())
@@ -542,7 +542,7 @@ pub(crate) fn measure(
         context.layout_with_axis_specs(
             (x_low, x_high),
             (y_low, y_high),
-            crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
+            crate::layout::PixelRect::new(central_x0, central_x1, central_y0, central_y1),
             chart
                 .prepared_axis_inputs()
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
@@ -628,9 +628,9 @@ pub(crate) fn measure(
             .into());
     }
 
-    let central_panel = PanelBox::new(central_x0, central_x1, central_y0, central_y1);
-    let top_panel = PanelBox::new(central_x0, central_x1, top_y0, top_y1);
-    let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
+    let central_panel = PixelRect::new(central_x0, central_x1, central_y0, central_y1);
+    let top_panel = PixelRect::new(central_x0, central_x1, top_y0, top_y1);
+    let right_panel = PixelRect::new(right_x0, right_x1, central_y0, central_y1);
     let panels = [
         measure_linked_panel(
             central_panel,
@@ -838,7 +838,7 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
         chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
-        || layout::StandardPanelInputs::new(theme),
+        || layout::CoordinateLayoutInputs::new(theme),
     )?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

@@ -42,7 +42,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0),
+            crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
         ))
         .unwrap();
@@ -131,7 +131,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0),
+            crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
         ))
         .unwrap();

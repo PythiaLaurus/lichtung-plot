@@ -4,7 +4,7 @@
 //! owns the canvas geometry around that panel: title, subtitle, caption,
 //! axis labels, tick labels, and future legend reservations.
 
-use crate::layout::PanelAxisPlan;
+use crate::layout::AxisSystemPlan;
 #[cfg(test)]
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
@@ -18,8 +18,8 @@ use crate::Error;
 pub(crate) const MINIMUM_PANEL_SPAN: f64 = 1.0 / 1024.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PanelBox {
+#[derive(Clone, Copy, PartialEq)]
+pub struct PixelRect {
     /// Left edge of the plot panel.
     pub x0: f64,
     /// Right edge of the plot panel.
@@ -30,7 +30,21 @@ pub struct PanelBox {
     pub y1: f64,
 }
 
-impl PanelBox {
+// This private type appears in existing diagnostics. Renaming its Rust symbol
+// must not change those error bytes.
+impl std::fmt::Debug for PixelRect {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PanelBox")
+            .field("x0", &self.x0)
+            .field("x1", &self.x1)
+            .field("y0", &self.y0)
+            .field("y1", &self.y1)
+            .finish()
+    }
+}
+
+impl PixelRect {
     /// Construct a panel box from math-style pixel coordinates.
     #[must_use]
     pub fn new(x0: f64, x1: f64, y0: f64, y1: f64) -> Self {
@@ -58,16 +72,16 @@ impl PanelBox {
 
 /// Space used by one panel's axes and compact text outside its data box.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub(crate) struct PanelRequirements {
+pub(crate) struct EdgeSpaceRequirements {
     pub(crate) left: f64,
     pub(crate) right: f64,
     pub(crate) bottom: f64,
     pub(crate) top: f64,
 }
 
-impl PanelRequirements {
+impl EdgeSpaceRequirements {
     pub(crate) fn measure_header(
-        axes: &PanelAxisPlan,
+        axes: &AxisSystemPlan,
         theme: &ResolvedTheme,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let required = axes.requirements();
@@ -102,11 +116,11 @@ pub struct CanvasInsets {
 pub(crate) struct RootFramePlan {
     pub(crate) root_text: crate::decorations::title_block::plan::RootTitleBlockPlan,
     /// Plot panel available for data marks, axes, grid, and frame.
-    pub panel_box: PanelBox,
+    pub panel_box: PixelRect,
     /// Resolved reserved margins.
     pub insets: CanvasInsets,
     pub(crate) native_preference:
-        Option<crate::layout::interior::preference::NativePanelPreference>,
+        Option<crate::layout::interior::preference::CoordinateSizePreference>,
 }
 
 impl RootFramePlan {
@@ -152,7 +166,7 @@ impl RootFramePlan {
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let (canvas_width, canvas_height) = canvas_size;
 
-        let outer = PanelBox::new(0.0, f64::from(canvas_width), 0.0, f64::from(canvas_height));
+        let outer = PixelRect::new(0.0, f64::from(canvas_width), 0.0, f64::from(canvas_height));
         let padding = theme.root_padding_lengths()?;
         let plan = crate::decorations::title_block::plan::RootTitleBlockPlan::measure(
             theme,
@@ -236,6 +250,16 @@ mod tests {
     use crate::theme::Theme;
 
     #[test]
+    fn renamed_pixel_rect_preserves_existing_clip_diagnostics() {
+        let error = crate::render::coordinates::canonical_clip(PixelRect::new(0.0, 0.0, -0.0, 1.0))
+            .unwrap_err();
+        let Error::Render(message) = error else {
+            panic!("clip render error")
+        };
+        assert_eq!(message, "clip region must have finite coordinates and finite positive width and height; got PanelBox { x0: 0.0, x1: 0.0, y0: -0.0, y1: 1.0 }");
+    }
+
+    #[test]
     fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
         let theme = Theme::publication().resolve().unwrap();
         let frame = RootFramePlan::measure(
@@ -257,7 +281,7 @@ mod tests {
                 top: 12.0
             }
         );
-        assert_eq!(frame.panel_box, PanelBox::new(16.0, 84.0, 8.0, 68.0));
+        assert_eq!(frame.panel_box, PixelRect::new(16.0, 84.0, 8.0, 68.0));
     }
 
     #[test]

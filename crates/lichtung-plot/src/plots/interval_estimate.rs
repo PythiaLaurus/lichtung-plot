@@ -368,7 +368,7 @@ struct EstimateRowPayload {
 
 #[derive(Debug)]
 pub(crate) struct EstimatePayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
     reference: Option<[Point2D; 2]>,
     reference_style: LineStyle,
@@ -622,7 +622,7 @@ fn plan_not_estimable(
 }
 
 fn not_estimable_text_x(
-    panel: crate::layout::PanelBox,
+    panel: crate::layout::PixelRect,
     text_width: f64,
     vertical_guide_x: Option<f64>,
     spacing: &crate::theme::annotation::EstimateAnnotationLengths,
@@ -1283,7 +1283,7 @@ fn project(
     for (index, row) in payload.rows.iter_mut().enumerate() {
         let Some(text) = &mut row.text else { continue };
         let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
-        let region = crate::layout::PanelBox::new(
+        let region = crate::layout::PixelRect::new(
             if chart.user_x_limits().is_some() || estimates[index].is_none() {
                 clip.x0
             } else {
@@ -1383,7 +1383,7 @@ fn project(
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
     spec: &crate::layout::AxisSpec,
-    panel: crate::layout::PanelBox,
+    panel: crate::layout::PixelRect,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {

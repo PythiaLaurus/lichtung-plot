@@ -2,7 +2,7 @@
 
 use std::fmt::{self, Write as _};
 
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::render::backend::{BracketOrientation, GradientStop, Point2D, SignificanceBracket};
 use crate::Error;
 
@@ -540,8 +540,8 @@ pub(crate) struct CanonicalRect {
 }
 
 impl CanonicalRect {
-    pub(crate) fn panel(self) -> PanelBox {
-        PanelBox::new(
+    pub(crate) fn panel(self) -> PixelRect {
+        PixelRect::new(
             self.left.value(),
             self.right.value(),
             self.bottom.value(),
@@ -599,12 +599,12 @@ impl CanonicalRoundedBox {
     }
 }
 
-pub(crate) fn canonical_clip(region: PanelBox) -> Result<CanonicalRect, Error> {
+pub(crate) fn canonical_clip(region: PixelRect) -> Result<CanonicalRect, Error> {
     canonical_panel_rect(region, CoordinatePrecision::CssQuantum, "clip region")
 }
 
 fn canonical_panel_rect(
-    region: PanelBox,
+    region: PixelRect,
     precision: CoordinatePrecision,
     context: &str,
 ) -> Result<CanonicalRect, Error> {
@@ -683,7 +683,7 @@ pub(crate) struct CanonicalGradient {
 }
 
 pub(crate) fn canonical_gradient(
-    bounds: PanelBox,
+    bounds: PixelRect,
     start: Point2D,
     end: Point2D,
     stops: &[GradientStop],
@@ -704,7 +704,7 @@ pub(crate) fn canonical_gradient(
 }
 
 pub(crate) fn visit_canonical_gradient(
-    bounds: PanelBox,
+    bounds: PixelRect,
     start: Point2D,
     end: Point2D,
     stops: &[GradientStop],
@@ -1040,7 +1040,7 @@ mod tests {
             "test"
         )
         .is_err());
-        let rect = canonical_clip(PanelBox::new(-0.25, 1.25, -2.5, 3.125)).unwrap();
+        let rect = canonical_clip(PixelRect::new(-0.25, 1.25, -2.5, 3.125)).unwrap();
         let native = CanonicalBox::from_bottom_up(rect, 100).unwrap();
         assert_eq!(native.x.to_string(), "-0.25");
         assert_eq!(native.y.to_string(), "96.875");

@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use super::artifacts::TEMP_FILE_COUNTER;
 use super::*;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::render::backend::{
     BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, SignificanceBracket,
     SurfaceRole, TextStyle,
@@ -37,7 +37,7 @@ struct RecordingBackend {
     begins: usize,
     begin_sizes: Vec<(u32, u32)>,
     ends: usize,
-    clips: Vec<PanelBox>,
+    clips: Vec<PixelRect>,
     clip_ends: usize,
     active_clips: usize,
     layer_ends: usize,
@@ -49,14 +49,14 @@ struct RecordingBackend {
     gradients: Vec<Vec<GradientStop>>,
     texts: Vec<(f64, f64, String)>,
     text_draws: Vec<(f64, f64, String, TextStyle)>,
-    rounded_rects: Vec<PanelBox>,
+    rounded_rects: Vec<PixelRect>,
     bracket_clip_depths: Vec<usize>,
     failures: Vec<BackendFailure>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct SurfaceCall {
-    bounds: PanelBox,
+    bounds: PixelRect,
     paint: crate::theme::Color,
     role: SurfaceRole,
 }
@@ -68,10 +68,10 @@ impl RecordingBackend {
             f64::from(self.begin_sizes.last().expect("begun recorder").1) - point.y.value(),
         )
     }
-    fn observed_panel(&self, bounds: CanonicalBox) -> PanelBox {
+    fn observed_panel(&self, bounds: CanonicalBox) -> PixelRect {
         let height = f64::from(self.begin_sizes.last().expect("begun recorder").1);
         let top = height - bounds.y.value();
-        PanelBox::new(
+        PixelRect::new(
             bounds.x.value(),
             bounds.x.value() + bounds.width.value(),
             top - bounds.height.value(),
@@ -262,7 +262,7 @@ impl Backend for RecordingBackend {
         }
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         crate::render::backend::validate_clip_region(region)?;
         self.clips.push(region);
         self.active_clips += 1;
@@ -286,7 +286,7 @@ impl Backend for RecordingBackend {
 
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -339,7 +339,7 @@ impl Backend for RecordingBackend {
 
     fn draw_linear_gradient(
         &mut self,
-        _bounds: PanelBox,
+        _bounds: PixelRect,
         _start: Point2D,
         _end: Point2D,
         stops: &[GradientStop],
@@ -365,7 +365,7 @@ impl Backend for RecordingBackend {
         style: &FillStyle,
     ) -> Result<(), Error> {
         self.rounded_rects
-            .push(PanelBox::new(x, x + width, y, y + height));
+            .push(PixelRect::new(x, x + width, y, y + height));
         self.draw_polygon(
             &[
                 Point2D::new(x, y),
@@ -419,7 +419,7 @@ fn assert_no_staging_files(directory: &Path) {
 fn deferred_backend_lazily_begins_and_forwards_complete_surface_calls() {
     let mut recorded = RecordingBackend::default();
     let surface = SurfaceCall {
-        bounds: PanelBox::new(0.0, 320.0, 0.0, 200.0),
+        bounds: PixelRect::new(0.0, 320.0, 0.0, 200.0),
         paint: crate::theme::Color::rgba(1, 2, 3, 4),
         role: SurfaceRole::CanvasRoot,
     };

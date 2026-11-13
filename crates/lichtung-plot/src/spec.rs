@@ -1,6 +1,6 @@
 //! Shared plot specification and render-result types.
 
-use crate::layout::{Layout, PanelBox};
+use crate::layout::{Layout, PixelRect};
 use crate::significance::SignificancePlan;
 use crate::{NumericFormat, NumericValues};
 
@@ -130,7 +130,7 @@ impl HistogramComposite {
 
 /// A corner inside one chart's resolved mark panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PanelCorner {
+pub enum DataAreaCorner {
     /// Top-left corner.
     TopLeft,
     /// Top-right corner.
@@ -143,17 +143,17 @@ pub enum PanelCorner {
 
 /// Caller-owned text block anchored inside a chart panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PanelTextAnnotation {
+pub struct PlotTextAnnotation {
     position: crate::TextPosition,
     text: crate::Text,
 }
 
-impl PanelTextAnnotation {
+impl PlotTextAnnotation {
     /// Construct one validated panel-corner annotation from plain or styled text.
     ///
     /// Local appearance replaces the complete panel-text role. Alignment applies
     /// within the text block; the selected corner continues to place that block.
-    pub fn new(corner: PanelCorner, text: impl Into<crate::Text>) -> Result<Self, crate::Error> {
+    pub fn new(corner: DataAreaCorner, text: impl Into<crate::Text>) -> Result<Self, crate::Error> {
         Self::at(crate::TextPosition::corner(corner), text)
     }
 
@@ -643,7 +643,7 @@ use crate::Error;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a> {
     pub(crate) data: crate::data::PlotData<'a>,
-    pub(crate) panel: PanelBox,
+    pub(crate) panel: PixelRect,
     pub(crate) content_height: bool,
     // An embedded content-sized child still fills its parent's arranged row.
     // Its own preferred height is reported separately to that same root driver.
@@ -674,7 +674,7 @@ impl<'a> PlotRenderContext<'a> {
     }
     pub(crate) fn new(
         data: crate::data::PlotData<'a>,
-        panel: PanelBox,
+        panel: PixelRect,
         theme: &'a crate::theme::ResolvedTheme,
     ) -> Self {
         Self {
@@ -697,7 +697,7 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) fn with_source_rows(
         data: crate::data::PlotData<'a>,
         source_rows: &'a [usize],
-        panel: PanelBox,
+        panel: PixelRect,
         theme: &'a crate::theme::ResolvedTheme,
     ) -> Self {
         Self {
@@ -722,7 +722,7 @@ impl<'a> PlotRenderContext<'a> {
         self
     }
 
-    pub(crate) const fn with_panel(mut self, panel: PanelBox) -> Self {
+    pub(crate) const fn with_panel(mut self, panel: PixelRect) -> Self {
         self.panel = panel;
         self
     }
@@ -788,7 +788,7 @@ impl<'a> PlotRenderContext<'a> {
         self,
         x: (f64, f64),
         y: (f64, f64),
-        panel: PanelBox,
+        panel: PixelRect,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
         x_spec: &crate::layout::AxisSpec,
@@ -822,7 +822,7 @@ impl<'a> PlotRenderContext<'a> {
         self,
         mut x: (f64, f64),
         mut y: (f64, f64),
-        panel: PanelBox,
+        panel: PixelRect,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
         mut x_ticks: Vec<crate::layout::AxisTick>,
@@ -905,7 +905,7 @@ impl<'a> PlotRenderContext<'a> {
 #[derive(Debug)]
 pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
-    pub(crate) axes: Option<crate::layout::PanelAxisPlan>,
+    pub(crate) axes: Option<crate::layout::AxisSystemPlan>,
     pub(crate) grid_axis_gutters: Option<[f64; 4]>,
     pub(crate) x_domain: AxisDomain,
     pub(crate) y_domain: AxisDomain,
@@ -917,7 +917,7 @@ pub(crate) struct PlotRenderResult {
     pub(crate) y_tick_keys: Option<Vec<String>>,
     pub(crate) deferred_annotation_text: Vec<crate::layout::DeferredAnnotationTextPlan>,
     pub(crate) producer_text: Vec<crate::render::backend::PlacedText>,
-    pub(crate) panel_text: Vec<crate::decorations::panel_text::PanelTextPlan>,
+    pub(crate) panel_text: Vec<crate::decorations::panel_text::PlotTextAnnotationPlan>,
     pub(crate) self_managed_legend: Option<std::sync::Arc<crate::decorations::legend::Legend>>,
     pub(crate) matrix_axes: Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>,
     pub(crate) marks: Option<std::sync::Arc<crate::layout::interior::SelectedMarkPlan>>,

@@ -2,19 +2,19 @@
 
 use crate::decorations::legend::{Legend, LegendDrawPlan};
 use crate::layout::fit::{FitScope, PlanError};
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::theme::ResolvedTheme;
 use crate::Error;
 
 pub(super) fn measure(
     chart: &crate::Plot,
-    panel: PanelBox,
+    panel: PixelRect,
     minimum: f64,
     theme: &ResolvedTheme,
     scope: &FitScope,
 
     content_plot: Option<&crate::Plot>,
-) -> Result<(PanelBox, Legend), PlanError> {
+) -> Result<(PixelRect, Legend), PlanError> {
     let descriptor = chart
         .prepared_discrete_guide()?
         .ok_or_else(|| Error::Render("native Heatmap guide was not prepared".into()))?;
@@ -30,7 +30,7 @@ pub(super) fn measure(
 
 pub(super) fn select(
     guide: &Legend,
-    body: PanelBox,
+    body: PixelRect,
     theme: &ResolvedTheme,
 ) -> Result<LegendDrawPlan, Error> {
     let bounds = guide.box_at(

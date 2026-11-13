@@ -11,7 +11,7 @@ use super::coordinates::{
     CoordinatePrecision,
 };
 use crate::layout::ResolvedTextPlan;
-use crate::layout::{kernel::FinalStage, PanelBox};
+use crate::layout::{kernel::FinalStage, PixelRect};
 use crate::theme::Color;
 use crate::{Error, PointShape};
 use std::sync::Arc;
@@ -436,7 +436,7 @@ pub(crate) struct CanonicalGradientFill {
 
 impl CanonicalGradientFill {
     pub(crate) fn new(
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         raw: &[GradientStop],

@@ -8,7 +8,7 @@ mod panel;
 pub(crate) mod text;
 mod unicode16;
 
-pub(crate) use canvas::{PanelBox, RootFramePlan};
+pub(crate) use canvas::{PixelRect, RootFramePlan};
 #[cfg(test)]
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_root, FrozenRoot, MeasuredLayout, RootRequest, RootSize};
@@ -23,8 +23,8 @@ pub(crate) use panel::NumericTickPlan;
 pub(crate) use panel::TickSource;
 pub(crate) use panel::LABEL_CLEARANCE;
 pub(crate) use panel::{anchored_auto_range, continuous_auto_range, display_axis_spec};
-pub(crate) use panel::{Axis, AxisSide, AxisSpec, Layout, PanelAxisPlan, Projection};
-pub(crate) use panel::{RangeProvenance, StandardPanelInputs};
+pub(crate) use panel::{Axis, AxisSide, AxisSpec, AxisSystemPlan, Layout, Projection};
+pub(crate) use panel::{CoordinateLayoutInputs, RangeProvenance};
 #[allow(unused_imports)]
 pub(crate) use text::{
     foundational_plot_requirements, maximum_width_quanta, DeferredAnnotationTextPlan,

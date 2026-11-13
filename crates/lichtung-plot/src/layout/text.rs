@@ -527,7 +527,7 @@ impl ResolvedTextPlan {
             None,
         ))
     }
-    pub(crate) fn clip_region(mut self, region: crate::layout::PanelBox) -> Self {
+    pub(crate) fn clip_region(mut self, region: crate::layout::PixelRect) -> Self {
         self.payload_mut().paint_region =
             Some([region.x0, region.x1, region.y0, region.y1].map(f64::to_bits));
         self

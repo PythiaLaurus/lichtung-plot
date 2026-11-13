@@ -4,7 +4,7 @@ use crate::layout::AxisTick;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, HeatmapAnnotations, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, InteractionStyle,
-    LegendPolicy, LinePathStyle, PanelTextAnnotation, QqLine, RawOverlay, RegressionBand,
+    LegendPolicy, LinePathStyle, PlotTextAnnotation, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
 use crate::theme::Theme;
@@ -588,9 +588,9 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Add a caller-owned text block at one corner inside the chart panel.
     #[must_use]
-    pub fn panel_text_annotation(mut self, annotation: PanelTextAnnotation) -> Self
+    pub fn text_annotation(mut self, annotation: PlotTextAnnotation) -> Self
     where
-        K: crate::kind::PanelText,
+        K: crate::kind::TextAnnotation,
     {
         self.description
             .payload_mut()

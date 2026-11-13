@@ -28,7 +28,7 @@ fn fitted_prose_uses_permitted_minima_and_selected_gaps_without_changing_root_pa
         let plan = RootTitleBlockPlan::measure(
             &theme,
             sources,
-            PanelBox::new(0.0, 400.0, 0.0, 600.0),
+            PixelRect::new(0.0, 400.0, 0.0, 600.0),
             &padding,
             400.0,
             alignments,
@@ -51,11 +51,11 @@ fn fitted_prose_uses_permitted_minima_and_selected_gaps_without_changing_root_pa
     assert_eq!(
         fitted
             .reserves
-            .body(PanelBox::new(0.0, 400.0, 0.0, 600.0), &padding)
+            .body(PixelRect::new(0.0, 400.0, 0.0, 600.0), &padding)
             .unwrap(),
         nominal
             .reserves
-            .body(PanelBox::new(0.0, 400.0, 0.0, 600.0), &padding)
+            .body(PixelRect::new(0.0, 400.0, 0.0, 600.0), &padding)
             .unwrap(),
     );
 }

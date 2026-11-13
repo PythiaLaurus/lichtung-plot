@@ -3,7 +3,7 @@
 use crate::Error;
 
 use crate::builder::Plot;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::spec::PlotKind;
 
 pub(super) struct FacetSelector {
@@ -28,7 +28,7 @@ pub(super) struct FacetPanel {
     pub(super) cell: FacetCell,
     pub(super) rows: Vec<usize>,
     pub(super) source_rows: Vec<usize>,
-    pub(super) panel: PanelBox,
+    pub(super) panel: PixelRect,
 }
 
 impl FacetPanel {
@@ -260,7 +260,7 @@ pub(super) fn base_plot(
 pub(super) fn extract_panels(
     plot: &Plot,
     selectors: &FacetSelectors,
-    provisional: Option<&[PanelBox]>,
+    provisional: Option<&[PixelRect]>,
     mapped_data: crate::data::PlotData<'_>,
 ) -> Result<Vec<FacetPanel>, Error> {
     let configured_source_rows = plot.configured_source_rows()?;
@@ -299,7 +299,7 @@ pub(super) fn extract_panels(
                     .as_ref()
                     .map_or(*index, |rows| rows[*index]))
             }))?;
-        let panel = provisional.map_or(PanelBox::new(0.0, 1.0, 0.0, 1.0), |boxes| {
+        let panel = provisional.map_or(PixelRect::new(0.0, 1.0, 0.0, 1.0), |boxes| {
             boxes[*row * selectors.columns + *column]
         });
         panels.push(FacetPanel {

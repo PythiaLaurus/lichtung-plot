@@ -9,10 +9,10 @@ use crate::decorations::legend::discrete::scoped::{
     SUPPRESSED_GUIDES,
 };
 use crate::decorations::plan::{LegendRole, PanelPlan};
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
-use crate::layout::{PanelBox, RootFramePlan};
+use crate::layout::{PixelRect, RootFramePlan};
 use crate::spec::{FacetScales, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -56,10 +56,10 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
     horizontal_axis_label: Option<&crate::Text>,
     vertical_axis_label: Option<&crate::Text>,
     theme: &ResolvedTheme,
-    reserved_panel: PanelBox,
-    candidate_panel: PanelBox,
+    reserved_panel: PixelRect,
+    candidate_panel: PixelRect,
     round: &mut FeedbackRound,
-) -> Result<PanelBox, crate::layout::fit::PlanError> {
+) -> Result<PixelRect, crate::layout::fit::PlanError> {
     let baseline = shared_axis_requirements(
         horizontal_axis_label,
         vertical_axis_label,
@@ -84,7 +84,7 @@ pub(super) fn shared_axis_requirements(
     horizontal: Option<&crate::Text>,
     vertical: Option<&crate::Text>,
     theme: &ResolvedTheme,
-    panel: PanelBox,
+    panel: PixelRect,
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
 
@@ -125,10 +125,10 @@ fn adjusted_shared_axis_panel(
     vertical_axis_label: Option<&crate::Text>,
     theme: &ResolvedTheme,
     baseline: [f64; 4],
-    candidate: PanelBox,
+    candidate: PixelRect,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
-) -> Result<(PanelBox, f64, f64), crate::layout::fit::PlanError> {
+) -> Result<(PixelRect, f64, f64), crate::layout::fit::PlanError> {
     let consumed = round.insets(address, FeedbackKind::AxisGutter);
     let initial =
         shared_axis_requirements(horizontal_axis_label, vertical_axis_label, theme, candidate)?;
@@ -186,13 +186,13 @@ fn adjusted_shared_axis_panel(
 pub(super) fn native_parent(
     plot: &Plot,
     panels: &mut [FacetPanel],
-    outer: PanelBox,
+    outer: PixelRect,
     shape: (usize, usize),
     facet_scales: FacetScales,
     theme: &ResolvedTheme,
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
-    probe_cells: &[PanelBox],
+    probe_cells: &[PixelRect],
     minima: &[(f64, f64)],
     containing_trial: bool,
     discrete_guide: Option<&std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
@@ -230,7 +230,7 @@ pub(super) fn native_parent(
         requirements.push((
             facet.row,
             facet.column,
-            PanelRequirements {
+            EdgeSpaceRequirements {
                 left: left.max(measured.left),
                 right: right.max(measured.right),
                 bottom: bottom.max(measured.bottom),

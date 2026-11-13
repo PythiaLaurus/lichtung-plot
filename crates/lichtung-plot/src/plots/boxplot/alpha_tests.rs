@@ -116,7 +116,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();

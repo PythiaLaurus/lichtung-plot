@@ -8,7 +8,7 @@ use crate::layout::interior::{ClearanceAxis, DomainExpansion, InteriorReserveReq
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::render::geometry::GeometrySnapshot;
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
@@ -70,7 +70,7 @@ impl AssignedGuideFrame {
         )
     }
 
-    pub(crate) fn available(&self, cell: PanelBox, gutters: [f64; 4]) -> (f64, f64) {
+    pub(crate) fn available(&self, cell: PixelRect, gutters: [f64; 4]) -> (f64, f64) {
         let horizontal = self.horizontal();
         (
             cell.width()
@@ -94,11 +94,11 @@ impl AssignedGuideFrame {
 
     pub(crate) fn assign_fit(
         &self,
-        cell: PanelBox,
+        cell: PixelRect,
         guide: Option<(f64, f64)>,
         gutters: [f64; 4],
         scope: &FitScope,
-    ) -> Result<crate::layout::fit::FitOutcome<PanelBox>, Error> {
+    ) -> Result<crate::layout::fit::FitOutcome<PixelRect>, Error> {
         let mut insets = [0.0; 4];
         if let Some((width, height)) = guide {
             match self.edge {
@@ -124,7 +124,7 @@ impl AssignedGuideFrame {
         .assign_fit(cell, gutters, scope)
     }
 
-    pub(crate) fn place(&self, residual: PanelBox, guide: (f64, f64)) -> PanelBox {
+    pub(crate) fn place(&self, residual: PixelRect, guide: (f64, f64)) -> PixelRect {
         let (width, height) = guide;
         let align = match self.edge {
             LegendPosition::OutsideRightTop
@@ -164,13 +164,13 @@ impl AssignedGuideFrame {
             ),
             _ => unreachable!("inside guides are collision overlays, not outside tracks"),
         };
-        PanelBox::new(left, left + width, bottom, bottom + height)
+        PixelRect::new(left, left + width, bottom, bottom + height)
     }
 }
 
 impl ResolvedLegend {
     pub(crate) fn observe_feedback(&self, round: &mut FeedbackRound) -> Result<(), Error> {
-        round.observe_box(PanelBox::new(
+        round.observe_box(PixelRect::new(
             self.bounds.left,
             self.bounds.right,
             self.bounds.bottom,
@@ -186,8 +186,8 @@ impl ResolvedLegend {
 pub(crate) struct PanelPlan {
     // Content requests expose their preferred frame here; embedded fill may
     // arrange a taller physical panel_box under the owning Grid's row maximum.
-    pub(crate) frame_box: PanelBox,
-    pub(crate) panel_box: PanelBox,
+    pub(crate) frame_box: PixelRect,
+    pub(crate) panel_box: PixelRect,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
     planned_x_limits: Option<(f64, f64)>,
@@ -197,10 +197,10 @@ pub(crate) struct PanelPlan {
 pub(crate) fn place_outside_legend(
     legend: Legend,
     position: LegendPosition,
-    cell: PanelBox,
+    cell: PixelRect,
     minimum_body: (f64, f64),
     scope: &FitScope,
-) -> Result<crate::layout::fit::FitOutcome<(PanelBox, ResolvedLegend)>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<(PixelRect, ResolvedLegend)>, Error> {
     let frame = AssignedGuideFrame::new(position, minimum_body, legend.metrics.outside_gap);
     let panel_box = match frame.assign_fit(
         cell,
@@ -267,7 +267,7 @@ impl PanelPlan {
 pub(crate) fn plan_panel(
     plot: &Plot,
     kind: PlotKind,
-    cell: PanelBox,
+    cell: PixelRect,
     role: LegendRole,
     theme: &crate::theme::ResolvedTheme,
     round: &mut FeedbackRound,
@@ -562,7 +562,7 @@ fn content_frame(
     round: &FeedbackRound,
     address: &ComponentAddress,
     guide: Option<(bool, (f64, f64), f64)>,
-) -> Result<(PanelBox, f64), Error> {
+) -> Result<(PixelRect, f64), Error> {
     let mut plot = plot.clone();
     if let Some(domain) = round.feedback_domain(address, FeedbackKind::AutomaticDomainX) {
         plot = plot.with_planned_x_limits(domain);
@@ -603,7 +603,7 @@ fn content_frame(
         height
     };
     Ok((
-        PanelBox::new(
+        PixelRect::new(
             context.panel.x0,
             context.panel.x1,
             context.panel.y0,
@@ -620,8 +620,8 @@ fn content_frame(
 pub(crate) fn check_assigned_body(
     plot: &Plot,
     discovered: &PlotRenderResult,
-    cell: PanelBox,
-    assigned: PanelBox,
+    cell: PixelRect,
+    assigned: PixelRect,
     theme: &crate::theme::ResolvedTheme,
     scope: &FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
@@ -698,7 +698,7 @@ pub(crate) fn check_assigned_body(
         }
     }
 
-    let panel = PanelBox::new(
+    let panel = PixelRect::new(
         assigned.x0 + old.x0 - cell.x0,
         assigned.x0 + old.x0 - cell.x0 + width,
         assigned.y0 + old.y0 - cell.y0,
@@ -1185,7 +1185,7 @@ fn plan_panel_attempt(
         let (width, height) = plot.canvas_dimensions()?;
         let mut overflow = [0.0_f64; 4];
         for bounds in chrome.bounds() {
-            round.observe_box(PanelBox::new(
+            round.observe_box(PixelRect::new(
                 bounds.left,
                 bounds.right,
                 bounds.bottom,
@@ -1259,7 +1259,7 @@ fn plan_panel_attempt(
         }
     };
     let axes = result.layout.projection.panel_box();
-    let next_axes = PanelBox::new(
+    let next_axes = PixelRect::new(
         axes.x0 + next_frame.x0 - panel_box.x0,
         axes.x1 + next_frame.x1 - panel_box.x1,
         axes.y0 + next_frame.y0 - panel_box.y0,
@@ -1430,7 +1430,7 @@ fn plan_panel_attempt(
                 round.miss(address, FitKind::OverlayCollision, &requests, format!("{placement} cannot fit inside the plot without overlapping recorded geometry (in_bounds={fits}, overlap_score={overlap:.3}); increase the canvas, shorten legend labels, choose an outside position, or provide more automatic axis range"))?;
             }
         } else {
-            let fits_track = |panel: PanelBox| {
+            let fits_track = |panel: PixelRect| {
                 (!frame.vertical() || legend.legend.compute_box_height() <= panel.height())
                     && (!frame.horizontal() || legend.legend.compute_box_width() <= panel.width())
             };
@@ -1461,7 +1461,7 @@ fn plan_panel_attempt(
     round.observe_count(geometry.bounds().len())?;
     let (width, height) = plot.canvas_dimensions()?;
     for bounds in geometry.bounds() {
-        round.observe_box(PanelBox::new(
+        round.observe_box(PixelRect::new(
             bounds.left,
             bounds.right,
             bounds.bottom,
@@ -1500,7 +1500,7 @@ fn plan_panel_attempt(
                 );
             let resolved_by_projection = geometry.text_overflow_resolved(
                 *bounds,
-                PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
+                PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height)),
                 &result.layout.projection,
                 &next_projection,
                 declared,
@@ -1533,7 +1533,7 @@ fn plan_panel_attempt(
     geometry.observe_feedback(round)?;
     Ok(FitOutcome::Measured(PanelPlan {
         frame_box: if context.fill_content_height {
-            PanelBox::new(
+            PixelRect::new(
                 cell.x0,
                 cell.x1,
                 cell.y0,
@@ -1545,7 +1545,7 @@ fn plan_panel_attempt(
                 PlotKind::Heatmap | PlotKind::Beeswarm | PlotKind::Matrix
             )
         {
-            PanelBox::new(
+            PixelRect::new(
                 cell.x0,
                 cell.x1,
                 cell.y0,
@@ -1631,7 +1631,7 @@ struct AutomaticClearance {
     expansion: Option<DomainExpansion>,
 }
 
-fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) -> ClearanceEdge {
+fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PixelRect) -> ClearanceEdge {
     match position {
         LegendPosition::InsideRightTop
         | LegendPosition::InsideRight
@@ -1903,7 +1903,7 @@ fn expansion_ratio(range: (f64, f64), limits: (f64, f64)) -> Result<f64, Error> 
     Ok(ratio)
 }
 
-fn legend_fits_panel(legend: LegendBox, panel: PanelBox) -> bool {
+fn legend_fits_panel(legend: LegendBox, panel: PixelRect) -> bool {
     const EPSILON: f64 = 1e-6;
     legend.left >= panel.x0 - EPSILON
         && legend.right <= panel.x1 + EPSILON
@@ -1915,7 +1915,7 @@ fn overlap_score_within_panel(
     legend: LegendBox,
     geometry: &[crate::render::geometry::GeometryBox],
     margin: f64,
-    panel: PanelBox,
+    panel: PixelRect,
 ) -> f64 {
     let legend = crate::render::geometry::GeometryBox {
         left: legend.left,
@@ -2065,7 +2065,7 @@ fn auto_candidate_avoiding_panel_text(
     None
 }
 
-fn guide_panel(mut panel: PanelBox, gutters: [f64; 4], position: LegendPosition) -> PanelBox {
+fn guide_panel(mut panel: PixelRect, gutters: [f64; 4], position: LegendPosition) -> PixelRect {
     match position {
         LegendPosition::OutsideLeftTop
         | LegendPosition::OutsideLeft
@@ -2086,7 +2086,7 @@ fn guide_panel(mut panel: PanelBox, gutters: [f64; 4], position: LegendPosition)
 
 fn initial_auto_candidate(
     legend: &Legend,
-    panel: PanelBox,
+    panel: PixelRect,
     geometry: &[crate::render::geometry::GeometryBox],
     default: LegendDefault,
 ) -> usize {
@@ -2123,8 +2123,8 @@ fn resolve_box(
     frame: &AssignedGuideFrame,
     position: LegendPosition,
     default: LegendDefault,
-    axes: PanelBox,
-    reserved_panel: PanelBox,
+    axes: PixelRect,
+    reserved_panel: PixelRect,
     geometry: &[crate::render::geometry::GeometryBox],
 ) -> LegendBox {
     let pixel_box = axes.as_tuple();

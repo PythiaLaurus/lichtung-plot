@@ -133,7 +133,7 @@ fallback expands them.
   content/instruction equality participates in root-frame, child and height reuse.
   Prepared axes retain Text, including for shared facet titles; each title's selected
   appearance owns its intrinsic measurement and font-relative axis clearances.
-- PanelTextAnnotation retains the same Text value over the owning Plot's complete
+- PlotTextAnnotation retains the same Text value over the owning Plot's complete
   panel-text role. Its corner places the block independently of line alignment;
   selected local size also owns its annotation padding metric.
 - Each operation owns prepared sources, immutable font bytes, exact dependencies,

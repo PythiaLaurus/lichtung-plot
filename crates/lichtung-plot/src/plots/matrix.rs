@@ -30,7 +30,7 @@ use crate::alpha::{
 };
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
-use crate::layout::{self, Layout, PanelBox};
+use crate::layout::{self, Layout, PixelRect};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
@@ -294,7 +294,7 @@ impl MatrixPrimitive {
     fn geometry(
         &self,
         geometry: &mut crate::render::geometry::GeometrySnapshot,
-        clip: PanelBox,
+        clip: PixelRect,
     ) -> Result<(), Error> {
         match self {
             Self::Scatter(points, _, style) => geometry.scatter(points, style, clip),
@@ -306,10 +306,10 @@ impl MatrixPrimitive {
 #[derive(Debug)]
 struct MatrixCellPayload {
     address: layout::ComponentAddress,
-    clip: PanelBox,
+    clip: PixelRect,
     frame: [Option<[Point2D; 2]>; 4],
     marks: Vec<MatrixPrimitive>,
-    axes: layout::PanelAxisPlan,
+    axes: layout::AxisSystemPlan,
 }
 
 #[derive(Debug)]
@@ -622,11 +622,11 @@ pub(crate) fn measure(
         for col in 0..n {
             let (x0, x1) = axes.columns[col];
             let (y0, y1) = axes.rows[row];
-            let cell_panel = PanelBox::new(x0, x1, y0, y1);
+            let cell_panel = PixelRect::new(x0, x1, y0, y1);
             // The native cell owns the polygon outline reserve. All cells in
             // a variable track use the same inset, so pairwise coordinates and
             // diagonal sources remain aligned with their frozen axes.
-            let mark_panel = PanelBox::new(
+            let mark_panel = PixelRect::new(
                 x0 + ink.0 + 2.0 / 1024.0,
                 x1 - ink.0 - 2.0 / 1024.0,
                 y0 + ink.1 + 2.0 / 1024.0,
@@ -835,7 +835,7 @@ pub(crate) fn measure(
     let mut title_axes =
         crate::data::source::collect_source(cells.iter_mut().map(|cell| Ok(&mut cell.axes)))?;
     for side in [layout::AxisSide::Bottom, layout::AxisSide::Left] {
-        layout::PanelAxisPlan::uniform_titles(
+        layout::AxisSystemPlan::uniform_titles(
             &mut title_axes,
             side,
             &axis_theme,
@@ -895,7 +895,7 @@ pub(crate) struct MatrixAxisPlan {
 #[derive(Debug)]
 struct MatrixTickCache {
     plan: layout::NumericTickPlan,
-    standard: layout::StandardPanelInputs,
+    standard: layout::CoordinateLayoutInputs,
     range: [u64; 2],
     span: [u64; 2],
     side: layout::AxisSide,
@@ -942,7 +942,7 @@ fn matrix_ticks<'a>(
 
         *cached = Some(MatrixTickCache {
             plan,
-            standard: layout::StandardPanelInputs::new(theme)?,
+            standard: layout::CoordinateLayoutInputs::new(theme)?,
             range: range_bits,
             span,
             side,

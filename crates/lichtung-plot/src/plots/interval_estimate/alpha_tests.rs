@@ -86,7 +86,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(40.0, 600.0, 40.0, 420.0),
+            crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
             &theme,
         ))
         .unwrap();

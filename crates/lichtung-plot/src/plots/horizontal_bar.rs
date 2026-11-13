@@ -10,7 +10,7 @@
 
 use crate::Error;
 
-use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan};
+use crate::layout::{Layout, PhysicalTextAlignment, PixelRect, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -244,7 +244,7 @@ pub(crate) fn measure_marks(
 fn range_for_bar_marks(
     chart: &Plot,
     prepared: &PreparedBars,
-    panel: PanelBox,
+    panel: PixelRect,
     range: (f64, f64),
     text_plans: &[ResolvedTextPlan],
     attached: &bar_data::BarSignificance,

@@ -1,5 +1,5 @@
 use super::{AxisSide, Projection};
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 
 #[cfg(test)]
 thread_local! {
@@ -105,9 +105,9 @@ impl Projection {
 
     /// The resolved plot panel in math-style canvas coordinates.
     #[must_use]
-    pub fn panel_box(&self) -> PanelBox {
+    pub fn panel_box(&self) -> PixelRect {
         let (x0, x1, y0, y1) = self.pixel_box;
-        PanelBox::new(x0, x1, y0, y1)
+        PixelRect::new(x0, x1, y0, y1)
     }
 
     /// Whether a data-space point lies within both resolved axis ranges.

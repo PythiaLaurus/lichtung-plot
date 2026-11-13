@@ -15,7 +15,7 @@ use crate::spec::{
     AxisScale, BarInput, BarSpacing, Bootstrap, CategoryOrder, ConfidenceIntervalAlgorithm,
     DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation,
     HistogramBins, HistogramComposite, HistogramStat, LegendPolicy, LegendPosition, LinePathStyle,
-    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
+    PlotKind, PlotTextAnnotation, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::{HistogramGeometry, NumericFormat, RaincloudGeometry};
 
@@ -783,7 +783,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Caller-owned panel-corner text annotations.
     #[must_use]
-    pub(crate) fn panel_text_annotations(&self) -> &[PanelTextAnnotation] {
+    pub(crate) fn panel_text_annotations(&self) -> &[PlotTextAnnotation] {
         &self.description.payload.panel_text_annotations
     }
 

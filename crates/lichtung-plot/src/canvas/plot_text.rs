@@ -6,19 +6,19 @@ use crate::decorations::title_block::plan::{
 };
 use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::FitKind;
-use crate::layout::{AddressRole, PanelBox};
+use crate::layout::{AddressRole, PixelRect};
 use crate::theme::ResolvedTheme;
 use crate::{Error, TextAlignment};
 
 pub(super) struct PlotLocalTextPlan {
     pub(super) text: RootTitleBlockPlan,
-    pub(super) body: PanelBox,
+    pub(super) body: PixelRect,
 }
 
 impl PlotLocalTextPlan {
     pub(super) fn measure(
         plot: &Plot,
-        cell: PanelBox,
+        cell: PixelRect,
         theme: &ResolvedTheme,
         panel_alignments: [Option<TextAlignment>; 2],
         intrinsics: RootTitleBlockIntrinsics,
@@ -67,7 +67,7 @@ impl PlotLocalTextPlan {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         let reserved = text.reserves.body(cell, &padding)?;
-        let body = PanelBox::new(cell.x0, cell.x1, reserved.y0, reserved.y1);
+        let body = PixelRect::new(cell.x0, cell.x1, reserved.y0, reserved.y1);
         if body.width() < minimum.0 || body.height() < minimum.1 {
             return Ok(FitOutcome::Miss(
                 scope.child(AddressRole::RootBody, 0)?.failure(

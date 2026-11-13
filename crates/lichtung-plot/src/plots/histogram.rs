@@ -281,7 +281,7 @@ impl HistogramSemantics {
 
 #[derive(Debug)]
 pub(crate) struct HistogramPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) bins: Vec<([Point2D; 4], FillStyle)>,
     curve: Option<Vec<Point2D>>,
     rugs: Vec<[Point2D; 2]>,
@@ -293,7 +293,7 @@ pub(crate) struct HistogramPayload {
 impl HistogramPayload {
     fn geometry(
         &self,
-        clip: Option<crate::layout::PanelBox>,
+        clip: Option<crate::layout::PixelRect>,
     ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         for (bin, fill) in &self.bins {
@@ -1060,7 +1060,7 @@ mod tests {
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                 &theme,
             ))
             .unwrap();
@@ -1175,7 +1175,7 @@ mod tests {
             let selected = chart
                 .measure_selected_interior(PlotRenderContext::new(
                     chart.data(),
-                    crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                     &theme,
                 ))
                 .unwrap();

@@ -6,9 +6,9 @@ use crate::Error;
 
 #[cfg(test)]
 use crate::font::canonical::PreparedFontEnvironment;
-use crate::layout::{PanelBox, ResolvedTextPlan, CSS_PIXEL_QUANTA};
 #[cfg(test)]
 use crate::layout::{PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance};
+use crate::layout::{PixelRect, ResolvedTextPlan, CSS_PIXEL_QUANTA};
 use crate::render::backend::{
     self, FillStyle, GradientStop, LineStyle, PlannedSignificanceCall, PlannedTextOrigin,
     PlannedTextPlacement, Point2D, PointStyle, TextAnchor, POLYGON_MITER_LIMIT,
@@ -142,7 +142,7 @@ impl GeometryBox {
         })
     }
 
-    fn clipped(self, clip: Option<PanelBox>) -> Option<Self> {
+    fn clipped(self, clip: Option<PixelRect>) -> Option<Self> {
         let Some(clip) = clip else { return Some(self) };
         let bounds = Self {
             left: self.left.max(clip.x0),
@@ -177,7 +177,7 @@ impl GeometryBox {
 pub(crate) struct GeometryBackend {
     snapshot: GeometrySnapshot,
     font_environment: PreparedFontEnvironment,
-    clips: Vec<PanelBox>,
+    clips: Vec<PixelRect>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
 }
@@ -193,7 +193,7 @@ pub(crate) struct GeometrySnapshot {
 struct PositionedText {
     placement: PlannedTextPlacement,
     plan: ResolvedTextPlan,
-    clip: Option<PanelBox>,
+    clip: Option<PixelRect>,
     bounds_index: Option<usize>,
 }
 
@@ -263,7 +263,7 @@ impl GeometrySnapshot {
     pub(crate) fn record(
         &mut self,
         bounds: Option<GeometryBox>,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         if let Some(bounds) = bounds.and_then(|bounds| bounds.clipped(clip)) {
             backend::reserve_text_records(&mut self.bounds, 1)?;
@@ -276,7 +276,7 @@ impl GeometrySnapshot {
         &mut self,
         points: &[Point2D],
         style: &PointStyle,
-        clip: PanelBox,
+        clip: PixelRect,
     ) -> Result<(), Error> {
         self.scatter_with_clip(points, style, Some(clip))
     }
@@ -285,7 +285,7 @@ impl GeometrySnapshot {
         &mut self,
         points: &[Point2D],
         style: &PointStyle,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         scatter_bounds(points, style, |bounds| self.record(bounds, clip))
     }
@@ -294,7 +294,7 @@ impl GeometrySnapshot {
         &mut self,
         [x, y, width, height, radius]: [f64; 5],
         style: &FillStyle,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         let rounded = backend::validate_rounded_rect(x, y, width, height, radius)?;
         backend::validate_fill_style(style)?;
@@ -336,7 +336,7 @@ impl GeometrySnapshot {
         &mut self,
         points: &[Point2D],
         style: &LineStyle,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         line_bounds(points, style, |bounds| self.record(bounds, clip))
     }
@@ -345,7 +345,7 @@ impl GeometrySnapshot {
         &mut self,
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         let canonical = backend::validate_planned_text(placement, plan)?;
         let placement = PlannedTextPlacement {
@@ -379,7 +379,7 @@ impl GeometrySnapshot {
         &mut self,
         points: &[Point2D],
         style: &FillStyle,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         if points.len() < 3 {
             return Ok(());
@@ -408,11 +408,11 @@ impl GeometrySnapshot {
 
     pub(crate) fn linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
     ) -> Result<(), Error> {
         let gradient = backend::validate_linear_gradient(bounds, start, end, stops)?;
         let bounds = gradient.bounds;
@@ -502,7 +502,7 @@ impl GeometrySnapshot {
     ) -> Result<(), Error> {
         round.observe_count(self.bounds.len())?;
         for bounds in &self.bounds {
-            round.observe_box(PanelBox::new(
+            round.observe_box(PixelRect::new(
                 bounds.left,
                 bounds.right,
                 bounds.bottom,
@@ -528,8 +528,8 @@ impl GeometrySnapshot {
 
     pub(crate) fn overlap_after_assignment(
         &self,
-        before: PanelBox,
-        after: PanelBox,
+        before: PixelRect,
+        after: PixelRect,
         legend: GeometryBox,
         margin: f64,
         screen_text: impl Fn(&ResolvedTextPlan) -> Option<PlannedTextPlacement>,
@@ -606,7 +606,7 @@ impl GeometrySnapshot {
     pub(crate) fn text_overflow_resolved<'a>(
         &self,
         bounds: GeometryBox,
-        root: PanelBox,
+        root: PixelRect,
         current: &crate::layout::Projection,
         next: &crate::layout::Projection,
         declared: impl Iterator<Item = &'a ResolvedTextPlan> + Clone,
@@ -764,7 +764,7 @@ impl GeometryBackend {
         let clip = self.clips.iter().copied().reduce(|a, b| {
             let left = a.x0.max(b.x0);
             let bottom = a.y0.max(b.y0);
-            PanelBox::new(
+            PixelRect::new(
                 left,
                 a.x1.min(b.x1).max(left),
                 bottom,
@@ -1459,7 +1459,7 @@ impl Backend for GeometryBackend {
         }
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         self.ensure_open("begin_clip")?;
         let region = backend::validate_clip_region(region)?;
         self.clips.push(region.panel());
@@ -1486,7 +1486,7 @@ impl Backend for GeometryBackend {
 
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         _paint: Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -1537,7 +1537,7 @@ impl Backend for GeometryBackend {
 
     fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
@@ -1792,7 +1792,7 @@ mod tests {
                     "{kind}"
                 );
                 geometry
-                    .begin_clip(PanelBox::new(right, right + 1.0, 9.0, 21.0))
+                    .begin_clip(PixelRect::new(right, right + 1.0, 9.0, 21.0))
                     .unwrap();
                 draw_quantum_stroke(&mut geometry, kind, x).unwrap();
                 assert_eq!(
@@ -1940,7 +1940,7 @@ mod tests {
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
             let mut geometry = begun_backend();
             geometry
-                .begin_clip(PanelBox::new(8.0, 12.0, 12.0, 13.0))
+                .begin_clip(PixelRect::new(8.0, 12.0, 12.0, 13.0))
                 .unwrap();
             let mut style = PointStyle::new((0, 0, 0), 2).with_shape(shape);
             style.color = style.color.alpha(0);
@@ -1996,7 +1996,7 @@ mod tests {
             tick_height: 7.0,
         };
         geometry
-            .begin_clip(PanelBox::new(9.0, 10.0, 29.0, 30.0))
+            .begin_clip(PixelRect::new(9.0, 10.0, 29.0, 30.0))
             .unwrap();
         geometry
             .draw_bracket(
@@ -2065,7 +2065,7 @@ mod tests {
                     [1.0; 4],
                 )?;
                 let mut geometry = begun_backend();
-                geometry.begin_clip(PanelBox::new(0.0, 1.0, 0.0, 1.0))?;
+                geometry.begin_clip(PixelRect::new(0.0, 1.0, 0.0, 1.0))?;
                 geometry.draw_planned_text(
                     PlannedTextPlacement::middle(
                         Point2D::new(if calls == 1 { 50.0 } else { 60.0 }, 50.0),
@@ -2126,7 +2126,7 @@ mod tests {
                     let domain = round
                         .feedback_domain(&address, FeedbackKind::AutomaticDomainX)
                         .unwrap_or((0.0, 1.0));
-                    let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+                    let panel = PixelRect::new(0.0, 100.0, 0.0, 100.0);
                     let current =
                         crate::layout::Projection::new(domain, (0.0, 1.0), panel.as_tuple());
                     let (x, y) = current.project(1.1, 0.5);
@@ -2222,7 +2222,7 @@ mod tests {
         assert!(backend.begin(100, 100).is_err());
         backend.draw_line(&points, &style).unwrap();
         backend
-            .begin_clip(PanelBox::new(0.0, 10.0, 0.0, 10.0))
+            .begin_clip(PixelRect::new(0.0, 10.0, 0.0, 10.0))
             .unwrap();
         assert!(backend.end().is_err());
         backend.end_clip().unwrap();
@@ -2246,7 +2246,7 @@ mod tests {
         assert!(backend.end_clip().is_err());
         assert!(backend.end().is_err());
         backend
-            .begin_clip(PanelBox::new(0.0, 10.0, 0.0, 10.0))
+            .begin_clip(PixelRect::new(0.0, 10.0, 0.0, 10.0))
             .unwrap();
         assert!(backend.end_layer().is_err());
         backend.end_clip().unwrap();
@@ -2259,24 +2259,24 @@ mod tests {
         let mut backend = begun_backend();
         let style = test_fill_style(255, 0.0);
         backend
-            .begin_clip(PanelBox::new(0.0, 10.0, 0.0, 10.0))
+            .begin_clip(PixelRect::new(0.0, 10.0, 0.0, 10.0))
             .unwrap();
         backend
-            .begin_clip(PanelBox::new(8.0, 20.0, 8.0, 20.0))
+            .begin_clip(PixelRect::new(8.0, 20.0, 8.0, 20.0))
             .unwrap();
         backend
             .draw_rounded_rect(0.0, 0.0, 20.0, 20.0, 0.0, &style)
             .unwrap();
         backend.end_clip().unwrap();
         backend
-            .begin_clip(PanelBox::new(20.0, 30.0, 20.0, 30.0))
+            .begin_clip(PixelRect::new(20.0, 30.0, 20.0, 30.0))
             .unwrap();
         backend
             .draw_rounded_rect(0.0, 0.0, 30.0, 30.0, 0.0, &style)
             .unwrap();
         backend.end_clip().unwrap();
         backend
-            .begin_clip(PanelBox::new(10.0, 20.0, 0.0, 10.0))
+            .begin_clip(PixelRect::new(10.0, 20.0, 0.0, 10.0))
             .unwrap();
         backend
             .draw_rounded_rect(0.0, 0.0, 20.0, 20.0, 0.0, &style)
@@ -2311,7 +2311,7 @@ mod tests {
 
     #[test]
     fn invisible_point_parts_do_not_create_collision_bounds() {
-        let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+        let panel = PixelRect::new(0.0, 100.0, 0.0, 100.0);
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
             let mut style = PointStyle::new((1, 2, 3), 2).with_shape(shape);
             style.outline = Some(backend::PointOutline {

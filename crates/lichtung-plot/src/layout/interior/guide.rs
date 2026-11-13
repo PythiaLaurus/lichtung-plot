@@ -11,14 +11,14 @@ use crate::{Error, Plot, PlotKind};
 /// One measured mandatory right guide beside the flexible scientific body.
 pub(crate) fn native_right(
     descriptor: std::sync::Arc<PreparedGuide>,
-    panel: crate::layout::PanelBox,
+    panel: crate::layout::PixelRect,
     minimum: f64,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 
     content_plot: Option<&Plot>,
 ) -> Result<
-    (crate::layout::PanelBox, crate::decorations::legend::Legend),
+    (crate::layout::PixelRect, crate::decorations::legend::Legend),
     crate::layout::fit::PlanError,
 > {
     use crate::layout::fit::{self, FitKind};
@@ -103,7 +103,7 @@ pub(crate) fn native_right(
         panel.y1
     };
     Ok((
-        crate::layout::PanelBox::new(panel.x0, body_right, panel.y0, top),
+        crate::layout::PixelRect::new(panel.x0, body_right, panel.y0, top),
         guide,
     ))
 }

@@ -32,7 +32,7 @@ fn measure_layer(
     chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0),
+            crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             theme,
         ))
         .unwrap()
@@ -101,7 +101,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();
@@ -261,7 +261,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();
@@ -396,7 +396,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0),
+            crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0),
             &theme,
         ))
         .unwrap();

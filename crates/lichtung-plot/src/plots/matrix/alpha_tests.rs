@@ -74,7 +74,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            PanelBox::new(20.0, 800.0, 20.0, 620.0),
+            PixelRect::new(20.0, 800.0, 20.0, 620.0),
             &theme,
         ))
         .unwrap();

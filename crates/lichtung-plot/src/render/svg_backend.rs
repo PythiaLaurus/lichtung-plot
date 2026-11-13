@@ -22,7 +22,7 @@ use super::primitives::{
 use crate::font::canonical::{FrozenFontRegistry, ShapingDirection};
 #[cfg(test)]
 use crate::font::canonical::{PreparedFontEnvironment, SealedTextVerifier};
-use crate::layout::{PanelBox, ResolvedTextPlan};
+use crate::layout::{PixelRect, ResolvedTextPlan};
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use std::sync::Arc;
 
@@ -1005,13 +1005,13 @@ svg_backend_methods! {
     fn begin_layer(name: &str);
     fn begin_layer_with_role(name: &str, role: LayerRole);
     fn end_layer();
-    fn begin_clip(region: PanelBox);
+    fn begin_clip(region: PixelRect);
     fn end_clip();
-    fn draw_surface(bounds: PanelBox, paint: Color, role: SurfaceRole);
+    fn draw_surface(bounds: PixelRect, paint: Color, role: SurfaceRole);
     fn draw_scatter(points: &[Point2D], style: &PointStyle);
     fn draw_line(points: &[Point2D], style: &LineStyle);
     fn draw_polygon(points: &[Point2D], style: &FillStyle);
-    fn draw_linear_gradient(bounds: PanelBox, start: Point2D, end: Point2D, stops: &[GradientStop]);
+    fn draw_linear_gradient(bounds: PixelRect, start: Point2D, end: Point2D, stops: &[GradientStop]);
     fn draw_planned_text(placement: PlannedTextPlacement, plan: &ResolvedTextPlan);
     fn draw_rounded_rect(x: f64, y: f64, width: f64, height: f64, radius: f64, style: &FillStyle);
     fn draw_planned_bracket(call: PlannedSignificanceCall<'_>);
@@ -1501,7 +1501,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         Ok(())
     }
 
-    pub(crate) fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    pub(crate) fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error> {
         self.ensure_begun("begin_clip")?;
         let region = validate_clip_region(region)?;
         self.begin_canonical_clip(coordinates::CanonicalBox::from_bottom_up(
@@ -1549,7 +1549,7 @@ impl<S: SvgSink> SvgSerializer<S> {
 
     pub(crate) fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         paint: Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
@@ -1718,7 +1718,7 @@ impl<S: SvgSink> SvgSerializer<S> {
 
     pub(crate) fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],

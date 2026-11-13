@@ -5,13 +5,13 @@ use super::{
     text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan, ResolvedCanvasThemes,
 };
 use crate::decorations::legend::discrete::scoped::GuideAllocation;
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
 use crate::layout::PhysicalTextAlignment;
-use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
@@ -51,7 +51,7 @@ fn centered_x(
 
 fn place_header(
     plan: crate::layout::ResolvedTextPlan,
-    region: PanelBox,
+    region: PixelRect,
     position: Point2D,
     anchor: TextAnchor,
     scope: &FitScope,
@@ -75,7 +75,7 @@ fn required(value: f64) -> Result<i64, Error> {
     nearest_spatial_quanta(crate::layout::kernel::required_length(value)?)
 }
 
-fn centered_y(region: PanelBox, plan: &crate::layout::ResolvedTextPlan) -> Result<f64, Error> {
+fn centered_y(region: PixelRect, plan: &crate::layout::ResolvedTextPlan) -> Result<f64, Error> {
     let bottom = position(region.y0 + (region.height() - plan.height()) / 2.0)?;
     let half = crate::render::backend::nearest_even_text_half(plan.height_quanta)
         .ok_or_else(|| Error::Render("Canvas header half height overflow".into()))?;
@@ -202,7 +202,7 @@ pub(super) fn minimum(
 }
 
 pub(super) struct CanvasGridAssignment {
-    pub owners: Vec<Option<PanelBox>>,
+    pub owners: Vec<Option<PixelRect>>,
     pub tracks: DeclaredTracks,
     pub headers: Vec<CanvasHeaderPlan>,
     pub row_titles: Vec<CanvasHeaderPlan>,
@@ -215,8 +215,8 @@ pub(super) struct DeclaredTracks {
     rows: Vec<(f64, f64)>,
 }
 impl DeclaredTracks {
-    fn owner(&self, footprint: super::placement::Footprint) -> PanelBox {
-        PanelBox::new(
+    fn owner(&self, footprint: super::placement::Footprint) -> PixelRect {
+        PixelRect::new(
             self.columns[footprint.column].0,
             self.columns[footprint.column + footprint.column_span - 1].1,
             self.rows[footprint.row + footprint.row_span - 1].0,
@@ -250,7 +250,7 @@ pub(super) struct ContentSizing<'a> {
     reason = "the Grid's existing owners and prepared summaries are shared by both measurement phases"
 )]
 pub(super) fn allocate(
-    outer: PanelBox,
+    outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     text_panels: &[Option<TextPanelIntrinsics>],
@@ -258,7 +258,7 @@ pub(super) fn allocate(
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
-    gutters: &[(usize, usize, PanelRequirements)],
+    gutters: &[(usize, usize, EdgeSpaceRequirements)],
     themes: &ResolvedCanvasThemes,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
@@ -311,7 +311,7 @@ pub(super) fn natural_width(
     }
     Ok(
         match measure(
-            PanelBox::new(0.0, 0.0, 0.0, 0.0),
+            PixelRect::new(0.0, 0.0, 0.0, 0.0),
             placements,
             plots,
             text_panels,
@@ -350,7 +350,7 @@ enum Measurement {
     reason = "one Canvas Grid owns canonical sparse topology, root TextPanels, per-Plot minima, and measured gutters"
 )]
 fn measure(
-    outer: PanelBox,
+    outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     text_panels: &[Option<TextPanelIntrinsics>],
@@ -358,7 +358,7 @@ fn measure(
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
-    gutters: &[(usize, usize, PanelRequirements)],
+    gutters: &[(usize, usize, EdgeSpaceRequirements)],
     themes: &ResolvedCanvasThemes,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
@@ -426,7 +426,7 @@ fn measure(
         row_header_plans.push(plan);
     }
     let header_outer = outer;
-    let outer = PanelBox::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
+    let outer = PixelRect::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
     if outer.width() <= 0.0 && !content.is_some_and(|value| value.natural_width) {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
@@ -1044,7 +1044,7 @@ fn measure(
             .column_header_padding
             .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
             / 2.0;
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             left,
             right,
             header_outer.y1 - pixels(header_quanta) + inset,
@@ -1075,7 +1075,7 @@ fn measure(
             .row_header_padding
             .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
             / 2.0;
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             header_outer.x0 + inset,
             header_outer.x0 + row_header_width - inset,
             bottom,
@@ -1112,7 +1112,7 @@ fn measure(
             .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
             / 2.0;
         let lower = tracks.rows[row].1 + pixels(axis_row_tops[row]);
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             title_left + horizontal,
             title_right - horizontal,
             lower + vertical,

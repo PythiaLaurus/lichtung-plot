@@ -7,7 +7,8 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 #[test]
 fn explicit_tilt_keeps_complete_category_labels_and_non_tenth_annotation_rotation() {
     use lichtung_plot::{
-        PanelCorner, PanelTextAnnotation, Text, TextAnchor, TextLayout, TextOverflow, TextRotation,
+        DataAreaCorner, PlotTextAnnotation, Text, TextAnchor, TextLayout, TextOverflow,
+        TextRotation,
     };
     let plot = Plot::bar(
         CategoryValues::new("model", ["LightGBM", "CatBoost", "RandomForest"]).unwrap(),
@@ -16,9 +17,9 @@ fn explicit_tilt_keeps_complete_category_labels_and_non_tenth_annotation_rotatio
     .size(360, 380)
     .labels(Labels::raw())
     .x_tick_text_layout(TextLayout::default().rotation(TextRotation::degrees(-60.0).unwrap()))
-    .panel_text_annotation(
-        PanelTextAnnotation::new(
-            PanelCorner::TopLeft,
+    .text_annotation(
+        PlotTextAnnotation::new(
+            DataAreaCorner::TopLeft,
             Text::new("Projected note").layout(
                 TextLayout::default()
                     .anchor(TextAnchor::top_left())

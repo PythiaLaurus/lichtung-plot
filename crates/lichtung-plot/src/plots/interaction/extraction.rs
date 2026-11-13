@@ -70,7 +70,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(40.0, 600.0, 40.0, 420.0),
+            crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
             &theme,
         ))
         .unwrap();

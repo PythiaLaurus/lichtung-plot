@@ -471,7 +471,7 @@ pub(crate) fn prepare(
 
 #[derive(Debug)]
 pub(crate) struct InteractionPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     traces: Vec<TracePayload>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }

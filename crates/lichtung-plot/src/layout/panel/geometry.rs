@@ -1,7 +1,7 @@
 use super::range_ticks::resolve_range;
 use super::{Axis, AxisSide, AxisSpec, AxisTick, Layout, NumericTickPlan, Projection, TickSource};
 use crate::layout::fit::PlanError;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 #[cfg(test)]
 use crate::render::backend::Backend;
 use crate::theme::ResolvedTheme;
@@ -9,7 +9,7 @@ use crate::Error;
 
 impl Layout {
     /// Retain the actual assigned containing box of a self-decorating Grid.
-    pub(crate) fn envelope(panel: PanelBox) -> Self {
+    pub(crate) fn envelope(panel: PixelRect) -> Self {
         Self {
             x_axis: Axis {
                 label: None,
@@ -65,7 +65,7 @@ impl Layout {
     pub fn new_with_axis_specs_in_panel_box(
         x_range: (f64, f64),
         y_range: (f64, f64),
-        panel_box: PanelBox,
+        panel_box: PixelRect,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
         x_spec: &AxisSpec,
@@ -93,7 +93,7 @@ impl Layout {
     pub fn new_with_ticks_and_axis_specs_in_panel_box(
         x_range: (f64, f64),
         y_range: (f64, f64),
-        panel_box: PanelBox,
+        panel_box: PixelRect,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
         x_ticks: Vec<AxisTick>,
@@ -259,8 +259,8 @@ impl AxisSpec {
 }
 
 #[cfg(test)]
-fn default_panel_box(canvas_width: u32, canvas_height: u32) -> PanelBox {
-    PanelBox::new(
+fn default_panel_box(canvas_width: u32, canvas_height: u32) -> PixelRect {
+    PixelRect::new(
         80.0,
         f64::from(canvas_width) - 30.0,
         60.0,

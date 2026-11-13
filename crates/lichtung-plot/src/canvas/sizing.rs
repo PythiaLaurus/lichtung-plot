@@ -5,11 +5,11 @@ use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, GuideUse, ScopedGuideInputs,
 };
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::{body_preference, text_width};
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
-use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
@@ -348,7 +348,7 @@ pub(super) fn grid_gutters(
     source: &Canvas,
 
     round: &FeedbackRound,
-) -> Result<Vec<(usize, usize, PanelRequirements)>, Error> {
+) -> Result<Vec<(usize, usize, EdgeSpaceRequirements)>, Error> {
     let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut gutters = Vec::new();
     fit::reserve(
@@ -367,7 +367,7 @@ pub(super) fn grid_gutters(
         gutters.push((
             index / source.columns,
             index % source.columns,
-            PanelRequirements {
+            EdgeSpaceRequirements {
                 left,
                 right,
                 bottom,
@@ -485,7 +485,7 @@ pub(super) fn measure(
         gutters.push((
             index / source.columns,
             index % source.columns,
-            PanelRequirements {
+            EdgeSpaceRequirements {
                 left,
                 right,
                 bottom,
@@ -514,9 +514,9 @@ pub(super) fn measure(
     } else {
         0.0
     };
-    let allocate = |width: Option<f64>, gutters: &[(usize, usize, PanelRequirements)]| {
+    let allocate = |width: Option<f64>, gutters: &[(usize, usize, EdgeSpaceRequirements)]| {
         fit::measured(super::tracks::allocate(
-            PanelBox::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
+            PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             &source.placements,
             &plots,
             &prepared.text_panel_intrinsics,

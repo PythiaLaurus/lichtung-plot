@@ -19,7 +19,7 @@ use super::primitives::{
     CanonicalPlannedText, CanonicalScatter,
 };
 use crate::layout::{
-    DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment, ResolvedTextPlan,
+    DeferredAnnotationTextPlan, PhysicalTextAlignment, PixelRect, ResolvedTextPlan,
 };
 use crate::render::coordinates::{
     self, CanonicalBracket, CanonicalGradient, CanonicalPoint, CanonicalRect, CanonicalRoundedRect,
@@ -555,7 +555,7 @@ pub trait Backend {
     /// Begin clipping subsequent draw calls to a math-style canvas rectangle.
     /// Clip scopes may nest with layers and must be closed in last-in-first-out
     /// order with [`Backend::end_clip`].
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error>;
+    fn begin_clip(&mut self, region: PixelRect) -> Result<(), Error>;
 
     /// End the current clip scope.
     fn end_clip(&mut self) -> Result<(), Error>;
@@ -564,7 +564,7 @@ pub trait Backend {
     /// order rather than ordinary draw-call order.
     fn draw_surface(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         paint: Color,
         role: SurfaceRole,
     ) -> Result<(), Error>;
@@ -584,7 +584,7 @@ pub trait Backend {
     /// Stops must begin at 0, end at 1, and have strictly increasing offsets.
     fn draw_linear_gradient(
         &mut self,
-        bounds: PanelBox,
+        bounds: PixelRect,
         start: Point2D,
         end: Point2D,
         stops: &[GradientStop],
@@ -648,11 +648,11 @@ pub trait Backend {
     fn end(&mut self) -> Result<(), Error>;
 }
 
-pub(crate) fn validate_clip_region(region: PanelBox) -> Result<CanonicalRect, Error> {
+pub(crate) fn validate_clip_region(region: PixelRect) -> Result<CanonicalRect, Error> {
     coordinates::canonical_clip(region)
 }
 
-pub(crate) fn validate_surface_bounds(bounds: PanelBox) -> Result<CanonicalRect, Error> {
+pub(crate) fn validate_surface_bounds(bounds: PixelRect) -> Result<CanonicalRect, Error> {
     coordinates::canonical_clip(bounds)
 }
 
@@ -718,7 +718,7 @@ pub(crate) fn validate_fill_style(style: &FillStyle) -> Result<(), Error> {
 }
 
 pub(crate) fn validate_linear_gradient(
-    bounds: PanelBox,
+    bounds: PixelRect,
     start: Point2D,
     end: Point2D,
     stops: &[GradientStop],
@@ -993,7 +993,7 @@ pub(crate) fn validate_bracket_label(
 
 pub(crate) fn with_clip<T>(
     backend: &mut dyn Backend,
-    region: PanelBox,
+    region: PixelRect,
     draw: impl FnOnce(&mut dyn Backend) -> Result<T, Error>,
 ) -> Result<T, Error> {
     backend.begin_clip(region)?;

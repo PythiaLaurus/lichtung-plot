@@ -3,12 +3,12 @@
 
 use super::data::FacetPanel;
 use crate::data::PlotData;
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{FitOutcome, FitScope};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
-use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::theme::ResolvedTheme;
 use crate::Error;
 
@@ -37,7 +37,7 @@ pub(super) struct ContentSizing<'a> {
 }
 
 pub(super) struct GridAssignment {
-    pub cells: Vec<PanelBox>,
+    pub cells: Vec<PixelRect>,
     pub size: (f64, f64),
 }
 
@@ -47,11 +47,11 @@ pub(super) struct GridAssignment {
 )]
 pub(super) fn allocate(
     data: PlotData<'_>,
-    outer: PanelBox,
+    outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
-    gutters: &[(usize, usize, PanelRequirements)],
+    gutters: &[(usize, usize, EdgeSpaceRequirements)],
     theme: &ResolvedTheme,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
@@ -95,7 +95,7 @@ pub(super) fn natural_width(
     Ok(
         match measure(
             data,
-            PanelBox::new(0.0, 0.0, 0.0, 0.0),
+            PixelRect::new(0.0, 0.0, 0.0, 0.0),
             shape,
             panels,
             minima,
@@ -131,11 +131,11 @@ enum Measurement {
 )]
 fn measure(
     data: PlotData<'_>,
-    outer: PanelBox,
+    outer: PixelRect,
     shape: (usize, usize),
     panels: &[FacetPanel],
     minima: &[(f64, f64)],
-    gutters: &[(usize, usize, PanelRequirements)],
+    gutters: &[(usize, usize, EdgeSpaceRequirements)],
     theme: &ResolvedTheme,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
@@ -468,7 +468,7 @@ fn measure(
     for &top in &y_positions {
         for (&left, &width) in x_positions.iter().zip(&columns) {
             let row = cells.len() / columns.len();
-            cells.push(PanelBox::new(
+            cells.push(PixelRect::new(
                 pixels(left),
                 pixels(checked(i128::from(left) + i128::from(width))?),
                 pixels(checked(i128::from(top) - i128::from(rows[row]))?),
@@ -534,7 +534,7 @@ mod tests {
                 |(), assigned, round| {
                     let FitOutcome::Measured(grid) = allocate(
                         plot.data(),
-                        PanelBox::new(0.0, 0.0, 0.0, 0.0),
+                        PixelRect::new(0.0, 0.0, 0.0, 0.0),
                         (1, 2),
                         &[],
                         &[],
@@ -556,7 +556,7 @@ mod tests {
                     assert_eq!(grid.size.1.to_bits(), f64::from(em).to_bits());
                     let FitOutcome::Measured(exact) = allocate(
                         plot.data(),
-                        PanelBox::new(0.0, 2.0 / 1024.0, 0.0, 1.0 / 1024.0),
+                        PixelRect::new(0.0, 2.0 / 1024.0, 0.0, 1.0 / 1024.0),
                         (1, 2),
                         &[],
                         &[],
@@ -602,7 +602,7 @@ mod tests {
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let result = allocate(
                 data,
-                PanelBox::new(0.0, 400.0, 0.0, 200.0),
+                PixelRect::new(0.0, 400.0, 0.0, 200.0),
                 (2, 2),
                 &[],
                 &[],
@@ -640,13 +640,13 @@ mod tests {
             cell: Vec::new(),
             rows: vec![index],
             source_rows: vec![index],
-            panel: PanelBox::new(0.0, 1.0, 0.0, 1.0),
+            panel: PixelRect::new(0.0, 1.0, 0.0, 1.0),
         });
         let gutters = [
             (
                 0,
                 0,
-                PanelRequirements {
+                EdgeSpaceRequirements {
                     left: 20.0,
                     right: 5.0,
                     bottom: 0.0,
@@ -656,7 +656,7 @@ mod tests {
             (
                 0,
                 1,
-                PanelRequirements {
+                EdgeSpaceRequirements {
                     left: 5.0,
                     right: 20.0,
                     bottom: 0.0,
@@ -666,7 +666,7 @@ mod tests {
         ];
         let FitOutcome::Measured(cells) = allocate(
             plot.data(),
-            PanelBox::new(0.0, 400.0, 0.0, 200.0),
+            PixelRect::new(0.0, 400.0, 0.0, 200.0),
             (1, 2),
             &panels,
             &[(80.0, 60.0), (120.0, 60.0)],

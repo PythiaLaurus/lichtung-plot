@@ -78,7 +78,7 @@ Shared color-guide titles require complete equal Text requests, including explic
 
 ### References, anchors and local adaptation
 
-PanelTextAnnotation::new anchors to a corner. `at` instead accepts typed
+PlotTextAnnotation::new anchors to a corner. `at` instead accepts typed
 Data/Panel/Figure references; TextLayout's block anchor is a separate choice.
 The data reference is projected by the actual panel, not inferred from screen
 coordinates. `position()` reads the typed reference. TextOffset chooses Screen

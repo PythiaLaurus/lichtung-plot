@@ -24,8 +24,8 @@ fn authored_display_slots_preserve_common_source_and_real_blank_line_metrics() {
     .legend(crate::LegendPolicy::Visible(
         crate::LegendPosition::OutsideRight,
     ))
-    .panel_text_annotation(
-        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, SOURCE).unwrap(),
+    .text_annotation(
+        crate::PlotTextAnnotation::new(crate::DataAreaCorner::TopLeft, SOURCE).unwrap(),
     );
     let canvas = Canvas::grid(2, 1)
         .unwrap()
@@ -138,8 +138,8 @@ fn native_category_selection_uses_final_orders_and_skips_only_unselected_glyphs(
     let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
     assert_eq!(svg.matches("<polygon ").count(), 12);
     assert_eq!(capture_counters(), counters);
-    let used = plot.panel_text_annotation(
-        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, unavailable).unwrap(),
+    let used = plot.text_annotation(
+        crate::PlotTextAnnotation::new(crate::DataAreaCorner::TopLeft, unavailable).unwrap(),
     );
     let error = Canvas::grid(1, 1)
         .unwrap()
@@ -233,7 +233,7 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         .unwrap();
     canvas
         .build_preflight_plan(|prepared, _| {
-            let outer = PanelBox::new(0.0, 650.0, 0.0, 500.0);
+            let outer = PixelRect::new(0.0, 650.0, 0.0, 500.0);
             let plan = crate::layout::fit::measured(tracks::allocate(
                 outer,
                 &canvas.placements,
@@ -672,7 +672,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
             let measured = crate::layout::fit::measured(TextPanelPlan::measure(
                 &panel,
                 0,
-                PanelBox::new(0.0, 600.0, 0.0, 900.0),
+                PixelRect::new(0.0, 600.0, 0.0, 900.0),
                 theme,
                 prepared.text_panel_intrinsics[0].unwrap(),
                 &crate::layout::fit::FitScope::root(),

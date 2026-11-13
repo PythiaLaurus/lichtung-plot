@@ -76,7 +76,7 @@ impl Plot {
 
 #[derive(Debug)]
 pub(crate) struct GuideSnapshot {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     lines: Vec<([Point2D; 2], crate::render::backend::LineStyle)>,
 }
 

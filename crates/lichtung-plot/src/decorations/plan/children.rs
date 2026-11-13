@@ -7,7 +7,7 @@ use super::{LegendRole, PanelPlan};
 use crate::decorations::legend::discrete::scoped::{GuideConsumption, GuideUse, ScopedGuideInputs};
 use crate::layout::fit::FitOutcome;
 use crate::layout::kernel::{ChildFeedback, ChildFeedbackInputs, FeedbackRound};
-use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::spec::{FacetScales, PlotRenderContext, PlotRenderResult};
 use crate::{Error, Plot};
 
@@ -94,7 +94,7 @@ impl Inputs {
     }
 }
 
-fn geometry(panel: PanelBox) -> [u64; 4] {
+fn geometry(panel: PixelRect) -> [u64; 4] {
     [panel.x0, panel.x1, panel.y0, panel.y1].map(f64::to_bits)
 }
 
@@ -369,7 +369,7 @@ mod tests {
                 let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
                 let context = PlotRenderContext::new(
                     source.data(),
-                    crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
+                    crate::layout::PixelRect::new(20.0, 400.0, 20.0, 500.0),
                     &theme,
                 );
                 let key = Inputs::new(&source, context, &owner, round)?;
@@ -413,7 +413,7 @@ mod tests {
             },
             |_| Ok(()),
             |(), assigned, round| {
-                let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
+                let panel = PixelRect::new(10.0, 200.0, 30.0, 400.0);
                 let context = PlotRenderContext::new(source.data(), panel, &theme);
                 let mut produce = || {
                     produced += 1;
@@ -586,13 +586,13 @@ mod tests {
                 |(), assigned, round| {
                     let context = PlotRenderContext::new(
                         source.data(),
-                        PanelBox::new(10.0, 200.0, 30.0, 400.0),
+                        PixelRect::new(10.0, 200.0, 30.0, 400.0),
                         &theme,
                     );
                     let mut produce = || {
                         produced += 1;
                         Ok(FitOutcome::Measured(PlotRenderResult::new(
-                            crate::layout::Layout::envelope(crate::layout::PanelBox::new(
+                            crate::layout::Layout::envelope(crate::layout::PixelRect::new(
                                 80.0, 770.0, 60.0, 570.0,
                             )),
                             None,
@@ -694,7 +694,7 @@ mod tests {
                 rounds += 1;
                 let context = PlotRenderContext::new(
                     source.data(),
-                    PanelBox::new(10.0, 200.0, 30.0, 400.0),
+                    PixelRect::new(10.0, 200.0, 30.0, 400.0),
                     &theme,
                 );
                 if rounds == 1 {
@@ -708,7 +708,7 @@ mod tests {
                             frame_box: context.panel,
                             panel_box: context.panel,
                             result: PlotRenderResult::new(
-                                crate::layout::Layout::envelope(crate::layout::PanelBox::new(
+                                crate::layout::Layout::envelope(crate::layout::PixelRect::new(
                                     80.0, 770.0, 60.0, 570.0,
                                 )),
                                 None,
@@ -779,7 +779,7 @@ mod tests {
             },
             |_| Ok(()),
             |(), assigned, round| {
-                let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
+                let panel = PixelRect::new(10.0, 200.0, 30.0, 400.0);
                 let context = PlotRenderContext::new(source.data(), panel, &theme);
                 assert!(Inputs::new(
                     &source,
@@ -797,9 +797,9 @@ mod tests {
                     round
                 )?);
                 for moved in [
-                    PanelBox::new(11.0, 201.0, 30.0, 400.0),
-                    PanelBox::new(10.0, 200.0, 31.0, 401.0),
-                    PanelBox::new(10.0 + 1.0 / 4096.0, 200.0, 30.0, 400.0),
+                    PixelRect::new(11.0, 201.0, 30.0, 400.0),
+                    PixelRect::new(10.0, 200.0, 31.0, 401.0),
+                    PixelRect::new(10.0 + 1.0 / 4096.0, 200.0, 30.0, 400.0),
                 ] {
                     assert!(!key.matches(&source, context.with_panel(moved), &owner, round)?);
                 }

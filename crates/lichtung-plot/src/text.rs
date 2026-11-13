@@ -21,11 +21,11 @@ pub use roles::GuideTextRole;
 /// Clones share immutable source bytes and retain complete local instructions.
 ///
 /// ```
-/// use lichtung_plot::{NumericValues, PanelCorner, PanelTextAnnotation, Plot, Text, TextAlignment, TextLayout, TextPanel, Theme};
+/// use lichtung_plot::{NumericValues, DataAreaCorner, PlotTextAnnotation, Plot, Text, TextAlignment, TextLayout, TextPanel, Theme};
 /// let style = Theme::publication().typography().get_composition()
 ///     .get_text_panel_title().clone().font_size(24.0)?;
 /// let title = Text::new("Study\ncontext").style(style).alignment(TextAlignment::End);
-/// let note = PanelTextAnnotation::new(PanelCorner::TopLeft, title.clone())?;
+/// let note = PlotTextAnnotation::new(DataAreaCorner::TopLeft, title.clone())?;
 /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
 ///     NumericValues::new("y", [1.0, 0.0]))
 ///     .title(title.clone()).title("Updated heading")
@@ -492,7 +492,8 @@ pub(crate) const fn is_nonpainting_control(scalar: char) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AxisTick, Canvas, Labels, NumericValues, PanelCorner, PanelTextAnnotation, Plot, TextPanel,
+        AxisTick, Canvas, DataAreaCorner, Labels, NumericValues, Plot, PlotTextAnnotation,
+        TextPanel,
     };
 
     #[test]
@@ -699,7 +700,7 @@ mod tests {
             Err(crate::Error::Data(_))
         ));
         assert!(TextPanel::new(Text::UNSET, "body").is_err());
-        assert!(PanelTextAnnotation::new(PanelCorner::TopLeft, Text::UNSET).is_err());
+        assert!(PlotTextAnnotation::new(DataAreaCorner::TopLeft, Text::UNSET).is_err());
     }
 
     #[test]
@@ -718,7 +719,7 @@ mod tests {
                 .unwrap()
         };
         let errors = [
-            PanelTextAnnotation::new(PanelCorner::TopLeft, "a\tb").unwrap_err(),
+            PlotTextAnnotation::new(DataAreaCorner::TopLeft, "a\tb").unwrap_err(),
             TextPanel::new("title", "a\tb").unwrap_err(),
             canvas().column_header(0, 1, "a\tb").err().unwrap(),
             canvas().title("a\tb").preflight().unwrap_err(),

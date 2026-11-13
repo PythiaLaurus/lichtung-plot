@@ -33,13 +33,13 @@ mod semantics;
 mod sources;
 #[cfg(test)]
 use semantics::RangePolicy;
-pub(crate) use semantics::{AxisSemanticInputs, RangeProvenance, StandardPanelInputs};
+pub(crate) use semantics::{AxisSemanticInputs, CoordinateLayoutInputs, RangeProvenance};
 pub(crate) use sources::format_guide_label;
 pub(crate) use sources::format_label;
 pub(crate) use sources::interval::fixed_is_empty as fixed_interval_is_empty;
 pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickSource};
 
-pub(crate) use axis_frame_grid::PanelAxisPlan;
+pub(crate) use axis_frame_grid::AxisSystemPlan;
 pub(crate) use cells::category_label_span;
 pub(crate) use cells::LABEL_CLEARANCE;
 pub(crate) use range_ticks::{anchored_auto_range, continuous_auto_range, display_axis_spec};

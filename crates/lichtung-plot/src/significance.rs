@@ -8,7 +8,7 @@ pub use spec::{Attached, FacetCell, Pairwise, Significance, SignificanceMark, Si
 use crate::Error;
 
 use crate::layout::kernel::SpatialRounding;
-use crate::layout::{DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment};
+use crate::layout::{DeferredAnnotationTextPlan, PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{
     Backend, BracketOrientation, BracketStyle, PlannedSignificanceCall, SignificanceBracket,
 };
@@ -69,7 +69,7 @@ pub(crate) fn plan(
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
@@ -101,7 +101,7 @@ fn plan_comparisons(
     y_range: (f64, f64),
     categorical_x_override: Option<(f64, f64)>,
     y_limits: Option<(f64, f64)>,
-    panel: PanelBox,
+    panel: PixelRect,
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
@@ -134,7 +134,7 @@ fn plan_comparisons_with_label(
     y_range: (f64, f64),
     categorical_x_override: Option<(f64, f64)>,
     y_limits: Option<(f64, f64)>,
-    panel: PanelBox,
+    panel: PixelRect,
     legend_constraint: LegendAnnotationConstraint,
     effective: &EffectiveSignificance,
     theme: &crate::theme::ResolvedTheme,
@@ -173,7 +173,7 @@ fn plan_comparisons_at_with_label(
     y_range: (f64, f64),
     categorical_x_override: Option<(f64, f64)>,
     y_limits: Option<(f64, f64)>,
-    panel: PanelBox,
+    panel: PixelRect,
     legend_constraint: LegendAnnotationConstraint,
     horizontal: bool,
     effective: &EffectiveSignificance,
@@ -554,7 +554,7 @@ fn plan_comparisons_at_with_label(
     let mut labels = Vec::new();
     crate::data::source::reserve_source(&mut labels, brackets.len())?;
     let containing = if horizontal {
-        PanelBox::new(panel.y0, panel.y1, panel.x0, panel.x1)
+        PixelRect::new(panel.y0, panel.y1, panel.x0, panel.x1)
     } else {
         panel
     };
@@ -617,7 +617,7 @@ fn plan_comparisons_at_with_label(
 fn label_footprint(
     plan: &crate::layout::ResolvedTextPlan,
     horizontal: bool,
-) -> Result<PanelBox, Error> {
+) -> Result<PixelRect, Error> {
     use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
     let default = if horizontal {
         PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), TextAnchor::Start, 0.0)
@@ -640,7 +640,7 @@ pub(crate) fn plan_grouped(
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     y_range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     stacked: bool,
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
@@ -673,7 +673,7 @@ pub(crate) fn plan_horizontal(
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     x_range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     stacked: bool,
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
@@ -685,7 +685,7 @@ pub(crate) fn plan_horizontal(
         rendered_maxima,
         group_width,
         x_range,
-        PanelBox::new(panel.y0, panel.y1, panel.x0, panel.x1),
+        PixelRect::new(panel.y0, panel.y1, panel.x0, panel.x1),
         LegendAnnotationConstraint::NoObstacle,
         stacked,
         true,
@@ -727,7 +727,7 @@ fn plan_grouped_oriented(
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     numeric_range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     legend_constraint: LegendAnnotationConstraint,
     stacked: bool,
     horizontal: bool,
@@ -929,7 +929,7 @@ fn validate_bracket(
 
 fn place_lines(
     range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     level_maxima: &[f64],
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
@@ -1011,13 +1011,13 @@ fn significance_level_spacing(
     })
 }
 
-fn annotation_capacity(panel: PanelBox, ceiling: Option<f64>) -> Result<ExactLength, Error> {
+fn annotation_capacity(panel: PixelRect, ceiling: Option<f64>) -> Result<ExactLength, Error> {
     ExactLength::pixels((ceiling.unwrap_or(panel.y1).min(panel.y1) - panel.y0).max(0.0))
 }
 
 fn expand_upper_limit(
     range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     level_maxima: &[f64],
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
@@ -1089,7 +1089,7 @@ fn expand_upper_limit(
 
 fn fit_data_below_ceiling(
     range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     rendered_maxima: &[f64],
     ceiling: f64,
     metrics: &BracketMetrics,
@@ -1152,7 +1152,7 @@ fn fit_data_below_ceiling(
 
 fn data_fits_below_ceiling(
     range: (f64, f64),
-    panel: PanelBox,
+    panel: PixelRect,
     maximum: f64,
     ceiling: f64,
     metrics: &BracketMetrics,

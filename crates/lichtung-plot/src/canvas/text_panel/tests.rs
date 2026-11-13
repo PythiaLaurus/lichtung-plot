@@ -31,8 +31,8 @@ fn body_anchor_uses_the_enlarged_post_inset_sequence_cell_not_the_whole_panel() 
         .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)
         .unwrap();
     for cell in [
-        PanelBox::new(40.0, 440.0, 30.0, 430.0),
-        PanelBox::new(40.0, 640.0, 30.0, 730.0),
+        PixelRect::new(40.0, 440.0, 30.0, 430.0),
+        PixelRect::new(40.0, 640.0, 30.0, 730.0),
     ] {
         let plan = fit::measured(TextPanelPlan::measure(
             &source,
@@ -121,7 +121,7 @@ fn assigned_sequence_height_fits_body_without_shrinking_an_independent_heading()
     let plan = fit::measured(TextPanelPlan::measure(
         &source,
         0,
-        PanelBox::new(0.0, 400.0, 0.0, height),
+        PixelRect::new(0.0, 400.0, 0.0, height),
         &theme,
         intrinsic,
         &FitScope::root(),

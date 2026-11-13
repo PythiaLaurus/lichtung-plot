@@ -2,11 +2,11 @@
 
 use super::{data, tracks, PreparedFacetGuide};
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::text_width;
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
-use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::layout::{AddressRole, ComponentAddress, PixelRect};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
@@ -39,7 +39,7 @@ pub(super) fn grid_height(
         gutters.push((
             panel.row,
             panel.column,
-            PanelRequirements {
+            EdgeSpaceRequirements {
                 left,
                 right,
                 bottom,
@@ -50,7 +50,7 @@ pub(super) fn grid_height(
     Ok(
         match tracks::allocate(
             data,
-            PanelBox::new(0.0, width, 0.0, 0.0),
+            PixelRect::new(0.0, width, 0.0, 0.0),
             shape,
             panels,
             minima,
@@ -107,7 +107,7 @@ pub(in crate::orchestrator) fn natural_size(
         gutters.push((
             panel.row,
             panel.column,
-            PanelRequirements {
+            EdgeSpaceRequirements {
                 left,
                 right,
                 bottom,
@@ -137,10 +137,10 @@ pub(in crate::orchestrator) fn natural_size(
     } else {
         0.0
     };
-    let allocate = |width: Option<f64>, gutters: &[(usize, usize, PanelRequirements)]| {
+    let allocate = |width: Option<f64>, gutters: &[(usize, usize, EdgeSpaceRequirements)]| {
         fit::measured(tracks::allocate(
             data,
-            PanelBox::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
+            PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             (selectors.rows, selectors.columns),
             &panels,
             &minima,
@@ -186,7 +186,7 @@ pub(in crate::orchestrator) fn natural_size(
             labels[0].as_ref(),
             labels[1].as_ref(),
             theme,
-            PanelBox::new(0.0, natural.0, 0.0, natural.1),
+            PixelRect::new(0.0, natural.0, 0.0, natural.1),
         )
         .map_err(fit::PlanError::into_error)?;
         let body = theme.root_outer_width(natural.0 + axes[0])?;
@@ -227,7 +227,7 @@ pub(in crate::orchestrator) fn natural_size(
         labels[0].as_ref(),
         labels[1].as_ref(),
         theme,
-        PanelBox::new(0.0, grid.size.0, 0.0, grid.size.1),
+        PixelRect::new(0.0, grid.size.0, 0.0, grid.size.1),
     )
     .map_err(fit::PlanError::into_error)?;
     let prose = RootTitleBlockPlan::content_reserves(

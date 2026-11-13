@@ -4,7 +4,7 @@ use super::{
     Arc, AxisScale, AxisSpec, BarPointLayer, BarSpacing, BooleanValues, Bounds, CategoryOrders,
     CategoryValues, FacetSpec, GuideSpec, HeatmapAnnotations, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, Labels,
-    LegendPolicy, LinePathStyle, NumericFormat, PanelTextAnnotation, PlotInput, PlotKind,
+    LegendPolicy, LinePathStyle, NumericFormat, PlotInput, PlotKind, PlotTextAnnotation,
     PointLayer, QqLine, RawOverlay, RegressionBand, SourceRows, Theme, WaterfallLabels,
 };
 
@@ -75,7 +75,7 @@ pub(super) struct SharedPayload {
     pub(super) guides: Vec<GuideSpec>,
     pub(super) point_layers: Vec<PointLayer>,
     pub(super) bar_point_layers: Vec<BarPointLayer>,
-    pub(super) panel_text_annotations: Vec<PanelTextAnnotation>,
+    pub(super) panel_text_annotations: Vec<PlotTextAnnotation>,
 }
 
 impl PlotDescription {

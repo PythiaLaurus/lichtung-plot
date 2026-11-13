@@ -205,7 +205,7 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
     ]);
     let mut y = AxisSpec::default().limits(0.0, 1.0);
     y.exact_ticks = Some(vec![AxisTick::new(0.5, "")]);
-    let panel = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0);
+    let panel = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0);
     let numeric = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 1.0),
         (0.0, 1.0),
@@ -275,7 +275,7 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
     let result = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (1.1, 1.2),
         (0.0, 1.0),
-        crate::layout::PanelBox::new(0.0, 1.0, 0.0, 100.0),
+        crate::layout::PixelRect::new(0.0, 1.0, 0.0, 100.0),
         None,
         None,
         Vec::new(),
@@ -297,7 +297,7 @@ fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range()
     let wide = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 400.0),
+        crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
         &AxisSpec::default(),
@@ -308,7 +308,7 @@ fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range()
     let narrow = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
-        crate::layout::PanelBox::new(0.0, 40.0, 0.0, 400.0),
+        crate::layout::PixelRect::new(0.0, 40.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
         &AxisSpec::default(),
@@ -327,7 +327,7 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
     let tall = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 400.0),
+        crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
         &AxisSpec::default(),
@@ -338,7 +338,7 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
     let short = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 40.0),
+        crate::layout::PixelRect::new(0.0, 400.0, 0.0, 40.0),
         Some("x".into()),
         Some("y".into()),
         &AxisSpec::default(),
@@ -354,7 +354,7 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
 #[test]
 fn wider_numeric_labels_reduce_automatic_x_tick_density() {
     let theme = crate::Theme::publication().resolve().unwrap();
-    let panel_box = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 100.0);
+    let panel_box = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 100.0);
     let wider_label_spec = AxisSpec::default().limits(0.0, 1e12);
     let shorter_label_spec = AxisSpec::default().limits(0.0, 1.0);
     let wider_labels = Layout::new_with_axis_specs_in_panel_box(
@@ -405,7 +405,7 @@ fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 400.0),
+        crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
         &spec,
@@ -428,7 +428,7 @@ fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
 #[test]
 fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
     let spec = AxisSpec::default().limits(0.0, 100.0);
-    let panel = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 400.0);
+    let panel = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0);
     let default_theme = crate::Theme::publication().resolve().unwrap();
     let default_layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
@@ -494,7 +494,7 @@ fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 10.0),
-        crate::layout::PanelBox::new(40.0, 360.0, 40.0, 360.0),
+        crate::layout::PixelRect::new(40.0, 360.0, 40.0, 360.0),
         None,
         None,
         &AxisSpec::default(),
@@ -533,7 +533,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 10.0),
-        crate::layout::PanelBox::new(80.0, 360.0, 80.0, 360.0),
+        crate::layout::PixelRect::new(80.0, 360.0, 80.0, 360.0),
         Some("horizontal".into()),
         Some("vertical".into()),
         &spec,
@@ -545,7 +545,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
     drop(layout);
     drop(theme);
     let shape_calls = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let render = |plan: &PanelAxisPlan| {
+    let render = |plan: &AxisSystemPlan| {
         let mut backend = crate::render::svg_backend::SvgBackend::in_memory(400, 400);
         backend.begin(400, 400).unwrap();
         plan.draw_grid(&mut backend).unwrap();
@@ -571,7 +571,7 @@ fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 10.0),
-        crate::layout::PanelBox::new(40.0, 360.0, 40.0, 360.0),
+        crate::layout::PixelRect::new(40.0, 360.0, 40.0, 360.0),
         Some("horizontal".into()),
         Some("vertical".into()),
         &AxisSpec::default(),
@@ -605,7 +605,7 @@ fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (5.0, 30.0),
         (0.0, 1.0),
-        crate::layout::PanelBox::new(0.0, 1_000.0, 0.0, 100.0),
+        crate::layout::PixelRect::new(0.0, 1_000.0, 0.0, 100.0),
         Some("x".into()),
         Some("y".into()),
         &spec,
@@ -649,7 +649,7 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 7.0),
-        crate::layout::PanelBox::new(0.0, 640.0, 0.0, 480.0),
+        crate::layout::PixelRect::new(0.0, 640.0, 0.0, 480.0),
         Some("x".into()),
         Some("y".into()),
         Vec::new(),

@@ -510,7 +510,7 @@ mod tests {
                 .unwrap();
             theme.marks = theme.marks.clone().points(points).unwrap();
             let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
-            let panel = crate::layout::PanelBox::new(10.0, 610.0, 20.0, 420.0);
+            let panel = crate::layout::PixelRect::new(10.0, 610.0, 20.0, 420.0);
             let measure = |theme: &super::super::ResolvedTheme| {
                 let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, theme).unwrap();
                 chart

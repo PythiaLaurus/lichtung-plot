@@ -2,7 +2,7 @@ use crate::Error;
 
 use super::sources::SourceKind;
 use super::{cells, Axis, AxisSide, AxisSpec, AxisTick, Layout, Projection, TickSource};
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor};
@@ -58,18 +58,18 @@ impl AxisTick {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PanelAxisPlan {
+pub(crate) struct AxisSystemPlan {
     projection: Projection,
     semantics: [super::AxisSemanticInputs; 2],
-    standard: super::StandardPanelInputs,
+    standard: super::CoordinateLayoutInputs,
     x_axis: FrozenAxisPlan,
     y_axis: FrozenAxisPlan,
     frame: Option<FramePlan>,
     grid: Option<GridPlan>,
-    requirements: PanelRequirements,
+    requirements: EdgeSpaceRequirements,
 }
 
-impl PanelAxisPlan {
+impl AxisSystemPlan {
     /// Matrix variable-title roles span their edge cells, but never merge axes'
     /// independent numeric tick groups or the row and column title roles.
     pub(crate) fn uniform_titles(
@@ -116,7 +116,7 @@ struct FramePlan {
 
 impl FramePlan {
     fn new(
-        panel: crate::layout::PanelBox,
+        panel: crate::layout::PixelRect,
         frame: &crate::theme::FrameTheme,
     ) -> Result<Self, Error> {
         let selected = frame.get_sides().drawing_order();
@@ -190,7 +190,7 @@ struct FrozenAxisPlan {
     end_overhang: f64,
 }
 
-impl PanelAxisPlan {
+impl AxisSystemPlan {
     pub(crate) fn geometry_snapshot(
         &self,
     ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
@@ -226,7 +226,7 @@ impl PanelAxisPlan {
         }
     }
 
-    pub(crate) fn requirements(&self) -> PanelRequirements {
+    pub(crate) fn requirements(&self) -> EdgeSpaceRequirements {
         self.requirements
     }
 
@@ -335,7 +335,7 @@ impl PanelAxisPlan {
 
 impl Layout {
     #[cfg(test)]
-    pub(crate) fn plan_axes(&self, theme: &ResolvedTheme) -> Result<PanelAxisPlan, Error> {
+    pub(crate) fn plan_axes(&self, theme: &ResolvedTheme) -> Result<AxisSystemPlan, Error> {
         self.measure_axes(theme, &FitScope::root(), self.test_semantics())
             .map_err(PlanError::into_error)
     }
@@ -360,9 +360,9 @@ impl Layout {
         theme: &ResolvedTheme,
         scope: &FitScope,
         semantics: [super::AxisSemanticInputs; 2],
-    ) -> Result<PanelAxisPlan, PlanError> {
+    ) -> Result<AxisSystemPlan, PlanError> {
         self.measure_axes_with_inputs(theme, scope, semantics, || {
-            super::StandardPanelInputs::new(theme)
+            super::CoordinateLayoutInputs::new(theme)
         })
     }
 
@@ -371,8 +371,8 @@ impl Layout {
         theme: &ResolvedTheme,
         scope: &FitScope,
         semantics: [super::AxisSemanticInputs; 2],
-        standard: impl FnOnce() -> Result<super::StandardPanelInputs, Error>,
-    ) -> Result<PanelAxisPlan, PlanError> {
+        standard: impl FnOnce() -> Result<super::CoordinateLayoutInputs, Error>,
+    ) -> Result<AxisSystemPlan, PlanError> {
         let standard = standard()?;
         let directional = theme.reproject_text(self);
         let theme = &directional;
@@ -432,7 +432,7 @@ impl Layout {
             None
         };
         let edges = frame.as_ref().map_or([0.0; 4], FramePlan::outward_edges);
-        let mut requirements = PanelRequirements {
+        let mut requirements = EdgeSpaceRequirements {
             left: y_axis.gutter.max(x_axis.start_overhang).max(edges[0]),
             right: x_axis.end_overhang.max(edges[1]),
             bottom: x_axis.gutter.max(y_axis.start_overhang).max(edges[2]),
@@ -446,7 +446,7 @@ impl Layout {
         ] {
             *extent = (*extent * 1024.0).ceil() / 1024.0;
         }
-        Ok(PanelAxisPlan {
+        Ok(AxisSystemPlan {
             projection: self.projection.clone(),
             semantics,
             standard,
@@ -545,7 +545,7 @@ impl Axis {
 
     fn vertical_label_width(
         &self,
-        panel: crate::layout::PanelBox,
+        panel: crate::layout::PixelRect,
         theme: &ResolvedTheme,
     ) -> Result<f64, Error> {
         if let Some(width) = self.assigned_tick_width {
@@ -600,7 +600,7 @@ impl Axis {
         projection: &Projection,
         side: AxisSide,
         theme: &ResolvedTheme,
-        standard: &super::StandardPanelInputs,
+        standard: &super::CoordinateLayoutInputs,
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
         if let Some(crate::text::orientation::Orientation::Automatic(angles)) = theme
@@ -833,12 +833,12 @@ impl Axis {
                 if !allow {
                     let bounds = crate::layout::text::placement::footprint(placement, &plan)?;
                     let region = match side {
-                        AxisSide::Bottom => {
-                            crate::layout::PanelBox::new(cell.start, cell.end, bounds.y0, bounds.y1)
-                        }
-                        AxisSide::Left => {
-                            crate::layout::PanelBox::new(bounds.x0, bounds.x1, cell.start, cell.end)
-                        }
+                        AxisSide::Bottom => crate::layout::PixelRect::new(
+                            cell.start, cell.end, bounds.y0, bounds.y1,
+                        ),
+                        AxisSide::Left => crate::layout::PixelRect::new(
+                            bounds.x0, bounds.x1, cell.start, cell.end,
+                        ),
                     };
                     plan = crate::layout::text::placement::contain(plan, placement, region, scope)?;
                 }
@@ -874,10 +874,10 @@ impl Axis {
             )?;
             let region = match side {
                 AxisSide::Bottom => {
-                    crate::layout::PanelBox::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
+                    crate::layout::PixelRect::new(panel.x0, panel.x1, -f64::MAX, f64::MAX)
                 }
                 AxisSide::Left => {
-                    crate::layout::PanelBox::new(-f64::MAX, f64::MAX, panel.y0, panel.y1)
+                    crate::layout::PixelRect::new(-f64::MAX, f64::MAX, panel.y0, panel.y1)
                 }
             };
             let failure = tick_text
@@ -1018,10 +1018,10 @@ impl Axis {
             let bounds = crate::layout::text::placement::footprint(placement, &plan)?;
             let region = match side {
                 AxisSide::Bottom => {
-                    crate::layout::PanelBox::new(panel.x0, panel.x1, bounds.y0, bounds.y1)
+                    crate::layout::PixelRect::new(panel.x0, panel.x1, bounds.y0, bounds.y1)
                 }
                 AxisSide::Left => {
-                    crate::layout::PanelBox::new(bounds.x0, bounds.x1, panel.y0, panel.y1)
+                    crate::layout::PixelRect::new(bounds.x0, bounds.x1, panel.y0, panel.y1)
                 }
             };
             plan = crate::layout::text::placement::contain(plan, placement, region, scope)?;

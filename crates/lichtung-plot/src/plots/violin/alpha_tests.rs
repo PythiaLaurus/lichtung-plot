@@ -62,7 +62,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();

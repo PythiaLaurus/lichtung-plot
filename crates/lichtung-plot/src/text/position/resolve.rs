@@ -1,7 +1,7 @@
 //! Resolve raw references once from final scientific axes and owning root geometry.
 
 use super::{Coordinate, DataCoordinate, DataValue, Position, TextPosition};
-use crate::layout::{Layout, PanelBox};
+use crate::layout::{Layout, PixelRect};
 use crate::render::backend::Point2D;
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, Result};
@@ -96,7 +96,7 @@ pub(crate) fn resolve(
     Ok([axis(x, 0)?, axis(y, 1)?])
 }
 
-pub(crate) fn point(reference: [ReferenceAxis; 2], panel: PanelBox) -> Point2D {
+pub(crate) fn point(reference: [ReferenceAxis; 2], panel: PixelRect) -> Point2D {
     Point2D::new(
         reference[0].resolve(panel.x0, panel.x1),
         reference[1].resolve(panel.y0, panel.y1),

@@ -1,7 +1,7 @@
 //! Assigned-width root text, frozen before scene capture and Null validation.
 
 use crate::layout::fit::{self, FitScope, PlanError};
-use crate::layout::{AddressRole, PanelBox, ResolvedTextPlan};
+use crate::layout::{AddressRole, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{Backend, PlannedTextPlacement, Point2D};
 use crate::theme::composition::RootPaddingLengths;
 use crate::theme::spacing::ExactLength;
@@ -42,7 +42,7 @@ impl RootAlignments {
 struct RootTextRole {
     request: crate::Text,
     text: ResolvedTextPlan,
-    bounds: PanelBox,
+    bounds: PixelRect,
     placement: PlannedTextPlacement,
 }
 
@@ -68,10 +68,10 @@ impl RootTextReserves {
     }
     pub(crate) fn body(
         &self,
-        outer: PanelBox,
+        outer: PixelRect,
         padding: &RootPaddingLengths,
-    ) -> Result<PanelBox, Error> {
-        Ok(PanelBox::new(
+    ) -> Result<PixelRect, Error> {
+        Ok(PixelRect::new(
             padding.left.after_pixels(outer.x0)?,
             padding.right.before_pixels(outer.x1)?,
             self.bottom
@@ -241,7 +241,7 @@ impl RootTitleBlockPlan {
     pub(crate) fn measure(
         theme: &ResolvedTheme,
         sources: [Option<&crate::Text>; 3],
-        span: PanelBox,
+        span: PixelRect,
         padding: &RootPaddingLengths,
         maximum_width: f64,
         alignments: RootAlignments,
@@ -332,7 +332,7 @@ impl RootTitleBlockPlan {
                             as f64
                             / 1024.0;
                 }
-                let bounds = PanelBox::new(
+                let bounds = PixelRect::new(
                     left,
                     left + text.occupied_size().0,
                     top - text.occupied_size().1,
@@ -371,7 +371,7 @@ impl RootTitleBlockPlan {
                 let placement = crate::layout::text::placement::resolve(
                     placement,
                     &text,
-                    Some(PanelBox::new(
+                    Some(PixelRect::new(
                         text_span.x0,
                         text_span.x1,
                         bounds.y0,
@@ -381,7 +381,7 @@ impl RootTitleBlockPlan {
                 let text = crate::layout::text::placement::contain(
                     text,
                     placement,
-                    PanelBox::new(text_span.x0, text_span.x1, bounds.y0, bounds.y1),
+                    PixelRect::new(text_span.x0, text_span.x1, bounds.y0, bounds.y1),
                     scope,
                 )?;
                 if index < 2 {

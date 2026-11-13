@@ -277,7 +277,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     let selected = chart
         .measure_selected_interior(crate::spec::PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(20.0, 640.0, 20.0, 480.0),
+            crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
             &theme,
         ))
         .unwrap();

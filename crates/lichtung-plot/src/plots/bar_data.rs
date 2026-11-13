@@ -481,7 +481,7 @@ pub(crate) struct BarShape {
 
 #[derive(Debug)]
 pub(crate) struct BarPayload {
-    pub(crate) clip: crate::layout::PanelBox,
+    pub(crate) clip: crate::layout::PixelRect,
     pub(crate) domain_expansion: Option<crate::layout::interior::DomainExpansion>,
     pub(crate) zero: Option<[crate::render::backend::Point2D; 2]>,
     pub(crate) zero_style: crate::render::backend::LineStyle,
@@ -821,7 +821,7 @@ pub(crate) fn attached_significance_text_plans(
 pub(crate) fn validate_attached_text(
     marks: &[PreparedBarSignificance],
     plans: &mut [crate::layout::ResolvedTextPlan],
-    panel: crate::layout::PanelBox,
+    panel: crate::layout::PixelRect,
     scope: &crate::layout::fit::FitScope,
     vertical: bool,
     pending_domain: bool,

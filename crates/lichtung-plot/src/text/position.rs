@@ -1,7 +1,7 @@
 //! Typed scientific, panel and owning-output references for authored annotations.
 
 use super::layout::Finite;
-use crate::{PanelCorner, Result};
+use crate::{DataAreaCorner, Result};
 pub(crate) mod resolve;
 
 /// A typed scientific point, independent of drawing instructions.
@@ -55,7 +55,7 @@ impl TextCoordinate {
         Self(Coordinate::Data(value))
     }
     /// Use a finite fraction of the actual scientific panel, positive y upward.
-    pub fn panel_fraction(value: f64) -> Result<Self> {
+    pub fn data_area_fraction(value: f64) -> Result<Self> {
         Ok(Self(Coordinate::Panel(Finite::new(value)?)))
     }
     /// Use a finite fraction of the owning output root, including an embedding Canvas.
@@ -69,7 +69,7 @@ pub struct TextPosition(pub(crate) Position);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Position {
     Coordinates(TextCoordinate, TextCoordinate),
-    Corner(PanelCorner),
+    Corner(DataAreaCorner),
 }
 impl TextPosition {
     /// Retain independently qualified x and y coordinates.
@@ -77,11 +77,11 @@ impl TextPosition {
         Self(Position::Coordinates(x, y))
     }
     /// Preserve the panel corner's ordinary inset and placement defaults.
-    pub const fn corner(value: PanelCorner) -> Self {
+    pub const fn corner(value: DataAreaCorner) -> Self {
         Self(Position::Corner(value))
     }
     /// Inspect corner syntax without inventing one for unrelated coordinate frames.
-    pub const fn as_corner(&self) -> Option<PanelCorner> {
+    pub const fn as_corner(&self) -> Option<DataAreaCorner> {
         match self.0 {
             Position::Corner(value) => Some(value),
             Position::Coordinates(..) => None,

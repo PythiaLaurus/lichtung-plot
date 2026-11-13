@@ -59,7 +59,7 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
             .map_err(fit::PlanError::into_error)?;
             assert!(width > 0.0);
             let full = super::super::tracks::allocate(
-                PanelBox::new(0.0, 0.0, 0.0, 0.0),
+                PixelRect::new(0.0, 0.0, 0.0, 0.0),
                 &source.placements,
                 &plots,
                 &text,

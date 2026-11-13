@@ -38,7 +38,7 @@ pub(crate) use measurement::GuideMeasurements;
 pub(crate) enum LegendCall {
     Background([f64; 5], FillStyle),
     Gradient(
-        crate::layout::PanelBox,
+        crate::layout::PixelRect,
         Point2D,
         Point2D,
         Vec<crate::render::backend::GradientStop>,

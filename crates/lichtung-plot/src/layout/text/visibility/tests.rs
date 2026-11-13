@@ -7,10 +7,10 @@ fn original_index_selection_and_geometric_greedy_keep_protected_endpoints() {
     let candidates = source.map(|(index, position)| Candidate {
         index,
         position,
-        bounds: PanelBox::new(position - 5.0, position + 5.0, 0.0, 10.0),
+        bounds: PixelRect::new(position - 5.0, position + 5.0, 0.0, 10.0),
     });
     let eligible = [0, 1, 2, 3, 4];
-    let region = PanelBox::new(0.0, 100.0, 0.0, 10.0);
+    let region = PixelRect::new(0.0, 100.0, 0.0, 10.0);
     let scope = FitScope::root();
     let every = TextVisibility::every(3, 1, LabelEndpoints::Both).unwrap();
     assert_eq!(
@@ -60,11 +60,11 @@ fn parity_uses_extra_separation_and_never_silently_unprotects_a_conflict() {
         Candidate {
             index,
             position,
-            bounds: PanelBox::new(position, position + 15.0, 0.0, 10.0),
+            bounds: PixelRect::new(position, position + 15.0, 0.0, 10.0),
         }
     });
     let eligible = [0, 1, 2, 3, 4, 5];
-    let region = PanelBox::new(0.0, 65.0, 0.0, 10.0);
+    let region = PixelRect::new(0.0, 65.0, 0.0, 10.0);
     let policy = TextVisibility::parity(LabelEndpoints::Both)
         .separation(6.0)
         .unwrap();

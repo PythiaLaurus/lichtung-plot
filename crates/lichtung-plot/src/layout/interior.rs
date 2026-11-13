@@ -605,7 +605,7 @@ impl SelectedMarkPlan {
 pub(crate) struct SelectedAnnotationPlan {
     pub(crate) guides: crate::orchestrator::layers::GuideSnapshot,
     pub(crate) panel_layer: Option<String>,
-    pub(crate) panel_clip: crate::layout::PanelBox,
+    pub(crate) panel_clip: crate::layout::PixelRect,
     pub(crate) text: Vec<crate::render::backend::PlacedText>,
     pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
     pub(crate) explanation: Option<crate::render::backend::PlacedText>,

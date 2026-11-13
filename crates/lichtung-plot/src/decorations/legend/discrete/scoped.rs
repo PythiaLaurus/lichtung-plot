@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::{GuideSlot, PreparedGuide};
 use crate::layout::kernel::{ChildFeedbackInputs, FeedbackRound, LayoutScalar, SpatialRounding};
-use crate::layout::{ComponentAddress, PanelBox};
+use crate::layout::{ComponentAddress, PixelRect};
 use crate::{Error, LegendComposition, Plot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,7 +59,7 @@ impl GuideAllocation {
         Ok(Self::Width(width))
     }
 
-    pub(crate) fn bounds(bounds: PanelBox) -> Result<Self, Error> {
+    pub(crate) fn bounds(bounds: PixelRect) -> Result<Self, Error> {
         let mut edges = [0; 4];
         for (target, source) in edges
             .iter_mut()

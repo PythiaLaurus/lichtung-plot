@@ -55,7 +55,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            crate::layout::PanelBox::new(10.0, 600.0, 20.0, 420.0),
+            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
             &theme,
         ))
         .unwrap();

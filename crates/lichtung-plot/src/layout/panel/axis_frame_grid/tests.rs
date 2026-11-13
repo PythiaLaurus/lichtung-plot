@@ -6,8 +6,8 @@ fn empty_axis_measurement_does_not_shape_text() {
     {
         let theme = crate::Theme::publication().resolve().unwrap();
 
-        let layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
-        let standard = super::super::StandardPanelInputs::new(&theme).unwrap();
+        let layout = Layout::envelope(PixelRect::new(80.0, 770.0, 60.0, 570.0));
+        let standard = super::super::CoordinateLayoutInputs::new(&theme).unwrap();
 
         crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
         let result = layout.x_axis.measure(
@@ -27,7 +27,7 @@ fn empty_axis_measurement_does_not_shape_text() {
 fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidden() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(1.0, "")],
         Vec::new(),
         TickSource::EXACT,
@@ -55,7 +55,7 @@ fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidd
 fn empty_category_alias_keeps_its_line_until_the_owner_hides_tick_text() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         Vec::new(),
         vec![AxisTick::new(1.5, "")],
         TickSource::SUPPLIED,
@@ -82,7 +82,7 @@ fn empty_category_alias_keeps_its_line_until_the_owner_hides_tick_text() {
 fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(1.0, "one")],
         vec![AxisTick::new(1.0, "one")],
         TickSource::EXACT,
@@ -113,10 +113,10 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
         layout.projection.x_range()
     );
 }
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 
-fn layout(panel: PanelBox, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSource) -> Layout {
-    let mut layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
+fn layout(panel: PixelRect, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSource) -> Layout {
+    let mut layout = Layout::envelope(PixelRect::new(80.0, 770.0, 60.0, 570.0));
     layout.projection = Projection::new((0.0, 3.0), (0.0, 3.0), panel.as_tuple()).with_categories(
         [x.len(), y.len()]
             .map(|count| (source == TickSource::SUPPLIED && count > 0).then_some(count)),
@@ -141,7 +141,7 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
         let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
             (0.0, 3.0),
             (0.0, 3.0),
-            PanelBox::new(origin, end, origin, end),
+            PixelRect::new(origin, end, origin, end),
             None,
             None,
             ticks(),
@@ -176,7 +176,7 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
 fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 380.0, 80.0, 380.0),
+        PixelRect::new(80.0, 380.0, 80.0, 380.0),
         vec![AxisTick::new(0.25, "first"), AxisTick::new(1.75, "second")],
         vec![AxisTick::new(1.75, "top"), AxisTick::new(0.25, "bottom")],
         TickSource::SUPPLIED,
@@ -233,7 +233,7 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
         precision: None,
     };
     let layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(0.0, "1"), AxisTick::new(3.0, "")],
         Vec::new(),
         source,
@@ -257,7 +257,7 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
 fn exact_cells_use_adjacent_label_midpoints_and_skip_empty_labels() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         vec![
             AxisTick::new(0.0, "wide"),
             AxisTick::new(0.01, "near"),
@@ -295,7 +295,7 @@ fn category_bands_round_exact_ratios_and_preserve_reverse_semantic_order() {
         AxisTick::new(0.5, "first"),
     ];
     let layout = layout(
-        PanelBox::new(200.0, 700.0, 80.0, 181.0),
+        PixelRect::new(200.0, 700.0, 80.0, 181.0),
         Vec::new(),
         ticks,
         TickSource::SUPPLIED,
@@ -323,7 +323,7 @@ fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let label = "W".repeat(50);
     let layout = layout(
-        PanelBox::new(80.0, 280.0, 80.0, 280.0),
+        PixelRect::new(80.0, 280.0, 80.0, 280.0),
         vec![AxisTick::new(1.5, &label)],
         Vec::new(),
         TickSource::SUPPLIED,
@@ -340,7 +340,7 @@ fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
 fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_glyph() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 280.0),
+        PixelRect::new(80.0, 680.0, 80.0, 280.0),
         vec![
             AxisTick::new(0.5, "First"),
             AxisTick::new(1.5, "\u{10ffff}"),
@@ -384,7 +384,7 @@ fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids
     use crate::{TextLayout, TextOrientation, TextRotation};
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
-        PanelBox::new(80.0, 180.0, 80.0, 380.0),
+        PixelRect::new(80.0, 180.0, 80.0, 380.0),
         vec![
             AxisTick::new(0.5, "LightGBM"),
             AxisTick::new(1.5, "LightGBM"),
@@ -431,7 +431,7 @@ fn exact_labels_retain_original_strings_and_positions_under_explicit_display_dis
     use crate::{TextBounds, TextElision, TextEllipsis, TextFailure, TextLayout, TextOverflow};
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let source = layout(
-        PanelBox::new(80.0, 480.0, 80.0, 280.0),
+        PixelRect::new(80.0, 480.0, 80.0, 280.0),
         vec![
             AxisTick::new(0.5, "Same long beginning one"),
             AxisTick::new(2.5, "Same long beginning two"),
@@ -469,7 +469,7 @@ fn exact_labels_retain_original_strings_and_positions_under_explicit_display_dis
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 100.0),
+        PixelRect::new(80.0, 680.0, 80.0, 100.0),
         Vec::new(),
         vec![
             AxisTick::new(0.5, "first"),
@@ -489,7 +489,7 @@ fn vertical_category_cells_reject_insufficient_height_without_dropping() {
 fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(200.0, 700.0, 80.0, 480.0),
+        PixelRect::new(200.0, 700.0, 80.0, 480.0),
         Vec::new(),
         vec![AxisTick::new(1.5, "Control group")],
         TickSource::SUPPLIED,
@@ -523,7 +523,7 @@ fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() 
 fn gutter_is_provisional_below_at_and_above_forty_percent() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        PixelRect::new(80.0, 680.0, 80.0, 480.0),
         Vec::new(),
         vec![AxisTick::new(1.5, "W".repeat(20))],
         TickSource::SUPPLIED,
@@ -553,7 +553,7 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
             theme.axes.frame = None;
         }
         theme.axes.ticks.as_mut().unwrap().length = 17;
-        let panel = PanelBox::new(250.0, 650.0, 150.0, 550.0);
+        let panel = PixelRect::new(250.0, 650.0, 150.0, 550.0);
         let mut layout = layout(
             panel,
             vec![AxisTick::new(0.0, "left"), AxisTick::new(3.0, "right")],
@@ -608,7 +608,7 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
 fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
     let theme = crate::Theme::science().resolve().unwrap();
     let mut layout = layout(
-        PanelBox::new(80.0, 480.0, 80.0, 480.0),
+        PixelRect::new(80.0, 480.0, 80.0, 480.0),
         Vec::new(),
         vec![AxisTick::new(0.0, "-0.5"), AxisTick::new(3.0, "0.5")],
         TickSource::EXACT,
@@ -631,7 +631,7 @@ fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins()
     for origin in [0.0, 1.0 / 1024.0, 0.1, -0.1] {
         let end = origin + 81_923.0 / 1024.0;
         let mut layout = layout(
-            PanelBox::new(origin, end, origin, end),
+            PixelRect::new(origin, end, origin, end),
             [1.0, 2.0, 3.0].map(|value| AxisTick::new(value, "")).into(),
             [1.0, 2.0, 3.0].map(|value| AxisTick::new(value, "")).into(),
             TickSource::EXACT,
@@ -772,7 +772,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
             )
             .unwrap();
             assert_eq!(selected.source.ordinal == 0, span >= low);
-            let mut layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
+            let mut layout = Layout::envelope(PixelRect::new(80.0, 770.0, 60.0, 570.0));
             layout.projection = projection;
             let axis = match side {
                 AxisSide::Bottom => &mut layout.x_axis,

@@ -2,7 +2,7 @@
 
 use crate::layout::{
     fit::{FitKind, FitScope, PlanError},
-    PanelBox,
+    PixelRect,
 };
 use crate::text::layout::VisibilityProgram;
 use crate::{TextFailure, TextVisibility};
@@ -13,14 +13,14 @@ mod tests;
 pub(crate) struct Candidate {
     pub(crate) index: usize,
     pub(crate) position: f64,
-    pub(crate) bounds: PanelBox,
+    pub(crate) bounds: PixelRect,
 }
 
 /// Freeze visibility once per actual owner group, retaining hidden source plans.
 pub(crate) fn apply(
     plans: &mut [crate::render::backend::PlacedText],
     indices: &[usize],
-    region: PanelBox,
+    region: PixelRect,
     vertical: bool,
     scope: &FitScope,
 ) -> Result<(), PlanError> {
@@ -120,7 +120,7 @@ pub(crate) fn require_nonoverlap(
     plans: &mut [crate::render::backend::PlacedText],
     scope: &FitScope,
 ) -> Result<(), PlanError> {
-    let mut occupied: Vec<(usize, PanelBox)> = Vec::new();
+    let mut occupied: Vec<(usize, PixelRect)> = Vec::new();
     crate::data::source::reserve_source(&mut occupied, plans.len())?;
     for index in 0..plans.len() {
         let allows = |plan: &super::ResolvedTextPlan| {
@@ -162,7 +162,7 @@ pub(crate) fn require_nonoverlap(
     Ok(())
 }
 
-fn intersects(a: PanelBox, b: PanelBox, gap: f64) -> bool {
+fn intersects(a: PixelRect, b: PixelRect, gap: f64) -> bool {
     a.width() > 0.0
         && a.height() > 0.0
         && b.width() > 0.0
@@ -181,7 +181,7 @@ pub(crate) fn reduce(
     policy: &TextVisibility,
     eligible: &[usize],
     candidates: &[Candidate],
-    region: PanelBox,
+    region: PixelRect,
     failure: TextFailure,
     scope: &FitScope,
 ) -> Result<Vec<bool>, PlanError> {

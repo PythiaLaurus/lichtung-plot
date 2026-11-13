@@ -150,7 +150,7 @@ capability!(CategoricalScale, "Plots that consume a complete caller-owned catego
     Scatter, Line, Trajectory, LinePath, Density, Bar, HorizontalBar, StackedBar,
     StackedHorizontalBar, Boxplot, Interaction, Violin, Raincloud, Marginal, Matrix,
 ]);
-capability!(PanelText, "Plots with one standard panel that accept corner text." => [
+capability!(TextAnnotation, "Plots with one standard panel that accept corner text." => [
     Scatter, Histogram, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,
     Dumbbell, Heatmap, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin,
     Raincloud, Regression, Marginal, Beeswarm, Waterfall,

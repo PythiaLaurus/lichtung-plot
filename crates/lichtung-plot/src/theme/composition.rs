@@ -200,8 +200,8 @@ impl RootPaddingLengths {
     pub(crate) fn vertical(&self) -> ExactLength {
         self.bottom.add_length(&self.top)
     }
-    pub(crate) fn inset(&self, span: crate::layout::PanelBox) -> Result<crate::layout::PanelBox> {
-        Ok(crate::layout::PanelBox::new(
+    pub(crate) fn inset(&self, span: crate::layout::PixelRect) -> Result<crate::layout::PixelRect> {
+        Ok(crate::layout::PixelRect::new(
             self.left.after_pixels(span.x0)?,
             self.right.before_pixels(span.x1)?,
             self.bottom.after_pixels(span.y0)?,

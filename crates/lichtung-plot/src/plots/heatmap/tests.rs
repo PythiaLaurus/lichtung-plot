@@ -62,7 +62,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
     let result = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            PanelBox::new(0.0, 500.0, 0.0, 200.0),
+            PixelRect::new(0.0, 500.0, 0.0, 200.0),
             &resolved,
         ))
         .unwrap();
@@ -114,7 +114,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let chart = inputs
         .attach_with_guides_for_test(original_source, &theme)
         .unwrap();
-    let panel = PanelBox::new(0.0, 400.0, 0.0, 300.0);
+    let panel = PixelRect::new(0.0, 400.0, 0.0, 300.0);
     let opaque = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -306,7 +306,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            PanelBox::new(20.0, 800.0, 20.0, 620.0),
+            PixelRect::new(20.0, 800.0, 20.0, 620.0),
             &theme,
         ))
         .unwrap();

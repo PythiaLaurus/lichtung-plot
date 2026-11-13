@@ -5,7 +5,7 @@
 mod output;
 
 use lichtung_plot::{
-    Canvas, DataCoordinate, NumericValues, PanelTextAnnotation, Plot, Text, TextAlignment,
+    Canvas, DataCoordinate, NumericValues, Plot, PlotTextAnnotation, Text, TextAlignment,
     TextAnchor, TextBounds, TextCoordinate, TextElision, TextEllipsis, TextFailure, TextFit,
     TextFitPriority, TextLayout, TextOverflow, TextPanel, TextPosition, TextRotation, Theme,
 };
@@ -20,7 +20,7 @@ fn main() -> lichtung_plot::Result<()> {
         .clone()
         .font_size(14.25)?;
     // ANCHOR: text-reference
-    let note = PanelTextAnnotation::at(
+    let note = PlotTextAnnotation::at(
         TextPosition::new(
             TextCoordinate::data(DataCoordinate::numeric(2.0)?),
             TextCoordinate::data(DataCoordinate::numeric(3.0)?),
@@ -38,7 +38,7 @@ fn main() -> lichtung_plot::Result<()> {
     )
     .x_limits(0.0, 4.0)
     .y_limits(0.0, 4.0)
-    .panel_text_annotation(note)
+    .text_annotation(note)
     .title("Scientific coordinates stay unchanged");
     // ANCHOR: text-fitting
     let title = Text::new("Treatment group with extended follow-up")

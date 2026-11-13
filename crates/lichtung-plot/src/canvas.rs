@@ -11,10 +11,10 @@ use crate::decorations::legend::discrete::scoped::{
 };
 use crate::decorations::legend::Legend;
 use crate::decorations::plan::children::MeasurementPhase;
-use crate::layout::canvas::PanelRequirements;
+use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
-use crate::layout::{PanelBox, RootFramePlan};
+use crate::layout::{PixelRect, RootFramePlan};
 use crate::render::backend::{with_layer, Backend, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::AxisDomain;
@@ -35,14 +35,14 @@ pub(crate) mod lifecycle_tests;
 #[cfg(test)]
 thread_local! {
     pub(crate) static CANVAS_SCENE_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static CANVAS_ASSIGNED_PANEL_EVIDENCE: std::cell::RefCell<Vec<(PanelBox, PanelBox)>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static CANVAS_ASSIGNED_PANEL_EVIDENCE: std::cell::RefCell<Vec<(PixelRect, PixelRect)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 struct PlannedCanvasPanel {
     index: usize,
     kind: PlotKind,
     surface: crate::Color,
-    canvas_cell: PanelBox,
+    canvas_cell: PixelRect,
     panel_plan: Arc<crate::decorations::plan::PanelPlan>,
     local_text: plot_text::PlotLocalTextPlan,
     header_layer: String,
@@ -170,7 +170,7 @@ struct CanvasHeader {
 
 struct TextPanelPlan {
     layer: String,
-    cell: PanelBox,
+    cell: PixelRect,
     title: crate::layout::TextBlock,
     body: crate::layout::TextBlock,
     title_placement: crate::render::backend::PlannedTextPlacement,
@@ -2272,11 +2272,11 @@ impl Canvas {
     fn complete_cell_gutters(
         &self,
         plots: &[Option<Plot>],
-        cells: &[Option<PanelBox>],
+        cells: &[Option<PixelRect>],
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
-        requirements: &mut [(usize, usize, PanelRequirements)],
+        requirements: &mut [(usize, usize, EdgeSpaceRequirements)],
         shared_allocation: Option<GuideAllocation>,
     ) -> Result<FitOutcome<()>, Error> {
         for (index, plot) in plots.iter().enumerate() {
@@ -2309,7 +2309,7 @@ impl Canvas {
                 FitOutcome::Measured(probe) => probe,
                 FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
             };
-            let measured = PanelRequirements::measure_header(
+            let measured = EdgeSpaceRequirements::measure_header(
                 probe
                     .axes
                     .as_ref()
@@ -2367,7 +2367,7 @@ impl Canvas {
             // different ticks and must not replace those scoped inputs locally.
             let gutters = sizing::grid_gutters(self, round)?;
             let grid = tracks::allocate(
-                PanelBox::new(0.0, width, 0.0, 0.0),
+                PixelRect::new(0.0, width, 0.0, 0.0),
                 &self.placements,
                 &plots,
                 prepared.text_panel_intrinsics,
@@ -2624,7 +2624,7 @@ impl Canvas {
             requirements.push((
                 index / self.columns,
                 index % self.columns,
-                PanelRequirements {
+                EdgeSpaceRequirements {
                     left,
                     right,
                     bottom,
@@ -2847,7 +2847,7 @@ impl Canvas {
                     .borrow_mut()
                     .push((local.body, panel_plan.result.layout.projection.panel_box()));
             });
-            let requirement = match fit::outcome(PanelRequirements::measure_header(
+            let requirement = match fit::outcome(EdgeSpaceRequirements::measure_header(
                 panel_plan.result.axes.as_ref().ok_or_else(|| {
                     Error::Render("composed panel is missing its measured axes".into())
                 })?,
@@ -3060,7 +3060,7 @@ impl Canvas {
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         backend.draw_surface(
-            PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
+            PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height)),
             plan.root_paint,
             SurfaceRole::CanvasRoot,
         )?;
@@ -3137,7 +3137,7 @@ impl Canvas {
     fn preflight_shared_legend(
         plots: &[Option<Plot>],
         themes: &ResolvedCanvasThemes,
-        panel: PanelBox,
+        panel: PixelRect,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
         prepared_discrete_guide: Option<&Arc<PreparedGuide>>,

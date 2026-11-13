@@ -1,7 +1,7 @@
 //! One measured block/reference transform shared by text owners and final geometry.
 
 use super::ResolvedTextPlan;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::render::backend::{
     PlannedTextOrigin, PlannedTextPlacement, Point2D, TextAnchor as BackendAnchor,
 };
@@ -14,7 +14,7 @@ mod tests;
 pub(crate) fn resolve(
     default: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
-    region: Option<PanelBox>,
+    region: Option<PixelRect>,
 ) -> Result<PlannedTextPlacement, Error> {
     let Some(request) = &plan.request else {
         return Ok(default);
@@ -199,7 +199,7 @@ pub(crate) fn at(
 pub(crate) fn logical_bounds(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
-) -> Result<PanelBox, Error> {
+) -> Result<PixelRect, Error> {
     rectangle_bounds(placement, plan, plan.width_quanta, plan.height_quanta)
 }
 
@@ -207,7 +207,7 @@ pub(crate) fn logical_bounds(
 pub(crate) fn footprint(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
-) -> Result<PanelBox, Error> {
+) -> Result<PixelRect, Error> {
     let mut bounds = logical_bounds(placement, plan)?;
     if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
         plan,
@@ -217,7 +217,7 @@ pub(crate) fn footprint(
         placement.origin,
         placement.reverse_lines,
     ) {
-        bounds = PanelBox::new(
+        bounds = PixelRect::new(
             bounds.x0.min(ink.left),
             bounds.x1.max(ink.right),
             bounds.y0.min(ink.bottom),
@@ -227,7 +227,7 @@ pub(crate) fn footprint(
     if let Some(clip) = paint_clip(placement, plan)? {
         let x0 = bounds.x0.max(clip.x0);
         let y0 = bounds.y0.max(clip.y0);
-        bounds = PanelBox::new(
+        bounds = PixelRect::new(
             x0,
             bounds.x1.min(clip.x1).max(x0),
             y0,
@@ -241,7 +241,7 @@ pub(crate) fn footprint(
 pub(crate) fn contain(
     plan: ResolvedTextPlan,
     placement: PlannedTextPlacement,
-    region: PanelBox,
+    region: PixelRect,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
     let bounds = footprint(placement, &plan)?;
@@ -280,7 +280,7 @@ fn rectangle_bounds(
     plan: &ResolvedTextPlan,
     width: i64,
     height: i64,
-) -> Result<PanelBox, Error> {
+) -> Result<PixelRect, Error> {
     let half = |value| {
         crate::render::backend::nearest_even_text_half(value)
             .ok_or_else(|| Error::Render("negative text extent".into()))
@@ -317,7 +317,7 @@ fn rectangle_bounds(
     let lower = |axis: fn(&Point2D) -> f64| corners.iter().map(axis).fold(f64::INFINITY, f64::min);
     let upper =
         |axis: fn(&Point2D) -> f64| corners.iter().map(axis).fold(f64::NEG_INFINITY, f64::max);
-    Ok(PanelBox::new(
+    Ok(PixelRect::new(
         lower(|p| p.x),
         upper(|p| p.x),
         lower(|p| p.y),
@@ -328,7 +328,7 @@ fn rectangle_bounds(
 pub(crate) fn paint_clip(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
-) -> Result<Option<PanelBox>, Error> {
+) -> Result<Option<PixelRect>, Error> {
     let local = plan
         .clip_size
         .map(|(width, height)| {
@@ -342,13 +342,13 @@ pub(crate) fn paint_clip(
         .transpose()?;
     let region = plan.paint_region.map(|values| {
         let [x0, x1, y0, y1] = values.map(f64::from_bits);
-        PanelBox::new(x0, x1, y0, y1)
+        PixelRect::new(x0, x1, y0, y1)
     });
     Ok(match (local, region) {
         (Some(a), Some(b)) => {
             let x0 = a.x0.max(b.x0);
             let y0 = a.y0.max(b.y0);
-            Some(PanelBox::new(
+            Some(PixelRect::new(
                 x0,
                 a.x1.min(b.x1).max(x0),
                 y0,

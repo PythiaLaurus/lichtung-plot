@@ -777,7 +777,7 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     let layout = super::super::Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 10.0),
-        crate::layout::PanelBox::new(0.0, 1000.0, 0.0, 1000.0),
+        crate::layout::PixelRect::new(0.0, 1000.0, 0.0, 1000.0),
         None,
         None,
         &x,

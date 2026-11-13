@@ -111,7 +111,7 @@ impl crate::Plot {
 
 /// T5a supplies typography and preferred aspect; mark/density inputs belong to T5c.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct StandardPanelInputs {
+pub(crate) struct CoordinateLayoutInputs {
     tick_layouts: [Option<crate::TextLayout>; 2],
     pub(crate) axes: crate::theme::AxisTheme,
     pub(crate) tick_label: crate::theme::TextTheme,
@@ -119,7 +119,7 @@ pub(crate) struct StandardPanelInputs {
     preferred_aspect: [u8; 2],
 }
 
-impl StandardPanelInputs {
+impl CoordinateLayoutInputs {
     pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, crate::Error> {
         let retain = |source: &crate::theme::TextTheme| -> Result<_, crate::Error> {
             let stack = source
@@ -191,7 +191,7 @@ mod tests {
         use crate::font::canonical::named_stack;
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αZ"]);
-        let standard = StandardPanelInputs::new(&theme).unwrap();
+        let standard = CoordinateLayoutInputs::new(&theme).unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αY"]);
         assert!(!standard.matches(&theme).unwrap());
     }

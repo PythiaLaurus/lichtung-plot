@@ -299,7 +299,7 @@ impl PreparedDensity {
 
 #[derive(Debug)]
 pub(crate) struct DensityPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) curves: Vec<DensityCurvePayload>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
@@ -993,7 +993,7 @@ mod tests {
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 400.0),
+                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
                 &theme,
             ))
             .unwrap();
@@ -1035,7 +1035,7 @@ mod tests {
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 400.0),
+                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
                 &theme,
             ))
             .unwrap();
@@ -1159,7 +1159,7 @@ mod tests {
             let selected = chart
                 .measure_selected_interior(PlotRenderContext::new(
                     chart.data(),
-                    crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                     &theme,
                 ))
                 .unwrap();

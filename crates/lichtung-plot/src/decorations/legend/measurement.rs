@@ -639,7 +639,7 @@ fn stack_sections(
         } else {
             flow.width
         };
-        let region = crate::layout::PanelBox::new(
+        let region = crate::layout::PixelRect::new(
             0.0,
             pixels(hard(&section_width)?),
             -pixels(hard(&top.add_length(&occupied))?),
@@ -680,7 +680,7 @@ fn stack_sections(
 
 fn select_entry_visibility(
     slots: &mut [super::LegendSlot],
-    region: crate::layout::PanelBox,
+    region: crate::layout::PixelRect,
     horizontal: bool,
     scope: &FitScope,
 ) -> Result<(), PlanError> {

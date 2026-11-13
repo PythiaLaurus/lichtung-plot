@@ -42,7 +42,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
-            crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
+            crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
             &theme,
         );
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -273,7 +273,7 @@ impl Plot {
                 })
         }) {
             let (width, height) = self.figure_dimensions()?;
-            crate::layout::PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height))
+            crate::layout::PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height))
         } else {
             result.layout.projection.panel_box()
         };
@@ -351,7 +351,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     .y_label("Vertical")
     .labels(crate::Labels::raw())
     .erase();
-    let panel = crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0);
+    let panel = crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0);
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     let error = validate_frozen_axes_and_guides(&plot, &mut result).unwrap_err();
@@ -372,7 +372,7 @@ fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     let theme = crate::Theme::publication().resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     let mut layout =
-        crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));
+        crate::layout::Layout::envelope(crate::layout::PixelRect::new(80.0, 610.0, 60.0, 450.0));
     layout.x_axis.label = Some("W".repeat(200).into());
     let scope = FitScope::root();
     assert!(matches!(

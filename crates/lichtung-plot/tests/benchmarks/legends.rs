@@ -397,7 +397,7 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
 )]
 fn shared_legend_child_cache_replay_contract() {
     use crate::decorations::plan::children::{ChildPlans, MeasurementPhase};
-    use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout, PanelBox};
+    use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout, PixelRect};
     use crate::orchestrator::measurements;
     use std::sync::Arc;
 
@@ -433,7 +433,7 @@ fn shared_legend_child_cache_replay_contract() {
             },
             |inputs, assigned, round| {
                 let plot = inputs.attach(plot.clone())?;
-                let panel = PanelBox::new(100.0, 1100.0, 100.0, 620.0);
+                let panel = PixelRect::new(100.0, 1100.0, 100.0, 620.0);
                 let context = crate::spec::PlotRenderContext::new(plot.data(), panel, &theme);
                 let first = children.measure(
                     &plot,
@@ -584,8 +584,8 @@ fn inside_case(dense: bool) -> CaseMeasurement {
                 .unwrap(),
             )
             .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight))
-            .panel_text_annotation(
-                crate::PanelTextAnnotation::new(crate::PanelCorner::BottomLeft, "Caller note")
+            .text_annotation(
+                crate::PlotTextAnnotation::new(crate::DataAreaCorner::BottomLeft, "Caller note")
                     .unwrap(),
             )
             .size(800, 600)

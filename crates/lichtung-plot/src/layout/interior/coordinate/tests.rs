@@ -38,8 +38,8 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         for panel in [
-            PanelBox::new(80.25, 550.75, 70.5, 410.25),
-            PanelBox::new(30.0, 810.0, 50.0, 600.0),
+            PixelRect::new(80.25, 550.75, 70.5, 410.25),
+            PixelRect::new(30.0, 810.0, 50.0, 600.0),
         ] {
             for ranges in [[(-1.0, 3.0), (0.0, 4.0)], [(-2.0, 5.0), (-1.0, 6.0)]] {
                 let plot = plot
@@ -103,7 +103,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
             .measure_selected_interior(
                 PlotRenderContext::new(
                     plot.data(),
-                    PanelBox::new(0.0, minimum.0 - 1.0 / 1024.0, 0.0, minimum.1),
+                    PixelRect::new(0.0, minimum.0 - 1.0 / 1024.0, 0.0, minimum.1),
                     &theme,
                 )
                 .with_fit_scope(&scope),
@@ -149,7 +149,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
     let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
-    let panel = PanelBox::new(30.0, 810.0, 50.0, 600.0);
+    let panel = PixelRect::new(30.0, 810.0, 50.0, 600.0);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
         .unwrap();
@@ -258,7 +258,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             .measure_selected_interior(
                 PlotRenderContext::new(
                     plot.data(),
-                    PanelBox::new(30.0, 610.0, 50.0, 440.0),
+                    PixelRect::new(30.0, 610.0, 50.0, 440.0),
                     &theme,
                 )
                 .with_fit_scope(&scope),

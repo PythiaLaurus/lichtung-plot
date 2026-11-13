@@ -185,7 +185,7 @@ impl PreparedQq {
 
 #[derive(Debug)]
 pub(crate) struct QqPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     line: Option<[Point2D; 2]>,
     pub(crate) point_batches: Vec<(Vec<Point2D>, PointStyle)>,
     line_style: LineStyle,
@@ -694,7 +694,7 @@ mod tests {
         let selected = mapped
             .measure_selected_interior(PlotRenderContext::new(
                 mapped.data(),
-                crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
                 &theme,
             ))
             .unwrap();
@@ -739,7 +739,7 @@ mod tests {
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 420.0),
+                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
                 &theme,
             ))
             .unwrap();

@@ -8,7 +8,7 @@ use crate::{
     CategoryLabelSelection, CategoryOrder, ContinuousColorScale, EstimateStatus, GuideSpec,
     GuideTextRole, HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins,
     HistogramComposite, HistogramStat, InteractionStyle, LegendComposition, LegendPolicy,
-    LinePathStyle, NumericFormat, Output, PanelTextAnnotation, PngOptions, PointLayer, QqLine,
+    LinePathStyle, NumericFormat, Output, PlotTextAnnotation, PngOptions, PointLayer, QqLine,
     RawOverlay, RegressionBand, Significance, SignificanceMarkStyle, Text, TextAlignment,
     TextLayout, Theme, TickGeneration, WaterfallLabels,
 };
@@ -53,7 +53,7 @@ forward!(color_label_format(format: NumericFormat) => ContinuousColor);
 forward!(heatmap_null_row_annotation(annotation: HeatmapNullRowAnnotation) => HeatmapOptions);
 forward!(estimate_labels(format: NumericFormat) => CoefficientOptions);
 forward!(significance_mark_style(style: SignificanceMarkStyle) => SignificanceStyle);
-forward!(panel_text_annotation(annotation: PanelTextAnnotation) => PanelText);
+forward!(text_annotation(annotation: PlotTextAnnotation) => TextAnnotation);
 forward!(x_category_labels(selection: CategoryLabelSelection) => CategoricalX);
 forward!(y_category_labels(selection: CategoryLabelSelection) => CategoricalY);
 forward!(category_order(order: impl Into<CategoryOrder>) => CategoryOrder);

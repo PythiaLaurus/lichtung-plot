@@ -10,7 +10,7 @@
 use crate::alpha::{marks::ObservationAlpha, AlphaEncoding, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
-use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
+use crate::layout::{AxisTick, Layout, PhysicalTextAlignment, PixelRect, TextBlock};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
@@ -218,7 +218,7 @@ fn assigned_columns(
     prepared: &HeatmapData,
     labels: &[String],
     selection: &crate::CategoryLabelSelection,
-    panel: PanelBox,
+    panel: PixelRect,
     theme: &ResolvedTheme,
 
     scope: &crate::layout::fit::FitScope,
@@ -682,7 +682,7 @@ pub(crate) fn natural_body_height(
         marks,
         labels,
         &axes.specs[0].category_labels,
-        PanelBox::new(0.0, width, 0.0, 1.0),
+        PixelRect::new(0.0, width, 0.0, 1.0),
         theme,
         &crate::layout::fit::FitScope::root(),
     )
@@ -1382,7 +1382,7 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
         chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
-        || crate::layout::StandardPanelInputs::new(theme),
+        || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
 
     let texts = payload
@@ -1925,7 +1925,7 @@ fn color_domain(
 
 #[derive(Debug)]
 pub(crate) struct HeatmapPayload {
-    clip: PanelBox,
+    clip: PixelRect,
     cross_style: LineStyle,
     cells: Vec<CellPayload>,
     colorbar: Option<crate::decorations::legend::LegendDrawPlan>,
@@ -1957,7 +1957,7 @@ impl CellPayload {
     fn geometry(
         &self,
         geometry: &mut crate::render::geometry::GeometrySnapshot,
-        clip: Option<PanelBox>,
+        clip: Option<PixelRect>,
         cross_style: &LineStyle,
     ) -> Result<(), Error> {
         geometry.polygon(&self.corners, &self.fill, clip)?;
@@ -1981,7 +1981,7 @@ impl HeatmapPayload {
     ) -> Result<(), crate::layout::fit::PlanError> {
         for (index, cell) in self.cells.iter_mut().enumerate() {
             let Some(text) = &mut cell.text else { continue };
-            let containing = PanelBox::new(
+            let containing = PixelRect::new(
                 cell.corners[0].x,
                 cell.corners[2].x,
                 cell.corners[0].y,
@@ -2098,7 +2098,7 @@ fn select_cells(
                             0.0,
                         ),
                         annotation,
-                        Some(PanelBox::new(left, right, bottom, top)),
+                        Some(PixelRect::new(left, right, bottom, top)),
                     )?,
                 }),
             });

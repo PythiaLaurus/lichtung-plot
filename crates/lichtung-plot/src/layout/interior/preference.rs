@@ -5,7 +5,7 @@ use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct StandardPanelPreference {
+pub(crate) struct StandardSizePreference {
     pub(crate) primary_marks: u128,
     pub(crate) mark_pitch: f64,
     pub(crate) density_side: f64,
@@ -13,13 +13,13 @@ pub(crate) struct StandardPanelPreference {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum NativePanelPreference {
-    Standard(StandardPanelPreference),
-    Categorical(CategoricalPanelPreference),
+pub(crate) enum CoordinateSizePreference {
+    Standard(StandardSizePreference),
+    Categorical(CategoricalSizePreference),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct CategoricalPanelPreference {
+pub(crate) struct CategoricalSizePreference {
     pub(crate) axis: crate::layout::AxisSide,
     pub(crate) slots: u32,
     pub(crate) primary_marks: u128,
@@ -46,7 +46,7 @@ pub(crate) fn categorical_preference(
     plot: &Plot,
     theme: &ResolvedTheme,
     hard: (f64, f64),
-) -> Result<CategoricalPanelPreference, Error> {
+) -> Result<CategoricalSizePreference, Error> {
     let scope = plot.axis_scope();
     let (axis, slots, primary_marks) =
         match plot.kind() {
@@ -154,7 +154,7 @@ pub(crate) fn categorical_preference(
             height,
         )
     };
-    Ok(CategoricalPanelPreference {
+    Ok(CategoricalSizePreference {
         axis,
         slots,
         primary_marks,
@@ -209,7 +209,7 @@ pub(crate) fn mark_preference(
     plot: &Plot,
     theme: &ResolvedTheme,
     hard: (f64, f64),
-) -> Result<StandardPanelPreference, Error> {
+) -> Result<StandardSizePreference, Error> {
     let scope = plot.axis_scope();
     let point_ink = |radius| -> Result<f64, Error> {
         let point = plot.point_style(theme, (0, 0, 0), radius);
@@ -348,7 +348,7 @@ pub(crate) fn mark_preference(
         )?));
     let height_quanta = i64::try_from(height_quanta)
         .map_err(|_| Error::Render("standard preferred height exceeds spatial range".into()))?;
-    Ok(StandardPanelPreference {
+    Ok(StandardSizePreference {
         primary_marks: count,
         mark_pitch,
         density_side,
@@ -362,16 +362,17 @@ mod tests {
     use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
 
-    fn standard(root: &crate::layout::RootFramePlan) -> &StandardPanelPreference {
-        let Some(NativePanelPreference::Standard(preference)) = root.native_preference.as_ref()
+    fn standard(root: &crate::layout::RootFramePlan) -> &StandardSizePreference {
+        let Some(CoordinateSizePreference::Standard(preference)) = root.native_preference.as_ref()
         else {
             panic!("standard native root preference")
         };
         preference
     }
 
-    fn categorical(root: &crate::layout::RootFramePlan) -> &CategoricalPanelPreference {
-        let Some(NativePanelPreference::Categorical(preference)) = root.native_preference.as_ref()
+    fn categorical(root: &crate::layout::RootFramePlan) -> &CategoricalSizePreference {
+        let Some(CoordinateSizePreference::Categorical(preference)) =
+            root.native_preference.as_ref()
         else {
             panic!("categorical native root preference")
         };

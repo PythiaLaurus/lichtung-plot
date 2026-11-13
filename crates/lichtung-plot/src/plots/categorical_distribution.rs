@@ -267,13 +267,13 @@ pub(crate) enum Mark {
 
 #[derive(Debug)]
 pub(crate) struct DistributionPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) marks: Vec<Mark>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl DistributionPayload {
-    pub(crate) fn new(clip: crate::layout::PanelBox) -> Self {
+    pub(crate) fn new(clip: crate::layout::PixelRect) -> Self {
         Self {
             clip,
             marks: Vec::new(),

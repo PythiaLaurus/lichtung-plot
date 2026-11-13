@@ -3,7 +3,7 @@
 use super::{ComponentAddress, LayoutScalar, SpatialRounding};
 use crate::layout::fit::{FitFailure, FitScope};
 pub(crate) use crate::layout::fit::{FitKind, FitReason};
-use crate::layout::{Layout, PanelBox, ResolvedTextPlan};
+use crate::layout::{Layout, PixelRect, ResolvedTextPlan};
 use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -550,7 +550,7 @@ impl FeedbackRound {
         self.observe(Observation::LegendGlyph { point, line, fill })
     }
 
-    pub(crate) fn observe_box(&mut self, panel: PanelBox) -> Result<(), Error> {
+    pub(crate) fn observe_box(&mut self, panel: PixelRect) -> Result<(), Error> {
         if panel.x1 < panel.x0 || panel.y1 < panel.y0 {
             return Err(Error::Render(
                 "layout feedback box has reversed edges".into(),
@@ -1135,10 +1135,10 @@ impl FrameRequirements {
     )]
     pub(crate) fn assign_fit(
         &self,
-        cell: PanelBox,
+        cell: PixelRect,
         gutters: [f64; 4],
         scope: &FitScope,
-    ) -> Result<crate::layout::fit::FitOutcome<PanelBox>, Error> {
+    ) -> Result<crate::layout::fit::FitOutcome<PixelRect>, Error> {
         let checked = |value: i128| {
             i64::try_from(value)
                 .map_err(|_| Error::Render("assigned frame arithmetic overflowed".into()))
@@ -1181,7 +1181,7 @@ impl FrameRequirements {
             )));
         }
         let [left, right, bottom, top] = assigned.map(|value| value as f64 / 1024.0);
-        Ok(crate::layout::fit::FitOutcome::Measured(PanelBox::new(
+        Ok(crate::layout::fit::FitOutcome::Measured(PixelRect::new(
             left, right, bottom, top,
         )))
     }
@@ -1698,8 +1698,8 @@ mod tests {
         let plot = source.clone().erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
         let theme = crate::Theme::publication().resolve().unwrap();
-        let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
-        let state = |plot: &crate::Plot, standard: &crate::layout::StandardPanelInputs| {
+        let standard = crate::layout::CoordinateLayoutInputs::new(&theme).unwrap();
+        let state = |plot: &crate::Plot, standard: &crate::layout::CoordinateLayoutInputs| {
             let mut round = FeedbackRound::new(None, 0).unwrap();
             for input in plot.axis_semantic_inputs(domains) {
                 input.observe_feedback(&mut round).unwrap();
@@ -1746,7 +1746,7 @@ mod tests {
             .axes
             .tick_label
             .line_height_multiplier += 0.25;
-        let changed = crate::layout::StandardPanelInputs::new(&changed_theme).unwrap();
+        let changed = crate::layout::CoordinateLayoutInputs::new(&changed_theme).unwrap();
         assert_ne!(state(&shared, &standard), state(&shared, &changed));
     }
 
@@ -1765,7 +1765,7 @@ mod tests {
         original.claim_guide_trial(&owner, 2, 1).unwrap();
         original.observe_text(&text_plan()).unwrap();
         original
-            .observe_box(PanelBox::new(1.0, 9.0, 2.0, 8.0))
+            .observe_box(PixelRect::new(1.0, 9.0, 2.0, 8.0))
             .unwrap();
         original
             .request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])

@@ -295,7 +295,7 @@ impl PreparedRegression {
 
 #[derive(Debug)]
 pub(crate) struct RegressionPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) point_batches: Vec<(Vec<Point2D>, PointStyle)>,
     pub(crate) fit_line: [Point2D; 2],
     pub(crate) band: Option<Vec<Point2D>>,
@@ -569,7 +569,7 @@ mod style_tests {
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
-                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 420.0),
+                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
                 &theme,
             ))
             .unwrap();
@@ -712,7 +712,7 @@ mod style_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -819,7 +819,7 @@ mod style_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let panel = crate::layout::PixelRect::new(10.0, 620.0, 20.0, 420.0);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))

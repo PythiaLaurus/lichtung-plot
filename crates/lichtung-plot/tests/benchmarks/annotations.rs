@@ -23,7 +23,7 @@ fn significance_case(count: usize) -> [Duration; 2] {
     .erase();
     let theme = crate::Theme::publication().resolve().unwrap();
     theme.prepare_font_environment().unwrap();
-    let panel = crate::layout::PanelBox::new(0.0, 800.0, 0.0, 600.0);
+    let panel = crate::layout::PixelRect::new(0.0, 800.0, 0.0, 600.0);
     let mut expected: Option<((f64, f64), [u64; Counter::ALL.len()])> = None;
     let mut elapsed_samples = [Duration::ZERO; 2];
     for (repeat, elapsed_sample) in elapsed_samples.iter_mut().enumerate() {

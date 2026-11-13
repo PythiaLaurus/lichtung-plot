@@ -2,13 +2,13 @@
 
 use crate::layout::{
     fit::{self, FitKind, FitScope, PlanError},
-    Layout, PanelBox, ResolvedTextPlan,
+    Layout, PixelRect, ResolvedTextPlan,
 };
 use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::position::resolve::{self, ReferenceAxis};
 use crate::theme::{spacing::ExactLength, ResolvedTheme};
 use crate::{
-    PanelCorner, Plot, TextAlignment, TextAnchor, TextFailure, TextOverlap, TextPosition,
+    DataAreaCorner, Plot, TextAlignment, TextAnchor, TextFailure, TextOverlap, TextPosition,
     TextWrapping,
 };
 
@@ -16,46 +16,46 @@ use crate::{
 mod tests;
 
 #[derive(Debug, Clone)]
-pub(crate) struct PanelTextPlan {
+pub(crate) struct PlotTextAnnotationPlan {
     pub(crate) text_plan: ResolvedTextPlan,
     placement: PlannedTextPlacement,
-    bounds: PanelBox,
+    bounds: PixelRect,
     source: TextPosition,
-    reference: Reference,
-    panel: PanelBox,
+    reference: PlotTextAnnotationReference,
+    panel: PixelRect,
     minimum_size: (f64, f64),
     overlap: bool,
 }
 #[derive(Debug, Clone, Copy)]
-enum Reference {
-    Corner(PanelCorner, f64),
+enum PlotTextAnnotationReference {
+    Corner(DataAreaCorner, f64),
     Axes([ReferenceAxis; 2]),
 }
-impl Reference {
-    fn point(self, panel: PanelBox) -> Point2D {
+impl PlotTextAnnotationReference {
+    fn point(self, panel: PixelRect) -> Point2D {
         match self {
             Self::Axes(axes) => resolve::point(axes, panel),
             Self::Corner(corner, padding) => Point2D::new(
                 match corner {
-                    PanelCorner::TopLeft | PanelCorner::BottomLeft => panel.x0 + padding,
+                    DataAreaCorner::TopLeft | DataAreaCorner::BottomLeft => panel.x0 + padding,
                     _ => panel.x1 - padding,
                 },
                 match corner {
-                    PanelCorner::TopLeft | PanelCorner::TopRight => panel.y1 - padding,
+                    DataAreaCorner::TopLeft | DataAreaCorner::TopRight => panel.y1 - padding,
                     _ => panel.y0 + padding,
                 },
             ),
         }
     }
 }
-impl PanelTextPlan {
+impl PlotTextAnnotationPlan {
     pub(crate) fn retained_placement(&self) -> crate::render::backend::PlacedText {
         crate::render::backend::PlacedText {
             placement: self.placement,
             plan: self.text_plan.clone(),
         }
     }
-    pub(crate) fn placement_in(&self, panel: PanelBox) -> PlannedTextPlacement {
+    pub(crate) fn placement_in(&self, panel: PixelRect) -> PlannedTextPlacement {
         let old = self.reference.point(self.panel);
         let new = self.reference.point(panel);
         PlannedTextPlacement {
@@ -66,10 +66,10 @@ impl PanelTextPlan {
             ..self.placement
         }
     }
-    pub(crate) fn bounds_in(&self, panel: PanelBox) -> PanelBox {
+    pub(crate) fn bounds_in(&self, panel: PixelRect) -> PixelRect {
         let next = self.placement_in(panel).position;
         let old = self.placement.position;
-        PanelBox::new(
+        PixelRect::new(
             self.bounds.x0 + next.x - old.x,
             self.bounds.x1 + next.x - old.x,
             self.bounds.y0 + next.y - old.y,
@@ -78,7 +78,7 @@ impl PanelTextPlan {
     }
     pub(crate) fn avoids_legend_in(
         &self,
-        panel: PanelBox,
+        panel: PixelRect,
         legend: crate::decorations::legend::LegendBox,
     ) -> bool {
         self.text_plan.lines.is_empty()
@@ -87,13 +87,13 @@ impl PanelTextPlan {
                 && self.minimum_size.1 <= panel.height()
                 && !overlap_predicate(
                     self.bounds_in(panel),
-                    PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
+                    PixelRect::new(legend.left, legend.right, legend.bottom, legend.top),
                 ))
     }
 }
 
 pub(crate) fn conflicting_legend_annotation(
-    plans: &[PanelTextPlan],
+    plans: &[PlotTextAnnotationPlan],
     legend: crate::decorations::legend::LegendBox,
 ) -> Option<&TextPosition> {
     plans
@@ -102,14 +102,14 @@ pub(crate) fn conflicting_legend_annotation(
             !plan.overlap
                 && overlap_predicate(
                     plan.bounds,
-                    PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
+                    PixelRect::new(legend.left, legend.right, legend.bottom, legend.top),
                 )
         })
         .map(|plan| &plan.source)
 }
 pub(crate) fn conflict_resolved_by_assignment(
-    plans: &[PanelTextPlan],
-    next_panel: PanelBox,
+    plans: &[PlotTextAnnotationPlan],
+    next_panel: PixelRect,
     next_legend: crate::decorations::legend::LegendBox,
 ) -> bool {
     plans
@@ -117,12 +117,12 @@ pub(crate) fn conflict_resolved_by_assignment(
         .all(|plan| plan.avoids_legend_in(next_panel, next_legend))
 }
 
-fn corner_anchor(corner: PanelCorner) -> TextAnchor {
+fn corner_anchor(corner: DataAreaCorner) -> TextAnchor {
     match corner {
-        PanelCorner::TopLeft => TextAnchor::top_left(),
-        PanelCorner::TopRight => TextAnchor::top_right(),
-        PanelCorner::BottomLeft => TextAnchor::bottom_left(),
-        PanelCorner::BottomRight => TextAnchor::bottom_right(),
+        DataAreaCorner::TopLeft => TextAnchor::top_left(),
+        DataAreaCorner::TopRight => TextAnchor::top_right(),
+        DataAreaCorner::BottomLeft => TextAnchor::bottom_left(),
+        DataAreaCorner::BottomRight => TextAnchor::bottom_right(),
     }
 }
 
@@ -131,7 +131,7 @@ pub(crate) fn measure_plans(
     layout: &Layout,
     theme: &ResolvedTheme,
     scope: &FitScope,
-) -> Result<Vec<PanelTextPlan>, PlanError> {
+) -> Result<Vec<PlotTextAnnotationPlan>, PlanError> {
     let plans = fit::collect(
         "panel annotations",
         plot.panel_text_annotations()
@@ -151,12 +151,12 @@ pub(crate) fn measure_plans(
     reason = "one annotation transaction resolves its actual reference, complete policy, measured transform and collision footprint"
 )]
 fn measure(
-    annotation: &crate::PanelTextAnnotation,
+    annotation: &crate::PlotTextAnnotation,
     plot: &Plot,
     layout: &Layout,
     theme: &ResolvedTheme,
     scope: &FitScope,
-) -> Result<PanelTextPlan, PlanError> {
+) -> Result<PlotTextAnnotationPlan, PlanError> {
     let directional = theme.with_text_projection(plot, layout);
     let theme = &directional;
     let panel = layout.projection.panel_box();
@@ -173,9 +173,9 @@ fn measure(
     let inset = padding.pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
     let corner = annotation.position().as_corner();
     let reference = if let Some(corner) = corner {
-        Reference::Corner(corner, inset)
+        PlotTextAnnotationReference::Corner(corner, inset)
     } else {
-        Reference::Axes(resolve::resolve(
+        PlotTextAnnotationReference::Axes(resolve::resolve(
             annotation.position(),
             plot,
             layout,
@@ -205,7 +205,7 @@ fn measure(
         })?;
     let default_alignment = if matches!(
         corner,
-        Some(PanelCorner::TopRight | PanelCorner::BottomRight)
+        Some(DataAreaCorner::TopRight | DataAreaCorner::BottomRight)
     ) {
         TextAlignment::End
     } else {
@@ -238,15 +238,15 @@ fn measure(
         false,
         request.instructions().offset,
     )?;
-    let (width, height) = if matches!(reference,Reference::Axes(axes) if axes.iter().any(|axis|matches!(axis,ReferenceAxis::Figure(_))))
+    let (width, height) = if matches!(reference,PlotTextAnnotationReference::Axes(axes) if axes.iter().any(|axis|matches!(axis,ReferenceAxis::Figure(_))))
     {
         plot.figure_dimensions()?
     } else {
         (0, 0)
     };
     let allowed = match reference {
-        Reference::Corner(..) => panel,
-        Reference::Axes(axes) => PanelBox::new(
+        PlotTextAnnotationReference::Corner(..) => panel,
+        PlotTextAnnotationReference::Axes(axes) => PixelRect::new(
             if matches!(axes[0], ReferenceAxis::Figure(_)) {
                 0.0
             } else {
@@ -278,7 +278,7 @@ fn measure(
         placement.origin,
         placement.reverse_lines,
     ) {
-        bounds = PanelBox::new(
+        bounds = PixelRect::new(
             bounds.x0.min(ink.left),
             bounds.x1.max(ink.right),
             bounds.y0.min(ink.bottom),
@@ -302,7 +302,7 @@ fn measure(
             }
             TextFailure::Hide => {
                 text_plan = text_plan.hide()?;
-                bounds = PanelBox::new(
+                bounds = PixelRect::new(
                     placement.position.x,
                     placement.position.x,
                     placement.position.y,
@@ -311,7 +311,7 @@ fn measure(
             }
             TextFailure::Clip => {
                 text_plan = text_plan.clip_region(allowed);
-                bounds = PanelBox::new(
+                bounds = PixelRect::new(
                     bounds.x0.max(allowed.x0),
                     bounds.x1.min(allowed.x1),
                     bounds.y0.max(allowed.y0),
@@ -331,7 +331,7 @@ fn measure(
                 .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?,
         )
     };
-    Ok(PanelTextPlan {
+    Ok(PlotTextAnnotationPlan {
         text_plan,
         placement,
         bounds,
@@ -343,7 +343,7 @@ fn measure(
     })
 }
 
-fn check_collisions(plans: &[PanelTextPlan], scope: &FitScope) -> Result<(), PlanError> {
+fn check_collisions(plans: &[PlotTextAnnotationPlan], scope: &FitScope) -> Result<(), PlanError> {
     for (index, left) in plans.iter().enumerate() {
         for right in &plans[index + 1..] {
             if !left.overlap && !right.overlap && overlap_predicate(left.bounds, right.bounds) {
@@ -359,7 +359,7 @@ fn check_collisions(plans: &[PanelTextPlan], scope: &FitScope) -> Result<(), Pla
     }
     Ok(())
 }
-fn overlap_predicate(left: PanelBox, right: PanelBox) -> bool {
+fn overlap_predicate(left: PixelRect, right: PixelRect) -> bool {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,

@@ -69,7 +69,7 @@ Shared 色标标题要求完整 Text 请求相等，包括显式重置。
 
 ### 参照、锚点与局部适配
 
-PanelTextAnnotation::new 将注释放到角落；`at` 接收类型化的 Data／Panel／Figure 参照。
+PlotTextAnnotation::new 将注释放到角落；`at` 接收类型化的 Data／Panel／Figure 参照。
 TextLayout 的块锚点是另一个独立选择。数据参照由实际面板投影，不从屏幕坐标猜测。
 `position()` 读取类型化参照，TextOffset 选择 Screen 或 TextLocal 的 CSS 偏移。
 表头块保持在声明跨度中央，局部对齐只控制块内各行。

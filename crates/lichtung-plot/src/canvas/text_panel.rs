@@ -5,7 +5,7 @@ use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
-use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, TextBlock};
+use crate::layout::{AddressRole, PhysicalTextAlignment, PixelRect, TextBlock};
 use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::TextAppearance;
 use crate::theme::ResolvedTheme;
@@ -175,7 +175,7 @@ impl TextPanelPlan {
     pub(super) fn measure(
         source: &TextPanel,
         index: usize,
-        cell: PanelBox,
+        cell: PixelRect,
         theme: &ResolvedTheme,
         intrinsics: TextPanelIntrinsics,
         scope: &FitScope,
@@ -405,7 +405,7 @@ impl TextPanelPlan {
                 0.0,
             ),
             title.plan(),
-            Some(PanelBox::new(
+            Some(PixelRect::new(
                 x,
                 right,
                 title_top - pixels(allocation.sizes[0]),
@@ -419,12 +419,12 @@ impl TextPanelPlan {
                 0.0,
             ),
             body.plan(),
-            Some(PanelBox::new(x, right, bottom, body_top)),
+            Some(PixelRect::new(x, right, bottom, body_top)),
         )?;
         let title = match crate::layout::fit::outcome(crate::layout::text::placement::contain(
             title.plan().clone(),
             title_placement,
-            PanelBox::new(x, right, title_top - pixels(allocation.sizes[0]), title_top),
+            PixelRect::new(x, right, title_top - pixels(allocation.sizes[0]), title_top),
             &title_scope,
         ))? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
@@ -433,7 +433,7 @@ impl TextPanelPlan {
         let body = match crate::layout::fit::outcome(crate::layout::text::placement::contain(
             body.plan().clone(),
             body_placement,
-            PanelBox::new(x, right, bottom, body_top),
+            PixelRect::new(x, right, bottom, body_top),
             &body_scope,
         ))? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),

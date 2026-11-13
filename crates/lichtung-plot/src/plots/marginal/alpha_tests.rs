@@ -79,7 +79,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
-            PanelBox::new(20.0, 800.0, 20.0, 620.0),
+            PixelRect::new(20.0, 800.0, 20.0, 620.0),
             &theme,
         ))
         .unwrap();

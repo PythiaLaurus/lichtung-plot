@@ -11,7 +11,7 @@ use crate::alpha::{
     marks::{fill_style, ObservationAlpha},
     AlphaTarget, AlphaUnitKind,
 };
-use crate::layout::{AxisTick, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{AxisTick, PhysicalTextAlignment, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, PlannedTextPlacement, Point2D, TextAnchor,
 };
@@ -131,7 +131,7 @@ mod geometry_tests {
         let chart =
             crate::plots::shared_x::prepare_panel_for_test(&source.erase(), &resolved).unwrap();
         let marks = retained(&chart).unwrap();
-        let panel = PanelBox::new(0.0, 800.0, 0.0, 400.0);
+        let panel = PixelRect::new(0.0, 800.0, 0.0, 400.0);
         let projection = crate::layout::Projection::new((0.0, 20.0), (0.0, 1.0), panel.as_tuple());
         let totals = marks.selected_totals(&projection).unwrap();
         assert!(totals
@@ -197,7 +197,7 @@ mod geometry_tests {
             .map(f64::to_bits),
             [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
         );
-        let panel = crate::layout::PanelBox::new(10.0, 810.0, 20.0, 620.0);
+        let panel = crate::layout::PixelRect::new(10.0, 810.0, 20.0, 620.0);
         let measure = |theme: &crate::theme::ResolvedTheme| {
             chart
                 .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, theme))
@@ -514,7 +514,7 @@ pub(crate) fn natural_body_height(
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
     let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
-    let panel = PanelBox::new(0.0, width, 0.0, 1.0);
+    let panel = PixelRect::new(0.0, width, 0.0, 1.0);
     let projection = crate::layout::Projection::new(
         range,
         chart.y_axis_spec().limits.unwrap_or(axes.ranges[1]),
@@ -902,7 +902,7 @@ pub(crate) fn measure(
 
     for (index, text) in payload.text.iter_mut().enumerate() {
         let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
-        let region = PanelBox::new(
+        let region = PixelRect::new(
             if chart.user_x_limits().is_some() {
                 panel.x0
             } else {
@@ -1019,7 +1019,7 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
         chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
-        || crate::layout::StandardPanelInputs::new(theme),
+        || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
     result.producer_text =
         crate::data::source::collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
@@ -1034,7 +1034,7 @@ pub(crate) fn measure(
 
 #[derive(Debug)]
 pub(crate) struct WaterfallPayload {
-    clip: PanelBox,
+    clip: PixelRect,
     bars: Vec<([Point2D; 4], FillStyle)>,
     source_rows: Vec<usize>,
     connectors: Vec<([Point2D; 2], LineStyle)>,
@@ -1113,7 +1113,7 @@ fn total_shelf_size(
 
 fn plan_annotations(
     projection: &crate::layout::Projection,
-    panel: PanelBox,
+    panel: PixelRect,
     source_y: f64,
     candidates: &[(f64, Option<crate::Text>); 2],
     context: PlotRenderContext<'_>,
@@ -1328,7 +1328,7 @@ fn plan_annotations(
     crate::layout::text::visibility::apply(
         &mut text,
         &indices,
-        PanelBox::new(panel.x0, panel.x1, 0.0, height),
+        PixelRect::new(panel.x0, panel.x1, 0.0, height),
         false,
         scope,
     )?;

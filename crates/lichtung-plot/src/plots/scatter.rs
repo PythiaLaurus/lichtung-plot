@@ -57,7 +57,7 @@ struct ScatterPoint {
 
 #[derive(Debug)]
 pub(crate) struct ScatterPayload {
-    clip: crate::layout::PanelBox,
+    clip: crate::layout::PixelRect,
     pub(crate) groups: Vec<(Vec<Point2D>, PointStyle)>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }

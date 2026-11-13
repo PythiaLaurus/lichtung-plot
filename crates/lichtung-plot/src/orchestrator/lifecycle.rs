@@ -5,7 +5,7 @@ use crate::Error;
 use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::layout::PanelBox;
+use crate::layout::PixelRect;
 use crate::render::backend::{Backend, SurfaceRole};
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
@@ -1016,7 +1016,7 @@ fn render_plot_scene(
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     backend.draw_surface(
-        PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
+        PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height)),
         theme.surfaces.canvas_root,
         SurfaceRole::CanvasRoot,
     )?;
@@ -1185,7 +1185,7 @@ impl Plot {
     pub(crate) fn preflight_panel(
         &self,
         kind: PlotKind,
-        panel: crate::layout::PanelBox,
+        panel: crate::layout::PixelRect,
         theme: &ResolvedTheme,
     ) -> Result<PlotRenderResult, Error> {
         crate::layout::fit::measured(self.preflight_measurement(
@@ -1200,7 +1200,7 @@ impl Plot {
     pub(crate) fn preflight_measurement(
         &self,
         kind: PlotKind,
-        panel: crate::layout::PanelBox,
+        panel: crate::layout::PixelRect,
         theme: &ResolvedTheme,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<crate::layout::fit::FitOutcome<PlotRenderResult>, Error> {

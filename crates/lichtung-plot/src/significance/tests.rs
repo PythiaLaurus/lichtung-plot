@@ -4,8 +4,8 @@ fn categories() -> Vec<String> {
     ["a", "b", "c", "d"].map(str::to_string).to_vec()
 }
 
-fn panel() -> PanelBox {
-    PanelBox::new(50.0, 350.0, 40.0, 240.0)
+fn panel() -> PixelRect {
+    PixelRect::new(50.0, 350.0, 40.0, 240.0)
 }
 
 fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceAnnotation {
@@ -162,7 +162,7 @@ fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() 
             (0.0, 10.0),
             None,
             Some((0.0, 10.0)),
-            PanelBox::new(0.0, 400.0, 0.0, height),
+            PixelRect::new(0.0, 400.0, 0.0, height),
             LegendAnnotationConstraint::NoObstacle,
             &effective,
             &theme,

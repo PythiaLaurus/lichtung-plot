@@ -4,8 +4,8 @@
 use super::{InteriorRoute, OneCategoricalAxis, StandardCoordinate};
 use crate::layout::fit::{self, FitKind, PlanError};
 #[cfg(test)]
-use crate::layout::PanelBox;
-use crate::layout::{Axis, AxisSide, Layout, Projection, StandardPanelInputs};
+use crate::layout::PixelRect;
+use crate::layout::{Axis, AxisSide, CoordinateLayoutInputs, Layout, Projection};
 use crate::spec::{AxisDomain, PlotRenderContext, PlotRenderResult};
 use crate::{Error, Plot};
 
@@ -13,7 +13,7 @@ use crate::{Error, Plot};
 /// the prepared mark and annotation intrinsics of each family.
 #[derive(Debug)]
 pub(crate) struct Intrinsics {
-    standard: StandardPanelInputs,
+    standard: CoordinateLayoutInputs,
     titles: [Option<crate::Text>; 2],
     formats: [Option<std::sync::Arc<crate::numeric::format::NumericFormat>>; 2],
     category_labels: [crate::CategoryLabelSelection; 2],
@@ -104,7 +104,7 @@ impl Intrinsics {
             crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
             diagnostic_scope,
         );
-        let standard = StandardPanelInputs::new(theme)?;
+        let standard = CoordinateLayoutInputs::new(theme)?;
         let mut minimum_body = (
             crate::layout::canvas::MINIMUM_PANEL_SPAN,
             crate::layout::canvas::MINIMUM_PANEL_SPAN,
@@ -443,7 +443,7 @@ impl InteriorRoute {
             context.theme,
             context.fit_scope(),
             plot.axis_semantic_inputs(domains),
-            || StandardPanelInputs::new(context.theme),
+            || CoordinateLayoutInputs::new(context.theme),
         )?;
         let mut result = match self {
             Self::StandardCoordinate(StandardCoordinate::Scatter) => {
@@ -521,7 +521,7 @@ pub(crate) fn canvas_layout(
     )?;
     root.native_preference = match super::InteriorRoute::classify(plot.kind()) {
         super::InteriorRoute::StandardCoordinate(_) => {
-            Some(super::preference::NativePanelPreference::Standard(
+            Some(super::preference::CoordinateSizePreference::Standard(
                 super::preference::mark_preference(plot, theme, minimum)?,
             ))
         }
@@ -538,7 +538,7 @@ pub(crate) fn canvas_layout(
             | super::OneCategoricalAxis::Violin
             | super::OneCategoricalAxis::Raincloud
             | super::OneCategoricalAxis::Interaction,
-        ) => Some(super::preference::NativePanelPreference::Categorical(
+        ) => Some(super::preference::CoordinateSizePreference::Categorical(
             super::preference::categorical_preference(plot, theme, minimum)?,
         )),
         _ => None,

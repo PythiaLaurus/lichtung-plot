@@ -182,7 +182,7 @@ pub(super) struct FacetPlan {
     horizontal_axis_label: Option<crate::Text>,
     vertical_axis_label: Option<crate::Text>,
     canvas_layout: crate::layout::RootFramePlan,
-    outer: crate::layout::PanelBox,
+    outer: crate::layout::PixelRect,
     shared_axis_origin: (f64, f64),
     strip_text: Vec<Vec<crate::render::backend::PlacedText>>,
     shared_axis_text: Vec<crate::render::backend::PlacedText>,
@@ -804,9 +804,9 @@ impl FacetPlan {
 
 fn position_shared_axis_guides(
     position: LegendPosition,
-    canvas_panel: crate::layout::PanelBox,
-    reserved_outer: crate::layout::PanelBox,
-    outer: crate::layout::PanelBox,
+    canvas_panel: crate::layout::PixelRect,
+    reserved_outer: crate::layout::PixelRect,
+    outer: crate::layout::PixelRect,
     legend: Option<&mut ResolvedLegend>,
 ) -> (f64, f64) {
     let mut origin = (outer.x0, outer.y0);
@@ -869,8 +869,9 @@ mod feedback_tests {
                 crate::layout::AxisTick::new(0.0, "zero"),
                 crate::layout::AxisTick::new(1.0, "one"),
             ])
-            .panel_text_annotation(
-                crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "annotation").unwrap(),
+            .text_annotation(
+                crate::PlotTextAnnotation::new(crate::DataAreaCorner::TopLeft, "annotation")
+                    .unwrap(),
             )
             .legend(crate::LegendPolicy::Hidden)
             .size(1200, 800)
