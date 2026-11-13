@@ -403,11 +403,10 @@ fn shared_legend_child_cache_replay_contract() {
 
     for facet in [false, true] {
         let plot = scatter(3, false).size(1200, 720).erase();
-        let canvas = crate::Canvas::grid(1, 1).unwrap();
         let mut children = if facet {
-            ChildPlans::facets(&plot)
+            ChildPlans::facets()
         } else {
-            ChildPlans::canvas(&canvas)
+            ChildPlans::canvas()
         };
         let owner = ComponentAddress::root()
             .child(

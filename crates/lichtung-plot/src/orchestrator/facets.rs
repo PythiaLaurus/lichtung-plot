@@ -890,7 +890,7 @@ mod feedback_tests {
                 let theme = crate::Theme::publication().resolve().unwrap();
                 let text = crate::text::TextService::default();
                 let theme = crate::text::TextRequestContext::new(&theme, &text);
-                let mut children = ChildPlans::facets(&source);
+                let mut children = ChildPlans::facets();
                 let mut calls = 0;
                 let mut retained_neighbor = None;
                 let root = crate::layout::plan_root(
@@ -1145,7 +1145,7 @@ mod feedback_tests {
                         PlotKind::Scatter,
                         &theme,
                         round,
-                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                        &mut crate::decorations::plan::children::ChildPlans::facets(),
                         guide,
                         false,
                         None,
@@ -1291,7 +1291,7 @@ mod feedback_tests {
                         PlotKind::Scatter,
                         &theme,
                         round,
-                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                        &mut crate::decorations::plan::children::ChildPlans::facets(),
                         guide,
                         false,
                         None,

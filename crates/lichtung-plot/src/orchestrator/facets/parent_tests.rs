@@ -171,7 +171,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let mut children = ChildPlans::facets(&source);
+        let mut children = ChildPlans::facets();
         let mut exercised = false;
         let root = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {

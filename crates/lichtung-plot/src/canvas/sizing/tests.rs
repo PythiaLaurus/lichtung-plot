@@ -108,7 +108,7 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
         .map(|variant| inputs.attach(variant).unwrap())
         .collect::<Vec<_>>();
     let source = inputs.attach(source).unwrap();
-    let measurements = HeightMeasurements::default();
+    let mut measurements = HeightMeasurements::default();
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
             width: 800,

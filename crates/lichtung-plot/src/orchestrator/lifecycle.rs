@@ -3,6 +3,7 @@
 use crate::Error;
 
 use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
+use super::root::{CachedRootFrame, RootLayoutCaches};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::PixelRect;
@@ -22,14 +23,7 @@ struct PreparedPlotInputs {
     text: TextService,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
-    root_frame: std::cell::RefCell<Option<CachedRootFrame>>,
-}
-
-struct CachedRootFrame {
-    prose: [crate::Text; 3],
-    dimensions: (u32, u32),
-    minimum: [u64; 2],
-    frame: std::sync::Arc<crate::layout::RootFramePlan>,
+    caches: std::cell::RefCell<RootLayoutCaches>,
 }
 
 impl PreparedPlotInputs {
@@ -38,13 +32,14 @@ impl PreparedPlotInputs {
     fn root_frame(
         &self,
         source: &Plot,
+        frames: &mut Option<CachedRootFrame>,
     ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
         let dimensions = source.canvas_dimensions()?;
         let request = TextRequestContext::new(&self.theme, &self.text);
         let minimum = source.intrinsic_body_minimum(&request)?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
-        if let Some(cached) = self.root_frame.borrow().as_ref() {
+        if let Some(cached) = frames.as_ref() {
             if cached.dimensions == dimensions
                 && cached.minimum == minimum
                 && source.description().same_prose(&cached.prose)
@@ -55,7 +50,7 @@ impl PreparedPlotInputs {
         let frame = source.measured_canvas_layout(&request)?;
 
         let frame = frame.into_shared();
-        *self.root_frame.borrow_mut() = Some(CachedRootFrame {
+        *frames = Some(CachedRootFrame {
             prose: source.description().copy_prose()?,
             dimensions,
             minimum,
@@ -89,8 +84,9 @@ fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
             let environment = prepared.text.prepared_font_environment().unwrap();
             let core = environment.liveness_probe();
             let operation = environment.operation().liveness_probe();
-            let frame = prepared.root_frame.borrow();
-            let (_, title) = frame
+            let caches = prepared.caches.borrow();
+            let (_, title) = caches
+                .frames
                 .as_ref()
                 .unwrap()
                 .frame
@@ -140,11 +136,13 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
         |prepared, _| {
             let source = prepared.axes.attach(source.clone()).unwrap();
 
-            prepared.root_frame.borrow_mut().take();
-            let original = prepared.root_frame(&source).unwrap();
+            let mut caches = prepared.caches.borrow_mut();
+            let frames = &mut caches.frames;
+            frames.take();
+            let original = prepared.root_frame(&source, frames).unwrap();
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
 
-            let repeated = prepared.root_frame(&source).unwrap();
+            let repeated = prepared.root_frame(&source, frames).unwrap();
             assert_eq!(original, repeated);
 
             assert_eq!(
@@ -159,7 +157,7 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
                 assert!(left.shares_payload(right));
             }
             let changed = prepared
-                .root_frame(&source.clone().with_canvas_size(641, 480))
+                .root_frame(&source.clone().with_canvas_size(641, 480), frames)
                 .unwrap();
             assert_ne!(changed.panel_box, repeated.panel_box);
 
@@ -173,7 +171,7 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
             );
 
             let repeated_changed = prepared
-                .root_frame(&source.clone().with_canvas_size(641, 480))
+                .root_frame(&source.clone().with_canvas_size(641, 480), frames)
                 .unwrap();
             assert!(std::sync::Arc::ptr_eq(&changed, &repeated_changed));
 
@@ -189,14 +187,14 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
                         .unwrap(),
                 ),
             );
-            let styled_frame = prepared.root_frame(&styled).unwrap();
+            let styled_frame = prepared.root_frame(&styled, frames).unwrap();
             assert!(!std::sync::Arc::ptr_eq(&original, &styled_frame));
             assert!(styled_frame.insets.top > original.insets.top);
-            let repeated_style = prepared.root_frame(&styled).unwrap();
+            let repeated_style = prepared.root_frame(&styled, frames).unwrap();
             assert!(std::sync::Arc::ptr_eq(&styled_frame, &repeated_style));
             let reset =
                 styled.title(crate::Text::new("Root title").layout(crate::TextLayout::default()));
-            let reset_frame = prepared.root_frame(&reset).unwrap();
+            let reset_frame = prepared.root_frame(&reset, frames).unwrap();
             assert!(!std::sync::Arc::ptr_eq(&styled_frame, &reset_frame));
             assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
             let error = styled_frame
@@ -788,7 +786,9 @@ impl PlotPlan {
         let sizing = source.description().sizing_request();
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
+        let caches = std::cell::RefCell::new(RootLayoutCaches::new(
+            crate::decorations::plan::children::ChildPlans::facets(),
+        ));
         let root = crate::layout::plan_root(
             sizing,
             |prepared_stage| {
@@ -879,10 +879,14 @@ impl PlotPlan {
                     text,
                     text_census: census,
                     root_text,
-                    root_frame: std::cell::RefCell::new(None),
+                    caches,
                 })
             },
             |prepared, assigned, round| {
+                let mut caches = prepared.caches.borrow_mut();
+                let RootLayoutCaches {
+                    children, frames, ..
+                } = &mut *caches;
                 let request = TextRequestContext::new(&prepared.theme, &prepared.text);
                 let assigned =
                     if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
@@ -928,7 +932,7 @@ impl PlotPlan {
                             kind,
                             &request,
                             round,
-                            &mut children,
+                            children,
                             prepared
                                 .facet_guide
                                 .as_ref()
@@ -943,7 +947,7 @@ impl PlotPlan {
                         &source,
                         kind,
                         &request,
-                        prepared.root_frame(&source)?,
+                        prepared.root_frame(&source, frames)?,
                         round,
                         sizing.automatic_height(),
                     )?))

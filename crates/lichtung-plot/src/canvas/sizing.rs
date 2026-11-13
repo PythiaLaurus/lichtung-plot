@@ -18,7 +18,9 @@ mod tests;
 /// Root-local measured consequences. Source data, labels, typography and guide
 /// semantics are immutable under this owner; coordinated inputs below are not.
 #[derive(Default)]
-pub(super) struct HeightMeasurements(std::cell::RefCell<Vec<Option<HeightMeasurement>>>);
+pub(crate) struct HeightMeasurements {
+    records: Vec<Option<HeightMeasurement>>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 struct HeightInputs {
@@ -186,8 +188,7 @@ impl HeightMeasurements {
     ) -> Result<Option<f64>, Error> {
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
-        let entries = self.0.borrow();
-        let Some(Some(entry)) = entries.get(index) else {
+        let Some(Some(entry)) = self.records.get(index) else {
             return Ok(None);
         };
         if entry.inputs.matches_assignment(inputs) && entry.inputs.guides.stable(round) {
@@ -202,7 +203,7 @@ impl HeightMeasurements {
         reason = "record one exact width-dependent consequence with its declared guide dependencies"
     )]
     pub(super) fn record(
-        &self,
+        &mut self,
         plot: &Plot,
         width: f64,
         height: f64,
@@ -215,17 +216,13 @@ impl HeightMeasurements {
             HeightInputs::new(plot, width, parent_insets, round, owner, true, dependencies)?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
-        let mut entries = self.0.borrow_mut();
+        let entries = &mut self.records;
         let needed = index
             .checked_add(1)
             .ok_or_else(|| Error::Render("content height slot count overflowed".into()))?;
         if entries.len() < needed {
             let additional = needed - entries.len();
-            fit::reserve(
-                &mut entries,
-                additional,
-                "content height measurement inputs",
-            )?;
+            fit::reserve(entries, additional, "content height measurement inputs")?;
             entries.resize_with(needed, || None);
         }
 

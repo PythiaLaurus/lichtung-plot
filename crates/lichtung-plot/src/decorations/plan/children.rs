@@ -150,40 +150,31 @@ struct Panel {
     feedback: ChildFeedback,
 }
 
-enum RootSource<'a> {
-    Canvas { _source: &'a crate::Canvas },
-    Facets { _source: &'a Plot },
-}
-
-pub(crate) struct ChildPlans<'a> {
-    source: RootSource<'a>,
+pub(crate) struct ChildPlans {
+    source: AddressRole,
     measurements: Vec<Measurement>,
     panels: Vec<Panel>,
 }
 
-impl<'a> ChildPlans<'a> {
-    pub(crate) fn canvas(source: &'a crate::Canvas) -> Self {
+impl ChildPlans {
+    pub(crate) fn canvas() -> Self {
         Self {
-            source: RootSource::Canvas { _source: source },
+            source: AddressRole::CanvasCell,
             measurements: Vec::new(),
             panels: Vec::new(),
         }
     }
 
-    pub(crate) fn facets(source: &'a Plot) -> Self {
+    pub(crate) fn facets() -> Self {
         Self {
-            source: RootSource::Facets { _source: source },
+            source: AddressRole::FacetCell,
             measurements: Vec::new(),
             panels: Vec::new(),
         }
     }
 
     fn validate_owner(&self, owner: &ComponentAddress) -> Result<(), Error> {
-        let role = match self.source {
-            RootSource::Canvas { .. } => AddressRole::CanvasCell,
-            RootSource::Facets { .. } => AddressRole::FacetCell,
-        };
-        if owner.leaf_role() != role {
+        if owner.leaf_role() != self.source {
             return Err(Error::Render(
                 "child result belongs to a different root topology".into(),
             ));
@@ -431,7 +422,7 @@ mod tests {
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
-        let mut children = ChildPlans::facets(&source);
+        let mut children = ChildPlans::facets();
         let mut produced = 0;
         crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
@@ -609,7 +600,7 @@ mod tests {
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
                 .unwrap();
-            let mut children = ChildPlans::facets(&source);
+            let mut children = ChildPlans::facets();
             let mut produced = 0;
             crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
@@ -717,7 +708,7 @@ mod tests {
         let sibling = ComponentAddress::root()
             .child(AddressRole::FacetCell, 1)
             .unwrap();
-        let mut children = ChildPlans::facets(&source);
+        let mut children = ChildPlans::facets();
         let mut rounds = 0;
         let mut finalized = false;
         let result = crate::layout::plan_root(

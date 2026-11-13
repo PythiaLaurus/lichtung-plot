@@ -25,6 +25,7 @@ mod dependencies;
 mod placement;
 mod plot_text;
 mod sizing;
+pub(crate) use sizing::HeightMeasurements;
 mod text_clear;
 mod text_panel;
 mod tracks;
@@ -65,6 +66,7 @@ struct CanvasPlan {
 }
 
 struct PreparedCanvasInputs {
+    caches: std::cell::RefCell<crate::orchestrator::root::RootLayoutCaches>,
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
@@ -78,7 +80,6 @@ struct PreparedCanvasInputs {
 
 struct PreparedCanvasRound<'a> {
     content_sizing: bool,
-    measurements: Option<&'a sizing::HeightMeasurements>,
     interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
     themes: Arc<ResolvedCanvasThemes>,
     canvas_layout: RootFramePlan,
@@ -1505,8 +1506,9 @@ impl Canvas {
         #[cfg(test)] inspect: impl FnOnce(&PreparedCanvasInputs, &crate::orchestrator::TextReplayPlan),
     ) -> Result<crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan>, Error> {
         let sizing_request = self.root_size;
-        let mut children = crate::decorations::plan::children::ChildPlans::canvas(self);
-        let measurements = sizing::HeightMeasurements::default();
+        let caches = std::cell::RefCell::new(crate::orchestrator::root::RootLayoutCaches::new(
+            crate::decorations::plan::children::ChildPlans::canvas(),
+        ));
         let root = crate::layout::plan_root(
             sizing_request,
             |prepared_stage| {
@@ -1558,6 +1560,7 @@ impl Canvas {
                 let (root_text, text_panel_intrinsics, plot_intrinsics) =
                     self.prepare_intrinsics(&themes, &interiors)?;
                 Ok(PreparedCanvasInputs {
+                    caches,
                     themes,
                     text_census: census,
                     root_text,
@@ -1570,7 +1573,11 @@ impl Canvas {
                 })
             },
             |prepared, assigned, round| {
-                let assigned = sizing::measure(self, prepared, assigned, round, &measurements)?;
+                let mut caches = prepared.caches.borrow_mut();
+                let crate::orchestrator::root::RootLayoutCaches {
+                    children, heights, ..
+                } = &mut *caches;
+                let assigned = sizing::measure(self, prepared, assigned, round, heights)?;
                 if let Some(guide) = &prepared.shared_guide {
                     round.observe_guide(guide)?;
                 }
@@ -1588,7 +1595,7 @@ impl Canvas {
                     Arc::clone(&prepared.themes),
                     assigned,
                     round,
-                    &mut children,
+                    children,
                     &prepared.shared_x,
                     prepared.color_domains.as_deref().map(Vec::as_slice),
                     prepared.shared_guide.as_ref(),
@@ -1596,7 +1603,7 @@ impl Canvas {
                     &prepared.plot_intrinsics,
                     &prepared.interiors,
                     sizing_request.automatic_height(),
-                    Some(&measurements),
+                    Some(heights),
                 )?;
                 #[cfg(test)]
                 assert_eq!(
@@ -1981,7 +1988,7 @@ impl Canvas {
         >],
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         content_sizing: bool,
-        measurements: Option<&sizing::HeightMeasurements>,
+        mut measurements: Option<&mut sizing::HeightMeasurements>,
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
@@ -1997,7 +2004,6 @@ impl Canvas {
             plot_intrinsics,
             interiors,
             content_sizing,
-            measurements,
         )?;
         let mut compact_changes = true;
         if self.legend_policy != CanvasLegendPolicy::Shared || prepared.shared_legend.is_none() {
@@ -2008,6 +2014,7 @@ impl Canvas {
                 None,
                 &mut compact_changes,
                 children,
+                measurements.as_deref_mut(),
             )? {
                 FitOutcome::Measured(plan) => Ok(plan),
                 FitOutcome::Miss(reason) => Err(reason.into_error()),
@@ -2050,6 +2057,7 @@ impl Canvas {
                     Some((edge, compact)),
                     &mut compact_changes,
                     children,
+                    measurements.as_deref_mut(),
                 )?;
                 match outcome {
                     FitOutcome::Measured(plan) => match round.finish_trial(checkpoint) {
@@ -2105,7 +2113,7 @@ impl Canvas {
         themes: Arc<ResolvedCanvasThemes>,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
-        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+        children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &'a [Option<(f64, f64)>],
         color_domains: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&'a Arc<PreparedGuide>>,
@@ -2115,7 +2123,6 @@ impl Canvas {
         >],
         interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
         content_sizing: bool,
-        measurements: Option<&'a sizing::HeightMeasurements>,
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions()?;
 
@@ -2214,7 +2221,6 @@ impl Canvas {
 
         Ok(PreparedCanvasRound {
             content_sizing,
-            measurements,
             interiors,
             themes,
             canvas_layout,
@@ -2385,6 +2391,7 @@ impl Canvas {
 
     #[expect(
         clippy::too_many_lines,
+        clippy::too_many_arguments,
         reason = "one Canvas trial allocates declared tracks and measures every affected child"
     )]
     fn build_canvas_attempt(
@@ -2395,6 +2402,7 @@ impl Canvas {
         guide_trial: Option<(crate::LegendPosition, bool)>,
         compact_changes: &mut bool,
         children: &mut crate::decorations::plan::children::ChildPlans,
+        mut measurements: Option<&mut sizing::HeightMeasurements>,
     ) -> Result<crate::layout::fit::FitOutcome<CanvasPlan>, Error> {
         use crate::layout::fit;
         let root_address = crate::layout::ComponentAddress::root();
@@ -2439,7 +2447,7 @@ impl Canvas {
                     source: self,
                     interiors: prepared.interiors,
                     round,
-                    measurements: prepared.measurements,
+                    measurements: measurements.as_deref(),
                     shared_allocation: shared.then(|| GuideAllocation::width(width)).transpose()?,
                     natural_width: false,
                     natural_height: true,
@@ -2569,7 +2577,7 @@ impl Canvas {
                     source: self,
                     interiors: prepared.interiors,
                     round,
-                    measurements: prepared.measurements,
+                    measurements: measurements.as_deref(),
                     shared_allocation: shared_width,
                     natural_width: false,
                     natural_height: false,
@@ -2740,7 +2748,7 @@ impl Canvas {
                     source: self,
                     interiors: prepared.interiors,
                     round,
-                    measurements: prepared.measurements,
+                    measurements: measurements.as_deref(),
                     shared_allocation: shared_width,
                     natural_width: false,
                     natural_height: false,
@@ -2880,7 +2888,7 @@ impl Canvas {
                     &owner,
                     theme,
                 )?;
-                if let Some(measurements) = prepared.measurements {
+                if let Some(measurements) = measurements.as_deref_mut() {
                     measurements.record(
                         plot,
                         cell.width(),
@@ -3204,7 +3212,7 @@ impl Canvas {
         plots: &[Option<Plot>],
         themes: &ResolvedCanvasThemes,
         panel: PixelRect,
-        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+        children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
         prepared_discrete_guide: Option<&Arc<PreparedGuide>>,
     ) -> Result<
@@ -3240,7 +3248,7 @@ impl Canvas {
 fn plot_category_domain(
     plot: &Plot,
     context: crate::spec::PlotRenderContext<'_, '_>,
-    children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+    children: &mut crate::decorations::plan::children::ChildPlans,
     index: usize,
     round: &crate::layout::kernel::FeedbackRound,
 ) -> Result<Vec<String>, Error> {

@@ -24,7 +24,7 @@ fn parent_guide(
 }
 
 fn measure(
-    children: &mut ChildPlans<'_>,
+    children: &mut ChildPlans,
     source: &Plot,
     context: PlotRenderContext<'_, '_>,
     owner: &ComponentAddress,
@@ -85,7 +85,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
         },
         |_| Ok(()),
         |(), assigned, round| {
-            let mut children = ChildPlans::facets(&source);
+            let mut children = ChildPlans::facets();
             let produced = std::cell::Cell::new(0);
             let panel = PixelRect::new(20.0, 400.0, 20.0, 500.0);
             let allocation = GuideAllocation::bounds(panel)?;
