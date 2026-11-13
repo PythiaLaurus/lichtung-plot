@@ -4,7 +4,6 @@ use crate::Error;
 
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
-use crate::decorations::plan::MeasuredPlotPlan;
 use crate::layout::{PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::PlotKind;
@@ -15,16 +14,20 @@ pub(super) fn observe_arranged_chrome(
     round: &mut crate::layout::kernel::FeedbackRound,
 ) -> Result<(), Error> {
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-    for (facet, text) in plan.panels.iter().zip(&plan.strip_text) {
-        round.observe_box(facet.panel)?;
-        for text in text {
+    for child in &plan.children {
+        round.observe_box(plan.cells[child.slot.0])?;
+        for text in &child.strips {
             geometry.text(text.placement, &text.plan, None)?;
         }
     }
     for text in &plan.shared_axis_text {
         geometry.text(text.placement, &text.plan, None)?;
     }
-    for legend in plan.legends.iter().flatten() {
+    for (_, legend) in plan.parent_guide.iter().chain(
+        plan.children
+            .iter()
+            .filter_map(|child| child.legend.as_ref()),
+    ) {
         legend.geometry(&mut geometry)?;
     }
     geometry.observe_feedback(round)
@@ -37,25 +40,24 @@ pub(super) fn observe_arranged_chrome(
 pub(super) fn render_scene(
     source: &Plot,
     kind: PlotKind,
-    panels: &[FacetPanel],
-    panel_plans: &[std::sync::Arc<MeasuredPlotPlan>],
-    legends: &[Option<crate::decorations::legend::LegendDrawPlan>],
-    strip_layers: &[String],
-    panel_layers: &[[String; 3]],
-    strip_text: &[Vec<PlacedText>],
+    children: &[super::OwnedFacetChild],
+    parent_guide: Option<&(String, crate::decorations::legend::LegendDrawPlan)>,
+    panel_layers: &[[String; 2]],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::RootFramePlan,
     theme: &crate::text::TextRequestContext<'_, '_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    for panel_plan in panel_plans {
+    for child in children {
+        let panel_plan = &child.plot;
         backend.draw_surface(
             panel_plan.panel_box,
             theme.surfaces.plot_panel,
             SurfaceRole::PlotPanel,
         )?;
     }
-    for (layers, panel_plan) in panel_layers.iter().zip(panel_plans) {
+    for (layers, child) in panel_layers.iter().zip(children) {
+        let panel_plan = &child.plot;
         crate::render::backend::with_layer_role(
             backend,
             &layers[0],
@@ -71,9 +73,8 @@ pub(super) fn render_scene(
         )?;
     }
 
-    for (index, ((_facet, panel_plan), strip)) in
-        panels.iter().zip(panel_plans).zip(strip_text).enumerate()
-    {
+    for (index, child) in children.iter().enumerate() {
+        let panel_plan = &child.plot;
         crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
         panel_plan.result.draw_body(backend)?;
         crate::significance::render_selected(&panel_plan.result, backend)?;
@@ -85,12 +86,15 @@ pub(super) fn render_scene(
                 .ok_or_else(|| Error::Render("facet plan is missing immutable axes".into()))?
                 .draw(backend)
         })?;
-        if let Some(legend) = &legends[index] {
-            crate::render::backend::with_layer(backend, &panel_layers[index][2], |backend| {
-                legend.draw(backend)
-            })?;
+        let legend = if index == 0 {
+            parent_guide.or(child.legend.as_ref())
+        } else {
+            child.legend.as_ref()
+        };
+        if let Some((layer, legend)) = legend {
+            crate::render::backend::with_layer(backend, layer, |backend| legend.draw(backend))?;
         }
-        draw_facet_strip(&strip_layers[index], strip, backend)?;
+        draw_facet_strip(&child.strip_layer, &child.strips, backend)?;
     }
     draw_shared_facet_axis_labels(shared_axis_text, backend)?;
     canvas_layout

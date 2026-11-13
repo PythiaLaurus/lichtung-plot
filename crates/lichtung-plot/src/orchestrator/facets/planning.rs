@@ -8,7 +8,7 @@ use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideConsumption, GuideOrientation,
     SUPPRESSED_GUIDES,
 };
-use crate::decorations::plan::{LegendRole, MeasuredPlotPlan};
+use crate::decorations::plan::LegendRole;
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
@@ -200,7 +200,10 @@ pub(super) fn native_parent(
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
     inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
-) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<MeasuredPlotPlan>>)>, Error> {
+) -> Result<
+    crate::layout::fit::FitOutcome<(Plot, Vec<super::OwnedFacetChild>, Vec<PixelRect>)>,
+    Error,
+> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
     let resources = theme.text.prepared_font_environment()?.operation();
@@ -423,7 +426,13 @@ pub(super) fn native_parent(
                 "facet cell requires measured decoration gutters",
             )?;
         }
-        panel_plans.push(result);
+        panel_plans.push(super::OwnedFacetChild {
+            slot: crate::orchestrator::root::GridSlot(facet.row * columns + facet.column),
+            plot: result,
+            strips: Vec::new(),
+            strip_layer: String::new(),
+            legend: None,
+        });
     }
     if let Some(failure) = child_miss {
         return Ok(FitOutcome::Miss(failure));
@@ -431,7 +440,7 @@ pub(super) fn native_parent(
     for facet in panels {
         facet.panel = cells[facet.row * columns + facet.column];
     }
-    Ok(FitOutcome::Measured((plot.clone(), panel_plans)))
+    Ok(FitOutcome::Measured((plot.clone(), panel_plans, cells)))
 }
 
 pub(super) fn feedback_plot(

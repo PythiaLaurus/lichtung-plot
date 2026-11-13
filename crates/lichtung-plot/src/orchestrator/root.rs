@@ -2,6 +2,9 @@
 
 use crate::decorations::plan::children::ChildPlans;
 
+#[derive(Clone, Copy)]
+pub(crate) struct GridSlot(pub(crate) usize);
+
 /// One occurrence's post-font analysis. Native readers retain their original
 /// lazy initialization; scientific axes own no measurement state.
 #[derive(Debug)]

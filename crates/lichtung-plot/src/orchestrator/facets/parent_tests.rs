@@ -259,8 +259,11 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
-                for (first, repeated) in original.panel_plans.iter().zip(&same.panel_plans) {
-                    assert_eq!(std::sync::Arc::ptr_eq(first, repeated), !disabled);
+                for (first, repeated) in original.children.iter().zip(&same.children) {
+                    assert_eq!(
+                        std::sync::Arc::ptr_eq(&first.plot, &repeated.plot),
+                        !disabled
+                    );
                 }
                 let changed = FacetPlan::new(
                     &plot,
@@ -274,19 +277,19 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     inputs,
                 )
                 .map_err(fit::PlanError::into_error)?;
-                for (first, replacement) in same.panel_plans.iter().zip(&changed.panel_plans) {
-                    assert_eq!(first.panel_box, replacement.panel_box);
+                for (first, replacement) in same.children.iter().zip(&changed.children) {
+                    assert_eq!(first.plot.panel_box, replacement.plot.panel_box);
                 }
                 assert!(!std::sync::Arc::ptr_eq(
-                    &same.panel_plans[0],
-                    &changed.panel_plans[0]
+                    &same.children[0].plot,
+                    &changed.children[0].plot
                 ));
                 assert_eq!(
-                    std::sync::Arc::ptr_eq(&same.panel_plans[1], &changed.panel_plans[1]),
+                    std::sync::Arc::ptr_eq(&same.children[1].plot, &changed.children[1].plot),
                     !disabled,
                 );
-                assert!(changed.panel_plans[0].legend.is_some());
-                assert!(changed.panel_plans[1].legend.is_none());
+                assert!(changed.children[0].plot.legend.is_some());
+                assert!(changed.children[1].plot.legend.is_none());
 
                 // The original root-level guide slot is outside both cells.
                 // Its instability invalidates the routed consumer at unchanged
@@ -311,11 +314,11 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 )
                 .map_err(fit::PlanError::into_error)?;
                 assert!(!std::sync::Arc::ptr_eq(
-                    &changed.panel_plans[0],
-                    &unstable.panel_plans[0]
+                    &changed.children[0].plot,
+                    &unstable.children[0].plot
                 ));
                 assert_eq!(
-                    std::sync::Arc::ptr_eq(&changed.panel_plans[1], &unstable.panel_plans[1]),
+                    std::sync::Arc::ptr_eq(&changed.children[1].plot, &unstable.children[1].plot),
                     !disabled,
                 );
                 round.record_failure(FitScope::new(&guide_owner, 0).failure(
