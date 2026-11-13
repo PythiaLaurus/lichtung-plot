@@ -1202,6 +1202,17 @@ impl<K: crate::kind::Marker> Plot<K> {
             .map_or_else(|| self.canvas_dimensions(), Ok)
     }
 
+    pub(crate) fn measure_dimensions(
+        &self,
+    ) -> Result<crate::orchestrator::assignment::PlotMeasureDimensions, Error> {
+        Ok(crate::orchestrator::assignment::PlotMeasureDimensions {
+            canvas: self.description.root_size.assigned_size()?,
+            output_override: self
+                .output_dimensions
+                .map(|(width, height)| crate::layout::RootSize::new(width, height)),
+        })
+    }
+
     /// Selected semantic plot kind.
     #[must_use]
     pub const fn kind(&self) -> PlotKind {

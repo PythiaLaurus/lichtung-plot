@@ -88,9 +88,9 @@ impl TextOrientation {
 
 #[derive(Clone, Copy)]
 pub(crate) struct TextReferenceResolver<'v, 'src> {
-    pub(crate) plot: &'v crate::Plot,
-    pub(crate) registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'src>>,
+    pub(crate) registered: &'v crate::orchestrator::registration::PlotRegistration<'src>,
     pub(crate) layout: &'v crate::layout::Layout,
+    pub(crate) dimensions: crate::orchestrator::assignment::PlotMeasureDimensions,
 }
 impl std::fmt::Debug for TextReferenceResolver<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,7 +122,7 @@ impl TextReferenceResolver<'_, '_> {
                 self.layout.x_axis.assigned_cells.clone(),
                 self.layout.y_axis.assigned_cells.clone(),
             ],
-            self.plot.axis_scope().map(str::to_owned),
+            self.registered.scope.render_name.clone(),
         )
     }
 
@@ -144,13 +144,13 @@ impl TextReferenceResolver<'_, '_> {
             && other.1 == self.layout.projection.panel_box()
             && other.2[0] == self.layout.x_axis.assigned_cells
             && other.2[1] == self.layout.y_axis.assigned_cells
-            && other.3.as_deref() == self.plot.axis_scope()
+            && other.3.as_deref() == self.registered.scope.render_name.as_deref()
     }
     pub(crate) fn rotation(
         &self,
         from: &DataPosition,
         to: &DataPosition,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<TextRotation> {
         let point = |point: &DataPosition| {
             let position = crate::TextPosition::new(
@@ -158,13 +158,7 @@ impl TextReferenceResolver<'_, '_> {
                 crate::TextCoordinate::data(point.y.clone()),
             );
             Ok::<_, Error>(crate::text::position::resolve::point(
-                crate::text::position::resolve::resolve(
-                    &position,
-                    self.plot,
-                    self.registered,
-                    self.layout,
-                    theme,
-                )?,
+                crate::text::position::resolve::resolve(&position, self, theme)?,
                 self.layout.projection.panel_box(),
             ))
         };

@@ -686,8 +686,8 @@ pub(crate) fn check_assigned_body(
         FitFailure::retain_least(&mut miss, reason);
     }
     let annotations = match fit::outcome(crate::decorations::panel_text::measure_plans(
-        plot,
-        registered,
+        registered.expect("prepared assigned-body reference"),
+        plot.measure_dimensions()?,
         &discovered.layout,
         theme,
         scope,
@@ -1288,8 +1288,8 @@ fn plan_panel_attempt(
         if auto_annotation_miss && (gutter_request.is_some() || ink_request.is_some()) {
             let annotations =
                 match crate::layout::fit::outcome(crate::decorations::panel_text::measure_plans(
-                    &planning_plot,
-                    context.registered,
+                    context.registered.expect("prepared planned-body reference"),
+                    planning_plot.measure_dimensions()?,
                     &result.layout,
                     context.theme,
                     &scope,

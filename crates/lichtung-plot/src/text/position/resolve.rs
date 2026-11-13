@@ -1,9 +1,9 @@
 //! Resolve raw references once from final scientific axes and owning root geometry.
 
 use super::{Coordinate, DataCoordinate, DataValue, Position, TextPosition};
-use crate::layout::{Layout, PixelRect};
+use crate::layout::PixelRect;
 use crate::render::backend::Point2D;
-use crate::{Error, Plot, Result};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ReferenceAxis {
@@ -21,33 +21,31 @@ impl ReferenceAxis {
 
 pub(crate) fn resolve(
     position: &TextPosition,
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    layout: &Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    reference: &crate::text::orientation::TextReferenceResolver<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<[ReferenceAxis; 2]> {
     let Position::Coordinates(x, y) = &position.0 else {
         return Err(Error::Render(
             "corner references require their semantic inset".into(),
         ));
     };
+    let layout = reference.layout;
+    let registered = reference.registered;
     let panel = layout.projection.panel_box();
     let axis = |coordinate: &super::TextCoordinate, side: usize| -> Result<ReferenceAxis> {
         match &coordinate.0 {
             Coordinate::Panel(value) => Ok(ReferenceAxis::Panel(value.get())),
             Coordinate::Figure(value) => Ok(ReferenceAxis::Figure(
                 value.get() * {
-                    let (width, height) = plot.figure_dimensions()?;
+                    let (width, height) = reference.dimensions.figure_size().dimensions()?;
                     f64::from(if side == 0 { width } else { height })
                 },
             )),
             Coordinate::Data(value) => {
                 if let DataValue::Category(raw) = &value.0 {
-                    let axes = registered
-                        .and_then(|registered| registered.axes.as_ref())
-                        .ok_or_else(|| {
-                            Error::Render("data text reference requires actual axes".into())
-                        })?;
+                    let axes = registered.axes.as_ref().ok_or_else(|| {
+                        Error::Render("data text reference requires actual axes".into())
+                    })?;
                     let index = axes.categories[side]
                         .as_ref()
                         .and_then(|ticks| ticks.iter().position(|tick| &tick.label == raw))
@@ -108,11 +106,12 @@ pub(crate) fn point(reference: [ReferenceAxis; 2], panel: PixelRect) -> Point2D 
 pub(crate) fn data(
     coordinate: &DataCoordinate,
     side: usize,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<f64> {
     let axes = registered
-        .and_then(|registered| registered.axes.as_ref())
+        .axes
+        .as_ref()
         .ok_or_else(|| Error::Render("data text reference requires prepared actual axes".into()))?;
     let categories = axes.categories[side].as_deref();
     match &coordinate.0 {
@@ -148,14 +147,11 @@ pub(crate) fn data(
                     "category-series reference requires the categorical axis".into(),
                 ));
             }
-            if registered.is_some_and(|registered| {
-                matches!(
-                    &registered.family,
-                    crate::orchestrator::registration::PreparedFamily::Distribution { .. }
-                )
-            }) {
-                let marks = registered
-                    .map(|registered| registered.family.as_ref())
+            if matches!(
+                &registered.family,
+                crate::orchestrator::registration::PreparedFamily::Distribution { .. }
+            ) {
+                let marks = Some(registered.family.as_ref())
                     .and_then(|family| match family {
                         crate::orchestrator::registration::FamilyRef::Distribution {
                             marks,
@@ -166,7 +162,7 @@ pub(crate) fn data(
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
                 return marks.series_center(category, series);
             }
-            let (mode, bars) = registered.map(|registered| registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
+            let (mode, bars) = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
             let category = bars
                 .categories

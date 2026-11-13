@@ -297,7 +297,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             Ok((inputs, expected))
         },
         |(inputs, expected), assigned, _| {
-            let chart = inputs.attach(source.clone())?;
+            let (width, height) = assigned.assigned_size()?.dimensions()?;
+            let chart = inputs
+                .attach(source.clone())?
+                .with_canvas_size(width, height);
             let operation = text.prepared_font_environment()?.operation();
             let measured = chart
                 .measure_selected_interior(

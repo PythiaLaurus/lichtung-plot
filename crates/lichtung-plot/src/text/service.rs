@@ -32,9 +32,9 @@ impl<'v, 'src> TextRequestContext<'v, 'src> {
 
     pub(crate) fn with_text_projection<'a, 's>(
         &self,
-        plot: &'a crate::Plot,
-        registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'s>>,
+        registered: &'a crate::orchestrator::registration::PlotRegistration<'s>,
         layout: &'a crate::layout::Layout,
+        dimensions: crate::orchestrator::assignment::PlotMeasureDimensions,
     ) -> TextRequestContext<'a, 's>
     where
         'v: 'a,
@@ -44,9 +44,9 @@ impl<'v, 'src> TextRequestContext<'v, 'src> {
             text: self.text,
             trial: self.trial,
             reference: Some(super::orientation::TextReferenceResolver {
-                plot,
                 registered,
                 layout,
+                dimensions,
             }),
         }
     }
@@ -59,7 +59,7 @@ impl<'v, 'src> TextRequestContext<'v, 'src> {
         'v: 'a,
     {
         self.reference.map_or(*self, |frame| {
-            self.with_text_projection(frame.plot, frame.registered, layout)
+            self.with_text_projection(frame.registered, layout, frame.dimensions)
         })
     }
 }

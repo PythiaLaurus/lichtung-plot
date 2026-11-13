@@ -8,8 +8,7 @@ use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::position::resolve::{self, ReferenceAxis};
 use crate::theme::spacing::ExactLength;
 use crate::{
-    DataAreaCorner, Plot, TextAlignment, TextAnchor, TextFailure, TextOverlap, TextPosition,
-    TextWrapping,
+    DataAreaCorner, TextAlignment, TextAnchor, TextFailure, TextOverlap, TextPosition, TextWrapping,
 };
 
 #[cfg(test)]
@@ -127,21 +126,22 @@ fn corner_anchor(corner: DataAreaCorner) -> TextAnchor {
 }
 
 pub(crate) fn measure_plans(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    dimensions: crate::orchestrator::assignment::PlotMeasureDimensions,
     layout: &Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<Vec<PlotTextAnnotationPlan>, PlanError> {
     let plans = fit::collect(
         "panel annotations",
-        plot.description()
+        registered
+            .source
             .panel_text_annotations()
             .iter()
             .enumerate()
             .map(|(index, annotation)| {
                 let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-                measure(annotation, plot, registered, layout, theme, &scope)
+                measure(annotation, registered, dimensions, layout, theme, &scope)
             }),
     )?;
     check_collisions(&plans, scope)?;
@@ -154,8 +154,8 @@ pub(crate) fn measure_plans(
 )]
 fn measure(
     annotation: &crate::PlotTextAnnotation,
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    dimensions: crate::orchestrator::assignment::PlotMeasureDimensions,
     layout: &Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
@@ -165,7 +165,7 @@ fn measure(
         theme: &appearance,
         ..*theme
     };
-    let directional = request.with_text_projection(plot, registered, layout);
+    let directional = request.with_text_projection(registered, layout, dimensions);
     let theme = &directional;
     let panel = layout.projection.panel_box();
     let appearance = annotation
@@ -185,9 +185,10 @@ fn measure(
     } else {
         PlotTextAnnotationReference::Axes(resolve::resolve(
             annotation.position(),
-            plot,
-            registered,
-            layout,
+            directional
+                .reference
+                .as_ref()
+                .expect("installed panel text reference"),
             theme,
         )?)
     };
@@ -249,7 +250,7 @@ fn measure(
     )?;
     let (width, height) = if matches!(reference,PlotTextAnnotationReference::Axes(axes) if axes.iter().any(|axis|matches!(axis,ReferenceAxis::Figure(_))))
     {
-        plot.figure_dimensions()?
+        dimensions.figure_size().dimensions()?
     } else {
         (0, 0)
     };

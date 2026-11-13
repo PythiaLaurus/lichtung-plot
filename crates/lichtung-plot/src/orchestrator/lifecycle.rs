@@ -136,11 +136,15 @@ pub(crate) fn with_prepared_plot_for_test<T>(
 ) -> Result<T, Error> {
     let mut visit = Some(visit);
     let mut result = None;
-    crate::layout::plan_root(
-        crate::layout::RootRequest::ExactSize {
+    let sizing = match source.description().sizing_request() {
+        exact @ crate::layout::RootRequest::ExactSize { .. } => exact,
+        _ => crate::layout::RootRequest::ExactSize {
             width: 1,
             height: 1,
         },
+    };
+    crate::layout::plan_root(
+        sizing,
         |stage| {
             PreparedPlotInputs::prepare(
                 source,
@@ -153,7 +157,11 @@ pub(crate) fn with_prepared_plot_for_test<T>(
             )
         },
         |prepared, assigned, _| {
-            let plot = prepared.axes.attach(source.clone())?;
+            let (width, height) = assigned.assigned_size()?.dimensions()?;
+            let plot = prepared
+                .axes
+                .attach(source.clone())?
+                .with_canvas_size(width, height);
             let request = TextRequestContext::new(&prepared.theme, &prepared.text);
             result = Some(visit.take().expect("one feedback-free producer fixture")(
                 &plot,

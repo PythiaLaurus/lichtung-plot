@@ -8,6 +8,7 @@ use crate::render::backend::Backend;
 use crate::spec::{PlotKind, PlotRenderContext, PlotRenderResult};
 
 mod artifacts;
+pub(crate) mod assignment;
 mod backend;
 mod facets;
 pub(crate) use facets::prepare_facet_scopes;
@@ -191,7 +192,11 @@ impl Plot {
             theme: &appearance,
             ..*context.theme
         };
-        let directional = request.with_text_projection(self, context.registered, &frame);
+        let directional = request.with_text_projection(
+            context.registered.expect("prepared directional reference"),
+            &frame,
+            self.measure_dimensions()?,
+        );
         let context = context.with_theme(&directional);
         match kind {
             PlotKind::Scatter
@@ -280,8 +285,8 @@ impl Plot {
         let guides = layers::GuideSnapshot::measure(self.description(), &result, &mut geometry)?;
         validate_frozen_axes_and_guides(self, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
-            self,
-            context.registered,
+            context.registered.expect("prepared panel text reference"),
+            self.measure_dimensions()?,
             &result.layout,
             context.theme,
             context.fit_scope(),

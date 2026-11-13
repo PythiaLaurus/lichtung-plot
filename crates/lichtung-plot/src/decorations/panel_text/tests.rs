@@ -1,4 +1,6 @@
 use super::*;
+use crate::orchestrator::assignment::PlotMeasureDimensions;
+use crate::Plot;
 
 fn near(actual: f64, expected: f64) {
     assert!(
@@ -21,6 +23,7 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
     .erase()
     .with_output_dimensions(1000, 800);
     crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |plot, inputs, theme| {
+        let dimensions = plot.measure_dimensions().unwrap();
         let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
         let layout = Layout {
             projection: crate::layout::Projection::new((0.0, 20.0), (0.0, 10.0), panel.as_tuple()),
@@ -46,8 +49,8 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
             let note = crate::PlotTextAnnotation::at(position.clone(), text).unwrap();
             let plan = measure(
                 &note,
-                plot,
-                inputs.plots.first(),
+                &inputs.plots[0],
+                dimensions,
                 &layout,
                 theme,
                 &FitScope::root(),
@@ -70,8 +73,8 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
         .unwrap();
         let plan = measure(
             &note,
-            plot,
-            inputs.plots.first(),
+            &inputs.plots[0],
+            dimensions,
             &layout,
             theme,
             &FitScope::root(),
@@ -97,7 +100,7 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
         crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0])),
     )
     .erase();
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |plot, inputs, theme| {
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_, inputs, theme| {
         let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
         let mut layout = Layout::envelope(panel);
         layout.x_axis.assigned_cells = Some(vec![(20.0, 120.0), (120.0, 420.0)]);
@@ -105,8 +108,15 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
             TextCoordinate::data(DataCoordinate::category("second_raw")),
             TextCoordinate::data_area_fraction(0.75).unwrap(),
         );
-        let resolved =
-            resolve::resolve(&position, plot, inputs.plots.first(), &layout, theme).unwrap();
+        let reference = crate::text::orientation::TextReferenceResolver {
+            registered: &inputs.plots[0],
+            layout: &layout,
+            dimensions: PlotMeasureDimensions {
+                canvas: crate::layout::RootSize::new(420, 230),
+                output_override: None,
+            },
+        };
+        let resolved = resolve::resolve(&position, &reference, theme).unwrap();
         let point = resolve::point(resolved, panel);
         near(point.x, 270.0);
         near(point.y, 180.0);
@@ -114,7 +124,7 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
             TextCoordinate::data(DataCoordinate::category("Second raw")),
             TextCoordinate::data_area_fraction(0.5).unwrap(),
         );
-        assert!(resolve::resolve(&bad, plot, inputs.plots.first(), &layout, theme).is_err());
+        assert!(resolve::resolve(&bad, &reference, theme).is_err());
     })
     .unwrap();
 }
@@ -130,7 +140,7 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
         crate::NumericValues::new("y", [0.0, 10.0]),
     )
     .erase();
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |plot, inputs, theme| {
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_, inputs, theme| {
         let data = |x, y| {
             DataPosition::new(
                 DataCoordinate::numeric(x).unwrap(),
@@ -149,10 +159,8 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
             Text::new("A note").layout(request),
         )
         .unwrap();
-        for panel in [
-            PixelRect::new(0.0, 400.0, 0.0, 200.0),
-            PixelRect::new(0.0, 200.0, 0.0, 400.0),
-        ] {
+        for (width, height) in [(400, 200), (200, 400)] {
+            let panel = PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height));
             let layout = Layout {
                 projection: crate::layout::Projection::new(
                     (0.0, 20.0),
@@ -163,8 +171,11 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
             };
             let planned = measure(
                 &note,
-                plot,
-                inputs.plots.first(),
+                &inputs.plots[0],
+                PlotMeasureDimensions {
+                    canvas: crate::layout::RootSize::new(width, height),
+                    output_override: None,
+                },
                 &layout,
                 theme,
                 &FitScope::root(),
@@ -188,8 +199,11 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
         let layout = Layout::envelope(PixelRect::new(0.0, 400.0, 0.0, 400.0));
         let planned = measure(
             &note,
-            plot,
-            inputs.plots.first(),
+            &inputs.plots[0],
+            PlotMeasureDimensions {
+                canvas: crate::layout::RootSize::new(400, 400),
+                output_override: None,
+            },
             &layout,
             theme,
             &FitScope::root(),
@@ -286,8 +300,8 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
             (0.0, plan.minimum_size.0 - 1.0 / 1024.0, 0.0, 300.0),
         );
         assert!(measure_plans(
-            chart,
-            inputs.plots.first(),
+            &inputs.plots[0],
+            chart.measure_dimensions().unwrap(),
             &short,
             theme,
             &crate::layout::fit::ROOT_SCOPE

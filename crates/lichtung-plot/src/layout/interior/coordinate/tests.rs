@@ -313,7 +313,10 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                 Ok(inputs)
             },
             |inputs, assigned, _| {
-                let plot = inputs.attach(source.clone())?;
+                let (width, height) = assigned.assigned_size()?.dimensions()?;
+                let plot = inputs
+                    .attach(source.clone())?
+                    .with_canvas_size(width, height);
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let scope = fit::FitScope::new(
                     &crate::layout::ComponentAddress::root()
