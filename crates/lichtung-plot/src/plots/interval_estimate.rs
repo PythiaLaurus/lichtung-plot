@@ -987,9 +987,7 @@ pub(crate) fn measure_marks(
     let prepared = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Estimate { marks, .. } => {
-                Some(marks)
-            }
+            crate::orchestrator::registration::FamilyRef::Estimate { marks, .. } => Some(marks),
             _ => None,
         })
         .ok_or_else(|| {

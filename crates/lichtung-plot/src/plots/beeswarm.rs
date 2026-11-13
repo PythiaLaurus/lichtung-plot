@@ -38,8 +38,10 @@ fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
         &chart.prepared_families,
         chart.axis_scope(),
         "Beeswarm",
-    )? {
-        crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) => Ok(marks),
+    )?
+    .as_ref()
+    {
+        crate::orchestrator::registration::FamilyRef::Beeswarm(marks) => Ok(marks),
         _ => Err(Error::Render(
             "Beeswarm requires root-prepared source rows".into(),
         )),
@@ -330,12 +332,13 @@ pub(crate) fn natural_body_height(
     if chart.prepared_families.is_empty() {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     }
-    let crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) =
+    let crate::orchestrator::registration::FamilyRef::Beeswarm(marks) =
         crate::layout::interior::preference::panel(
             &chart.prepared_families,
             chart.axis_scope(),
             "natural Beeswarm",
         )?
+        .as_ref()
     else {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
     };

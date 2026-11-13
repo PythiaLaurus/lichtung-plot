@@ -473,8 +473,10 @@ fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
         &chart.prepared_families,
         chart.axis_scope(),
         "Heatmap",
-    )? {
-        crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => Ok(marks),
+    )?
+    .as_ref()
+    {
+        crate::orchestrator::registration::FamilyRef::Heatmap(marks) => Ok(marks),
         _ => Err(Error::Render(
             "heatmap requires root-prepared semantics".into(),
         )),

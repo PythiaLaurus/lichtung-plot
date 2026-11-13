@@ -47,7 +47,71 @@ pub(crate) enum PreparedFamily {
 }
 
 impl PreparedFamily {
+    pub(crate) const fn as_ref(&self) -> FamilyRef<'_> {
+        match self {
+            Self::Scatter(marks) => FamilyRef::Scatter(marks),
+            Self::Line { kind, marks } => FamilyRef::Line { kind: *kind, marks },
+            Self::Histogram(marks) => FamilyRef::Histogram(marks),
+            Self::Density(marks) => FamilyRef::Density(marks),
+            Self::Qq(marks) => FamilyRef::Qq(marks),
+            Self::Regression(marks) => FamilyRef::Regression(marks),
+            Self::Bars { kind, mode, marks } => FamilyRef::Bars {
+                kind: *kind,
+                mode: *mode,
+                marks,
+            },
+            Self::Estimate { kind, marks } => FamilyRef::Estimate { kind: *kind, marks },
+            Self::Dumbbell(marks) => FamilyRef::Dumbbell(marks),
+            Self::Distribution { kind, marks } => FamilyRef::Distribution { kind: *kind, marks },
+            Self::Interaction(marks) => FamilyRef::Interaction(marks),
+            Self::Heatmap(marks) => FamilyRef::Heatmap(marks),
+            Self::Beeswarm(marks) => FamilyRef::Beeswarm(marks),
+            Self::Waterfall(marks) => FamilyRef::Waterfall(marks),
+            Self::Marginal(marks) => FamilyRef::Marginal(marks),
+            Self::Matrix(marks) => FamilyRef::Matrix(marks),
+        }
+    }
+
     pub(crate) const fn kind(&self) -> crate::PlotKind {
+        self.as_ref().kind()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum FamilyRef<'v> {
+    Scatter(&'v crate::plots::scatter::PreparedScatter),
+    Line {
+        kind: crate::PlotKind,
+        marks: &'v crate::plots::line::PreparedLine,
+    },
+    Histogram(&'v crate::plots::histogram::HistogramSemantics),
+    Density(&'v crate::plots::density::PreparedDensity),
+    Qq(&'v crate::plots::qq::PreparedQq),
+    Regression(&'v crate::plots::regression::PreparedRegression),
+    Bars {
+        kind: crate::PlotKind,
+        mode: crate::plots::bar_data::BarMode,
+        marks: &'v crate::plots::bar_data::PreparedBars,
+    },
+    Estimate {
+        kind: crate::PlotKind,
+        marks: &'v crate::plots::interval_estimate::PreparedEstimate,
+    },
+    Dumbbell(&'v crate::plots::dumbbell::DumbbellData),
+    Distribution {
+        kind: crate::PlotKind,
+        marks: &'v crate::plots::categorical_distribution::PreparedDistribution,
+    },
+    Interaction(&'v crate::plots::interaction::PreparedInteraction),
+    Heatmap(&'v crate::plots::heatmap::HeatmapData),
+    Beeswarm(&'v crate::plots::beeswarm::PreparedBeeswarm),
+    Waterfall(&'v crate::plots::waterfall::PreparedWaterfall),
+    Marginal(&'v crate::plots::marginal::PreparedMarginal),
+    Matrix(&'v crate::plots::matrix::PreparedMatrixAxes),
+}
+
+impl FamilyRef<'_> {
+    pub(crate) const fn kind(self) -> crate::PlotKind {
         match self {
             Self::Scatter(_) => crate::PlotKind::Scatter,
             Self::Histogram(_) => crate::PlotKind::Histogram,
@@ -57,7 +121,7 @@ impl PreparedFamily {
             Self::Line { kind, .. }
             | Self::Bars { kind, .. }
             | Self::Estimate { kind, .. }
-            | Self::Distribution { kind, .. } => *kind,
+            | Self::Distribution { kind, .. } => kind,
             Self::Dumbbell(_) => crate::PlotKind::Dumbbell,
             Self::Interaction(_) => crate::PlotKind::Interaction,
             Self::Heatmap(_) => crate::PlotKind::Heatmap,

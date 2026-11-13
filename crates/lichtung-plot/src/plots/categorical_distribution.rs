@@ -241,9 +241,7 @@ pub(crate) fn retained(chart: &Plot) -> Result<&PreparedDistribution, Error> {
     chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Distribution { marks, .. } => {
-                Some(marks)
-            }
+            crate::orchestrator::registration::FamilyRef::Distribution { marks, .. } => Some(marks),
             _ => None,
         })
         .ok_or_else(|| {

@@ -75,8 +75,10 @@ fn retained(chart: &Plot) -> Result<&PreparedWaterfall, Error> {
         &chart.prepared_families,
         chart.axis_scope(),
         "Waterfall",
-    )? {
-        crate::orchestrator::registration::PreparedFamily::Waterfall(marks) => Ok(marks),
+    )?
+    .as_ref()
+    {
+        crate::orchestrator::registration::FamilyRef::Waterfall(marks) => Ok(marks),
         _ => Err(Error::Render(
             "Waterfall requires root-prepared spans".into(),
         )),
@@ -538,12 +540,13 @@ pub(crate) fn natural_body_height(
     if chart.prepared_families.is_empty() {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     }
-    let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+    let crate::orchestrator::registration::FamilyRef::Waterfall(marks) =
         crate::layout::interior::preference::panel(
             &chart.prepared_families,
             chart.axis_scope(),
             "natural Waterfall",
         )?
+        .as_ref()
     else {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     };

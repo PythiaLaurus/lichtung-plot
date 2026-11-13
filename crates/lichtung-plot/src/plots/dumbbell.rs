@@ -43,7 +43,7 @@ pub(crate) fn intrinsic_body_minimum(
     let prepared = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Dumbbell(marks) => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Dumbbell(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("Dumbbell intrinsic requires root-prepared pairs".into()))?;
@@ -224,7 +224,7 @@ pub(crate) fn measure_marks(
     let prepared = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Dumbbell(marks) => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Dumbbell(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;

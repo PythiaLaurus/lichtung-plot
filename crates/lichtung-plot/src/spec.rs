@@ -768,7 +768,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
         self.prepared_axes = plot.prepared_axis_inputs();
         self.prepared_kind = Some(plot.prepared_family().map_or(
             plot.kind(),
-            crate::orchestrator::registration::PreparedFamily::kind,
+            crate::orchestrator::registration::FamilyRef::kind,
         ));
         self.prepared_limits = [
             plot.description().x_axis_spec().limits,

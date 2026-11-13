@@ -1182,11 +1182,11 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn prepared_family(
         &self,
-    ) -> Option<&crate::orchestrator::registration::PreparedFamily> {
+    ) -> Option<crate::orchestrator::registration::FamilyRef<'_>> {
         self.prepared_families
             .iter()
             .find(|(scope, _)| scope == &self.render_scope)
-            .map(|(_, family)| family)
+            .map(|(_, family)| family.as_ref())
     }
 
     pub(crate) fn prepared_discrete_guide(

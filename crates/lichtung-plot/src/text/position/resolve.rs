@@ -154,7 +154,7 @@ pub(crate) fn data(
                 let marks = plot
                     .prepared_family()
                     .and_then(|family| match family {
-                        crate::orchestrator::registration::PreparedFamily::Distribution {
+                        crate::orchestrator::registration::FamilyRef::Distribution {
                             marks,
                             ..
                         } => Some(marks),
@@ -163,7 +163,7 @@ pub(crate) fn data(
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
                 return marks.series_center(category, series);
             }
-            let (mode, bars) = plot.prepared_family().and_then(|family| match family { crate::orchestrator::registration::PreparedFamily::Bars { mode, marks, .. } => Some((*mode, marks)), _ => None })
+            let (mode, bars) = plot.prepared_family().and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
             let category = bars
                 .categories

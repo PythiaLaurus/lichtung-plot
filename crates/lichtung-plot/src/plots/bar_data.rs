@@ -759,7 +759,7 @@ pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
     chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Bars { marks, .. } => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("bar measurement requires root-prepared semantics".into()))

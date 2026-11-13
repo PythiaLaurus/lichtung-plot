@@ -176,7 +176,7 @@ pub(crate) fn intrinsic_body_minimum(
     let prepared = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| {
@@ -225,7 +225,7 @@ pub(crate) fn natural_body_preference(
     let marks = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
@@ -477,7 +477,7 @@ pub(crate) fn measure(
     let prepared = chart
         .prepared_family()
         .and_then(|family| match family {
-            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
             _ => None,
         })
         .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
