@@ -149,10 +149,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             (&self.description.payload.axes[0], &other.x_axis_spec),
             (&self.description.payload.axes[1], &other.y_axis_spec),
         ] {
-            if axis.limits != other.limits
-                || axis.provenance != other.provenance
-                || axis.generation != other.generation
-                || !same_values(axis.exact_ticks.as_deref(), other.exact_ticks.as_deref())
+            if axis.limits != other.0
+                || axis.provenance != other.1
+                || axis.generation != other.2
+                || !same_values(axis.exact_ticks.as_deref(), other.5.as_deref())
             {
                 return false;
             }
@@ -160,8 +160,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
         self.description().same_prose(&other.prose)
             && self.description().same_axis_titles(&other.axis_titles)
-            && range(self.description.payload.axes[0].limits) == range(other.x_axis_spec.limits)
-            && range(self.description.payload.axes[1].limits) == range(other.y_axis_spec.limits)
+            && range(self.description.payload.axes[0].limits) == range(other.x_axis_spec.0)
+            && range(self.description.payload.axes[1].limits) == range(other.y_axis_spec.0)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
             && same_values(
                 self.global_hue_levels.as_deref(),
@@ -212,16 +212,22 @@ impl<K: crate::kind::Marker> Plot<K> {
             value.push_str(source);
             Ok(value)
         };
-        let mut axes = [
-            crate::layout::AxisSpec::default(),
-            crate::layout::AxisSpec::default(),
-        ];
+        let mut axes = std::array::from_fn::<_, 2, _>(|_| {
+            (
+                None,
+                crate::layout::RangeProvenance::Automatic,
+                crate::TickGeneration::automatic(),
+                crate::CategoryLabelSelection::all(),
+                None,
+                None,
+            )
+        });
         for (target, source) in axes.iter_mut().zip(&self.description.payload.axes) {
-            target.limits = source.limits;
-            target.provenance = source.provenance;
-            target.generation.clone_from(&source.generation);
-            target.category_labels.clone_from(&source.category_labels);
-            target.format.clone_from(&source.format);
+            target.0 = source.limits;
+            target.1 = source.provenance;
+            target.2.clone_from(&source.generation);
+            target.3.clone_from(&source.category_labels);
+            target.4.clone_from(&source.format);
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();
                 crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;
@@ -231,7 +237,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                         label: copy(&tick.label)?,
                     });
                 }
-                target.exact_ticks = Some(retained);
+                target.5 = Some(retained);
             }
         }
         let mut levels = [None, None, None];

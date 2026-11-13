@@ -32,19 +32,19 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), None, None)
         .unwrap();
     assert_eq!(
-        retained.x_axis_spec.generation,
+        retained.x_axis_spec.2,
         plot.description().x_axis_spec().generation
     );
     assert_eq!(
-        retained.y_axis_spec.generation,
+        retained.y_axis_spec.2,
         plot.description().y_axis_spec().generation
     );
     assert_eq!(
-        retained.x_axis_spec.format,
+        retained.x_axis_spec.4,
         plot.description().x_axis_spec().format
     );
     assert_eq!(
-        retained.y_axis_spec.format,
+        retained.y_axis_spec.4,
         plot.description().y_axis_spec().format
     );
     assert!(plot.same_composed_inputs(&retained, &retained.guides, None, None));
@@ -52,12 +52,12 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
     assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
     plot.description.payload_mut().axes[0]
         .generation
-        .clone_from(&retained.x_axis_spec.generation);
+        .clone_from(&retained.x_axis_spec.2);
     plot.description.payload_mut().axes[1].generation = TickGeneration::automatic();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
     plot.description.payload_mut().axes[1]
         .generation
-        .clone_from(&retained.y_axis_spec.generation);
+        .clone_from(&retained.y_axis_spec.2);
     for selection in [
         TickGeneration::target(5).unwrap(),
         TickGeneration::maximum(5).unwrap(),
@@ -122,7 +122,7 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         .unwrap();
     assert!(shared.same_composed_inputs(&shared_retained, &shared_retained.guides, None, None));
     assert_eq!(
-        shared_retained.x_axis_spec.provenance,
+        shared_retained.x_axis_spec.1,
         crate::layout::RangeProvenance::Shared
     );
 }

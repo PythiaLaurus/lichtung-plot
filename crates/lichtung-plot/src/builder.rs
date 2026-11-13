@@ -490,13 +490,31 @@ enum AxisGutterOwner {
 }
 
 /// Coordinated replacements and complete numeric policies for a fixed child owner.
+#[expect(
+    clippy::type_complexity,
+    reason = "the original narrow axis snapshots retain only comparison values, not authored or working axis owners"
+)]
 pub(crate) struct ComposedInputs {
     output_dimensions: Option<(u32, u32)>,
     text_layouts: crate::text::roles::TextRoles,
     prose: [crate::Text; 3],
     axis_titles: [crate::Text; 2],
-    x_axis_spec: AxisSpec,
-    y_axis_spec: AxisSpec,
+    x_axis_spec: (
+        Option<(f64, f64)>,
+        crate::layout::RangeProvenance,
+        crate::TickGeneration,
+        crate::CategoryLabelSelection,
+        Option<Arc<NumericFormat>>,
+        Option<Vec<crate::AxisTick>>,
+    ),
+    y_axis_spec: (
+        Option<(f64, f64)>,
+        crate::layout::RangeProvenance,
+        crate::TickGeneration,
+        crate::CategoryLabelSelection,
+        Option<Arc<NumericFormat>>,
+        Option<Vec<crate::AxisTick>>,
+    ),
     resolved_facet_x_range: Option<(f64, f64)>,
     global_hue_levels: Option<Vec<String>>,
     global_group_levels: Option<Vec<String>>,
