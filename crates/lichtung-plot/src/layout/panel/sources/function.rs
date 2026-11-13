@@ -31,13 +31,13 @@ fn materialize(
         },
         request.provenance,
         if log {
-            request.source.raw_limits(side)
+            request.raw_limits(side)
         } else {
             Some(range)
         },
     );
     let view = View {
-        owner: request.source.owner.try_copy()?,
+        owner: request.binding.owner.try_copy()?,
         domain,
         axis: match side {
             AxisSide::Bottom => CoordinateAxis::X,
@@ -46,7 +46,7 @@ fn materialize(
         span: span.to_bits(),
     };
     request
-        .source
+        .binding
         .operation
         .tick_positions
         .lock()
@@ -72,12 +72,12 @@ pub(super) fn plan(
         TickPositions::Log10Exponents(_) => {
             return Err(Error::Data(format!(
                 "position exponents require a Log10 axis for {:?}",
-                request.source.owner
+                request.binding.owner
             ))
             .into())
         }
     };
-    let coordinate = |value| coordinate(value, range, log, power, &request.source.owner);
+    let coordinate = |value| coordinate(value, range, log, power, request.binding.owner);
     let mut count = 0_usize;
     for &value in values {
         if coordinate(value)?.is_some() {
@@ -89,7 +89,7 @@ pub(super) fn plan(
     if count > request.generation.get_maximum_count().unwrap_or(usize::MAX) {
         return Err(Error::Render(format!(
             "position count exceeds configured maximum for {:?}",
-            request.source.owner
+            request.binding.owner
         ))
         .into());
     }

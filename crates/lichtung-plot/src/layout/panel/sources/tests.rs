@@ -524,16 +524,18 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         ),
     ] {
         let format = NumericFormat::new(NumericNotation::Decimal, precision).unwrap();
-        let selected = numeric_tick_plan(
-            (0.0, 0.04),
-            TickGeneration::additive(0.01).unwrap(),
-            false,
-            &projection,
-            AxisSide::Bottom,
-            &theme,
-            Some(&crate::numeric::source::AxisRequest::for_test(&format)),
-            &crate::layout::fit::ROOT_SCOPE,
-        )
+        let selected = crate::numeric::source::with_axis_request_for_test(&format, |request| {
+            numeric_tick_plan(
+                (0.0, 0.04),
+                TickGeneration::additive(0.01).unwrap(),
+                false,
+                &projection,
+                AxisSide::Bottom,
+                &theme,
+                Some(&request),
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+        })
         .unwrap();
         assert_eq!(selected.source.ordinal == 0, expected_ordinal);
         assert_eq!(selected.source.precision, Some(expected_digits));
@@ -691,16 +693,18 @@ fn generated_labels_are_unique_across_decimal_and_power_ranges() {
     let range = (0.5_f64.next_down(), 0.5_f64.next_up());
     let projection = Projection::new(range, (0.0, 1.0), (0.0, 800.0, 0.0, 100.0));
     let configured = crate::numeric::format::NumericFormat::default();
-    let selected = numeric_tick_plan(
-        range,
-        TickGeneration::automatic(),
-        true,
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        Some(&crate::numeric::source::AxisRequest::for_test(&configured)),
-        &crate::layout::fit::ROOT_SCOPE,
-    )
+    let selected = crate::numeric::source::with_axis_request_for_test(&configured, |request| {
+        numeric_tick_plan(
+            range,
+            TickGeneration::automatic(),
+            true,
+            &projection,
+            AxisSide::Bottom,
+            &theme,
+            Some(&request),
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+    })
     .unwrap();
     assert_eq!(selected.source.kind, SourceKind::Midpoint);
     assert_eq!(selected.ticks[0].label, "3.16");

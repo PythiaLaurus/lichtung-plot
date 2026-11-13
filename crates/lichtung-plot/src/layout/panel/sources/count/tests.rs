@@ -155,33 +155,35 @@ fn explicit_sources_above_ten_thousand_keep_their_cardinality_and_refuse_text_no
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 2_000_000.0, 0.0, 480.0));
     let format =
         crate::NumericFormat::default().value_function(|context| Ok(context.index().to_string()));
-    let request = crate::numeric::source::AxisRequest::for_test(&format);
-    let selected = plan(
-        (0.0, 1.0),
-        (10_001, TickSpace::Data, TickSingleton::Lower),
-        false,
-        None,
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        Some(&request),
-        &crate::layout::fit::ROOT_SCOPE,
-    )
+    let selected = crate::numeric::source::with_axis_request_for_test(&format, |request| {
+        plan(
+            (0.0, 1.0),
+            (10_001, TickSpace::Data, TickSingleton::Lower),
+            false,
+            None,
+            &projection,
+            AxisSide::Bottom,
+            &theme,
+            Some(&request),
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+    })
     .unwrap();
     assert_eq!(selected.ticks.len(), 10_001);
     assert_eq!(selected.source.kind, SourceKind::ExactCount);
     let collision = crate::NumericFormat::from_specifier(".0f").unwrap();
-    let request = crate::numeric::source::AxisRequest::for_test(&collision);
-    assert!(plan(
-        (0.0, 1.0),
-        (4, TickSpace::Data, TickSingleton::Lower),
-        false,
-        None,
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        Some(&request),
-        &crate::layout::fit::ROOT_SCOPE
-    )
-    .is_err());
+    assert!(
+        crate::numeric::source::with_axis_request_for_test(&collision, |request| plan(
+            (0.0, 1.0),
+            (4, TickSpace::Data, TickSingleton::Lower),
+            false,
+            None,
+            &projection,
+            AxisSide::Bottom,
+            &theme,
+            Some(&request),
+            &crate::layout::fit::ROOT_SCOPE
+        ))
+        .is_err()
+    );
 }

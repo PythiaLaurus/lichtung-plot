@@ -185,7 +185,7 @@ impl AxisSpec {
     pub(crate) fn numeric_request(
         &self,
     ) -> Result<Option<crate::numeric::source::AxisRequest<'_>>, Error> {
-        let Some(source) = self.numeric_source.clone() else {
+        let Some(source) = self.numeric_source.as_deref() else {
             if self.format.is_some() || self.generation.position_function().is_some() {
                 return Err(Error::Render(
                     "numeric axis lacks its operation-bound owner".into(),
@@ -195,7 +195,8 @@ impl AxisSpec {
         };
         Ok(Some(crate::numeric::source::AxisRequest {
             format: self.format.as_deref(),
-            source,
+            binding: source.binding(),
+            raw_limits: &source.raw_limits,
             provenance: self.provenance,
             generation: self.generation.clone(),
             source_indices: None,

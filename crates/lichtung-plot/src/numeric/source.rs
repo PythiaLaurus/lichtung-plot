@@ -94,7 +94,7 @@ impl<'v> NumericBinding<'v> {
 pub(crate) struct NumericSource {
     pub(crate) operation: crate::font::canonical::OperationContext,
     pub(crate) owner: OwnerInfo,
-    raw_limits: [Option<(u64, u64)>; 2],
+    pub(crate) raw_limits: [Option<(u64, u64)>; 2],
 }
 impl PartialEq for NumericSource {
     fn eq(&self, other: &Self) -> bool {
@@ -159,46 +159,22 @@ impl NumericSource {
         self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
             .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
     }
-    pub(crate) fn indexed(
-        &self,
-        values: &[super::operand::Operand],
-        role: NumericRole,
-        purpose: NumericPurpose,
-        domain: Option<DomainInfo>,
-    ) -> Result<ContextInfo> {
-        self.binding().indexed(values, role, purpose, domain)
-    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct AxisRequest<'a> {
     pub(crate) format: Option<&'a crate::NumericFormat>,
-    pub(crate) source: std::sync::Arc<NumericSource>,
+    pub(crate) binding: NumericBinding<'a>,
+    pub(crate) raw_limits: &'a [Option<(u64, u64)>; 2],
     pub(crate) provenance: crate::layout::RangeProvenance,
     pub(crate) generation: crate::TickGeneration,
     pub(crate) source_indices: Option<&'a [usize]>,
 }
 
 impl AxisRequest<'_> {
-    #[cfg(test)]
-    pub(crate) fn for_test(format: &crate::NumericFormat) -> AxisRequest<'_> {
-        AxisRequest {
-            format: Some(format),
-            source: std::sync::Arc::new(NumericSource {
-                operation: crate::font::canonical::OperationContext::new(),
-                owner: OwnerInfo {
-                    kind: None,
-                    canvas: None,
-                    facet: None,
-                    shared: false,
-                    scope: None,
-                },
-                raw_limits: [None; 2],
-            }),
-            provenance: crate::layout::RangeProvenance::Automatic,
-            generation: crate::TickGeneration::automatic(),
-            source_indices: None,
-        }
+    pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
+        self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
+            .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
     }
     pub(crate) fn materialize(
         &self,
@@ -212,7 +188,7 @@ impl AxisRequest<'_> {
             return Ok(None);
         };
         format.materialize(
-            &self.source.operation,
+            self.binding.operation,
             self.context(positions, log, side, range, purpose)?,
             purpose == NumericPurpose::ActualSet,
         )
@@ -238,13 +214,13 @@ impl AxisRequest<'_> {
             crate::AxisScale::Linear
         };
         let raw = if log {
-            self.source.raw_limits[index].map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
+            self.raw_limits[index].map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
         } else {
             Some(range)
         };
         let domain = DomainInfo::axis(range, scale, self.provenance, raw);
         let mut info = self
-            .source
+            .binding
             .indexed(positions, role, purpose, Some(domain))?;
         if let Some(indices) = self.source_indices {
             if indices.len() != info.values.len() {
@@ -262,6 +238,34 @@ impl AxisRequest<'_> {
         info.generation = Some(self.generation.clone());
         Ok(info)
     }
+}
+
+/// Primitive numeric-source fixtures keep the request inside its real operation.
+#[cfg(test)]
+pub(crate) fn with_axis_request_for_test<T>(
+    format: &crate::NumericFormat,
+    visit: impl FnOnce(AxisRequest<'_>) -> T,
+) -> T {
+    let operation = crate::font::canonical::OperationContext::new();
+    let owner = OwnerInfo {
+        kind: None,
+        canvas: None,
+        facet: None,
+        shared: false,
+        scope: None,
+    };
+    visit(AxisRequest {
+        format: Some(format),
+        binding: NumericBinding {
+            operation: &operation,
+            owner: &owner,
+            plot_id: None,
+        },
+        raw_limits: &[None; 2],
+        provenance: crate::layout::RangeProvenance::Automatic,
+        generation: crate::TickGeneration::automatic(),
+        source_indices: None,
+    })
 }
 
 pub(crate) fn collect_values(

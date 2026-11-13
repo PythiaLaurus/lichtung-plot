@@ -153,48 +153,49 @@ fn empty_and_capped_huge_sources_do_not_materialize_numeric_functions() {
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let policy =
         crate::NumericFormat::default().set_function(|_| panic!("unreached numeric owner"));
-    let format = crate::numeric::source::AxisRequest::for_test(&policy);
-    for view in [(-10.0, -1.0), (1.1, 1.2)] {
+    crate::numeric::source::with_axis_request_for_test(&policy, |format| {
+        for view in [(-10.0, -1.0), (1.1, 1.2)] {
+            let projection = Projection::new(view, (0.0, 1.0), (0.0, 500.0, 0.0, 500.0));
+            let empty = plan(
+                view,
+                false,
+                (1.0, 2.0, TickRequirement::Fixed),
+                None,
+                &projection,
+                AxisSide::Bottom,
+                &theme,
+                Some(&format),
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+            .unwrap();
+            assert!(empty.ticks.is_empty() && empty.numeric.is_none());
+            crate::Plot::scatter(
+                crate::NumericValues::new("x", [view.0, view.1]),
+                crate::NumericValues::new("y", [0.0, 1.0]),
+            )
+            .x_limits(view.0, view.1)
+            .x_tick_generation(
+                crate::TickGeneration::multiplicative(1.0, 2.0, TickRequirement::Fixed).unwrap(),
+            )
+            .x_tick_format(policy.clone())
+            .preflight()
+            .unwrap();
+        }
+        let view = (0.0, f64::MAX);
         let projection = Projection::new(view, (0.0, 1.0), (0.0, 500.0, 0.0, 500.0));
-        let empty = plan(
+        assert!(plan(
             view,
-            false,
-            (1.0, 2.0, TickRequirement::Fixed),
-            None,
+            true,
+            (1.0, 1.0_f64.next_up(), TickRequirement::Fixed),
+            Some(10),
             &projection,
             AxisSide::Bottom,
             &theme,
             Some(&format),
-            &crate::layout::fit::ROOT_SCOPE,
+            &crate::layout::fit::ROOT_SCOPE
         )
-        .unwrap();
-        assert!(empty.ticks.is_empty() && empty.numeric.is_none());
-        crate::Plot::scatter(
-            crate::NumericValues::new("x", [view.0, view.1]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .x_limits(view.0, view.1)
-        .x_tick_generation(
-            crate::TickGeneration::multiplicative(1.0, 2.0, TickRequirement::Fixed).unwrap(),
-        )
-        .x_tick_format(policy.clone())
-        .preflight()
-        .unwrap();
-    }
-    let view = (0.0, f64::MAX);
-    let projection = Projection::new(view, (0.0, 1.0), (0.0, 500.0, 0.0, 500.0));
-    assert!(plan(
-        view,
-        true,
-        (1.0, 1.0_f64.next_up(), TickRequirement::Fixed),
-        Some(10),
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        Some(&format),
-        &crate::layout::fit::ROOT_SCOPE
-    )
-    .is_err());
+        .is_err());
+    });
     assert!(crate::Plot::scatter(
         crate::NumericValues::new("x", [1.0, 64.0]),
         crate::NumericValues::new("y", [0.0, 1.0])
