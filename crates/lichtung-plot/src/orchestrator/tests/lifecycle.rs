@@ -1086,12 +1086,15 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     for composition in [Combined, Separate] {
-        let plot = plot.clone().with_parent_legend_composition(composition);
         let operation = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
+        let mut inputs =
+            crate::plots::shared_x::prepare_plot(plot, &operation, Some(&theme)).unwrap();
+        for registered in &mut inputs.plots {
+            registered.policy.guide_composition = composition;
+        }
         inputs
             .prepare_discrete_guides(
-                &plot,
+                plot,
                 &theme,
                 &operation,
                 &crate::layout::ComponentAddress::root(),
@@ -1131,7 +1134,7 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
                 assert_eq!(descriptor.sections.len(), 1);
                 let color = descriptor.continuous().expect("actual native color body");
                 let source = crate::layout::interior::PreparedInteriorInputs::continuous_source(
-                    &plot,
+                    plot,
                     &theme,
                     &inputs.plots[0],
                 )

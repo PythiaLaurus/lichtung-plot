@@ -187,7 +187,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.description.payload.alpha == other.alpha
             && self.description.payload.text_layouts == other.text_layouts
             && self.output_dimensions == other.output_dimensions
-            && guides.matches_source(self)
+            && guides.matches_source(self, registered)
             && *guides == other.guides
     }
 
@@ -197,7 +197,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         canvas: Option<&crate::Canvas>,
     ) -> Result<ComposedInputs, crate::Error> {
-        if !guides.matches_source(self) {
+        if !guides.matches_source(self, registered) {
             return Err(crate::Error::Render(
                 "retained guide inputs do not belong to their computed source".into(),
             ));

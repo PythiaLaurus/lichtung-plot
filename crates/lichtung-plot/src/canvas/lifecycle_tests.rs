@@ -943,7 +943,8 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                 .placements
                 .plot(layer_slot)
                 .unwrap()
-                .effective_legend_composition(),
+                .description()
+                .legend_composition_spec(),
             Separate
         );
         if composition == Separate && layer_first {

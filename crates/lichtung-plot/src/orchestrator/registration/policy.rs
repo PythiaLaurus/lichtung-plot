@@ -4,6 +4,7 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) significance_indices: Vec<usize>,
     pub(crate) axis_text: AxisTextVisibility,
     pub(crate) gutter_owner: GutterOwner,
+    pub(crate) guide_composition: crate::LegendComposition,
     pub(crate) coordinated: CoordinatedDomains,
 }
 
@@ -49,6 +50,7 @@ impl PlotScopePolicy {
             } else {
                 GutterOwner::Root
             },
+            guide_composition: source.legend_composition_spec(),
             coordinated: CoordinatedDomains::default(),
         }
     }

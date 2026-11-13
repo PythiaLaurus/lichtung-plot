@@ -178,7 +178,13 @@ impl HeightInputs {
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot, registered, Some(canvas))?,
             alpha: plot.description().alpha_inputs().clone(),
-            guides: ScopedGuideInputs::new(plot, use_kind, local.as_ref(), dependencies)?,
+            guides: ScopedGuideInputs::new(
+                plot,
+                registered,
+                use_kind,
+                local.as_ref(),
+                dependencies,
+            )?,
             scope: plot
                 .axis_scope()
                 .map(crate::data::source::copy_source_string)

@@ -8,10 +8,14 @@ use crate::{CategoryValues, Color, NumericValues, Plot};
 fn prepare(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
+    composition: LegendComposition,
     inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
 ) -> Arc<PreparedGuides> {
     let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
+    let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
+    for registered in &mut inputs.plots {
+        registered.policy.guide_composition = composition;
+    }
     inputs
         .prepare_discrete_guides(
             plot,
@@ -35,13 +39,7 @@ fn separate_inputs(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Arc<PreparedGuides> {
-    prepare(
-        &plot
-            .clone()
-            .with_parent_legend_composition(LegendComposition::Separate),
-        theme,
-        |_| (),
-    )
+    prepare(plot, theme, LegendComposition::Separate, |_| ())
 }
 
 fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme) {
@@ -82,6 +80,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     let inputs = prepare(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
+        LegendComposition::Combined,
         |inputs| {
             let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
                 &inputs.plots[0].family
@@ -153,6 +152,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     let fixed_inputs = prepare(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
+        LegendComposition::Combined,
         |_| (),
     );
     let projected_fixed = PreparedGuide::prepare_for_test(
@@ -574,7 +574,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &theme, |_| ());
+    let inputs = prepare(&plot, &theme, LegendComposition::Combined, |_| ());
     assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
     let projected = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
         .unwrap()

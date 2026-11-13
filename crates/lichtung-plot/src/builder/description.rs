@@ -78,6 +78,10 @@ pub(super) struct SharedPayload {
 }
 
 impl PlotDescription {
+    pub(crate) const fn legend_composition_spec(&self) -> crate::LegendComposition {
+        self.legend_composition
+    }
+
     pub(super) fn new(input: PlotInput, kind: PlotKind) -> Self {
         Self {
             kind,

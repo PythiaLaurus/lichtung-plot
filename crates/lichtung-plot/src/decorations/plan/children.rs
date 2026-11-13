@@ -72,6 +72,7 @@ impl PlotEntryInputs {
             plot: plot.retain_composed_inputs(
                 ScopedGuideInputs::new(
                     plot,
+                    context.registered,
                     context.guides.use_kind,
                     context.guides.local_guide,
                     context.guides.dependencies,

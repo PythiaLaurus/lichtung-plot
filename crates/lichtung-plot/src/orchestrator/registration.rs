@@ -121,6 +121,16 @@ pub(crate) fn axis_tick_labels_visible(
     registered.is_none_or(|registered| registered.policy.axis_text.tick_labels[side])
 }
 
+pub(crate) fn guide_composition(
+    source: &PlotDescription,
+    registered: Option<&PlotRegistration<'_>>,
+) -> crate::LegendComposition {
+    registered.map_or_else(
+        || source.legend_composition_spec(),
+        |registered| registered.policy.guide_composition,
+    )
+}
+
 impl std::fmt::Debug for PlotRegistration<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

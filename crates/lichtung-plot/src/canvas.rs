@@ -1352,6 +1352,9 @@ impl Canvas {
             panel.policy.axis_text.tick_labels[1] = self.category_labels
                 != CanvasCategoryLabels::FirstColumnPerRow
                 || index.is_multiple_of(self.columns);
+            if self.legend_policy == CanvasLegendPolicy::Shared {
+                panel.policy.guide_composition = self.legend_composition;
+            }
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
@@ -2257,9 +2260,6 @@ impl Canvas {
     }
 
     fn cell_visibility(&self, mut plot: Plot) -> Plot {
-        if self.legend_policy == CanvasLegendPolicy::Shared {
-            plot = plot.with_parent_legend_composition(self.legend_composition);
-        }
         if self.legend_policy == CanvasLegendPolicy::Hidden {
             plot = plot
                 .with_suppressed_legend()

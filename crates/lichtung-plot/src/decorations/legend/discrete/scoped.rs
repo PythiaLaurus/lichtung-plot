@@ -131,6 +131,7 @@ pub(crate) struct ScopedGuideInputs {
 impl ScopedGuideInputs {
     pub(crate) fn new(
         plot: &Plot<impl crate::kind::Marker>,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         use_kind: GuideUse,
         local_guide: Option<&GuideSlot>,
         dependencies: &[ConsumedGuideDependency],
@@ -147,7 +148,8 @@ impl ScopedGuideInputs {
             .transpose()?
             .flatten()
             .cloned();
-        let composition = plot.effective_legend_composition();
+        let composition =
+            crate::orchestrator::registration::guide_composition(plot.description(), registered);
         if contribution
             .iter()
             .chain(local_guide.map(|slot| &slot.descriptor))
@@ -188,8 +190,13 @@ impl ScopedGuideInputs {
         })
     }
 
-    pub(crate) fn matches_source(&self, plot: &Plot<impl crate::kind::Marker>) -> bool {
-        self.composition == plot.effective_legend_composition()
+    pub(crate) fn matches_source(
+        &self,
+        plot: &Plot<impl crate::kind::Marker>,
+        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    ) -> bool {
+        self.composition
+            == crate::orchestrator::registration::guide_composition(plot.description(), registered)
             && plot.description().same_color_title(&self.color_title)
             && self.contribution_prepared == plot.prepared_discrete_guides.is_some()
             && match &plot.prepared_discrete_guides {
@@ -224,6 +231,6 @@ impl ScopedGuideInputs {
 
     #[cfg(test)]
     pub(crate) fn for_test(plot: &Plot) -> Self {
-        Self::new(plot, GuideUse::SharedSuppressed, None, &[]).unwrap()
+        Self::new(plot, None, GuideUse::SharedSuppressed, None, &[]).unwrap()
     }
 }

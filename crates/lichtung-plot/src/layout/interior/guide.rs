@@ -544,7 +544,7 @@ impl PreparedInteriorInputs<'_> {
                     keys,
                     continuous,
                     alpha.sections(&scoped)?,
-                    scoped.effective_legend_composition(),
+                    registered.policy.guide_composition,
                 )?
             };
             panels.push(ScopedGuide {
@@ -555,7 +555,15 @@ impl PreparedInteriorInputs<'_> {
                 alpha,
             });
         }
-        let order = parent_guide_order(chart, &panels, facet_cells)?;
+        let order = parent_guide_order(
+            chart,
+            self.plots.first().map_or_else(
+                || chart.description().legend_composition_spec(),
+                |registered| registered.policy.guide_composition,
+            ),
+            &panels,
+            facet_cells,
+        )?;
         let root = if facet_cells && matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
         {
             // Native color bodies belong to each actual facet. Their domains,
@@ -703,6 +711,7 @@ impl PreparedInteriorInputs<'_> {
 
 fn parent_guide_order(
     chart: &Plot,
+    composition: crate::LegendComposition,
     panels: &[ScopedGuide],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
@@ -710,7 +719,7 @@ fn parent_guide_order(
     use crate::decorations::legend::GuideEntryIdentity;
     use crate::LegendComposition;
     let mut order = Vec::new();
-    if chart.effective_legend_composition() == LegendComposition::Separate {
+    if composition == LegendComposition::Separate {
         // Facet marginals follow their own full parent domains, not the first
         // pair or occupied facet containing them. Canvas color domains also
         // include Hidden marks and cannot order visible guide contributions.
