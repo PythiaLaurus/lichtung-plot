@@ -905,7 +905,11 @@ impl PreparedTextRequirement {
                 prepared_stage.as_deref_mut(),
             )?;
         }
-        if plot.description().legend_policy_spec() != crate::LegendPolicy::Hidden {
+        if crate::orchestrator::registration::discrete_guide_use(
+            plot.description(),
+            interiors.and_then(|inputs| inputs.plots.first()),
+        ) == crate::decorations::legend::discrete::scoped::GuideUse::Local
+        {
             if let Some(interiors) = interiors {
                 let guides = interiors.discrete_guides.get().ok_or_else(|| {
                     Error::Render("discrete guide font census requires prepared semantics".into())

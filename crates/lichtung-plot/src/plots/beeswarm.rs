@@ -407,7 +407,10 @@ pub(crate) fn measure(
     )?;
     let (panel, colorbar) =
         if crate::orchestrator::registration::continuous_guide_suppressed(context.registered)
-            || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+            || crate::orchestrator::registration::continuous_guide_use(
+                chart.description(),
+                context.registered,
+            ) != crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
             (context.panel, None)
         } else {

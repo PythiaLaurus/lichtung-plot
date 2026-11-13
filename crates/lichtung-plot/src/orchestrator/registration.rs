@@ -139,6 +139,48 @@ pub(crate) fn continuous_guide_suppressed(registered: Option<&PlotRegistration<'
     })
 }
 
+pub(crate) fn discrete_guide_use(
+    source: &PlotDescription,
+    registered: Option<&PlotRegistration<'_>>,
+) -> crate::decorations::legend::discrete::scoped::GuideUse {
+    use crate::decorations::legend::discrete::scoped::GuideUse;
+    if source.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        GuideUse::Hidden
+    } else {
+        registered.map_or(GuideUse::Local, |registered| {
+            registered.policy.discrete_guide_use
+        })
+    }
+}
+
+pub(crate) fn continuous_guide_use(
+    source: &PlotDescription,
+    registered: Option<&PlotRegistration<'_>>,
+) -> crate::decorations::legend::discrete::scoped::GuideUse {
+    use crate::decorations::legend::discrete::scoped::GuideUse;
+    if source.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        GuideUse::Hidden
+    } else {
+        registered.map_or(GuideUse::Local, |registered| {
+            registered.policy.continuous_guide_use
+        })
+    }
+}
+
+/// Preserve the old effective legend operand at its original snapshot readers.
+pub(crate) fn legend_policy(
+    source: &PlotDescription,
+    registered: Option<&PlotRegistration<'_>>,
+) -> crate::LegendPolicy {
+    if discrete_guide_use(source, registered)
+        == crate::decorations::legend::discrete::scoped::GuideUse::Hidden
+    {
+        crate::LegendPolicy::Hidden
+    } else {
+        source.legend_policy_spec()
+    }
+}
+
 pub(crate) fn collective_pairs<'v>(
     registered: Option<&'v PlotRegistration<'_>>,
 ) -> Option<&'v [crate::data::CollectivePair]> {

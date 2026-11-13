@@ -118,6 +118,8 @@ impl PreparedGuide {
         let labels = &policy.labels;
         if (keys.is_empty() && continuous.is_none() && alpha.is_empty())
             || plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+            || policy.discrete_guide_use
+                == crate::decorations::legend::discrete::scoped::GuideUse::Hidden
         {
             return Ok(None);
         }

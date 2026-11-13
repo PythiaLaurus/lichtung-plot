@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn fixed_guide_use_keeps_shared_contributions_and_authored_visibility_distinct() {
+    use crate::decorations::legend::discrete::scoped::GuideUse;
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 2.0]),
+    )
+    .hue(crate::CategoryValues::new("group", ["first", "second"]).unwrap());
+    for policy in [
+        CanvasLegendPolicy::PerPlot,
+        CanvasLegendPolicy::Shared,
+        CanvasLegendPolicy::Hidden,
+    ] {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 500)
+            .legend_policy(policy)
+            .panel(0, 0, plot.clone())
+            .unwrap()
+            .panel(0, 1, plot.clone().legend(crate::LegendPolicy::Hidden))
+            .unwrap();
+        canvas
+            .build_preflight_plan(|prepared, _| {
+                for index in 0..2 {
+                    let inputs = prepared.interiors[index].as_ref().unwrap();
+                    let registered = &inputs.plots[0];
+                    let expected = if index == 1 || policy == CanvasLegendPolicy::Hidden {
+                        GuideUse::Hidden
+                    } else if policy == CanvasLegendPolicy::Shared {
+                        GuideUse::SharedSuppressed
+                    } else {
+                        GuideUse::Local
+                    };
+                    assert_eq!(registered.policy.discrete_guide_use, expected);
+                    assert_eq!(registered.policy.continuous_guide_use, expected);
+                    assert_eq!(
+                        registered.source.legend_policy_spec() == crate::LegendPolicy::Hidden,
+                        index == 1
+                    );
+                    assert_eq!(
+                        inputs.discrete_guides.get().unwrap().root.is_some(),
+                        expected != GuideUse::Hidden
+                    );
+                    assert_eq!(
+                        registered.policy.continuous_materialization,
+                        if policy == CanvasLegendPolicy::Hidden {
+                            crate::orchestrator::registration::ContinuousMaterialization::Suppressed
+                        } else {
+                            crate::orchestrator::registration::ContinuousMaterialization::Local
+                        }
+                    );
+                }
+            })
+            .unwrap();
+    }
+}
+
+#[test]
 fn effective_label_policy_is_borrowed_without_rewriting_authored_child_labels() {
     let labels = Labels::raw()
         .alias("raw_x", "Canvas X")

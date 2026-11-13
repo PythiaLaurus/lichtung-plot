@@ -5,6 +5,8 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) significance_indices: Vec<usize>,
     pub(crate) axis_text: AxisTextVisibility,
     pub(crate) gutter_owner: GutterOwner,
+    pub(crate) discrete_guide_use: crate::decorations::legend::discrete::scoped::GuideUse,
+    pub(crate) continuous_guide_use: crate::decorations::legend::discrete::scoped::GuideUse,
     pub(crate) guide_composition: crate::LegendComposition,
     pub(crate) continuous_materialization: ContinuousMaterialization,
     pub(crate) facet_scales: Option<crate::FacetScales>,
@@ -41,6 +43,11 @@ impl PlotScopePolicy {
         source: &crate::builder::PlotDescription,
         facet: Option<&crate::FacetCell>,
     ) -> Self {
+        let guide_use = if source.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            crate::decorations::legend::discrete::scoped::GuideUse::Hidden
+        } else {
+            crate::decorations::legend::discrete::scoped::GuideUse::Local
+        };
         Self {
             labels: source.labels_policy().clone(),
             significance_indices: source
@@ -62,6 +69,8 @@ impl PlotScopePolicy {
             } else {
                 GutterOwner::Root
             },
+            discrete_guide_use: guide_use,
+            continuous_guide_use: guide_use,
             guide_composition: source.legend_composition_spec(),
             continuous_materialization: ContinuousMaterialization::Local,
             facet_scales: source.has_facets().then(|| source.facet_scales_spec()),

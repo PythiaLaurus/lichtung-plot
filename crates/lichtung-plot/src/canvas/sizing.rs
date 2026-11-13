@@ -129,13 +129,16 @@ impl HeightInputs {
             }
         }
 
-        let use_kind = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
-            GuideUse::Hidden
-        } else if per_plot {
-            GuideUse::Local
-        } else {
-            GuideUse::SharedSuppressed
-        };
+        let use_kind =
+            if crate::orchestrator::registration::legend_policy(plot.description(), registered)
+                == crate::LegendPolicy::Hidden
+            {
+                GuideUse::Hidden
+            } else if per_plot {
+                GuideUse::Local
+            } else {
+                GuideUse::SharedSuppressed
+            };
         let local = if use_kind == GuideUse::Local {
             plot.prepared_discrete_guide()?
                 .map(|descriptor| {
@@ -174,7 +177,10 @@ impl HeightInputs {
             own_insets,
             parent_insets,
             y_labels: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
-            legend: plot.description().legend_policy_spec(),
+            legend: crate::orchestrator::registration::legend_policy(
+                plot.description(),
+                registered,
+            ),
             continuous_hidden: crate::orchestrator::registration::continuous_guide_suppressed(
                 registered,
             ),

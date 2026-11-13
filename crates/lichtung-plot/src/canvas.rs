@@ -1112,7 +1112,7 @@ impl Canvas {
         crate::data::source::reserve_source(&mut contributions, self.placements.len())?;
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(source) = plot else { continue };
-            let mut plot = self.cell_visibility(source.clone());
+            let mut plot = source.clone();
             let mut groups = None;
             if let Some((_, levels)) = hue_groups.and_then(|groups| {
                 groups.iter().find(|(field, _)| {
@@ -1338,6 +1338,21 @@ impl Canvas {
             if let Some(labels) = &self.labels {
                 panel.policy.labels.clone_from(labels);
             }
+            let guide_use = match self.legend_policy {
+                CanvasLegendPolicy::Hidden => {
+                    crate::decorations::legend::discrete::scoped::GuideUse::Hidden
+                }
+                CanvasLegendPolicy::Shared
+                    if plot.description().legend_policy_spec() != crate::LegendPolicy::Hidden =>
+                {
+                    crate::decorations::legend::discrete::scoped::GuideUse::SharedSuppressed
+                }
+                CanvasLegendPolicy::PerPlot | CanvasLegendPolicy::Shared => {
+                    panel.policy.discrete_guide_use
+                }
+            };
+            panel.policy.discrete_guide_use = guide_use;
+            panel.policy.continuous_guide_use = guide_use;
             panel.policy.gutter_owner = crate::orchestrator::registration::GutterOwner::Composition;
             panel.policy.axis_text.tick_labels[1] = self.category_labels
                 != CanvasCategoryLabels::FirstColumnPerRow
@@ -1708,7 +1723,7 @@ impl Canvas {
         for (index, inputs) in interiors.iter().enumerate() {
             if let Some(inputs) = inputs {
                 let source = self.placements.plot(index).expect("prepared Canvas panel");
-                let plot = self.cell_visibility(source.clone());
+                let plot = source.clone();
                 inputs.prepare_intrinsics(
                     &plot,
                     &themes
@@ -1923,10 +1938,6 @@ impl Canvas {
             let Some(plot) = plot else { continue };
 
             let plot = plot.clone();
-            let mut plot = self.cell_visibility(plot);
-            if self.legend_policy == CanvasLegendPolicy::Shared {
-                plot = plot.with_suppressed_legend();
-            }
             let theme = &themes
                 .plot_request(index)
                 .expect("configured canvas panel has a resolved theme");
@@ -2198,7 +2209,6 @@ impl Canvas {
                 let kind = plot.kind();
                 plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
             }
-            plot = self.cell_visibility(plot);
             plots.push(Some(plot));
         }
         let hue_groups: &[(String, Vec<String>)] =
@@ -2265,13 +2275,6 @@ impl Canvas {
             text_panel_intrinsics,
             plot_intrinsics,
         })
-    }
-
-    fn cell_visibility(&self, mut plot: Plot) -> Plot {
-        if self.legend_policy == CanvasLegendPolicy::Hidden {
-            plot = plot.with_suppressed_legend();
-        }
-        plot
     }
 
     /// Install the same coordinated domain and visibility inputs before every
@@ -2341,7 +2344,7 @@ impl Canvas {
             if let Some(range) = round.feedback_domain(&address, FeedbackKind::AutomaticDomainY) {
                 plot = plot.with_planned_y_limits(range);
             }
-            *slot = Some(self.cell_visibility(plot));
+            *slot = Some(plot);
         }
         Ok(())
     }

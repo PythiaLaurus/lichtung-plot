@@ -64,7 +64,8 @@ pub(crate) fn guided_preference(
     } else {
         plot.description().legend_position_spec()
     };
-    if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+    if crate::orchestrator::registration::legend_policy(plot.description(), inputs.plots.first())
+        == crate::LegendPolicy::Hidden
         || (position != crate::LegendPosition::Auto
             && !crate::decorations::plan::is_outside(position))
         || plot.kind() == PlotKind::Matrix

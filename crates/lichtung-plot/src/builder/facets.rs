@@ -1,5 +1,6 @@
 use super::{ComposedInputs, Plot, PlotDescription};
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
+use crate::orchestrator::registration::legend_policy;
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
 #[cfg(test)]
@@ -180,7 +181,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && crate::orchestrator::registration::axis_tick_labels_visible(registered, 1)
                 == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
-            && self.description.payload.legend_policy == other.legend_policy
+            && legend_policy(self.description(), registered) == other.legend_policy
             && crate::orchestrator::registration::continuous_guide_suppressed(registered)
                 == other.suppress_continuous_guide
             && self.description.root_size == other.root_size
@@ -290,7 +291,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 registered, 1,
             ),
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
-            legend_policy: self.description.payload.legend_policy,
+            legend_policy: legend_policy(self.description(), registered),
             suppress_continuous_guide:
                 crate::orchestrator::registration::continuous_guide_suppressed(registered),
             root_size: self.description.root_size,

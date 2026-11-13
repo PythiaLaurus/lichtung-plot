@@ -382,7 +382,8 @@ pub(crate) fn plan_panel_with_context(
     let position = plot.description().legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
         || discrete_guide.is_none()
-        || plot.description().legend_policy_spec() == LegendPolicy::Hidden
+        || crate::orchestrator::registration::legend_policy(plot.description(), context.registered)
+            == LegendPolicy::Hidden
         || (position != LegendPosition::Auto && !is_outside(position));
     if context.content_height
         && !matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
@@ -924,7 +925,10 @@ fn plan_panel_attempt(
     };
     let visible = discovered.decoration_mode == crate::spec::DecorationMode::Standard
         && role == LegendRole::Panel
-        && planning_plot.description().legend_policy_spec() != LegendPolicy::Hidden
+        && crate::orchestrator::registration::legend_policy(
+            planning_plot.description(),
+            context.registered,
+        ) != LegendPolicy::Hidden
         && discrete_guide.is_some();
     let legend = if let Some(guide) = assigned_guide {
         Some(guide)

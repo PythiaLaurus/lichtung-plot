@@ -525,8 +525,10 @@ impl PreparedInteriorInputs<'_> {
                 owner.clone()
             };
             let alpha = self.alpha_sources(&scoped, theme, registered, &contributor)?;
-            let descriptor = if chart.description().legend_policy_spec()
-                == crate::LegendPolicy::Hidden
+            let descriptor = if crate::orchestrator::registration::legend_policy(
+                chart.description(),
+                Some(registered),
+            ) == crate::LegendPolicy::Hidden
             {
                 None
             } else {
