@@ -1253,10 +1253,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.suppress_continuous_guide
     }
 
-    pub(crate) const fn parent_owns_axis_gutters(&self) -> bool {
-        matches!(self.axis_gutter_owner, super::AxisGutterOwner::Composition)
-    }
-
     pub(crate) const fn y_tick_labels_visible(&self) -> bool {
         self.y_tick_labels_visible
     }

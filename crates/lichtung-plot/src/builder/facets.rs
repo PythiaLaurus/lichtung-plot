@@ -173,7 +173,10 @@ impl<K: crate::kind::Marker> Plot<K> {
                 self.global_line_condition_levels.as_deref(),
                 other.global_line_condition_levels.as_deref(),
             )
-            && self.axis_gutter_owner == other.axis_gutter_owner
+            && registered.map_or(
+                crate::orchestrator::registration::GutterOwner::Root,
+                |registered| registered.policy.gutter_owner,
+            ) == other.axis_gutter_owner
             && self.y_tick_labels_visible == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.description.payload.legend_policy == other.legend_policy
@@ -276,7 +279,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             global_line_condition_levels,
             global_collective_pairs: pairs,
             resolved_facet_x_range: self.resolved_facet_x_range,
-            axis_gutter_owner: self.axis_gutter_owner,
+            axis_gutter_owner: registered.map_or(
+                crate::orchestrator::registration::GutterOwner::Root,
+                |registered| registered.policy.gutter_owner,
+            ),
             y_tick_labels_visible: self.y_tick_labels_visible,
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.description.payload.legend_policy,
@@ -338,11 +344,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn with_render_scope(mut self, scope: impl Into<String>) -> Self {
         self.render_scope = Some(scope.into());
-        self
-    }
-
-    pub(crate) fn with_parent_axis_gutters(mut self) -> Self {
-        self.axis_gutter_owner = super::AxisGutterOwner::Composition;
         self
     }
 

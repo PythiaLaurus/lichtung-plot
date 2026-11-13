@@ -1348,6 +1348,7 @@ impl Canvas {
             }
             let id = registry.reserve(source.description(), scope, &resources)?;
             let panel = &mut registry.panels[id.slot];
+            panel.policy.gutter_owner = crate::orchestrator::registration::GutterOwner::Composition;
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
@@ -2219,8 +2220,7 @@ impl Canvas {
                 };
                 *slot = Some(
                     plot.with_canvas_size(width, height)
-                        .with_output_dimensions(width, height)
-                        .with_parent_axis_gutters(),
+                        .with_output_dimensions(width, height),
                 );
             }
         }

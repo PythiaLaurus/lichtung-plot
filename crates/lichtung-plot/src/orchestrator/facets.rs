@@ -271,9 +271,8 @@ impl FacetPlan {
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
         let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
         let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
-        let shared_plot = base_plot
-            .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
-            .with_parent_axis_gutters();
+        let shared_plot =
+            base_plot.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
         let discrete_guide = prepared_guide.descriptor.as_ref();
         let position = source.description().legend_position_spec();

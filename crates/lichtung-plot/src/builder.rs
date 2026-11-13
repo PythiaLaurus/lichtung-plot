@@ -468,7 +468,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     render_scope: Option<String>,
     pub(crate) prepared_discrete_guides:
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
-    axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     marker: PhantomData<K>,
 }
@@ -481,12 +480,6 @@ struct CategoryOrders {
     primary: CategoryOrder,
     x: CategoryOrder,
     y: CategoryOrder,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AxisGutterOwner {
-    Root,
-    Composition,
 }
 
 /// Coordinated replacements and complete numeric policies for a fixed child owner.
@@ -520,7 +513,7 @@ pub(crate) struct ComposedInputs {
     global_group_levels: Option<Vec<String>>,
     global_collective_pairs: Option<Vec<crate::data::CollectivePair>>,
     global_line_condition_levels: Option<Vec<String>>,
-    axis_gutter_owner: AxisGutterOwner,
+    axis_gutter_owner: crate::orchestrator::registration::GutterOwner,
     y_tick_labels_visible: bool,
     render_scope: Option<String>,
     legend_policy: LegendPolicy,
@@ -547,7 +540,6 @@ impl Plot<crate::kind::Any> {
             global_line_condition_levels: None,
             render_scope: None,
             prepared_discrete_guides: None,
-            axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
             marker: PhantomData,
         }
@@ -879,7 +871,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             render_scope,
-            axis_gutter_owner,
             y_tick_labels_visible,
             marker: _,
             prepared_discrete_guides,
@@ -898,7 +889,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             render_scope,
-            axis_gutter_owner,
             y_tick_labels_visible,
             marker: PhantomData,
         }

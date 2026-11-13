@@ -3,7 +3,14 @@
 pub(crate) struct PlotScopePolicy {
     pub(crate) significance_indices: Vec<usize>,
     pub(crate) axis_text: AxisTextVisibility,
+    pub(crate) gutter_owner: GutterOwner,
     pub(crate) coordinated: CoordinatedDomains,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GutterOwner {
+    Root,
+    Composition,
 }
 
 #[derive(Debug, Default)]
@@ -34,6 +41,11 @@ impl PlotScopePolicy {
                 .collect(),
             axis_text: AxisTextVisibility {
                 titles: [!source.has_facets(); 2],
+            },
+            gutter_owner: if source.has_facets() {
+                GutterOwner::Composition
+            } else {
+                GutterOwner::Root
             },
             coordinated: CoordinatedDomains::default(),
         }

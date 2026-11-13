@@ -953,7 +953,9 @@ fn plan_panel_attempt(
     let mut gutters = result.grid_axis_gutters.unwrap_or([0.0; 4]);
     if let Some(axes) = &panel_axes {
         let required = axes.requirements();
-        if !planning_plot.parent_owns_axis_gutters() {
+        if context.registered.is_none_or(|registered| {
+            registered.policy.gutter_owner == crate::orchestrator::registration::GutterOwner::Root
+        }) {
             // The root cell excludes only root-owned padding/title/caption.
             // Replace the entire axis reserve, allowing contraction as well as
             // growth without spending another component's reserved space.
@@ -1246,7 +1248,10 @@ fn plan_panel_attempt(
             *extra = (*extra - (next_axis_gutters[index] - current_axis_gutters[index]).max(0.0))
                 .max(0.0);
         }
-        if !planning_plot.parent_owns_axis_gutters() && overflow.iter().any(|value| *value > 0.0) {
+        if context.registered.is_none_or(|registered| {
+            registered.policy.gutter_owner == crate::orchestrator::registration::GutterOwner::Root
+        }) && overflow.iter().any(|value| *value > 0.0)
+        {
             let mut reserves = owned_ink;
             for (reserve, extra) in reserves.iter_mut().zip(overflow) {
                 // Reserve outward rather than clamping a frozen text anchor.

@@ -522,7 +522,7 @@ pub(super) fn measure(
         if let Some(limits) = prepared.shared_x.get(index).copied().flatten() {
             plot = plot.with_planned_x_limits(limits);
         }
-        plots.push(Some(plot.with_parent_axis_gutters()));
+        plots.push(Some(plot));
     }
     source.coordinate_plots(&mut plots, &prepared.shared_x, round)?;
     let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;

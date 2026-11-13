@@ -860,8 +860,15 @@ mod tests {
                 width: 800,
                 height: 600,
             },
-            |stage| Ok(stage.operation()),
-            |operation, assigned, round| {
+            |stage| {
+                let operation = stage.operation();
+                let mut inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                inputs.plots[0].policy.gutter_owner =
+                    crate::orchestrator::registration::GutterOwner::Composition;
+                Ok((operation, inputs))
+            },
+            |(operation, inputs), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -878,6 +885,11 @@ mod tests {
                         .is_err());
                         let key = PlotEntryInputs::new(&source, context, &owner, round)?;
                         assert!(key.matches(&source, context, &owner, round)?);
+                        let registered = &inputs.plots[0];
+                        let composed =
+                            PlotRenderContext::new(registered.data(operation)?, panel, &theme)
+                                .with_registration(registered, inputs.intrinsic(registered));
+                        assert!(!key.matches(&source, composed, &owner, round)?);
                         assert!(!key.matches(
                             &source,
                             context.with_axis_label_width(context.axis_label_width + 1.0),
@@ -915,7 +927,6 @@ mod tests {
                                 .with_global_line_condition_levels(vec!["new condition".into()]),
                             source.clone().with_global_collective_pairs(Vec::new()),
                             source.clone().with_y_tick_labels_visible(false),
-                            source.clone().with_parent_axis_gutters(),
                             source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(
