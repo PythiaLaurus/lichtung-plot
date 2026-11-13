@@ -232,7 +232,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         .unwrap(),
     );
     let operation = crate::font::canonical::OperationContext::new();
-    let prepared = crate::data::with_source_data_for_test(
+    let (prepared, _) = crate::data::with_source_data_for_test(
         &absent,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,

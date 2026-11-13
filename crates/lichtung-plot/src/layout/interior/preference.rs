@@ -100,7 +100,17 @@ pub(crate) fn categorical_preference(
             } else {
                 crate::layout::AxisSide::Left
             };
-            (axis, marks.categories.len(), marks.primary_mark_count())
+            (
+                axis,
+                registered
+                    .expect("prepared Bar occurrence")
+                    .axes
+                    .categories(usize::from(axis == crate::layout::AxisSide::Left))
+                    .expect("prepared Bar categories")
+                    .raw
+                    .len(),
+                marks.primary_mark_count(),
+            )
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             let marks = family!("distribution preference lacks preparation", "Distribution", F::Distribution { marks, .. } => marks);

@@ -28,12 +28,19 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let categories = &context
+        .registered
+        .expect("prepared Bar occurrence")
+        .axes
+        .categories(0)
+        .expect("prepared Bar categories")
+        .raw;
+    let (colors, accents) = prepared.resolved_colors(chart, categories, theme, data)?;
     let mut rendered_maxima =
-        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| Ok(0.0_f64)))?;
+        crate::data::source::collect_source((0..categories.len()).map(|_| Ok(0.0_f64)))?;
     let anchor_count = prepared.series.len().max(1);
     let mut grouped_maxima =
-        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| {
+        crate::data::source::collect_source((0..categories.len()).map(|_| {
             crate::data::source::collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))
         }))?;
     for bar in &prepared.bars {
@@ -106,7 +113,7 @@ pub(crate) fn measure_marks(
     let significance = if prepared.series.is_empty() {
         crate::significance::plan(
             chart,
-            &prepared.categories,
+            categories,
             &rendered_maxima,
             base_y_range,
             panel,
@@ -116,7 +123,7 @@ pub(crate) fn measure_marks(
     } else {
         crate::significance::plan_grouped(
             chart,
-            &prepared.categories,
+            categories,
             &prepared.series,
             &grouped_maxima,
             theme.marks.get_extents().get_categories().group_span(false),
@@ -188,7 +195,7 @@ pub(crate) fn measure_marks(
                     .get_fills()
                     .get_bodies()
                     .get_bar_body()
-                    .backend_style(prepared.bar_color(chart, bar, &colors, &accents)?),
+                    .backend_style(prepared.bar_color(chart, categories, bar, &colors, &accents)?),
             ),
             interval: bar
                 .interval
@@ -231,6 +238,7 @@ pub(crate) fn measure_marks(
     payload.domain_expansion = bar_data::automatic_numeric_ink_expansion(
         chart,
         prepared,
+        categories,
         &payload,
         &layout.projection,
         context.fit_scope(),

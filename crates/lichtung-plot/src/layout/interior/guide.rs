@@ -251,7 +251,18 @@ impl PreparedInteriorInputs<'_> {
                 F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
                 F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
                 F::Bars { marks, .. } => {
-                    include_keys(&mut keys, marks.color_keys().iter().map(String::as_str))?;
+                    let categories = &registered
+                        .axes
+                        .categories(usize::from(matches!(
+                            chart.kind(),
+                            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                        )))
+                        .expect("prepared Bar categories")
+                        .raw;
+                    include_keys(
+                        &mut keys,
+                        marks.color_keys(categories).iter().map(String::as_str),
+                    )?;
                 }
                 F::Distribution { marks, .. } => {
                     let domain = if marks.hue_levels().is_empty() {
@@ -276,6 +287,10 @@ impl PreparedInteriorInputs<'_> {
         palette.validate_capacity(keys.len())
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the closed guide dispatch borrows each family's actual scientific and axis owners"
+    )]
     pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
@@ -310,7 +325,15 @@ impl PreparedInteriorInputs<'_> {
                     F::Bars { marks, .. } => Some(marks),
                     _ => None,
                 })?;
-                let (colors, accents) = marks.resolved_colors(chart, theme, data)?;
+                let categories = &registered
+                    .axes
+                    .categories(usize::from(matches!(
+                        kind,
+                        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                    )))
+                    .expect("prepared Bar categories")
+                    .raw;
+                let (colors, accents) = marks.resolved_colors(chart, categories, theme, data)?;
                 crate::plots::bar_data::guide_sources(marks, chart, theme, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
@@ -543,7 +566,24 @@ impl PreparedInteriorInputs<'_> {
             PlotKind::Bar
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar => standard!(F::Bars { marks, .. } => marks),
+            | PlotKind::StackedHorizontalBar => {
+                let marks = Self::family(registered, chart.kind(), |family| {
+                    if let F::Bars { marks, .. } = family {
+                        Some(marks)
+                    } else {
+                        None
+                    }
+                })?;
+                let categories = &registered
+                    .axes
+                    .categories(usize::from(matches!(
+                        chart.kind(),
+                        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                    )))
+                    .expect("prepared Bar categories")
+                    .raw;
+                marks.alpha_guide(chart, categories, theme, &mut guide)?;
+            }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 standard!(F::Distribution { marks, .. } => marks);
             }

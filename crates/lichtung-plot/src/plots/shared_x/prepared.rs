@@ -252,15 +252,33 @@ pub(crate) fn prepare_plot_registration(
         PlotKind::Bar
         | PlotKind::HorizontalBar
         | PlotKind::StackedBar
-        | PlotKind::StackedHorizontalBar => Ok(PreparedFamily::Bars {
-            kind: source.kind(),
-            mode: crate::plots::bar_data::mode(source),
-            marks: crate::plots::bar_data::prepare(
+        | PlotKind::StackedHorizontalBar => {
+            let (marks, categories) = crate::plots::bar_data::prepare(
                 source,
                 data,
                 crate::plots::bar_data::mode(source),
-            )?,
-        }),
+            )?;
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "category lengths are admitted source rows"
+            )]
+            let slots = (0.0, categories.len() as f64);
+            let horizontal = matches!(
+                source.kind(),
+                PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+            );
+            let (ranges, categories) = if horizontal {
+                ([marks.value_range, slots], [None, Some(categories)])
+            } else {
+                ([slots, marks.value_range], [Some(categories), None])
+            };
+            panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), categories)?);
+            Ok(PreparedFamily::Bars {
+                kind: source.kind(),
+                mode: crate::plots::bar_data::mode(source),
+                marks,
+            })
+        }
         PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
             let (marks, range, labels) = crate::plots::interval_estimate::PreparedEstimate::new(
                 source,
@@ -382,7 +400,14 @@ impl PreparedFamily {
                         0.0,
                     )?
                 } else {
-                    (0.0, marks.categories.len() as f64)
+                    (
+                        0.0,
+                        axes.expect("prepared Bar axes")
+                            .categories(0)
+                            .expect("prepared Bar categories")
+                            .raw
+                            .len() as f64,
+                    )
                 }
             }
             Self::Estimate { kind, .. } => crate::plots::interval_estimate::x_range(
@@ -896,17 +921,35 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::Bar
                 | PlotKind::HorizontalBar
                 | PlotKind::StackedBar
-                | PlotKind::StackedHorizontalBar => PreparedFamily::Bars {
-                    kind: source.kind(),
-                    mode: crate::plots::bar_data::mode(source),
-                    marks: crate::plots::bar_data::prepare_scoped(
+                | PlotKind::StackedHorizontalBar => {
+                    let (marks, categories) = crate::plots::bar_data::prepare_scoped(
                         source,
                         data,
                         crate::plots::bar_data::mode(source),
                         Some(facet),
                         panel.significance_annotations(),
-                    )?,
-                },
+                    )?;
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "category lengths are admitted source rows"
+                    )]
+                    let slots = (0.0, categories.len() as f64);
+                    let horizontal = matches!(
+                        source.kind(),
+                        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                    );
+                    let (ranges, categories) = if horizontal {
+                        ([marks.value_range, slots], [None, Some(categories)])
+                    } else {
+                        ([slots, marks.value_range], [Some(categories), None])
+                    };
+                    panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), categories)?);
+                    PreparedFamily::Bars {
+                        kind: source.kind(),
+                        mode: crate::plots::bar_data::mode(source),
+                        marks,
+                    }
+                }
                 PlotKind::Matrix | PlotKind::Marginal => {
                     panel.axes = Some(prepare(
                         source,
@@ -1281,17 +1324,13 @@ fn prepare(
         | PlotKind::HorizontalBar
         | PlotKind::StackedHorizontalBar => {
             let marks = marks!(reference, PreparedFamily::Bars { marks, .. } => marks, "bar axes require prepared semantics");
-            let levels = crate::data::source::collect_source(
-                marks
-                    .categories
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?;
             let range = marks.value_range;
             let horizontal = matches!(
                 chart.kind(),
                 PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
             );
+            let levels = prepared_axes.as_mut().expect("prepared Bar axes").sources_mut()[usize::from(horizontal)]
+                .categories.take().expect("prepared Bar categories").raw;
             let slots = (0.0, levels.len() as f64);
             categories[usize::from(horizontal)] = Some(levels);
             let values = crate::layout::anchored_auto_range(

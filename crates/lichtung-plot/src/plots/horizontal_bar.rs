@@ -27,8 +27,15 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let y_count = prepared.categories.len() as f64;
+    let categories = &context
+        .registered
+        .expect("prepared Bar occurrence")
+        .axes
+        .categories(1)
+        .expect("prepared Bar categories")
+        .raw;
+    let (colors, accents) = prepared.resolved_colors(chart, categories, theme, data)?;
+    let y_count = categories.len() as f64;
     let panel_box = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;
     let mut attached_label_plans = bar_data::attached_significance_text_plans(
@@ -56,7 +63,7 @@ pub(crate) fn measure_marks(
     )?;
     let anchor_count = prepared.series.len().max(1);
     let mut rendered_maxima =
-        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| {
+        crate::data::source::collect_source((0..categories.len()).map(|_| {
             crate::data::source::collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))
         }))?;
     for bar in &prepared.bars {
@@ -104,7 +111,7 @@ pub(crate) fn measure_marks(
     }
     let significance = crate::significance::plan_horizontal(
         chart,
-        &prepared.categories,
+        categories,
         &prepared.series,
         &rendered_maxima,
         theme.marks.get_extents().get_categories().group_span(true),
@@ -161,7 +168,7 @@ pub(crate) fn measure_marks(
             true,
             theme.marks.get_extents().get_categories(),
         );
-        let color = prepared.bar_color(chart, bar, &colors, &accents)?;
+        let color = prepared.bar_color(chart, categories, bar, &colors, &accents)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
@@ -224,6 +231,7 @@ pub(crate) fn measure_marks(
     payload.domain_expansion = bar_data::automatic_numeric_ink_expansion(
         chart,
         prepared,
+        categories,
         &payload,
         &layout.projection,
         context.fit_scope(),

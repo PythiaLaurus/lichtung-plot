@@ -169,8 +169,9 @@ pub(crate) fn data(
             }
             let (mode, bars) = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, marks, .. } => Some((mode, marks)), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
-            let category = bars
-                .categories
+            let category = categories
+                .expect("positioned categorical axis")
+                .raw
                 .iter()
                 .position(|raw| raw == category)
                 .ok_or_else(|| Error::Data("annotation category is absent".into()))?;

@@ -135,15 +135,21 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(registered.map(|registered| registered.family.as_ref()))?;
-    if prepared.categories.is_empty() || prepared.bars.is_empty() {
-        return Err(Error::Render(
-            "bar intrinsic has no prepared category or segment".into(),
-        ));
-    }
     let horizontal = matches!(
         chart.kind(),
         crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
     );
+    let categories = &registered
+        .expect("prepared Bar occurrence")
+        .axes
+        .categories(usize::from(horizontal))
+        .expect("prepared Bar categories")
+        .raw;
+    if categories.is_empty() || prepared.bars.is_empty() {
+        return Err(Error::Render(
+            "bar intrinsic has no prepared category or segment".into(),
+        ));
+    }
     let mode = mode(chart);
 
     let body = theme
@@ -169,7 +175,7 @@ pub(crate) fn intrinsic_body_minimum(
                 .get_uncertainty()
                 .backend_style(),
         ))?;
-        if bar.category_index >= prepared.categories.len()
+        if bar.category_index >= categories.len()
             || bar
                 .series_index
                 .is_some_and(|index| index >= prepared.series.len())
@@ -231,7 +237,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
 
     for point in &prepared.points {
-        if point.category_index >= prepared.categories.len()
+        if point.category_index >= categories.len()
             || point
                 .series_index
                 .is_some_and(|index| index >= prepared.series.len())
@@ -268,7 +274,7 @@ pub(crate) fn intrinsic_body_minimum(
         }
     }
     let categories = f64::from(
-        u32::try_from(prepared.categories.len())
+        u32::try_from(categories.len())
             .map_err(|_| Error::Render("bar category count exceeds coordinate range".into()))?,
     );
     let categorical = pitch * categories;
@@ -296,7 +302,7 @@ pub(crate) fn intrinsic_body_minimum(
 /// A prepared bar or stacked-bar segment in data coordinates.
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedBar {
-    /// Index into [`PreparedBars::categories`].
+    /// Index into the owning categorical axis's raw domain.
     pub(crate) category_index: usize,
     /// Optional index into [`PreparedBars::series`].
     pub(crate) series_index: Option<usize>,
@@ -337,8 +343,6 @@ pub(crate) struct PreparedBarPoint {
 /// Prepared bar data and metadata shared by both orientations.
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedBars {
-    /// Primary category labels in observed order.
-    pub(crate) categories: Vec<String>,
     /// Series labels in observed order. Empty for `Single` mode.
     pub(crate) series: Vec<String>,
     /// Color labels derived from positioned series in observed order.
@@ -357,6 +361,7 @@ impl PreparedBars {
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,
+        categories: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -365,7 +370,7 @@ impl PreparedBars {
         for bar in &self.bars {
             let unit = AlphaUnit::aggregate(
                 chart,
-                &self.categories[bar.category_index],
+                &categories[bar.category_index],
                 bar.series_index.map(|index| self.series[index].as_str()),
             )?;
             guide.fill(
@@ -410,9 +415,9 @@ impl PreparedBars {
         })
     }
 
-    pub(crate) fn color_keys(&self) -> &[String] {
+    pub(crate) fn color_keys<'a>(&'a self, categories: &'a [String]) -> &'a [String] {
         if self.hues.is_empty() {
-            &self.categories
+            categories
         } else {
             &self.hues
         }
@@ -421,12 +426,13 @@ impl PreparedBars {
     pub(crate) fn resolved_colors(
         &self,
         chart: &Plot,
+        categories: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
         let keys = if self.hues.is_empty() {
-            &self.categories[..]
+            categories
         } else {
             chart.global_hue_levels().unwrap_or(&self.hues)
         };
@@ -458,6 +464,7 @@ impl PreparedBars {
     pub(crate) fn bar_color(
         &self,
         chart: &Plot,
+        categories: &[String],
         bar: &PreparedBar,
         colors: &CategoryColors,
         accents: &AccentColors,
@@ -467,7 +474,7 @@ impl PreparedBars {
         } else if let Some(hue) = bar.hue_index {
             colors.color(&self.hues[hue])
         } else {
-            colors.color(&self.categories[bar.category_index])
+            colors.color(&categories[bar.category_index])
         }
     }
 
@@ -500,6 +507,7 @@ pub(crate) struct BarPayload {
 pub(crate) fn automatic_numeric_ink_expansion(
     chart: &Plot,
     prepared: &PreparedBars,
+    categories: &[String],
     payload: &BarPayload,
     projection: &crate::layout::Projection,
 
@@ -539,7 +547,7 @@ pub(crate) fn automatic_numeric_ink_expansion(
     else {
         return Ok(payload.domain_expansion);
     };
-    let count = u32::try_from(prepared.categories.len())
+    let count = u32::try_from(categories.len())
         .map_err(|_| Error::Render("bar category count exceeds coordinate range".into()))?;
     let mut numeric = prepared.value_range;
 
@@ -601,6 +609,7 @@ impl BarPayload {
 
         chart: &Plot,
         prepared: &PreparedBars,
+        categories: &[String],
 
         scope: &crate::layout::fit::FitScope,
     ) -> Result<(), crate::layout::fit::PlanError> {
@@ -664,7 +673,7 @@ impl BarPayload {
                     extrema.0 = extrema.0.min(target.edge);
                     extrema.1 = extrema.1.max(target.edge);
                 }
-                let category_range = (0.0, prepared.categories.len() as f64);
+                let category_range = (0.0, categories.len() as f64);
                 let source = if horizontal {
                     [extrema, category_range]
                 } else {
@@ -707,6 +716,16 @@ impl BarPayload {
             &result.layout.projection,
             chart,
             prepared,
+            &context
+                .registered
+                .expect("prepared Bar occurrence")
+                .axes
+                .categories(usize::from(matches!(
+                    chart.kind(),
+                    crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
+                )))
+                .expect("prepared Bar categories")
+                .raw,
             context.fit_scope(),
         )?;
         if let Some(line) = &self.zero {
@@ -887,7 +906,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     mode: BarMode,
-) -> Result<PreparedBars, Error> {
+) -> Result<(PreparedBars, Vec<String>), Error> {
     prepare_scoped(
         chart,
         data,
@@ -903,8 +922,8 @@ pub(crate) fn prepare_scoped<'a>(
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
-) -> Result<PreparedBars, Error> {
-    let mut prepared = prepare_core(chart, data, mode, facet)?;
+) -> Result<(PreparedBars, Vec<String>), Error> {
+    let (mut prepared, categories) = prepare_core(chart, data, mode, facet)?;
     let category = data
         .column(
             chart
@@ -934,7 +953,7 @@ pub(crate) fn prepare_scoped<'a>(
         )?)
     };
     for bar in &mut prepared.bars {
-        let key = (category, prepared.categories[bar.category_index].as_str());
+        let key = (category, categories[bar.category_index].as_str());
         let series = chart.description().group_name().zip(
             bar.series_index
                 .map(|index| prepared.series[index].as_str()),
@@ -944,8 +963,14 @@ pub(crate) fn prepare_scoped<'a>(
             bar.line_alpha = alpha.aggregate(key, series)?;
         }
     }
-    apply_attached_significance(annotations, &mut prepared, mode)?;
-    prepared.points = prepare_point_layers(chart, &prepared, mode)?;
+    apply_attached_significance(annotations, &mut prepared, &categories, mode)?;
+    prepared.points = prepare_point_layers(
+        chart.description(),
+        &prepared,
+        mode,
+        &categories,
+        &prepared.series,
+    )?;
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
@@ -955,7 +980,7 @@ pub(crate) fn prepare_scoped<'a>(
         .categorical_map_spec()
         .filter(|_| !chart.description().colors_by_sign())
     {
-        for key in prepared.color_keys() {
+        for key in prepared.color_keys(&categories) {
             if exact.color_in(key).is_none() {
                 return Err(Error::Data(format!(
                     "bar: category {key:?} has no caller-owned color"
@@ -963,7 +988,7 @@ pub(crate) fn prepare_scoped<'a>(
             }
         }
     }
-    Ok(prepared)
+    Ok((prepared, categories))
 }
 
 fn prepare_core(
@@ -971,7 +996,7 @@ fn prepare_core(
     data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<PreparedBars, Error> {
+) -> Result<(PreparedBars, Vec<String>), Error> {
     data.validate_row_source()?;
     let x_col = chart
         .description()
@@ -1022,7 +1047,7 @@ fn prepare_core(
             facet_identity: &facet_identity,
         })
     };
-    let mut prepared = match mode {
+    let (mut prepared, mut categories) = match mode {
         BarMode::Single => prepare_single(
             categories,
             channels.hues.as_deref(),
@@ -1060,14 +1085,15 @@ fn prepare_core(
     }?;
     apply_category_order(
         &mut prepared,
+        &mut categories,
         chart.description().category_order_spec(),
         mode,
         !data.is_full_plot(),
     )?;
     if let Some(bounds) = chart.description().bar_bound_cols() {
-        apply_precomputed_bounds(chart, data, &mut prepared, bounds)?;
+        apply_precomputed_bounds(chart, data, &mut prepared, &categories, bounds)?;
     }
-    Ok(prepared)
+    Ok((prepared, categories))
 }
 
 fn facet_identity(
@@ -1100,6 +1126,7 @@ fn facet_identity(
 fn apply_attached_significance<'a>(
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     prepared: &mut PreparedBars,
+    categories: &[String],
     mode: BarMode,
 ) -> Result<(), Error> {
     for (source_index, annotation) in annotations.into_iter().enumerate() {
@@ -1107,15 +1134,14 @@ fn apply_attached_significance<'a>(
             continue;
         };
 
-        let category_index = prepared
-            .categories
+        let category_index = categories
             .iter()
             .position(|category| category == target.category_name())
             .ok_or_else(|| {
                 Error::Data(format!(
                     "bar significance references unknown category {:?}; available categories: {}",
                     target.category_name(),
-                    prepared.categories.join(", ")
+                    categories.join(", ")
                 ))
             })?;
         let series_index = target
@@ -1188,6 +1214,7 @@ fn apply_precomputed_bounds(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     prepared: &mut PreparedBars,
+    category_order: &[String],
     (lower_column, upper_column): (&str, &str),
 ) -> Result<(), Error> {
     let category_column = chart
@@ -1208,8 +1235,7 @@ fn apply_precomputed_bounds(
         ));
     }
     for row in 0..categories.len() {
-        let category_index = prepared
-            .categories
+        let category_index = category_order
             .iter()
             .position(|category| category == &categories[row])
             .ok_or_else(|| {
@@ -1250,11 +1276,13 @@ fn apply_precomputed_bounds(
 }
 
 fn prepare_point_layers(
-    chart: &Plot,
+    source: &crate::builder::PlotDescription,
     prepared: &PreparedBars,
     mode: BarMode,
+    categories: &[String],
+    series_order: &[String],
 ) -> Result<Vec<PreparedBarPoint>, Error> {
-    if chart.description().bar_point_layers().is_empty() {
+    if source.bar_point_layers().is_empty() {
         return Ok(Vec::new());
     }
     if mode == BarMode::Stacked {
@@ -1262,9 +1290,9 @@ fn prepare_point_layers(
             "bar point layers are not supported by stacked bars".into(),
         ));
     }
-    let has_series = chart.description().group_col().is_some();
+    let has_series = source.group_col().is_some();
     let mut points = Vec::new();
-    for (layer_index, layer) in chart.description().bar_point_layers().iter().enumerate() {
+    for (layer_index, layer) in source.bar_point_layers().iter().enumerate() {
         let context = format!("bar point layer {layer_index}");
         if layer.series_values().is_some() != has_series {
             return Err(Error::Data(format!(
@@ -1282,33 +1310,31 @@ fn prepare_point_layers(
                 },
             ))
         };
-        let categories = category_values(layer.category_values())?;
+        let layer_categories = category_values(layer.category_values())?;
         let series = layer.series_values().map(category_values).transpose()?;
         let values = crate::data::source::collect_source(
             (0..layer.values().len())
                 .map(|row| crate::data::strict_numeric_value(layer.values(), row, &context)),
         )?;
-        if categories.is_empty() || categories.len() != values.len() {
+        if layer_categories.is_empty() || layer_categories.len() != values.len() {
             return Err(Error::Data(format!(
                 "{context}: category and value columns must have equal non-zero lengths"
             )));
         }
         for row in 0..values.len() {
-            let category_index = prepared
-                .categories
+            let category_index = categories
                 .iter()
-                .position(|value| value == &categories[row])
+                .position(|value| value == &layer_categories[row])
                 .ok_or_else(|| {
                     Error::Data(format!(
                         "{context}: unknown category {:?} at row {row}",
-                        categories[row]
+                        layer_categories[row]
                     ))
                 })?;
             let series_index = series
                 .as_ref()
                 .map(|series_values| {
-                    prepared
-                        .series
+                    series_order
                         .iter()
                         .position(|value| value == &series_values[row])
                         .ok_or_else(|| {
@@ -1485,6 +1511,7 @@ pub(crate) fn validate_cells(chart: &crate::builder::PlotDescription) -> Result<
 
 fn apply_category_order(
     prepared: &mut PreparedBars,
+    categories: &mut Vec<String>,
     order: &CategoryOrder,
     mode: BarMode,
     is_subset: bool,
@@ -1493,17 +1520,16 @@ fn apply_category_order(
         CategoryOrder::Observed => Ok(()),
         CategoryOrder::Explicit(requested) => {
             let ordered = crate::data::explicit_category_order(
-                &prepared.categories,
+                categories,
                 requested,
                 "bar category order",
                 is_subset,
             )?;
-            let old_categories = std::mem::replace(&mut prepared.categories, ordered);
+            let old_categories = std::mem::replace(categories, ordered);
             for bar in &mut prepared.bars {
 
                 let label = &old_categories[bar.category_index];
-                bar.category_index = prepared
-                    .categories
+                bar.category_index = categories
                     .iter()
                     .position(|candidate| candidate == label)
                     .ok_or_else(|| {
@@ -1515,7 +1541,7 @@ fn apply_category_order(
             Ok(())
         }
         CategoryOrder::Value(sort) if mode == BarMode::Single => {
-            sort_single_values(prepared, *sort)
+            sort_single_values(prepared, categories, *sort)
         }
         CategoryOrder::Value(_) => Err(Error::Data(
             "bar: value-derived category order requires one ungrouped bar per category; use an explicit category order for grouped or stacked bars"
@@ -1524,8 +1550,12 @@ fn apply_category_order(
     }
 }
 
-fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) -> Result<(), Error> {
-    let mut order = crate::data::source::collect_source((0..prepared.categories.len()).map(Ok))?;
+fn sort_single_values(
+    prepared: &mut PreparedBars,
+    categories: &mut Vec<String>,
+    sort: ValueSort,
+) -> Result<(), Error> {
+    let mut order = crate::data::source::collect_source((0..categories.len()).map(Ok))?;
     sort_source_by(&mut order, |left, right| {
         let left_value = prepared.bars[*left].end;
         let right_value = prepared.bars[*right].end;
@@ -1535,10 +1565,10 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) -> Result<()
         })
         .then_with(|| left.cmp(right))
     });
-    let categories = crate::data::source::collect_source(
+    let ordered = crate::data::source::collect_source(
         order
             .iter()
-            .map(|index| crate::data::source::copy_source_string(&prepared.categories[*index])),
+            .map(|index| crate::data::source::copy_source_string(&categories[*index])),
     )?;
     let bars = crate::data::source::collect_source(order.iter().enumerate().map(
         |(category_index, old_index)| {
@@ -1547,7 +1577,7 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) -> Result<()
             Ok(bar)
         },
     ))?;
-    prepared.categories = categories;
+    *categories = ordered;
     prepared.bars = bars;
     Ok(())
 }
@@ -1606,7 +1636,7 @@ fn prepare_single(
     values: Vec<f64>,
     mut hue_levels: Vec<String>,
     summary: BarSummaryInput<'_>,
-) -> Result<PreparedBars, Error> {
+) -> Result<(PreparedBars, Vec<String>), Error> {
     let mut category_levels = Vec::new();
     let mut groups: Vec<SingleBarCell> = Vec::new();
     for (row, (category, value)) in categories.into_iter().zip(values).enumerate() {
@@ -1678,15 +1708,17 @@ fn prepare_single(
     }
 
     let value_range = value_range(&bars)?;
-    Ok(PreparedBars {
-        categories: category_levels,
-        series: Vec::new(),
-        hues: hue_levels,
-        value_range,
-        bars,
-        points: Vec::new(),
-        significance: Vec::new(),
-    })
+    Ok((
+        PreparedBars {
+            series: Vec::new(),
+            hues: hue_levels,
+            value_range,
+            bars,
+            points: Vec::new(),
+            significance: Vec::new(),
+        },
+        category_levels,
+    ))
 }
 
 fn prepare_grouped(
@@ -1697,7 +1729,7 @@ fn prepare_grouped(
     series_order: Vec<String>,
     hue_order: Vec<String>,
     summary: BarSummaryInput<'_>,
-) -> Result<PreparedBars, Error> {
+) -> Result<(PreparedBars, Vec<String>), Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
         return Err(Error::Data(
             "bar: category/value/series length mismatch".into(),
@@ -1788,15 +1820,17 @@ fn prepare_grouped(
 
     let value_range = value_range(&bars)?;
 
-    Ok(PreparedBars {
-        categories: category_levels,
-        series: series_levels,
-        hues: hue_levels,
-        value_range,
-        bars,
-        points: Vec::new(),
-        significance: Vec::new(),
-    })
+    Ok((
+        PreparedBars {
+            series: series_levels,
+            hues: hue_levels,
+            value_range,
+            bars,
+            points: Vec::new(),
+            significance: Vec::new(),
+        },
+        category_levels,
+    ))
 }
 
 #[expect(
@@ -1810,7 +1844,7 @@ fn prepare_stacked(
     values: Vec<f64>,
     series_order: Vec<String>,
     hue_order: Vec<String>,
-) -> Result<PreparedBars, Error> {
+) -> Result<(PreparedBars, Vec<String>), Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
         return Err(Error::Data(
             "bar: category/value/series length mismatch".into(),
@@ -1921,15 +1955,17 @@ fn prepare_stacked(
     }
 
     let value_range = value_range(&bars)?;
-    Ok(PreparedBars {
-        categories: category_levels,
-        series: series_levels,
-        hues: hue_levels,
-        value_range,
-        bars,
-        points: Vec::new(),
-        significance: Vec::new(),
-    })
+    Ok((
+        PreparedBars {
+            series: series_levels,
+            hues: hue_levels,
+            value_range,
+            bars,
+            points: Vec::new(),
+            significance: Vec::new(),
+        },
+        category_levels,
+    ))
 }
 
 fn level_index(levels: &mut Vec<String>, label: String) -> Result<usize, Error> {
