@@ -8,7 +8,7 @@ use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideConsumption, GuideOrientation,
     SUPPRESSED_GUIDES,
 };
-use crate::decorations::plan::{LegendRole, PanelPlan};
+use crate::decorations::plan::{LegendRole, MeasuredPlotPlan};
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
@@ -200,7 +200,7 @@ pub(super) fn native_parent(
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
     inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
-) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<MeasuredPlotPlan>>)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
     let resources = theme.text.prepared_font_environment()?.operation();

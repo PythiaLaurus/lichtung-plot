@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use super::{LegendRole, PanelPlan};
+use super::{LegendRole, MeasuredPlotPlan};
 use crate::decorations::legend::discrete::scoped::{GuideConsumption, GuideUse, ScopedGuideInputs};
 use crate::layout::fit::FitOutcome;
 use crate::layout::kernel::{ChildFeedback, ChildFeedbackInputs, FeedbackRound};
@@ -23,7 +23,7 @@ thread_local! {
 // These boundaries construct fresh producer contexts. Source rows, source
 // configuration and prepared fonts are fixed by the borrowed root and cell;
 // coordination's computed replacements are compared by value, not pointers.
-struct Inputs {
+struct PlotEntryInputs {
     owners: [ComponentAddress; 2],
     geometry: [u64; 4],
     axis_label_width: u64,
@@ -45,7 +45,7 @@ struct Inputs {
     feedback: ChildFeedbackInputs,
 }
 
-impl Inputs {
+impl PlotEntryInputs {
     fn new(
         plot: &Plot,
         context: PlotRenderContext<'_, '_>,
@@ -127,7 +127,7 @@ fn geometry(panel: PixelRect) -> [u64; 4] {
 }
 
 struct Measurement {
-    inputs: Inputs,
+    inputs: PlotEntryInputs,
     phase: MeasurementPhase,
     result: Arc<PlotRenderResult>,
 }
@@ -152,17 +152,17 @@ impl MeasurementPhase {
     }
 }
 
-struct Panel {
-    inputs: Inputs,
+struct CompleteChildCacheEntry {
+    inputs: PlotEntryInputs,
     role: LegendRole,
-    result: Arc<PanelPlan>,
+    result: Arc<MeasuredPlotPlan>,
     feedback: ChildFeedback,
 }
 
 pub(crate) struct ChildPlans {
     source: AddressRole,
     measurements: Vec<Measurement>,
-    panels: Vec<Panel>,
+    panels: Vec<CompleteChildCacheEntry>,
 }
 
 impl ChildPlans {
@@ -279,7 +279,7 @@ impl ChildPlans {
             .retain(|entry| entry.inputs.owners[0] != *owner || entry.phase != phase);
         crate::render::backend::reserve_text_records(&mut self.measurements, 1)?;
         self.measurements.push(Measurement {
-            inputs: Inputs::new(plot, context, owner, round)?,
+            inputs: PlotEntryInputs::new(plot, context, owner, round)?,
             phase,
             result: Arc::clone(&result),
         });
@@ -294,7 +294,7 @@ impl ChildPlans {
         discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
         round: &mut FeedbackRound,
         owner: &ComponentAddress,
-    ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {
+    ) -> Result<FitOutcome<Arc<MeasuredPlotPlan>>, Error> {
         self.validate_owner(owner)?;
         let use_kind = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             GuideUse::Hidden
@@ -343,10 +343,10 @@ impl ChildPlans {
         }
         self.panels.retain(|entry| entry.inputs.owners[0] != *owner);
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
-            let inputs = Inputs::new(plot, context, owner, round)?;
+            let inputs = PlotEntryInputs::new(plot, context, owner, round)?;
             if round.child_stable(&inputs.owners) {
                 crate::render::backend::reserve_text_records(&mut self.panels, 1)?;
-                self.panels.push(Panel {
+                self.panels.push(CompleteChildCacheEntry {
                     inputs,
                     role,
                     result: Arc::clone(&result),
@@ -401,7 +401,7 @@ mod tests {
                             crate::layout::PixelRect::new(20.0, 400.0, 20.0, 500.0),
                             &theme,
                         );
-                        let key = Inputs::new(&source, context, &owner, round)?;
+                        let key = PlotEntryInputs::new(&source, context, &owner, round)?;
                         assert!(key.matches(&source, context, &owner, round)?);
                         for (content_height, fill_content_height) in
                             [(true, false), (false, true), (true, true)]
@@ -771,10 +771,10 @@ mod tests {
                             let start = round.child_checkpoint();
                             round.observe_number(1.0)?;
                             // Seed a successful immutable panel to isolate the replay boundary.
-                            children.panels.push(Panel {
-                                inputs: Inputs::new(&source, context, &owner, round)?,
+                            children.panels.push(CompleteChildCacheEntry {
+                                inputs: PlotEntryInputs::new(&source, context, &owner, round)?,
                                 role: LegendRole::Suppressed,
-                                result: Arc::new(PanelPlan {
+                                result: Arc::new(MeasuredPlotPlan {
                                     selected: crate::orchestrator::assignment::PlotMeasureAssignment {
                                         dimensions: crate::orchestrator::assignment::PlotMeasureDimensions { canvas: assigned.assigned_size()?, output_override: None },
                                         frame: context.panel,
@@ -868,14 +868,14 @@ mod tests {
                     |data| {
                         let panel = PixelRect::new(10.0, 200.0, 30.0, 400.0);
                         let context = PlotRenderContext::new(data, panel, &theme);
-                        assert!(Inputs::new(
+                        assert!(PlotEntryInputs::new(
                             &source,
                             context,
                             &owner.child(AddressRole::CanvasCell, 1)?,
                             round
                         )
                         .is_err());
-                        let key = Inputs::new(&source, context, &owner, round)?;
+                        let key = PlotEntryInputs::new(&source, context, &owner, round)?;
                         assert!(key.matches(&source, context, &owner, round)?);
                         assert!(!key.matches(
                             &source,

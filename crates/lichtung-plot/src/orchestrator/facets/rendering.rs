@@ -4,7 +4,7 @@ use crate::Error;
 
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
-use crate::decorations::plan::PanelPlan;
+use crate::decorations::plan::MeasuredPlotPlan;
 use crate::layout::{PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::PlotKind;
@@ -38,7 +38,7 @@ pub(super) fn render_scene(
     source: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
-    panel_plans: &[std::sync::Arc<PanelPlan>],
+    panel_plans: &[std::sync::Arc<MeasuredPlotPlan>],
     legends: &[Option<crate::decorations::legend::LegendDrawPlan>],
     strip_layers: &[String],
     panel_layers: &[[String; 3]],

@@ -262,7 +262,7 @@ pub(super) fn measured_preference(
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
-    plan: &crate::decorations::plan::PanelPlan,
+    plan: &crate::decorations::plan::MeasuredPlotPlan,
     local_text_height: f64,
     round: &FeedbackRound,
     owner: &ComponentAddress,

@@ -44,7 +44,7 @@ struct PlannedCanvasPanel {
     kind: PlotKind,
     surface: crate::Color,
     canvas_cell: PixelRect,
-    panel_plan: Arc<crate::decorations::plan::PanelPlan>,
+    panel_plan: Arc<crate::decorations::plan::MeasuredPlotPlan>,
     local_text: plot_text::PlotLocalTextPlan,
     header_layer: String,
     legend: Option<crate::decorations::legend::LegendDrawPlan>,

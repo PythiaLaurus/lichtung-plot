@@ -153,7 +153,7 @@ pub(super) fn prepare_discrete_guide(
 pub(super) struct FacetPlan {
     pub(super) dimensions: (u32, u32),
     panels: Vec<data::FacetPanel>,
-    panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
+    panel_plans: Vec<std::sync::Arc<crate::decorations::plan::MeasuredPlotPlan>>,
     outside_legend: Option<ResolvedLegend>,
     horizontal_axis_label: Option<crate::Text>,
     vertical_axis_label: Option<crate::Text>,

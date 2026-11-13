@@ -5,7 +5,7 @@ use crate::Error;
 use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
 use super::root::{CachedRootFrame, RootLayoutCaches};
 use crate::builder::Plot;
-use crate::decorations::plan::PanelPlan;
+use crate::decorations::plan::MeasuredPlotPlan;
 use crate::layout::PixelRect;
 use crate::render::backend::{Backend, SurfaceRole};
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
@@ -499,7 +499,7 @@ mod soft_hyphen_tests {
 
 struct UnfacetedPlotPlan {
     dimensions: (u32, u32),
-    panel_plan: PanelPlan,
+    panel_plan: MeasuredPlotPlan,
     canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
     layers: [String; 2],

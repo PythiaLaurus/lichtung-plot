@@ -183,7 +183,7 @@ impl ResolvedLegend {
     }
 }
 
-pub(crate) struct PanelPlan {
+pub(crate) struct MeasuredPlotPlan {
     pub(crate) selected: crate::orchestrator::assignment::PlotMeasureAssignment,
     pub(crate) preference:
         Option<std::sync::Arc<crate::orchestrator::assignment::PlotFrameHeightPreference>>,
@@ -250,7 +250,7 @@ const fn is_inside(position: LegendPosition) -> bool {
     !is_outside(position)
 }
 
-impl PanelPlan {
+impl MeasuredPlotPlan {
     pub(crate) fn plot_with_planned_limits(&self, plot: &Plot) -> Plot {
         let mut plot = plot.clone();
         if let Some(limits) = self.planned_x_limits {
@@ -278,7 +278,7 @@ pub(crate) fn plan_panel(
     theme: &crate::text::TextRequestContext<'_, '_>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
-) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
     plot.description().configured_source_rows()?;
     let registered = registered.expect("prepared test panel");
     let operation = theme.text.prepared_font_environment()?.operation();
@@ -312,7 +312,7 @@ pub(crate) fn plan_panel_with_context(
     discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
-) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
 
@@ -774,7 +774,7 @@ fn plan_panel_attempt(
     address: &ComponentAddress,
     assigned_guide: Option<Legend>,
     initial: Option<(PlotRenderResult, GeometrySnapshot)>,
-) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address));
     let context = context.with_fit_scope(&scope);
@@ -1584,7 +1584,7 @@ fn plan_panel_attempt(
                 .height(),
         })
     });
-    Ok(FitOutcome::Measured(PanelPlan {
+    Ok(FitOutcome::Measured(MeasuredPlotPlan {
         selected,
         preference,
         panel_box,
