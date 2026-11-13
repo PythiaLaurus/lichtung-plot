@@ -16,6 +16,7 @@ pub(super) fn measure(
         &crate::Plot,
         Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         &crate::orchestrator::root::PlotIntrinsics,
+        &crate::font::canonical::OperationContext,
     )>,
 ) -> Result<(PixelRect, Legend), PlanError> {
     let descriptor = chart

@@ -279,38 +279,42 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         0
     );
     assert!(crate::plots::shared_x::prepare_plot(&source, &resources, None).is_err());
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
-        let operation = theme.text.prepared_font_environment().unwrap().operation();
-        let selected = chart
-            .measure_selected_interior(
-                crate::spec::PlotRenderContext::new(
-                    inputs.plots[0].data(&operation).unwrap(),
-                    crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
-                    theme,
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |chart, inputs, theme, _operation| {
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let selected = chart
+                .measure_selected_interior(
+                    crate::spec::PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
-                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-            )
-            .unwrap();
-        let crate::layout::interior::MarkPayload::Heatmap(payload) =
-            &selected.marks.as_ref().unwrap().payload
-        else {
-            panic!("selected owner Heatmap")
-        };
-        let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
-            700,
-            500,
-            theme.text.prepared_font_environment().unwrap(),
-        );
-        backend.begin(700, 500).unwrap();
-        payload.draw(&mut backend).unwrap();
-        backend.end().unwrap();
-        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-        assert!(svg.contains("fill=\"#53565A\""));
-        assert!(svg.contains("fill=\"#6D7074\""));
-        assert_eq!(
-            original.color_scales.get_qualitative().capacity(),
-            PaletteCapacity::Extendable
-        );
-    })
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Heatmap(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected owner Heatmap")
+            };
+            let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
+                700,
+                500,
+                theme.text.prepared_font_environment().unwrap(),
+            );
+            backend.begin(700, 500).unwrap();
+            payload.draw(&mut backend).unwrap();
+            backend.end().unwrap();
+            let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+            assert!(svg.contains("fill=\"#53565A\""));
+            assert!(svg.contains("fill=\"#6D7074\""));
+            assert_eq!(
+                original.color_scales.get_qualitative().capacity(),
+                PaletteCapacity::Extendable
+            );
+        },
+    )
     .unwrap();
 }

@@ -323,8 +323,12 @@ pub(crate) fn plan_panel_with_context(
     } else {
         discrete_guide
     };
-    let minimum =
-        plot.intrinsic_body_minimum(context.registered, context.intrinsic(), context.theme)?;
+    let minimum = plot.intrinsic_body_minimum(
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        context.theme,
+    )?;
     let position = plot.description().legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
         || discrete_guide.is_none()
@@ -585,12 +589,17 @@ fn content_frame(
     {
         *inset += ink;
     }
-    let hard =
-        plot.intrinsic_body_minimum(context.registered, context.intrinsic(), context.theme)?;
+    let hard = plot.intrinsic_body_minimum(
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        context.theme,
+    )?;
     let preference = crate::layout::interior::sizing::body_preference(
         &plot,
         context.registered,
         context.intrinsic(),
+        context.data.source_resources(),
         context.theme,
         hard,
     )?;
@@ -606,6 +615,7 @@ fn content_frame(
     let mut height = plot.natural_body_height(
         context.registered,
         context.intrinsic(),
+        context.data.source_resources(),
         context.theme,
         width,
         preference.1,
@@ -768,8 +778,12 @@ fn plan_panel_attempt(
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address));
     let context = context.with_fit_scope(&scope);
-    let minimum =
-        plot.intrinsic_body_minimum(context.registered, context.intrinsic(), context.theme)?;
+    let minimum = plot.intrinsic_body_minimum(
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        context.theme,
+    )?;
     let cell = context.panel;
     round.begin_owner(address)?;
     round.observe_box(cell)?;

@@ -863,7 +863,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
                 generation: source.generation.clone(),
                 category_labels: source.category_labels.clone(),
                 format: source.format.clone(),
-                numeric_source: source.numeric_source.clone(),
                 exact_ticks: source
                     .exact_ticks
                     .as_ref()
@@ -895,9 +894,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
                     *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
                 }
                 specs[side].limits = Some(*range);
-                specs[side]
-                    .numeric_source
-                    .clone_from(&axes.specs[side].numeric_source);
             }
         }
         Layout::new_with_ticks_and_axis_specs_in_panel_box(
@@ -912,6 +908,13 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             &specs[1],
             theme,
             self.fit_scope,
+            self.registered
+                .map(|registered| registered.axis_numeric_binding(self.data.source_resources()))
+                .transpose()?,
+            self.registered.map_or(
+                [None; 2],
+                crate::orchestrator::registration::PlotRegistration::raw_windows,
+            ),
         )
     }
 

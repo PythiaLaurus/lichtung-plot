@@ -1139,9 +1139,12 @@ pub(crate) fn measure(
             &context
                 .fit_scope()
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
-            context
-                .content_height
-                .then_some((chart, context.registered, context.intrinsic())),
+            context.content_height.then_some((
+                chart,
+                context.registered,
+                context.intrinsic(),
+                context.data.source_resources(),
+            )),
         )?;
         (body, Some(guide))
     };

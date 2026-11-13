@@ -98,10 +98,11 @@ fn plot_minimum(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let mut hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let mut hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
     let sources = plot.description().prose();
     hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
         theme, sources, hard.1,
@@ -115,10 +116,15 @@ fn plot_minimum(
     Ok(hard)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each child intrinsic receives the containing root's explicit operation"
+)]
 pub(super) fn minimum(
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    operation: &crate::font::canonical::OperationContext,
     text: &[Option<TextPanelIntrinsics>],
     titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     themes: &ResolvedCanvasThemes,
@@ -143,6 +149,7 @@ pub(super) fn minimum(
                 plot,
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),
+                operation,
                 titles[index].expect("Plot title intrinsics"),
                 &themes.plot_request(index).expect("Plot theme"),
             )?
@@ -241,6 +248,7 @@ impl DeclaredTracks {
 }
 
 pub(super) struct ContentSizing<'a> {
+    pub operation: &'a crate::font::canonical::OperationContext,
     pub source: &'a super::Canvas,
     pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
     pub round: &'a crate::layout::kernel::FeedbackRound,
@@ -259,6 +267,7 @@ pub(super) fn allocate(
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    operation: &crate::font::canonical::OperationContext,
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
@@ -275,6 +284,7 @@ pub(super) fn allocate(
             placements,
             plots,
             interiors,
+            operation,
             text_panels,
             plot_titles,
             column_headers,
@@ -322,6 +332,7 @@ pub(super) fn natural_width(
             placements,
             plots,
             content.interiors,
+            content.operation,
             text_panels,
             plot_titles,
             column_headers,
@@ -362,6 +373,7 @@ fn measure(
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
     interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    operation: &crate::font::canonical::OperationContext,
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
@@ -459,6 +471,7 @@ fn measure(
                 interiors[index]
                     .as_ref()
                     .and_then(|input| input.plots.first()),
+                content.operation,
                 theme,
             )?;
             let footprint = placements.footprint(index).expect("Plot owner");
@@ -534,6 +547,7 @@ fn measure(
                 plot,
                 registered,
                 intrinsic,
+                operation,
                 plot_titles[index].expect("Plot text intrinsics"),
                 child_theme,
             )?;
@@ -547,8 +561,9 @@ fn measure(
                     plot,
                     registered,
                     intrinsic,
+                    operation,
                     child_theme,
-                    plot.intrinsic_body_minimum(registered, intrinsic, child_theme)?,
+                    plot.intrinsic_body_minimum(registered, intrinsic, operation, child_theme)?,
                 )?;
                 let mut width = body.0;
                 if let Some(content) = content.filter(|content| {
@@ -925,6 +940,7 @@ fn measure(
                 )?;
                 super::sizing::cell_height(
                     plot,
+                    content.operation,
                     content.source,
                     &themes.plot_request(index).expect("prepared Plot theme"),
                     width,

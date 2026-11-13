@@ -115,6 +115,14 @@ impl std::fmt::Debug for PlotRegistration<'_> {
 }
 
 impl<'src> PlotRegistration<'src> {
+    pub(crate) fn raw_windows(&self) -> [Option<&(f64, f64)>; 2] {
+        [self.source.x_axis_spec(), self.source.y_axis_spec()].map(|axis| {
+            axis.limits
+                .as_ref()
+                .filter(|_| axis.provenance == crate::layout::RangeProvenance::Configured)
+        })
+    }
+
     pub(crate) fn data<'op>(
         &'op self,
         operation: &'op crate::font::canonical::OperationContext,

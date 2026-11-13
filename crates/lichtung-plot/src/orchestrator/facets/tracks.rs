@@ -27,6 +27,7 @@ fn checked(value: i128) -> Result<i64, Error> {
 }
 
 pub(super) struct ContentSizing<'a> {
+    pub operation: &'a crate::font::canonical::OperationContext,
     pub plot: &'a crate::Plot,
     pub inputs: &'a crate::layout::interior::PreparedInteriorInputs<'a>,
     pub round: &'a crate::layout::kernel::FeedbackRound,
@@ -165,6 +166,7 @@ fn measure(
             let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
                 &plot,
                 content.inputs.plots.get(index),
+                content.operation,
                 theme,
             )?;
             let insets = column_insets.get_mut(panel.column).ok_or_else(|| {
@@ -218,6 +220,7 @@ fn measure(
                 &plot,
                 content.inputs.plots.get(index),
                 content.inputs.intrinsic(&content.inputs.plots[index]),
+                content.operation,
                 theme,
                 *minimum,
             )?;
@@ -376,6 +379,7 @@ fn measure(
                 &plot,
                 content.inputs.plots.get(index),
                 content.inputs.intrinsic(&content.inputs.plots[index]),
+                content.operation,
                 theme,
                 *minimum,
             )?;
@@ -393,6 +397,7 @@ fn measure(
                     &plot,
                     content.inputs.plots.get(index),
                     content.inputs.intrinsic(&content.inputs.plots[index]),
+                    content.operation,
                     theme,
                     width,
                     guide.as_ref(),
@@ -402,6 +407,7 @@ fn measure(
                 plot.natural_body_height(
                     content.inputs.plots.get(index),
                     content.inputs.intrinsic(&content.inputs.plots[index]),
+                    content.operation,
                     theme,
                     width,
                     preference.1,
@@ -509,8 +515,6 @@ mod tests {
             crate::NumericValues::new("y", [1.0, 0.0]),
         )
         .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.composition = theme
             .composition
@@ -546,8 +550,12 @@ mod tests {
                     width: 1,
                     height: 1,
                 },
-                |_| Ok(()),
-                |(), assigned, round| {
+                |stage| {
+                    let operation = stage.operation();
+                    let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None)?;
+                    Ok((inputs, operation))
+                },
+                |(inputs, operation), assigned, round| {
                     let FitOutcome::Measured(grid) = allocate(
                         PixelRect::new(0.0, 0.0, 0.0, 0.0),
                         (1, 2),
@@ -557,8 +565,9 @@ mod tests {
                         &theme,
                         &FitScope::root(),
                         Some(&ContentSizing {
+                            operation,
                             plot: &plot,
-                            inputs: &inputs,
+                            inputs,
                             round,
                             natural_width: true,
                             natural_height: true,
@@ -591,7 +600,7 @@ mod tests {
                         (),
                     ))
                 },
-                |(), _, (), _| Ok(()),
+                |_, _, (), _| Ok(()),
             )
             .unwrap();
         }

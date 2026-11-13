@@ -120,7 +120,6 @@ fn exact_tick_configuration_validates_count_before_fonts() {
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
             format: None,
-            numeric_source: None,
             exact_ticks: Some(
                 (0..count)
                     .map(|index| AxisTick::new(f64::from(index), ""))
@@ -147,7 +146,6 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
             format: None,
-            numeric_source: None,
             exact_ticks: Some(
                 positions
                     .into_iter()
@@ -170,7 +168,6 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
         generation: crate::TickGeneration::automatic(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,
-        numeric_source: None,
         exact_ticks: Some(vec![
             AxisTick::new(-f64::MAX, "same"),
             AxisTick::new(0.0, ""),
@@ -231,6 +228,8 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
         &y,
         &theme,
         &crate::layout::fit::ROOT_SCOPE,
+        None,
+        [None; 2],
     )
     .unwrap();
     for layout in [numeric, supplied] {
@@ -290,6 +289,8 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
         &y,
         &theme,
         &scope,
+        None,
+        [None; 2],
     );
     assert!(matches!(
         result,
@@ -486,6 +487,8 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
         &spec,
         &large_tick_theme,
         &crate::layout::fit::ROOT_SCOPE,
+        None,
+        [None; 2],
     )
     .unwrap();
 
@@ -552,7 +555,6 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
         generation: crate::TickGeneration::automatic(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,
-        numeric_source: None,
     };
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
@@ -693,6 +695,8 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
         &AxisSpec::default(),
         &theme,
         &crate::layout::fit::ROOT_SCOPE,
+        None,
+        [None; 2],
     )
     .unwrap();
 

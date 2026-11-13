@@ -66,6 +66,7 @@ struct CanvasPlan {
 }
 
 struct PreparedCanvasInputs<'src> {
+    operation: crate::font::canonical::OperationContext,
     caches: std::cell::RefCell<crate::orchestrator::root::RootLayoutCaches>,
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
@@ -79,6 +80,7 @@ struct PreparedCanvasInputs<'src> {
 }
 
 struct PreparedCanvasRound<'a> {
+    operation: &'a crate::font::canonical::OperationContext,
     content_sizing: bool,
     interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
     themes: Arc<ResolvedCanvasThemes>,
@@ -1394,9 +1396,9 @@ impl Canvas {
                     plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
                 }
                 if plot.kind() == PlotKind::Scatter {
-                    crate::plots::shared_x::prepare_scatter_plot(&plot, panel, &resources)?;
+                    crate::plots::shared_x::prepare_scatter_plot(&plot, panel)?;
                 } else {
-                    crate::plots::shared_x::prepare_line_plot(&plot, panel, &resources)?;
+                    crate::plots::shared_x::prepare_line_plot(&plot, panel)?;
                 }
             } else {
                 let scope_bytes = 6 + index
@@ -1545,8 +1547,9 @@ impl Canvas {
                 )?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
                 let (root_text, text_panel_intrinsics, plot_intrinsics) =
-                    self.prepare_intrinsics(&themes, &interiors)?;
+                    self.prepare_intrinsics(&themes, &interiors, &prepared_stage.operation())?;
                 Ok(PreparedCanvasInputs {
+                    operation: prepared_stage.operation(),
                     caches,
                     themes,
                     text_census: census,
@@ -1580,6 +1583,7 @@ impl Canvas {
                     crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
                 let plan = self.build_canvas_plan(
                     Arc::clone(&prepared.themes),
+                    &prepared.operation,
                     assigned,
                     round,
                     children,
@@ -1653,6 +1657,7 @@ impl Canvas {
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<
         (
             crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
@@ -1672,6 +1677,7 @@ impl Canvas {
                     &themes
                         .plot_request(index)
                         .expect("prepared Canvas panel theme"),
+                    operation,
                 )?;
             }
         }
@@ -1963,6 +1969,7 @@ impl Canvas {
     fn build_canvas_plan(
         &self,
         themes: Arc<ResolvedCanvasThemes>,
+        operation: &crate::font::canonical::OperationContext,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
@@ -1981,6 +1988,7 @@ impl Canvas {
         use crate::layout::kernel::TrialOutcome;
         let prepared = self.prepare_canvas_round(
             themes,
+            operation,
             assigned,
             round,
             children,
@@ -2098,6 +2106,7 @@ impl Canvas {
     fn prepare_canvas_round<'a>(
         &self,
         themes: Arc<ResolvedCanvasThemes>,
+        operation: &'a crate::font::canonical::OperationContext,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
@@ -2208,6 +2217,7 @@ impl Canvas {
         };
 
         Ok(PreparedCanvasRound {
+            operation,
             content_sizing,
             interiors,
             themes,
@@ -2438,6 +2448,7 @@ impl Canvas {
                 &self.placements,
                 &plots,
                 prepared.interiors,
+                prepared.operation,
                 prepared.text_panel_intrinsics,
                 prepared.plot_intrinsics,
                 &self.column_headers,
@@ -2447,6 +2458,7 @@ impl Canvas {
                 &themes,
                 &scope,
                 Some(&tracks::ContentSizing {
+                    operation: prepared.operation,
                     source: self,
                     interiors: prepared.interiors,
                     round,
@@ -2473,6 +2485,7 @@ impl Canvas {
                 &self.placements,
                 &plots,
                 prepared.interiors,
+                prepared.operation,
                 prepared.text_panel_intrinsics,
                 prepared.plot_intrinsics,
                 &themes,
@@ -2568,6 +2581,7 @@ impl Canvas {
             &self.placements,
             &plots,
             prepared.interiors,
+            prepared.operation,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
@@ -2579,6 +2593,7 @@ impl Canvas {
             prepared
                 .content_sizing
                 .then_some(tracks::ContentSizing {
+                    operation: prepared.operation,
                     source: self,
                     interiors: prepared.interiors,
                     round,
@@ -2767,6 +2782,7 @@ impl Canvas {
             &self.placements,
             &plots,
             prepared.interiors,
+            prepared.operation,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
@@ -2778,6 +2794,7 @@ impl Canvas {
             prepared
                 .content_sizing
                 .then_some(tracks::ContentSizing {
+                    operation: prepared.operation,
                     source: self,
                     interiors: prepared.interiors,
                     round,
@@ -2827,6 +2844,7 @@ impl Canvas {
                 plot,
                 Some(registered),
                 intrinsic,
+                prepared.operation,
                 cell,
                 theme,
                 [self.panel_title_alignment, self.panel_subtitle_alignment],
@@ -2921,6 +2939,7 @@ impl Canvas {
                     plot,
                     Some(registered),
                     intrinsic,
+                    prepared.operation,
                     &panel_plan,
                     cell.height() - local.body.height(),
                     round,

@@ -296,6 +296,7 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
                 &canvas.placements,
                 &[None, None],
                 &prepared.interiors,
+                &prepared.operation,
                 &prepared.text_panel_intrinsics,
                 &prepared.plot_intrinsics,
                 &canvas.column_headers,

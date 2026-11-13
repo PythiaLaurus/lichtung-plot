@@ -143,7 +143,7 @@ mod geometry_tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source.erase(),
             &resolved,
-            |chart, inputs, resolved| {
+            |chart, inputs, resolved, _operation| {
                 let operation = resolved
                     .text
                     .prepared_font_environment()
@@ -215,7 +215,7 @@ mod geometry_tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &crate::text::TextRequestContext::new(&theme, &text_service),
-            |chart, inputs, request| {
+            |chart, inputs, request, _operation| {
                 let mut theme = request.theme.clone();
                 let text_service = request.text;
                 let operation = request
@@ -509,11 +509,13 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = mark_intrinsic_body_minimum(chart, registered, theme)?;
-    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(
-        chart, registered, intrinsic, theme,
+    let axes = crate::orchestrator::root::coordinate_intrinsic(
+        intrinsic,
+        &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(chart.y_tick_labels_visible());
     let prepared = retained(chart, registered)?;
@@ -582,6 +584,7 @@ pub(crate) fn natural_body_height(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
@@ -630,8 +633,9 @@ pub(crate) fn natural_body_height(
     let hard = mark_intrinsic_body_minimum(chart, registered, theme)?
         .1
         .max(
-            crate::layout::interior::coordinate::Intrinsics::prepared(
-                chart, registered, intrinsic, theme,
+            crate::orchestrator::root::coordinate_intrinsic(
+                intrinsic,
+                &chart.intrinsic_inputs(registered, theme, operation)?,
             )?
             .minimum(chart.y_tick_labels_visible())
             .1,
@@ -766,11 +770,9 @@ pub(crate) fn measure(
         context,
     )?;
     let mark_minimum = mark_intrinsic_body_minimum(chart, context.registered, theme)?;
-    let axes_minimum = crate::layout::interior::coordinate::Intrinsics::prepared(
-        chart,
-        context.registered,
+    let axes_minimum = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
-        theme,
+        &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
     )?
     .minimum(chart.y_tick_labels_visible());
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
@@ -850,6 +852,16 @@ pub(crate) fn measure(
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
+        Some(
+            context
+                .registered
+                .expect("prepared Waterfall occurrence")
+                .axis_numeric_binding(context.data.source_resources())?,
+        ),
+        context
+            .registered
+            .expect("prepared Waterfall occurrence")
+            .raw_windows(),
     )?;
     let ticks =
         crate::data::source::collect_source(display.iter().zip(&bands).map(|(label, band)| {

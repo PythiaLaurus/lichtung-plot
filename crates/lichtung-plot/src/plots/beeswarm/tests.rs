@@ -34,22 +34,26 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let select = |source: &Plot| {
-        crate::orchestrator::with_prepared_plot_for_test(source, &theme, |chart, inputs, theme| {
-            let chart = chart.clone();
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
-            let selected = chart
-                .measure_selected_interior(
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        PixelRect::new(20.0, 700.0, 20.0, 420.0),
-                        theme,
+        crate::orchestrator::with_prepared_plot_for_test(
+            source,
+            &theme,
+            |chart, inputs, theme, _operation| {
+                let chart = chart.clone();
+                let operation = theme.text.prepared_font_environment().unwrap().operation();
+                let selected = chart
+                    .measure_selected_interior(
+                        PlotRenderContext::new(
+                            inputs.plots[0].data(&operation).unwrap(),
+                            PixelRect::new(20.0, 700.0, 20.0, 420.0),
+                            theme,
+                        )
+                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                     )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
-                .unwrap();
-            assert!(selected.discrete_guide.is_none());
-            selected
-        })
+                    .unwrap();
+                assert!(selected.discrete_guide.is_none());
+                selected
+            },
+        )
         .unwrap()
     };
     let varied = select(&source);

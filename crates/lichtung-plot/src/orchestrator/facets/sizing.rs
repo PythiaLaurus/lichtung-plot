@@ -15,6 +15,7 @@ use crate::{Error, Plot};
 )]
 pub(super) fn grid_height(
     plot: &Plot,
+    operation: &crate::font::canonical::OperationContext,
     panels: &[data::FacetPanel],
     shape: (usize, usize),
     minima: &[(f64, f64)],
@@ -55,6 +56,7 @@ pub(super) fn grid_height(
             theme,
             &FitScope::root(),
             Some(&tracks::ContentSizing {
+                operation,
                 plot,
                 inputs,
                 round,
@@ -74,6 +76,7 @@ pub(super) fn grid_height(
 )]
 pub(in crate::orchestrator) fn natural_size(
     source: &Plot,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     request: crate::layout::RootRequest,
     round: &FeedbackRound,
@@ -96,6 +99,7 @@ pub(in crate::orchestrator) fn natural_size(
         minima.push(plot.intrinsic_body_minimum(
             inputs.plots.get(index),
             inputs.intrinsic(&inputs.plots[index]),
+            operation,
             theme,
         )?);
         let owner = grid_owner.child(
@@ -147,6 +151,7 @@ pub(in crate::orchestrator) fn natural_size(
             theme,
             &FitScope::root(),
             Some(&tracks::ContentSizing {
+                operation,
                 plot: &base,
                 inputs,
                 round,
@@ -170,6 +175,7 @@ pub(in crate::orchestrator) fn natural_size(
                 theme,
                 &FitScope::root(),
                 &tracks::ContentSizing {
+                    operation,
                     plot: &base,
                     inputs,
                     round,

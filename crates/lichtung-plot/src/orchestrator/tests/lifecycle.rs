@@ -839,7 +839,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             crate::orchestrator::with_prepared_plot_for_test(
                 &plot,
                 &theme,
-                |plot, inputs, theme| {
+                |plot, inputs, theme, operation| {
                     let preparations =
                         crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
                     let registered = inputs.plots.first();
@@ -847,6 +847,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                         .measured_canvas_layout(
                             registered,
                             inputs.intrinsic(registered.unwrap()),
+                            operation,
                             theme,
                         )
                         .unwrap()

@@ -22,31 +22,62 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
     .size(400, 300)
     .erase()
     .with_output_dimensions(1000, 800);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |plot, inputs, theme| {
-        let dimensions = plot.measure_dimensions().unwrap();
-        let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
-        let layout = Layout {
-            projection: crate::layout::Projection::new((0.0, 20.0), (0.0, 10.0), panel.as_tuple()),
-            ..Layout::envelope(panel)
-        };
-        let position = TextPosition::new(
-            TextCoordinate::data(DataCoordinate::numeric(12.0).unwrap()),
-            TextCoordinate::data(DataCoordinate::numeric(5.0).unwrap()),
-        );
-        for (source, size) in [("A", 12.5), ("Longer\nlabel", 27.25)] {
-            let style = theme
-                .typography
-                .annotations
-                .panel_text
-                .clone()
-                .font_size(size)
-                .unwrap();
-            let text = Text::new(source).style(style).layout(
-                TextLayout::default()
-                    .anchor(TextAnchor::bottom_left())
-                    .alignment(TextAlignment::End),
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |plot, inputs, theme, _operation| {
+            let dimensions = plot.measure_dimensions().unwrap();
+            let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
+            let layout = Layout {
+                projection: crate::layout::Projection::new(
+                    (0.0, 20.0),
+                    (0.0, 10.0),
+                    panel.as_tuple(),
+                ),
+                ..Layout::envelope(panel)
+            };
+            let position = TextPosition::new(
+                TextCoordinate::data(DataCoordinate::numeric(12.0).unwrap()),
+                TextCoordinate::data(DataCoordinate::numeric(5.0).unwrap()),
             );
-            let note = crate::PlotTextAnnotation::at(position.clone(), text).unwrap();
+            for (source, size) in [("A", 12.5), ("Longer\nlabel", 27.25)] {
+                let style = theme
+                    .typography
+                    .annotations
+                    .panel_text
+                    .clone()
+                    .font_size(size)
+                    .unwrap();
+                let text = Text::new(source).style(style).layout(
+                    TextLayout::default()
+                        .anchor(TextAnchor::bottom_left())
+                        .alignment(TextAlignment::End),
+                );
+                let note = crate::PlotTextAnnotation::at(position.clone(), text).unwrap();
+                let plan = measure(
+                    &note,
+                    &inputs.plots[0],
+                    dimensions,
+                    &layout,
+                    theme,
+                    &FitScope::root(),
+                )
+                .unwrap();
+                near(plan.placement.position.x - plan.text_plan.width(), 260.0);
+                near(
+                    plan.placement.position.y - plan.text_plan.height() / 2.0,
+                    130.0,
+                );
+            }
+            let position = TextPosition::new(
+                TextCoordinate::figure_fraction(0.75).unwrap(),
+                TextCoordinate::data_area_fraction(0.25).unwrap(),
+            );
+            let note = crate::PlotTextAnnotation::at(
+                position,
+                Text::new("Figure note").layout(TextLayout::default().anchor(TextAnchor::center())),
+            )
+            .unwrap();
             let plan = measure(
                 &note,
                 &inputs.plots[0],
@@ -56,36 +87,13 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
                 &FitScope::root(),
             )
             .unwrap();
-            near(plan.placement.position.x - plan.text_plan.width(), 260.0);
             near(
-                plan.placement.position.y - plan.text_plan.height() / 2.0,
-                130.0,
+                plan.placement.position.x + plan.text_plan.width() / 2.0,
+                750.0,
             );
-        }
-        let position = TextPosition::new(
-            TextCoordinate::figure_fraction(0.75).unwrap(),
-            TextCoordinate::data_area_fraction(0.25).unwrap(),
-        );
-        let note = crate::PlotTextAnnotation::at(
-            position,
-            Text::new("Figure note").layout(TextLayout::default().anchor(TextAnchor::center())),
-        )
-        .unwrap();
-        let plan = measure(
-            &note,
-            &inputs.plots[0],
-            dimensions,
-            &layout,
-            theme,
-            &FitScope::root(),
-        )
-        .unwrap();
-        near(
-            plan.placement.position.x + plan.text_plan.width() / 2.0,
-            750.0,
-        );
-        near(plan.placement.position.y, 80.0);
-    })
+            near(plan.placement.position.y, 80.0);
+        },
+    )
     .unwrap();
 }
 
@@ -100,32 +108,36 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
         crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0])),
     )
     .erase();
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_, inputs, theme| {
-        let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
-        let mut layout = Layout::envelope(panel);
-        layout.x_axis.assigned_cells = Some(vec![(20.0, 120.0), (120.0, 420.0)]);
-        let position = TextPosition::new(
-            TextCoordinate::data(DataCoordinate::category("second_raw")),
-            TextCoordinate::data_area_fraction(0.75).unwrap(),
-        );
-        let reference = crate::text::orientation::TextReferenceResolver {
-            registered: &inputs.plots[0],
-            layout: &layout,
-            dimensions: PlotMeasureDimensions {
-                canvas: crate::layout::RootSize::new(420, 230),
-                output_override: None,
-            },
-        };
-        let resolved = resolve::resolve(&position, &reference, theme).unwrap();
-        let point = resolve::point(resolved, panel);
-        near(point.x, 270.0);
-        near(point.y, 180.0);
-        let bad = TextPosition::new(
-            TextCoordinate::data(DataCoordinate::category("Second raw")),
-            TextCoordinate::data_area_fraction(0.5).unwrap(),
-        );
-        assert!(resolve::resolve(&bad, &reference, theme).is_err());
-    })
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |_, inputs, theme, _operation| {
+            let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
+            let mut layout = Layout::envelope(panel);
+            layout.x_axis.assigned_cells = Some(vec![(20.0, 120.0), (120.0, 420.0)]);
+            let position = TextPosition::new(
+                TextCoordinate::data(DataCoordinate::category("second_raw")),
+                TextCoordinate::data_area_fraction(0.75).unwrap(),
+            );
+            let reference = crate::text::orientation::TextReferenceResolver {
+                registered: &inputs.plots[0],
+                layout: &layout,
+                dimensions: PlotMeasureDimensions {
+                    canvas: crate::layout::RootSize::new(420, 230),
+                    output_override: None,
+                },
+            };
+            let resolved = resolve::resolve(&position, &reference, theme).unwrap();
+            let point = resolve::point(resolved, panel);
+            near(point.x, 270.0);
+            near(point.y, 180.0);
+            let bad = TextPosition::new(
+                TextCoordinate::data(DataCoordinate::category("Second raw")),
+                TextCoordinate::data_area_fraction(0.5).unwrap(),
+            );
+            assert!(resolve::resolve(&bad, &reference, theme).is_err());
+        },
+    )
     .unwrap();
 }
 
@@ -140,40 +152,71 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
         crate::NumericValues::new("y", [0.0, 10.0]),
     )
     .erase();
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_, inputs, theme| {
-        let data = |x, y| {
-            DataPosition::new(
-                DataCoordinate::numeric(x).unwrap(),
-                DataCoordinate::numeric(y).unwrap(),
-            )
-        };
-        let request = TextLayout::default().orientation(TextOrientation::data_direction(
-            data(0.0, 0.0),
-            data(20.0, 10.0),
-        ));
-        let note = crate::PlotTextAnnotation::at(
-            TextPosition::new(
-                crate::TextCoordinate::data_area_fraction(0.5).unwrap(),
-                crate::TextCoordinate::data_area_fraction(0.5).unwrap(),
-            ),
-            Text::new("A note").layout(request),
-        )
-        .unwrap();
-        for (width, height) in [(400, 200), (200, 400)] {
-            let panel = PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height));
-            let layout = Layout {
-                projection: crate::layout::Projection::new(
-                    (0.0, 20.0),
-                    (0.0, 10.0),
-                    panel.as_tuple(),
-                ),
-                ..Layout::envelope(panel)
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |_, inputs, theme, _operation| {
+            let data = |x, y| {
+                DataPosition::new(
+                    DataCoordinate::numeric(x).unwrap(),
+                    DataCoordinate::numeric(y).unwrap(),
+                )
             };
+            let request = TextLayout::default().orientation(TextOrientation::data_direction(
+                data(0.0, 0.0),
+                data(20.0, 10.0),
+            ));
+            let note = crate::PlotTextAnnotation::at(
+                TextPosition::new(
+                    crate::TextCoordinate::data_area_fraction(0.5).unwrap(),
+                    crate::TextCoordinate::data_area_fraction(0.5).unwrap(),
+                ),
+                Text::new("A note").layout(request),
+            )
+            .unwrap();
+            for (width, height) in [(400, 200), (200, 400)] {
+                let panel = PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height));
+                let layout = Layout {
+                    projection: crate::layout::Projection::new(
+                        (0.0, 20.0),
+                        (0.0, 10.0),
+                        panel.as_tuple(),
+                    ),
+                    ..Layout::envelope(panel)
+                };
+                let planned = measure(
+                    &note,
+                    &inputs.plots[0],
+                    PlotMeasureDimensions {
+                        canvas: crate::layout::RootSize::new(width, height),
+                        output_override: None,
+                    },
+                    &layout,
+                    theme,
+                    &FitScope::root(),
+                )
+                .unwrap();
+                near(
+                    planned.placement.rotation,
+                    -panel.height().atan2(panel.width()).to_degrees(),
+                );
+            }
+            let note = crate::PlotTextAnnotation::new(
+                DataAreaCorner::TopLeft,
+                Text::new("30 degree note").layout(
+                    TextLayout::default()
+                        .anchor(TextAnchor::top_left())
+                        .rotation(TextRotation::degrees(30.05).unwrap())
+                        .overflow(crate::TextOverflow::visible()),
+                ),
+            )
+            .unwrap();
+            let layout = Layout::envelope(PixelRect::new(0.0, 400.0, 0.0, 400.0));
             let planned = measure(
                 &note,
                 &inputs.plots[0],
                 PlotMeasureDimensions {
-                    canvas: crate::layout::RootSize::new(width, height),
+                    canvas: crate::layout::RootSize::new(400, 400),
                     output_override: None,
                 },
                 &layout,
@@ -181,36 +224,9 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
                 &FitScope::root(),
             )
             .unwrap();
-            near(
-                planned.placement.rotation,
-                -panel.height().atan2(panel.width()).to_degrees(),
-            );
-        }
-        let note = crate::PlotTextAnnotation::new(
-            DataAreaCorner::TopLeft,
-            Text::new("30 degree note").layout(
-                TextLayout::default()
-                    .anchor(TextAnchor::top_left())
-                    .rotation(TextRotation::degrees(30.05).unwrap())
-                    .overflow(crate::TextOverflow::visible()),
-            ),
-        )
-        .unwrap();
-        let layout = Layout::envelope(PixelRect::new(0.0, 400.0, 0.0, 400.0));
-        let planned = measure(
-            &note,
-            &inputs.plots[0],
-            PlotMeasureDimensions {
-                canvas: crate::layout::RootSize::new(400, 400),
-                output_override: None,
-            },
-            &layout,
-            theme,
-            &FitScope::root(),
-        )
-        .unwrap();
-        assert_eq!(planned.placement.rotation.to_bits(), 30.05_f64.to_bits());
-    })
+            assert_eq!(planned.placement.rotation.to_bits(), 30.05_f64.to_bits());
+        },
+    )
     .unwrap();
 }
 
@@ -245,68 +261,72 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
         .unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
-        let operation = theme.text.prepared_font_environment().unwrap().operation();
-        let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);
-        let result = chart
-            .measure_selected_interior(
-                crate::spec::PlotRenderContext::new(
-                    inputs.plots[0].data(&operation).unwrap(),
-                    panel,
-                    theme,
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |chart, inputs, theme, _operation| {
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);
+            let result = chart
+                .measure_selected_interior(
+                    crate::spec::PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        panel,
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
-                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
+                .unwrap();
+            let plan = &result.panel_text[0];
+            assert!(plan.text_plan.style.exact_override);
+            assert_eq!(
+                plan.text_plan.style.alignment,
+                crate::layout::PhysicalTextAlignment::End
+            );
+            assert!(
+                plan.text_plan.lines[1].translation_x_quanta
+                    > plan.text_plan.lines[0].translation_x_quanta
+            );
+            assert_eq!(
+                (plan.placement.position.x - plan.text_plan.width()).to_bits(),
+                (panel.x0 + 28.0).to_bits()
+            );
+            assert_eq!(
+                plan.minimum_size.0.to_bits(),
+                (plan.text_plan.width() + 56.0).to_bits()
+            );
+            assert_eq!(
+                plan.minimum_size.1.to_bits(),
+                (plan.text_plan.height() + 56.0).to_bits()
+            );
+            let moved = PixelRect::new(60.0, 460.0, 50.0, 350.0);
+            let placement = plan.placement_in(moved);
+            assert_eq!(
+                placement.position.x.to_bits(),
+                (plan.placement.position.x + 50.0).to_bits()
+            );
+            assert_eq!(
+                placement.position.y.to_bits(),
+                (plan.placement.position.y + 30.0).to_bits()
+            );
+            let bounds = plan.bounds_in(moved);
+            assert_eq!(bounds.x0.to_bits(), (plan.bounds.x0 + 50.0).to_bits());
+            assert_eq!(bounds.y1.to_bits(), (plan.bounds.y1 + 30.0).to_bits());
+            let mut short = result.layout.clone();
+            short.projection = crate::layout::Projection::new(
+                (0.0, 1.0),
+                (0.0, 1.0),
+                (0.0, plan.minimum_size.0 - 1.0 / 1024.0, 0.0, 300.0),
+            );
+            assert!(measure_plans(
+                &inputs.plots[0],
+                chart.measure_dimensions().unwrap(),
+                &short,
+                theme,
+                &crate::layout::fit::ROOT_SCOPE
             )
-            .unwrap();
-        let plan = &result.panel_text[0];
-        assert!(plan.text_plan.style.exact_override);
-        assert_eq!(
-            plan.text_plan.style.alignment,
-            crate::layout::PhysicalTextAlignment::End
-        );
-        assert!(
-            plan.text_plan.lines[1].translation_x_quanta
-                > plan.text_plan.lines[0].translation_x_quanta
-        );
-        assert_eq!(
-            (plan.placement.position.x - plan.text_plan.width()).to_bits(),
-            (panel.x0 + 28.0).to_bits()
-        );
-        assert_eq!(
-            plan.minimum_size.0.to_bits(),
-            (plan.text_plan.width() + 56.0).to_bits()
-        );
-        assert_eq!(
-            plan.minimum_size.1.to_bits(),
-            (plan.text_plan.height() + 56.0).to_bits()
-        );
-        let moved = PixelRect::new(60.0, 460.0, 50.0, 350.0);
-        let placement = plan.placement_in(moved);
-        assert_eq!(
-            placement.position.x.to_bits(),
-            (plan.placement.position.x + 50.0).to_bits()
-        );
-        assert_eq!(
-            placement.position.y.to_bits(),
-            (plan.placement.position.y + 30.0).to_bits()
-        );
-        let bounds = plan.bounds_in(moved);
-        assert_eq!(bounds.x0.to_bits(), (plan.bounds.x0 + 50.0).to_bits());
-        assert_eq!(bounds.y1.to_bits(), (plan.bounds.y1 + 30.0).to_bits());
-        let mut short = result.layout.clone();
-        short.projection = crate::layout::Projection::new(
-            (0.0, 1.0),
-            (0.0, 1.0),
-            (0.0, plan.minimum_size.0 - 1.0 / 1024.0, 0.0, 300.0),
-        );
-        assert!(measure_plans(
-            &inputs.plots[0],
-            chart.measure_dimensions().unwrap(),
-            &short,
-            theme,
-            &crate::layout::fit::ROOT_SCOPE
-        )
-        .is_err());
-    })
+            .is_err());
+        },
+    )
     .unwrap();
 }

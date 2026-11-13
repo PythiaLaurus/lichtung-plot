@@ -176,6 +176,7 @@ impl FacetPlan {
     )]
     pub(super) fn new(
         source: &Plot,
+        operation: &crate::font::canonical::OperationContext,
         kind: PlotKind,
         theme: &TextRequestContext<'_, '_>,
         round: &mut crate::layout::kernel::FeedbackRound,
@@ -223,10 +224,12 @@ impl FacetPlan {
             minima.push(scoped.intrinsic_body_minimum(
                 inputs.plots.get(index),
                 inputs.intrinsic(&inputs.plots[index]),
+                operation,
                 theme,
             )?);
         }
         let provisional_content = content_sizing.then_some(tracks::ContentSizing {
+            operation,
             plot: &base_plot,
             inputs,
             round,
@@ -398,6 +401,7 @@ impl FacetPlan {
                             };
                         let height = match sizing::grid_height(
                             &shared_plot,
+                            operation,
                             &panels,
                             (selectors.rows, selectors.columns),
                             &minima,
@@ -452,6 +456,7 @@ impl FacetPlan {
                     if content_sizing {
                         let height = fit::measured(sizing::grid_height(
                             &shared_plot,
+                            operation,
                             &panels,
                             (selectors.rows, selectors.columns),
                             &minima,
@@ -545,6 +550,7 @@ impl FacetPlan {
                     outside_legend.as_mut(),
                 );
                 let measured = planning::native_parent(
+                    operation,
                     &shared_plot,
                     &mut panels,
                     outer,
@@ -903,13 +909,14 @@ mod feedback_tests {
                             presence,
                             stage,
                         )?;
-                        Ok((inputs, guide))
+                        Ok((inputs, guide, stage.operation()))
                     },
-                    |(inputs, guide), assigned, round| {
+                    |(inputs, guide, operation), assigned, round| {
                         let source = inputs.attach(source.clone())?;
                         calls += 1;
                         let plan = FacetPlan::new(
                             &source,
+                            operation,
                             PlotKind::Scatter,
                             &theme,
                             round,
@@ -1106,14 +1113,15 @@ mod feedback_tests {
                 theme
                     .text
                     .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, guide))
+                Ok((inputs, guide, stage.operation()))
             },
-            |(inputs, guide), assigned, round| {
+            |(inputs, guide, operation), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     FacetPlan::new(
                         &source,
+                        operation,
                         PlotKind::Scatter,
                         &theme,
                         round,
@@ -1252,14 +1260,15 @@ mod feedback_tests {
                 theme
                     .text
                     .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, guide))
+                Ok((inputs, guide, stage.operation()))
             },
-            |(inputs, guide), assigned, round| {
+            |(inputs, guide, operation), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     FacetPlan::new(
                         &source,
+                        operation,
                         PlotKind::Scatter,
                         &theme,
                         round,

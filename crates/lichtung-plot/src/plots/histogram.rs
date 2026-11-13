@@ -1165,7 +1165,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
-            |chart, inputs, theme| {
+            |chart, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let panels = &inputs.plots;
                 assert_eq!(panels.len(), 2);

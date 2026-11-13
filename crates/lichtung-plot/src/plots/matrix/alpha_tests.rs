@@ -84,7 +84,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     theme.marks = theme.marks.clone().points(points).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme, _operation| {
     let chart = chart.clone();
     let operation = theme.text.prepared_font_environment().unwrap().operation();
     let selected = chart

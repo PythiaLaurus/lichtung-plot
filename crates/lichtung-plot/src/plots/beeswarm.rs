@@ -51,6 +51,7 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(chart, registered)?;
@@ -105,8 +106,9 @@ pub(crate) fn intrinsic_body_minimum(
                 .backend_style(),
         )?);
     }
-    let axes = crate::layout::interior::coordinate::Intrinsics::prepared(
-        chart, registered, intrinsic, theme,
+    let axes = crate::orchestrator::root::coordinate_intrinsic(
+        intrinsic,
+        &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(chart.y_tick_labels_visible());
     Ok((
@@ -332,6 +334,7 @@ pub(crate) fn natural_body_height(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
@@ -366,7 +369,7 @@ pub(crate) fn natural_body_height(
         &projection,
         radius,
     )?;
-    let hard = intrinsic_body_minimum(chart, registered, intrinsic, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
         .max(2.0 * theme.typography.axes.tick_label.font_size)
         * marks.levels.len() as f64;
@@ -380,7 +383,13 @@ pub(crate) fn measure(
     let prepared = retained(chart, context.registered)?;
     let theme = context.theme;
 
-    let minimum = intrinsic_body_minimum(chart, context.registered, context.intrinsic(), theme)?;
+    let minimum = intrinsic_body_minimum(
+        chart,
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        theme,
+    )?;
     let (panel, colorbar) = if chart.continuous_guide_suppressed()
         || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -398,9 +407,12 @@ pub(crate) fn measure(
             minimum.0,
             theme,
             &guide_scope,
-            context
-                .content_height
-                .then_some((chart, context.registered, context.intrinsic())),
+            context.content_height.then_some((
+                chart,
+                context.registered,
+                context.intrinsic(),
+                context.data.source_resources(),
+            )),
         )?;
         (body, Some(guide))
     };
@@ -420,6 +432,16 @@ pub(crate) fn measure(
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
+        Some(
+            context
+                .registered
+                .expect("prepared Beeswarm occurrence")
+                .axis_numeric_binding(context.data.source_resources())?,
+        ),
+        context
+            .registered
+            .expect("prepared Beeswarm occurrence")
+            .raw_windows(),
     )?;
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(

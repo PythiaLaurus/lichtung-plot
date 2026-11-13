@@ -838,7 +838,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
         let minimums = crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
-            |chart, inputs, theme| {
+            |chart, inputs, theme, operation| {
                 inputs
                     .plots
                     .iter()
@@ -852,6 +852,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
                             .intrinsic_body_minimum(
                                 Some(registered),
                                 inputs.intrinsic(registered),
+                                operation,
                                 theme,
                             )
                             .unwrap()
@@ -955,13 +956,14 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             )
             .map_err(|error| Error::Render(error.to_string()))?;
             text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-            Ok(inputs)
+            Ok((inputs, stage.operation()))
         },
-        |inputs, assigned, round| {
+        |(inputs, operation), assigned, round| {
             let plot = inputs.attach(plot.clone())?;
             let canvas = plot.measured_canvas_layout(
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),
+                operation,
                 &theme,
             )?;
             let FitOutcome::Measured(plan) = crate::decorations::plan::plan_panel(

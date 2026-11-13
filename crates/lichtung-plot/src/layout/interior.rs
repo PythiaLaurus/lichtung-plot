@@ -176,6 +176,7 @@ impl<'src> PreparedInteriorInputs<'src> {
         &self,
         plot: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<(), Error> {
         self.route.validate(plot.description())?;
         for registered in &self.plots {
@@ -185,12 +186,15 @@ impl<'src> PreparedInteriorInputs<'src> {
             let scope = &registered.scope.render_name;
             let intrinsic = self.intrinsic(registered);
             if self.route.is_coordinate() {
-                coordinate::Intrinsics::prepare(
+                crate::orchestrator::root::coordinate_intrinsic(
                     intrinsic,
-                    axes,
-                    theme,
-                    scope.as_deref(),
-                    plot.y_tick_labels_visible(),
+                    &crate::orchestrator::root::PlotIntrinsicInputs {
+                        registered,
+                        request: *theme,
+                        operation,
+                        diagnostic_scope: scope.as_deref(),
+                        y_visible: plot.y_tick_labels_visible(),
+                    },
                 )?;
             } else if self.route.kind() == PlotKind::Heatmap {
                 let prepared = match &registered.family {
@@ -224,11 +228,15 @@ impl Plot {
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+        operation: &crate::font::canonical::OperationContext,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
-            coordinate::Intrinsics::prepared(self, registered, intrinsic, theme)?
-                .minimum(self.y_tick_labels_visible())
+            crate::orchestrator::root::coordinate_intrinsic(
+                intrinsic,
+                &self.intrinsic_inputs(registered, theme, operation)?,
+            )?
+            .minimum(self.y_tick_labels_visible())
         } else {
             (1.0 / 1024.0, 1.0 / 1024.0)
         };
@@ -290,13 +298,13 @@ impl Plot {
                 self, registered, intrinsic, theme,
             )?),
             PlotKind::Beeswarm => Some(crate::plots::beeswarm::intrinsic_body_minimum(
-                self, registered, intrinsic, theme,
+                self, registered, intrinsic, operation, theme,
             )?),
             PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
-                self, registered, intrinsic, theme,
+                self, registered, intrinsic, operation, theme,
             )?),
             PlotKind::Marginal => Some(crate::plots::marginal::intrinsic_body_minimum(
-                self, registered, intrinsic, theme,
+                self, registered, intrinsic, operation, theme,
             )?),
             PlotKind::Matrix => Some(crate::plots::matrix::intrinsic_body_minimum(
                 self, registered, theme,

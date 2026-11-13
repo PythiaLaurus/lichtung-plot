@@ -65,93 +65,98 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
-        let chart = chart.clone();
-        let operation = theme.text.prepared_font_environment().unwrap().operation();
-        let selected = chart
-            .measure_selected_interior(
-                PlotRenderContext::new(
-                    inputs.plots[0].data(&operation).unwrap(),
-                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                    theme,
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |chart, inputs, theme, _operation| {
+            let chart = chart.clone();
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let selected = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
-                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-            )
-            .unwrap();
-        let crate::layout::interior::MarkPayload::Distribution(payload) =
-            &selected.marks.as_ref().unwrap().payload
-        else {
-            panic!("Violin payload")
-        };
-        let points = payload
-            .marks
-            .iter()
-            .filter_map(|mark| {
-                if let categorical_distribution::Mark::Scatter(points, style) = mark {
-                    Some((points, style))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            points
-                .iter()
-                .map(|(points, style)| (points.len(), style.color.get_alpha()))
-                .collect::<Vec<_>>(),
-            [(1, 0), (1, 230), (2, 64)]
-        );
-        let expected = crate::plots::distribution_sample::overlay_x(
-            crate::RawOverlay::Jittered,
-            0.32,
-            0.34,
-            800,
-        );
-        let expected = selected.layout.projection.project(expected, 4.0);
-        assert_eq!(points[1].0[0], Point2D::new(expected.0, expected.1));
-        assert!(points.iter().all(|(_, style)| style.outline.is_some()));
-        assert_eq!(
-            payload
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Violin payload")
+            };
+            let points = payload
                 .marks
                 .iter()
-                .filter_map(|mark| match mark {
-                    categorical_distribution::Mark::Polygon(_, style) =>
-                        Some(style.color.get_alpha()),
-                    _ => None,
+                .filter_map(|mark| {
+                    if let categorical_distribution::Mark::Scatter(points, style) = mark {
+                        Some((points, style))
+                    } else {
+                        None
+                    }
                 })
-                .collect::<Vec<_>>(),
-            [
-                128,
-                theme
+                .collect::<Vec<_>>();
+            assert_eq!(
+                points
+                    .iter()
+                    .map(|(points, style)| (points.len(), style.color.get_alpha()))
+                    .collect::<Vec<_>>(),
+                [(1, 0), (1, 230), (2, 64)]
+            );
+            let expected = crate::plots::distribution_sample::overlay_x(
+                crate::RawOverlay::Jittered,
+                0.32,
+                0.34,
+                800,
+            );
+            let expected = selected.layout.projection.project(expected, 4.0);
+            assert_eq!(points[1].0[0], Point2D::new(expected.0, expected.1));
+            assert!(points.iter().all(|(_, style)| style.outline.is_some()));
+            assert_eq!(
+                payload
                     .marks
-                    .get_fills()
-                    .get_bodies()
-                    .get_inner_summary()
-                    .backend_style()
-                    .color
-                    .get_alpha(),
-                64,
-                theme
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        categorical_distribution::Mark::Polygon(_, style) =>
+                            Some(style.color.get_alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [
+                    128,
+                    theme
+                        .marks
+                        .get_fills()
+                        .get_bodies()
+                        .get_inner_summary()
+                        .backend_style()
+                        .color
+                        .get_alpha(),
+                    64,
+                    theme
+                        .marks
+                        .get_fills()
+                        .get_bodies()
+                        .get_inner_summary()
+                        .backend_style()
+                        .color
+                        .get_alpha()
+                ]
+            );
+            assert_eq!(
+                payload
                     .marks
-                    .get_fills()
-                    .get_bodies()
-                    .get_inner_summary()
-                    .backend_style()
-                    .color
-                    .get_alpha()
-            ]
-        );
-        assert_eq!(
-            payload
-                .marks
-                .iter()
-                .filter_map(|mark| match mark {
-                    categorical_distribution::Mark::Line(_, style) => Some(style.color.get_alpha()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-            [0, 0, 0, 0, 230, 230, 230, 230]
-        );
-    })
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        categorical_distribution::Mark::Line(_, style) =>
+                            Some(style.color.get_alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [0, 0, 0, 0, 230, 230, 230, 230]
+            );
+        },
+    )
     .unwrap();
 }

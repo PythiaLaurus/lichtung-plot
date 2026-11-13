@@ -23,6 +23,7 @@ impl PlotLocalTextPlan {
         plot: &Plot,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+        operation: &crate::font::canonical::OperationContext,
         cell: PixelRect,
         theme: &crate::text::TextRequestContext<'_, '_>,
         panel_alignments: [Option<TextAlignment>; 2],
@@ -56,7 +57,7 @@ impl PlotLocalTextPlan {
         {
             return Ok(FitOutcome::Miss(reason));
         }
-        let minimum = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+        let minimum = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
         let alignments = RootAlignments::resolve(
             theme,
             plot.description().prose_alignments(),

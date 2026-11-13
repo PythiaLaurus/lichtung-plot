@@ -8,11 +8,12 @@ impl Plot {
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+        operation: &crate::font::canonical::OperationContext,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<RootFramePlan, Error> {
         if !self.description().has_facets() {
             return crate::layout::interior::coordinate::canvas_layout(
-                self, registered, intrinsic, theme,
+                self, registered, intrinsic, operation, theme,
             )
             .map_err(crate::layout::fit::PlanError::into_error);
         }

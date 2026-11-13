@@ -110,74 +110,78 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     theme.marks = theme.marks.clone().strokes(strokes).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
-        let chart = chart.clone();
-        let operation = theme.text.prepared_font_environment().unwrap().operation();
-        assert_eq!(
-            intrinsic_body_minimum(&chart, inputs.plots.first(), theme)
-                .unwrap()
-                .1
-                .to_bits(),
-            100.0_f64.to_bits()
-        );
-        let selected = chart
-            .measure_selected_interior(
-                PlotRenderContext::new(
-                    inputs.plots[0].data(&operation).unwrap(),
-                    crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                    theme,
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |chart, inputs, theme, _operation| {
+            let chart = chart.clone();
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            assert_eq!(
+                intrinsic_body_minimum(&chart, inputs.plots.first(), theme)
+                    .unwrap()
+                    .1
+                    .to_bits(),
+                100.0_f64.to_bits()
+            );
+            let selected = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
-                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-            )
-            .unwrap();
-        let crate::layout::interior::MarkPayload::Distribution(payload) =
-            &selected.marks.as_ref().unwrap().payload
-        else {
-            panic!("Boxplot payload")
-        };
-        let points = payload
-            .marks
-            .iter()
-            .filter_map(|mark| {
-                if let categorical_distribution::Mark::Scatter(points, style) = mark {
-                    Some((points, style))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            points
-                .iter()
-                .map(|(points, style)| (points.len(), style.color.get_alpha()))
-                .collect::<Vec<_>>(),
-            [(1, 128), (1, 230), (1, 0)]
-        );
-        assert_eq!(points[1].0, points[2].0);
-        assert!(points.iter().all(|(_, style)| style.outline.is_none()));
-        let summaries = payload
-            .marks
-            .iter()
-            .filter_map(|mark| match mark {
-                categorical_distribution::Mark::Line(_, style) => Some(style.color),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(summaries, [crate::Color::rgba(17, 41, 67, 128); 5]);
-        let categorical_distribution::Mark::Polygon(_, fill) = &payload.marks[0] else {
-            panic!("Boxplot body")
-        };
-        assert_eq!(fill.color.get_alpha(), 0);
-        assert_eq!(
-            fill.stroke,
-            theme
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Boxplot payload")
+            };
+            let points = payload
                 .marks
-                .get_fills()
-                .get_bodies()
-                .get_box_body()
-                .backend_style((fill.color.red(), fill.color.green(), fill.color.blue()))
-                .stroke
-        );
-    })
+                .iter()
+                .filter_map(|mark| {
+                    if let categorical_distribution::Mark::Scatter(points, style) = mark {
+                        Some((points, style))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                points
+                    .iter()
+                    .map(|(points, style)| (points.len(), style.color.get_alpha()))
+                    .collect::<Vec<_>>(),
+                [(1, 128), (1, 230), (1, 0)]
+            );
+            assert_eq!(points[1].0, points[2].0);
+            assert!(points.iter().all(|(_, style)| style.outline.is_none()));
+            let summaries = payload
+                .marks
+                .iter()
+                .filter_map(|mark| match mark {
+                    categorical_distribution::Mark::Line(_, style) => Some(style.color),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(summaries, [crate::Color::rgba(17, 41, 67, 128); 5]);
+            let categorical_distribution::Mark::Polygon(_, fill) = &payload.marks[0] else {
+                panic!("Boxplot body")
+            };
+            assert_eq!(fill.color.get_alpha(), 0);
+            assert_eq!(
+                fill.stroke,
+                theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_box_body()
+                    .backend_style((fill.color.red(), fill.color.green(), fill.color.blue()))
+                    .stroke
+            );
+        },
+    )
     .unwrap();
 }

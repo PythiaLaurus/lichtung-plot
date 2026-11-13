@@ -83,6 +83,8 @@ impl Layout {
             y_spec,
             theme,
             &crate::layout::fit::ROOT_SCOPE,
+            None,
+            [None; 2],
         )
         .map_err(crate::layout::fit::PlanError::into_error)
     }
@@ -101,6 +103,8 @@ impl Layout {
         y_spec: &AxisSpec,
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
+        binding: Option<crate::numeric::source::NumericBinding<'_>>,
+        raw_windows: [Option<&(f64, f64)>; 2],
     ) -> Result<Self, crate::layout::fit::PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
@@ -126,8 +130,24 @@ impl Layout {
         };
         let projection = Projection::new(x_range, y_range, pixel_box);
 
-        let x_ticks = x_spec.layout_ticks(x_ticks, &projection, AxisSide::Bottom, theme, scope);
-        let y_ticks = y_spec.layout_ticks(y_ticks, &projection, AxisSide::Left, theme, scope);
+        let x_ticks = x_spec.layout_ticks(
+            x_ticks,
+            &projection,
+            AxisSide::Bottom,
+            theme,
+            scope,
+            binding,
+            raw_windows,
+        );
+        let y_ticks = y_spec.layout_ticks(
+            y_ticks,
+            &projection,
+            AxisSide::Left,
+            theme,
+            scope,
+            binding,
+            raw_windows,
+        );
         // A later fatal axis error must not be hidden by an earlier geometric miss.
         let (x_ticks, y_ticks) = match (x_ticks, y_ticks) {
             (Err(error @ PlanError::Fatal(_)), _)
@@ -182,10 +202,12 @@ impl Layout {
 }
 
 impl AxisSpec {
-    pub(crate) fn numeric_request(
-        &self,
-    ) -> Result<Option<crate::numeric::source::AxisRequest<'_>>, Error> {
-        let Some(source) = self.numeric_source.as_deref() else {
+    pub(crate) fn numeric_request<'v>(
+        &'v self,
+        binding: Option<crate::numeric::source::NumericBinding<'v>>,
+        raw_windows: [Option<&'v (f64, f64)>; 2],
+    ) -> Result<Option<crate::numeric::source::AxisRequest<'v>>, Error> {
+        let Some(binding) = binding else {
             if self.format.is_some() || self.generation.position_function().is_some() {
                 return Err(Error::Render(
                     "numeric axis lacks its operation-bound owner".into(),
@@ -195,13 +217,17 @@ impl AxisSpec {
         };
         Ok(Some(crate::numeric::source::AxisRequest {
             format: self.format.as_deref(),
-            binding: source.binding(),
-            raw_limits: &source.raw_limits,
+            binding,
+            raw_windows,
             provenance: self.provenance,
             generation: self.generation.clone(),
             source_indices: None,
         }))
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "numeric sources borrow the operation and raw windows only for this selection"
+    )]
     pub(crate) fn layout_ticks(
         &self,
         supplied: Vec<AxisTick>,
@@ -209,6 +235,8 @@ impl AxisSpec {
         side: AxisSide,
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
+        binding: Option<crate::numeric::source::NumericBinding<'_>>,
+        raw_windows: [Option<&(f64, f64)>; 2],
     ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
@@ -245,7 +273,7 @@ impl AxisSpec {
                 projection,
                 side,
                 theme,
-                self.numeric_request()?.as_ref(),
+                self.numeric_request(binding, raw_windows)?.as_ref(),
                 scope,
             )
         } else {

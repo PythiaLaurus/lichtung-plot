@@ -261,17 +261,19 @@ pub(super) fn measured_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     plan: &crate::decorations::plan::PanelPlan,
     local_text_height: f64,
     round: &FeedbackRound,
     owner: &ComponentAddress,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
     let mut height = plot.natural_body_height(
         registered,
         intrinsic,
+        operation,
         theme,
         plan.panel_box.width(),
         preference.1,
@@ -301,6 +303,7 @@ pub(super) fn measured_preference(
 )]
 pub(super) fn cell_height(
     plot: &Plot,
+    operation: &crate::font::canonical::OperationContext,
     canvas: &Canvas,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
@@ -314,8 +317,8 @@ pub(super) fn cell_height(
 ) -> Result<f64, Error> {
     let registered = inputs.plots.first();
     let intrinsic = inputs.intrinsic(&inputs.plots[0]);
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
     let sources = plot.description().prose();
     let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
@@ -370,13 +373,21 @@ pub(super) fn cell_height(
             plot,
             registered,
             intrinsic,
+            operation,
             theme,
             body_width,
             guide.as_ref(),
             &FitScope::new(owner, 0),
         )?
     } else {
-        plot.natural_body_height(registered, intrinsic, theme, body_width, preference.1)?
+        plot.natural_body_height(
+            registered,
+            intrinsic,
+            operation,
+            theme,
+            body_width,
+            preference.1,
+        )?
     };
 
     let height = prose.height_with_body(height + local[2] + local[3])?;
@@ -563,6 +574,7 @@ pub(super) fn measure(
             &source.placements,
             &plots,
             &prepared.interiors,
+            &prepared.operation,
             &prepared.text_panel_intrinsics,
             &prepared.plot_intrinsics,
             &source.column_headers,
@@ -574,6 +586,7 @@ pub(super) fn measure(
             Some(&super::tracks::ContentSizing {
                 source,
                 interiors: &prepared.interiors,
+                operation: &prepared.operation,
                 round,
                 measurements: Some(measurements),
                 shared_allocation: None,
@@ -599,6 +612,7 @@ pub(super) fn measure(
             &super::tracks::ContentSizing {
                 source,
                 interiors: &prepared.interiors,
+                operation: &prepared.operation,
                 round,
                 measurements: Some(measurements),
                 shared_allocation: None,

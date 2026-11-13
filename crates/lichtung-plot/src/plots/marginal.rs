@@ -208,6 +208,7 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = registered
@@ -217,8 +218,9 @@ pub(crate) fn intrinsic_body_minimum(
             _ => None,
         })
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
-    let mut central = crate::layout::interior::coordinate::Intrinsics::prepared(
-        chart, registered, intrinsic, theme,
+    let mut central = crate::orchestrator::root::coordinate_intrinsic(
+        intrinsic,
+        &chart.intrinsic_inputs(registered, theme, operation)?,
     )?
     .minimum(chart.y_tick_labels_visible());
 
@@ -398,14 +400,17 @@ pub(crate) fn natural_body_preference(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let hard = intrinsic_body_minimum(chart, registered, intrinsic, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let gap = theme.composition_grid_gap()?;
     let ink = density_ink(registered, theme)?;
-    let axes =
-        layout::interior::coordinate::Intrinsics::prepared(chart, registered, intrinsic, theme)?
-            .minimum(chart.y_tick_labels_visible());
+    let axes = crate::orchestrator::root::coordinate_intrinsic(
+        intrinsic,
+        &chart.intrinsic_inputs(registered, theme, operation)?,
+    )?
+    .minimum(chart.y_tick_labels_visible());
     let central = (
         (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
         (hard.1 - gap - (2.0 * ink.1).max(1.0 / 1024.0)).max(axes.1),
@@ -429,17 +434,20 @@ pub(crate) fn natural_body_height(
     chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
     let gap = theme.composition_grid_gap()?;
-    let hard = intrinsic_body_minimum(chart, registered, intrinsic, theme)?;
+    let hard = intrinsic_body_minimum(chart, registered, intrinsic, operation, theme)?;
     let ink = density_ink(registered, theme)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
-    let axes =
-        layout::interior::coordinate::Intrinsics::prepared(chart, registered, intrinsic, theme)?
-            .minimum(chart.y_tick_labels_visible());
+    let axes = crate::orchestrator::root::coordinate_intrinsic(
+        intrinsic,
+        &chart.intrinsic_inputs(registered, theme, operation)?,
+    )?
+    .minimum(chart.y_tick_labels_visible());
     let central_hard = (
         (hard.0 - gap - right_hard).max(axes.0),
         (hard.1 - gap - top_hard).max(axes.1),
@@ -500,7 +508,13 @@ pub(crate) fn measure(
     // --- Layout geometry ---
     let outer = context.panel;
     let gap = theme.composition_grid_gap()?;
-    let hard = intrinsic_body_minimum(chart, context.registered, context.intrinsic(), theme)?;
+    let hard = intrinsic_body_minimum(
+        chart,
+        context.registered,
+        context.intrinsic(),
+        context.data.source_resources(),
+        theme,
+    )?;
     if outer.width() < hard.0 || outer.height() < hard.1 {
         return Err(context.fit_scope().failure(
             crate::layout::fit::FitKind::SpecializedGeometry,
@@ -510,11 +524,9 @@ pub(crate) fn measure(
     let ink = density_ink(context.registered, theme)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
-    let axes_hard = layout::interior::coordinate::Intrinsics::prepared(
-        chart,
-        context.registered,
+    let axes_hard = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
-        theme,
+        &chart.intrinsic_inputs(context.registered, theme, context.data.source_resources())?,
     )?
     .minimum(chart.y_tick_labels_visible());
     let central_hard = (

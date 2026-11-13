@@ -27,43 +27,24 @@ pub(crate) struct Intrinsics {
 impl Intrinsics {
     /// The prepared axis scope is the owner identity. Parent widths, domain
     /// feedback, and hidden shared-axis labels cannot invalidate its analysis.
-    pub(crate) fn prepared<'a>(
-        plot: &Plot,
-        registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'_>>,
-        intrinsic: &'a crate::orchestrator::root::PlotIntrinsics,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-    ) -> Result<&'a Self, Error> {
-        let axes = registered
-            .and_then(|registered| registered.axes.as_ref())
-            .ok_or_else(|| {
-                Error::Render("native coordinate panel requires root-prepared axes".into())
-            })?;
-        Self::prepare(
-            intrinsic,
-            axes,
-            theme,
-            plot.axis_scope(),
-            plot.y_tick_labels_visible(),
-        )
-    }
-
     pub(crate) fn prepare<'a>(
         intrinsic: &'a crate::orchestrator::root::PlotIntrinsics,
-        axes: &crate::plots::shared_x::PreparedAxes,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        scope: Option<&str>,
-        y_labels_visible: bool,
+        input: &crate::orchestrator::root::PlotIntrinsicInputs<'_, '_>,
     ) -> Result<&'a Self, Error> {
+        let axes = input.registered.axes.as_ref().ok_or_else(|| {
+            Error::Render("native coordinate panel requires root-prepared axes".into())
+        })?;
+        let theme = &input.request;
         let crate::orchestrator::root::PlotIntrinsics::Coordinate { value } = intrinsic else {
             unreachable!("coordinate intrinsic slot")
         };
         if value.get().is_none() {
-            let summary = Self::analyze(axes, theme, scope, y_labels_visible)?;
+            let summary = Self::analyze(axes, input)?;
 
             let _ = value.set(summary);
         }
         let summary = value.get().expect("initialized panel intrinsics");
-        if y_labels_visible && !summary.y_labels_analyzed {
+        if input.y_visible && !summary.y_labels_analyzed {
             return Err(Error::Render(
                 "previously suppressed axis text cannot become active in prepared intrinsics"
                     .into(),
@@ -107,10 +88,12 @@ impl Intrinsics {
     )]
     fn analyze(
         axes: &crate::plots::shared_x::PreparedAxes,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        diagnostic_scope: Option<&str>,
-        y_labels_visible: bool,
+        input: &crate::orchestrator::root::PlotIntrinsicInputs<'_, '_>,
     ) -> Result<Self, Error> {
+        let theme = &input.request;
+        let diagnostic_scope = input.diagnostic_scope;
+        let y_labels_visible = input.y_visible;
+        let windows = input.registered.raw_windows();
         #[cfg(not(test))]
         let _ = diagnostic_scope;
         #[cfg(test)]
@@ -194,12 +177,18 @@ impl Intrinsics {
                 } else {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
-            } else if axes.specs[side].exact_ticks.is_none() && !axes.empty_numeric_source(side)? {
+            } else if axes.specs[side].exact_ticks.is_none()
+                && !axes.empty_numeric_source(side, windows[side].copied())?
+            {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.
                 let value = f64::midpoint(axes.ranges[side].0, axes.ranges[side].1);
                 let power = axes.logarithmic && side == 0;
-                let label = if let Some(probe) = axes.numeric_probe(side)? {
+                let label = if let Some(probe) = axes.numeric_probe(
+                    side,
+                    input.registered.axis_numeric_binding(input.operation)?,
+                    windows,
+                )? {
                     crate::data::source::copy_source_string(&probe.labels[1])?
                 } else {
                     crate::layout::panel::format_label(value, power, false, 0)?
@@ -344,8 +333,12 @@ impl InteriorRoute {
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
-        let minimum =
-            plot.intrinsic_body_minimum(context.registered, context.intrinsic(), context.theme)?;
+        let minimum = plot.intrinsic_body_minimum(
+            context.registered,
+            context.intrinsic(),
+            context.data.source_resources(),
+            context.theme,
+        )?;
         let panel = context.panel;
         if ![panel.x0, panel.x1, panel.y0, panel.y1]
             .into_iter()
@@ -423,6 +416,14 @@ impl InteriorRoute {
                         panel,
                         context.theme,
                         context.fit_scope(),
+                        context
+                            .registered
+                            .expect("prepared coordinate occurrence")
+                            .axis_numeric_binding(context.data.source_resources())?,
+                        context
+                            .registered
+                            .expect("prepared coordinate occurrence")
+                            .raw_windows(),
                     )?
                 } else {
                     inputs.specs[side].layout_ticks(
@@ -435,6 +436,16 @@ impl InteriorRoute {
                         },
                         context.theme,
                         context.fit_scope(),
+                        Some(
+                            context
+                                .registered
+                                .expect("prepared coordinate occurrence")
+                                .axis_numeric_binding(context.data.source_resources())?,
+                        ),
+                        context
+                            .registered
+                            .expect("prepared coordinate occurrence")
+                            .raw_windows(),
                     )?
                 };
                 Ok(Axis {
@@ -525,10 +536,11 @@ pub(crate) fn canvas_layout(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<crate::layout::RootFramePlan, PlanError> {
     use crate::decorations::title_block::plan::RootAlignments;
-    let minimum = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
+    let minimum = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
     // Only root-owned padding and text are hard reservations. Axis gutters are
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
@@ -594,12 +606,12 @@ mod intrinsic_tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &source,
                 &theme,
-                |chart, inputs, theme| {
-                    let minimum = Intrinsics::prepared(
-                        chart,
-                        inputs.plots.first(),
+                |chart, inputs, theme, operation| {
+                    let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
-                        theme,
+                        &chart
+                            .intrinsic_inputs(inputs.plots.first(), theme, operation)
+                            .unwrap(),
                     )
                     .unwrap()
                     .minimum(chart.y_tick_labels_visible());
@@ -670,7 +682,7 @@ mod intrinsic_tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &source,
                 &theme,
-                |chart, inputs, theme| {
+                |chart, inputs, theme, operation| {
                     let measured = theme
                         .measure_text(
                             label,
@@ -680,11 +692,11 @@ mod intrinsic_tests {
                             false,
                         )
                         .unwrap();
-                    let minimum = Intrinsics::prepared(
-                        chart,
-                        inputs.plots.first(),
+                    let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
-                        theme,
+                        &chart
+                            .intrinsic_inputs(inputs.plots.first(), theme, operation)
+                            .unwrap(),
                     )
                     .unwrap()
                     .minimum(chart.y_tick_labels_visible());
@@ -711,6 +723,7 @@ mod intrinsic_tests {
                         crate::layout::interior::sizing::horizontal_gutter_preference(
                             chart,
                             inputs.plots.first(),
+                            operation,
                             theme
                         )
                         .unwrap()

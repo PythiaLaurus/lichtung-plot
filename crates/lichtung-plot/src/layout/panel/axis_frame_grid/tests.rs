@@ -160,6 +160,8 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
             &AxisSpec::default(),
             &theme,
             &FitScope::root(),
+            None,
+            [None; 2],
         )
         .unwrap();
         assert_eq!(layout.projection.category_counts(), [Some(3); 2]);

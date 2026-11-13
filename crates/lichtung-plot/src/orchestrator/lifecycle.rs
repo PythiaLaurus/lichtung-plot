@@ -17,6 +17,7 @@ pub(super) struct PlotPlan {
 }
 
 struct PreparedPlotInputs<'src> {
+    operation: crate::font::canonical::OperationContext,
     axes: crate::layout::interior::PreparedInteriorInputs<'src>,
     facet_guide: Option<super::facets::PreparedFacetGuide>,
     theme: Box<ResolvedTheme>,
@@ -103,7 +104,7 @@ impl<'src> PreparedPlotInputs<'src> {
         text.prepare_font_environment_from_census(&mut census, scalar_presence, prepared_stage)?;
         // Scientific preparation and the font census are complete. No
         // parent width has been allocated when these summaries are retained.
-        axes.prepare_intrinsics(source, &request)?;
+        axes.prepare_intrinsics(source, &request, &prepared_stage.operation())?;
         let root_text =
             crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
                 &request,
@@ -111,6 +112,7 @@ impl<'src> PreparedPlotInputs<'src> {
                 None,
             )?;
         Ok(Self {
+            operation: prepared_stage.operation(),
             axes,
             facet_guide,
             theme,
@@ -132,6 +134,7 @@ pub(crate) fn with_prepared_plot_for_test<T>(
         &Plot,
         &crate::layout::interior::PreparedInteriorInputs<'_>,
         &TextRequestContext<'_, '_>,
+        &crate::font::canonical::OperationContext,
     ) -> T,
 ) -> Result<T, Error> {
     let mut visit = Some(visit);
@@ -167,6 +170,7 @@ pub(crate) fn with_prepared_plot_for_test<T>(
                 &plot,
                 &prepared.axes,
                 &request,
+                &prepared.operation,
             ));
             Ok(crate::layout::MeasuredLayout::new(
                 assigned.assigned_size()?,
@@ -189,8 +193,12 @@ impl PreparedPlotInputs<'_> {
         let dimensions = source.canvas_dimensions()?;
         let request = TextRequestContext::new(&self.theme, &self.text);
         let intrinsic = self.axes.intrinsic(&self.axes.plots[0]);
-        let minimum =
-            source.intrinsic_body_minimum(self.axes.plots.first(), intrinsic, &request)?;
+        let minimum = source.intrinsic_body_minimum(
+            self.axes.plots.first(),
+            intrinsic,
+            &self.operation,
+            &request,
+        )?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
         if let Some(cached) = frames.as_ref() {
@@ -201,7 +209,12 @@ impl PreparedPlotInputs<'_> {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
         }
-        let frame = source.measured_canvas_layout(self.axes.plots.first(), intrinsic, &request)?;
+        let frame = source.measured_canvas_layout(
+            self.axes.plots.first(),
+            intrinsic,
+            &self.operation,
+            &request,
+        )?;
 
         let frame = frame.into_shared();
         *frames = Some(CachedRootFrame {
@@ -962,6 +975,7 @@ impl PlotPlan {
                         if source.description().has_facets() {
                             super::facets::natural_size(
                                 &attached,
+                                &prepared.operation,
                                 &request,
                                 assigned,
                                 round,
@@ -972,6 +986,7 @@ impl PlotPlan {
                             crate::layout::interior::sizing::plot_size(
                                 &attached,
                                 &prepared.axes,
+                                &prepared.operation,
                                 &request,
                                 assigned,
                                 round,
@@ -995,6 +1010,7 @@ impl PlotPlan {
                     PlotLayoutPlan::Faceted(Box::new(
                         super::facets::FacetPlan::new(
                             &source,
+                            &prepared.operation,
                             kind,
                             &request,
                             round,
@@ -1175,7 +1191,8 @@ impl UnfacetedPlotPlan {
                 panel_plan.selected.dimensions.canvas_size().dimensions()?.0,
                 height,
             );
-            let mut resized = plot.measured_canvas_layout(registered, intrinsic, theme)?;
+            let mut resized =
+                plot.measured_canvas_layout(registered, intrinsic, &operation, theme)?;
             resized.panel_box = crate::orchestrator::assignment::completion_frame(
                 kind,
                 &panel_plan.selected,
@@ -1284,10 +1301,11 @@ impl Plot {
         &self,
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
-        with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
+        with_prepared_plot_for_test(self, theme, |plot, inputs, request, operation| {
             plot.intrinsic_body_minimum(
                 inputs.plots.first(),
                 inputs.intrinsic(&inputs.plots[0]),
+                operation,
                 request,
             )
         })?
@@ -1309,7 +1327,7 @@ impl Plot {
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, Error> {
-        with_prepared_plot_for_test(self, theme, |plot, inputs, request| {
+        with_prepared_plot_for_test(self, theme, |plot, inputs, request, _operation| {
             crate::layout::fit::measured(plot.preflight_measurement(
                 inputs.plots.first(),
                 Some(inputs.intrinsic(&inputs.plots[0])),
@@ -1420,9 +1438,9 @@ mod root_title_tests {
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
                     text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                    Ok(inputs)
+                    Ok((inputs, stage.operation()))
                 },
-                |inputs, assigned, round| {
+                |(inputs, operation), assigned, round| {
                     let plot = inputs.attach(source.clone())?;
                     let plan = UnfacetedPlotPlan::new(
                         &plot,
@@ -1433,6 +1451,7 @@ mod root_title_tests {
                         plot.measured_canvas_layout(
                             inputs.plots.first(),
                             inputs.intrinsic(&inputs.plots[0]),
+                            operation,
                             &theme,
                         )?
                         .into_shared(),
@@ -1611,9 +1630,9 @@ mod retained_legend_tests {
                 theme
                     .text
                     .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(inputs)
+                Ok((inputs, stage.operation()))
             },
-            |inputs, assigned, round| {
+            |(inputs, operation), assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
@@ -1626,6 +1645,7 @@ mod retained_legend_tests {
                         plot.measured_canvas_layout(
                             inputs.plots.first(),
                             inputs.intrinsic(&inputs.plots[0]),
+                            operation,
                             &theme,
                         )?
                         .into_shared(),

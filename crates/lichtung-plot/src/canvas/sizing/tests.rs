@@ -28,15 +28,19 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
     .unwrap();
     let interiors = vec![None];
     let plots = vec![None];
-    let (_, text, prose) = source.prepare_intrinsics(&themes, &interiors).unwrap();
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
             width: 800,
             height: 600,
         },
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| {
+            let operation = stage.operation();
+            let (_, text, prose) = source.prepare_intrinsics(&themes, &interiors, &operation)?;
+            Ok((text, prose, operation))
+        },
+        |(text, prose, operation), assigned, round| {
             let content = super::super::tracks::ContentSizing {
+                operation,
                 source: &source,
                 interiors: &interiors,
                 round,
@@ -48,8 +52,8 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
             let width = fit::measured(super::super::tracks::natural_width(
                 &source.placements,
                 &plots,
-                &text,
-                &prose,
+                text,
+                prose,
                 &[],
                 &[],
                 &[],
@@ -64,8 +68,9 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
                 &source.placements,
                 &plots,
                 &interiors,
-                &text,
-                &prose,
+                operation,
+                text,
+                prose,
                 &[],
                 &[],
                 &[],
@@ -80,7 +85,7 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
                 (),
             ))
         },
-        |(), _, (), _| Ok(()),
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
 }

@@ -131,6 +131,7 @@ fn gap(theme: &crate::text::TextRequestContext<'_, '_>) -> Result<f64> {
 pub(crate) fn preferred_width(
     plot: &Plot,
     registered: Option<&PlotRegistration<'_>>,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<f64> {
     let mut width = 0.0_f64;
@@ -142,11 +143,12 @@ pub(crate) fn preferred_width(
         )?);
         Ok(())
     })?;
-    Ok(width.max(axis_preferences(registered, theme)?.0))
+    Ok(width.max(axis_preferences(registered, operation, theme)?.0))
 }
 
 pub(crate) fn axis_preferences(
     registered: Option<&PlotRegistration<'_>>,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64)> {
     let mut preferred = [0.0_f64; 2];
@@ -157,7 +159,12 @@ pub(crate) fn axis_preferences(
             if axes.specs[side].exact_ticks.is_some() || axes.categories[side].is_some() {
                 continue;
             }
-            if let Some(set) = axes.numeric_probe(side)? {
+            let registered = registered.expect("prepared axis occurrence");
+            if let Some(set) = axes.numeric_probe(
+                side,
+                registered.axis_numeric_binding(operation)?,
+                registered.raw_windows(),
+            )? {
                 if let Some(text) = set.explanation {
                     let preference = super::slot::preferred_width(
                         &text,

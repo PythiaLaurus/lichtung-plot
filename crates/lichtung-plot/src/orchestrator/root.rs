@@ -29,6 +29,40 @@ impl PlotIntrinsics {
     }
 }
 
+pub(crate) struct PlotIntrinsicInputs<'v, 'src> {
+    pub(crate) registered: &'v crate::orchestrator::registration::PlotRegistration<'src>,
+    pub(crate) request: crate::text::TextRequestContext<'v, 'src>,
+    pub(crate) operation: &'v crate::font::canonical::OperationContext,
+    pub(crate) y_visible: bool,
+    pub(crate) diagnostic_scope: Option<&'v str>,
+}
+
+pub(crate) fn coordinate_intrinsic<'a>(
+    slot: &'a PlotIntrinsics,
+    input: &PlotIntrinsicInputs<'_, '_>,
+) -> Result<&'a crate::layout::interior::coordinate::Intrinsics, crate::Error> {
+    crate::layout::interior::coordinate::Intrinsics::prepare(slot, input)
+}
+
+impl crate::Plot {
+    pub(crate) fn intrinsic_inputs<'v, 'src>(
+        &'v self,
+        registered: Option<&'v crate::orchestrator::registration::PlotRegistration<'src>>,
+        request: &crate::text::TextRequestContext<'v, 'src>,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<PlotIntrinsicInputs<'v, 'src>, crate::Error> {
+        Ok(PlotIntrinsicInputs {
+            registered: registered.ok_or_else(|| {
+                crate::Error::Render("native coordinate panel requires root-prepared axes".into())
+            })?,
+            request: *request,
+            operation,
+            y_visible: self.y_tick_labels_visible(),
+            diagnostic_scope: self.axis_scope(),
+        })
+    }
+}
+
 pub(crate) struct RootLayoutCaches {
     pub(crate) children: ChildPlans,
     pub(crate) heights: crate::canvas::HeightMeasurements,
@@ -55,7 +89,6 @@ impl RootLayoutCaches {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::interior::coordinate::Intrinsics;
     use crate::{CategoryValues, NumericValues, Plot, PlotKind};
 
     #[test]
@@ -72,7 +105,7 @@ mod tests {
         let text = crate::text::TextService::default();
         let request = crate::text::TextRequestContext::new(&appearance, &text);
         for source in sources {
-            crate::orchestrator::with_prepared_plot_for_test(&source, &request, |plot, inputs, request| {
+            crate::orchestrator::with_prepared_plot_for_test(&source, &request, |plot, inputs, request, operation| {
                 let registered = &inputs.plots[0];
                 let intrinsic = inputs.intrinsic(registered);
                 let PlotIntrinsics::Coordinate { value } = intrinsic else {
@@ -80,13 +113,13 @@ mod tests {
                 };
                 assert!(value.get().is_none(), "post-font preparation must remain lazy");
                 let plot = plot.clone().with_y_tick_labels_visible(plot.kind() != PlotKind::Beeswarm);
-                plot.intrinsic_body_minimum(Some(registered), intrinsic, request).unwrap();
+                plot.intrinsic_body_minimum(Some(registered), intrinsic, operation, request).unwrap();
                 let initialized = value.get().unwrap();
-                let same = Intrinsics::prepared(&plot, Some(registered), intrinsic, request).unwrap();
+                let same = coordinate_intrinsic(intrinsic, &plot.intrinsic_inputs(Some(registered), request, operation).unwrap()).unwrap();
                 assert!(std::ptr::eq(initialized, same));
                 if plot.kind() == PlotKind::Beeswarm {
                     let visible = plot.with_y_tick_labels_visible(true);
-                    let error = Intrinsics::prepared(&visible, Some(registered), intrinsic, request).unwrap_err();
+                    let error = coordinate_intrinsic(intrinsic, &visible.intrinsic_inputs(Some(registered), request, operation).unwrap()).unwrap_err();
                     assert_eq!(error.to_string(), "render error: previously suppressed axis text cannot become active in prepared intrinsics");
                 }
             }).unwrap();
@@ -106,7 +139,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &request,
-            |plot, inputs, request| {
+            |plot, inputs, request, operation| {
                 let intrinsic = inputs.intrinsic(&inputs.plots[0]);
                 let PlotIntrinsics::Coordinate { value } = intrinsic else {
                     panic!("coordinate slot")
@@ -116,8 +149,13 @@ mod tests {
                 changed.typography.axes.tick_label.font_size += 1.0;
                 let changed = crate::text::TextRequestContext::new(&changed, request.text);
                 crate::orchestrator::measurements::start();
-                let error = Intrinsics::prepared(plot, inputs.plots.first(), intrinsic, &changed)
-                    .unwrap_err();
+                let error = coordinate_intrinsic(
+                    intrinsic,
+                    &plot
+                        .intrinsic_inputs(inputs.plots.first(), &changed, operation)
+                        .unwrap(),
+                )
+                .unwrap_err();
                 let measured = crate::orchestrator::measurements::finish();
                 assert_eq!(
                     error.to_string(),

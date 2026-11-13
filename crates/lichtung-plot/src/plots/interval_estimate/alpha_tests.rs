@@ -105,40 +105,44 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         prepared.interval_ink(&theme).unwrap().to_bits(),
         40.0_f64.to_bits()
     );
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |chart, inputs, theme| {
-        let chart = chart.clone();
-        let operation = theme.text.prepared_font_environment().unwrap().operation();
-        let selected = chart
-            .measure_selected_interior(
-                PlotRenderContext::new(
-                    inputs.plots[0].data(&operation).unwrap(),
-                    crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
-                    theme,
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &theme,
+        |chart, inputs, theme, _operation| {
+            let chart = chart.clone();
+            let operation = theme.text.prepared_font_environment().unwrap().operation();
+            let selected = chart
+                .measure_selected_interior(
+                    PlotRenderContext::new(
+                        inputs.plots[0].data(&operation).unwrap(),
+                        crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
+                        theme,
+                    )
+                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
                 )
-                .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-            )
-            .unwrap();
-        let crate::layout::interior::MarkPayload::Estimate(payload) =
-            &selected.marks.as_ref().unwrap().payload
-        else {
-            panic!("Estimate payload")
-        };
-        assert!(payload.rows[0].point.is_none());
-        assert!(payload.rows[0].text.is_some());
-        assert_eq!(payload.rows[1].point_style.color.get_alpha(), 255);
-        assert_eq!(payload.rows[2].point_style.color.get_alpha(), 0);
-        assert!(payload.rows[1].interval.is_some());
-        assert!(payload.rows[2].interval.is_some());
-        assert_eq!(
-            payload.rows[1].interval_style.color,
-            crate::Color::rgba(17, 41, 67, 0)
-        );
-        assert_eq!(
-            payload.rows[2].interval_style.color,
-            crate::Color::rgba(17, 41, 67, 230)
-        );
-        assert!(payload.rows[1].caps.iter().all(Option::is_some));
-        assert!(payload.rows[2].caps.iter().all(Option::is_some));
-    })
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Estimate(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Estimate payload")
+            };
+            assert!(payload.rows[0].point.is_none());
+            assert!(payload.rows[0].text.is_some());
+            assert_eq!(payload.rows[1].point_style.color.get_alpha(), 255);
+            assert_eq!(payload.rows[2].point_style.color.get_alpha(), 0);
+            assert!(payload.rows[1].interval.is_some());
+            assert!(payload.rows[2].interval.is_some());
+            assert_eq!(
+                payload.rows[1].interval_style.color,
+                crate::Color::rgba(17, 41, 67, 0)
+            );
+            assert_eq!(
+                payload.rows[2].interval_style.color,
+                crate::Color::rgba(17, 41, 67, 230)
+            );
+            assert!(payload.rows[1].caps.iter().all(Option::is_some));
+            assert!(payload.rows[2].caps.iter().all(Option::is_some));
+        },
+    )
     .unwrap();
 }

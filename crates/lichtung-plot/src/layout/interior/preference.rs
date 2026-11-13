@@ -360,15 +360,20 @@ mod tests {
         plot: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> crate::layout::RootFramePlan {
-        crate::orchestrator::with_prepared_plot_for_test(plot, theme, |plot, inputs, request| {
-            super::super::coordinate::canvas_layout(
-                plot,
-                inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
-                request,
-            )
-            .unwrap()
-        })
+        crate::orchestrator::with_prepared_plot_for_test(
+            plot,
+            theme,
+            |plot, inputs, request, operation| {
+                super::super::coordinate::canvas_layout(
+                    plot,
+                    inputs.plots.first(),
+                    inputs.intrinsic(&inputs.plots[0]),
+                    operation,
+                    request,
+                )
+                .unwrap()
+            },
+        )
         .unwrap()
     }
 

@@ -90,21 +90,6 @@ impl<'v> NumericBinding<'v> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct NumericSource {
-    pub(crate) operation: crate::font::canonical::OperationContext,
-    pub(crate) owner: OwnerInfo,
-    pub(crate) raw_limits: [Option<(u64, u64)>; 2],
-}
-impl PartialEq for NumericSource {
-    fn eq(&self, other: &Self) -> bool {
-        self.operation.same_operation(&other.operation)
-            && self.owner == other.owner
-            && self.raw_limits == other.raw_limits
-    }
-}
-impl Eq for NumericSource {}
-
 impl OwnerInfo {
     pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
@@ -137,35 +122,11 @@ impl OwnerInfo {
     }
 }
 
-impl NumericSource {
-    pub(crate) fn from_binding(
-        binding: NumericBinding<'_>,
-        raw_limits: [Option<(f64, f64)>; 2],
-    ) -> Result<Self> {
-        Ok(Self {
-            operation: binding.operation.clone(),
-            owner: binding.owner.try_copy()?,
-            raw_limits: raw_limits.map(|limits| limits.map(|(a, b)| (a.to_bits(), b.to_bits()))),
-        })
-    }
-    pub(crate) fn binding(&self) -> NumericBinding<'_> {
-        NumericBinding {
-            operation: &self.operation,
-            owner: &self.owner,
-            plot_id: None,
-        }
-    }
-    pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
-        self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
-            .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct AxisRequest<'a> {
     pub(crate) format: Option<&'a crate::NumericFormat>,
     pub(crate) binding: NumericBinding<'a>,
-    pub(crate) raw_limits: &'a [Option<(u64, u64)>; 2],
+    pub(crate) raw_windows: [Option<&'a (f64, f64)>; 2],
     pub(crate) provenance: crate::layout::RangeProvenance,
     pub(crate) generation: crate::TickGeneration,
     pub(crate) source_indices: Option<&'a [usize]>,
@@ -173,8 +134,7 @@ pub(crate) struct AxisRequest<'a> {
 
 impl AxisRequest<'_> {
     pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
-        self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
-            .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
+        self.raw_windows[usize::from(side == crate::layout::AxisSide::Left)].copied()
     }
     pub(crate) fn materialize(
         &self,
@@ -214,7 +174,7 @@ impl AxisRequest<'_> {
             crate::AxisScale::Linear
         };
         let raw = if log {
-            self.raw_limits[index].map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
+            self.raw_windows[index].copied()
         } else {
             Some(range)
         };
@@ -261,7 +221,7 @@ pub(crate) fn with_axis_request_for_test<T>(
             owner: &owner,
             plot_id: None,
         },
-        raw_limits: &[None; 2],
+        raw_windows: [None; 2],
         provenance: crate::layout::RangeProvenance::Automatic,
         generation: crate::TickGeneration::automatic(),
         source_indices: None,

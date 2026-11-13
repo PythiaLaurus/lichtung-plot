@@ -33,7 +33,11 @@ pub(crate) struct PreparedAxes {
 }
 
 impl PreparedAxes {
-    pub(crate) fn empty_numeric_source(&self, side: usize) -> Result<bool, Error> {
+    pub(crate) fn empty_numeric_source(
+        &self,
+        side: usize,
+        raw: Option<(f64, f64)>,
+    ) -> Result<bool, Error> {
         let generation = &self.specs[side].generation;
         if generation
             .exact_parameters()
@@ -56,16 +60,6 @@ impl PreparedAxes {
             return Ok(count == num_bigint::BigInt::ZERO);
         }
         if let Some(parameters) = generation.interval_parameters() {
-            let raw = self.specs[side]
-                .numeric_source
-                .as_deref()
-                .and_then(|source| {
-                    source.raw_limits(if side == 0 {
-                        crate::layout::AxisSide::Bottom
-                    } else {
-                        crate::layout::AxisSide::Left
-                    })
-                });
             return crate::layout::fixed_interval_is_empty(range, raw, log, parameters, maximum);
         }
         Ok(false)
@@ -74,14 +68,16 @@ impl PreparedAxes {
     pub(crate) fn numeric_probe(
         &self,
         side: usize,
+        numeric: crate::numeric::source::NumericBinding<'_>,
+        windows: [Option<&(f64, f64)>; 2],
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
         if self.specs[side].exact_ticks.is_some()
             || self.categories[side].is_some()
-            || self.empty_numeric_source(side)?
+            || self.empty_numeric_source(side, windows[side].copied())?
         {
             return Ok(None);
         }
-        let Some(request) = self.specs[side].numeric_request()? else {
+        let Some(request) = self.specs[side].numeric_request(Some(numeric), windows)? else {
             return Ok(None);
         };
         let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
@@ -98,25 +94,6 @@ impl PreparedAxes {
             range,
             crate::NumericPurpose::IntrinsicProbe,
         )
-    }
-    fn bind_numeric(
-        &mut self,
-        plot: &Plot,
-        resources: &crate::font::canonical::OperationContext,
-        scope: &Scope,
-    ) -> Result<(), Error> {
-        let row_source =
-            crate::data::source::RowSourceContext::new(plot.description(), scope, resources);
-        let binding = scope.axis_numeric_binding(plot.description(), &row_source, resources)?;
-        let source = crate::numeric::source::NumericSource::from_binding(
-            binding,
-            [plot.user_x_limits(), plot.user_y_limits()],
-        )?;
-        let source = crate::data::source::source_arc(source)?;
-        for spec in &mut self.specs {
-            spec.numeric_source = Some(source.clone());
-        }
-        Ok(())
     }
     pub(crate) fn copy_label(&self, side: usize) -> Result<Option<crate::Text>, Error> {
         self.labels[side]
@@ -301,8 +278,7 @@ pub(crate) fn prepare_reference_plot(
         labels,
         ..ReferenceAxisConfig::default()
     };
-    let mut axes = prepare(source, None, Some(&family), Some(config))?;
-    axes.bind_numeric(source, resources, &panel.scope)?;
+    let axes = prepare(source, None, Some(&family), Some(config))?;
     if let PreparedFamily::Waterfall(marks) = &mut family {
         marks.prepare_totals(
             crate::plots::waterfall::WaterfallTotalsPrepare {
@@ -404,7 +380,7 @@ pub(crate) fn prepare_plot<'src>(
             source_data.expect("single plot data"),
         )?;
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
-        prepare_scatter_plot(source, &mut registry.panels[0], resources)?;
+        prepare_scatter_plot(source, &mut registry.panels[0])?;
         return PreparedInteriorInputs::from_registry(
             registry,
             InteriorRoute::classify(source.kind()),
@@ -424,7 +400,7 @@ pub(crate) fn prepare_plot<'src>(
             kind: source.kind(),
             marks,
         });
-        prepare_line_plot(source, &mut registry.panels[0], resources)?;
+        prepare_line_plot(source, &mut registry.panels[0])?;
         return PreparedInteriorInputs::from_registry(
             registry,
             InteriorRoute::classify(source.kind()),
@@ -656,7 +632,7 @@ pub(crate) fn prepare_plot<'src>(
                     continue;
                 }
             };
-            let mut axes = prepare(
+            let axes = prepare(
                 source,
                 Some(facet),
                 Some(&family),
@@ -665,7 +641,6 @@ pub(crate) fn prepare_plot<'src>(
                     ..ReferenceAxisConfig::default()
                 }),
             )?;
-            axes.bind_numeric(source, resources, &panel.scope)?;
             panel.family = Some(family);
             panel.axes = Some(axes);
         }
@@ -738,8 +713,7 @@ pub(crate) fn prepare_plot<'src>(
             crate::plots::matrix::prepare_axes(source, source_data.expect("single plot data"))?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
     } else {
-        let mut axes = prepare(source, None, None, None)?;
-        axes.bind_numeric(source, resources, &registry.panels[0].scope)?;
+        let axes = prepare(source, None, None, None)?;
         registry.panels[0].axes = Some(axes);
     }
     PreparedInteriorInputs::from_registry(registry, InteriorRoute::classify(source.kind()))
@@ -771,11 +745,9 @@ fn facet_source_strings(
 pub(crate) fn prepare_scatter_plot(
     source: &Plot,
     panel: &mut PlotRegistrationBuild<'_>,
-    resources: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source.description())?;
-    let mut axes = prepare(source, None, panel.family.as_ref(), None)?;
-    axes.bind_numeric(source, resources, &panel.scope)?;
+    let axes = prepare(source, None, panel.family.as_ref(), None)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges,
@@ -788,10 +760,8 @@ pub(crate) fn prepare_scatter_plot(
 pub(crate) fn prepare_line_plot(
     source: &Plot,
     panel: &mut PlotRegistrationBuild<'_>,
-    resources: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
-    let mut axes = prepare(source, None, panel.family.as_ref(), None)?;
-    axes.bind_numeric(source, resources, &panel.scope)?;
+    let axes = prepare(source, None, panel.family.as_ref(), None)?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(
         source.description(),
         axes.ranges,
@@ -1157,7 +1127,6 @@ fn prepare(
             generation: source.generation.clone(),
             category_labels: source.category_labels.clone(),
             format: source.format.clone(),
-            numeric_source: None,
             exact_ticks: if logarithmic && side == 0 {
                 chart.description().projected_explicit_x_ticks()?
             } else {

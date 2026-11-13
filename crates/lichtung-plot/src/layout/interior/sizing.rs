@@ -81,28 +81,44 @@ pub(crate) fn guided_preference(
     }))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the guide shares the occurrence's explicit operation without loading fonts or numeric presentations early"
+)]
 pub(crate) fn guided_body_height(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
     guide: Option<&GuidedPreference>,
     scope: &FitScope,
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
     let Some(guide) = guide else {
-        return plot.natural_body_height(registered, intrinsic, theme, width, preference.1);
+        return plot.natural_body_height(
+            registered,
+            intrinsic,
+            operation,
+            theme,
+            width,
+            preference.1,
+        );
     };
     let natural = guide.preference(theme)?;
     if guide.horizontal() {
         let measured = guide.at_width(width, theme, scope)?;
-        return Ok(
-            plot.natural_body_height(registered, intrinsic, theme, width, preference.1)?
-                + measured.1
-                + theme.legend_outside_gap()?,
-        );
+        return Ok(plot.natural_body_height(
+            registered,
+            intrinsic,
+            operation,
+            theme,
+            width,
+            preference.1,
+        )? + measured.1
+            + theme.legend_outside_gap()?);
     }
     let available = width - hard.0 - theme.legend_outside_gap()?;
     if available <= 0.0
@@ -111,7 +127,7 @@ pub(crate) fn guided_body_height(
         // This proposal does not select an Auto edge. The existing containing
         // frame trials report the selected width-dependent content height.
         return Ok(plot
-            .natural_body_height(registered, intrinsic, theme, width, preference.1)?
+            .natural_body_height(registered, intrinsic, operation, theme, width, preference.1)?
             .max(natural.1));
     }
     let allocated = natural.0.min(available);
@@ -120,6 +136,7 @@ pub(crate) fn guided_body_height(
         .natural_body_height(
             registered,
             intrinsic,
+            operation,
             theme,
             width - measured.0 - theme.legend_outside_gap()?,
             preference.1,
@@ -162,6 +179,7 @@ pub(crate) fn body_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<(f64, f64), Error> {
@@ -183,7 +201,9 @@ pub(crate) fn body_preference(
             ))
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Marginal) => {
-            crate::plots::marginal::natural_body_preference(plot, registered, intrinsic, theme)
+            crate::plots::marginal::natural_body_preference(
+                plot, registered, intrinsic, operation, theme,
+            )
         }
         InteriorRoute::SpecializedGrid(SpecializedGrid::Matrix) => {
             crate::plots::matrix::natural_body_preference(plot, registered, theme)
@@ -217,7 +237,7 @@ pub(crate) fn body_preference(
     }?;
     Ok((
         preference.0.max(crate::numeric::values::preferred_width(
-            plot, registered, theme,
+            plot, registered, operation, theme,
         )?),
         preference.1,
     ))
@@ -241,6 +261,7 @@ fn axis_title_style<'a>(
 pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let title = axis_title_style(registered, theme, 1);
@@ -294,11 +315,20 @@ pub(crate) fn horizontal_gutter_preference(
                 }
                 include_label(&tick.label)?;
             }
-        } else if let Some(probe) = axes.numeric_probe(1)? {
+        } else if let Some(probe) = axes.numeric_probe(
+            1,
+            registered
+                .expect("prepared axis occurrence")
+                .axis_numeric_binding(operation)?,
+            registered.expect("prepared axis occurrence").raw_windows(),
+        )? {
             for label in &probe.labels {
                 include_label(label)?;
             }
-        } else if !axes.empty_numeric_source(1)? {
+        } else if !axes.empty_numeric_source(
+            1,
+            registered.expect("prepared axis occurrence").raw_windows()[1].copied(),
+        )? {
             for value in [
                 axes.ranges[1].0,
                 f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
@@ -338,9 +368,14 @@ pub(crate) fn horizontal_gutter_preference(
 }
 
 /// Measure natural outer height after width selection, under consumed root feedback.
+#[expect(
+    clippy::too_many_lines,
+    reason = "preserve the original root preference, feedback and prose ordering"
+)]
 pub(crate) fn plot_size(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
+    operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     requested: crate::layout::RootRequest,
     round: &FeedbackRound,
@@ -352,8 +387,8 @@ pub(crate) fn plot_size(
 
     let registered = inputs.plots.first();
     let intrinsic = inputs.intrinsic(registered.expect("prepared standalone occurrence"));
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, theme, hard)?;
+    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
     let title = axis_title_style(registered, theme, 0);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
@@ -366,7 +401,8 @@ pub(crate) fn plot_size(
     };
     let panel_edge = theme.panel_edge_length()?;
     let bottom_outward = common_chrome.outward(crate::layout::AxisSide::Bottom, true)?;
-    let (initial_left, initial_right) = horizontal_gutter_preference(plot, registered, theme)?;
+    let (initial_left, initial_right) =
+        horizontal_gutter_preference(plot, registered, operation, theme)?;
     let guide = guided_preference(plot, inputs, theme)?;
     let (guide_width, guide_height) = if plot.kind() == PlotKind::Matrix {
         crate::plots::matrix::natural_guide_preference(plot, theme)?
@@ -411,8 +447,14 @@ pub(crate) fn plot_size(
     // trial derives its height from the selected guide edge at this fixed width.
     let body_width =
         (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
-    let body_height =
-        plot.natural_body_height(registered, intrinsic, theme, body_width, preference.1)?;
+    let body_height = plot.natural_body_height(
+        registered,
+        intrinsic,
+        operation,
+        theme,
+        body_width,
+        preference.1,
+    )?;
     let sources = plot.description().prose();
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
         theme,
@@ -476,24 +518,25 @@ impl Plot {
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+        operation: &crate::font::canonical::OperationContext,
         theme: &crate::text::TextRequestContext<'_, '_>,
         width: f64,
         preference: f64,
     ) -> Result<f64, Error> {
-        let hard = self.intrinsic_body_minimum(registered, intrinsic, theme)?;
+        let hard = self.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
         let height = match self.kind() {
             PlotKind::Heatmap => {
                 crate::plots::heatmap::natural_body_height(self, registered, theme, width)
             }
             PlotKind::Beeswarm => crate::plots::beeswarm::natural_body_height(
-                self, registered, intrinsic, theme, width,
+                self, registered, intrinsic, operation, theme, width,
             ),
             PlotKind::Waterfall => crate::plots::waterfall::natural_body_height(
-                self, registered, intrinsic, theme, width,
+                self, registered, intrinsic, operation, theme, width,
             ),
             PlotKind::Matrix => Ok(width.max(hard.1)),
             PlotKind::Marginal => crate::plots::marginal::natural_body_height(
-                self, registered, intrinsic, theme, width,
+                self, registered, intrinsic, operation, theme, width,
             ),
             _ => {
                 let density = match super::InteriorRoute::classify(self.kind()) {
@@ -517,7 +560,7 @@ impl Plot {
             }
         }?;
         crate::layout::kernel::required_length(
-            height.max(crate::numeric::values::axis_preferences(registered, theme)?.1)
+            height.max(crate::numeric::values::axis_preferences(registered, operation, theme)?.1)
                 + crate::numeric::values::natural_height(self, registered, theme, width)?,
         )
     }

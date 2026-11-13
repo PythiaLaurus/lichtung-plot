@@ -223,12 +223,13 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 theme
                     .text
                     .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, guide, changed))
+                Ok((inputs, guide, changed, operation))
             },
-            |(inputs, guide, changed_guide), assigned, round| {
+            |(inputs, guide, changed_guide, operation), assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 let original = FacetPlan::new(
                     &plot,
+                    operation,
                     PlotKind::Scatter,
                     &theme,
                     round,
@@ -248,6 +249,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 exercised = true;
                 let same = FacetPlan::new(
                     &plot,
+                    operation,
                     PlotKind::Scatter,
                     &theme,
                     round,
@@ -262,6 +264,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 }
                 let changed = FacetPlan::new(
                     &plot,
+                    operation,
                     PlotKind::Scatter,
                     &theme,
                     round,
@@ -297,6 +300,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 )?;
                 let unstable = FacetPlan::new(
                     &plot,
+                    operation,
                     PlotKind::Scatter,
                     &theme,
                     round,

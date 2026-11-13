@@ -183,6 +183,7 @@ fn adjusted_shared_axis_panel(
     reason = "facet measurement keeps immutable grid, scale, theme, and child-plan inputs explicit"
 )]
 pub(super) fn native_parent(
+    operation: &crate::font::canonical::OperationContext,
     plot: &Plot,
     panels: &mut [FacetPanel],
     outer: PixelRect,
@@ -236,6 +237,7 @@ pub(super) fn native_parent(
         ));
     }
     let track_sizing = content_sizing.then_some(super::tracks::ContentSizing {
+        operation,
         plot,
         inputs,
         round,
