@@ -20,11 +20,6 @@ use crate::Error;
 use crate::Plot;
 
 #[derive(Debug)]
-pub(crate) struct PreparedWaterfallInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedWaterfall)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct PreparedWaterfall {
     pub(crate) labels: Vec<String>,
     pub(crate) range: (f64, f64),
@@ -71,11 +66,21 @@ struct WaterfallSpan {
 }
 
 fn retained(chart: &Plot) -> Result<&PreparedWaterfall, Error> {
-    let inputs = chart
-        .prepared_waterfall
-        .as_ref()
-        .ok_or_else(|| Error::Render("Waterfall requires root-prepared spans".into()))?;
-    crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Waterfall")
+    if chart.prepared_families.is_empty() {
+        return Err(Error::Render(
+            "Waterfall requires root-prepared spans".into(),
+        ));
+    }
+    match crate::layout::interior::preference::panel(
+        &chart.prepared_families,
+        chart.axis_scope(),
+        "Waterfall",
+    )? {
+        crate::orchestrator::registration::PreparedFamily::Waterfall(marks) => Ok(marks),
+        _ => Err(Error::Render(
+            "Waterfall requires root-prepared spans".into(),
+        )),
+    }
 }
 
 struct BodyGeometry {
@@ -530,15 +535,18 @@ pub(crate) fn natural_body_height(
     width: f64,
 ) -> Result<f64, Error> {
     let resources = theme.text.prepared_font_environment()?.operation();
-    let inputs = chart
-        .prepared_waterfall
-        .as_ref()
-        .ok_or_else(|| Error::Render("natural Waterfall rows missing".into()))?;
-    let marks = crate::layout::interior::preference::panel(
-        &inputs.panels,
-        chart.axis_scope(),
-        "natural Waterfall",
-    )?;
+    if chart.prepared_families.is_empty() {
+        return Err(Error::Render("natural Waterfall rows missing".into()));
+    }
+    let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+        crate::layout::interior::preference::panel(
+            &chart.prepared_families,
+            chart.axis_scope(),
+            "natural Waterfall",
+        )?
+    else {
+        return Err(Error::Render("natural Waterfall rows missing".into()));
+    };
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;

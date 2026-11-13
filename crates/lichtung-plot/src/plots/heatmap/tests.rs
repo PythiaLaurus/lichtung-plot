@@ -164,7 +164,11 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         Some(&crate::Theme::publication()),
     )
     .unwrap();
-    let same_paint_marks = &same_paint_inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks) =
+        &same_paint_inputs.families[0].1
+    else {
+        panic!("prepared Heatmap")
+    };
     assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
     assert!(!axes
         .heatmap_intrinsics
@@ -190,7 +194,11 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         Some(&crate::Theme::publication()),
     )
     .unwrap();
-    let changed_marks = &changed_inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks) =
+        &changed_inputs.families[0].1
+    else {
+        panic!("prepared Heatmap")
+    };
     assert_eq!(marks.value_labels, changed_marks.value_labels);
     assert!(!axes
         .heatmap_intrinsics

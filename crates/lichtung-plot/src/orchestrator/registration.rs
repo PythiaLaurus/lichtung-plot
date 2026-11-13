@@ -39,6 +39,11 @@ pub(crate) enum PreparedFamily {
         marks: crate::plots::categorical_distribution::PreparedDistribution,
     },
     Interaction(crate::plots::interaction::PreparedInteraction),
+    Heatmap(crate::plots::heatmap::HeatmapData),
+    Beeswarm(crate::plots::beeswarm::PreparedBeeswarm),
+    Waterfall(crate::plots::waterfall::PreparedWaterfall),
+    Marginal(crate::plots::marginal::PreparedMarginal),
+    Matrix(crate::plots::matrix::PreparedMatrixAxes),
 }
 
 impl PreparedFamily {
@@ -55,6 +60,11 @@ impl PreparedFamily {
             | Self::Distribution { kind, .. } => *kind,
             Self::Dumbbell(_) => crate::PlotKind::Dumbbell,
             Self::Interaction(_) => crate::PlotKind::Interaction,
+            Self::Heatmap(_) => crate::PlotKind::Heatmap,
+            Self::Beeswarm(_) => crate::PlotKind::Beeswarm,
+            Self::Waterfall(_) => crate::PlotKind::Waterfall,
+            Self::Marginal(_) => crate::PlotKind::Marginal,
+            Self::Matrix(_) => crate::PlotKind::Matrix,
         }
     }
 }

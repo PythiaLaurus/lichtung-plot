@@ -430,7 +430,11 @@ pub(crate) fn prepare_reference_plot(
         .or_else(|| estimate.map(|marks| PreparedFamily::Estimate { kind, marks }))
         .or_else(|| dumbbell.map(PreparedFamily::Dumbbell))
         .or_else(|| distribution.map(|marks| PreparedFamily::Distribution { kind, marks }))
-        .or_else(|| interaction.map(PreparedFamily::Interaction));
+        .or_else(|| interaction.map(PreparedFamily::Interaction))
+        .or_else(|| waterfall.map(PreparedFamily::Waterfall))
+        .or_else(|| beeswarm.map(PreparedFamily::Beeswarm))
+        .or_else(|| marginal.map(PreparedFamily::Marginal))
+        .or_else(|| heatmap.map(PreparedFamily::Heatmap));
     let mut families = Vec::new();
     if let Some(family) = family {
         crate::data::source::reserve_source(&mut families, 1)?;
@@ -438,40 +442,8 @@ pub(crate) fn prepare_reference_plot(
     }
     Ok(PreparedInteriorInputs {
         discrete_guides: std::sync::OnceLock::new(),
-        waterfall: waterfall
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::waterfall::PreparedWaterfallInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
-        beeswarm: beeswarm
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
-        marginal: marginal.map(crate::data::source::source_arc).transpose()?,
-        heatmap: heatmap
-            .map(|marks| {
-                let mut panels = Vec::new();
-                crate::data::source::reserve_source(&mut panels, 1)?;
-                panels.push((scope()?, marks));
-                crate::data::source::source_arc(crate::plots::heatmap::PreparedHeatmapInputs {
-                    panels,
-                })
-            })
-            .transpose()?,
         route,
         axes: crate::data::source::source_arc(retained)?,
-        matrix: None,
         families: crate::data::source::source_arc(families)?,
     })
 }
@@ -485,12 +457,8 @@ pub(crate) fn prepare_plot(
     resources: &crate::font::canonical::OperationContext,
     owner: Option<&crate::theme::Theme>,
 ) -> Result<PreparedInteriorInputs, Error> {
-    let mut matrix = None;
     let mut retained = Vec::new();
     let mut families = Vec::new();
-    let mut heatmap = Vec::new();
-    let mut beeswarm = Vec::new();
-    let mut waterfall = Vec::new();
     let source_data = source
         .description()
         .configured_source_rows()?
@@ -806,24 +774,24 @@ pub(crate) fn prepare_plot(
             let scope = panel.scope()?;
             axes.bind_numeric(source, resources, panel.numeric_cell(), Some(&scope))?;
             if let Some(marks) = waterfall_marks {
-                crate::data::source::reserve_source(&mut waterfall, 1)?;
-                waterfall.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Waterfall(marks),
                 ));
             }
             if let Some(marks) = beeswarm_marks {
-                crate::data::source::reserve_source(&mut beeswarm, 1)?;
-                beeswarm.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Beeswarm(marks),
                 ));
             }
             if let Some(marks) = heatmap_marks {
-                crate::data::source::reserve_source(&mut heatmap, 1)?;
-                heatmap.push((
+                crate::data::source::reserve_source(&mut families, 1)?;
+                families.push((
                     Some(crate::data::source::copy_source_string(&scope)?),
-                    marks,
+                    PreparedFamily::Heatmap(marks),
                 ));
             }
             if let Some(marks) = interaction_marks {
@@ -936,8 +904,10 @@ pub(crate) fn prepare_plot(
             }
             reconcile_facet_axis(&mut retained, side)?;
         }
-        for ((_, marks), (_, axes)) in waterfall.iter_mut().zip(&retained) {
-            marks.prepare_totals(axes, false)?;
+        for ((_, family), (_, axes)) in families.iter_mut().zip(&retained) {
+            if let PreparedFamily::Waterfall(marks) = family {
+                marks.prepare_totals(axes, false)?;
+            }
         }
         for ((_, family), (_, axes)) in families.iter().zip(&retained) {
             let PreparedFamily::Qq(quantiles) = family else {
@@ -969,9 +939,15 @@ pub(crate) fn prepare_plot(
             )?;
         }
     } else if source.kind() == PlotKind::Matrix {
-        matrix = Some(crate::data::source::source_arc(
-            crate::plots::matrix::prepare_axes(source, source_data)?,
-        )?);
+        let marks = crate::plots::matrix::prepare_axes(source, source_data)?;
+        crate::data::source::reserve_source(&mut families, 1)?;
+        families.push((
+            source
+                .axis_scope()
+                .map(crate::data::source::copy_source_string)
+                .transpose()?,
+            PreparedFamily::Matrix(marks),
+        ));
     } else {
         let mut axes = prepare(source, None, None, None, None, None, None, None, None)?;
         axes.bind_numeric(source, resources, None, source.axis_scope())?;
@@ -985,33 +961,10 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
-        marginal: None,
         discrete_guides: std::sync::OnceLock::new(),
-        waterfall: if source.kind() == PlotKind::Waterfall {
-            Some(crate::data::source::source_arc(
-                crate::plots::waterfall::PreparedWaterfallInputs { panels: waterfall },
-            )?)
-        } else {
-            None
-        },
-        beeswarm: if source.kind() == PlotKind::Beeswarm {
-            Some(crate::data::source::source_arc(
-                crate::plots::beeswarm::PreparedBeeswarmInputs { panels: beeswarm },
-            )?)
-        } else {
-            None
-        },
-        heatmap: if source.kind() == PlotKind::Heatmap {
-            Some(crate::data::source::source_arc(
-                crate::plots::heatmap::PreparedHeatmapInputs { panels: heatmap },
-            )?)
-        } else {
-            None
-        },
         families: crate::data::source::source_arc(families)?,
         route: InteriorRoute::classify(source.kind()),
         axes: crate::data::source::source_arc(retained)?,
-        matrix,
     })
 }
 
@@ -1055,12 +1008,7 @@ pub(crate) fn prepare_scatter_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(PlotKind::Scatter),
         discrete_guides: std::sync::OnceLock::new(),
-        beeswarm: None,
-        waterfall: None,
-        marginal: None,
-        heatmap: None,
         axes: crate::data::source::source_arc(retained_axes)?,
-        matrix: None,
         families: crate::data::source::source_arc(panels)?,
     })
 }
@@ -1109,12 +1057,7 @@ pub(crate) fn prepare_line_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         discrete_guides: std::sync::OnceLock::new(),
-        beeswarm: None,
-        waterfall: None,
-        marginal: None,
-        heatmap: None,
         axes: crate::data::source::source_arc(retained_axes)?,
-        matrix: None,
         families: crate::data::source::source_arc(panels)?,
     })
 }

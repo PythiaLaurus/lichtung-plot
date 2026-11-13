@@ -22,26 +22,31 @@ fn role<'a>(
 fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()> {
     match plot.kind() {
         PlotKind::Heatmap => {
-            if let Some(inputs) = &plot.prepared_heatmap {
-                if let Some(text) =
-                    panel(&inputs.panels, plot.axis_scope(), "Heatmap")?.numeric_explanation()
-                {
+            if let Some(marks) = family(plot, "Heatmap", |family| match family {
+                PreparedFamily::Heatmap(marks) => Some(marks),
+                _ => None,
+            })? {
+                if let Some(text) = marks.numeric_explanation() {
                     visit(text)?;
                 }
             }
         }
         PlotKind::Coefficient => {
-            if let Some(marks) = estimate(plot)? {
+            if let Some(marks) = family(plot, "Coefficient", |family| match family {
+                PreparedFamily::Estimate { marks, .. } => Some(marks),
+                _ => None,
+            })? {
                 if let Some(text) = marks.numeric_explanation() {
                     visit(text)?;
                 }
             }
         }
         PlotKind::Waterfall => {
-            if let Some(inputs) = &plot.prepared_waterfall {
-                for text in
-                    panel(&inputs.panels, plot.axis_scope(), "Waterfall")?.total_explanations()
-                {
+            if let Some(marks) = family(plot, "Waterfall", |family| match family {
+                PreparedFamily::Waterfall(marks) => Some(marks),
+                _ => None,
+            })? {
+                for text in marks.total_explanations() {
                     visit(text)?;
                 }
             }
@@ -51,45 +56,60 @@ fn sources(plot: &Plot, mut visit: impl FnMut(&Text) -> Result<()>) -> Result<()
     Ok(())
 }
 
-fn estimate(plot: &Plot) -> Result<Option<&crate::plots::interval_estimate::PreparedEstimate>> {
+fn family<'a, T>(
+    plot: &'a Plot,
+    owner: &str,
+    select: impl Fn(&'a PreparedFamily) -> Option<&'a T>,
+) -> Result<Option<&'a T>> {
     if !plot
         .prepared_families
         .iter()
-        .any(|(_, family)| matches!(family, PreparedFamily::Estimate { .. }))
+        .any(|(_, family)| select(family).is_some())
     {
         return Ok(None);
     }
-    let family = panel(&plot.prepared_families, plot.axis_scope(), "Coefficient")?;
-    Ok(match family {
-        PreparedFamily::Estimate { marks, .. } => Some(marks),
-        _ => None,
-    })
+    Ok(select(panel(
+        &plot.prepared_families,
+        plot.axis_scope(),
+        owner,
+    )?))
 }
 
 fn source<'a>(plot: &'a Plot, context: PlotRenderContext<'_, '_>) -> Result<Option<&'a Text>> {
     match plot.kind() {
-        PlotKind::Heatmap => plot
-            .prepared_heatmap
-            .as_ref()
-            .map(|inputs| {
-                Ok(panel(&inputs.panels, plot.axis_scope(), "Heatmap")?.numeric_explanation())
-            })
-            .transpose()
-            .map(Option::flatten),
-        PlotKind::Coefficient => Ok(estimate(plot)?
-            .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation)),
+        PlotKind::Heatmap => Ok(family(plot, "Heatmap", |family| match family {
+            PreparedFamily::Heatmap(marks) => Some(marks),
+            _ => None,
+        })?
+        .and_then(crate::plots::heatmap::HeatmapData::numeric_explanation)),
+        PlotKind::Coefficient => Ok(family(plot, "Coefficient", |family| match family {
+            PreparedFamily::Estimate { marks, .. } => Some(marks),
+            _ => None,
+        })?
+        .and_then(crate::plots::interval_estimate::PreparedEstimate::numeric_explanation)),
         PlotKind::Waterfall => {
-            let Some(inputs) = &plot.prepared_waterfall else {
+            if !plot
+                .prepared_families
+                .iter()
+                .any(|(_, family)| matches!(family, PreparedFamily::Waterfall(_)))
+            {
                 return Ok(None);
-            };
+            }
             let axes = plot
                 .prepared_axis_inputs()
                 .ok_or_else(|| Error::Render("total explanation lacks prepared axes".into()))?;
             let x = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(axes.ranges[0]))?;
             let y = context.axis_range(crate::layout::AxisSide::Left, || Ok(axes.ranges[1]))?;
-            panel(&inputs.panels, plot.axis_scope(), "Waterfall")?.total_explanation(
-                &crate::layout::Projection::new(x, y, context.panel.as_tuple()),
-            )
+            let PreparedFamily::Waterfall(marks) =
+                panel(&plot.prepared_families, plot.axis_scope(), "Waterfall")?
+            else {
+                return Ok(None);
+            };
+            marks.total_explanation(&crate::layout::Projection::new(
+                x,
+                y,
+                context.panel.as_tuple(),
+            ))
         }
         _ => Ok(None),
     }

@@ -471,21 +471,12 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) prepared_axes:
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
-    pub(crate) prepared_matrix_axes:
-        Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
     pub(crate) prepared_families: std::sync::Arc<
         Vec<(
             Option<String>,
             crate::orchestrator::registration::PreparedFamily,
         )>,
     >,
-    pub(crate) prepared_marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
-    pub(crate) prepared_waterfall:
-        Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
-    pub(crate) prepared_beeswarm:
-        Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
-    pub(crate) prepared_heatmap:
-        Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     marker: PhantomData<K>,
@@ -550,11 +541,6 @@ impl Plot<crate::kind::Any> {
             prepared_discrete_guides: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_families: std::sync::Arc::new(Vec::new()),
-            prepared_marginal: None,
-            prepared_heatmap: None,
-            prepared_beeswarm: None,
-            prepared_waterfall: None,
-            prepared_matrix_axes: None,
             axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
             marker: PhantomData,
@@ -892,23 +878,12 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_tick_labels_visible,
             marker: _,
             prepared_axes,
-            prepared_matrix_axes,
             prepared_discrete_guides,
             prepared_families,
-
-            prepared_marginal,
-            prepared_heatmap,
-            prepared_beeswarm,
-            prepared_waterfall,
         } = self;
         Plot {
-            prepared_waterfall,
-            prepared_beeswarm,
-            prepared_marginal,
-            prepared_heatmap,
             prepared_families,
             prepared_axes,
-            prepared_matrix_axes,
             prepared_discrete_guides,
             description,
             output_dimensions,

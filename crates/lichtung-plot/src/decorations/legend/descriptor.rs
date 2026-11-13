@@ -67,10 +67,14 @@ impl ContinuousContributor {
         let (title, semantics, samples) = match plot.kind() {
             crate::PlotKind::Heatmap => {
                 let marks = input
-                    .heatmap
-                    .as_ref()
-                    .and_then(|inputs| inputs.panels.first())
-                    .map(|(_, marks)| marks)
+                    .families
+                    .first()
+                    .and_then(|(_, family)| match family {
+                        crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
+                            Some(marks)
+                        }
+                        _ => None,
+                    })
                     .ok_or_else(|| {
                         Error::Render("shared Heatmap guide has no prepared input".into())
                     })?;
@@ -83,10 +87,14 @@ impl ContinuousContributor {
             }
             crate::PlotKind::Beeswarm => {
                 let marks = input
-                    .beeswarm
-                    .as_ref()
-                    .and_then(|inputs| inputs.panels.first())
-                    .map(|(_, marks)| marks)
+                    .families
+                    .first()
+                    .and_then(|(_, family)| match family {
+                        crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) => {
+                            Some(marks)
+                        }
+                        _ => None,
+                    })
                     .ok_or_else(|| {
                         Error::Render("shared Beeswarm guide has no prepared input".into())
                     })?;

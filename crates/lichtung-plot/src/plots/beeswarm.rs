@@ -15,11 +15,6 @@ use crate::Error;
 use crate::Plot;
 
 #[derive(Debug)]
-pub(crate) struct PreparedBeeswarmInputs {
-    pub(crate) panels: Vec<(Option<String>, PreparedBeeswarm)>,
-}
-
-#[derive(Debug)]
 pub(crate) struct PreparedBeeswarm {
     pub(crate) levels: Vec<String>,
     pub(crate) x_data: (f64, f64),
@@ -34,11 +29,21 @@ pub(crate) struct PreparedBeeswarm {
 }
 
 fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
-    let inputs = chart
-        .prepared_beeswarm
-        .as_ref()
-        .ok_or_else(|| Error::Render("Beeswarm requires root-prepared source rows".into()))?;
-    crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Beeswarm")
+    if chart.prepared_families.is_empty() {
+        return Err(Error::Render(
+            "Beeswarm requires root-prepared source rows".into(),
+        ));
+    }
+    match crate::layout::interior::preference::panel(
+        &chart.prepared_families,
+        chart.axis_scope(),
+        "Beeswarm",
+    )? {
+        crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) => Ok(marks),
+        _ => Err(Error::Render(
+            "Beeswarm requires root-prepared source rows".into(),
+        )),
+    }
 }
 
 pub(crate) fn intrinsic_body_minimum(
@@ -322,15 +327,18 @@ pub(crate) fn natural_body_height(
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
 ) -> Result<f64, Error> {
-    let inputs = chart
-        .prepared_beeswarm
-        .as_ref()
-        .ok_or_else(|| Error::Render("natural Beeswarm rows missing".into()))?;
-    let marks = crate::layout::interior::preference::panel(
-        &inputs.panels,
-        chart.axis_scope(),
-        "natural Beeswarm",
-    )?;
+    if chart.prepared_families.is_empty() {
+        return Err(Error::Render("natural Beeswarm rows missing".into()));
+    }
+    let crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) =
+        crate::layout::interior::preference::panel(
+            &chart.prepared_families,
+            chart.axis_scope(),
+            "natural Beeswarm",
+        )?
+    else {
+        return Err(Error::Render("natural Beeswarm rows missing".into()));
+    };
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;

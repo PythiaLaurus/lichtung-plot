@@ -1009,21 +1009,36 @@ impl Canvas {
             };
             match plot.kind() {
                 PlotKind::Heatmap => {
-                    let panels = Arc::get_mut(input.heatmap.as_mut().ok_or_else(|| {
-                        Error::Render("shared Heatmap has no prepared inputs".into())
-                    })?)
-                    .ok_or_else(|| Error::Render("shared Heatmap inputs are aliased".into()))?;
-                    for (_, marks) in &mut panels.panels {
-                        marks.install_shared_domain(descriptor)?;
+                    if input.families.is_empty() {
+                        return Err(Error::Render(
+                            "shared Heatmap has no prepared inputs".into(),
+                        ));
+                    }
+                    let panels = Arc::get_mut(&mut input.families)
+                        .ok_or_else(|| Error::Render("shared Heatmap inputs are aliased".into()))?;
+                    for (_, family) in panels {
+                        if let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+                            family
+                        {
+                            marks.install_shared_domain(descriptor)?;
+                        }
                     }
                 }
                 PlotKind::Beeswarm => {
-                    let panels = Arc::get_mut(input.beeswarm.as_mut().ok_or_else(|| {
-                        Error::Render("shared Beeswarm has no prepared inputs".into())
-                    })?)
-                    .ok_or_else(|| Error::Render("shared Beeswarm inputs are aliased".into()))?;
-                    for (_, marks) in &mut panels.panels {
-                        marks.install_shared_domain(descriptor)?;
+                    if input.families.is_empty() {
+                        return Err(Error::Render(
+                            "shared Beeswarm has no prepared inputs".into(),
+                        ));
+                    }
+                    let panels = Arc::get_mut(&mut input.families).ok_or_else(|| {
+                        Error::Render("shared Beeswarm inputs are aliased".into())
+                    })?;
+                    for (_, family) in panels {
+                        if let crate::orchestrator::registration::PreparedFamily::Beeswarm(marks) =
+                            family
+                        {
+                            marks.install_shared_domain(descriptor)?;
+                        }
                     }
                 }
                 _ => {}
@@ -1440,13 +1455,23 @@ impl Canvas {
                 let Some(inputs) = interiors[index].as_mut() else {
                     continue;
                 };
-                let Some(waterfall) = inputs.waterfall.as_mut() else {
+                if !inputs.families.iter().any(|(_, family)| {
+                    matches!(
+                        family,
+                        crate::orchestrator::registration::PreparedFamily::Waterfall(_)
+                    )
+                }) {
                     continue;
-                };
-                let waterfall = Arc::get_mut(waterfall).ok_or_else(|| {
+                }
+                let families = Arc::get_mut(&mut inputs.families).ok_or_else(|| {
                     Error::Render("Waterfall totals were aliased before window preparation".into())
                 })?;
-                for (scope, marks) in &mut waterfall.panels {
+                for (scope, family) in families {
+                    let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+                        family
+                    else {
+                        continue;
+                    };
                     let axes = inputs
                         .axes
                         .iter()

@@ -119,13 +119,8 @@ impl CompositionChildPolicy {
 pub(crate) struct PreparedInteriorInputs {
     pub(crate) discrete_guides:
         std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
-    pub(crate) waterfall: Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
-    pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
-    pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
-    pub(crate) heatmap: Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
     pub(crate) route: InteriorRoute,
     pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
-    pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
     pub(crate) families: std::sync::Arc<
         Vec<(
             Option<String>,
@@ -167,20 +162,21 @@ impl PreparedInteriorInputs {
                     scope.as_deref(),
                     plot.y_tick_labels_visible(),
                 )?;
-            } else if let Some(heatmap) = &self.heatmap {
-                let prepared = heatmap
-                    .panels
+            } else if self.route.kind() == PlotKind::Heatmap {
+                let prepared = self
+                    .families
                     .get(index)
                     .filter(|(owner, _)| owner == scope)
+                    .and_then(|(_, family)| match family {
+                        crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => {
+                            Some(marks)
+                        }
+                        _ => None,
+                    })
                     .ok_or_else(|| {
                         Error::Render("prepared heatmap intrinsic scope missing".into())
                     })?;
-                crate::plots::heatmap::prepare_intrinsics(
-                    &prepared.1,
-                    axes,
-                    theme,
-                    scope.as_deref(),
-                )?;
+                crate::plots::heatmap::prepare_intrinsics(prepared, axes, theme, scope.as_deref())?;
             }
         }
         Ok(())
@@ -190,11 +186,6 @@ impl PreparedInteriorInputs {
         self.route.validate(plot.description())?;
         plot.prepared_discrete_guides = self.discrete_guides.get().cloned();
         plot.prepared_axes = self.axes.clone();
-        plot.prepared_waterfall.clone_from(&self.waterfall);
-        plot.prepared_beeswarm.clone_from(&self.beeswarm);
-        plot.prepared_heatmap.clone_from(&self.heatmap);
-        plot.prepared_marginal.clone_from(&self.marginal);
-        plot.prepared_matrix_axes.clone_from(&self.matrix);
         plot.prepared_families.clone_from(&self.families);
         Ok(plot)
     }

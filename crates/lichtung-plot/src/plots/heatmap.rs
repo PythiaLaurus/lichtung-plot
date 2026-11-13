@@ -463,18 +463,22 @@ fn assigned_rows(
     Ok(edges)
 }
 
-#[derive(Debug)]
-pub(crate) struct PreparedHeatmapInputs {
-    pub(crate) panels: Vec<(Option<String>, HeatmapData)>,
-}
-
 fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
-    let inputs = chart
-        .prepared_heatmap
-        .as_ref()
-        .ok_or_else(|| Error::Render("heatmap requires root-prepared semantics".into()))?;
-
-    crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Heatmap")
+    if chart.prepared_families.is_empty() {
+        return Err(Error::Render(
+            "heatmap requires root-prepared semantics".into(),
+        ));
+    }
+    match crate::layout::interior::preference::panel(
+        &chart.prepared_families,
+        chart.axis_scope(),
+        "Heatmap",
+    )? {
+        crate::orchestrator::registration::PreparedFamily::Heatmap(marks) => Ok(marks),
+        _ => Err(Error::Render(
+            "heatmap requires root-prepared semantics".into(),
+        )),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

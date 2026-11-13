@@ -1124,11 +1124,15 @@ fn push_deferred_plot_requirements(
         )?;
     } else if kind == PlotKind::Waterfall {
         let waterfall = interiors
-            .and_then(|inputs| inputs.waterfall.as_deref())
+            .filter(|inputs| inputs.route.kind() == PlotKind::Waterfall)
+            .map(|inputs| inputs.families.as_slice())
             .ok_or_else(|| {
                 Error::Render("waterfall census requires root-prepared semantics".into())
             })?;
-        for (scope, marks) in &waterfall.panels {
+        for (scope, family) in waterfall {
+            let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) = family else {
+                continue;
+            };
             if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
                 continue;
             }
@@ -1151,11 +1155,15 @@ fn push_deferred_plot_requirements(
         }
     } else if kind == PlotKind::Heatmap {
         let heatmap = interiors
-            .and_then(|inputs| inputs.heatmap.as_deref())
+            .filter(|inputs| inputs.route.kind() == PlotKind::Heatmap)
+            .map(|inputs| inputs.families.as_slice())
             .ok_or_else(|| {
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
-        for (_, marks) in &heatmap.panels {
+        for (_, family) in heatmap {
+            let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) = family else {
+                continue;
+            };
             if let Some(text) = marks.numeric_explanation() {
                 push_deferred_body(
                     requirements,
@@ -2667,12 +2675,12 @@ mod tests {
             )
             .unwrap(),
         };
-        std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap())
-            .unwrap()
-            .panels[0]
-            .1
-            .install_shared_domain(&descriptor)
-            .unwrap();
+        let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+            &mut std::sync::Arc::get_mut(&mut inputs.families).unwrap()[0].1
+        else {
+            panic!("prepared Heatmap")
+        };
+        marks.install_shared_domain(&descriptor).unwrap();
         assert_eq!(
             selected_stack(&inputs).unwrap(),
             canonical::named_stack(&["Selected dark contrast"])
@@ -2760,6 +2768,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one operation carries selected contrast text from census to the actual Heatmap intrinsic"
+    )]
     fn unavailable_unselected_heatmap_contrast_face_never_enters_font_preparation() {
         for (value, light_selected) in [(0.0, false), (1.0, true)] {
             let plot = crate::Plot::heatmap(
@@ -2838,7 +2850,11 @@ mod tests {
                         presence,
                         stage,
                     )?;
-                    let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+                    let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+                        &inputs.families[0].1
+                    else {
+                        panic!("prepared Heatmap")
+                    };
                     let minimum = crate::plots::heatmap::prepare_intrinsics(
                         marks,
                         &inputs.axes[0].1,

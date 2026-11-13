@@ -135,7 +135,10 @@ impl PreparedGuide {
         let data = plot.data().with_operation(&operation);
         let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
-        } else if let Some(matrix) = &inputs.matrix {
+        } else if let Some(matrix) = inputs.families.iter().find_map(|(_, family)| match family {
+            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            _ => None,
+        }) {
             matrix.guide_sources(plot, theme, data)?
         } else {
             inputs.guide_sources(plot, theme, data, plot.axis_scope())?

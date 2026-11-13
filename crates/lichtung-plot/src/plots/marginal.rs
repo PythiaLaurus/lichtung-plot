@@ -209,8 +209,11 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_marginal
-        .as_ref()
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Marginal(marks) => Some(marks),
+            _ => None,
+        })
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
     let mut central =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
@@ -251,8 +254,11 @@ fn density_ink(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = chart
-        .prepared_marginal
-        .as_ref()
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Marginal(marks) => Some(marks),
+            _ => None,
+        })
         .ok_or_else(|| Error::Render("Marginal density ink requires prepared groups".into()))?;
     fill_ink_outset(
         &theme
@@ -467,8 +473,11 @@ pub(crate) fn measure(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let prepared = chart
-        .prepared_marginal
-        .as_ref()
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Marginal(marks) => Some(marks),
+            _ => None,
+        })
         .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
     let resources = theme.text.prepared_font_environment()?.operation();

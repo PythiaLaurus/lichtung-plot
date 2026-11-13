@@ -184,17 +184,17 @@ impl PreparedInteriorInputs {
                         include(value)?;
                     }
                 }
+                F::Marginal(marks) => {
+                    for value in marks.hue_levels() {
+                        include(value)?;
+                    }
+                }
+                F::Matrix(marks) => {
+                    for value in marks.hue_levels() {
+                        include(value)?;
+                    }
+                }
                 _ => {}
-            }
-        }
-        if let Some(marks) = &self.marginal {
-            for value in marks.hue_levels() {
-                include(value)?;
-            }
-        }
-        if let Some(marks) = &self.matrix {
-            for value in marks.hue_levels() {
-                include(value)?;
             }
         }
         if levels.is_empty() {
@@ -263,14 +263,12 @@ impl PreparedInteriorInputs {
                     include_keys(&mut keys, domain.iter().map(String::as_str))?;
                 }
                 F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
+                F::Marginal(marks) => include_keys(&mut keys, marks.hue_levels())?,
+                F::Matrix(marks) => {
+                    include_keys(&mut keys, marks.hue_levels().iter().map(String::as_str))?;
+                }
                 _ => {}
             }
-        }
-        if let Some(marks) = &self.marginal {
-            include_keys(&mut keys, marks.hue_levels())?;
-        }
-        if let Some(marks) = &self.matrix {
-            include_keys(&mut keys, marks.hue_levels().iter().map(String::as_str))?;
         }
         palette.validate_capacity(keys.len())
     }
@@ -335,8 +333,12 @@ impl PreparedInteriorInputs {
                 marks.guide_entries(chart, theme, data)
             }
             PlotKind::Marginal => self
-                .marginal
-                .as_ref()
+                .families
+                .iter()
+                .find_map(|(_, family)| match family {
+                    F::Marginal(marks) => Some(marks),
+                    _ => None,
+                })
                 .ok_or_else(|| {
                     Error::Render("Marginal guide is missing prepared semantics".into())
                 })?
@@ -388,7 +390,7 @@ impl PreparedInteriorInputs {
         let mut components = crate::data::source::collect_source(
             self.axes.iter().map(|(scope, _)| Ok(scope.as_deref())),
         )?;
-        if self.matrix.is_some() && components.is_empty() {
+        if self.route.kind() == PlotKind::Matrix && components.is_empty() {
             crate::data::source::reserve_source(&mut components, 1)?;
             components.push(chart.axis_scope());
         }
@@ -418,8 +420,12 @@ impl PreparedInteriorInputs {
                 None
             } else {
                 let keys = if chart.kind() == PlotKind::Matrix {
-                    self.matrix
-                        .as_ref()
+                    self.families
+                        .iter()
+                        .find_map(|(_, family)| match family {
+                            F::Matrix(marks) => Some(marks),
+                            _ => None,
+                        })
                         .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
                         .guide_sources(&scoped, theme, data)?
                 } else {
@@ -478,20 +484,18 @@ impl PreparedInteriorInputs {
     > {
         let field = chart.description().color_dimension_key().unwrap_or("");
         let descriptor = match chart.kind() {
-            PlotKind::Heatmap => panel(
-                self.heatmap.as_ref().map(|inputs| inputs.panels.as_slice()),
-                scope,
-                chart.kind(),
-            )?
-            .guide_descriptor(field, theme)?,
-            PlotKind::Beeswarm => panel(
-                self.beeswarm
-                    .as_ref()
-                    .map(|inputs| inputs.panels.as_slice()),
-                scope,
-                chart.kind(),
-            )?
-            .guide_descriptor(field)?,
+            PlotKind::Heatmap => self
+                .family(scope, chart.kind(), |family| match family {
+                    F::Heatmap(marks) => Some(marks),
+                    _ => None,
+                })?
+                .guide_descriptor(field, theme)?,
+            PlotKind::Beeswarm => self
+                .family(scope, chart.kind(), |family| match family {
+                    F::Beeswarm(marks) => Some(marks),
+                    _ => None,
+                })?
+                .guide_descriptor(field)?,
             _ => return Ok(None),
         };
         descriptor.map(crate::data::source::source_arc).transpose()
@@ -509,16 +513,6 @@ impl PreparedInteriorInputs {
             crate::decorations::legend::alpha::AlphaGuideBuilder::new(chart, theme, owner);
         if !guide.any_enabled() {
             return guide.finish();
-        }
-        macro_rules! scoped {
-            ($field:ident) => {
-                panel(
-                    self.$field.as_ref().map(|inputs| inputs.panels.as_slice()),
-                    scope,
-                    chart.kind(),
-                )?
-                .alpha_guide(chart, theme, &mut guide)?
-            };
         }
         macro_rules! standard {
             ($pattern:pat => $marks:ident) => {
@@ -553,19 +547,27 @@ impl PreparedInteriorInputs {
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 standard!(F::Distribution { marks, .. } => marks);
             }
-            PlotKind::Beeswarm => scoped!(beeswarm),
-            PlotKind::Heatmap => scoped!(heatmap),
-            PlotKind::Waterfall => scoped!(waterfall),
+            PlotKind::Beeswarm => standard!(F::Beeswarm(marks) => marks),
+            PlotKind::Heatmap => standard!(F::Heatmap(marks) => marks),
+            PlotKind::Waterfall => standard!(F::Waterfall(marks) => marks),
             PlotKind::Marginal => self
-                .marginal
-                .as_ref()
+                .families
+                .iter()
+                .find_map(|(_, family)| match family {
+                    F::Marginal(marks) => Some(marks),
+                    _ => None,
+                })
                 .ok_or_else(|| {
                     Error::Render("Marginal alpha guide is missing actual groups".into())
                 })?
                 .alpha_guide(chart, theme, &mut guide)?,
             PlotKind::Matrix => self
-                .matrix
-                .as_ref()
+                .families
+                .iter()
+                .find_map(|(_, family)| match family {
+                    F::Matrix(marks) => Some(marks),
+                    _ => None,
+                })
                 .ok_or_else(|| Error::Render("Matrix alpha guide is missing actual groups".into()))?
                 .alpha_guide(chart, theme, &mut guide)?,
         }

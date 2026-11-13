@@ -274,7 +274,11 @@ mod tests {
                 .erase()
                 .with_planned_y_limits(y_limits);
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None).unwrap();
-            let marks = &inputs.waterfall.as_ref().unwrap().panels[0].1;
+            let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+                &inputs.families[0].1
+            else {
+                panic!("prepared Waterfall")
+            };
             let projection =
                 crate::layout::Projection::new(limits, y_limits, (0.0, 800.0, 0.0, 500.0));
             let selected = marks.selected_totals(&projection).unwrap();
@@ -342,10 +346,11 @@ mod tests {
             .x_limits(1.0, 1.015)
             .erase();
         let mut inputs = crate::plots::shared_x::prepare_plot(&limited, &operation, None).unwrap();
-        let marks = &mut std::sync::Arc::get_mut(inputs.waterfall.as_mut().unwrap())
-            .unwrap()
-            .panels[0]
-            .1;
+        let crate::orchestrator::registration::PreparedFamily::Waterfall(marks) =
+            &mut std::sync::Arc::get_mut(&mut inputs.families).unwrap()[0].1
+        else {
+            panic!("prepared Waterfall")
+        };
         marks.prepare_totals(&inputs.axes[0].1, true).unwrap();
         assert!(matches!(
             marks.total_variants[3],

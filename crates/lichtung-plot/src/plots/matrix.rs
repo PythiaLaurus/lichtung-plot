@@ -173,9 +173,15 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart.prepared_matrix_axes.as_ref().ok_or_else(|| {
-        Error::Render("matrix intrinsic requires prepared variable domains".into())
-    })?;
+    let prepared = chart
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            Error::Render("matrix intrinsic requires prepared variable domains".into())
+        })?;
     let n = prepared.labels.len();
     let (out_x, out_y) = prepared.density_ink(theme)?;
     let mut cell = (
@@ -217,8 +223,11 @@ pub(crate) fn natural_body_preference(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let marks = chart
-        .prepared_matrix_axes
-        .as_ref()
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            _ => None,
+        })
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
     let hard = intrinsic_body_minimum(chart, theme)?;
 
@@ -466,8 +475,11 @@ pub(crate) fn measure(
     let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let prepared = chart
-        .prepared_matrix_axes
-        .as_ref()
+        .prepared_family()
+        .and_then(|family| match family {
+            crate::orchestrator::registration::PreparedFamily::Matrix(marks) => Some(marks),
+            _ => None,
+        })
         .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
     let n = prepared.labels.len();
     let display_cols = &prepared.labels;

@@ -301,8 +301,11 @@ pub(crate) fn mark_preference(
         }
         PlotKind::Marginal => {
             let marks = plot
-                .prepared_marginal
-                .as_ref()
+                .prepared_family()
+                .and_then(|family| match family {
+                    F::Marginal(marks) => Some(marks),
+                    _ => None,
+                })
                 .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
             (
                 marks.checked_primary_mark_count()?,
