@@ -395,6 +395,14 @@ serialization and reserve canonical scene/SVG/scratch storage before one balance
 final Null validation. Count/capture are not extra Null lifecycles. Preflight uses
 the same preparation/planning/validation path without publishing an artifact.
 
+Selected interior and chrome plans own their draw operands, layer names and paint;
+they do not retain working Plot arrays or measurement contexts for capture. The
+capture coordinator reads source/route checks at their original draw sites, then
+draws marks and annotations directly from their selected payloads. It does not
+reenter body measurement or find producer text by owner/source lookup. Standalone
+and facet prose retain their interleaved source-check/draw order; Canvas prose
+continues drawing its retained requests without a new whole-owner validation pass.
+
 Terminal Plot/Canvas calls borrow the owner, render one canonical scene through
 one balanced concrete lifecycle, publish one file and return Output. Canvas uses
 one begin/end for all panels. Scientific marks use their panel clip; required

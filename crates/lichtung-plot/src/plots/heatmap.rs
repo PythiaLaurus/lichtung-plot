@@ -674,8 +674,7 @@ pub(crate) fn natural_body_height(
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
-    let resources = theme.prepared_font_environment()?.operation();
-    let data = chart.data().with_operation(&resources);
+    theme.prepared_font_environment()?;
     let labels = axes.display_categories[0]
         .as_ref()
         .ok_or_else(|| Error::Render("natural Heatmap columns missing".into()))?;
@@ -688,15 +687,12 @@ pub(crate) fn natural_body_height(
         &crate::layout::fit::FitScope::root(),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    let text =
-        PlotRenderContext::new(data, PanelBox::new(0.0, width, 0.0, 1.0), theme).producer_text()?;
     let annotations = measure_annotations(
         chart,
         marks,
         &columns,
         theme,
         &crate::layout::fit::FitScope::root(),
-        &text,
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let preferred = columns
@@ -1116,7 +1112,6 @@ pub(crate) fn measure(
     let prepared = retained_in(chart)?;
     let theme = context.theme;
 
-    let text = context.producer_text()?;
     let minimum = intrinsic_body_minimum(chart, theme)?;
     let (body, colorbar) = if chart.continuous_guide_suppressed()
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
@@ -1225,14 +1220,8 @@ pub(crate) fn measure(
         )?;
         columns = Some(assigned);
         let column_edges = columns.as_ref().expect("assigned Heatmap columns");
-        let mut measured = measure_annotations(
-            chart,
-            prepared,
-            column_edges,
-            theme,
-            context.fit_scope(),
-            &text,
-        )?;
+        let mut measured =
+            measure_annotations(chart, prepared, column_edges, theme, context.fit_scope())?;
         let assigned = assigned_rows(
             prepared,
             &measured,
@@ -2220,7 +2209,6 @@ fn measure_annotations(
     columns: &[f64],
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
-    text: &crate::spec::ProducerText<'_>,
 ) -> Result<AnnotationPlans, crate::layout::fit::PlanError> {
     use crate::layout::fit::{self, FitFailure, FitKind, FitOutcome};
     use crate::layout::AddressRole;
@@ -2272,20 +2260,18 @@ fn measure_annotations(
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
             let cell_scope = scope.child(AddressRole::HeatmapValueLabel, index)?;
-            let measured = text.plan(source, owner, || {
-                fit::measured(crate::layout::text::request::measure_occurrence(
-                    &assigned_theme,
-                    source,
-                    crate::text::TextAppearance::from(appearance)
-                        .layout(theme.text_layouts.value.as_ref()),
-                    crate::layout::maximum_width_quanta(cell_width)
-                        .map_err(|error| Error::Render(error.to_string()))?,
-                    PhysicalTextAlignment::Center,
-                    owner,
-                    &cell_scope,
-                    (index, &eligible),
-                ))
-            });
+            let measured = fit::measured(crate::layout::text::request::measure_occurrence(
+                &assigned_theme,
+                source,
+                crate::text::TextAppearance::from(appearance)
+                    .layout(theme.text_layouts.value.as_ref()),
+                crate::layout::maximum_width_quanta(cell_width)
+                    .map_err(|error| Error::Render(error.to_string()))?,
+                PhysicalTextAlignment::Center,
+                owner,
+                &cell_scope,
+                (index, &eligible),
+            ));
             match measured {
                 Ok(plan) => plans.values[index] = Some(plan),
                 Err(crate::layout::fit::PlanError::Fit(failure)) => {
@@ -2325,24 +2311,20 @@ fn measure_annotations(
             geometry.get_null_row_vertical_padding().clone(),
         ));
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
-        let block = match fit::outcome(text.plan(
-            annotation.as_str(),
-            "heatmap fully-null row annotation",
-            || {
-                fit::measured(crate::layout::text::request::measure_occurrence(
-                    &assigned_theme,
-                    annotation.as_str(),
-                    appearance,
-                    crate::layout::maximum_width_quanta(columns[columns.len() - 1] - columns[0])
-                        .map_err(|error| Error::Render(error.to_string()))?,
-                    annotation
-                        .resolved_alignment(crate::TextAlignment::Center)
-                        .into(),
-                    "heatmap fully-null row annotation",
-                    &row_scope,
-                    (y_index, &eligible),
-                ))
-            },
+        let block = match fit::outcome(fit::measured(
+            crate::layout::text::request::measure_occurrence(
+                &assigned_theme,
+                annotation.as_str(),
+                appearance,
+                crate::layout::maximum_width_quanta(columns[columns.len() - 1] - columns[0])
+                    .map_err(|error| Error::Render(error.to_string()))?,
+                annotation
+                    .resolved_alignment(crate::TextAlignment::Center)
+                    .into(),
+                "heatmap fully-null row annotation",
+                &row_scope,
+                (y_index, &eligible),
+            ),
         ))? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(failure) => {

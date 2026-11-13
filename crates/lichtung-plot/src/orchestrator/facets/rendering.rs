@@ -7,7 +7,7 @@ use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::{PanelBox, PhysicalTextAlignment};
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
-use crate::spec::{PlotKind, PlotRenderContext};
+use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
 
 pub(super) fn observe_arranged_chrome(
@@ -37,7 +37,6 @@ pub(super) fn observe_arranged_chrome(
 )]
 pub(super) fn render_scene(
     source: &Plot,
-    panel_plots: &[Plot],
     kind: PlotKind,
     panels: &[FacetPanel],
     panel_plans: &[std::sync::Arc<PanelPlan>],
@@ -73,18 +72,11 @@ pub(super) fn render_scene(
         )?;
     }
 
-    for (index, ((facet, panel_plan), strip)) in
+    for (index, ((_facet, panel_plan), strip)) in
         panels.iter().zip(panel_plans).zip(strip_text).enumerate()
     {
-        let panel_plot = &panel_plots[index];
-        let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(panel_plot, &facet.rows, &facet.source_rows),
-            panel_plan.panel_box,
-            theme,
-        )
-        .with_facet_scales(source.facet_scales_spec())
-        .with_retained_body(&panel_plan.result);
-        panel_plot.render_panel(kind, context, backend)?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
+        panel_plan.result.draw_body(backend)?;
         crate::significance::render_selected(&panel_plan.result, backend)?;
         crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {
             panel_plan
@@ -102,7 +94,7 @@ pub(super) fn render_scene(
         draw_facet_strip(&strip_layers[index], strip, backend)?;
     }
     draw_shared_facet_axis_labels(shared_axis_text, backend)?;
-    crate::decorations::apply::apply_canvas_text(source, canvas_layout, backend)
+    canvas_layout.root_text.draw(source.prose(), backend)
 }
 
 #[expect(

@@ -41,6 +41,7 @@ thread_local! {
 struct PlannedCanvasPanel {
     index: usize,
     kind: PlotKind,
+    surface: crate::Color,
     canvas_cell: PanelBox,
     panel_plan: Arc<crate::decorations::plan::PanelPlan>,
     local_text: plot_text::PlotLocalTextPlan,
@@ -54,8 +55,7 @@ use crate::decorations::legend::discrete::PreparedGuide;
 
 struct CanvasPlan {
     dimensions: (u32, u32),
-    themes: Arc<ResolvedCanvasThemes>,
-    plots: Vec<Option<Plot>>,
+    root_paint: crate::Color,
     canvas_layout: RootFramePlan,
     shared_legend_draw: Option<crate::decorations::legend::LegendDrawPlan>,
     panels: Vec<PlannedCanvasPanel>,
@@ -1554,7 +1554,7 @@ impl Canvas {
                 let assigned = crate::layout::RootSize::new(plan.dimensions.0, plan.dimensions.1);
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
-            |_, assigned, plan, final_stage| {
+            |prepared, assigned, plan, final_stage| {
                 let (width, height) = assigned.dimensions()?;
                 #[cfg(test)]
                 let before = lifecycle_tests::capture_counters();
@@ -1565,9 +1565,9 @@ impl Canvas {
                     width,
                     height,
                     "prepared canvas scene capture",
-                    plan.themes.root(),
+                    prepared.themes.root(),
                     final_stage,
-                    |backend| Self::render_planned_canvas(&plan, width, height, backend),
+                    |backend| self.render_planned_canvas(&plan, width, height, backend),
                 )?;
                 #[cfg(test)]
                 assert_eq!(
@@ -2967,6 +2967,11 @@ impl Canvas {
             panels.push(PlannedCanvasPanel {
                 index,
                 kind,
+                surface: themes
+                    .plot(index)
+                    .expect("configured panel theme")
+                    .surfaces
+                    .plot_panel,
                 canvas_cell: cell,
                 legend: panel_plan
                     .legend
@@ -2989,7 +2994,7 @@ impl Canvas {
                     canvas_layout.panel_box.y1 + canvas_layout.insets.top,
                 )?,
             ),
-            themes,
+            root_paint: themes.root().surfaces.canvas_root,
             canvas_layout,
             shared_legend_draw: shared_legend
                 .as_ref()
@@ -2998,7 +3003,6 @@ impl Canvas {
                     legend.legend.select(x, y)
                 })
                 .transpose()?,
-            plots,
             panels,
             text_panels,
             headers,
@@ -3040,25 +3044,21 @@ impl Canvas {
     }
 
     fn render_planned_canvas(
+        &self,
         plan: &CanvasPlan,
         width: u32,
         height: u32,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        let theme = plan.themes.root();
         backend.draw_surface(
             PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
-            theme.surfaces.canvas_root,
+            plan.root_paint,
             SurfaceRole::CanvasRoot,
         )?;
         for panel in &plan.panels {
-            let theme = plan
-                .themes
-                .plot(panel.index)
-                .expect("configured canvas panel has a resolved theme");
             backend.draw_surface(
                 panel.panel_plan.panel_box,
-                theme.surfaces.plot_panel,
+                panel.surface,
                 SurfaceRole::PlotPanel,
             )?;
         }
@@ -3081,34 +3081,12 @@ impl Canvas {
             )?;
         }
         for panel in &plan.panels {
-            let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
+            let plot = self.placements.plot(panel.index).ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
-            let theme = plan
-                .themes
-                .plot(panel.index)
-                .expect("configured canvas panel has a resolved theme");
-            let source_rows = plot.configured_source_rows()?;
-            let context = source_rows
-                .map_or_else(
-                    || {
-                        crate::spec::PlotRenderContext::new(
-                            plot.data(),
-                            panel.panel_plan.panel_box,
-                            theme,
-                        )
-                    },
-                    |rows| {
-                        crate::spec::PlotRenderContext::with_source_rows(
-                            plot.data(),
-                            rows,
-                            panel.panel_plan.panel_box,
-                            theme,
-                        )
-                    },
-                )
-                .with_retained_body(&panel.panel_plan.result);
-            plot.render_panel(panel.kind, context, backend)?;
+            plot.configured_source_rows()?;
+            crate::layout::interior::InteriorRoute::classify(panel.kind).validate(plot)?;
+            panel.panel_plan.result.draw_body(backend)?;
             crate::significance::render_selected(&panel.panel_plan.result, backend)?;
             with_layer(backend, &panel.layers[1], |backend| {
                 panel

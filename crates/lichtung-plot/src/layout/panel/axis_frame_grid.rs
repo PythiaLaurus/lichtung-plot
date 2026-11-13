@@ -218,6 +218,7 @@ impl PanelAxisPlan {
         }
         Ok(geometry)
     }
+    #[cfg(test)]
     pub(crate) fn range(&self, side: AxisSide) -> (f64, f64) {
         match side {
             AxisSide::Bottom => self.projection.x_range(),

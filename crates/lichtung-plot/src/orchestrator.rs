@@ -3,6 +3,7 @@
 use crate::Error;
 
 use crate::builder::Plot;
+#[cfg(test)]
 use crate::render::backend::Backend;
 use crate::spec::{PlotKind, PlotRenderContext, PlotRenderResult};
 
@@ -155,57 +156,6 @@ impl Plot {
         lifecycle::PlotPlan::new(self, self.kind()).map(|_| ())
     }
 
-    pub(crate) fn render_panel(
-        &self,
-        kind: PlotKind,
-        context: PlotRenderContext<'_>,
-        backend: &mut dyn Backend,
-    ) -> Result<crate::spec::DecorationMode, Error> {
-        match kind {
-            PlotKind::Scatter
-            | PlotKind::Line
-            | PlotKind::Trajectory
-            | PlotKind::LinePath
-            | PlotKind::Histogram
-            | PlotKind::Density
-            | PlotKind::Qq
-            | PlotKind::Regression
-            | PlotKind::Dumbbell
-            | PlotKind::PointInterval
-            | PlotKind::Coefficient
-            | PlotKind::Forest
-            | PlotKind::Bar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar
-            | PlotKind::Boxplot
-            | PlotKind::Violin
-            | PlotKind::Raincloud
-            | PlotKind::Interaction
-            | PlotKind::Heatmap
-            | PlotKind::Beeswarm
-            | PlotKind::Waterfall
-            | PlotKind::Marginal
-            | PlotKind::Matrix => {
-                crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
-                let result = context.selected_interior.ok_or_else(|| {
-                    Error::Render("extracted capture requires its selected interior payload".into())
-                })?;
-                result
-                    .marks
-                    .as_ref()
-                    .ok_or_else(|| Error::Render("selected mark payload is missing".into()))?
-                    .draw(backend)?;
-                result
-                    .annotations
-                    .as_ref()
-                    .ok_or_else(|| Error::Render("selected annotation payload is missing".into()))?
-                    .draw(backend)?;
-                Ok(result.decoration_mode)
-            }
-        }
-    }
-
     pub(crate) fn measure_panel(
         &self,
         kind: PlotKind,
@@ -305,7 +255,7 @@ impl Plot {
             }
         }
         let guides = layers::GuideSnapshot::measure(self, &result, &mut geometry)?;
-        validate_frozen_axes_and_guides(self, &mut result, context)?;
+        validate_frozen_axes_and_guides(self, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             self,
             &result.layout,
@@ -366,12 +316,8 @@ impl Plot {
 fn validate_frozen_axes_and_guides(
     plot: &Plot,
     result: &mut PlotRenderResult,
-    context: PlotRenderContext<'_>,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    if result.decoration_mode != crate::spec::DecorationMode::SelfManaged
-        && context.retained_axes.is_none()
-        && result.axes.is_none()
-    {
+    if result.decoration_mode != crate::spec::DecorationMode::SelfManaged && result.axes.is_none() {
         return Err(Error::Render("native panel is missing its frozen axes".into()).into());
     }
     if result.discrete_guide != plot.prepared_discrete_guide()? {
@@ -406,15 +352,9 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     .labels(crate::Labels::raw())
     .erase();
     let panel = crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0);
-    let theme = crate::Theme::publication().resolve().unwrap();
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let error = validate_frozen_axes_and_guides(
-        &plot,
-        &mut result,
-        PlotRenderContext::new(plot.data(), panel, &theme),
-    )
-    .unwrap_err();
+    let error = validate_frozen_axes_and_guides(&plot, &mut result).unwrap_err();
     assert!(
         matches!(error, crate::layout::fit::PlanError::Fatal(Error::Render(message)) if message.contains("missing its frozen axes"))
     );

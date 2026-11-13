@@ -653,16 +653,11 @@ pub(crate) struct PlotRenderContext<'a> {
     // Parent-owned perpendicular capacity; axis feedback must not shrink it a
     // second time merely because the assigned mark panel became narrower.
     pub(crate) axis_label_width: f64,
-    pub(crate) retained_axes: Option<&'a crate::layout::PanelAxisPlan>,
-    pub(crate) selected_interior: Option<&'a PlotRenderResult>,
     prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
     prepared_limits: [Option<(f64, f64)>; 2],
     prepared_kind: Option<PlotKind>,
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
-    pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
-    pub(crate) self_managed_legend:
-        Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
     pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
@@ -689,15 +684,11 @@ impl<'a> PlotRenderContext<'a> {
             fill_content_height: false,
             content_preference: None,
             axis_label_width: panel.width().max(0.0),
-            retained_axes: None,
-            selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
             theme,
             facet_scales: None,
-            panel_text: None,
-            self_managed_legend: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
@@ -716,15 +707,11 @@ impl<'a> PlotRenderContext<'a> {
             fill_content_height: false,
             content_preference: None,
             axis_label_width: panel.width().max(0.0),
-            retained_axes: None,
-            selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
             theme,
             facet_scales: None,
-            panel_text: None,
-            self_managed_legend: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
@@ -765,44 +752,12 @@ impl<'a> PlotRenderContext<'a> {
         self.facet_scales
     }
 
-    pub(crate) fn producer_text(self) -> Result<ProducerText<'a>, Error> {
-        let mut lookup = std::collections::HashMap::new();
-        let frozen = self
-            .selected_interior
-            .map(|result| result.producer_text.as_slice());
-        if let Some(frozen) = frozen {
-            // Four bucket records per entry also covers the hash table's control bytes.
-
-            lookup
-                .try_reserve(frozen.len())
-                .map_err(|_| Error::Render("producer lookup allocation failed".into()))?;
-            for text in frozen {
-                let owner = text.plan.style.provenance.owner.as_str();
-                lookup
-                    .entry((owner, text.plan.original_source()))
-                    .or_insert(&text.plan);
-            }
-        }
-        Ok(ProducerText { frozen, lookup })
-    }
-
-    pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
-        self.selected_interior = Some(result);
-        self.retained_axes = result.axes.as_ref();
-        self.panel_text = Some(&result.panel_text);
-        self.self_managed_legend = Some(&result.self_managed_legend);
-        self
-    }
-
     /// Annotation geometry may read the selected range but must not resolve it again.
     pub(crate) fn axis_range(
         self,
         side: crate::layout::AxisSide,
         prepare: impl FnOnce() -> Result<(f64, f64), Error>,
     ) -> Result<(f64, f64), Error> {
-        if let Some(axes) = self.retained_axes {
-            return Ok(axes.range(side));
-        }
         let index = usize::from(side == crate::layout::AxisSide::Left);
         self.prepared_axes.map_or_else(prepare, |axes| {
             Ok(self.prepared_limits[index].unwrap_or(axes.ranges[index]))
@@ -810,9 +765,6 @@ impl<'a> PlotRenderContext<'a> {
     }
 
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
-        if self.selected_interior.is_some() {
-            return Ok(self);
-        }
         self.prepared_axes = plot.prepared_axis_inputs();
         self.prepared_kind = Some(plot.kind());
         self.prepared_limits = [plot.x_axis_spec().limits, plot.y_axis_spec().limits];
@@ -947,35 +899,6 @@ impl<'a> PlotRenderContext<'a> {
     }
 }
 
-/// Typography measured by body producers, retained across the final capture boundary.
-pub(crate) struct ProducerText<'a> {
-    frozen: Option<&'a [crate::render::backend::PlacedText]>,
-    lookup: std::collections::HashMap<(&'a str, &'a str), &'a crate::layout::ResolvedTextPlan>,
-}
-
-impl ProducerText<'_> {
-    pub(crate) fn plan(
-        &self,
-        source: &str,
-        owner: &str,
-        measure: impl FnOnce() -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError>,
-    ) -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError> {
-        if self.frozen.is_some() {
-            return self
-                .lookup
-                .get(&(owner, source))
-                .map(|plan| (*plan).clone())
-                .ok_or_else(|| {
-                    Error::Render(format!(
-                        "frozen producer text is missing {owner}: {source:?}"
-                    ))
-                    .into()
-                });
-        }
-        measure()
-    }
-}
-
 /// Current constrained interior result. FitOutcome/PlanError distinguish measured,
 /// terminal fit and fatal outcomes; provisional misses belong to FeedbackRound.
 /// Point/path families retain selected marks and annotations; other marks remain combined.
@@ -1017,6 +940,21 @@ pub(crate) enum DecorationMode {
 }
 
 impl PlotRenderResult {
+    pub(crate) fn draw_body(
+        &self,
+        backend: &mut dyn crate::render::backend::Backend,
+    ) -> Result<DecorationMode, Error> {
+        self.marks
+            .as_ref()
+            .ok_or_else(|| Error::Render("selected mark payload is missing".into()))?
+            .draw(backend)?;
+        self.annotations
+            .as_ref()
+            .ok_or_else(|| Error::Render("selected annotation payload is missing".into()))?
+            .draw(backend)?;
+        Ok(self.decoration_mode)
+    }
+
     pub(crate) fn new(
         layout: Layout,
         discrete_guide: Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,

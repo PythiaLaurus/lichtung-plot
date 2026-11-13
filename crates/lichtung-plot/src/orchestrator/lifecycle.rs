@@ -258,10 +258,11 @@ mod soft_hyphen_tests {
 }
 
 struct UnfacetedPlotPlan {
-    plot: Plot,
+    dimensions: (u32, u32),
     panel_plan: PanelPlan,
     canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
+    layers: [String; 2],
 }
 
 #[cfg(test)]
@@ -855,7 +856,7 @@ impl PlotPlan {
                 children.finish_round(round);
                 let assigned = match &plan {
                     PlotLayoutPlan::Unfaceted(plan) => {
-                        let (width, height) = plan.plot.canvas_dimensions()?;
+                        let (width, height) = plan.dimensions;
                         crate::layout::RootSize::new(width, height)
                     }
                     PlotLayoutPlan::Faceted(plan) => {
@@ -1038,10 +1039,11 @@ impl UnfacetedPlotPlan {
             })
             .transpose()?;
         Ok(Self {
-            plot,
+            dimensions: plot.canvas_dimensions()?,
             panel_plan,
             canvas_layout,
             legend,
+            layers: [source.layer_name("grid"), source.layer_name("axes")],
         })
     }
 
@@ -1058,29 +1060,17 @@ impl UnfacetedPlotPlan {
             SurfaceRole::PlotPanel,
         )?;
         if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
-            crate::decorations::apply::apply_grid(source, &self.panel_plan, backend)?;
+            crate::decorations::apply::apply_grid(&self.layers[0], &self.panel_plan, backend)?;
         }
-        let source_rows = self.plot.configured_source_rows()?;
-        let context = source_rows
-            .map_or_else(
-                || PlotRenderContext::new(self.plot.data(), self.panel_plan.panel_box, theme),
-                |rows| {
-                    PlotRenderContext::with_source_rows(
-                        self.plot.data(),
-                        rows,
-                        self.panel_plan.panel_box,
-                        theme,
-                    )
-                },
-            )
-            .with_retained_body(&self.panel_plan.result);
-        let rendered = self.plot.render_panel(kind, context, backend)?;
+        source.configured_source_rows()?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
+        let rendered = self.panel_plan.result.draw_body(backend)?;
 
         crate::significance::render_selected(&self.panel_plan.result, backend)?;
 
         match self.panel_plan.result.decoration_mode {
             DecorationMode::Standard => {
-                crate::decorations::apply::apply_axes(source, &self.panel_plan, backend)?;
+                crate::decorations::apply::apply_axes(&self.layers[1], &self.panel_plan, backend)?;
                 if let Some((layer, legend)) = &self.legend {
                     crate::render::backend::with_layer(backend, layer, |backend| {
                         legend.draw(backend)
@@ -1089,7 +1079,7 @@ impl UnfacetedPlotPlan {
             }
             DecorationMode::SelfManaged => {}
         }
-        crate::decorations::apply::apply_canvas_text(source, &self.canvas_layout, backend)?;
+        self.canvas_layout.root_text.draw(source.prose(), backend)?;
         debug_assert_eq!(rendered, self.panel_plan.result.decoration_mode);
         Ok(())
     }

@@ -186,7 +186,6 @@ pub(super) struct FacetPlan {
     shared_axis_origin: (f64, f64),
     strip_text: Vec<Vec<crate::render::backend::PlacedText>>,
     shared_axis_text: Vec<crate::render::backend::PlacedText>,
-    panel_plots: Vec<Plot>,
     legends: Vec<Option<crate::decorations::legend::LegendDrawPlan>>,
     strip_layers: Vec<String>,
     panel_layers: Vec<[String; 3]>,
@@ -660,14 +659,12 @@ impl FacetPlan {
                         strip_text[panel][part] = text;
                     }
                 }
-                let mut panel_plots = Vec::new();
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();
                 let mut panel_layers = Vec::new();
                 theme.prepared_font_environment()?;
 
                 crate::data::source::reserve_source(&mut panel_layers, panels.len())?;
-                crate::data::source::reserve_source(&mut panel_plots, panels.len())?;
                 crate::data::source::reserve_source(&mut legends, panels.len())?;
                 crate::data::source::reserve_source(&mut strip_layers, panels.len())?;
                 for (index, (facet, panel)) in panels.iter().zip(&panel_plans).enumerate() {
@@ -684,11 +681,6 @@ impl FacetPlan {
                         layer.push_str(suffix);
                     }
                     panel_layers.push(layers);
-                    let plot = panel
-                        .plot_with_planned_limits(&planned_plot)
-                        .with_render_scope(scope)
-                        .with_significance_subset(facet.significance_selectors());
-                    panel_plots.push(plot);
                     let legend = if index == 0 {
                         outside_legend.as_ref().or(panel.legend.as_ref())
                     } else {
@@ -715,7 +707,6 @@ impl FacetPlan {
                         )?,
                     ),
                     panel_layers,
-                    panel_plots,
                     legends,
                     strip_layers,
                     strip_text,
@@ -796,7 +787,6 @@ impl FacetPlan {
     ) -> Result<(), Error> {
         rendering::render_scene(
             source,
-            &self.panel_plots,
             kind,
             &self.panels,
             &self.panel_plans,

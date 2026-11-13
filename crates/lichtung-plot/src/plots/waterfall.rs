@@ -1138,7 +1138,6 @@ fn plan_annotations(
         .gap
         .round(crate::layout::kernel::SpatialRounding::Ceil)?
         .quanta();
-    let producer = context.producer_text()?;
     let eligible = crate::data::source::collect_source(
         candidates
             .iter()
@@ -1168,7 +1167,7 @@ fn plan_annotations(
         } else {
             "waterfall terminal annotation"
         };
-        let text_plan = producer.plan(text.as_str(), owner, || {
+        let text_plan =
             crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
                 theme,
                 text.as_str(),
@@ -1178,8 +1177,7 @@ fn plan_annotations(
                 owner,
                 scope,
                 (index, &eligible),
-            ))
-        })?;
+            ))?;
         let width = text_plan.occupied_size().0;
         let required_width = metrics
             .padding
