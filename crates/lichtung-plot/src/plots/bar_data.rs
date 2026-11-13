@@ -133,7 +133,7 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart)?;
+    let prepared = retained(chart.prepared_family())?;
     if prepared.categories.is_empty() || prepared.bars.is_empty() {
         return Err(Error::Render(
             "bar intrinsic has no prepared category or segment".into(),
@@ -755,9 +755,10 @@ pub(crate) fn mode(chart: &Plot) -> BarMode {
     }
 }
 
-pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
-    chart
-        .prepared_family()
+pub(crate) fn retained(
+    family: Option<crate::orchestrator::registration::FamilyRef<'_>>,
+) -> Result<&PreparedBars, Error> {
+    family
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Bars { marks, .. } => Some(marks),
             _ => None,

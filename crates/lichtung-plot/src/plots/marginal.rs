@@ -472,7 +472,7 @@ pub(crate) fn measure(
     context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let prepared = chart
+    let prepared = context
         .prepared_family()
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),

@@ -160,7 +160,7 @@ impl PreparedFamily {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum FamilyRef<'v> {
     Scatter(&'v crate::plots::scatter::PreparedScatter),
     Line {

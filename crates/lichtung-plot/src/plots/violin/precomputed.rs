@@ -27,7 +27,7 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let crate::plots::categorical_distribution::PreparedDistribution::Supplied(prepared) =
-        crate::plots::categorical_distribution::retained(chart)?
+        crate::plots::categorical_distribution::retained(chart.prepared_family())?
     else {
         return Err(Error::Render(
             "supplied Raincloud intrinsic requires retained groups".into(),
@@ -342,7 +342,7 @@ pub(super) fn measure_marks(
     let theme = context.theme;
     let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
-    let colors = crate::plots::categorical_distribution::retained(chart)?
+    let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
         .resolved_colors(chart, theme, data)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());

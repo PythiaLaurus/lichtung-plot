@@ -656,6 +656,7 @@ pub(crate) struct PlotRenderContext<'a, 'src> {
     prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
     prepared_limits: [Option<(f64, f64)>; 2],
     prepared_kind: Option<PlotKind>,
+    prepared_family: Option<crate::orchestrator::registration::FamilyRef<'a>>,
     pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
     facet_scales: Option<FacetScales>,
     pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
@@ -687,6 +688,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
+            prepared_family: None,
             theme,
             facet_scales: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
@@ -710,6 +712,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
+            prepared_family: None,
             theme,
             facet_scales: None,
             guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
@@ -766,7 +769,8 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
 
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
         self.prepared_axes = plot.prepared_axis_inputs();
-        self.prepared_kind = Some(plot.prepared_family().map_or(
+        self.prepared_family = plot.prepared_family();
+        self.prepared_kind = Some(self.prepared_family.map_or(
             plot.kind(),
             crate::orchestrator::registration::FamilyRef::kind,
         ));
@@ -786,6 +790,12 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             self.prepared_limits[0] = Some(shared);
         }
         Ok(self)
+    }
+
+    pub(crate) const fn prepared_family(
+        self,
+    ) -> Option<crate::orchestrator::registration::FamilyRef<'a>> {
+        self.prepared_family
     }
 
     #[expect(

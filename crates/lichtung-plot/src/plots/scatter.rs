@@ -424,7 +424,7 @@ pub(crate) fn measure_marks(
         stages.set(counts);
     });
     let theme = context.theme;
-    let prepared = chart
+    let prepared = context
         .prepared_family()
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Scatter(marks) => Some(marks),

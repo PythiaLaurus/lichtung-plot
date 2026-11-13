@@ -575,7 +575,7 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let marks = chart
+    let marks = context
         .prepared_family()
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Interaction(marks) => Some(marks),

@@ -257,7 +257,7 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
-        let prepared = retained(&chart).unwrap();
+        let prepared = retained(chart.prepared_family()).unwrap();
         assert_eq!(prepared.primary_mark_count(), 5);
         assert_eq!(
             prepared

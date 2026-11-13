@@ -55,7 +55,9 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
+    let PreparedDistribution::Boxplot(prepared) =
+        categorical_distribution::retained(chart.prepared_family())?
+    else {
         return Err(Error::Render(
             "Boxplot intrinsic requires prepared summaries".into(),
         ));
@@ -309,7 +311,9 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
+    let PreparedDistribution::Boxplot(prepared) =
+        categorical_distribution::retained(context.prepared_family())?
+    else {
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
     let theme = context.theme;
@@ -340,7 +344,7 @@ pub(crate) fn measure_marks(
     let overlay = chart.description().raw_overlay_spec();
     let panel = context.panel;
     let colors = {
-        let retained = categorical_distribution::retained(chart)?;
+        let retained = categorical_distribution::retained(context.prepared_family())?;
         retained.resolved_colors(chart, theme, data)?
     };
     let significance = if group_levels.is_empty() {

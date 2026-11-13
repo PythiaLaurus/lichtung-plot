@@ -166,7 +166,9 @@ pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let PreparedDistribution::Violin(prepared) = categorical_distribution::retained(chart)? else {
+    let PreparedDistribution::Violin(prepared) =
+        categorical_distribution::retained(chart.prepared_family())?
+    else {
         return Err(Error::Render(
             "sampled distribution intrinsic requires retained KDE groups".into(),
         ));
@@ -433,7 +435,7 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let retained = categorical_distribution::retained(chart)?;
+    let retained = categorical_distribution::retained(context.prepared_family())?;
     if let PreparedDistribution::Supplied(input) = retained {
         return precomputed::measure_marks(chart, input, context, layout);
     }

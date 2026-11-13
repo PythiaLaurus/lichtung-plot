@@ -474,7 +474,7 @@ pub(crate) fn measure(
     let theme = context.theme;
     let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
-    let prepared = chart
+    let prepared = context
         .prepared_family()
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),

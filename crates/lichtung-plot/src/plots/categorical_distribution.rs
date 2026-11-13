@@ -237,9 +237,10 @@ impl PreparedDistribution {
     }
 }
 
-pub(crate) fn retained(chart: &Plot) -> Result<&PreparedDistribution, Error> {
-    chart
-        .prepared_family()
+pub(crate) fn retained(
+    family: Option<crate::orchestrator::registration::FamilyRef<'_>>,
+) -> Result<&PreparedDistribution, Error> {
+    family
         .and_then(|family| match family {
             crate::orchestrator::registration::FamilyRef::Distribution { marks, .. } => Some(marks),
             _ => None,
@@ -360,10 +361,13 @@ impl DistributionPayload {
                     .into());
             }
             if chart.user_y_limits().is_none() {
-                let categories = categorical_distribution_count(chart)?;
+                let categories = categorical_distribution_count(context.prepared_family())?;
                 self.domain_expansions =
                     crate::layout::interior::automatic_absolute_ink_expansions(
-                        [(0.0, f64::from(categories)), retained(chart)?.range()],
+                        [
+                            (0.0, f64::from(categories)),
+                            retained(context.prepared_family())?.range(),
+                        ],
                         &result.layout.projection,
                         bounds,
                         [false, true],
@@ -382,8 +386,10 @@ impl DistributionPayload {
     }
 }
 
-fn categorical_distribution_count(chart: &Plot) -> Result<u32, Error> {
-    u32::try_from(retained(chart)?.categories().len()).map_err(|_| {
+fn categorical_distribution_count(
+    family: Option<crate::orchestrator::registration::FamilyRef<'_>>,
+) -> Result<u32, Error> {
+    u32::try_from(retained(family)?.categories().len()).map_err(|_| {
         Error::Render("categorical distribution count exceeds coordinate range".into())
     })
 }
