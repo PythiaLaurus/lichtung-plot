@@ -3,6 +3,7 @@
 
 use super::PreparedWaterfall;
 use crate::numeric::set::{FormattedSet, NumericPresentation};
+use crate::orchestrator::registration::DisplayExtent;
 use crate::{Error, Result};
 
 #[derive(Debug)]
@@ -49,8 +50,8 @@ impl PreparedWaterfall {
         can_expand: bool,
     ) -> Result<()> {
         let axes = input.axes;
-        let x = axes[0].extent().pair();
-        let y = axes[1].extent().pair();
+        let x = axes[0].extent()?.pair();
+        let y = axes[1].extent()?.pair();
         let projection = crate::layout::Projection::new(x, y, (0.0, 1.0, 0.0, 1.0));
         let initial = self.eligibility(&projection)?;
         let row_position = self.source_y()?;
@@ -136,7 +137,7 @@ impl PreparedWaterfall {
                         })
                     }),
             )?;
-            let range = axes[0].extent().pair();
+            let range = axes[0].extent()?.pair();
             let domain = crate::numeric::context::DomainInfo::axis(
                 range,
                 crate::AxisScale::Linear,
@@ -149,10 +150,8 @@ impl PreparedWaterfall {
                 values,
                 Some(domain),
             )?;
-            info.window = Some(std::array::from_fn(|index| {
-                let (a, b) = axes[index].extent().pair();
-                (a.to_bits(), b.to_bits())
-            }));
+            let [x, y] = axes.map(|axis| axis.extent().map(DisplayExtent::pair));
+            info.window = Some([x?, y?].map(|(a, b)| (a.to_bits(), b.to_bits())));
             let Some(set) = format.materialize(input.numeric.operation, info, false)? else {
                 return Ok(TotalVariant::Collision);
             };

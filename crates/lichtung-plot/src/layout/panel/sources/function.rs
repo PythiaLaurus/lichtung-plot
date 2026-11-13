@@ -2,56 +2,21 @@
 
 use super::{AxisSide, NumericTickPlan, Projection, SourceKind, TickSource};
 use crate::layout::fit::{FitKind, FitScope, PlanError};
-use crate::numeric::{context::DomainInfo, operand::Operand, source::AxisRequest};
-use crate::spec::ticks::function::View;
-use crate::{AxisScale, CoordinateAxis, Error, TickPositions};
+use crate::numeric::{operand::Operand, source::AxisRequest};
+use crate::{Error, TickPositions};
 
 #[cfg(test)]
 mod tests;
 
-fn materialize(
-    range: (f64, f64),
-    log: bool,
-    projection: &Projection,
-    side: AxisSide,
-    request: &AxisRequest<'_>,
-) -> Result<std::sync::Arc<TickPositions>, Error> {
-    let panel = projection.panel_box();
-    let span = match side {
-        AxisSide::Bottom => panel.width(),
-        AxisSide::Left => panel.height(),
-    };
-    crate::layout::kernel::required_length(span)?;
-    let domain = DomainInfo::axis(
-        range,
-        if log {
-            AxisScale::Log10
-        } else {
-            AxisScale::Linear
-        },
-        request.provenance,
-        if log {
-            request.raw_limits(side)
-        } else {
-            Some(range)
-        },
-    );
-    let view = View {
-        owner: request.binding.owner.try_copy()?,
-        domain,
-        axis: match side {
-            AxisSide::Bottom => CoordinateAxis::X,
-            AxisSide::Left => CoordinateAxis::Y,
-        },
-        span: span.to_bits(),
-    };
+fn materialize(request: &AxisRequest<'_>) -> Result<std::sync::Arc<TickPositions>, Error> {
+    let view = request.position_view()?;
     request
         .binding
         .operation
         .tick_positions
         .lock()
         .map_err(|_| Error::Render("position table synchronization failed".into()))?
-        .materialize(&request.generation, view)
+        .materialize(request.generation, view)
 }
 
 pub(super) fn plan(
@@ -65,7 +30,7 @@ pub(super) fn plan(
 ) -> Result<NumericTickPlan, PlanError> {
     let request = request
         .ok_or_else(|| Error::Render("position function lacks its operation-bound owner".into()))?;
-    let returned = materialize(range, log, projection, side, request)?;
+    let returned = materialize(request)?;
     let (values, power) = match returned.as_ref() {
         TickPositions::Data(values) => (values, false),
         TickPositions::Log10Exponents(values) if log => (values, true),
@@ -119,13 +84,14 @@ pub(super) fn plan(
             indices.push(index);
         }
     }
-    let request = AxisRequest {
-        source_indices: Some(&indices),
-        ..request.clone()
-    };
     let selected = if request.format.is_some() {
         NumericTickPlan::formatted(
-            &positions, &operands, log, &request, theme, source, projection, side,
+            &positions,
+            &operands,
+            request,
+            theme,
+            source,
+            Some(&indices),
         )?
     } else {
         NumericTickPlan::omitted(&positions, &operands, false, source)?
@@ -137,13 +103,9 @@ pub(super) fn plan(
                 .as_ref()
                 .ok_or_else(|| Error::Render("omitted function text lost its members".into()))?
                 .try_copy()?;
-            set.context = Some(crate::data::source::source_arc(request.context(
-                &operands,
-                log,
-                side,
-                range,
-                crate::NumericPurpose::ActualSet,
-            )?)?);
+            set.context = Some(crate::data::source::source_arc(
+                request.actual_context(&operands, Some(&indices))?,
+            )?);
             selected.numeric = Some(crate::data::source::source_arc(set)?);
         }
         if super::labels_fit(&selected.ticks, projection, side, theme)? {

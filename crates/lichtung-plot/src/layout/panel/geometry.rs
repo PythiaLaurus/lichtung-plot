@@ -84,7 +84,6 @@ impl Layout {
             theme,
             &crate::layout::fit::ROOT_SCOPE,
             None,
-            [None; 2],
         )
         .map_err(crate::layout::fit::PlanError::into_error)
     }
@@ -104,7 +103,6 @@ impl Layout {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
-        raw_windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<Self, crate::layout::fit::PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
@@ -137,17 +135,9 @@ impl Layout {
             theme,
             scope,
             binding,
-            raw_windows,
         );
-        let y_ticks = y_spec.layout_ticks(
-            y_ticks,
-            &projection,
-            AxisSide::Left,
-            theme,
-            scope,
-            binding,
-            raw_windows,
-        );
+        let y_ticks =
+            y_spec.layout_ticks(y_ticks, &projection, AxisSide::Left, theme, scope, binding);
         // A later fatal axis error must not be hidden by an earlier geometric miss.
         let (x_ticks, y_ticks) = match (x_ticks, y_ticks) {
             (Err(error @ PlanError::Fatal(_)), _)
@@ -202,32 +192,6 @@ impl Layout {
 }
 
 impl AxisSpec {
-    pub(crate) fn numeric_request<'v>(
-        &'v self,
-        binding: Option<crate::numeric::source::NumericBinding<'v>>,
-        raw_windows: [Option<&'v crate::layout::RawWindow>; 2],
-    ) -> Result<Option<crate::numeric::source::AxisRequest<'v>>, Error> {
-        let Some(binding) = binding else {
-            if self.format.is_some() || self.generation.position_function().is_some() {
-                return Err(Error::Render(
-                    "numeric axis lacks its operation-bound owner".into(),
-                ));
-            }
-            return Ok(None);
-        };
-        Ok(Some(crate::numeric::source::AxisRequest {
-            format: self.format.as_deref(),
-            binding,
-            raw_windows,
-            provenance: self.provenance,
-            generation: self.generation.clone(),
-            source_indices: None,
-        }))
-    }
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "numeric sources borrow the operation and raw windows only for this selection"
-    )]
     pub(crate) fn layout_ticks(
         &self,
         supplied: Vec<AxisTick>,
@@ -236,7 +200,6 @@ impl AxisSpec {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
-        raw_windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
         layout_axis_ticks(
             self.exact_ticks.as_deref().map(|raw| {
@@ -251,7 +214,41 @@ impl AxisSpec {
             side,
             theme,
             scope,
-            || self.numeric_request(binding, raw_windows),
+            || {
+                let Some(binding) = binding else {
+                    if self.format.is_some() || self.generation.position_function().is_some() {
+                        return Err(Error::Render(
+                            "numeric axis lacks its operation-bound owner".into(),
+                        ));
+                    }
+                    return Ok(None);
+                };
+                let (range, axis, parallel_span) = match side {
+                    AxisSide::Bottom => (
+                        projection.x_range(),
+                        crate::CoordinateAxis::X,
+                        projection.panel_box().width(),
+                    ),
+                    AxisSide::Left => (
+                        projection.y_range(),
+                        crate::CoordinateAxis::Y,
+                        projection.panel_box().height(),
+                    ),
+                };
+                Ok(Some(crate::numeric::source::AxisRequest {
+                    binding,
+                    format: self.format.as_deref(),
+                    generation: &self.generation,
+                    axis,
+                    domain: crate::numeric::context::DomainInfo::axis(
+                        range,
+                        crate::AxisScale::Linear,
+                        self.provenance,
+                        Some(range),
+                    ),
+                    phase: crate::numeric::source::AxisNumericPhase::Actual { parallel_span },
+                }))
+            },
         )
     }
 }

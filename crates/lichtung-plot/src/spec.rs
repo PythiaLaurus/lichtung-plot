@@ -923,10 +923,6 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
             self.registered
                 .map(|registered| registered.axis_numeric_binding(self.data.source_resources()))
                 .transpose()?,
-            self.registered.map_or(
-                [None; 2],
-                crate::orchestrator::registration::PlotRegistration::raw_windows,
-            ),
         )
     }
 

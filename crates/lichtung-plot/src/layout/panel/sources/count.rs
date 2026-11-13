@@ -173,12 +173,10 @@ pub(crate) fn plan(
         NumericTickPlan::formatted(
             &positions.coordinates,
             &operands,
-            log,
             format,
             theme,
             source,
-            projection,
-            side,
+            None,
         )?
     } else {
         NumericTickPlan::omitted(&positions.coordinates, &operands, false, source)?

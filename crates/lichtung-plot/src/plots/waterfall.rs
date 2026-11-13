@@ -877,7 +877,18 @@ pub(crate) fn measure(
     )?;
     let projection =
         crate::layout::Projection::new(x_range, (0.0, labels.len() as f64), mark_panel.as_tuple());
-    let x = pair[0].layout_ticks(
+    let domain = crate::orchestrator::assignment::AxisDomainAssignment {
+        extent: crate::orchestrator::registration::DisplayExtent {
+            lower: x_range.0,
+            upper: x_range.1,
+        },
+        provenance: pair[0].provenance(),
+    };
+    let x = crate::orchestrator::assignment::AssignedAxisRef {
+        base: pair[0],
+        domain: &domain,
+    }
+    .layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
@@ -887,10 +898,6 @@ pub(crate) fn measure(
             .registered
             .expect("prepared Waterfall occurrence")
             .axis_numeric_binding(context.data.source_resources())?,
-        context
-            .registered
-            .expect("prepared Waterfall occurrence")
-            .raw_windows(),
     )?;
     let ticks =
         crate::data::source::collect_source(display.iter().zip(&bands).map(|(label, band)| {
@@ -916,7 +923,7 @@ pub(crate) fn measure(
                 .clone(),
             source: x.source,
             numeric: x.numeric,
-            explicit_ticks: pair[0].exact_ticks().is_some(),
+            explicit_ticks: pair[0].exact_ticks()?.is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
         },
@@ -1125,7 +1132,7 @@ pub(crate) fn measure(
     for (points, style) in &payload.references {
         full.line(points, style, None)?;
     }
-    if chart.user_x_limits().is_none() {
+    if pair[0].can_expand() {
         if let Some(bounds) = label_ink
             .bounds()
             .iter()

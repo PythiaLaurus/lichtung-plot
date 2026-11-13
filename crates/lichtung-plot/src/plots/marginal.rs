@@ -709,7 +709,7 @@ pub(crate) fn measure(
                             crate::orchestrator::registration::MarginalStrip::Top,
                         ),
                     )
-                    .extent()
+                    .extent()?
                     .pair(),
             ],
             layout::AddressRole::MarginalTop,
@@ -728,7 +728,7 @@ pub(crate) fn measure(
                             crate::orchestrator::registration::MarginalStrip::Right,
                         ),
                     )
-                    .extent()
+                    .extent()?
                     .pair(),
                 ranges[1],
             ],

@@ -307,6 +307,10 @@ impl ExactTicksRef<'_> {
 }
 
 impl<'a> BaseAxisRef<'a> {
+    pub(crate) const fn witness(self) -> &'a AxisSourceWitness {
+        &self.source.witness
+    }
+
     pub(crate) const fn authored(self) -> Option<&'a AxisSpec> {
         match self.intent {
             AxisIntentRef::Authored(spec) => Some(spec),
@@ -314,19 +318,42 @@ impl<'a> BaseAxisRef<'a> {
         }
     }
 
-    pub(crate) fn extent(self) -> DisplayExtent {
-        self.source.base_seed.expect("prepared axis display seed")
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the base reader preserves the original prepared-seed boundary without adding an earlier validator"
+    )]
+    pub(crate) fn extent(self) -> Result<DisplayExtent, Error> {
+        Ok(self.source.base_seed.expect("prepared axis display seed"))
     }
 
     pub(crate) const fn provenance(self) -> RangeProvenance {
         self.source.base_provenance
     }
 
-    pub(crate) fn exact_ticks(self) -> Option<ExactTicksRef<'a>> {
-        Some(ExactTicksRef {
-            raw: self.authored()?.exact_ticks.as_deref()?,
-            projected: self.source.projected_exact_positions.as_deref(),
+    pub(crate) fn raw_window(self) -> Option<&'a crate::layout::RawWindow> {
+        self.authored().and_then(|spec| {
+            spec.window
+                .as_ref()
+                .filter(|_| spec.provenance == RangeProvenance::Configured)
         })
+    }
+
+    pub(crate) fn can_expand(self) -> bool {
+        self.raw_window().is_none()
+    }
+
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "exact sources retain the shared fallible reader boundary without a new validation pass"
+    )]
+    pub(crate) fn exact_ticks(self) -> Result<Option<ExactTicksRef<'a>>, Error> {
+        let Some(raw) = self.authored().and_then(|spec| spec.exact_ticks.as_deref()) else {
+            return Ok(None);
+        };
+        Ok(Some(ExactTicksRef {
+            raw,
+            projected: self.source.projected_exact_positions.as_deref(),
+        }))
     }
 
     pub(crate) fn semantic_inputs(self) -> crate::layout::AxisSemanticInputs {
@@ -343,32 +370,9 @@ impl<'a> BaseAxisRef<'a> {
             self.source.range_policy,
         )
     }
+}
 
-    pub(crate) fn numeric_request(
-        self,
-        binding: crate::numeric::source::NumericBinding<'a>,
-        windows: [Option<&'a crate::layout::RawWindow>; 2],
-    ) -> Result<Option<crate::numeric::source::AxisRequest<'a>>, Error> {
-        let Some(authored) = self.authored() else {
-            return Ok(None);
-        };
-        let mut request = authored.numeric_request(
-            Some(crate::numeric::source::NumericBinding {
-                plot_id: Some(&self.source.witness.plot_id),
-                ..binding
-            }),
-            windows,
-        )?;
-        if let Some(request) = &mut request {
-            request.provenance = self.provenance();
-        }
-        Ok(request)
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one borrowed source selects exact or numeric ticks at its original operation and fit scope"
-    )]
+impl<'a> crate::orchestrator::assignment::AssignedAxisRef<'a> {
     pub(crate) fn layout_ticks(
         self,
         supplied: Vec<AxisTick>,
@@ -377,11 +381,11 @@ impl<'a> BaseAxisRef<'a> {
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: crate::numeric::source::NumericBinding<'a>,
-        windows: [Option<&'a crate::layout::RawWindow>; 2],
     ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
         crate::layout::layout_axis_ticks(
-            self.exact_ticks(),
+            self.base.exact_ticks()?,
             &self
+                .base
                 .authored()
                 .expect("coordinate authored intent")
                 .generation,
@@ -390,7 +394,7 @@ impl<'a> BaseAxisRef<'a> {
             side,
             theme,
             scope,
-            || self.numeric_request(binding, windows),
+            || crate::numeric::source::AxisRequest::actual(binding, self, projection, side),
         )
     }
 }

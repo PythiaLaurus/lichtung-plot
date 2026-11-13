@@ -667,7 +667,7 @@ pub(crate) fn measure(
         Ok(registered
             .axes
             .axis_at(registered.source, source.witness.slot)
-            .extent()
+            .extent()?
             .pair())
     }))?;
 
@@ -897,7 +897,7 @@ pub(crate) fn measure(
                     registered
                         .axes
                         .axis_at(registered.source, diagonal_density[row].witness.slot)
-                        .extent()
+                        .extent()?
                         .pair(),
                     &cell_layout.projection,
                 )?;

@@ -615,26 +615,22 @@ impl NumericTickPlan {
         }
         Ok(None)
     }
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "scientific coordinates and retained operands may differ on a logarithmic data-space source"
-    )]
     fn formatted(
         positions: &[f64],
         operands: &[crate::numeric::operand::Operand],
-        log: bool,
         format: &crate::numeric::source::AxisRequest<'_>,
         theme: &crate::text::TextRequestContext<'_, '_>,
         mut source: TickSource,
-        projection: &Projection,
-        side: AxisSide,
+        source_indices: Option<&[usize]>,
     ) -> Result<Option<Self>, Error> {
-        let range = match side {
-            AxisSide::Bottom => projection.x_range(),
-            AxisSide::Left => projection.y_range(),
+        let Some(policy) = format.format else {
+            return Ok(None);
         };
-        let Some(set) =
-            format.materialize(operands, log, side, range, crate::NumericPurpose::ActualSet)?
+        let Some(set) = policy.materialize(
+            format.binding.operation,
+            format.actual_context(operands, source_indices)?,
+            true,
+        )?
         else {
             return Ok(None);
         };
@@ -733,9 +729,7 @@ impl NumericTickPlan {
                         }))?
                     };
                 let plan = if let Some(format) = format {
-                    Self::formatted(
-                        &positions, &operands, log, format, theme, source, projection, side,
-                    )?
+                    Self::formatted(&positions, &operands, format, theme, source, None)?
                 } else {
                     let integral = log
                         && matches!(

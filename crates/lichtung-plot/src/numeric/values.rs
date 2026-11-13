@@ -157,14 +157,11 @@ pub(crate) fn axis_preferences(
     if let Some(axes) = registered.and_then(|registered| registered.axes.coordinate()) {
         for (side, preferred) in preferred.iter_mut().enumerate() {
             let base = axes.axis(registered.expect("prepared axis occurrence").source, side);
-            if base.exact_ticks().is_some() || axes.categories(side).is_some() {
+            if base.exact_ticks()?.is_some() || axes.categories(side).is_some() {
                 continue;
             }
             let registered = registered.expect("prepared axis occurrence");
-            if let Some(set) = base.numeric_probe(
-                registered.axis_numeric_binding(operation)?,
-                registered.raw_windows(),
-            )? {
+            if let Some(set) = base.numeric_probe(registered.axis_numeric_binding(operation)?)? {
                 if let Some(text) = set.explanation {
                     let preference = super::slot::preferred_width(
                         &text,

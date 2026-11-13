@@ -155,7 +155,16 @@ fn explicit_sources_above_ten_thousand_keep_their_cardinality_and_refuse_text_no
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 2_000_000.0, 0.0, 480.0));
     let format =
         crate::NumericFormat::default().value_function(|context| Ok(context.index().to_string()));
-    let selected = crate::numeric::source::with_axis_request_for_test(&format, |request| {
+    let generation = crate::TickGeneration::automatic();
+    let selected = crate::numeric::source::with_axis_binding_for_test(|binding| {
+        let request = crate::numeric::source::axis_request_for_test(
+            binding,
+            Some(&format),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         plan(
             (0.0, 1.0),
             (10_001, TickSpace::Data, TickSingleton::Lower),
@@ -173,17 +182,27 @@ fn explicit_sources_above_ten_thousand_keep_their_cardinality_and_refuse_text_no
     assert_eq!(selected.source.kind, SourceKind::ExactCount);
     let collision = crate::NumericFormat::from_specifier(".0f").unwrap();
     assert!(
-        crate::numeric::source::with_axis_request_for_test(&collision, |request| plan(
-            (0.0, 1.0),
-            (4, TickSpace::Data, TickSingleton::Lower),
-            false,
-            None,
-            &projection,
-            AxisSide::Bottom,
-            &theme,
-            Some(&request),
-            &crate::layout::fit::ROOT_SCOPE
-        ))
+        crate::numeric::source::with_axis_binding_for_test(|binding| {
+            let request = crate::numeric::source::axis_request_for_test(
+                binding,
+                Some(&collision),
+                &generation,
+                &projection,
+                AxisSide::Bottom,
+                false,
+            );
+            plan(
+                (0.0, 1.0),
+                (4, TickSpace::Data, TickSingleton::Lower),
+                false,
+                None,
+                &projection,
+                AxisSide::Bottom,
+                &theme,
+                Some(&request),
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+        })
         .is_err()
     );
 }

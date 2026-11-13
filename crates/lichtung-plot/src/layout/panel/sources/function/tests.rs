@@ -1,4 +1,6 @@
 use super::*;
+use crate::numeric::source::{axis_request_for_test, with_axis_binding_for_test};
+use crate::CoordinateAxis;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -29,10 +31,7 @@ fn warning_views_materialize_once_per_consumed_span_and_keep_complete_policy_ide
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let policy = crate::NumericFormat::default();
-    crate::numeric::source::with_axis_request_for_test(&policy, |mut request| {
-        request.format = None;
-        request.generation = generation;
+    with_axis_binding_for_test(|binding| {
         for (view, expected) in [
             ((0.0, 120.0), vec!["0", "50", "120"]),
             ((20.0, 80.0), vec!["20", "50", "80"]),
@@ -40,6 +39,14 @@ fn warning_views_materialize_once_per_consumed_span_and_keep_complete_policy_ide
         ] {
             for height in [300.0, 600.0] {
                 let projection = Projection::new(view, (0.0, 1.0), (0.0, 900.0, 0.0, height));
+                let request = axis_request_for_test(
+                    binding,
+                    None,
+                    &generation,
+                    &projection,
+                    AxisSide::Bottom,
+                    false,
+                );
                 let selected = plan(
                     view,
                     false,
@@ -62,6 +69,14 @@ fn warning_views_materialize_once_per_consumed_span_and_keep_complete_policy_ide
         }
         assert_eq!(calls.lock().unwrap().len(), 3);
         let projection = Projection::new((0.0, 120.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 300.0));
+        let request = axis_request_for_test(
+            binding,
+            None,
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         plan(
             (0.0, 120.0),
             false,
@@ -108,11 +123,19 @@ fn filtering_keeps_unsorted_duplicates_original_ids_and_raw_or_exponent_operands
         seen.lock().unwrap().push(values);
         context.format_builtin()
     });
-    crate::numeric::source::with_axis_request_for_test(&policy, |mut request| {
-        request.generation =
+    with_axis_binding_for_test(|binding| {
+        let generation =
             crate::TickGeneration::function(|_| Ok(vec![-10.0, 80.0, 20.0, 20.0, 120.0].into()));
         let view = (0.0, 100.0);
         let projection = Projection::new(view, (0.0, 1.0), (0.0, 900.0, 0.0, 300.0));
+        let request = axis_request_for_test(
+            binding,
+            Some(&policy),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         let selected = plan(
             view,
             false,
@@ -146,10 +169,16 @@ fn filtering_keeps_unsorted_duplicates_original_ids_and_raw_or_exponent_operands
                 vec![0.0_f64, 1.0, 400.0],
             ),
         ] {
-            request.generation = generation;
-            request.format = None;
             let view = if power { (0.0, 400.0) } else { (0.0, 2.0) };
             let projection = Projection::new(view, (0.0, 1.0), (0.0, 120_000.0, 0.0, 300.0));
+            let request = axis_request_for_test(
+                binding,
+                None,
+                &generation,
+                &projection,
+                AxisSide::Bottom,
+                true,
+            );
             let selected = plan(
                 view,
                 true,
@@ -172,6 +201,10 @@ fn filtering_keeps_unsorted_duplicates_original_ids_and_raw_or_exponent_operands
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one operation observes empty, capped and failed source refusal with its actual borrowed axis requests"
+)]
 fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
@@ -180,13 +213,21 @@ fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator()
     let seen = calls.clone();
     let policy = crate::NumericFormat::default()
         .set_function(|_| panic!("empty or capped text is not consumed"));
-    crate::numeric::source::with_axis_request_for_test(&policy, |mut request| {
-        request.generation = crate::TickGeneration::function(move |_| {
+    with_axis_binding_for_test(|binding| {
+        let generation = crate::TickGeneration::function(move |_| {
             seen.fetch_add(1, Ordering::SeqCst);
             Ok(vec![-1.0, 101.0].into())
         });
         let view = (0.0, 100.0);
         let projection = Projection::new(view, (0.0, 1.0), (0.0, 900.0, 0.0, 300.0));
+        let request = axis_request_for_test(
+            binding,
+            Some(&policy),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         assert!(plan(
             view,
             false,
@@ -200,9 +241,17 @@ fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator()
         .ticks
         .is_empty());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
-        request.generation = crate::TickGeneration::function(|_| Ok(vec![20.0; 10_001].into()))
+        let generation = crate::TickGeneration::function(|_| Ok(vec![20.0; 10_001].into()))
             .maximum_count(Some(10_000))
             .unwrap();
+        let request = axis_request_for_test(
+            binding,
+            Some(&policy),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         assert!(plan(
             view,
             false,
@@ -213,8 +262,15 @@ fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator()
             &FitScope::root()
         )
         .is_err());
-        request.generation = request.generation.maximum_count(None).unwrap();
-        request.format = None;
+        let generation = generation.maximum_count(None).unwrap();
+        let request = axis_request_for_test(
+            binding,
+            None,
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            false,
+        );
         assert_eq!(
             plan(
                 view,
@@ -235,7 +291,14 @@ fn empty_large_capped_and_failed_operations_do_not_retry_or_repair_the_locator()
             crate::TickGeneration::function(|_| Ok(vec![f64::NAN].into())),
             crate::TickGeneration::function(|_| Ok(TickPositions::Log10Exponents(vec![1.0]))),
         ] {
-            request.generation = generation;
+            let request = axis_request_for_test(
+                binding,
+                None,
+                &generation,
+                &projection,
+                AxisSide::Bottom,
+                false,
+            );
             assert!(plan(
                 view,
                 false,

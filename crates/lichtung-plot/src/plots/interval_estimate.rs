@@ -1364,19 +1364,24 @@ fn project(
 
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
-    axis: crate::orchestrator::registration::BaseAxisRef<'_>,
+    axis: crate::orchestrator::assignment::AssignedAxisRef<'_>,
     panel: crate::layout::PixelRect,
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
     numeric: crate::numeric::source::NumericBinding<'_>,
-    windows: [Option<&crate::layout::RawWindow>; 2],
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
-    let format = axis.numeric_request(numeric, windows)?;
-    let raw = windows[0].map(|window| window.pair());
+    let format = crate::numeric::source::AxisRequest::actual(
+        numeric,
+        axis,
+        &projection,
+        crate::layout::AxisSide::Bottom,
+    )?;
+    let raw = axis.base.raw_window().map(|window| window.pair());
     crate::layout::NumericTickPlan::measure_selected_source(
         range,
-        axis.authored()
+        axis.base
+            .authored()
             .expect("coordinate authored intent")
             .generation
             .clone(),

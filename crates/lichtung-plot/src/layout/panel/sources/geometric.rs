@@ -66,7 +66,6 @@ fn positions(
 
 fn selected(
     positions: &Positions,
-    log: bool,
     source: TickSource,
     projection: &Projection,
     side: AxisSide,
@@ -77,12 +76,10 @@ fn selected(
         NumericTickPlan::formatted(
             &positions.coordinates,
             &positions.operands,
-            log,
             format,
             theme,
             source,
-            projection,
-            side,
+            None,
         )?
     } else {
         NumericTickPlan::omitted(&positions.coordinates, &positions.operands, false, source)?
@@ -149,7 +146,7 @@ pub(super) fn plan(
         log,
         maximum,
     )? {
-        if let Some(plan) = selected(&positions, log, source, projection, side, theme, format)? {
+        if let Some(plan) = selected(&positions, source, projection, side, theme, format)? {
             return Ok(plan);
         }
     }
@@ -166,9 +163,7 @@ pub(super) fn plan(
             if let Some(positions) =
                 positions(&range, &range.first, &range.last, &stride, log, maximum)?
             {
-                if let Some(plan) =
-                    selected(&positions, log, source, projection, side, theme, format)?
-                {
+                if let Some(plan) = selected(&positions, source, projection, side, theme, format)? {
                     return Ok(plan);
                 }
             }
@@ -184,8 +179,7 @@ pub(super) fn plan(
             log,
             maximum,
         )? {
-            if let Some(plan) = selected(&positions, log, source, projection, side, theme, format)?
-            {
+            if let Some(plan) = selected(&positions, source, projection, side, theme, format)? {
                 return Ok(plan);
             }
         }

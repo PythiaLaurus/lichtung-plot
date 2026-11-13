@@ -74,71 +74,47 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
             .authored()
             .expect("coordinate authored intent")
             .generation;
-        if generation
-            .exact_parameters()
-            .is_some_and(|(count, _, _)| count == 0)
-        {
-            return Ok(true);
-        }
-        let range = self.extent().pair();
         let log = matches!(
             self.source.witness.space,
             crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
         );
-        let maximum = generation.get_maximum_count().unwrap_or(usize::MAX);
-        if let Some((anchor, ratio, requirement)) = generation.multiplicative_parameters() {
-            let count =
-                crate::numeric::lattice::generation::LatticeRange::new(range, log, anchor, ratio)?
-                    .count();
-            if requirement == crate::TickRequirement::Fixed
-                && count > num_bigint::BigInt::from(maximum)
-            {
-                return Err(Error::Render("fixed multiplicative count exceeds its configured maximum or platform representation".into()));
-            }
-            return Ok(count == num_bigint::BigInt::ZERO);
-        }
-        if let Some(parameters) = generation.interval_parameters() {
-            return crate::layout::fixed_interval_is_empty(range, raw, log, parameters, maximum);
-        }
-        Ok(false)
+        crate::numeric::source::empty_fixed_source(generation, self.source.base_seed, log, raw)
     }
 
     pub(crate) fn numeric_probe(
         self,
         numeric: crate::numeric::source::NumericBinding<'_>,
-        windows: [Option<&crate::layout::RawWindow>; 2],
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
         let (AxisSlot::Pair(axis_side) | AxisSlot::MarginalCentral(axis_side)) =
             self.source.witness.slot
         else {
             unreachable!("numeric coordinate source")
         };
-        let side = usize::from(axis_side == crate::layout::AxisSide::Left);
-        if self.exact_ticks().is_some()
-            || self.source.categories.is_some()
-            || self.empty_numeric_source(windows[side].map(|window| window.pair()))?
-        {
+        if self.exact_ticks()?.is_some() || self.source.categories.is_some() {
             return Ok(None);
         }
-        let Some(request) = self.numeric_request(numeric, windows)? else {
+        let Some(request) = crate::numeric::source::AxisRequest::base(numeric, self, axis_side)?
+        else {
             return Ok(None);
         };
-        let range = self.extent().pair();
+        if request.empty_fixed_source()? {
+            return Ok(None);
+        }
+        let range = self.extent()?.pair();
         let logarithmic = matches!(
             self.source.witness.space,
             crate::orchestrator::registration::AxisSpace::Continuous(AxisScale::Log10)
         );
-        request.materialize(
-            &[range.0, f64::midpoint(range.0, range.1), range.1]
-                .map(|value| crate::numeric::operand::Operand::number(value, logarithmic)),
-            logarithmic,
-            if side == 0 {
-                crate::layout::AxisSide::Bottom
-            } else {
-                crate::layout::AxisSide::Left
-            },
-            range,
-            crate::NumericPurpose::IntrinsicProbe,
+        let Some(format) = request.format else {
+            return Ok(None);
+        };
+        format.materialize(
+            request.binding.operation,
+            request.probe_context(
+                &[range.0, f64::midpoint(range.0, range.1), range.1]
+                    .map(|value| crate::numeric::operand::Operand::number(value, logarithmic)),
+            )?,
+            false,
         )
     }
 }
@@ -1047,7 +1023,7 @@ pub(crate) fn prepare_plot<'src>(
                     | PlotKind::StackedHorizontalBar
             ) {
                 for side in 0..2 {
-                    if let Some(ticks) = axes.axis(panel.source, side).exact_ticks() {
+                    if let Some(ticks) = axes.axis(panel.source, side).exact_ticks()? {
                         crate::layout::Axis::validate_exact_ticks(
                             &ticks,
                             axes.ranges()[side],
@@ -1178,10 +1154,10 @@ fn reconcile_facet_axis(
             axes: &'a PreparedAxesOwner,
             source: &'a crate::builder::PlotDescription,
             side: usize,
-        ) -> (bool, Option<&'a crate::numeric::format::NumericFormat>) {
-            (
+        ) -> Result<(bool, Option<&'a crate::numeric::format::NumericFormat>), Error> {
+            Ok((
                 axes.logarithmic() && side == 0,
-                if axes.axis(source, side).exact_ticks().is_some() {
+                if axes.axis(source, side).exact_ticks()?.is_some() {
                     None
                 } else {
                     axes.axis(source, side)
@@ -1190,11 +1166,11 @@ fn reconcile_facet_axis(
                         .format
                         .as_deref()
                 },
-            )
+            ))
         }
         for panel in &*retained {
             let axes = panel.axes.as_ref().expect("prepared facet axes");
-            if presentation(axes, panel.source, side) != presentation(first, first_source, side) {
+            if presentation(axes, panel.source, side)? != presentation(first, first_source, side)? {
                 return Err(Error::Data(
                     "fixed facet numeric axes require identical numeric formats and operand contexts"
                         .into(),

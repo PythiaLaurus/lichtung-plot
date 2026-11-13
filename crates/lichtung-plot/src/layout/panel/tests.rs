@@ -229,7 +229,6 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
         &theme,
         &crate::layout::fit::ROOT_SCOPE,
         None,
-        [None; 2],
     )
     .unwrap();
     for layout in [numeric, supplied] {
@@ -290,7 +289,6 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
         &theme,
         &scope,
         None,
-        [None; 2],
     );
     assert!(matches!(
         result,
@@ -488,7 +486,6 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
         &large_tick_theme,
         &crate::layout::fit::ROOT_SCOPE,
         None,
-        [None; 2],
     )
     .unwrap();
 
@@ -696,7 +693,6 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
         &theme,
         &crate::layout::fit::ROOT_SCOPE,
         None,
-        [None; 2],
     )
     .unwrap();
 

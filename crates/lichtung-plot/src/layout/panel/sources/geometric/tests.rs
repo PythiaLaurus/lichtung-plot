@@ -153,9 +153,18 @@ fn empty_and_capped_huge_sources_do_not_materialize_numeric_functions() {
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let policy =
         crate::NumericFormat::default().set_function(|_| panic!("unreached numeric owner"));
-    crate::numeric::source::with_axis_request_for_test(&policy, |format| {
+    let generation = crate::TickGeneration::automatic();
+    crate::numeric::source::with_axis_binding_for_test(|binding| {
         for view in [(-10.0, -1.0), (1.1, 1.2)] {
             let projection = Projection::new(view, (0.0, 1.0), (0.0, 500.0, 0.0, 500.0));
+            let format = crate::numeric::source::axis_request_for_test(
+                binding,
+                Some(&policy),
+                &generation,
+                &projection,
+                AxisSide::Bottom,
+                false,
+            );
             let empty = plan(
                 view,
                 false,
@@ -183,6 +192,14 @@ fn empty_and_capped_huge_sources_do_not_materialize_numeric_functions() {
         }
         let view = (0.0, f64::MAX);
         let projection = Projection::new(view, (0.0, 1.0), (0.0, 500.0, 0.0, 500.0));
+        let format = crate::numeric::source::axis_request_for_test(
+            binding,
+            Some(&policy),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            true,
+        );
         assert!(plan(
             view,
             true,

@@ -2,6 +2,20 @@
 
 use crate::layout::PixelRect;
 use crate::layout::RootSize;
+use crate::orchestrator::registration::{BaseAxisRef, DisplayExtent};
+
+/// A selected domain owns scale coordinates, never authored raw endpoints.
+#[derive(Debug)]
+pub(crate) struct AxisDomainAssignment {
+    pub(crate) extent: DisplayExtent,
+    pub(crate) provenance: crate::layout::RangeProvenance,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct AssignedAxisRef<'v> {
+    pub(crate) base: BaseAxisRef<'v>,
+    pub(crate) domain: &'v AxisDomainAssignment,
+}
 
 /// The selected allocation remains distinct from its completed root frame.
 pub(crate) struct PlotMeasureAssignment {

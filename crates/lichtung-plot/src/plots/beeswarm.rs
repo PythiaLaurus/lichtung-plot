@@ -439,7 +439,18 @@ pub(crate) fn measure(
         .expect("prepared Beeswarm occurrence")
         .source;
     let pair = [axes.axis(source, 0), axes.axis(source, 1)];
-    let x = pair[0].layout_ticks(
+    let domain = crate::orchestrator::assignment::AxisDomainAssignment {
+        extent: crate::orchestrator::registration::DisplayExtent {
+            lower: range.0,
+            upper: range.1,
+        },
+        provenance: pair[0].provenance(),
+    };
+    let x = crate::orchestrator::assignment::AssignedAxisRef {
+        base: pair[0],
+        domain: &domain,
+    }
+    .layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
@@ -449,10 +460,6 @@ pub(crate) fn measure(
             .registered
             .expect("prepared Beeswarm occurrence")
             .axis_numeric_binding(context.data.source_resources())?,
-        context
-            .registered
-            .expect("prepared Beeswarm occurrence")
-            .raw_windows(),
     )?;
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(
@@ -553,7 +560,7 @@ pub(crate) fn measure(
                 .clone(),
             source: x.source,
             numeric: x.numeric,
-            explicit_ticks: pair[0].exact_ticks().is_some(),
+            explicit_ticks: pair[0].exact_ticks()?.is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
         },

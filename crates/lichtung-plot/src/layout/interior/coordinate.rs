@@ -203,17 +203,16 @@ impl Intrinsics {
                 } else {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
-            } else if pair[side].exact_ticks().is_none()
+            } else if pair[side].exact_ticks()?.is_none()
                 && !pair[side].empty_numeric_source(windows[side].map(|window| window.pair()))?
             {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.
                 let value = f64::midpoint(axes.ranges()[side].0, axes.ranges()[side].1);
                 let power = axes.logarithmic() && side == 0;
-                let label = if let Some(probe) = pair[side].numeric_probe(
-                    input.registered.axis_numeric_binding(input.operation)?,
-                    windows,
-                )? {
+                let label = if let Some(probe) = pair[side]
+                    .numeric_probe(input.registered.axis_numeric_binding(input.operation)?)?
+                {
                     crate::data::source::copy_source_string(&probe.labels[1])?
                 } else {
                     crate::layout::panel::format_label(value, power, false, 0)?
@@ -444,10 +443,26 @@ impl InteriorRoute {
                 } else {
                     Vec::new()
                 };
-                let ticks = if side == 0 && inputs.logarithmic() && base.exact_ticks().is_none() {
+                let range = if side == 0 {
+                    projection.x_range()
+                } else {
+                    projection.y_range()
+                };
+                let domain = crate::orchestrator::assignment::AxisDomainAssignment {
+                    extent: crate::orchestrator::registration::DisplayExtent {
+                        lower: range.0,
+                        upper: range.1,
+                    },
+                    provenance: base.provenance(),
+                };
+                let assigned = crate::orchestrator::assignment::AssignedAxisRef {
+                    base,
+                    domain: &domain,
+                };
+                let ticks = if side == 0 && inputs.logarithmic() && base.exact_ticks()?.is_none() {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
-                        base,
+                        assigned,
                         panel,
                         context.theme,
                         context.fit_scope(),
@@ -455,13 +470,9 @@ impl InteriorRoute {
                             .registered
                             .expect("prepared coordinate occurrence")
                             .axis_numeric_binding(context.data.source_resources())?,
-                        context
-                            .registered
-                            .expect("prepared coordinate occurrence")
-                            .raw_windows(),
                     )?
                 } else {
-                    base.layout_ticks(
+                    assigned.layout_ticks(
                         supplied,
                         &projection,
                         if side == 0 {
@@ -475,10 +486,6 @@ impl InteriorRoute {
                             .registered
                             .expect("prepared coordinate occurrence")
                             .axis_numeric_binding(context.data.source_resources())?,
-                        context
-                            .registered
-                            .expect("prepared coordinate occurrence")
-                            .raw_windows(),
                     )?
                 };
                 Ok(Axis {
@@ -493,7 +500,7 @@ impl InteriorRoute {
                         .expect("coordinate authored intent")
                         .category_labels
                         .clone(),
-                    explicit_ticks: base.exact_ticks().is_some(),
+                    explicit_ticks: base.exact_ticks()?.is_some(),
                     assigned_tick_width: None,
                     assigned_cells: None,
                     source: ticks.source,

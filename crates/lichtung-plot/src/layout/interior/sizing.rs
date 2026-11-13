@@ -341,7 +341,6 @@ pub(crate) fn horizontal_gutter_preference(
             registered
                 .expect("prepared axis occurrence")
                 .axis_numeric_binding(operation)?,
-            registered.expect("prepared axis occurrence").raw_windows(),
         )? {
             for label in &probe.labels {
                 include_label(label)?;

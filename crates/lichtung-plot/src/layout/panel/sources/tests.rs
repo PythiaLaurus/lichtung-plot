@@ -524,7 +524,16 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         ),
     ] {
         let format = NumericFormat::new(NumericNotation::Decimal, precision).unwrap();
-        let selected = crate::numeric::source::with_axis_request_for_test(&format, |request| {
+        let generation = TickGeneration::automatic();
+        let selected = crate::numeric::source::with_axis_binding_for_test(|binding| {
+            let request = crate::numeric::source::axis_request_for_test(
+                binding,
+                Some(&format),
+                &generation,
+                &projection,
+                AxisSide::Bottom,
+                false,
+            );
             numeric_tick_plan(
                 (0.0, 0.04),
                 TickGeneration::additive(0.01).unwrap(),
@@ -693,7 +702,16 @@ fn generated_labels_are_unique_across_decimal_and_power_ranges() {
     let range = (0.5_f64.next_down(), 0.5_f64.next_up());
     let projection = Projection::new(range, (0.0, 1.0), (0.0, 800.0, 0.0, 100.0));
     let configured = crate::numeric::format::NumericFormat::default();
-    let selected = crate::numeric::source::with_axis_request_for_test(&configured, |request| {
+    let generation = TickGeneration::automatic();
+    let selected = crate::numeric::source::with_axis_binding_for_test(|binding| {
+        let request = crate::numeric::source::axis_request_for_test(
+            binding,
+            Some(&configured),
+            &generation,
+            &projection,
+            AxisSide::Bottom,
+            true,
+        );
         numeric_tick_plan(
             range,
             TickGeneration::automatic(),
