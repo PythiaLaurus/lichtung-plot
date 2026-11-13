@@ -47,7 +47,7 @@ impl PreparedEstimate {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_interval_estimate(),
@@ -106,7 +106,7 @@ impl PreparedEstimate {
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<crate::alpha::marks::PointInk>, Error> {
         point_ink(
-            &chart.point_style(
+            &chart.description().point_style(
                 theme,
                 (0, 0, 0),
                 theme.marks.get_points().get_radii().get_interval_estimate(),
@@ -219,7 +219,7 @@ impl PreparedEstimate {
         }
 
         let significance =
-            theme.effective_significance(chart.significance_mark_style_override())?;
+            theme.effective_significance(chart.description().significance_mark_style_override())?;
         let significance_indices = crate::data::source::collect_source(
             self.text_occurrences()
                 .filter(|(_, _, significance)| *significance)
@@ -238,7 +238,11 @@ impl PreparedEstimate {
             };
             let selected = crate::text::TextAppearance {
                 theme: appearance,
-                exact_override: adjacent.1 && chart.significance_mark_style_override().is_some(),
+                exact_override: adjacent.1
+                    && chart
+                        .description()
+                        .significance_mark_style_override()
+                        .is_some(),
                 layout: if adjacent.1 {
                     theme.text_layouts.significance.as_ref()
                 } else {
@@ -299,11 +303,11 @@ impl PreparedEstimate {
         let rows = crate::plots::point_interval::prepare(chart, data)?;
 
         let range = estimate_data_range(rows.iter().map(|row| &row.estimate));
-        let range = match (chart.x_axis_spec().limits, range) {
+        let range = match (chart.description().x_axis_spec().limits, range) {
             (Some(limits), _) => Some(limits),
             (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
                 range,
-                chart.x_axis_spec(),
+                chart.description().x_axis_spec(),
             )?),
             _ => None,
         };
@@ -328,7 +332,7 @@ impl PreparedEstimate {
             alphas,
             line_alphas,
             adjacent: Vec::new(),
-            reference: chart.zero_line_visible().then_some(0.0),
+            reference: chart.description().zero_line_visible().then_some(0.0),
             range,
             family: "point_interval",
             point_interval: true,
@@ -429,7 +433,7 @@ pub(crate) struct EstimateTuple {
 }
 
 pub(crate) fn prepare_estimate_tuples(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_>,
     family: &str,
     require_intervals: bool,
@@ -668,6 +672,7 @@ pub(crate) fn axis_categories(
     family: &str,
 ) -> Result<Vec<String>, Error> {
     let column = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data(format!("{family}: term/label column not set")))?;
     let labels = crate::data::strict_strings(data, column, family)?;
@@ -688,16 +693,19 @@ pub(crate) fn shared_x_domain(
     let forest = chart.kind() == crate::spec::PlotKind::Forest;
     let family = if forest { "forest" } else { "coefficient" };
     let reference = if forest {
-        chart.forest_reference_value()
+        chart.description().forest_reference_value()
     } else {
-        chart.coefficient_reference_line_value().unwrap_or(0.0)
+        chart
+            .description()
+            .coefficient_reference_line_value()
+            .unwrap_or(0.0)
     };
-    let estimates = prepare_estimate_tuples(chart, data, family, forest)?;
+    let estimates = prepare_estimate_tuples(chart.description(), data, family, forest)?;
     let transform = |value: f64| -> Result<f64, Error> {
         if !value.is_finite() {
             return Err(Error::Data(format!("{family}: axis values must be finite")));
         }
-        match chart.axis_scale_spec() {
+        match chart.description().axis_scale_spec() {
             AxisScale::Linear => Ok(value),
             AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value),
             AxisScale::Log10 => Err(Error::Data(format!("{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"))),
@@ -716,7 +724,7 @@ pub(crate) fn shared_x_domain(
             }));
         }
     }
-    if let Some(limits) = chart.x_axis_spec().limits {
+    if let Some(limits) = chart.description().x_axis_spec().limits {
         let range = (transform(limits.0)?, transform(limits.1)?);
         if range.0 >= range.1 {
             return Err(Error::Data(format!("{family}: logarithmic x-axis limits must remain distinguishable after transformation")));
@@ -758,20 +766,23 @@ fn prepare_model<'a>(
         "coefficient"
     };
     let reference = if require_intervals {
-        chart.forest_reference_value()
+        chart.description().forest_reference_value()
     } else {
-        chart.coefficient_reference_line_value().unwrap_or(0.0)
+        chart
+            .description()
+            .coefficient_reference_line_value()
+            .unwrap_or(0.0)
     };
-    if chart.hue_col().is_some() || chart.color_col().is_some() {
+    if chart.description().hue_col().is_some() || chart.description().color_col().is_some() {
         return Err(Error::Data(format!(
             "{family}: hue and continuous color channels are not supported"
         ))
         .into());
     }
     let labels = axis_categories(chart, data, family)?;
-    let estimates = prepare_estimate_tuples(chart, data, family, require_intervals)?;
-    let has_intervals = chart.interval_bound_cols().is_some();
-    if chart.estimate_labels_spec().is_some() && has_intervals {
+    let estimates = prepare_estimate_tuples(chart.description(), data, family, require_intervals)?;
+    let has_intervals = chart.description().interval_bound_cols().is_some();
+    if chart.description().estimate_labels_spec().is_some() && has_intervals {
         return Err(Error::Data(format!(
             "{family}: numeric estimate labels are supported only for point-only displays without intervals"
         )).into());
@@ -845,7 +856,7 @@ fn prepare_model<'a>(
             .into());
         }
     }
-    let scale = chart.axis_scale_spec();
+    let scale = chart.description().axis_scale_spec();
     let transform = |value: f64| -> Result<f64, Error> {
         match scale {
             AxisScale::Linear => Ok(value),
@@ -870,7 +881,7 @@ fn prepare_model<'a>(
         }))?;
     let transformed_reference = transform(reference)?;
 
-    let range = if let Some((lower, upper)) = chart.x_axis_spec().limits {
+    let range = if let Some((lower, upper)) = chart.description().x_axis_spec().limits {
         let limits = (transform(lower)?, transform(upper)?);
         if limits.0 >= limits.1 {
             return Err(Error::Data(format!("{family}: logarithmic x-axis limits must remain distinguishable after transformation")).into());
@@ -890,6 +901,7 @@ fn prepare_model<'a>(
             .transpose()?
     };
     let value_presentation = chart
+        .description()
         .estimate_labels_spec()
         .map(|format| -> Result<_, Error> {
             let format = crate::data::source::source_arc(format.try_copy()?)?;
@@ -1010,7 +1022,8 @@ fn project(
         .reference
         .filter(|value| *value >= x_range.0 && *value <= x_range.1)
         .map(|value| layout.projection.project(value, 0.0).0);
-    let significance = theme.effective_significance(chart.significance_mark_style_override())?;
+    let significance =
+        theme.effective_significance(chart.description().significance_mark_style_override())?;
     let reference_style = if prepared.point_interval {
         theme
             .marks
@@ -1138,7 +1151,7 @@ fn project(
         reference_style,
         rows: Vec::new(),
     };
-    let point_style = chart.point_style(
+    let point_style = chart.description().point_style(
         theme,
         crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
         theme.marks.get_points().get_radii().get_interval_estimate(),

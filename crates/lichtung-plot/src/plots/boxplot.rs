@@ -78,11 +78,13 @@ pub(crate) fn intrinsic_body_minimum(
         .get_bodies()
         .get_box_body()
         .backend_style((0, 0, 0));
-    let overlay = chart.raw_overlay_spec();
+    let overlay = chart.description().raw_overlay_spec();
     let point_style = if overlay.is_visible() {
-        chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), (0, 0, 0))
+        chart
+            .description()
+            .distribution_point_style(theme.marks.get_points().get_raw_overlay(), (0, 0, 0))
     } else {
-        chart.point_style(
+        chart.description().point_style(
             theme,
             theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
             theme.marks.get_points().get_radii().get_box_flier(),
@@ -244,7 +246,7 @@ impl PreparedBoxplot {
         use crate::alpha::AlphaUnitKind;
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let fill = theme.marks.get_fills().get_bodies().get_box_body();
-        let overlay = chart.raw_overlay_spec();
+        let overlay = chart.description().raw_overlay_spec();
         for (group, stat) in self.sample.groups.iter().zip(&self.stats) {
             let unit = AlphaUnit::aggregate(chart, &group.label, group.group_label.as_deref())?;
             guide.fill(
@@ -270,7 +272,7 @@ impl PreparedBoxplot {
                 false,
             )?;
             if overlay == RawOverlay::Hidden {
-                let point = chart.point_style(
+                let point = chart.description().point_style(
                     theme,
                     (0, 0, 0),
                     theme.marks.get_points().get_radii().get_box_flier(),
@@ -284,7 +286,7 @@ impl PreparedBoxplot {
                     )?;
                 }
             } else {
-                let point = chart.distribution_point_style(
+                let point = chart.description().distribution_point_style(
                     theme.marks.get_points().get_raw_overlay(),
                     (0, 0, 0),
                 );
@@ -335,7 +337,7 @@ pub(crate) fn measure_marks(
         rendered_maxima[stat.x_index] = rendered_maxima[stat.x_index].max(maximum);
         grouped_maxima[stat.x_index][stat.group_index] = maximum;
     }
-    let overlay = chart.raw_overlay_spec();
+    let overlay = chart.description().raw_overlay_spec();
     let panel = context.panel;
     let colors = {
         let retained = categorical_distribution::retained(chart)?;
@@ -462,7 +464,7 @@ pub(crate) fn measure_marks(
         )?;
 
         if overlay == RawOverlay::Hidden {
-            let flier_style = chart.point_style(
+            let flier_style = chart.description().point_style(
                 theme,
                 theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
                 theme.marks.get_points().get_radii().get_box_flier(),
@@ -498,7 +500,7 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                &chart.distribution_point_style(
+                &chart.description().distribution_point_style(
                     theme.marks.get_points().get_raw_overlay(),
                     colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
                 ),

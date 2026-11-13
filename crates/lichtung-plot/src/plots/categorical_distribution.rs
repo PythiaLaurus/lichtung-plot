@@ -64,13 +64,13 @@ impl PreparedDistribution {
         let resources = data.source_resources()?;
         let keys = if !self.hue_levels().is_empty() {
             chart.global_hue_levels().unwrap_or(self.hue_levels())
-        } else if !chart.has_facets() || matches!(self, Self::Supplied(_)) {
+        } else if !chart.description().has_facets() || matches!(self, Self::Supplied(_)) {
             self.categories()
         } else {
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
             let source = chart.data().with_operation(resources);
-            let column = chart.x_col().ok_or_else(|| {
+            let column = chart.description().x_col().ok_or_else(|| {
                 Error::Render("distribution category color source is missing".into())
             })?;
             let raw = crate::data::strict_strings(source, column, "distribution color domain")?;
@@ -78,14 +78,14 @@ impl PreparedDistribution {
             return CategoryColors::resolve(
                 &parent,
                 theme.color_scales.get_qualitative(),
-                chart.categorical_color_scale_spec(),
+                chart.description().categorical_color_scale_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
             keys,
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )
     }
@@ -124,7 +124,7 @@ impl PreparedDistribution {
         crate::data::source::reserve_source(&mut entries, sample.hue_levels.len())?;
         for label in sample.observed_hue_levels() {
             let color = colors.color(label)?;
-            let key = GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?;
+            let key = GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?;
             let key = if boxplot {
                 key.with_role_line(
                     theme
@@ -150,7 +150,7 @@ impl PreparedDistribution {
                     key
                 } else {
                     key.with_point(
-                        chart.distribution_point_style(
+                        chart.description().distribution_point_style(
                             theme.marks.get_points().get_mandatory_strip(),
                             color,
                         ),
@@ -191,7 +191,7 @@ impl PreparedDistribution {
             PlotKind::Boxplot => Ok(Self::Boxplot(crate::plots::boxplot::prepare(
                 chart, data, facet,
             )?)),
-            PlotKind::Raincloud if chart.raincloud_geometry_input().is_some() => Ok(
+            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => Ok(
                 Self::Supplied(crate::plots::violin::precomputed::prepare(chart)?),
             ),
             PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Violin(
@@ -201,7 +201,7 @@ impl PreparedDistribution {
                 "categorical distribution preparation requires its family".into(),
             )),
         }?;
-        if let Some(exact) = chart.categorical_map_spec() {
+        if let Some(exact) = chart.description().categorical_map_spec() {
             let keys = if prepared.hue_levels().is_empty() {
                 prepared.categories()
             } else {

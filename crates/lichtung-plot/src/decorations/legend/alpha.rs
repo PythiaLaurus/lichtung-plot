@@ -85,9 +85,11 @@ impl AlphaUnit {
         identity: Option<&crate::data::CollectivePair>,
     ) -> Result<Self> {
         let group = plot
+            .description()
             .group_name()
             .zip(identity.and_then(|pair| pair.group.as_deref()));
         let hue = plot
+            .description()
             .hue_name()
             .zip(identity.and_then(|pair| pair.hue.as_deref()));
         match (group, hue) {
@@ -100,11 +102,12 @@ impl AlphaUnit {
 
     pub(crate) fn aggregate(plot: &Plot, category: &str, series: Option<&str>) -> Result<Self> {
         let field = plot
+            .description()
             .x_col()
-            .and_then(|key| plot.data_column(key))
+            .and_then(|key| plot.description().data_column(key))
             .ok_or_else(|| Error::Render("alpha aggregate guide has no category field".into()))?;
         let category = (field.name(), category);
-        if let Some(series) = plot.group_name().zip(series) {
+        if let Some(series) = plot.description().group_name().zip(series) {
             Self::keyed(&[category, series])
         } else {
             Self::keyed(&[category])
@@ -523,7 +526,7 @@ fn alpha_section(
         .key;
     let entries = collect_source(examples.into_iter().map(|example| {
         let label = if values.semantics() == AlphaSemantics::Categorical {
-            plot.resolve_label(example.label)?
+            plot.description().resolve_label(example.label)?
         } else {
             copy_source_string(example.label)?
         };
@@ -601,7 +604,7 @@ fn title(plot: &Plot, source: &str, target: AlphaTarget, unit: AlphaUnitKind) ->
         AlphaUnitKind::Bin => "bin",
         AlphaUnitKind::Single => "single",
     };
-    let mut title = plot.resolve_label(source)?;
+    let mut title = plot.description().resolve_label(source)?;
     let extra = unit
         .len()
         .checked_add(target.len())

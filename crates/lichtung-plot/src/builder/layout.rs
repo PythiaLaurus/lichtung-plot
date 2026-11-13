@@ -8,17 +8,17 @@ impl Plot {
         &self,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<RootFramePlan, Error> {
-        if !self.has_facets() {
+        if !self.description().has_facets() {
             return crate::layout::interior::coordinate::canvas_layout(self, theme)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         RootFramePlan::measure(
             self.canvas_dimensions()?,
             theme,
-            self.prose(),
+            self.description().prose(),
             crate::decorations::title_block::plan::RootAlignments::resolve(
                 theme,
-                self.prose_alignments(),
+                self.description().prose_alignments(),
                 [None, None],
             ),
             (

@@ -755,7 +755,7 @@ impl PreparedTextRequirement {
             requirements,
             title_address,
             PreparedTextRole::Title,
-            plot.prose()[0],
+            plot.description().prose()[0],
             &theme.typography.root.title,
             true,
             prepared_stage.as_deref_mut(),
@@ -770,13 +770,13 @@ impl PreparedTextRequirement {
             requirements,
             subtitle_address,
             PreparedTextRole::Subtitle,
-            plot.prose()[1],
+            plot.description().prose()[1],
             &theme.typography.root.subtitle,
             true,
             prepared_stage.as_deref_mut(),
         )?;
         if kind != PlotKind::Matrix {
-            let [x_title, y_title] = plot.prepare_axis_labels(None)?;
+            let [x_title, y_title] = plot.description().prepare_axis_labels(None)?;
             let x_axis = prepared_address_child(
                 base,
                 AddressRole::AxisBottom,
@@ -848,13 +848,20 @@ impl PreparedTextRequirement {
             }
         }
 
-        let significance = theme.effective_significance(plot.significance_mark_style_override())?;
-        for (index, annotation) in plot.significance_annotations().iter().enumerate() {
+        let significance =
+            theme.effective_significance(plot.description().significance_mark_style_override())?;
+        for (index, annotation) in plot
+            .description()
+            .significance_annotations()
+            .iter()
+            .enumerate()
+        {
             if kind == PlotKind::Coefficient {
                 continue;
             }
             let eligible = crate::data::source::collect_source(
-                plot.significance_annotations()
+                plot.description()
+                    .significance_annotations()
                     .iter()
                     .enumerate()
                     .filter(|(_, other)| {
@@ -887,12 +894,14 @@ impl PreparedTextRequirement {
                 prepared_stage.as_deref_mut(),
             )?;
         }
-        if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
+        if plot.description().legend_policy_spec() != crate::LegendPolicy::Hidden {
             if let Some(interiors) = interiors {
                 let guides = interiors.discrete_guides.get().ok_or_else(|| {
                     Error::Render("discrete guide font census requires prepared semantics".into())
                 })?;
-                if plot.has_facets() && matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
+                if plot.description().has_facets()
+                    && matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
+                {
                     for (index, panel) in guides.panels.iter().enumerate() {
                         if let Some(guide) = &panel.descriptor {
                             let index = u32::try_from(index).map_err(|_| {
@@ -910,18 +919,21 @@ impl PreparedTextRequirement {
                         }
                     }
                 } else if let Some(guide) = &guides.root {
-                    let guide_parent =
-                        if plot.has_facets() || base.leaf_role() == AddressRole::CanvasCell {
-                            base.clone()
-                        } else {
-                            base.child(AddressRole::PlotBody, 0)?
-                        };
+                    let guide_parent = if plot.description().has_facets()
+                        || base.leaf_role() == AddressRole::CanvasCell
+                    {
+                        base.clone()
+                    } else {
+                        base.child(AddressRole::PlotBody, 0)?
+                    };
                     let role = if kind == PlotKind::Matrix {
                         AddressRole::InsideGuide
                     } else if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
                         AddressRole::OutsideGuideRight
                     } else {
-                        crate::decorations::legend::address_role(plot.legend_position_spec())
+                        crate::decorations::legend::address_role(
+                            plot.description().legend_position_spec(),
+                        )
                     };
                     guide.append_requirements(
                         requirements,
@@ -954,7 +966,7 @@ impl PreparedTextRequirement {
                 requirements,
                 caption_address,
                 PreparedTextRole::Caption,
-                plot.prose()[2],
+                plot.description().prose()[2],
                 &theme.typography.root.caption,
                 true,
                 prepared_stage,
@@ -991,7 +1003,7 @@ fn push_deferred_plot_requirements(
     )?;
     let mut body_index = 0_u32;
 
-    for annotation in plot.panel_text_annotations() {
+    for annotation in plot.description().panel_text_annotations() {
         let appearance = annotation
             .content()
             .appearance(&theme.typography.annotations.panel_text);
@@ -1008,7 +1020,7 @@ fn push_deferred_plot_requirements(
             prepared_stage.as_deref_mut(),
         )?;
     }
-    if plot.has_facets() {
+    if plot.description().has_facets() {
         crate::orchestrator::facet_text_census_labels(plot, |label| {
             push_deferred_body(
                 requirements,
@@ -1021,7 +1033,7 @@ fn push_deferred_plot_requirements(
             )
         })?;
     }
-    for layer in plot.point_layers() {
+    for layer in plot.description().point_layers() {
         if layer
             .label_layout
             .as_ref()
@@ -1076,6 +1088,7 @@ fn push_deferred_plot_requirements(
 
     if kind == PlotKind::Matrix {
         for variable in plot
+            .description()
             .matrix_variables()
             .unwrap_or_default()
             .iter()
@@ -1088,7 +1101,7 @@ fn push_deferred_plot_requirements(
                     address,
                     PreparedTextRole::AxisTitle,
                     body_index,
-                    plot.resolve_label(variable)?,
+                    plot.description().resolve_label(variable)?,
                     &[],
                     crate::text::TextAppearance::from(&theme.typography.axes.axis_title)
                         .layout(theme.text_layouts.matrix[role].as_ref()),
@@ -1236,8 +1249,8 @@ fn push_deferred_plot_requirements(
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            let significance =
-                theme.effective_significance(plot.significance_mark_style_override())?;
+            let significance = theme
+                .effective_significance(plot.description().significance_mark_style_override())?;
             for (index, source, is_significance) in marks.text_occurrences() {
                 let eligible = crate::data::source::collect_source(
                     marks
@@ -1317,6 +1330,7 @@ fn point_layer_row_is_visible(
         x.is_finite()
             && (!filter_x_to_limits
                 || plot
+                    .description()
                     .x_axis_spec()
                     .limits
                     .is_none_or(|limits| x >= limits.0 && x <= limits.1))
@@ -1324,6 +1338,7 @@ fn point_layer_row_is_visible(
         y.is_finite()
             && (!filter_y_to_limits
                 || plot
+                    .description()
                     .y_axis_spec()
                     .limits
                     .is_none_or(|limits| y >= limits.0 && y <= limits.1))
@@ -1391,7 +1406,7 @@ fn push_plot_axis_ticks(
             if plot.axis_scope().is_some() && plot.axis_scope() != scope.as_deref() {
                 continue;
             }
-            let owner = if plot.has_facets() {
+            let owner = if plot.description().has_facets() {
                 base.child(
                     crate::layout::AddressRole::FacetCell,
                     u32::try_from(index)
@@ -1401,7 +1416,7 @@ fn push_plot_axis_ticks(
                 base.clone()
             };
             for side in 0..2 {
-                if plot.text_layouts().ticks[side]
+                if plot.description().text_layouts().ticks[side]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
                 {
@@ -1444,14 +1459,17 @@ fn push_plot_axis_ticks(
             }
         }
     } else {
-        for (side, spec) in [plot.x_axis_spec(), plot.y_axis_spec()]
-            .into_iter()
-            .enumerate()
+        for (side, spec) in [
+            plot.description().x_axis_spec(),
+            plot.description().y_axis_spec(),
+        ]
+        .into_iter()
+        .enumerate()
         {
             if side == 1 && !plot.y_tick_labels_visible() {
                 continue;
             }
-            if plot.text_layouts().ticks[side]
+            if plot.description().text_layouts().ticks[side]
                 .as_ref()
                 .is_some_and(crate::TextLayout::hidden)
             {
@@ -1562,8 +1580,9 @@ fn automatic_category_labels(
     x_axis: bool,
 ) -> Result<Option<Vec<String>>, Error> {
     if kind == PlotKind::Raincloud && x_axis {
-        if let Some(input) = plot.raincloud_geometry_input() {
+        if let Some(input) = plot.description().raincloud_geometry_input() {
             return plot
+                .description()
                 .resolve_label_domain(
                     "x-axis categories",
                     (0..input.category.len()).filter_map(|row| input.category.get(row).flatten()),
@@ -1571,7 +1590,8 @@ fn automatic_category_labels(
                 .map(Some);
         }
     }
-    plot.automatic_axis_category_values(kind, x_axis)
+    plot.description()
+        .automatic_axis_category_values(kind, x_axis)
         .map(|values| {
             let normalized = matches!(
                 (kind, x_axis),
@@ -1592,7 +1612,7 @@ fn automatic_category_labels(
             } else {
                 Cow::Borrowed(values.levels())
             };
-            plot.resolve_label_domain(
+            plot.description().resolve_label_domain(
                 if x_axis {
                     "x-axis categories"
                 } else {

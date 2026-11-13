@@ -73,9 +73,10 @@ pub(crate) fn plan(
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
-    let effective = theme.effective_significance(chart.significance_mark_style_override())?;
+    let effective =
+        theme.effective_significance(chart.description().significance_mark_style_override())?;
     plan_comparisons_with_label(
-        chart.significance_annotations(),
+        chart.description().significance_annotations(),
         categories,
         rendered_maxima,
         y_range,
@@ -790,7 +791,7 @@ fn plan_grouped_oriented(
         .iter()
         .map(|index| positions[*index])
         .collect::<Vec<_>>();
-    for annotation in chart.significance_annotations() {
+    for annotation in chart.description().significance_annotations() {
         if let Some((endpoint_a, endpoint_b)) = annotation.endpoints() {
             if stacked && (endpoint_a.series_name().is_some() || endpoint_b.series_name().is_some())
             {
@@ -803,9 +804,10 @@ fn plan_grouped_oriented(
             resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
         }
     }
-    let effective = theme.effective_significance(chart.significance_mark_style_override())?;
+    let effective =
+        theme.effective_significance(chart.description().significance_mark_style_override())?;
     let mut result = plan_comparisons_at_with_label(
-        chart.significance_annotations(),
+        chart.description().significance_annotations(),
         &labels,
         &maxima,
         Some(&positions),

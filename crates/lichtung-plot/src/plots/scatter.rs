@@ -91,7 +91,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Scatter has no retained primary marks".into(),
         ));
     }
-    let style = chart.point_style(
+    let style = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_scatter(),
@@ -130,7 +130,7 @@ impl PreparedScatter {
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
-        let style = chart.point_style(
+        let style = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_scatter(),
@@ -170,9 +170,11 @@ impl PreparedScatter {
             stages.set(counts);
         });
         let x_col = chart
+            .description()
             .x_col()
             .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;
         let y_col = chart
+            .description()
             .y_col()
             .ok_or_else(|| Error::Data("scatter: y column not set".into()))?;
         let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "scatter")?;
@@ -185,7 +187,7 @@ impl PreparedScatter {
             crate::data::min_max(rows.iter().map(|(_, _, y)| *y), "scatter")?,
         ];
         let mut groups = Vec::new();
-        if let Some(hue_col) = chart.hue_col() {
+        if let Some(hue_col) = chart.description().hue_col() {
             let hues = crate::data::strict_strings(data, hue_col, "scatter")?;
             let retained_hues = crate::data::source::collect_source(
                 rows.iter()
@@ -226,7 +228,7 @@ impl PreparedScatter {
                 }))?,
             });
         }
-        if let Some(exact) = chart.categorical_map_spec() {
+        if let Some(exact) = chart.description().categorical_map_spec() {
             for group in &groups {
                 if let Some(label) = &group.label {
                     if exact.color_in(label).is_none() {
@@ -267,7 +269,7 @@ impl PreparedScatter {
         CategoryColors::resolve(
             &keys,
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )
     }
@@ -305,14 +307,15 @@ impl PreparedScatter {
             };
             let color = map.color(label)?;
             entries.push(
-                GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_point(
-                    chart.point_style(
-                        theme,
-                        color,
-                        theme.marks.get_points().get_radii().get_scatter(),
+                GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?
+                    .with_point(
+                        chart.description().point_style(
+                            theme,
+                            color,
+                            theme.marks.get_points().get_radii().get_scatter(),
+                        ),
+                        PointRole::Primary,
                     ),
-                    PointRole::Primary,
-                ),
             );
         }
         Ok(entries)
@@ -376,7 +379,7 @@ impl PreparedScatter {
                     .ok_or_else(|| Error::Render("Scatter accent owner is missing".into()))?
                     .color(0)?
             };
-            let style = chart.point_style(
+            let style = chart.description().point_style(
                 theme,
                 color,
                 theme.marks.get_points().get_radii().get_scatter(),
@@ -447,7 +450,7 @@ pub(crate) fn measure_marks(
     let resources = theme.text.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
-    let point_style = chart.point_style(
+    let point_style = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_scatter(),

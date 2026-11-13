@@ -75,6 +75,7 @@ pub(crate) fn intrinsic_body_minimum(
         offset = offset.max((0.36 - slot * (row.group_index as f64 + 0.5)).abs());
     }
     let endpoints = chart
+        .description()
         .dumbbell_endpoints_spec()
         .ok_or_else(|| Error::Render("Dumbbell endpoint paints are missing".into()))?;
     let mut outward = 0.0_f64;
@@ -132,6 +133,7 @@ impl DumbbellData {
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let endpoints = chart
+            .description()
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide endpoint paints are missing".into()))?;
         for row in &self.rows {
@@ -173,6 +175,7 @@ impl DumbbellData {
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let endpoints = chart
+            .description()
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide requires endpoint metadata".into()))?;
         let mut entries = Vec::new();
@@ -294,6 +297,7 @@ fn project(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
     let endpoints = chart
+        .description()
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
     let category_count = prepared.categories.len();
@@ -373,6 +377,7 @@ pub(crate) fn shared_x_domain(
     let left = crate::data::strict_finite_f64(
         data,
         chart
+            .description()
             .y_col()
             .ok_or_else(|| Error::Data("dumbbell: left value column not set".into()))?,
         "dumbbell",
@@ -380,6 +385,7 @@ pub(crate) fn shared_x_domain(
     let right = crate::data::strict_finite_f64(
         data,
         chart
+            .description()
             .dumbbell_right_col()
             .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?,
         "dumbbell",
@@ -387,7 +393,7 @@ pub(crate) fn shared_x_domain(
 
     crate::layout::continuous_auto_range(
         crate::data::min_max(left.into_iter().chain(right), "dumbbell")?,
-        chart.x_axis_spec(),
+        chart.description().x_axis_spec(),
     )
 }
 
@@ -397,38 +403,39 @@ pub(crate) fn prepare<'a>(
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
     data.validate_row_source()?;
+    let source = chart.description();
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
-    if chart.y_axis_spec() != &AxisSpec::default() {
+    if source.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "dumbbell: categorical y-axis limits are not supported".into(),
         ));
     }
-    if chart.hue_col().is_some() || chart.color_col().is_some() {
+    if source.hue_col().is_some() || source.color_col().is_some() {
         return Err(Error::Data(
             "dumbbell: hue and continuous color channels are not supported; endpoint colors are explicit"
                 .into(),
         ));
     }
-    if !matches!(chart.category_order_spec(), CategoryOrder::Observed) {
+    if !matches!(source.category_order_spec(), CategoryOrder::Observed) {
         return Err(Error::Data(
             "dumbbell: category ordering is not supported; category order is first-observed".into(),
         ));
     }
-    let category_col = chart
+    let category_col = source
         .x_col()
         .ok_or_else(|| Error::Data("dumbbell: category column not set".into()))?;
-    let left_col = chart
+    let left_col = source
         .y_col()
         .ok_or_else(|| Error::Data("dumbbell: left value column not set".into()))?;
-    let right_col = chart
+    let right_col = source
         .dumbbell_right_col()
         .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?;
     let categories =
         crate::data::strict_normalized_strings(data, category_col, "dumbbell", "category")?;
     let left = crate::data::strict_finite_f64(data, left_col, "dumbbell")?;
     let right = crate::data::strict_finite_f64(data, right_col, "dumbbell")?;
-    let groups = chart
+    let groups = source
         .group_col()
         .map(|column| {
             crate::data::strict_normalized_strings(data, column, "dumbbell", "replicate/group")
@@ -501,7 +508,7 @@ fn endpoint_style(
     theme: &crate::text::TextRequestContext<'_, '_>,
     color: crate::Color,
 ) -> crate::render::backend::PointStyle {
-    let mut point = chart.point_style(
+    let mut point = chart.description().point_style(
         theme,
         (color.red(), color.green(), color.blue()),
         theme.marks.get_points().get_radii().get_dumbbell(),

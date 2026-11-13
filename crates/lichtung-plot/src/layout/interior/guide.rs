@@ -126,8 +126,8 @@ impl PreparedInteriorInputs {
     /// Scientific color membership is independent of guide visibility, display
     /// aliases and eventual section projection. No body probe participates.
     pub(crate) fn observed_color_levels(&self, chart: &Plot) -> Result<Vec<String>, Error> {
-        self.route.validate(chart)?;
-        if chart.categorical_color_field().is_none() {
+        self.route.validate(chart.description())?;
+        if chart.description().categorical_color_field().is_none() {
             return Ok(Vec::new());
         }
         let mut levels = Vec::new();
@@ -208,9 +208,9 @@ impl PreparedInteriorInputs {
         global_hues: Option<&[String]>,
     ) -> Result<(), Error> {
         let global_hues = global_hues.or_else(|| chart.global_hue_levels());
-        let palette = if let Some(scale) = chart.categorical_color_scale_spec() {
+        let palette = if let Some(scale) = chart.description().categorical_color_scale_spec() {
             let Some(palette) = scale.palette() else {
-                if !chart.colors_by_sign() {
+                if !chart.description().colors_by_sign() {
                     for key in global_hues.into_iter().flatten() {
                         if scale
                             .map()
@@ -230,7 +230,9 @@ impl PreparedInteriorInputs {
         } else {
             theme.color_scales().get_qualitative()
         };
-        if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
+        if palette.capacity() != crate::theme::PaletteCapacity::Fixed
+            || chart.description().colors_by_sign()
+        {
             return Ok(());
         }
         let mut keys = Vec::new();
@@ -288,7 +290,7 @@ impl PreparedInteriorInputs {
         data: PlotData<'_>,
         scope: Option<&str>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        self.route.validate(chart)?;
+        self.route.validate(chart.description())?;
         let kind = chart.kind();
         match kind {
             PlotKind::Scatter => {
@@ -418,7 +420,9 @@ impl PreparedInteriorInputs {
                 owner.clone()
             };
             let alpha = self.alpha_sources(&scoped, theme, scope, &contributor)?;
-            let descriptor = if chart.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            let descriptor = if chart.description().legend_policy_spec()
+                == crate::LegendPolicy::Hidden
+            {
                 None
             } else {
                 let keys = if chart.kind() == PlotKind::Matrix {
@@ -480,7 +484,7 @@ impl PreparedInteriorInputs {
         Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
         Error,
     > {
-        let field = chart.color_dimension_key().unwrap_or("");
+        let field = chart.description().color_dimension_key().unwrap_or("");
         let descriptor = match chart.kind() {
             PlotKind::Heatmap => panel(
                 self.heatmap.as_ref().map(|inputs| inputs.panels.as_slice()),
@@ -508,7 +512,7 @@ impl PreparedInteriorInputs {
         scope: Option<&str>,
         owner: &crate::layout::ComponentAddress,
     ) -> Result<std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>, Error> {
-        self.route.validate(chart)?;
+        self.route.validate(chart.description())?;
         let mut guide =
             crate::decorations::legend::alpha::AlphaGuideBuilder::new(chart, theme, owner);
         if !guide.any_enabled() {
@@ -574,8 +578,14 @@ fn parent_guide_order(
         // include Hidden marks and cannot order visible guide contributions.
         if facet_cells {
             for (field, levels) in [
-                (chart.group_name(), chart.global_group_levels()),
-                (chart.hue_dimension_key(), chart.global_hue_levels()),
+                (
+                    chart.description().group_name(),
+                    chart.global_group_levels(),
+                ),
+                (
+                    chart.description().hue_dimension_key(),
+                    chart.global_hue_levels(),
+                ),
             ] {
                 if let (Some(field), Some(levels)) = (field, levels) {
                     let consumed = panels
@@ -607,12 +617,12 @@ fn parent_guide_order(
             .iter()
             .filter(|pair| pair.group.is_some() || pair.hue.is_some())
         {
-            order.push(chart.collective_legend_identity(pair)?);
+            order.push(chart.description().collective_legend_identity(pair)?);
         }
     } else if let Some(hues) = chart.global_hue_levels() {
         crate::data::source::reserve_source(&mut order, hues.len())?;
         for hue in hues {
-            order.push(chart.point_legend_identity(hue)?);
+            order.push(chart.description().point_legend_identity(hue)?);
         }
     }
     Ok(order)

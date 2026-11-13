@@ -38,7 +38,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     );
     let data = source
         .data()
-        .map_source_rows(source.source_row_map().unwrap());
+        .map_source_rows(source.description().source_row_map().unwrap());
     let before = prepare_axes(&source, data).unwrap();
     let control = source
         .clone()
@@ -52,7 +52,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         );
     let control_data = control
         .data()
-        .map_source_rows(control.source_row_map().unwrap());
+        .map_source_rows(control.description().source_row_map().unwrap());
     let after = prepare_axes(&control, control_data).unwrap();
     assert_eq!(before.ranges, after.ranges);
     for (before, after) in before.diagonals.iter().zip(&after.diagonals) {

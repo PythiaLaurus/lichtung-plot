@@ -19,7 +19,7 @@ pub(crate) struct NumericInputs {
 }
 
 fn cells<K: crate::kind::Marker>(plot: &Plot<K>) -> Option<&NumericFormat> {
-    match plot.heatmap_annotations_spec() {
+    match plot.description().heatmap_annotations_spec() {
         HeatmapAnnotations::Hidden => None,
         HeatmapAnnotations::Values(format) => Some(format),
     }
@@ -28,30 +28,31 @@ fn cells<K: crate::kind::Marker>(plot: &Plot<K>) -> Option<&NumericFormat> {
 impl NumericInputs {
     pub(crate) fn new<K: crate::kind::Marker>(plot: &Plot<K>) -> Result<Self> {
         Ok(Self {
-            scale: plot.axis_scale_spec(),
+            scale: plot.description().axis_scale_spec(),
             axes: [
-                plot.x_axis_spec().format.clone(),
-                plot.y_axis_spec().format.clone(),
+                plot.description().x_axis_spec().format.clone(),
+                plot.description().y_axis_spec().format.clone(),
             ],
-            color: plot.color_label_format_spec().cloned(),
+            color: plot.description().color_label_format_spec().cloned(),
             cells: cells(plot).map(NumericFormat::try_copy).transpose()?,
             estimates: plot
+                .description()
                 .estimate_labels_spec()
                 .map(NumericFormat::try_copy)
                 .transpose()?,
-            totals: plot.total_format_spec().cloned(),
+            totals: plot.description().total_format_spec().cloned(),
             owner: plot.canvas_owner.clone(),
         })
     }
 
     pub(crate) fn matches<K: crate::kind::Marker>(&self, plot: &Plot<K>) -> bool {
-        self.scale == plot.axis_scale_spec()
+        self.scale == plot.description().axis_scale_spec()
             && self.owner == plot.canvas_owner
-            && self.axes[0] == plot.x_axis_spec().format
-            && self.axes[1] == plot.y_axis_spec().format
-            && self.color.as_ref() == plot.color_label_format_spec()
+            && self.axes[0] == plot.description().x_axis_spec().format
+            && self.axes[1] == plot.description().y_axis_spec().format
+            && self.color.as_ref() == plot.description().color_label_format_spec()
             && self.cells.as_ref() == cells(plot)
-            && self.estimates.as_ref() == plot.estimate_labels_spec()
-            && self.totals.as_ref() == plot.total_format_spec()
+            && self.estimates.as_ref() == plot.description().estimate_labels_spec()
+            && self.totals.as_ref() == plot.description().total_format_spec()
     }
 }

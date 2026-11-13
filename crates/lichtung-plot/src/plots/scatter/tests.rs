@@ -29,7 +29,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     .erase();
     let data = source
         .data()
-        .map_source_rows(source.source_row_map().unwrap());
+        .map_source_rows(source.description().source_row_map().unwrap());
     let prepared = PreparedScatter::new(&source, data).unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 3);
     assert_eq!(
@@ -75,6 +75,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         [(1, 0), (1, 128), (1, 0)]
     );
     let outline = chart
+        .description()
         .point_style(
             &theme,
             (0, 0, 0),

@@ -70,7 +70,7 @@ impl PreparedMarginal {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_marginal(),
@@ -118,7 +118,7 @@ impl PreparedMarginal {
         let colors = CategoryColors::resolve(
             keys,
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
@@ -173,12 +173,14 @@ impl PreparedMarginal {
             let color = Self::group_color(group, colors, accents)?;
             entries.push(
                 GuideSourceKey::collective(
-                    chart.collective_legend_identity(&group.identity)?,
+                    chart
+                        .description()
+                        .collective_legend_identity(&group.identity)?,
                     chart,
                     false,
                 )?
                 .with_point(
-                    chart.point_style(
+                    chart.description().point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_marginal(),
@@ -214,7 +216,7 @@ pub(crate) fn intrinsic_body_minimum(
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
 
     for group in &prepared.groups {
-        let style = chart.point_style(
+        let style = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_marginal(),
@@ -554,8 +556,8 @@ pub(crate) fn measure(
                 .prepared_axis_inputs()
                 .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                 .copy_label(1)?,
-            &layout::display_axis_spec(chart.x_axis_spec(), (x_low, x_high)),
-            &layout::display_axis_spec(chart.y_axis_spec(), (y_low, y_high)),
+            &layout::display_axis_spec(chart.description().x_axis_spec(), (x_low, x_high)),
+            &layout::display_axis_spec(chart.description().y_axis_spec(), (y_low, y_high)),
             theme,
         )
     })()?;
@@ -661,7 +663,7 @@ pub(crate) fn measure(
     let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color = PreparedMarginal::group_color(group, &colors, &accents)?;
-        let point_style = chart.point_style(
+        let point_style = chart.description().point_style(
             theme,
             color,
             theme.marks.get_points().get_radii().get_marginal(),
@@ -862,7 +864,7 @@ pub(crate) fn prepare(
     for group in &mut groups {
         group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
     }
-    if let Some(exact) = chart.categorical_map_spec() {
+    if let Some(exact) = chart.description().categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
@@ -975,9 +977,12 @@ fn validate_marginal_range<'a>(
 
 fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 2], Error> {
     let mut ranges = [(0.0, 1.0); 2];
-    for (index, spec) in [chart.x_axis_spec(), chart.y_axis_spec()]
-        .into_iter()
-        .enumerate()
+    for (index, spec) in [
+        chart.description().x_axis_spec(),
+        chart.description().y_axis_spec(),
+    ]
+    .into_iter()
+    .enumerate()
     {
         let values: fn(&HueGroup) -> &[f64] = if index == 0 {
             |group| &group.x
@@ -1015,7 +1020,7 @@ pub(crate) fn shared_x_domain(
     let range = marginal_display_range(
         groups.iter().map(|group| group.x.as_slice()),
         range,
-        chart.x_axis_spec(),
+        chart.description().x_axis_spec(),
     )?;
     validate_marginal_range(&groups, range, |group| &group.x, "x")?;
     Ok(range)
@@ -1029,9 +1034,11 @@ fn build_groups<'a>(
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
 
     let x_col = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("marginal: x column not set".into()))?;
     let y_col = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
     let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
@@ -1040,10 +1047,10 @@ fn build_groups<'a>(
         crate::data::source::collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
+        chart.description().group_col(),
+        chart.description().group_name(),
+        chart.description().hue_col(),
+        chart.description().hue_name(),
         Some(&retained_rows),
         "marginal",
     )?;

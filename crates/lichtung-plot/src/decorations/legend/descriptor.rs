@@ -60,7 +60,7 @@ impl ContinuousContributor {
         input: &crate::layout::interior::PreparedInteriorInputs,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<Self>, Error> {
-        let Some(field) = plot.color_dimension_key() else {
+        let Some(field) = plot.description().color_dimension_key() else {
             return Ok(None);
         };
         let field = crate::data::source::copy_source_string(field)?;

@@ -54,7 +54,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Beeswarm source rows and prepared points differ".into(),
         ));
     }
-    let point = chart.point_style(
+    let point = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_beeswarm(),
@@ -84,7 +84,10 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let mut numeric = ink.map_or(0.0, |ink| ink.dimensions().0);
-    if chart.zero_line_visible() && prepared.x_data.0 <= 0.0 && prepared.x_data.1 >= 0.0 {
+    if chart.description().zero_line_visible()
+        && prepared.x_data.0 <= 0.0
+        && prepared.x_data.1 >= 0.0
+    {
         numeric = numeric.max(crate::render::geometry::line_ink_width(
             &theme
                 .marks
@@ -114,7 +117,7 @@ fn packing_radius(
     chart: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<i64, Error> {
-    let mut style = chart.point_style(
+    let mut style = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_beeswarm(),
@@ -134,12 +137,15 @@ pub(crate) fn prepare(
 ) -> Result<PreparedBeeswarm, Error> {
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let category_col = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
     let x_col = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("beeswarm: x column not set".into()))?;
     let color_col = chart
+        .description()
         .color_col()
         .ok_or_else(|| Error::Data("beeswarm: continuous color column not set".into()))?;
     let categories = crate::data::strict_strings(data, category_col, "beeswarm")?;
@@ -179,7 +185,7 @@ pub(crate) fn prepare(
         a.0.cmp(&b.0)
             .then_with(|| a.3.source_row.cmp(&b.3.source_row))
     });
-    let format = chart.color_label_format_spec().cloned();
+    let format = chart.description().color_label_format_spec().cloned();
     let numeric_source = crate::numeric::source::NumericSource::for_data(chart, data)?;
     let values = if chart.continuous_guide_suppressed() {
         None
@@ -214,7 +220,7 @@ pub(crate) fn prepare(
         scale,
         selection,
         colorbar_stops,
-        color_label: chart.prepare_color_label(None)?,
+        color_label: chart.description().prepare_color_label(None)?,
     })
 }
 
@@ -225,7 +231,7 @@ impl PreparedBeeswarm {
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_beeswarm(),
@@ -320,7 +326,11 @@ pub(crate) fn natural_body_height(
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
-    let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
+    let range = chart
+        .description()
+        .x_axis_spec()
+        .limits
+        .unwrap_or(axes.ranges[0]);
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(
@@ -347,7 +357,7 @@ pub(crate) fn measure(
 
     let minimum = intrinsic_body_minimum(chart, theme)?;
     let (panel, colorbar) = if chart.continuous_guide_suppressed()
-        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+        || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
         (context.panel, None)
     } else {
@@ -488,7 +498,7 @@ pub(crate) fn measure(
         },
     };
     let x_range = layout.projection.x_range();
-    let zero = if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
+    let zero = if chart.description().zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, prepared.levels.len() as f64);
         Some((
@@ -518,7 +528,7 @@ pub(crate) fn measure(
                     .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
                 Ok((
                     Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
-                    row.3.point(chart.point_style(
+                    row.3.point(chart.description().point_style(
                         theme,
                         color.as_rgb(),
                         theme.marks.get_points().get_radii().get_beeswarm(),

@@ -29,7 +29,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     .erase();
     let data = source
         .data()
-        .map_source_rows(source.source_row_map().unwrap());
+        .map_source_rows(source.description().source_row_map().unwrap());
     let prepared = finish(prepare(&source, data).unwrap(), None).unwrap();
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 6);
     assert_eq!(
@@ -60,7 +60,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         );
     let control_data = control
         .data()
-        .map_source_rows(control.source_row_map().unwrap());
+        .map_source_rows(control.description().source_row_map().unwrap());
     let control = finish(prepare(&control, control_data).unwrap(), None).unwrap();
     assert_eq!(prepared.ranges, control.ranges);
     assert_eq!(prepared.curves.x_densities, control.curves.x_densities);

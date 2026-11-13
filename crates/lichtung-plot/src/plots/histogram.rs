@@ -180,11 +180,12 @@ impl HistogramSemantics {
         owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
+        let source = chart.description();
         let curve_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
         let (range, bins, curve, rugs) = if let Some(input) =
-            chart.histogram_composite_geometry_input()
+            source.histogram_composite_geometry_input()
         {
             let range = input.validate()?;
             (
@@ -194,20 +195,20 @@ impl HistogramSemantics {
                 supplied_rugs(input)?,
             )
         } else {
-            if let Some(hue) = chart.hue_col() {
+            if let Some(hue) = source.hue_col() {
                 return Err(Error::Data(format!("histogram: hue column {hue:?} is not supported yet; render separate single-series histograms")));
             }
-            let column = chart
+            let column = source
                 .x_col()
                 .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
             let values = crate::data::strict_finite_f64(data, column, "histogram")?;
             let prepared = prepare_histogram(
                 &values,
-                chart.histogram_bins_spec(),
-                chart.histogram_stat_spec(),
+                source.histogram_bins_spec(),
+                source.histogram_stat_spec(),
             )?;
             let range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
-            let curve = prepare_density_curve(chart.histogram_composite_spec(), &values, range)?;
+            let curve = prepare_density_curve(source.histogram_composite_spec(), &values, range)?;
             let bins = crate::data::source::collect_source(
                 prepared.heights.iter().enumerate().map(|(i, height)| {
                     Ok(Bin {
@@ -266,8 +267,8 @@ impl HistogramSemantics {
             .fold(0.0_f64, f64::max);
         Ok(Self {
             ranges: [
-                chart.x_axis_spec().limits.unwrap_or(range),
-                crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0)?,
+                source.x_axis_spec().limits.unwrap_or(range),
+                crate::layout::anchored_auto_range((0.0, maximum), source.y_axis_spec(), 0.0)?,
             ],
             source_ranges: [range, (0.0, maximum)],
             bins,
@@ -488,14 +489,15 @@ pub(crate) fn shared_x_domain(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<(f64, f64), Error> {
-    if let Some(input) = chart.histogram_composite_geometry_input() {
+    if let Some(input) = chart.description().histogram_composite_geometry_input() {
         return input.validate();
     }
     let column = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
     let values = crate::data::strict_finite_f64(data, column, "histogram")?;
-    let edges = prepare_edges(&values, chart.histogram_bins_spec())?;
+    let edges = prepare_edges(&values, chart.description().histogram_bins_spec())?;
     Ok((edges[0], edges[edges.len() - 1]))
 }
 

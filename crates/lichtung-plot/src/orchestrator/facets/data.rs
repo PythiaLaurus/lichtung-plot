@@ -73,12 +73,12 @@ pub(super) fn facet_selectors(
     plot: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<FacetSelectors, Error> {
-    let data = if let Some(rows) = plot.configured_source_rows()? {
+    let data = if let Some(rows) = plot.description().configured_source_rows()? {
         data.map_source_rows(rows)
     } else {
         data
     };
-    let (row_column, column_column, wrap_column, wrap_columns) = plot.facet_columns();
+    let (row_column, column_column, wrap_column, wrap_columns) = plot.description().facet_columns();
     let mut variable_names = Vec::new();
     crate::data::source::reserve_source(&mut variable_names, 3)?;
     for column in [row_column, column_column, wrap_column]
@@ -87,11 +87,13 @@ pub(super) fn facet_selectors(
     {
         variable_names.push(data.column(column)?.name());
     }
-    plot.resolve_axis_label_domain("facet variables", variable_names.iter().copied())?;
+    plot.description()
+        .resolve_axis_label_domain("facet variables", variable_names.iter().copied())?;
     let cells = if let Some(wrap) = wrap_column {
         let levels =
             crate::data::source::source_levels(&crate::data::strict_strings(data, wrap, "facet")?)?;
-        plot.resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str))?;
+        plot.description()
+            .resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str))?;
         let columns = wrap_columns.unwrap_or(1);
         if columns == 0 {
             return Err(Error::Data(
@@ -130,13 +132,13 @@ pub(super) fn facet_selectors(
             },
         )?;
         if row_column.is_some() {
-            plot.resolve_axis_label_domain(
+            plot.description().resolve_axis_label_domain(
                 "facet levels for \"__facet_row\"",
                 row_levels.iter().map(String::as_str),
             )?;
         }
         if column_column.is_some() {
-            plot.resolve_axis_label_domain(
+            plot.description().resolve_axis_label_domain(
                 "facet levels for \"__facet_column\"",
                 column_levels.iter().map(String::as_str),
             )?;
@@ -197,52 +199,60 @@ pub(super) fn facet_selectors(
     })
 }
 
-pub(super) fn base_plot(
-    source: &Plot,
-    kind: PlotKind,
-    resources: &crate::font::canonical::OperationContext,
-) -> Result<Plot, Error> {
-    let source_rows = source.configured_source_rows()?;
-    let data = source_rows
-        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_operation(resources);
+pub(super) fn base_plot(source: &Plot, kind: PlotKind) -> Result<Plot, Error> {
+    let source_rows = source.description().configured_source_rows()?;
     let mut base_plot = source.clone().without_facets();
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
     ) || kind == PlotKind::LinePath
-        && source.line_path_style_spec() == crate::LinePathStyle::Hue;
+        && source.description().line_path_style_spec() == crate::LinePathStyle::Hue;
     if independent_collectives {
-        let channels = crate::data::observed_collectives(
-            data,
-            source.group_col(),
-            source.group_name(),
-            source.hue_col(),
-            source.hue_name(),
-            None,
+        let channels = crate::data::observed_source_collectives(
+            source.description(),
             "facet collective channels",
         )?;
         base_plot = base_plot
             .with_global_group_levels(channels.group_levels)
             .with_global_hue_levels(channels.hue_levels)
             .with_global_collective_pairs(channels.identities);
-    } else if let Some(group_column) = source.group_col() {
-        let levels = stable_levels(crate::data::strict_strings(
-            data,
-            group_column,
+    } else if let Some(group_column) = source.description().group_col() {
+        let column = source
+            .description()
+            .data_column(group_column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {group_column:?}")))?;
+        let crate::data::DataColumn::Category(values) = column else {
+            return Err(Error::Data(format!(
+                "facet graphical group: value {:?} must be categorical",
+                column.name()
+            )));
+        };
+        let levels = stable_levels(crate::data::strict_source_strings(
+            values,
+            source_rows,
             "facet graphical group",
         )?);
         base_plot = base_plot.with_global_group_levels(levels);
     }
     if kind == PlotKind::Trajectory {
-        if let Some(x_column) = source.x_col() {
-            let column = data.column(x_column).map_err(|error| {
-                Error::Data(format!("trajectory: column {x_column:?}: {error}"))
-            })?;
+        if let Some(x_column) = source.description().x_col() {
+            let column = source
+                .description()
+                .data_column(x_column)
+                .ok_or_else(|| Error::Data(format!("unknown semantic value {x_column:?}")))
+                .map_err(|error| {
+                    Error::Data(format!("trajectory: column {x_column:?}: {error}"))
+                })?;
             if !column.is_numeric() {
-                let levels = stable_levels(crate::data::strict_normalized_strings(
-                    data,
-                    x_column,
+                let crate::data::DataColumn::Category(values) = column else {
+                    return Err(Error::Data(format!(
+                        "trajectory: value {:?} must be categorical",
+                        column.name()
+                    )));
+                };
+                let levels = stable_levels(crate::data::strict_source_normalized_strings(
+                    values,
+                    source_rows,
                     "trajectory",
                     "condition",
                 )?);
@@ -263,7 +273,7 @@ pub(super) fn extract_panels(
     provisional: Option<&[PixelRect]>,
     mapped_data: crate::data::PlotData<'_>,
 ) -> Result<Vec<FacetPanel>, Error> {
-    let configured_source_rows = plot.configured_source_rows()?;
+    let configured_source_rows = plot.description().configured_source_rows()?;
     let mapped_data = if let Some(rows) = configured_source_rows {
         mapped_data.map_source_rows(rows)
     } else {
@@ -277,8 +287,8 @@ pub(super) fn extract_panels(
                 crate::data::strict_strings(mapped_data, selector.column, "facet")
             }))?;
         let mut source_indices = Vec::new();
-        crate::data::source::reserve_source(&mut source_indices, plot.row_count())?;
-        for index in 0..plot.row_count() {
+        crate::data::source::reserve_source(&mut source_indices, plot.description().row_count())?;
+        for index in 0..plot.description().row_count() {
             let mut matches = true;
             for (selector_index, selector) in cell.iter().enumerate() {
                 if columns_data[selector_index][index] != selector.level {
@@ -297,7 +307,7 @@ pub(super) fn extract_panels(
             crate::data::source::collect_source(source_indices.iter().map(|index| {
                 Ok(configured_source_rows
                     .as_ref()
-                    .map_or(*index, |rows| rows[*index]))
+                    .map_or(*index, |rows| rows.as_slice()[*index]))
             }))?;
         let panel = provisional.map_or(PixelRect::new(0.0, 1.0, 0.0, 1.0), |boxes| {
             boxes[*row * selectors.columns + *column]
@@ -326,7 +336,7 @@ pub(super) fn validate_significance_facet_anchors(
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
     let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
-    for annotation in plot.significance_annotations() {
+    for annotation in plot.description().significance_annotations() {
         let Some(cell) = annotation.facet_cell() else {
             return Err(Error::Render(
                 "faceted significance annotation must identify one FacetCell; annotations are never replicated across facets".into(),

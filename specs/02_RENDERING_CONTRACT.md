@@ -407,6 +407,11 @@ Measurement borrows that service through short-lived requests carrying the curre
 projection and trial inputs. Existing appearance-copy boundaries, font admission
 before memo lookup, trial memo bypass and guide measurement reuse remain unchanged.
 
+Authored readers and canonical configuration validation borrow PlotDescription
+directly. Source-only checks read the native typed columns without an operation
+data view. They retain each caller's original diagnostic-row mapping and perform
+complete strict reads before whitespace normalization.
+
 Selected interior and chrome plans own their draw operands, layer names and paint;
 they do not retain working Plot arrays or measurement contexts for capture. The
 capture coordinator reads source/route checks at their original draw sites, then

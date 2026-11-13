@@ -17,8 +17,8 @@ pub(super) fn prepare_discrete_guide(
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
     let source_data = source.data().with_operation(resources);
-    let mut base = super::data::base_plot(source, kind, resources)?;
-    if let Some(column) = source.hue_col() {
+    let mut base = super::data::base_plot(source, kind)?;
+    if let Some(column) = source.description().hue_col() {
         let observed = inputs.observed_color_levels(&base)?;
         let values = crate::data::strict_strings(source_data, column, "facet hue")?;
         let levels = crate::data::source::source_levels(&values)?;
@@ -72,7 +72,7 @@ pub(super) fn preflight_coordinated_panels(
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
 ) -> Result<(Plot, Vec<std::sync::Arc<PlotRenderResult>>), crate::layout::fit::PlanError> {
-    let facet_scales = source.facet_scales_spec();
+    let facet_scales = source.description().facet_scales_spec();
     let preflight = preflight_panels(
         &base_plot,
         kind,
@@ -81,7 +81,7 @@ pub(super) fn preflight_coordinated_panels(
         theme,
         children,
         round,
-        if source.hue_dimension_key().is_some() {
+        if source.description().hue_dimension_key().is_some() {
             MeasurementPhase::Hue
         } else {
             MeasurementPhase::Probe

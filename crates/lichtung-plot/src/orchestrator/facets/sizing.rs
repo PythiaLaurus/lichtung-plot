@@ -87,8 +87,8 @@ pub(in crate::orchestrator) fn natural_size(
     let data = source.data().with_operation(&resources);
     let selectors = data::facet_selectors(source, data)?;
     let panels = data::extract_panels(source, &selectors, None, data)?;
-    let labels = source.prepare_axis_labels(None)?;
-    let base = data::base_plot(source, source.kind(), &resources)?;
+    let labels = source.description().prepare_axis_labels(None)?;
+    let base = data::base_plot(source, source.kind())?;
     let mut minima = Vec::new();
     crate::data::source::reserve_source(&mut minima, panels.len())?;
     let mut gutters = Vec::new();
@@ -114,7 +114,7 @@ pub(in crate::orchestrator) fn natural_size(
             },
         ));
     }
-    let position = source.legend_position_spec();
+    let position = source.description().legend_position_spec();
     let outside =
         position == crate::LegendPosition::Auto || crate::decorations::plan::is_outside(position);
     let horizontal = matches!(
@@ -197,7 +197,7 @@ pub(in crate::orchestrator) fn natural_size(
     } else {
         0.0
     };
-    let sources = source.prose();
+    let sources = source.description().prose();
     if requested_width.is_none() {
         for (text, appearance) in sources
             .into_iter()
@@ -233,7 +233,7 @@ pub(in crate::orchestrator) fn natural_size(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
-        RootAlignments::resolve(theme, source.prose_alignments(), [None; 2]),
+        RootAlignments::resolve(theme, source.description().prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;

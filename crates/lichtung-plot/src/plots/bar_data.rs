@@ -51,7 +51,8 @@ impl BarSignificance {
         horizontal: bool,
     ) -> Result<Self, Error> {
         Ok(Self {
-            appearance: theme.effective_significance(chart.significance_mark_style_override())?,
+            appearance: theme
+                .effective_significance(chart.description().significance_mark_style_override())?,
             mode: mode(chart),
             group_span: theme
                 .marks
@@ -180,7 +181,7 @@ pub(crate) fn intrinsic_body_minimum(
             bar,
             prepared,
             mode,
-            chart.bar_spacing_spec(),
+            chart.description().bar_spacing_spec(),
             horizontal,
             theme.marks.get_extents().get_categories(),
         );
@@ -429,18 +430,26 @@ impl PreparedBars {
             chart.global_hue_levels().unwrap_or(&self.hues)
         };
         let colors = CategoryColors::resolve(
-            if chart.colors_by_sign() { &[] } else { keys },
+            if chart.description().colors_by_sign() {
+                &[]
+            } else {
+                keys
+            },
             theme.color_scales.get_qualitative(),
-            if chart.colors_by_sign() {
+            if chart.description().colors_by_sign() {
                 None
             } else {
-                chart.categorical_color_scale_spec()
+                chart.description().categorical_color_scale_spec()
             },
             resources,
         )?;
         let accents = AccentColors::resolve(
             theme.marks.get_accents(),
-            if chart.colors_by_sign() { 2 } else { 0 },
+            if chart.description().colors_by_sign() {
+                2
+            } else {
+                0
+            },
         )?;
         Ok((colors, accents))
     }
@@ -452,7 +461,7 @@ impl PreparedBars {
         colors: &CategoryColors,
         accents: &AccentColors,
     ) -> Result<(u8, u8, u8), Error> {
-        if chart.colors_by_sign() {
+        if chart.description().colors_by_sign() {
             accents.color(usize::from(bar.end < bar.start))
         } else if let Some(hue) = bar.hue_index {
             colors.color(&self.hues[hue])
@@ -744,7 +753,7 @@ pub(crate) fn mode(chart: &Plot) -> BarMode {
         crate::PlotKind::StackedBar | crate::PlotKind::StackedHorizontalBar
     ) {
         BarMode::Stacked
-    } else if chart.group_col().is_some() {
+    } else if chart.description().group_col().is_some() {
         BarMode::Grouped
     } else {
         BarMode::Single
@@ -887,7 +896,13 @@ pub(crate) fn prepare<'a>(
     mode: BarMode,
 ) -> Result<PreparedBars, Error> {
     let data = data.into();
-    prepare_scoped(chart, data, mode, None, chart.significance_annotations())
+    prepare_scoped(
+        chart,
+        data,
+        mode,
+        None,
+        chart.description().significance_annotations(),
+    )
 }
 
 pub(crate) fn prepare_scoped<'a>(
@@ -901,6 +916,7 @@ pub(crate) fn prepare_scoped<'a>(
     let category = data
         .column(
             chart
+                .description()
                 .x_col()
                 .ok_or_else(|| Error::Data("bar category column is missing".into()))?,
         )?
@@ -908,7 +924,7 @@ pub(crate) fn prepare_scoped<'a>(
     let mut fields = Vec::new();
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(category);
-    fields.extend(chart.group_name());
+    fields.extend(chart.description().group_name());
     let fill_alpha =
         chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
     let line_alpha = if mode == BarMode::Stacked {
@@ -923,7 +939,7 @@ pub(crate) fn prepare_scoped<'a>(
     };
     for bar in &mut prepared.bars {
         let key = (category, prepared.categories[bar.category_index].as_str());
-        let series = chart.group_name().zip(
+        let series = chart.description().group_name().zip(
             bar.series_index
                 .map(|index| prepared.series[index].as_str()),
         );
@@ -939,8 +955,9 @@ pub(crate) fn prepare_scoped<'a>(
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
     }
     if let Some(exact) = chart
+        .description()
         .categorical_map_spec()
-        .filter(|_| !chart.colors_by_sign())
+        .filter(|_| !chart.description().colors_by_sign())
     {
         for key in prepared.color_keys() {
             if exact.color_in(key).is_none() {
@@ -961,9 +978,11 @@ fn prepare_core(
 ) -> Result<PreparedBars, Error> {
     data.validate_row_source()?;
     let x_col = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
     let y_col = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data("bar: y column not set".into()))?;
 
@@ -972,8 +991,8 @@ fn prepare_core(
 
     let channels = crate::data::collective_channels(
         data,
-        chart.group_col(),
-        chart.hue_col(),
+        chart.description().group_col(),
+        chart.description().hue_col(),
         Some(&categories),
         "bar",
     )?;
@@ -992,6 +1011,7 @@ fn prepare_core(
             .map(|s| crate::data::source::copy_source_string(s)),
     )?;
     let units = chart
+        .description()
         .bar_units_col()
         .map(|column| crate::data::strict_strings(data, column, "bar sampling units"))
         .transpose()?;
@@ -1000,6 +1020,7 @@ fn prepare_core(
         Ok(BarSummaryInput {
             units: units.as_deref(),
             input: chart
+                .description()
                 .bar_input()
                 .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?,
             facet_identity: &facet_identity,
@@ -1043,18 +1064,18 @@ fn prepare_core(
     }?;
     apply_category_order(
         &mut prepared,
-        chart.category_order_spec(),
+        chart.description().category_order_spec(),
         mode,
         !data.is_full_plot(),
     )?;
-    if let Some(bounds) = chart.bar_bound_cols() {
+    if let Some(bounds) = chart.description().bar_bound_cols() {
         apply_precomputed_bounds(chart, data, &mut prepared, bounds)?;
     }
     Ok(prepared)
 }
 
 fn facet_identity(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<FacetIdentity, Error> {
-    let (row, column, wrap, _) = chart.facet_columns();
+    let (row, column, wrap, _) = chart.description().facet_columns();
     let mut identity = Vec::new();
     for facet_column in [row, column, wrap].into_iter().flatten() {
         let values = crate::data::strict_strings(data, facet_column, "bar facet identity")?;
@@ -1171,10 +1192,12 @@ fn apply_precomputed_bounds(
     (lower_column, upper_column): (&str, &str),
 ) -> Result<(), Error> {
     let category_column = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
     let categories = crate::data::strict_strings(data, category_column, "bar estimate bounds")?;
     let groups = chart
+        .description()
         .group_col()
         .map(|column| crate::data::strict_strings(data, column, "bar estimate bounds"))
         .transpose()?;
@@ -1232,7 +1255,7 @@ fn prepare_point_layers(
     prepared: &PreparedBars,
     mode: BarMode,
 ) -> Result<Vec<PreparedBarPoint>, Error> {
-    if chart.bar_point_layers().is_empty() {
+    if chart.description().bar_point_layers().is_empty() {
         return Ok(Vec::new());
     }
     if mode == BarMode::Stacked {
@@ -1240,9 +1263,9 @@ fn prepare_point_layers(
             "bar point layers are not supported by stacked bars".into(),
         ));
     }
-    let has_series = chart.group_col().is_some();
+    let has_series = chart.description().group_col().is_some();
     let mut points = Vec::new();
-    for (layer_index, layer) in chart.bar_point_layers().iter().enumerate() {
+    for (layer_index, layer) in chart.description().bar_point_layers().iter().enumerate() {
         let context = format!("bar point layer {layer_index}");
         if layer.series_values().is_some() != has_series {
             return Err(Error::Data(format!(
@@ -1323,16 +1346,41 @@ fn prepare_point_layers(
     clippy::too_many_lines,
     reason = "one pass preserves source-row, facet, category, and series validation context"
 )]
-pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<(), Error> {
+pub(crate) fn validate_cells(chart: &crate::builder::PlotDescription) -> Result<(), Error> {
+    let column = |key: &str| {
+        chart
+            .data_column(key)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
+    };
+    let strings = |key: &str, context: &str| {
+        let column = column(key)?;
+        let crate::data::DataColumn::Category(values) = column else {
+            return Err(Error::Data(format!(
+                "{context}: value {:?} must be categorical",
+                column.name()
+            )));
+        };
+        crate::data::strict_source_strings(values, None, context)
+    };
+    let numbers = |key: &str, context: &str| {
+        let column = column(key)?;
+        let crate::data::DataColumn::Numeric(values) = column else {
+            return Err(Error::Data(format!(
+                "{context}: value {:?} must be numeric",
+                column.name()
+            )));
+        };
+        crate::data::strict_source_f64(values, None, context)
+    };
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
     let y_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("bar: y column not set".into()))?;
-    let categories = crate::data::strict_strings(data, x_col, "bar")?;
-    let values = crate::data::strict_finite_f64(data, y_col, "bar")?;
-    let category_name = data.column(x_col)?.name();
+    let categories = strings(x_col, "bar")?;
+    let values = numbers(y_col, "bar")?;
+    let category_name = column(x_col)?.name();
     let facet_columns = {
         let (row, column, wrap, _) = chart.facet_columns();
         [row, column, wrap]
@@ -1342,11 +1390,11 @@ pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> R
     };
     let facet_values = facet_columns
         .iter()
-        .map(|column| crate::data::strict_strings(data, column, "bar"))
+        .map(|column| strings(column, "bar"))
         .collect::<Result<Vec<_>, _>>()?;
     let facet_names = facet_columns
         .iter()
-        .map(|column| data.column(column).map(crate::data::DataColumn::name))
+        .map(|key| column(key).map(crate::data::DataColumn::name))
         .collect::<Result<Vec<_>, _>>()?;
     let mark_cells = (0..values.len())
         .map(|index| {
@@ -1363,13 +1411,7 @@ pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> R
             identity
         })
         .collect::<Vec<_>>();
-    let channels = crate::data::collective_channels(
-        data,
-        chart.group_col(),
-        chart.hue_col(),
-        Some(&mark_cells),
-        "bar",
-    )?;
+    let channels = crate::data::source_collective_channels(chart, Some(&mark_cells), "bar")?;
     if categories.len() != values.len()
         || channels
             .groups
@@ -1407,11 +1449,11 @@ pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> R
         .bar_input()
         .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?;
     if let Some(units_column) = chart.bar_units_col() {
-        crate::data::strict_strings(data, units_column, "bar sampling units")?;
+        strings(units_column, "bar sampling units")?;
     }
     if let Some((lower_column, upper_column)) = chart.bar_bound_cols() {
-        let lower = crate::data::strict_finite_f64(data, lower_column, "bar estimate bounds")?;
-        let upper = crate::data::strict_finite_f64(data, upper_column, "bar estimate bounds")?;
+        let lower = numbers(lower_column, "bar estimate bounds")?;
+        let upper = numbers(upper_column, "bar estimate bounds")?;
         for row in 0..values.len() {
             if lower[row] > values[row] || values[row] > upper[row] {
                 return Err(Error::Data(format!(
@@ -1520,7 +1562,7 @@ pub(crate) fn guide_sources(
     colors: &CategoryColors,
     accents: &AccentColors,
 ) -> Result<Vec<GuideSourceKey>, Error> {
-    if chart.colors_by_sign() {
+    if chart.description().colors_by_sign() {
         let mut present = [false; 2];
         for bar in &prepared.bars {
             present[usize::from(bar.end < bar.start)] = true;
@@ -1549,7 +1591,7 @@ pub(crate) fn guide_sources(
     crate::data::source::reserve_source(&mut entries, prepared.hues.len())?;
     for label in prepared.observed_hue_levels() {
         entries.push(
-            GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_fill(
+            GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?.with_fill(
                 theme.marks.get_fills().get_bodies().get_bar_body(),
                 colors.color(label)?,
                 FillRole::BarBody,

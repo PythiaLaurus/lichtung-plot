@@ -696,7 +696,7 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
 
     pub(crate) fn with_source_rows(
         data: crate::data::PlotData<'a>,
-        source_rows: &'a [usize],
+        source_rows: &'a crate::SourceRows,
         panel: PixelRect,
         theme: &'a crate::text::TextRequestContext<'a, 'src>,
     ) -> Self {
@@ -767,8 +767,13 @@ impl<'a, 'src> PlotRenderContext<'a, 'src> {
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
         self.prepared_axes = plot.prepared_axis_inputs();
         self.prepared_kind = Some(plot.kind());
-        self.prepared_limits = [plot.x_axis_spec().limits, plot.y_axis_spec().limits];
-        if plot.kind() == PlotKind::Forest && plot.axis_scale_spec() == AxisScale::Log10 {
+        self.prepared_limits = [
+            plot.description().x_axis_spec().limits,
+            plot.description().y_axis_spec().limits,
+        ];
+        if plot.kind() == PlotKind::Forest
+            && plot.description().axis_scale_spec() == AxisScale::Log10
+        {
             if let Some((lo, hi)) = self.prepared_limits[0] {
                 self.prepared_limits[0] =
                     Some((crate::numeric::log10(lo)?, crate::numeric::log10(hi)?));

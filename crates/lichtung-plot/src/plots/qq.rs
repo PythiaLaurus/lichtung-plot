@@ -54,7 +54,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Qq primary quantile pairs are incomplete".into(),
         ));
     }
-    let style = chart.point_style(
+    let style = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_qq(),
@@ -104,7 +104,7 @@ impl PreparedQq {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_qq(),
@@ -147,16 +147,17 @@ impl PreparedQq {
         let line_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
-        if let Some(hue) = chart.hue_col() {
+        if let Some(hue) = chart.description().hue_col() {
             return Err(Error::Data(format!(
                 "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
             )));
         }
         let column = chart
+            .description()
             .x_col()
             .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
         let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
-        let mut prepared = prepare_qq(&values, chart.qq_line_spec())?;
+        let mut prepared = prepare_qq(&values, chart.description().qq_line_spec())?;
         prepared.line_alpha = line_alpha;
         for source in &mut prepared.alphas {
             *source = ObservationAlpha::resolve(data, &alpha, source.slot)?;
@@ -171,12 +172,12 @@ impl PreparedQq {
                     self.theoretical[0],
                     self.theoretical[self.theoretical.len() - 1],
                 ),
-                chart.x_axis_spec(),
+                chart.description().x_axis_spec(),
                 "x-axis",
             )?,
             qq_display_range(
                 (self.observed[0], self.observed[self.observed.len() - 1]),
-                chart.y_axis_spec(),
+                chart.description().y_axis_spec(),
                 "y-axis",
             )?,
         ])
@@ -231,7 +232,7 @@ pub(crate) fn measure_marks(
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme)?;
     if let Some(ink) = point_ink(
-        &chart.point_style(
+        &chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_qq(),
@@ -284,7 +285,7 @@ pub(crate) fn project(
         ),
         domain_expansions: [None; 2],
     };
-    let point_style = chart.point_style(
+    let point_style = chart.description().point_style(
         theme,
         crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
         theme.marks.get_points().get_radii().get_qq(),
@@ -309,10 +310,12 @@ pub(crate) fn project(
         .zip(&prepared.alphas)
     {
         if chart
+            .description()
             .x_axis_spec()
             .limits
             .is_some_and(|(minimum, maximum)| *theoretical < minimum || *theoretical > maximum)
             || chart
+                .description()
                 .y_axis_spec()
                 .limits
                 .is_some_and(|(minimum, maximum)| *observed < minimum || *observed > maximum)
@@ -351,6 +354,7 @@ pub(crate) fn shared_x_domain(
     data: crate::data::PlotData<'_>,
 ) -> Result<(f64, f64), Error> {
     let column = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
     let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
@@ -364,7 +368,7 @@ pub(crate) fn shared_x_domain(
             theoretical_quantile(0, values.len())?,
             theoretical_quantile(values.len() - 1, values.len())?,
         ),
-        chart.x_axis_spec(),
+        chart.description().x_axis_spec(),
         "x-axis",
     )
 }

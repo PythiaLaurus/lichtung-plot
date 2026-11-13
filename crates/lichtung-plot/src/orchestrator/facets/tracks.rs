@@ -354,6 +354,7 @@ fn measure(
                 crate::layout::kernel::FeedbackKind::AutomaticDomainX,
             ) {
                 let domain = plot
+                    .description()
                     .x_axis_spec()
                     .limits
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
@@ -364,6 +365,7 @@ fn measure(
                 crate::layout::kernel::FeedbackKind::AutomaticDomainY,
             ) {
                 let domain = plot
+                    .description()
                     .y_axis_spec()
                     .limits
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));

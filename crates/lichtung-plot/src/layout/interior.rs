@@ -71,7 +71,7 @@ impl InteriorRoute {
         )
     }
 
-    pub(crate) fn validate(self, plot: &Plot) -> Result<(), Error> {
+    pub(crate) fn validate(self, plot: &crate::builder::PlotDescription) -> Result<(), Error> {
         if self.kind() != plot.kind() {
             return Err(Error::Data(format!(
                 "interior route {:?} does not match prepared plot {:?}",
@@ -91,7 +91,10 @@ pub(crate) enum CompositionChildPolicy {
 }
 
 impl CompositionChildPolicy {
-    pub(crate) fn validate_child(self, plot: &Plot) -> Result<(), Error> {
+    pub(crate) fn validate_child(
+        self,
+        plot: &crate::builder::PlotDescription,
+    ) -> Result<(), Error> {
         match self {
             Self::Canvas if plot.kind() == PlotKind::Matrix => Err(Error::Render(
                 "Matrix manages its own canvas and cannot be nested in a composed canvas".into(),
@@ -164,7 +167,7 @@ impl PreparedInteriorInputs {
         plot: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(), Error> {
-        self.route.validate(plot)?;
+        self.route.validate(plot.description())?;
         for (index, (scope, axes)) in self.axes.iter().enumerate() {
             if self.route.is_coordinate() {
                 coordinate::Intrinsics::prepare(
@@ -193,7 +196,7 @@ impl PreparedInteriorInputs {
     }
 
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
-        self.route.validate(&plot)?;
+        self.route.validate(plot.description())?;
         plot.prepared_discrete_guides = self.discrete_guides.get().cloned();
         plot.prepared_axes = self.axes.clone();
         plot.prepared_waterfall.clone_from(&self.waterfall);
@@ -265,7 +268,7 @@ impl Plot {
                 Some(crate::plots::bar_data::intrinsic_body_minimum(self, theme)?)
             }
             PlotKind::Boxplot => Some(crate::plots::boxplot::intrinsic_body_minimum(self, theme)?),
-            PlotKind::Raincloud if self.raincloud_geometry_input().is_some() => Some(
+            PlotKind::Raincloud if self.description().raincloud_geometry_input().is_some() => Some(
                 crate::plots::violin::precomputed::intrinsic_body_minimum(self, theme)?,
             ),
             PlotKind::Violin | PlotKind::Raincloud => {

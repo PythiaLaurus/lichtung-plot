@@ -161,12 +161,15 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
     assert!(Arc::ptr_eq(&canvas.placements, &snapshot.placements));
     let source = source.title("external later edit");
     assert_eq!(
-        snapshot.placements.plot(0).unwrap().prose()[0]
+        snapshot.placements.plot(0).unwrap().description().prose()[0]
             .unwrap()
             .as_str(),
         "captured"
     );
-    assert_eq!(source.prose()[0].unwrap().as_str(), "external later edit");
+    assert_eq!(
+        source.description().prose()[0].unwrap().as_str(),
+        "external later edit"
+    );
 
     assert!(canvas.place_panel(0, 0, 1, 1, plot(), false).is_err());
     assert!(canvas.place_panel(0, 1, 0, 1, plot(), true).is_err());

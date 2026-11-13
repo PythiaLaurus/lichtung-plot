@@ -211,35 +211,36 @@ pub(crate) fn mark_preference(
 ) -> Result<StandardSizePreference, Error> {
     let scope = plot.axis_scope();
     let point_ink = |radius| -> Result<f64, Error> {
-        let point = plot.point_style(theme, (0, 0, 0), radius);
+        let point = plot.description().point_style(theme, (0, 0, 0), radius);
         let (x, y) = crate::render::geometry::point_ink_dimensions(&point)?;
         Ok(x.max(y))
     };
-    let (count, primary_ink) =
-        match plot.kind() {
-            PlotKind::Scatter => {
-                let inputs = plot.prepared_scatter.as_deref().ok_or_else(|| {
-                    Error::Render("Scatter mark preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Scatter")?;
-                (
-                    marks.checked_primary_mark_count()?,
-                    point_ink(theme.marks.get_points().get_radii().get_scatter())?,
-                )
-            }
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                let inputs = plot.prepared_line.as_deref().ok_or_else(|| {
-                    Error::Render("Line mark preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Line")?;
-                let stroke = if plot.kind() == PlotKind::Line {
-                    theme.marks.get_data_lines().get_series_line()
-                } else {
-                    theme.marks.get_data_lines().get_path_line()
-                };
-                let line =
-                    crate::render::geometry::line_ink_width(&stroke.backend_style((0, 0, 0)))?;
-                let marker = if plot.kind() == PlotKind::Trajectory || plot.markers_visible() {
+    let (count, primary_ink) = match plot.kind() {
+        PlotKind::Scatter => {
+            let inputs = plot
+                .prepared_scatter
+                .as_deref()
+                .ok_or_else(|| Error::Render("Scatter mark preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Scatter")?;
+            (
+                marks.checked_primary_mark_count()?,
+                point_ink(theme.marks.get_points().get_radii().get_scatter())?,
+            )
+        }
+        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+            let inputs = plot
+                .prepared_line
+                .as_deref()
+                .ok_or_else(|| Error::Render("Line mark preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Line")?;
+            let stroke = if plot.kind() == PlotKind::Line {
+                theme.marks.get_data_lines().get_series_line()
+            } else {
+                theme.marks.get_data_lines().get_path_line()
+            };
+            let line = crate::render::geometry::line_ink_width(&stroke.backend_style((0, 0, 0)))?;
+            let marker =
+                if plot.kind() == PlotKind::Trajectory || plot.description().markers_visible() {
                     point_ink(if plot.kind() == PlotKind::Line {
                         theme.marks.get_points().get_radii().get_path()
                     } else {
@@ -248,82 +249,83 @@ pub(crate) fn mark_preference(
                 } else {
                     0.0
                 };
-                (marks.checked_primary_mark_count()?, line.max(marker))
-            }
-            PlotKind::Histogram => {
-                let inputs = plot.prepared_histogram.as_deref().ok_or_else(|| {
-                    Error::Render("Histogram mark preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Histogram")?;
-                let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                    &theme
-                        .marks
-                        .get_fills()
-                        .get_bodies()
-                        .get_histogram_bin()
-                        .backend_style((0, 0, 0)),
-                )?;
-                (marks.primary_mark_count(), x.max(y))
-            }
-            PlotKind::Density => {
-                let inputs = plot.prepared_density.as_deref().ok_or_else(|| {
-                    Error::Render("Density mark preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Density")?;
-                let line = crate::render::geometry::line_ink_width(
-                    &theme
-                        .marks
-                        .get_data_lines()
-                        .get_density_line()
-                        .backend_style((0, 0, 0)),
-                )?;
-                let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                    &theme
-                        .marks
-                        .get_fills()
-                        .get_densities()
-                        .get_density_area()
-                        .backend_style((0, 0, 0)),
-                )?;
-                (marks.primary_mark_count(), line.max(x).max(y))
-            }
-            PlotKind::Qq => {
-                let inputs = plot
-                    .prepared_qq
-                    .as_deref()
-                    .ok_or_else(|| Error::Render("Qq mark preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Qq")?;
-                (
-                    marks.primary_mark_count(),
-                    point_ink(theme.marks.get_points().get_radii().get_qq())?,
-                )
-            }
-            PlotKind::Regression => {
-                let inputs = plot.prepared_regression.as_deref().ok_or_else(|| {
-                    Error::Render("Regression mark preference lacks preparation".into())
-                })?;
-                let marks = panel(&inputs.panels, scope, "Regression")?;
-                (
-                    marks.primary_mark_count(),
-                    point_ink(theme.marks.get_points().get_radii().get_regression())?,
-                )
-            }
-            PlotKind::Marginal => {
-                let marks = plot
-                    .prepared_marginal
-                    .as_ref()
-                    .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
-                (
-                    marks.checked_primary_mark_count()?,
-                    point_ink(theme.marks.get_points().get_radii().get_marginal())?,
-                )
-            }
-            _ => {
-                return Err(Error::Render(
-                    "standard mark preference requires a standard coordinate family".into(),
-                ))
-            }
-        };
+            (marks.checked_primary_mark_count()?, line.max(marker))
+        }
+        PlotKind::Histogram => {
+            let inputs = plot.prepared_histogram.as_deref().ok_or_else(|| {
+                Error::Render("Histogram mark preference lacks preparation".into())
+            })?;
+            let marks = panel(&inputs.panels, scope, "Histogram")?;
+            let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
+                &theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_histogram_bin()
+                    .backend_style((0, 0, 0)),
+            )?;
+            (marks.primary_mark_count(), x.max(y))
+        }
+        PlotKind::Density => {
+            let inputs = plot
+                .prepared_density
+                .as_deref()
+                .ok_or_else(|| Error::Render("Density mark preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Density")?;
+            let line = crate::render::geometry::line_ink_width(
+                &theme
+                    .marks
+                    .get_data_lines()
+                    .get_density_line()
+                    .backend_style((0, 0, 0)),
+            )?;
+            let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
+                &theme
+                    .marks
+                    .get_fills()
+                    .get_densities()
+                    .get_density_area()
+                    .backend_style((0, 0, 0)),
+            )?;
+            (marks.primary_mark_count(), line.max(x).max(y))
+        }
+        PlotKind::Qq => {
+            let inputs = plot
+                .prepared_qq
+                .as_deref()
+                .ok_or_else(|| Error::Render("Qq mark preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Qq")?;
+            (
+                marks.primary_mark_count(),
+                point_ink(theme.marks.get_points().get_radii().get_qq())?,
+            )
+        }
+        PlotKind::Regression => {
+            let inputs = plot.prepared_regression.as_deref().ok_or_else(|| {
+                Error::Render("Regression mark preference lacks preparation".into())
+            })?;
+            let marks = panel(&inputs.panels, scope, "Regression")?;
+            (
+                marks.primary_mark_count(),
+                point_ink(theme.marks.get_points().get_radii().get_regression())?,
+            )
+        }
+        PlotKind::Marginal => {
+            let marks = plot
+                .prepared_marginal
+                .as_ref()
+                .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
+            (
+                marks.checked_primary_mark_count()?,
+                point_ink(theme.marks.get_points().get_radii().get_marginal())?,
+            )
+        }
+        _ => {
+            return Err(Error::Render(
+                "standard mark preference requires a standard coordinate family".into(),
+            ))
+        }
+    };
     let em = theme.typography.axes.tick_label.font_size;
     let mark_pitch = em.max(primary_ink);
     let density_side = f64::from(ceil_sqrt(count)?) * mark_pitch;

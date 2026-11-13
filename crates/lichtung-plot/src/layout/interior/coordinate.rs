@@ -290,7 +290,7 @@ impl InteriorRoute {
             }
             _ => crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
         });
-        self.validate(plot)?;
+        self.validate(plot.description())?;
         let inputs = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
@@ -515,8 +515,8 @@ pub(crate) fn canvas_layout(
     let mut root = crate::layout::RootFramePlan::measure(
         plot.canvas_dimensions()?,
         theme,
-        plot.prose(),
-        RootAlignments::resolve(theme, plot.prose_alignments(), [None; 2]),
+        plot.description().prose(),
+        RootAlignments::resolve(theme, plot.description().prose_alignments(), [None; 2]),
         minimum,
     )?;
     root.native_preference = match super::InteriorRoute::classify(plot.kind()) {

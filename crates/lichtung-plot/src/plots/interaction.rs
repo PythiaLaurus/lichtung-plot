@@ -79,8 +79,9 @@ pub(crate) fn intrinsic_body_minimum(
                 .get_interaction_interval()
                 .backend_style((0, 0, 0)),
         ))?;
-        let marker = if chart.markers_visible() {
+        let marker = if chart.description().markers_visible() {
             let point = chart
+                .description()
                 .point_style(
                     theme,
                     (0, 0, 0),
@@ -98,18 +99,19 @@ pub(crate) fn intrinsic_body_minimum(
         } else {
             None
         };
-        let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
-            crate::render::geometry::line_ink_width(&line_style(
-                trace.line_alpha,
-                theme
-                    .marks
-                    .get_data_lines()
-                    .get_interaction_connector()
-                    .backend_style((0, 0, 0)),
-            ))?
-        } else {
-            0.0
-        };
+        let connector =
+            if chart.description().interaction_connectors_visible() && trace.cells.len() > 1 {
+                crate::render::geometry::line_ink_width(&line_style(
+                    trace.line_alpha,
+                    theme
+                        .marks
+                        .get_data_lines()
+                        .get_interaction_connector()
+                        .backend_style((0, 0, 0)),
+                ))?
+            } else {
+                0.0
+            };
         let stroke = interval.max(connector);
         numeric = numeric.max(stroke);
         pitch = pitch.max(stroke);
@@ -154,19 +156,20 @@ impl PreparedInteraction {
         for trace in &self.traces {
             let unit = AlphaUnit::series(chart, Some(&trace.identity))?;
             let point = chart
+                .description()
                 .point_style(
                     theme,
                     (0, 0, 0),
                     theme.marks.get_points().get_radii().get_interaction(),
                 )
                 .with_shape(trace.style.point_shape);
-            if chart.markers_visible() {
+            if chart.description().markers_visible() {
                 for cell in &trace.cells {
                     guide.point(
                         AlphaGlyphRole::Primary,
                         cell.alpha,
                         point.clone(),
-                        chart.interaction_styles_spec().is_some(),
+                        chart.description().interaction_styles_spec().is_some(),
                     )?;
                 }
             }
@@ -182,7 +185,7 @@ impl PreparedInteraction {
                     .backend_style((0, 0, 0)),
                 false,
             )?;
-            if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
+            if chart.description().interaction_connectors_visible() && trace.cells.len() > 1 {
                 let mut line = theme
                     .marks
                     .get_data_lines()
@@ -195,7 +198,7 @@ impl PreparedInteraction {
                     unit,
                     trace.line_alpha,
                     line,
-                    chart.interaction_styles_spec().is_some(),
+                    chart.description().interaction_styles_spec().is_some(),
                 )?;
             }
         }
@@ -243,7 +246,7 @@ impl PreparedInteraction {
         CategoryColors::resolve(
             &keys,
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             data.source_resources()?,
         )
     }
@@ -276,7 +279,9 @@ impl PreparedInteraction {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, self.traces.len())?;
         for trace in &self.traces {
-            if trace.identity.hue.is_none() && chart.interaction_styles_spec().is_none() {
+            if trace.identity.hue.is_none()
+                && chart.description().interaction_styles_spec().is_none()
+            {
                 continue;
             }
             let key = trace
@@ -286,8 +291,11 @@ impl PreparedInteraction {
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
             let color = colors.color(key)?;
-            let identity = chart.collective_legend_identity(&trace.identity)?;
+            let identity = chart
+                .description()
+                .collective_legend_identity(&trace.identity)?;
             let point = chart
+                .description()
                 .point_style(
                     theme,
                     color,
@@ -300,12 +308,12 @@ impl PreparedInteraction {
                 .get_interaction_connector()
                 .backend_style(color);
             line.pattern = trace.style.line_pattern.stroke_pattern();
-            let mapped_styles = chart.interaction_styles_spec().is_some();
+            let mapped_styles = chart.description().interaction_styles_spec().is_some();
             let mut key = GuideSourceKey::collective(identity, chart, mapped_styles)?;
-            if chart.markers_visible() {
+            if chart.description().markers_visible() {
                 key = key.with_point(point, PointRole::Primary);
             }
-            if chart.interaction_connectors_visible() {
+            if chart.description().interaction_connectors_visible() {
                 key = key.with_line(line, LineRole::InteractionConnector);
             }
             if mapped_styles {
@@ -334,24 +342,27 @@ pub(crate) fn prepare(
     data.validate_row_source()?;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
     let estimate_col = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data("interaction: estimate column not set".into()))?;
     chart
+        .description()
         .group_col()
         .ok_or_else(|| Error::Data("interaction: graphical group column not set".into()))?;
-    let (lo, hi) = chart.interval_bound_cols().ok_or_else(|| {
+    let (lo, hi) = chart.description().interval_bound_cols().ok_or_else(|| {
         Error::Data("interaction: complete precomputed interval columns are required".into())
     })?;
     let x = crate::data::strict_strings(data, x_col, "interaction")?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
+        chart.description().group_col(),
+        chart.description().group_name(),
+        chart.description().hue_col(),
+        chart.description().hue_name(),
         None,
         "interaction",
     )?;
@@ -446,7 +457,7 @@ pub(crate) fn prepare(
             line_alpha: line_alpha.collective(chart, identity)?,
         });
     }
-    if let Some(exact) = chart.categorical_map_spec() {
+    if let Some(exact) = chart.description().categorical_map_spec() {
         for trace in &traces {
             let key = trace
                 .identity
@@ -599,6 +610,7 @@ pub(crate) fn measure_marks(
             .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
         let color = colors.color(key)?;
         let point = chart
+            .description()
             .point_style(
                 context.theme,
                 color,
@@ -630,7 +642,8 @@ pub(crate) fn measure_marks(
                     .get_interaction_interval()
                     .backend_style(color),
             ),
-            connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
+            connector: (chart.description().interaction_connectors_visible()
+                && trace.cells.len() > 1)
                 .then(|| line.clone()),
             markers: Vec::new(),
         };
@@ -652,7 +665,7 @@ pub(crate) fn measure_marks(
             geometry.line(&interval, &selected.interval, Some(clip))?;
             selected.intervals.push(interval);
             selected.points.push(Point2D::new(px, py));
-            if chart.markers_visible() {
+            if chart.description().markers_visible() {
                 push_point(
                     &mut selected.markers,
                     Point2D::new(px, py),
@@ -681,7 +694,7 @@ pub(crate) fn measure_marks(
 }
 
 fn resolve_trace_styles(chart: &Plot, levels: &[String]) -> Result<Option<Vec<TraceStyle>>, Error> {
-    let Some(configured) = chart.interaction_styles_spec() else {
+    let Some(configured) = chart.description().interaction_styles_spec() else {
         return Ok(None);
     };
     let mut styles = crate::data::source::collect_source(levels.iter().map(|_| Ok(None)))?;

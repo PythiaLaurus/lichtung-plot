@@ -74,7 +74,7 @@ pub(super) fn render_scene(
     for (index, ((_facet, panel_plan), strip)) in
         panels.iter().zip(panel_plans).zip(strip_text).enumerate()
     {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
         panel_plan.result.draw_body(backend)?;
         crate::significance::render_selected(&panel_plan.result, backend)?;
         crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {
@@ -93,7 +93,9 @@ pub(super) fn render_scene(
         draw_facet_strip(&strip_layers[index], strip, backend)?;
     }
     draw_shared_facet_axis_labels(shared_axis_text, backend)?;
-    canvas_layout.root_text.draw(source.prose(), backend)
+    canvas_layout
+        .root_text
+        .draw(source.description().prose(), backend)
 }
 
 #[expect(
@@ -282,8 +284,8 @@ pub(super) fn facet_label(
     data.source_resources()?;
     let mut label = String::new();
     for (index, selector) in cell.iter().enumerate() {
-        let variable = plot.resolve_label(&selector.variable)?;
-        let level = plot.resolve_label(&selector.level)?;
+        let variable = plot.description().resolve_label(&selector.variable)?;
+        let level = plot.description().resolve_label(&selector.level)?;
         let length = variable
             .len()
             .checked_add(level.len())
@@ -312,8 +314,8 @@ pub(super) fn strip_sources(
     data.source_resources()?;
     crate::data::source::collect_source(cell.iter().enumerate().map(|(index, selector)| {
         let role = if cell.as_slice().len() == 1 { 1 } else { index };
-        let variable = plot.resolve_label(&selector.variable)?;
-        let level = plot.resolve_label(&selector.level)?;
+        let variable = plot.description().resolve_label(&selector.variable)?;
+        let level = plot.description().resolve_label(&selector.level)?;
         let length = variable
             .len()
             .checked_add(level.len())

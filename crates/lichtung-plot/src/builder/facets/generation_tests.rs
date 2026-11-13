@@ -33,14 +33,20 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         .unwrap();
     assert_eq!(
         retained.x_axis_spec.generation,
-        plot.x_axis_spec().generation
+        plot.description().x_axis_spec().generation
     );
     assert_eq!(
         retained.y_axis_spec.generation,
-        plot.y_axis_spec().generation
+        plot.description().y_axis_spec().generation
     );
-    assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec().format);
-    assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec().format);
+    assert_eq!(
+        retained.x_axis_spec.format,
+        plot.description().x_axis_spec().format
+    );
+    assert_eq!(
+        retained.y_axis_spec.format,
+        plot.description().y_axis_spec().format
+    );
     assert!(plot.same_composed_inputs(&retained, &retained.guides));
     plot.description.payload_mut().x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
@@ -105,10 +111,13 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         .retain_composed_inputs(ScopedGuideInputs::for_test(&automatic))
         .unwrap();
     assert_eq!(
-        automatic.x_axis_spec().limits,
-        configured.x_axis_spec().limits
+        automatic.description().x_axis_spec().limits,
+        configured.description().x_axis_spec().limits
     );
-    assert_eq!(automatic.x_axis_spec().limits, shared.x_axis_spec().limits);
+    assert_eq!(
+        automatic.description().x_axis_spec().limits,
+        shared.description().x_axis_spec().limits
+    );
     assert!(automatic.same_composed_inputs(&retained, &retained.guides));
     assert!(!configured.same_composed_inputs(&retained, &retained.guides));
     assert!(!shared.same_composed_inputs(&retained, &retained.guides));

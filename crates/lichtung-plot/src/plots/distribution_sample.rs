@@ -58,9 +58,11 @@ pub(crate) fn prepare_scoped(
 ) -> Result<DistributionSample, Error> {
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_column = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
     let y_column = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data(format!("{family}: y column not set")))?;
     let x_values = crate::data::strict_strings(data, x_column, family)?;
@@ -70,8 +72,8 @@ pub(crate) fn prepare_scoped(
     }
     let channels = crate::data::collective_channels(
         data,
-        chart.group_col(),
-        chart.hue_col(),
+        chart.description().group_col(),
+        chart.description().hue_col(),
         Some(&x_values),
         family,
     )?;
@@ -161,14 +163,17 @@ pub(crate) fn prepare_scoped(
     let mut fields = Vec::new();
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(category);
-    fields.extend(chart.group_name());
+    fields.extend(chart.description().group_name());
     let line_alpha =
         chart.prepare_scoped_alpha(AlphaTarget::Line, AlphaUnitKind::Aggregate, &fields, data)?;
     let fill_alpha =
         chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
     for group in &mut groups {
         let key = (category, group.label.as_str());
-        let series = chart.group_name().zip(group.group_label.as_deref());
+        let series = chart
+            .description()
+            .group_name()
+            .zip(group.group_label.as_deref());
         group.line_alpha = line_alpha.aggregate(key, series)?;
         group.fill_alpha = fill_alpha.aggregate(key, series)?;
     }

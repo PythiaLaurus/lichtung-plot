@@ -25,10 +25,10 @@ pub(super) fn canvas_layout(
     let mut canvas = RootFramePlan::measure(
         plot.canvas_dimensions()?,
         theme,
-        plot.prose(),
+        plot.description().prose(),
         crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            plot.prose_alignments(),
+            plot.description().prose_alignments(),
             [None; 2],
         ),
         (
@@ -267,7 +267,7 @@ pub(super) fn native_parent(
             crate::decorations::legend::discrete::GuideSlot::new(
                 std::sync::Arc::clone(descriptor),
                 &ComponentAddress::root(),
-                plot.legend_position_spec(),
+                plot.description().legend_position_spec(),
             )
         })
         .transpose()?;

@@ -86,12 +86,12 @@ impl crate::Plot {
         std::array::from_fn(|index| {
             let mut inputs = AxisSemanticInputs::new(
                 if index == 0 {
-                    self.x_axis_spec()
+                    self.description().x_axis_spec()
                 } else {
-                    self.y_axis_spec()
+                    self.description().y_axis_spec()
                 },
                 if index == 0 && self.kind() == PlotKind::Forest {
-                    self.axis_scale_spec()
+                    self.description().axis_scale_spec()
                 } else {
                     AxisScale::Linear
                 },
@@ -103,7 +103,7 @@ impl crate::Plot {
             );
             inputs
                 .text_layout
-                .clone_from(&self.text_layouts().ticks[index]);
+                .clone_from(&self.description().text_layouts().ticks[index]);
             inputs
         })
     }

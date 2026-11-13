@@ -147,7 +147,7 @@ pub(crate) fn measure_marks(
     crate::data::source::reserve_source(&mut payload.bars, prepared.bars.len())?;
     crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;
     crate::data::source::reserve_source(&mut payload.points, prepared.points.len())?;
-    if chart.zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
+    if chart.description().zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, y_count);
         payload.zero = Some([Point2D::new(x, y0), Point2D::new(x, y1)]);
@@ -157,7 +157,7 @@ pub(crate) fn measure_marks(
             bar,
             prepared,
             mode,
-            chart.bar_spacing_spec(),
+            chart.description().bar_spacing_spec(),
             true,
             theme.marks.get_extents().get_categories(),
         );

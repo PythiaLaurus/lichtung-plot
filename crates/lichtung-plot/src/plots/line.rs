@@ -106,14 +106,15 @@ pub(crate) fn intrinsic_body_minimum(
             path_style.clone(),
         ))?);
     }
-    let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
+    let points_visible =
+        chart.kind() == PlotKind::Trajectory || chart.description().markers_visible();
     let mark = if points_visible {
         let radius = if chart.kind() == PlotKind::Line {
             theme.marks.get_points().get_radii().get_path()
         } else {
             theme.marks.get_points().get_radii().get_trajectory()
         };
-        let point_style = chart.point_style(theme, (0, 0, 0), radius);
+        let point_style = chart.description().point_style(theme, (0, 0, 0), radius);
         point_ink(
             &point_style,
             prepared.groups.iter().flat_map(|group| {
@@ -128,7 +129,7 @@ pub(crate) fn intrinsic_body_minimum(
         (0.0, 0.0)
     };
     let mut ribbon = (0.0_f64, 0.0_f64);
-    if chart.kind() == PlotKind::Line && chart.line_band_configured() {
+    if chart.kind() == PlotKind::Line && chart.description().line_band_configured() {
         for group in &prepared.groups {
             if !group.points.iter().all(|point| point.interval.is_some()) {
                 continue;
@@ -184,7 +185,7 @@ impl PreparedLine {
         } else {
             theme.marks.get_points().get_radii().get_trajectory()
         };
-        let point = chart.point_style(theme, (0, 0, 0), radius);
+        let point = chart.description().point_style(theme, (0, 0, 0), radius);
         let band = theme.marks.get_fills().get_bands().get_line_band();
         for group in &self.groups {
             let unit = AlphaUnit::series(chart, group.identity.as_ref())?;
@@ -196,13 +197,13 @@ impl PreparedLine {
                 line.backend_style((0, 0, 0)),
                 false,
             )?;
-            if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
+            if chart.kind() == PlotKind::Trajectory || chart.description().markers_visible() {
                 for vertex in &group.points {
                     guide.point(AlphaGlyphRole::Primary, vertex.alpha, point.clone(), false)?;
                 }
             }
             if chart.kind() == PlotKind::Line
-                && chart.line_band_configured()
+                && chart.description().line_band_configured()
                 && group.points.iter().all(|point| point.interval.is_some())
             {
                 guide.fill(
@@ -229,7 +230,7 @@ impl PreparedLine {
         let map = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )?;
         let slots = self
@@ -249,7 +250,7 @@ impl PreparedLine {
         accent: &AccentColors,
     ) -> Result<(u8, u8, u8), Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.line_path_style_spec() == LinePathStyle::Hue;
+            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
         if chart.kind() == PlotKind::Line {
             if let Some(hue) = group
                 .identity
@@ -283,7 +284,7 @@ impl PreparedLine {
 
     pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<usize>, Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.line_path_style_spec() == LinePathStyle::Hue;
+            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
         let mut order = crate::data::source::collect_source((0..self.groups.len()).map(Ok))?;
         crate::data::source::sort_source_by(&mut order, |a, b| {
             let key = |index: usize| {
@@ -335,7 +336,7 @@ impl PreparedLine {
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.line_path_style_spec() == LinePathStyle::Hue;
+            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
         for &index in order {
             let group = &self.groups[index];
             let color = self.group_color(chart, group, theme, map, accent)?;
@@ -361,12 +362,12 @@ impl PreparedLine {
                 )
             };
             crate::data::source::reserve_source(&mut entries, 1)?;
-            let identity = chart.collective_legend_identity(identity)?;
+            let identity = chart.description().collective_legend_identity(identity)?;
             let mut key = GuideSourceKey::collective(identity, chart, false)?
                 .with_line(line.backend_style(color), line_role);
-            if chart.markers_visible() {
+            if chart.description().markers_visible() {
                 key = key.with_point(
-                    chart.point_style(
+                    chart.description().point_style(
                         theme,
                         color,
                         if chart.kind() == PlotKind::Line {
@@ -388,37 +389,43 @@ impl PreparedLine {
             entries.push(key);
         }
         if chart.kind() != PlotKind::Line
-            && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
+            && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
             && !hue_paths
         {
             let levels = chart.global_hue_levels().unwrap_or(&self.hues);
             crate::data::source::reserve_source(&mut entries, levels.len())?;
             for label in levels.iter().filter(|label| self.hues.contains(label)) {
                 entries.push(
-                    GuideSourceKey::row_hue(chart.point_legend_identity(label)?)?.with_point(
-                        chart.point_style(
-                            theme,
-                            map.color(label)?,
-                            theme.marks.get_points().get_radii().get_trajectory(),
+                    GuideSourceKey::row_hue(chart.description().point_legend_identity(label)?)?
+                        .with_point(
+                            chart.description().point_style(
+                                theme,
+                                map.color(label)?,
+                                theme.marks.get_points().get_radii().get_trajectory(),
+                            ),
+                            PointRole::Primary,
                         ),
-                        PointRole::Primary,
-                    ),
                 );
             }
         }
         for (index, layer) in self.layers.iter().enumerate() {
             if let Some(label) = &layer.legend {
                 crate::data::source::reserve_source(&mut entries, 1)?;
-                let style = chart.point_layers()[index].point_style(
+                let style = chart.description().point_layers()[index].point_style(
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.get_points().get_supplemental(),
                 );
                 let key = GuideSourceKey::supplemental(label, LayerLabelContext::for_plot(chart))?;
-                entries.push(if chart.point_layers()[index].get_color().is_some() {
-                    key.with_exact_point(style, PointRole::Supplemental)
-                } else {
-                    key.with_point(style, PointRole::Supplemental)
-                });
+                entries.push(
+                    if chart.description().point_layers()[index]
+                        .get_color()
+                        .is_some()
+                    {
+                        key.with_exact_point(style, PointRole::Supplemental)
+                    } else {
+                        key.with_point(style, PointRole::Supplemental)
+                    },
+                );
             }
         }
         Ok(entries)
@@ -432,7 +439,7 @@ impl PreparedLine {
         let mut prepared = Self::prepare_scientific(chart, data, conditions)?;
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
-                && chart.line_path_style_spec() == LinePathStyle::Hue);
+                && chart.description().line_path_style_spec() == LinePathStyle::Hue);
         let alpha = chart.prepare_collective_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Series,
@@ -483,22 +490,24 @@ impl PreparedLine {
             }
         };
         let x_col = chart
+            .description()
             .x_col()
             .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
         let y_col = chart
+            .description()
             .y_col()
             .ok_or_else(|| Error::Data(format!("{family}: y column not set")))?;
-        if kind != PlotKind::Line && chart.group_col().is_none() {
+        if kind != PlotKind::Line && chart.description().group_col().is_none() {
             return Err(Error::Data(format!(
                 "{family}: explicit graphical group column not set"
             )));
         }
         let channels = crate::data::observed_collectives(
             data,
-            chart.group_col(),
-            chart.group_name(),
-            chart.hue_col(),
-            chart.hue_name(),
+            chart.description().group_col(),
+            chart.description().group_name(),
+            chart.description().hue_col(),
+            chart.description().hue_name(),
             None,
             family,
         )?;
@@ -510,7 +519,7 @@ impl PreparedLine {
                 .iter()
                 .map(|label| crate::data::source::copy_source_string(label)),
         )?;
-        if let Some(exact) = chart.categorical_map_spec() {
+        if let Some(exact) = chart.description().categorical_map_spec() {
             for hue in &hues {
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
@@ -554,6 +563,7 @@ impl PreparedLine {
         }
         let bounds = if kind == PlotKind::Line {
             chart
+                .description()
                 .interval_bound_cols()
                 .map(|(lower, upper)| {
                     Ok::<_, Error>((
@@ -565,9 +575,9 @@ impl PreparedLine {
         } else {
             None
         };
-        let hue_paths =
-            kind == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
-        if hue_paths && chart.hue_col().is_none() {
+        let hue_paths = kind == PlotKind::LinePath
+            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
+        if hue_paths && chart.description().hue_col().is_none() {
             return Err(Error::Data(
                 "line path: LinePathStyle::Hue requires a categorical hue column".into(),
             ));
@@ -704,8 +714,8 @@ impl PreparedLine {
             });
         }
         let mut layers = Vec::new();
-        crate::data::source::reserve_source(&mut layers, chart.point_layers().len())?;
-        for (index, layer) in chart.point_layers().iter().enumerate() {
+        crate::data::source::reserve_source(&mut layers, chart.description().point_layers().len())?;
+        for (index, layer) in chart.description().point_layers().iter().enumerate() {
             let mut buffer = [0_u8; 64];
             let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
             std::io::Write::write_fmt(&mut cursor, format_args!("line point layer {index}"))
@@ -776,10 +786,11 @@ impl PreparedLine {
         ranges[0] = if let Some(levels) = &conditions {
             (0.0, categorical_index(levels.len())?)
         } else {
-            crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec())?
+            crate::layout::continuous_auto_range(ranges[0], chart.description().x_axis_spec())?
         };
-        ranges[1] = crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec())?;
-        let primary_accent_slots = usize::from(chart.hue_col().is_none());
+        ranges[1] =
+            crate::layout::continuous_auto_range(ranges[1], chart.description().y_axis_spec())?;
+        let primary_accent_slots = usize::from(chart.description().hue_col().is_none());
         Ok(Self {
             ranges,
             mark_ranges,
@@ -858,8 +869,8 @@ fn project(
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
     };
-    let hue_paths =
-        chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
+    let hue_paths = chart.kind() == PlotKind::LinePath
+        && chart.description().line_path_style_spec() == LinePathStyle::Hue;
     let order = prepared.group_order(chart)?;
     let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
 
@@ -970,7 +981,7 @@ fn project(
         }
         .backend_style(color);
         let line = line_style(group.line_alpha, line);
-        let point_style = chart.point_style(
+        let point_style = chart.description().point_style(
             theme,
             color,
             if chart.kind() == PlotKind::Line {
@@ -979,7 +990,7 @@ fn project(
                 theme.marks.get_points().get_radii().get_trajectory()
             },
         );
-        if chart.kind() == PlotKind::Line && chart.markers_visible() {
+        if chart.kind() == PlotKind::Line && chart.description().markers_visible() {
             crate::data::source::reserve_source(&mut payload.marks, 1)?;
             let mut markers = Vec::new();
             for (point, source) in points.iter().zip(&group.points) {
@@ -1003,7 +1014,7 @@ fn project(
     }
     // Trajectories and paths paint every connector before any point.
     if chart.kind() != PlotKind::Line
-        && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
+        && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
     {
         for &index in &order {
             let group = &prepared.groups[index];
@@ -1023,7 +1034,7 @@ fn project(
                     crate::data::source::collect_source(std::iter::once(Ok(project(
                         point.x, point.y,
                     ))))?,
-                    point.alpha.point(chart.point_style(
+                    point.alpha.point(chart.description().point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_trajectory(),
@@ -1035,7 +1046,7 @@ fn project(
     crate::data::source::reserve_source(&mut payload.layers, prepared.layers.len())?;
     let mut label_source: Option<[(f64, f64); 2]> = None;
     for (index, layer) in prepared.layers.iter().enumerate() {
-        let style = chart.point_layers()[index].point_style(
+        let style = chart.description().point_layers()[index].point_style(
             accent.color(prepared.primary_accent_slots + index)?,
             theme.marks.get_points().get_supplemental(),
         );
@@ -1045,9 +1056,11 @@ fn project(
         let mut text = Vec::new();
         let mut label_indices = Vec::new();
         if let Some(labels) = &layer.labels {
-            let appearance = chart.point_layers()[index]
+            let appearance = chart.description().point_layers()[index]
                 .label_appearance(&theme.typography.annotations.point_layer_label)?;
-            let label_layout = chart.point_layers()[index].label_layout.as_ref();
+            let label_layout = chart.description().point_layers()[index]
+                .label_layout
+                .as_ref();
             crate::data::source::reserve_source(&mut text, labels.len())?;
             crate::data::source::reserve_source(&mut label_indices, labels.len())?;
             let x_range = layout.projection.x_range();

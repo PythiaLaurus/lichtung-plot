@@ -1,6 +1,6 @@
 use crate::Error;
 
-use super::Plot;
+use super::{Plot, PlotDescription};
 use crate::data::{
     DataColumn, BAR_INTERVAL_LOWER, BAR_INTERVAL_UPPER, BAR_UNITS, COLOR, DUMBBELL_RIGHT,
     FACET_COLUMN, FACET_ROW, FACET_WRAP, GROUP, HEATMAP_HIGHLIGHT, HUE, INTERVAL_LOWER,
@@ -25,13 +25,13 @@ impl Plot {
     }
 }
 
-impl<K: crate::kind::Marker> Plot<K> {
+impl PlotDescription {
     pub(crate) fn text_layouts(&self) -> &crate::text::roles::TextRoles {
-        &self.description.payload.text_layouts
+        &self.payload.text_layouts
     }
 
     pub(crate) fn theme_spec(&self) -> Option<&crate::theme::Theme> {
-        self.description.payload.theme.as_deref()
+        self.payload.theme.as_deref()
     }
 
     pub(crate) fn resolve_theme(&self) -> Result<crate::theme::ResolvedTheme, Error> {
@@ -39,73 +39,76 @@ impl<K: crate::kind::Marker> Plot<K> {
             Some(theme) => theme.resolve(),
             None => crate::theme::Theme::publication().resolve(),
         }?;
-        theme.text_layouts = self.description.payload.text_layouts.clone();
+        theme.text_layouts = self.payload.text_layouts.clone();
         theme.apply_text_defaults(self.kind());
         Ok(theme)
     }
 
-    pub(crate) fn source_row_map(&self) -> Option<&[usize]> {
-        self.description
-            .payload
-            .source_rows
-            .as_ref()
-            .map(crate::SourceRows::as_slice)
+    pub(crate) fn source_row_map(&self) -> Option<&crate::SourceRows> {
+        self.payload.source_rows.as_ref()
+    }
+
+    pub(crate) fn configured_source_rows(&self) -> Result<Option<&crate::SourceRows>, Error> {
+        if let Some(rows) = self.source_row_map() {
+            if rows.len() != self.row_count() {
+                return Err(Error::Data(format!(
+                    "chart source-row map has length {}, but chart data has {} rows",
+                    rows.len(),
+                    self.row_count()
+                )));
+            }
+        }
+        Ok(self.source_row_map())
     }
 
     pub(crate) fn row_count(&self) -> usize {
-        self.description.payload.input.len()
+        self.payload.input.len()
     }
 
     fn series_values(&self) -> Option<&crate::CategoryValues> {
-        self.description.payload.input.required_series().or(self
-            .description
-            .payload
-            .series
-            .as_ref())
+        self.payload
+            .input
+            .required_series()
+            .or(self.payload.series.as_ref())
     }
 
     fn group_values(&self) -> Option<&crate::CategoryValues> {
-        self.description
-            .payload
+        self.payload
             .input
             .required_group()
-            .or(self.description.payload.group.as_ref())
+            .or(self.payload.group.as_ref())
     }
 
     fn color_values(&self) -> Option<&crate::NumericValues> {
-        self.description.payload.input.continuous_color()
+        self.payload.input.continuous_color()
     }
 
     pub(crate) fn x_col(&self) -> Option<&'static str> {
-        self.description.payload.input.x_name().map(|_| X)
+        self.payload.input.x_name().map(|_| X)
     }
 
     pub(crate) fn y_col(&self) -> Option<&'static str> {
-        self.description.payload.input.y_name().map(|_| Y)
+        self.payload.input.y_name().map(|_| Y)
     }
 
     pub(crate) fn hue_col(&self) -> Option<&'static str> {
-        if self.description.kind.uses_unified_series() {
+        if self.kind.uses_unified_series() {
             self.series_values().map(|_| SERIES)
         } else {
-            self.description.payload.hue.as_ref().map(|_| HUE)
+            self.payload.hue.as_ref().map(|_| HUE)
         }
     }
 
     pub(crate) fn hue_name(&self) -> Option<&str> {
-        if self.description.kind.uses_unified_series() {
+        if self.kind.uses_unified_series() {
             self.series_values().map(crate::CategoryValues::name)
         } else {
-            self.description
-                .payload
-                .hue
-                .as_ref()
-                .map(crate::CategoryValues::name)
+            self.payload.hue.as_ref().map(crate::CategoryValues::name)
         }
     }
 
     pub(crate) fn group_col(&self) -> Option<&'static str> {
-        if self.description.kind.uses_unified_series() {
+        if self.kind.uses_unified_series() {
             self.series_values().map(|_| SERIES)
         } else {
             self.group_values().map(|_| GROUP)
@@ -113,7 +116,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn group_name(&self) -> Option<&str> {
-        if self.description.kind.uses_unified_series() {
+        if self.kind.uses_unified_series() {
             self.series_values().map(crate::CategoryValues::name)
         } else {
             self.group_values().map(crate::CategoryValues::name)
@@ -132,17 +135,11 @@ impl<K: crate::kind::Marker> Plot<K> {
             return self.y_data_column();
         }
         match key {
-            HUE => self
-                .description
-                .payload
-                .hue
-                .as_ref()
-                .map(DataColumn::Category),
+            HUE => self.payload.hue.as_ref().map(DataColumn::Category),
             GROUP => self.group_values().map(DataColumn::Category),
             SERIES => self.series_values().map(DataColumn::Category),
             COLOR => self.color_values().map(DataColumn::Numeric),
             HEATMAP_HIGHLIGHT => self
-                .description
                 .payload
                 .heatmap_highlight
                 .as_ref()
@@ -180,39 +177,35 @@ impl<K: crate::kind::Marker> Plot<K> {
                     | ErrorBarKind::PercentileInterval(_)
                     | ErrorBarKind::StandardError(_) => None,
                 }),
-            DUMBBELL_RIGHT => match self.description.payload.input.as_ref() {
+            DUMBBELL_RIGHT => match self.payload.input.as_ref() {
                 PlotInput::Dumbbell { right, .. } => Some(DataColumn::Numeric(right)),
                 _ => None,
             },
             FACET_ROW => self
-                .description
                 .payload
                 .facet
                 .as_ref()
                 .and_then(crate::FacetSpec::row_values)
                 .map(DataColumn::Category),
             FACET_COLUMN => self
-                .description
                 .payload
                 .facet
                 .as_ref()
                 .and_then(crate::FacetSpec::column_values)
                 .map(DataColumn::Category),
             FACET_WRAP => self
-                .description
                 .payload
                 .facet
                 .as_ref()
                 .and_then(crate::FacetSpec::wrap_values)
                 .map(DataColumn::Category),
             _ => self
-                .description
                 .payload
                 .facet
                 .as_ref()
                 .and_then(|facet| facet.values().find(|values| values.name() == key))
                 .map(DataColumn::Category)
-                .or_else(|| match self.description.payload.input.as_ref() {
+                .or_else(|| match self.payload.input.as_ref() {
                     PlotInput::Matrix { variables } => variables
                         .iter()
                         .find(|values| values.name() == key)
@@ -223,7 +216,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn x_data_column(&self) -> Option<DataColumn<'_>> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Scatter { x, .. }
             | PlotInput::Regression { x, .. }
             | PlotInput::Marginal { x, .. }
@@ -282,7 +275,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn y_data_column(&self) -> Option<DataColumn<'_>> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Scatter { y, .. }
             | PlotInput::Line { y, .. }
             | PlotInput::Trajectory { y, .. }
@@ -368,7 +361,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         reason = "one exhaustive closed-input match keeps every family's aligned channels auditable"
     )]
     pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
-        let mut columns = match self.description.payload.input.as_ref() {
+        let mut columns = match self.payload.input.as_ref() {
             PlotInput::Scatter { x, y }
             | PlotInput::Regression { x, y }
             | PlotInput::Marginal { x, y } => {
@@ -489,39 +482,20 @@ impl<K: crate::kind::Marker> Plot<K> {
                 vec![DataColumn::Category(labels), DataColumn::Numeric(deltas)]
             }
         };
-        columns.extend(
-            self.description
-                .payload
-                .series
-                .iter()
-                .map(DataColumn::Category),
-        );
-        columns.extend(
-            self.description
-                .payload
-                .hue
-                .iter()
-                .map(DataColumn::Category),
-        );
-        columns.extend(
-            self.description
-                .payload
-                .group
-                .iter()
-                .map(DataColumn::Category),
-        );
+        columns.extend(self.payload.series.iter().map(DataColumn::Category));
+        columns.extend(self.payload.hue.iter().map(DataColumn::Category));
+        columns.extend(self.payload.group.iter().map(DataColumn::Category));
         if let Some(bounds) = self.drawable_bounds() {
             columns.push(DataColumn::Numeric(bounds.lower()));
             columns.push(DataColumn::Numeric(bounds.upper()));
         }
         columns.extend(
-            self.description
-                .payload
+            self.payload
                 .heatmap_highlight
                 .iter()
                 .map(DataColumn::Boolean),
         );
-        if let Some(facet) = &self.description.payload.facet {
+        if let Some(facet) = &self.payload.facet {
             columns.extend(facet.values().map(DataColumn::Category));
         }
         columns
@@ -530,31 +504,27 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Heatmap colorbar title, if explicitly configured.
     #[must_use]
     pub(crate) fn color_label_text(&self) -> Option<&str> {
-        self.description
-            .payload
-            .color_label
-            .provided()
-            .map(crate::Text::as_str)
+        self.payload.color_label.provided().map(crate::Text::as_str)
     }
 
     pub(crate) fn copy_color_title(&self) -> Result<crate::Text, Error> {
-        self.description.payload.color_label.try_copy()
+        self.payload.color_label.try_copy()
     }
 
     pub(crate) fn same_color_title(&self, title: &crate::Text) -> bool {
-        self.description.payload.color_label == *title
+        self.payload.color_label == *title
     }
 
     /// Requested heatmap coordinate layout.
     #[must_use]
     pub(crate) fn heatmap_layout_spec(&self) -> HeatmapLayout {
-        self.description.payload.heatmap_layout
+        self.payload.heatmap_layout
     }
 
     /// Requested categorical heatmap label-fit policy.
     #[must_use]
     pub(crate) fn continuous_color_scale_spec(&self) -> Option<&crate::ContinuousColorScale> {
-        self.description.payload.continuous_color_scale.as_ref()
+        self.payload.continuous_color_scale.as_ref()
     }
 
     /// Resolve the complete caller selection against its owning default mapping.
@@ -589,18 +559,17 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Requested heatmap annotation policy.
     #[must_use]
     pub(crate) fn heatmap_annotations_spec(&self) -> &HeatmapAnnotations {
-        &self.description.payload.heatmap_annotations
+        &self.payload.heatmap_annotations
     }
 
     /// Caller-owned annotations for fully-null heatmap rows.
     #[must_use]
     pub(crate) fn heatmap_null_row_annotations_spec(&self) -> &[HeatmapNullRowAnnotation] {
-        &self.description.payload.heatmap_null_row_annotations
+        &self.payload.heatmap_null_row_annotations
     }
 
     pub(crate) fn heatmap_highlight_col(&self) -> Option<&'static str> {
-        self.description
-            .payload
+        self.payload
             .heatmap_highlight
             .as_ref()
             .map(|_| HEATMAP_HIGHLIGHT)
@@ -609,47 +578,47 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Fixed numeric labels configured for point-only coefficient estimates.
     #[must_use]
     pub(crate) fn estimate_labels_spec(&self) -> Option<&NumericFormat> {
-        self.description.payload.estimate_labels.as_ref()
+        self.payload.estimate_labels.as_ref()
     }
 
     pub(crate) const fn significance_mark_style_override(
         &self,
     ) -> Option<crate::SignificanceMarkStyle> {
-        self.description.significance_mark_style
+        self.significance_mark_style
     }
 
     pub(crate) fn category_order_spec(&self) -> &CategoryOrder {
-        &self.description.payload.category_orders.primary
+        &self.payload.category_orders.primary
     }
 
     pub(crate) fn x_category_order_spec(&self) -> &CategoryOrder {
-        &self.description.payload.category_orders.x
+        &self.payload.category_orders.x
     }
 
     pub(crate) fn y_category_order_spec(&self) -> &CategoryOrder {
-        &self.description.payload.category_orders.y
+        &self.payload.category_orders.y
     }
 
     /// Requested histogram bin-selection strategy.
     #[must_use]
     pub(crate) fn histogram_bins_spec(&self) -> HistogramBins {
-        self.description.payload.histogram_bins
+        self.payload.histogram_bins
     }
 
     /// Requested histogram vertical-axis normalization.
     #[must_use]
     pub(crate) fn histogram_stat_spec(&self) -> HistogramStat {
-        self.description.payload.histogram_stat
+        self.payload.histogram_stat
     }
 
     /// Requested optional histogram density-and-rug composition.
     #[must_use]
     pub(crate) fn histogram_composite_spec(&self) -> &HistogramComposite {
-        &self.description.payload.histogram_composite
+        &self.payload.histogram_composite
     }
 
     pub(crate) fn histogram_composite_geometry_input(&self) -> Option<&HistogramGeometry> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Histogram { input } => input.geometry_input(),
             _ => None,
         }
@@ -658,19 +627,19 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Requested normal Q-Q reference-line policy.
     #[must_use]
     pub(crate) fn qq_line_spec(&self) -> QqLine {
-        self.description.payload.qq_line
+        self.payload.qq_line
     }
 
     /// Whether values should be colored according to their sign.
     #[must_use]
     pub(crate) fn colors_by_sign(&self) -> bool {
-        self.description.payload.color_by_sign
+        self.payload.color_by_sign
     }
 
     /// Whether the renderer should draw a zero reference line.
     #[must_use]
     pub(crate) fn zero_line_visible(&self) -> bool {
-        self.description.payload.zero_line
+        self.payload.zero_line
     }
 
     pub(crate) fn interval_bound_cols(&self) -> Option<(&'static str, &'static str)> {
@@ -679,21 +648,21 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn drawable_bounds(&self) -> Option<&crate::Bounds> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::PointInterval { bounds, .. }
             | PlotInput::Interaction { bounds, .. }
             | PlotInput::Forest { bounds, .. } => Some(bounds),
             PlotInput::Coefficient { input, .. } => input.bounds(),
-            _ => self.description.payload.line_band.as_ref(),
+            _ => self.payload.line_band.as_ref(),
         }
     }
 
     pub(crate) fn line_band_configured(&self) -> bool {
-        self.description.payload.line_band.is_some()
+        self.payload.line_band.is_some()
     }
 
     pub(crate) fn bar_input(&self) -> Option<&BarInput> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Bar { input, .. } | PlotInput::HorizontalBar { input, .. } => Some(input),
             _ => None,
         }
@@ -710,70 +679,70 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn estimate_status_values(&self) -> Option<&[crate::EstimateStatus]> {
-        self.description.payload.estimate_status.as_deref()
+        self.payload.estimate_status.as_deref()
     }
 
     pub(crate) fn markers_visible(&self) -> bool {
-        self.description.payload.markers_visible
+        self.payload.markers_visible
     }
 
     /// Configured confidence-band policy for generated regression plots.
     #[must_use]
     pub(crate) const fn regression_band_spec(&self) -> RegressionBand {
-        self.description.regression_band
+        self.regression_band
     }
 
     /// Configured complete-path color and legend policy.
     #[must_use]
     pub(crate) const fn line_path_style_spec(&self) -> LinePathStyle {
-        self.description.line_path_style
+        self.line_path_style
     }
 
     /// Configured original-observation overlay.
     #[must_use]
     pub(crate) const fn raw_overlay_spec(&self) -> RawOverlay {
-        self.description.raw_overlay
+        self.raw_overlay
     }
 
     pub(crate) fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometry> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Raincloud { input } => input.geometry_input(),
             _ => None,
         }
     }
 
     pub(crate) fn coefficient_reference_line_value(&self) -> Option<f64> {
-        self.description.payload.coefficient_reference_line
+        self.payload.coefficient_reference_line
     }
 
     pub(crate) fn forest_reference_value(&self) -> f64 {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Forest { reference, .. } => *reference,
             _ => 0.0,
         }
     }
 
     pub(crate) fn axis_scale_spec(&self) -> AxisScale {
-        self.description.payload.axis_scale
+        self.payload.axis_scale
     }
 
     pub(crate) const fn interaction_connectors_spec(&self) -> Option<bool> {
-        self.description.interaction_connectors
+        self.interaction_connectors
     }
 
     pub(crate) const fn interaction_connectors_visible(&self) -> bool {
-        match self.description.interaction_connectors {
+        match self.interaction_connectors {
             Some(visible) => visible,
             None => true,
         }
     }
 
     pub(crate) fn interaction_styles_spec(&self) -> Option<&[crate::InteractionStyle]> {
-        self.description.payload.interaction_styles.as_deref()
+        self.payload.interaction_styles.as_deref()
     }
 
     pub(crate) fn categorical_color_scale_spec(&self) -> Option<&crate::CategoricalColorScale> {
-        self.description.payload.categorical_color_scale.as_ref()
+        self.payload.categorical_color_scale.as_ref()
     }
 
     pub(crate) fn categorical_map_spec(&self) -> Option<&crate::CategoricalColorMap> {
@@ -784,11 +753,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Caller-owned panel-corner text annotations.
     #[must_use]
     pub(crate) fn panel_text_annotations(&self) -> &[PlotTextAnnotation] {
-        &self.description.payload.panel_text_annotations
+        &self.payload.panel_text_annotations
     }
 
     pub(crate) fn waterfall_base(&self) -> Option<f64> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Waterfall { base, .. } => Some(*base),
             _ => None,
         }
@@ -797,27 +766,23 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Caller-owned waterfall annotation labels, if configured.
     #[must_use]
     pub(crate) fn waterfall_labels_spec(&self) -> Option<&WaterfallLabels> {
-        self.description.payload.waterfall_labels.as_ref()
+        self.payload.waterfall_labels.as_ref()
     }
 
     pub(crate) fn total_format_spec(
         &self,
     ) -> Option<&std::sync::Arc<crate::numeric::format::NumericFormat>> {
-        self.description.payload.total_format.as_ref()
+        self.payload.total_format.as_ref()
     }
 
     pub(crate) fn dumbbell_right_col(&self) -> Option<&'static str> {
-        matches!(
-            self.description.payload.input.as_ref(),
-            PlotInput::Dumbbell { .. }
-        )
-        .then_some(DUMBBELL_RIGHT)
+        matches!(self.payload.input.as_ref(), PlotInput::Dumbbell { .. }).then_some(DUMBBELL_RIGHT)
     }
 
     /// Required endpoint labels and colors for a dumbbell plot.
     #[must_use]
     pub(crate) fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
-        match self.description.payload.input.as_ref() {
+        match self.payload.input.as_ref() {
             PlotInput::Dumbbell { endpoints, .. } => Some(endpoints),
             _ => None,
         }
@@ -826,63 +791,42 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// The chart title, if any.
     #[must_use]
     pub(crate) fn title_text(&self) -> Option<&str> {
-        self.description.title.provided().map(crate::Text::as_str)
+        self.title.provided().map(crate::Text::as_str)
     }
 
     /// The chart subtitle, if any.
     #[must_use]
     pub(crate) fn subtitle_text(&self) -> Option<&str> {
-        self.description
-            .subtitle
-            .provided()
-            .map(crate::Text::as_str)
+        self.subtitle.provided().map(crate::Text::as_str)
     }
 
     /// The chart caption, if any.
     #[must_use]
     pub(crate) fn caption_text(&self) -> Option<&str> {
-        self.description
-            .payload
-            .caption
-            .provided()
-            .map(crate::Text::as_str)
+        self.payload.caption.provided().map(crate::Text::as_str)
     }
 
     pub(crate) fn prose(&self) -> [Option<&crate::Text>; 3] {
-        [
-            &self.description.title,
-            &self.description.subtitle,
-            &self.description.payload.caption,
-        ]
-        .map(crate::Text::provided)
+        [&self.title, &self.subtitle, &self.payload.caption].map(crate::Text::provided)
     }
 
     pub(crate) fn prose_alignments(&self) -> [Option<crate::TextAlignment>; 3] {
-        [
-            &self.description.title,
-            &self.description.subtitle,
-            &self.description.payload.caption,
-        ]
-        .map(crate::Text::alignment_request)
+        [&self.title, &self.subtitle, &self.payload.caption].map(crate::Text::alignment_request)
     }
 
     pub(crate) fn copy_prose(&self) -> Result<[crate::Text; 3], Error> {
         Ok([
-            self.description.title.try_copy()?,
-            self.description.subtitle.try_copy()?,
-            self.description.payload.caption.try_copy()?,
+            self.title.try_copy()?,
+            self.subtitle.try_copy()?,
+            self.payload.caption.try_copy()?,
         ])
     }
 
     pub(crate) fn same_prose(&self, prose: &[crate::Text; 3]) -> bool {
-        [
-            &self.description.title,
-            &self.description.subtitle,
-            &self.description.payload.caption,
-        ]
-        .into_iter()
-        .zip(prose)
-        .all(|(left, right)| left == right)
+        [&self.title, &self.subtitle, &self.payload.caption]
+            .into_iter()
+            .zip(prose)
+            .all(|(left, right)| left == right)
     }
 
     pub(crate) fn validate_display_text(&self) -> Result<(), Error> {
@@ -891,19 +835,11 @@ impl<K: crate::kind::Marker> Plot<K> {
             (self.subtitle_text(), "plot subtitle"),
             (self.caption_text(), "plot caption"),
             (
-                self.description
-                    .payload
-                    .x_label
-                    .provided()
-                    .map(crate::Text::as_str),
+                self.payload.x_label.provided().map(crate::Text::as_str),
                 "x-axis title",
             ),
             (
-                self.description
-                    .payload
-                    .y_label
-                    .provided()
-                    .map(crate::Text::as_str),
+                self.payload.y_label.provided().map(crate::Text::as_str),
                 "y-axis title",
             ),
             (self.color_label_text(), "color guide title"),
@@ -916,7 +852,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn resolve_label(&self, raw: &str) -> Result<String, Error> {
-        self.description.payload.labels.resolve(raw)
+        self.payload.labels.resolve(raw)
     }
 
     pub(crate) fn resolve_axis_label_domain<'b>(
@@ -924,22 +860,18 @@ impl<K: crate::kind::Marker> Plot<K> {
         domain: &str,
         raw_labels: impl IntoIterator<Item = &'b str>,
     ) -> Result<Vec<String>, Error> {
-        self.description
-            .payload
-            .labels
-            .resolve_domain(domain, raw_labels)
+        self.payload.labels.resolve_domain(domain, raw_labels)
     }
 
     pub(crate) fn copy_axis_titles(&self) -> Result<[crate::Text; 2], Error> {
         Ok([
-            self.description.payload.x_label.try_copy()?,
-            self.description.payload.y_label.try_copy()?,
+            self.payload.x_label.try_copy()?,
+            self.payload.y_label.try_copy()?,
         ])
     }
 
     pub(crate) fn same_axis_titles(&self, titles: &[crate::Text; 2]) -> bool {
-        self.description.payload.x_label == titles[0]
-            && self.description.payload.y_label == titles[1]
+        self.payload.x_label == titles[0] && self.payload.y_label == titles[1]
     }
 
     pub(crate) fn prepare_axis_labels(
@@ -954,10 +886,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         let mut labels = [None, None];
         for ((target, source), authored) in labels
             .iter_mut()
-            .zip(self.axis_label_sources(self.description.kind))
+            .zip(self.axis_label_sources(self.kind))
             .zip([
-                self.description.payload.x_label.provided(),
-                self.description.payload.y_label.provided(),
+                self.payload.x_label.provided(),
+                self.payload.y_label.provided(),
             ])
         {
             *target = if let Some(text) = authored {
@@ -968,7 +900,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                     .map(|(raw, inferred)| {
                         if inferred {
                             policy
-                                .unwrap_or(&self.description.payload.labels)
+                                .unwrap_or(&self.payload.labels)
                                 .resolve(raw)
                                 .map(crate::Text::from)
                         } else {
@@ -993,25 +925,12 @@ impl<K: crate::kind::Marker> Plot<K> {
                 crate::orchestrator::measurements::Counter::AxisSourcePreparation,
             );
         }
-        self.description
-            .payload
-            .labels
-            .resolve_domain(domain, raw_labels)
+        self.payload.labels.resolve_domain(domain, raw_labels)
     }
 
     fn axis_label_sources(&self, kind: PlotKind) -> [Option<(&str, bool)>; 2] {
-        let x_name = self
-            .description
-            .payload
-            .input
-            .x_name()
-            .map(|name| (name, true));
-        let y_name = self
-            .description
-            .payload
-            .input
-            .y_name()
-            .map(|name| (name, true));
+        let x_name = self.payload.input.x_name().map(|name| (name, true));
+        let y_name = self.payload.input.y_name().map(|name| (name, true));
         let x = match kind {
             PlotKind::HorizontalBar
             | PlotKind::StackedHorizontalBar
@@ -1036,7 +955,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             | PlotKind::Dumbbell
             | PlotKind::Qq => x_name,
             PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
-                || match self.description.payload.histogram_stat {
+                || match self.payload.histogram_stat {
                     HistogramStat::Count => Some(("Count", false)),
                     HistogramStat::Probability => Some(("Probability", false)),
                     HistogramStat::Density => Some(("Density", false)),
@@ -1059,12 +978,12 @@ impl<K: crate::kind::Marker> Plot<K> {
 
         policy: Option<&crate::Labels>,
     ) -> Result<crate::Text, Error> {
-        if let Some(label) = self.description.payload.color_label.provided() {
+        if let Some(label) = self.payload.color_label.provided() {
             label.required_source("color guide title")?;
             label.try_copy()
         } else if let Some(values) = self.color_values() {
             policy
-                .unwrap_or(&self.description.payload.labels)
+                .unwrap_or(&self.payload.labels)
                 .resolve(values.name())
                 .map(crate::Text::from)
         } else {
@@ -1077,8 +996,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn legend_title_key(&self) -> &str {
-        self.description
-            .payload
+        self.payload
             .interaction_styles
             .as_ref()
             .and(self.group_values())
@@ -1132,9 +1050,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self,
         label: &str,
     ) -> Result<crate::decorations::legend::GuideEntryIdentity, Error> {
-        if self.description.payload.interaction_styles.is_none()
-            && self.hue_dimension_key().is_none()
-        {
+        if self.payload.interaction_styles.is_none() && self.hue_dimension_key().is_none() {
             return Err(Error::Render(
                 "categorical guide entry has no prepared field".into(),
             ));
@@ -1164,7 +1080,97 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Borrow x-axis scale configuration.
     #[must_use]
     pub(crate) fn x_axis_spec(&self) -> &AxisSpec {
-        &self.description.payload.x_axis_spec
+        &self.payload.x_axis_spec
+    }
+
+    pub(crate) fn explicit_x_ticks(&self) -> Option<&[AxisTick]> {
+        self.payload.x_axis_spec.exact_ticks.as_deref()
+    }
+
+    pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
+        &self.payload.y_axis_spec
+    }
+
+    pub(crate) fn explicit_y_ticks(&self) -> Option<&[AxisTick]> {
+        self.payload.y_axis_spec.exact_ticks.as_deref()
+    }
+
+    pub(crate) fn guides(&self) -> &[GuideSpec] {
+        &self.payload.guides
+    }
+
+    pub(crate) fn point_layers(&self) -> &[PointLayer] {
+        &self.payload.point_layers
+    }
+
+    pub(crate) fn bar_point_layers(&self) -> &[BarPointLayer] {
+        &self.payload.bar_point_layers
+    }
+
+    pub(crate) fn significance_annotations(
+        &self,
+    ) -> &[crate::significance::SignificanceAnnotation] {
+        &self.payload.significance
+    }
+
+    pub(crate) const fn sizing_request(&self) -> crate::layout::RootRequest {
+        self.root_size
+    }
+
+    pub(crate) fn matrix_variables(&self) -> Option<&[crate::NumericValues]> {
+        match self.payload.input.as_ref() {
+            PlotInput::Matrix { variables } => Some(variables),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn bar_spacing_spec(&self) -> BarSpacing {
+        self.payload.bar_spacing
+    }
+
+    pub(crate) fn point_style(
+        &self,
+        theme: &crate::theme::ResolvedTheme,
+        color: (u8, u8, u8),
+        radius: u32,
+    ) -> PointStyle {
+        theme.marks.get_points().get_primary().backend_style(
+            color,
+            radius,
+            self.payload.point_outline_visible,
+        )
+    }
+
+    pub(crate) fn distribution_point_style(
+        &self,
+        role: &crate::theme::mark::SizedPointTheme,
+        color: (u8, u8, u8),
+    ) -> PointStyle {
+        role.backend_style(color, self.payload.point_outline_visible)
+    }
+
+    pub(crate) fn legend_policy_spec(&self) -> LegendPolicy {
+        self.payload.legend_policy
+    }
+
+    pub(crate) fn legend_position_spec(&self) -> LegendPosition {
+        self.payload.legend_policy.position()
+    }
+
+    pub(crate) fn color_label_format_spec(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::numeric::format::NumericFormat>> {
+        self.payload.color_label_format.as_ref()
+    }
+
+    pub(crate) const fn kind(&self) -> PlotKind {
+        self.kind
+    }
+}
+
+impl<K: crate::kind::Marker> Plot<K> {
+    pub(crate) const fn description(&self) -> &PlotDescription {
+        &self.description
     }
 
     pub(crate) fn prepared_axis_inputs(&self) -> Option<&crate::plots::shared_x::PreparedAxes> {
@@ -1199,42 +1205,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.render_scope.as_deref()
     }
 
-    pub(crate) fn explicit_x_ticks(&self) -> Option<&[AxisTick]> {
-        self.description.payload.x_axis_spec.exact_ticks.as_deref()
-    }
-
-    /// Borrow y-axis scale configuration.
-    #[must_use]
-    pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
-        &self.description.payload.y_axis_spec
-    }
-
-    pub(crate) fn explicit_y_ticks(&self) -> Option<&[AxisTick]> {
-        self.description.payload.y_axis_spec.exact_ticks.as_deref()
-    }
-
-    pub(crate) fn guides(&self) -> &[GuideSpec] {
-        &self.description.payload.guides
-    }
-
-    pub(crate) fn point_layers(&self) -> &[PointLayer] {
-        &self.description.payload.point_layers
-    }
-
-    pub(crate) fn bar_point_layers(&self) -> &[BarPointLayer] {
-        &self.description.payload.bar_point_layers
-    }
-
-    pub(crate) fn significance_annotations(
-        &self,
-    ) -> &[crate::significance::SignificanceAnnotation] {
-        &self.description.payload.significance
-    }
-
-    pub(crate) const fn sizing_request(&self) -> crate::layout::RootRequest {
-        self.description.root_size
-    }
-
     /// Assigned geometry is available only after the root or parent allocates it.
     pub(crate) fn canvas_dimensions(&self) -> Result<(u32, u32), Error> {
         self.description.root_size.dimensions()
@@ -1245,53 +1215,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             .map_or_else(|| self.canvas_dimensions(), Ok)
     }
 
-    /// Borrow the ordered native variables for `PlotKind::Matrix`.
-    #[must_use]
-    pub(crate) fn matrix_variables(&self) -> Option<&[crate::NumericValues]> {
-        match self.description.payload.input.as_ref() {
-            PlotInput::Matrix { variables } => Some(variables),
-            _ => None,
-        }
-    }
-
-    /// Grouped-bar spacing preset.
-    #[must_use]
-    pub(crate) fn bar_spacing_spec(&self) -> BarSpacing {
-        self.description.payload.bar_spacing
-    }
-
-    /// Build a point style using this chart's point-outline policy.
-    #[must_use]
-    pub(crate) fn point_style(
-        &self,
-        theme: &crate::theme::ResolvedTheme,
-        color: (u8, u8, u8),
-        radius: u32,
-    ) -> PointStyle {
-        theme.marks.get_points().get_primary().backend_style(
-            color,
-            radius,
-            self.description.payload.point_outline_visible,
-        )
-    }
-
-    /// Materialize one selected distribution role with the same outline policy as its guide.
-    pub(crate) fn distribution_point_style(
-        &self,
-        role: &crate::theme::mark::SizedPointTheme,
-        color: (u8, u8, u8),
-    ) -> PointStyle {
-        role.backend_style(color, self.description.payload.point_outline_visible)
-    }
-
     /// Selected semantic plot kind.
     #[must_use]
     pub const fn kind(&self) -> PlotKind {
         self.description.kind
-    }
-
-    pub(crate) fn legend_policy_spec(&self) -> LegendPolicy {
-        self.description.payload.legend_policy
     }
 
     pub(crate) const fn effective_legend_composition(&self) -> crate::LegendComposition {
@@ -1307,10 +1234,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> Self {
         self.parent_legend_composition = Some(value);
         self
-    }
-
-    pub(crate) fn legend_position_spec(&self) -> LegendPosition {
-        self.description.payload.legend_policy.position()
     }
 
     pub(crate) fn with_legend_position(mut self, position: LegendPosition) -> Self {
@@ -1330,12 +1253,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) const fn continuous_guide_suppressed(&self) -> bool {
         self.suppress_continuous_guide
-    }
-
-    pub(crate) fn color_label_format_spec(
-        &self,
-    ) -> Option<&std::sync::Arc<crate::numeric::format::NumericFormat>> {
-        self.description.payload.color_label_format.as_ref()
     }
 
     pub(crate) const fn parent_owns_axis_gutters(&self) -> bool {

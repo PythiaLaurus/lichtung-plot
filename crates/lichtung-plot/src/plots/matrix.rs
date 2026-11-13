@@ -70,7 +70,7 @@ impl PreparedMatrixAxes {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_matrix(),
@@ -115,7 +115,7 @@ impl PreparedMatrixAxes {
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
-        let style = chart.point_style(
+        let style = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_matrix(),
@@ -143,7 +143,7 @@ impl PreparedMatrixAxes {
         let colors = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
@@ -408,17 +408,19 @@ pub(crate) fn prepare_axes(
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
 
-    let variables = chart.matrix_variables().unwrap_or_default();
+    let variables = chart.description().matrix_variables().unwrap_or_default();
     crate::data::source::reserve_source(&mut cols, variables.len())?;
     cols.extend(variables.iter().map(crate::NumericValues::name));
-    let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
+    let labels = chart
+        .description()
+        .resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (mut groups, hues) = build_groups(chart, &cols, data)?;
     let fill_alpha =
         chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)?;
     for group in &mut groups {
         group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
     }
-    if let Some(exact) = chart.categorical_map_spec() {
+    if let Some(exact) = chart.description().categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
@@ -434,8 +436,8 @@ pub(crate) fn prepare_axes(
             &groups,
             index,
             column,
-            chart.group_name(),
-            chart.hue_name(),
+            chart.description().group_name(),
+            chart.description().hue_name(),
         )?);
     }
     let diagonals = crate::data::source::collect_source(
@@ -785,7 +787,7 @@ pub(crate) fn measure(
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
                     require_aligned_points(xs.len(), group.alphas.len())?;
-                    let ps = chart.point_style(
+                    let ps = chart.description().point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_matrix(),
@@ -860,7 +862,7 @@ pub(crate) fn measure(
         let legend_w = legend.compute_box_width();
         let legend_h = legend.compute_box_height();
         let left = right_edge - legend_w;
-        let bottom = match chart.legend_position_spec() {
+        let bottom = match chart.description().legend_position_spec() {
             LegendPosition::OutsideRight => f64::midpoint(grid_bottom, top_edge) - legend_h / 2.0,
             LegendPosition::OutsideRightBottom => grid_bottom,
             _ => top_edge - legend_h,
@@ -992,7 +994,7 @@ fn matrix_guide_entries(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<GuideSourceKey>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
-        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+        || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
     {
         return Ok(Vec::new());
     }
@@ -1005,12 +1007,14 @@ fn matrix_guide_entries(
     {
         entries.push(
             GuideSourceKey::collective(
-                chart.collective_legend_identity(&group.identity)?,
+                chart
+                    .description()
+                    .collective_legend_identity(&group.identity)?,
                 chart,
                 false,
             )?
             .with_point(
-                chart.point_style(
+                chart.description().point_style(
                     theme,
                     color,
                     theme.marks.get_points().get_radii().get_matrix(),
@@ -1048,7 +1052,12 @@ fn prepare_density(
     let densities_per_group = crate::data::source::collect_source(groups.iter().map(|g| {
         let mut weighted = gaussian_kde(&g.columns[col_idx], &grid_pts, g.bandwidths[col_idx])
             .map_err(|error| {
-                let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
+                let context = matrix_group_context(
+                    column,
+                    chart.description().group_name(),
+                    chart.description().hue_name(),
+                    g,
+                );
                 Error::Data(format!("matrix: {context}: {error}"))
             })?;
         #[allow(clippy::cast_precision_loss)]
@@ -1059,7 +1068,12 @@ fn prepare_density(
         }
 
         if weighted.iter().any(|density| !density.is_finite()) {
-            let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
+            let context = matrix_group_context(
+                column,
+                chart.description().group_name(),
+                chart.description().hue_name(),
+                g,
+            );
             return Err(Error::Data(format!(
                 "matrix: {context} produced non-finite weighted KDE density"
             )));
@@ -1167,10 +1181,10 @@ fn build_groups(
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
+        chart.description().group_col(),
+        chart.description().group_name(),
+        chart.description().hue_col(),
+        chart.description().hue_name(),
         None,
         "matrix",
     )?;
@@ -1227,7 +1241,12 @@ fn build_groups(
     if groups.is_empty() {
         return Err(Error::Data("matrix: no valid finite rows".into()));
     }
-    validate_group_kdes(&mut groups, cols, chart.group_name(), chart.hue_name())?;
+    validate_group_kdes(
+        &mut groups,
+        cols,
+        chart.description().group_name(),
+        chart.description().hue_name(),
+    )?;
     Ok((groups, hue_levels))
 }
 

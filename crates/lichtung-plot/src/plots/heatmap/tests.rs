@@ -277,6 +277,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
         crate::data::PlotData::with_rows(&source, &[3, 2, 0, 1], &[400, 300, 100, 200])
             .with_operation(&operation),
         source
+            .description()
             .continuous_selection_in(crate::Theme::publication().color_scales())
             .unwrap(),
     )

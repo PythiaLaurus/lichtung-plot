@@ -91,8 +91,8 @@ impl<'a> PlotData<'a> {
         }
     }
 
-    pub(crate) fn map_source_rows(mut self, source_rows: &'a [usize]) -> Self {
-        self.source_rows = Some(source_rows);
+    pub(crate) fn map_source_rows(mut self, source_rows: &'a crate::SourceRows) -> Self {
+        self.source_rows = Some(source_rows.as_slice());
         self
     }
 
@@ -140,13 +140,14 @@ impl<'a> PlotData<'a> {
         #[cfg(test)]
         SOURCE_COLUMN_READS.with(|calls| calls.set(calls.get() + 1));
         self.plot
+            .description()
             .data_column(key)
             .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
     }
 
     pub(crate) fn height(self) -> usize {
         self.rows
-            .map_or_else(|| self.plot.row_count(), <[usize]>::len)
+            .map_or_else(|| self.plot.description().row_count(), <[usize]>::len)
     }
 
     pub(crate) const fn is_full_plot(self) -> bool {
@@ -161,7 +162,7 @@ impl<'a> PlotData<'a> {
     }
 
     pub(crate) fn estimate_statuses(self) -> Result<Option<Vec<crate::EstimateStatus>>, Error> {
-        let Some(statuses) = self.plot.estimate_status_values() else {
+        let Some(statuses) = self.plot.description().estimate_status_values() else {
             return Ok(None);
         };
         crate::data::source::collect_source((0..self.height())
@@ -259,6 +260,87 @@ pub(crate) fn strict_numeric_value(
         ))),
         None => unreachable!("row is bounded by NumericValues::len"),
     }
+}
+
+pub(crate) fn strict_category_at<'a>(
+    values: &'a CategoryValues,
+    input_slot: usize,
+    diagnostic_row: usize,
+    context: &str,
+) -> Result<&'a str, Error> {
+    match values.get(input_slot) {
+        Some(Some(value)) => Ok(value),
+        Some(None) => Err(Error::Data(format!(
+            "{context}: value {:?} contains null at source row {diagnostic_row}",
+            values.name()
+        ))),
+        None => Err(length_error(context, values.name(), input_slot)),
+    }
+}
+
+pub(crate) fn strict_numeric_at(
+    values: &NumericValues,
+    input_slot: usize,
+    diagnostic_row: usize,
+    context: &str,
+) -> Result<f64, Error> {
+    match values.get(input_slot) {
+        Some(Some(value)) if value.is_finite() => Ok(value),
+        Some(Some(value)) => Err(Error::Data(format!(
+            "{context}: value {:?} contains non-finite value {value} at source row {diagnostic_row}",
+            values.name()
+        ))),
+        Some(None) => Err(Error::Data(format!(
+            "{context}: value {:?} contains null at source row {diagnostic_row}",
+            values.name()
+        ))),
+        None => Err(length_error(context, values.name(), input_slot)),
+    }
+}
+
+pub(crate) fn strict_source_strings(
+    values: &CategoryValues,
+    rows: Option<&crate::SourceRows>,
+    context: &str,
+) -> Result<Vec<String>, Error> {
+    source::collect_source((0..values.len()).map(|slot| {
+        let diagnostic = rows
+            .and_then(|rows| rows.as_slice().get(slot))
+            .copied()
+            .unwrap_or(slot);
+        source::copy_source_string(strict_category_at(values, slot, diagnostic, context)?)
+    }))
+}
+
+pub(crate) fn strict_source_f64(
+    values: &NumericValues,
+    rows: Option<&crate::SourceRows>,
+    context: &str,
+) -> Result<Vec<f64>, Error> {
+    source::collect_source((0..values.len()).map(|slot| {
+        let diagnostic = rows
+            .and_then(|rows| rows.as_slice().get(slot))
+            .copied()
+            .unwrap_or(slot);
+        strict_numeric_at(values, slot, diagnostic, context)
+    }))
+}
+
+pub(crate) fn strict_source_normalized_strings(
+    values: &CategoryValues,
+    rows: Option<&crate::SourceRows>,
+    context: &str,
+    role: &str,
+) -> Result<Vec<String>, Error> {
+    source::collect_source(strict_source_strings(values, rows, context)?.into_iter().enumerate().map(|(slot, value)| {
+        let normalized = source::normalize_source_string(&value)?;
+        if normalized.is_empty() {
+            let diagnostic = rows.and_then(|rows| rows.as_slice().get(slot)).copied().unwrap_or(slot);
+            Err(Error::Data(format!("{context}: {role} label is empty after whitespace normalization at source row {diagnostic}")))
+        } else {
+            Ok(normalized)
+        }
+    }))
 }
 
 pub(crate) fn nullable_finite_f64<'a>(
@@ -452,6 +534,30 @@ pub(crate) fn observed_collectives<'a>(
     let hues = hue_column
         .map(|column| strict_strings_for_rows(data, column, &row_indices, plot))
         .transpose()?;
+    finish_observed_collectives(
+        groups,
+        group_name,
+        hues,
+        hue_name,
+        row_indices.len(),
+        |index| data.source_row(row_indices[index]),
+        plot,
+    )
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the decoded source arrays belong to this reduction and are not retained by its callers"
+)]
+pub(crate) fn finish_observed_collectives(
+    groups: Option<Vec<String>>,
+    group_name: Option<&str>,
+    hues: Option<Vec<String>>,
+    hue_name: Option<&str>,
+    row_count: usize,
+    diagnostic_row: impl Fn(usize) -> usize,
+    plot: &str,
+) -> Result<ObservedCollectives, Error> {
     let collapsed = group_name
         .zip(hue_name)
         .is_some_and(|(group, hue)| group == hue);
@@ -469,12 +575,12 @@ pub(crate) fn observed_collectives<'a>(
             return Err(Error::Data(format!(
                 "{plot}: graphical group and hue share semantic name {:?} but differ at source row {}",
                 group_name.unwrap_or_default(),
-                data.source_row(row_indices[index])
+                diagnostic_row(index)
             )));
         }
     }
 
-    let rows = crate::data::source::collect_source((0..row_indices.len()).map(|index| {
+    let rows = crate::data::source::collect_source((0..row_count).map(|index| {
         Ok(CollectivePair {
             group: groups
                 .as_ref()
@@ -567,6 +673,24 @@ pub(crate) fn collective_channels<'a>(
         .map(|column| strict_strings(data, column, plot))
         .transpose()?;
     let row_count = data.height();
+    finish_collective_channels(
+        groups,
+        hues,
+        cells,
+        row_count,
+        |row| data.source_row(row),
+        plot,
+    )
+}
+
+pub(crate) fn finish_collective_channels(
+    groups: Option<Vec<String>>,
+    hues: Option<Vec<String>>,
+    cells: Option<&[String]>,
+    row_count: usize,
+    diagnostic_row: impl Fn(usize) -> usize,
+    plot: &str,
+) -> Result<CollectiveChannels, Error> {
     if groups
         .as_ref()
         .is_some_and(|values| values.len() != row_count)
@@ -596,7 +720,7 @@ pub(crate) fn collective_channels<'a>(
                 if *seen_hue != hue {
                     return Err(Error::Data(format!(
                         "{plot}: each collective mark must have exactly one hue; found {seen_hue:?} and {hue:?} at source row {}",
-                        data.source_row(row)
+                        diagnostic_row(row)
                     )));
                 }
             } else {
@@ -617,6 +741,66 @@ pub(crate) fn collective_channels<'a>(
         groups,
         hues,
     })
+}
+
+pub(crate) fn source_collective_channels(
+    source: &crate::builder::PlotDescription,
+    cells: Option<&[String]>,
+    context: &str,
+) -> Result<CollectiveChannels, Error> {
+    let strings = |key: &str| {
+        let column = source
+            .data_column(key)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))?;
+        let DataColumn::Category(values) = column else {
+            return Err(Error::Data(format!(
+                "{context}: value {:?} must be categorical",
+                column.name()
+            )));
+        };
+        strict_source_strings(values, None, context)
+    };
+    let groups = source.group_col().map(strings).transpose()?;
+    let hues = source.hue_col().map(strings).transpose()?;
+    finish_collective_channels(groups, hues, cells, source.row_count(), |row| row, context)
+}
+
+pub(crate) fn observed_source_collectives(
+    source: &crate::builder::PlotDescription,
+    context: &str,
+) -> Result<ObservedCollectives, Error> {
+    let rows = source.source_row_map();
+    let mut row_indices = Vec::new();
+    self::source::reserve_source(&mut row_indices, source.row_count())?;
+    row_indices.extend(0..source.row_count());
+    let strings = |key: &str| {
+        let column = source
+            .data_column(key)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))?;
+        let DataColumn::Category(values) = column else {
+            return Err(Error::Data(format!(
+                "{context}: value {:?} must be categorical",
+                column.name()
+            )));
+        };
+        strict_source_strings(values, rows, context)
+    };
+    let groups = source.group_col().map(strings).transpose()?;
+    let hues = source.hue_col().map(strings).transpose()?;
+    finish_observed_collectives(
+        groups,
+        source.group_name(),
+        hues,
+        source.hue_name(),
+        row_indices.len(),
+        |slot| {
+            let slot = row_indices[slot];
+            rows.and_then(|rows| rows.as_slice().get(slot))
+                .copied()
+                .unwrap_or(slot)
+        },
+        context,
+    )
 }
 
 pub(crate) fn stable_levels(values: &[String]) -> Vec<String> {
@@ -746,6 +930,59 @@ mod tests {
     use crate::Plot;
 
     #[test]
+    fn typed_source_reads_keep_full_read_precedence_and_diagnostic_rows() {
+        let values = CategoryValues::nullable("category", [Some("   "), None]).unwrap();
+        let rows = crate::SourceRows::new([70, 901]).unwrap();
+        let error = strict_source_normalized_strings(&values, Some(&rows), "source", "category")
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "data error: source: value \"category\" contains null at source row 901"
+        );
+        let values = CategoryValues::new("category", ["  ", "valid"]).unwrap();
+        let error = strict_source_normalized_strings(&values, Some(&rows), "source", "category")
+            .unwrap_err();
+        assert_eq!(error.to_string(), "data error: source: category label is empty after whitespace normalization at source row 70");
+        let numbers = NumericValues::new("value", [3.0, f64::INFINITY]);
+        assert_eq!(
+            strict_numeric_at(&numbers, 0, 901, "source")
+                .unwrap()
+                .to_bits(),
+            3.0_f64.to_bits()
+        );
+        assert_eq!(
+            strict_source_f64(&numbers, Some(&rows), "source")
+                .unwrap_err()
+                .to_string(),
+            "data error: source: value \"value\" contains non-finite value inf at source row 901"
+        );
+    }
+
+    #[test]
+    fn source_configuration_keeps_original_bar_and_trajectory_ordinal_errors() {
+        let rows = crate::SourceRows::new([70, 901]).unwrap();
+        let bar = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            crate::BarInput::estimates(NumericValues::nullable("value", [Some(1.0), None])),
+        )
+        .source_rows(rows.clone());
+        assert_eq!(
+            bar.description()
+                .validate_configuration(bar.kind())
+                .unwrap_err()
+                .to_string(),
+            "data error: bar: value \"value\" contains null at source row 1"
+        );
+        let trajectory = Plot::trajectory(
+            CategoryValues::new("condition", ["valid", "   "]).unwrap(),
+            NumericValues::new("value", [1.0, 2.0]),
+            CategoryValues::new("group", ["g", "g"]).unwrap(),
+        )
+        .source_rows(rows);
+        assert_eq!(trajectory.description().validate_configuration(trajectory.kind()).unwrap_err().to_string(), "data error: trajectory: condition label is empty after whitespace normalization at source row 1");
+    }
+
+    #[test]
     fn observed_collectives_order_groups_then_hues_within_each_group() {
         let plot = Plot::line(
             crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0]),
@@ -757,10 +994,10 @@ mod tests {
 
         let channels = observed_collectives(
             &plot,
-            plot.group_col(),
-            plot.group_name(),
-            plot.hue_col(),
-            plot.hue_name(),
+            plot.description().group_col(),
+            plot.description().group_name(),
+            plot.description().hue_col(),
+            plot.description().hue_name(),
             None,
             "test",
         )

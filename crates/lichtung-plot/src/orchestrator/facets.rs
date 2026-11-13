@@ -27,14 +27,20 @@ pub(crate) fn text_census_labels(
 ) -> Result<(), Error> {
     let selectors = data::facet_selectors(source, source.data())?;
     for panel in data::extract_panels(source, &selectors, None, source.data())? {
-        if source.text_layouts().facet.iter().any(Option::is_some) {
+        if source
+            .description()
+            .text_layouts()
+            .facet
+            .iter()
+            .any(Option::is_some)
+        {
             for (index, selector) in panel.cell.iter().enumerate() {
                 let role = if panel.cell.as_slice().len() == 1 {
                     1
                 } else {
                     index
                 };
-                if source.text_layouts().facet[role]
+                if source.description().text_layouts().facet[role]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
                 {
@@ -43,8 +49,8 @@ pub(crate) fn text_census_labels(
                 visit(
                     format_args!(
                         "{} = {}",
-                        source.resolve_label(&selector.variable)?,
-                        source.resolve_label(&selector.level)?
+                        source.description().resolve_label(&selector.variable)?,
+                        source.description().resolve_label(&selector.level)?
                     )
                     .into(),
                 )?;
@@ -56,18 +62,18 @@ pub(crate) fn text_census_labels(
             [selector] => visit(
                 format_args!(
                     "{} = {}",
-                    source.resolve_label(&selector.variable)?,
-                    source.resolve_label(&selector.level)?
+                    source.description().resolve_label(&selector.variable)?,
+                    source.description().resolve_label(&selector.level)?
                 )
                 .into(),
             )?,
             [row, column] => visit(
                 format_args!(
                     "{} = {} | {} = {}",
-                    source.resolve_label(&row.variable)?,
-                    source.resolve_label(&row.level)?,
-                    source.resolve_label(&column.variable)?,
-                    source.resolve_label(&column.level)?
+                    source.description().resolve_label(&row.variable)?,
+                    source.description().resolve_label(&row.level)?,
+                    source.description().resolve_label(&column.variable)?,
+                    source.description().resolve_label(&column.level)?
                 )
                 .into(),
             )?,
@@ -104,6 +110,7 @@ impl FacetTextCensusPanel<'_> {
         &self,
     ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
         self.plot
+            .description()
             .significance_annotations()
             .iter()
             .filter(|annotation| {
@@ -123,7 +130,7 @@ pub(crate) fn text_census_panels<'a>(
     source: &'a Plot,
     source_data: crate::data::PlotData<'_>,
 ) -> Result<Vec<FacetTextCensusPanel<'a>>, Error> {
-    if !source.significance_annotations().is_empty()
+    if !source.description().significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
         return Err(Error::Data(format!(
@@ -208,7 +215,7 @@ impl FacetPlan {
         content_sizing: bool,
         inputs: Option<&crate::layout::interior::PreparedInteriorInputs>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
-        if !source.significance_annotations().is_empty()
+        if !source.description().significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
@@ -218,7 +225,8 @@ impl FacetPlan {
         }
 
         let selectors = data::facet_selectors(source, source.data())?;
-        let [horizontal_axis_label, vertical_axis_label] = source.prepare_axis_labels(None)?;
+        let [horizontal_axis_label, vertical_axis_label] =
+            source.description().prepare_axis_labels(None)?;
         let mut canvas_layout = planning::canvas_layout(
             source,
             theme,
@@ -230,7 +238,7 @@ impl FacetPlan {
         round.observe_canvas(&canvas_layout)?;
         let resources = theme.text.prepared_font_environment()?.operation();
         let data = source.data().with_operation(&resources);
-        let mut base_plot = data::base_plot(source, kind, &resources)?;
+        let mut base_plot = data::base_plot(source, kind)?;
         if let Some(levels) = &prepared_guide.hue_levels {
             base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
                 levels
@@ -268,7 +276,7 @@ impl FacetPlan {
         for facet in &mut panels {
             facet.panel = provisional[facet.row * selectors.columns + facet.column];
         }
-        let facet_scales = source.facet_scales_spec();
+        let facet_scales = source.description().facet_scales_spec();
 
         let (base_plot, preflight) = legend::preflight_coordinated_panels(
             source, base_plot, kind, &panels, theme, children, round,
@@ -282,7 +290,7 @@ impl FacetPlan {
             .with_parent_axis_gutters();
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
         let discrete_guide = prepared_guide.descriptor.as_ref();
-        let position = source.legend_position_spec();
+        let position = source.description().legend_position_spec();
         let automatic = position == LegendPosition::Auto && discrete_guide.is_some();
         let automatic_edges = [
             LegendPosition::OutsideRight,
@@ -887,7 +895,7 @@ mod feedback_tests {
                 let mut calls = 0;
                 let mut retained_neighbor = None;
                 let root = crate::layout::plan_root(
-                    source.sizing_request(),
+                    source.description().sizing_request(),
                     |stage| {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
@@ -1088,11 +1096,11 @@ mod feedback_tests {
         .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
-        let theme = source.resolve_theme().unwrap();
+        let theme = source.description().resolve_theme().unwrap();
         let text_service = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         crate::layout::plan_root(
-            source.sizing_request(),
+            source.description().sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1238,7 +1246,7 @@ mod feedback_tests {
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = crate::layout::plan_root(
-            source.sizing_request(),
+            source.description().sizing_request(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1303,7 +1311,7 @@ mod feedback_tests {
             .all(|panel| guide.bounds.bottom > panel.panel.y1));
         assert_eq!(
             plan.horizontal_axis_label.as_ref(),
-            source.prepare_axis_labels(None).unwrap()[0].as_ref()
+            source.description().prepare_axis_labels(None).unwrap()[0].as_ref()
         );
     }
 
@@ -1321,7 +1329,7 @@ mod feedback_tests {
         .erase();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_root(
-            source.sizing_request(),
+            source.description().sizing_request(),
             |stage| {
                 crate::plots::shared_x::prepare_plot(
                     &source,

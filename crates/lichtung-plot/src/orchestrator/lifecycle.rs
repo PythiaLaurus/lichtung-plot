@@ -47,7 +47,7 @@ impl PreparedPlotInputs {
         if let Some(cached) = self.root_frame.borrow().as_ref() {
             if cached.dimensions == dimensions
                 && cached.minimum == minimum
-                && source.same_prose(&cached.prose)
+                && source.description().same_prose(&cached.prose)
             {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
@@ -56,7 +56,7 @@ impl PreparedPlotInputs {
 
         let frame = frame.into_shared();
         *self.root_frame.borrow_mut() = Some(CachedRootFrame {
-            prose: source.copy_prose()?,
+            prose: source.description().copy_prose()?,
             dimensions,
             minimum,
             frame: std::sync::Arc::clone(&frame),
@@ -84,7 +84,7 @@ fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
     let plan = PlotPlan::new_with_theme_factory(
         &source,
         source.kind(),
-        || Ok(Box::new(source.resolve_theme()?)),
+        || Ok(Box::new(source.description().resolve_theme()?)),
         |prepared, replay| {
             let environment = prepared.text.prepared_font_environment().unwrap();
             let core = environment.liveness_probe();
@@ -136,7 +136,7 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
     PlotPlan::new_with_theme_factory(
         &source,
         source.kind(),
-        || Ok(Box::new(source.resolve_theme()?)),
+        || Ok(Box::new(source.description().resolve_theme()?)),
         |prepared, _| {
             let source = prepared.axes.attach(source.clone()).unwrap();
 
@@ -201,7 +201,10 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
             assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
             let error = styled_frame
                 .root_text
-                .draw(reset.prose(), &mut super::backend::NullBackend::default())
+                .draw(
+                    reset.description().prose(),
+                    &mut super::backend::NullBackend::default(),
+                )
                 .unwrap_err();
             assert!(
                 error
@@ -638,7 +641,7 @@ mod natural_sizing_tests {
                 .plan()
                 .retained_text()
                 .iter()
-                .any(|(_, text)| text.source == source.caption_text().unwrap()));
+                .any(|(_, text)| text.source == source.description().caption_text().unwrap()));
             for source in ["base 10 u", "total 16 u", "total 610 u"] {
                 assert!(plan
                     .root
@@ -757,7 +760,7 @@ impl PlotPlan {
         Self::new_with_theme_factory(
             source,
             kind,
-            || Ok(Box::new(source.resolve_theme()?)),
+            || Ok(Box::new(source.description().resolve_theme()?)),
             #[cfg(test)]
             |_, _| {},
         )
@@ -782,7 +785,7 @@ impl PlotPlan {
         resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
         #[cfg(test)] inspect: impl FnOnce(&PreparedPlotInputs, &TextReplayPlan),
     ) -> Result<Self, Error> {
-        let sizing = source.sizing_request();
+        let sizing = source.description().sizing_request();
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
@@ -792,7 +795,7 @@ impl PlotPlan {
                 let theme = resolve_theme()?;
                 let text = TextService::default();
                 let request = TextRequestContext::new(&theme, &text);
-                source.validate_configuration(kind)?;
+                source.description().validate_configuration(kind)?;
                 let axes = crate::plots::shared_x::prepare_plot(
                     source,
                     &prepared_stage.operation(),
@@ -800,6 +803,7 @@ impl PlotPlan {
                 )?;
                 axes.validate_categorical_scale(source, &request, None)?;
                 let facet_guide = source
+                    .description()
                     .has_facets()
                     .then(|| {
                         super::facets::prepare_discrete_guide(
@@ -811,7 +815,7 @@ impl PlotPlan {
                         )
                     })
                     .transpose()?;
-                if !source.has_facets() {
+                if !source.description().has_facets() {
                     axes.prepare_discrete_guides(
                         source,
                         &request,
@@ -865,7 +869,7 @@ impl PlotPlan {
                 let root_text =
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
                         &request,
-                        source.prose(),
+                        source.description().prose(),
                         None,
                     )?;
                 Ok(PreparedPlotInputs {
@@ -885,7 +889,7 @@ impl PlotPlan {
                         crate::layout::RootSize::new(width, height)
                     } else {
                         let attached = prepared.axes.attach(source.clone())?;
-                        if source.has_facets() {
+                        if source.description().has_facets() {
                             super::facets::natural_size(
                                 &attached,
                                 &request,
@@ -917,7 +921,7 @@ impl PlotPlan {
                     .axes
                     .attach(source.clone())?
                     .with_canvas_size(width, height);
-                let plan = if source.has_facets() {
+                let plan = if source.description().has_facets() {
                     PlotLayoutPlan::Faceted(Box::new(
                         super::facets::FacetPlan::new(
                             &source,
@@ -1036,7 +1040,7 @@ impl UnfacetedPlotPlan {
         content_height: bool,
     ) -> Result<Self, Error> {
         let cell = canvas_layout.panel_box;
-        let mut context = source.configured_source_rows()?.map_or_else(
+        let mut context = source.description().configured_source_rows()?.map_or_else(
             || PlotRenderContext::new(source.data(), cell, theme),
             |rows| PlotRenderContext::with_source_rows(source.data(), rows, cell, theme),
         );
@@ -1052,7 +1056,7 @@ impl UnfacetedPlotPlan {
                         descriptor,
                         &crate::layout::ComponentAddress::root()
                             .child(crate::layout::AddressRole::PlotBody, 0)?,
-                        source.legend_position_spec(),
+                        source.description().legend_position_spec(),
                     )
                 })
                 .transpose()?
@@ -1093,7 +1097,9 @@ impl UnfacetedPlotPlan {
                 let scope = crate::layout::fit::FitScope::root()
                     .child(crate::layout::AddressRole::PlotBody, 0)?
                     .child(
-                        crate::decorations::legend::address_role(source.legend_position_spec()),
+                        crate::decorations::legend::address_role(
+                            source.description().legend_position_spec(),
+                        ),
                         0,
                     )?;
                 let (width, height) = plot.canvas_dimensions()?;
@@ -1148,8 +1154,8 @@ impl UnfacetedPlotPlan {
         if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
             crate::decorations::apply::apply_grid(&self.layers[0], &self.panel_plan, backend)?;
         }
-        source.configured_source_rows()?;
-        crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
+        source.description().configured_source_rows()?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
         let rendered = self.panel_plan.result.draw_body(backend)?;
 
         crate::significance::render_selected(&self.panel_plan.result, backend)?;
@@ -1165,7 +1171,9 @@ impl UnfacetedPlotPlan {
             }
             DecorationMode::SelfManaged => {}
         }
-        self.canvas_layout.root_text.draw(source.prose(), backend)?;
+        self.canvas_layout
+            .root_text
+            .draw(source.description().prose(), backend)?;
         debug_assert_eq!(rendered, self.panel_plan.result.decoration_mode);
         Ok(())
     }
@@ -1204,33 +1212,22 @@ impl Plot {
         theme: &TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<crate::layout::fit::FitOutcome<PlotRenderResult>, Error> {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
-        self.validate_category_order_configuration(kind)?;
-        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self.description())?;
+        self.description()
+            .validate_category_order_configuration(kind)?;
+        if !self.description().significance_annotations().is_empty()
+            && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
         }
-        let source_rows = self.configured_source_rows()?;
+        let source_rows = self.description().configured_source_rows()?;
         let context = source_rows.map_or_else(
             || PlotRenderContext::new(self.data(), panel, theme),
             |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
         );
         crate::layout::fit::outcome(self.measure_panel(kind, context.with_fit_scope(scope)))
-    }
-
-    pub(crate) fn configured_source_rows(&self) -> Result<Option<&[usize]>, Error> {
-        if let Some(rows) = self.source_row_map() {
-            if rows.len() != self.data().height() {
-                return Err(Error::Data(format!(
-                    "chart source-row map has length {}, but chart data has {} rows",
-                    rows.len(),
-                    self.data().height()
-                )));
-            }
-        }
-        Ok(self.source_row_map())
     }
 }
 
@@ -1306,7 +1303,7 @@ mod root_title_tests {
             let text_sizes =
                 crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
                     &theme,
-                    source.prose(),
+                    source.description().prose(),
                 )
                 .map(|role| role.theme.get_font_size());
             let caption_top = if caption.is_empty() {
@@ -1353,7 +1350,7 @@ mod root_title_tests {
             .erase()
             .title_alignment(End)
             .subtitle_alignment(Start);
-            let theme = plot.resolve_theme().unwrap();
+            let theme = plot.description().resolve_theme().unwrap();
             let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme).unwrap();
             let retained = plan.root.plan().retained_text();
             for (source, alignment) in [

@@ -26,7 +26,7 @@ impl GuideSectionIdentity {
         let source = match self {
             Self::Combined(primary) => primary.resolved_text(plot),
             Self::GroupStyle(field) | Self::Joint(field) | Self::HueColor(field) => {
-                plot.resolve_label(field.as_str())
+                plot.description().resolve_label(field.as_str())
             }
             Self::Literal(LiteralDomain::BarSign) => {
                 crate::data::source::copy_source_string("Change")
@@ -115,7 +115,7 @@ impl PreparedGuide {
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
         if (keys.is_empty() && continuous.is_none() && alpha.is_empty())
-            || plot.legend_policy_spec() == crate::LegendPolicy::Hidden
+            || plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
         {
             return Ok(None);
         }

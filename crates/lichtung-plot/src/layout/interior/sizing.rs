@@ -62,9 +62,9 @@ pub(crate) fn guided_preference(
     let position = if native {
         crate::LegendPosition::OutsideRight
     } else {
-        plot.legend_position_spec()
+        plot.description().legend_position_spec()
     };
-    if plot.legend_policy_spec() == crate::LegendPolicy::Hidden
+    if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
         || (position != crate::LegendPosition::Auto
             && !crate::decorations::plan::is_outside(position))
         || plot.kind() == PlotKind::Matrix
@@ -399,14 +399,14 @@ pub(crate) fn plot_size(
     let body_width =
         (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
     let body_height = plot.natural_body_height(theme, body_width, preference.1)?;
-    let sources = plot.prose();
+    let sources = plot.description().prose();
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
         crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            plot.prose_alignments(),
+            plot.description().prose_alignments(),
             [None; 2],
         ),
         &FitScope::root(),
@@ -444,8 +444,11 @@ fn outer_width(
     if horizontal {
         width = width.max(theme.root_outer_width(guide)?);
     }
-    for (source, role) in plot.prose().into_iter().zip(
-        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(theme, plot.prose()),
+    for (source, role) in plot.description().prose().into_iter().zip(
+        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
+            theme,
+            plot.description().prose(),
+        ),
     ) {
         if let Some(source) = source {
             width = width.max(theme.root_outer_width(text_width(theme, source.as_str(), role)?)?);

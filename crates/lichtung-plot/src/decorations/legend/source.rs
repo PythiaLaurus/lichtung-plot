@@ -207,7 +207,9 @@ pub(crate) enum LayerLabelContext {
 
 impl LayerLabelContext {
     pub(crate) fn for_plot(plot: &Plot) -> Self {
-        if plot.hue_dimension_key().is_some() || plot.interaction_styles_spec().is_some() {
+        if plot.description().hue_dimension_key().is_some()
+            || plot.description().interaction_styles_spec().is_some()
+        {
             Self::Categorical
         } else {
             Self::LiteralSeries
@@ -291,9 +293,10 @@ impl GuideSourceKey {
             }
             GuideEntryIdentity::Category { field, .. } => {
                 if plot
+                    .description()
                     .group_name()
-                    .is_some_and(|group| Some(group) == plot.hue_name())
-                    || (group_styles && plot.hue_name().is_none())
+                    .is_some_and(|group| Some(group) == plot.description().hue_name())
+                    || (group_styles && plot.description().hue_name().is_none())
                 {
                     GuideEncoding::Joint {
                         field: field.clone(),
@@ -489,7 +492,7 @@ impl GuideSourceKey {
             .chain(self.mapping.style_bindings.line_pattern.iter())
             .any(|binding| matches!(binding, StyleBinding::InteractionGroup { .. }))
             && (plot.kind() != crate::PlotKind::Interaction
-                || plot.interaction_styles_spec().is_none())
+                || plot.description().interaction_styles_spec().is_none())
         {
             return Err(invalid(
                 "only configured Interaction styles map a group-style channel",

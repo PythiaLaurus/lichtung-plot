@@ -164,7 +164,7 @@ impl PreparedDensity {
         let map = CategoryColors::resolve(
             &keys,
             theme.color_scales.get_qualitative(),
-            chart.categorical_color_scale_spec(),
+            chart.description().categorical_color_scale_spec(),
             resources,
         )?;
         let accent = AccentColors::resolve(
@@ -241,7 +241,9 @@ impl PreparedDensity {
             let color = Self::curve_color(curve, colors, accent)?;
             entries.push(
                 GuideSourceKey::collective(
-                    chart.collective_legend_identity(&curve.identity)?,
+                    chart
+                        .description()
+                        .collective_legend_identity(&curve.identity)?,
                     chart,
                     false,
                 )?
@@ -266,6 +268,7 @@ impl PreparedDensity {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
         let column = chart
+            .description()
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
         let mut prepared = prepare_density_for_chart(chart, data, column)?;
@@ -277,7 +280,7 @@ impl PreparedDensity {
             curve.line_alpha = alpha.collective(chart, &curve.identity)?;
             curve.fill_alpha = fill_alpha.collective(chart, &curve.identity)?;
         }
-        if let Some(exact) = chart.categorical_map_spec() {
+        if let Some(exact) = chart.description().categorical_map_spec() {
             for hue in prepared.hue_levels() {
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
@@ -291,8 +294,16 @@ impl PreparedDensity {
 
     pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
         Ok([
-            chart.x_axis_spec().limits.unwrap_or(self.x_range),
-            crate::layout::anchored_auto_range((0.0, self.maximum), chart.y_axis_spec(), 0.0)?,
+            chart
+                .description()
+                .x_axis_spec()
+                .limits
+                .unwrap_or(self.x_range),
+            crate::layout::anchored_auto_range(
+                (0.0, self.maximum),
+                chart.description().y_axis_spec(),
+                0.0,
+            )?,
         ])
     }
 }
@@ -501,15 +512,16 @@ pub(crate) fn shared_x_domain(
     data: crate::data::PlotData<'_>,
 ) -> Result<(f64, f64), Error> {
     let column = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("density: value column not set".into()))?;
     let values = crate::data::strict_finite_f64(data, column, "density")?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
+        chart.description().group_col(),
+        chart.description().group_name(),
+        chart.description().hue_col(),
+        chart.description().hue_name(),
         None,
         "density",
     )?;
@@ -573,10 +585,10 @@ fn prepare_density_for_chart<'a>(
     prepare_density_ordered(
         data,
         value_col,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
+        chart.description().group_col(),
+        chart.description().group_name(),
+        chart.description().hue_col(),
+        chart.description().hue_name(),
         chart.global_collective_pairs(),
     )
 }

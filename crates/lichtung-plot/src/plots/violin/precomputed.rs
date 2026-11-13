@@ -81,8 +81,9 @@ pub(crate) fn intrinsic_body_minimum(
         };
     }
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let point =
-        chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
+    let point = chart
+        .description()
+        .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
     let point = crate::alpha::marks::point_ink(
         &point,
         prepared.groups.iter().flat_map(|group| {
@@ -141,11 +142,15 @@ impl PreparedRaincloud {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let input = chart.raincloud_geometry_input().ok_or_else(|| {
-            Error::Render("supplied Raincloud alpha guide has no dimensions".into())
-        })?;
+        let input = chart
+            .description()
+            .raincloud_geometry_input()
+            .ok_or_else(|| {
+                Error::Render("supplied Raincloud alpha guide has no dimensions".into())
+            })?;
         let fill = theme.marks.get_fills().get_bodies().get_violin_body();
         let point = chart
+            .description()
             .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
         for group in &self.groups {
             let category = (input.category_dimension.as_str(), group.category.as_str());
@@ -200,19 +205,21 @@ impl PreparedRaincloud {
     ) -> Result<Vec<GuideSourceKey>, Error> {
         crate::data::source::collect_source(self.hues.iter().map(|hue| {
             let color = colors.color(hue)?;
-            Ok(GuideSourceKey::hue_only(chart.point_legend_identity(hue)?)?
-                .with_point(
-                    chart.distribution_point_style(
-                        theme.marks.get_points().get_mandatory_strip(),
+            Ok(
+                GuideSourceKey::hue_only(chart.description().point_legend_identity(hue)?)?
+                    .with_point(
+                        chart.description().distribution_point_style(
+                            theme.marks.get_points().get_mandatory_strip(),
+                            color,
+                        ),
+                        PointRole::MandatoryStrip,
+                    )
+                    .with_fill(
+                        theme.marks.get_fills().get_bodies().get_violin_body(),
                         color,
+                        FillRole::ViolinBody,
                     ),
-                    PointRole::MandatoryStrip,
-                )
-                .with_fill(
-                    theme.marks.get_fills().get_bodies().get_violin_body(),
-                    color,
-                    FillRole::ViolinBody,
-                ))
+            )
         }))
     }
 }
@@ -238,6 +245,7 @@ thread_local! {
 
 pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
     let input = chart
+        .description()
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
     let membership = input.membership()?;
@@ -356,7 +364,9 @@ pub(super) fn measure_marks(
         project_strip(
             &layout,
             group,
-            &chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color),
+            &chart
+                .description()
+                .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color),
             index,
             theme,
             &mut payload,

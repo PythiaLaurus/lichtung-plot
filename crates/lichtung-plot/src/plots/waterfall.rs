@@ -469,8 +469,16 @@ pub(crate) fn intrinsic_body_minimum(
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("Waterfall total axes missing".into()))?;
     let projection = crate::layout::Projection::new(
-        chart.x_axis_spec().limits.unwrap_or(input.ranges[0]),
-        chart.y_axis_spec().limits.unwrap_or(input.ranges[1]),
+        chart
+            .description()
+            .x_axis_spec()
+            .limits
+            .unwrap_or(input.ranges[0]),
+        chart
+            .description()
+            .y_axis_spec()
+            .limits
+            .unwrap_or(input.ranges[1]),
         (0.0, 1.0, 0.0, 1.0),
     );
     let totals = &prepared.selected_totals(&projection)?.totals;
@@ -534,11 +542,19 @@ pub(crate) fn natural_body_height(
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
-    let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
+    let range = chart
+        .description()
+        .x_axis_spec()
+        .limits
+        .unwrap_or(axes.ranges[0]);
     let panel = PixelRect::new(0.0, width, 0.0, 1.0);
     let projection = crate::layout::Projection::new(
         range,
-        chart.y_axis_spec().limits.unwrap_or(axes.ranges[1]),
+        chart
+            .description()
+            .y_axis_spec()
+            .limits
+            .unwrap_or(axes.ranges[1]),
         panel.as_tuple(),
     );
     let data = chart.data().with_operation(&resources);
@@ -567,12 +583,15 @@ pub(crate) fn prepare(
 ) -> Result<PreparedWaterfall, Error> {
     data.source_resources()?;
     let label_col = chart
+        .description()
         .x_col()
         .ok_or_else(|| Error::Data("waterfall: label column not set".into()))?;
     let delta_col = chart
+        .description()
         .y_col()
         .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
     let base = chart
+        .description()
         .waterfall_base()
         .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
     let labels = crate::data::strict_strings(data, label_col, "waterfall")?;
@@ -592,7 +611,7 @@ pub(crate) fn prepare(
     let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let (spans, range) = prepare_spans(base, &deltas, data, &alpha)?;
     let running = spans.last().map_or(base, |span| span.end);
-    let [base_label, terminal_label] = chart.waterfall_labels_spec().map_or_else(
+    let [base_label, terminal_label] = chart.description().waterfall_labels_spec().map_or_else(
         || {
             Ok::<_, Error>([
                 crate::Text::from(crate::data::source::copy_source_string("base")?),
@@ -610,7 +629,7 @@ pub(crate) fn prepare(
         range,
         spans,
         total_candidates,
-        total_format: chart.total_format_spec().cloned(),
+        total_format: chart.description().total_format_spec().cloned(),
         total_variants: crate::data::source::collect_source((0..4).map(|_| Ok(None)))?,
         numeric_source: crate::numeric::source::NumericSource::for_data(chart, data)?,
     })
@@ -662,11 +681,12 @@ pub(crate) fn measure(
     let base = prepared.total_candidates[0].0;
     let terminal = prepared.total_candidates[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        crate::layout::continuous_auto_range(range, chart.x_axis_spec())
+        crate::layout::continuous_auto_range(range, chart.description().x_axis_spec())
     })?;
     let panel = context.panel;
     let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
         Ok(chart
+            .description()
             .y_axis_spec()
             .limits
             .unwrap_or((0.0, labels.len() as f64)))

@@ -134,7 +134,8 @@ pub(crate) fn measure_plans(
 ) -> Result<Vec<PlotTextAnnotationPlan>, PlanError> {
     let plans = fit::collect(
         "panel annotations",
-        plot.panel_text_annotations()
+        plot.description()
+            .panel_text_annotations()
             .iter()
             .enumerate()
             .map(|(index, annotation)| {

@@ -97,8 +97,14 @@ impl HeightInputs {
             Error::Render("height measurement requires prepared cell axes".into())
         })?;
         let ranges = [
-            plot.x_axis_spec().limits.unwrap_or(axes.ranges[0]),
-            plot.y_axis_spec().limits.unwrap_or(axes.ranges[1]),
+            plot.description()
+                .x_axis_spec()
+                .limits
+                .unwrap_or(axes.ranges[0]),
+            plot.description()
+                .y_axis_spec()
+                .limits
+                .unwrap_or(axes.ranges[1]),
         ]
         .map(|range| [range.0.to_bits(), range.1.to_bits()]);
         let child =
@@ -113,7 +119,7 @@ impl HeightInputs {
             }
         }
 
-        let use_kind = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        let use_kind = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             GuideUse::Hidden
         } else if per_plot {
             GuideUse::Local
@@ -126,7 +132,7 @@ impl HeightInputs {
                     crate::decorations::legend::discrete::GuideSlot::new(
                         descriptor,
                         &child,
-                        plot.legend_position_spec(),
+                        plot.description().legend_position_spec(),
                     )
                 })
                 .transpose()?
@@ -134,20 +140,23 @@ impl HeightInputs {
             None
         };
         Ok(Self {
-            prose: plot.copy_prose()?,
-            text_layouts: plot.text_layouts().clone(),
+            prose: plot.description().copy_prose()?,
+            text_layouts: plot.description().text_layouts().clone(),
             output_dimensions: plot.output_dimensions,
-            axis_titles: plot.copy_axis_titles()?,
+            axis_titles: plot.description().copy_axis_titles()?,
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
-            provenance: [plot.x_axis_spec().provenance, plot.y_axis_spec().provenance],
+            provenance: [
+                plot.description().x_axis_spec().provenance,
+                plot.description().y_axis_spec().provenance,
+            ],
             generation: [
-                plot.x_axis_spec().generation.clone(),
-                plot.y_axis_spec().generation.clone(),
+                plot.description().x_axis_spec().generation.clone(),
+                plot.description().y_axis_spec().generation.clone(),
             ],
             category_labels: [
-                plot.x_axis_spec().category_labels.clone(),
-                plot.y_axis_spec().category_labels.clone(),
+                plot.description().x_axis_spec().category_labels.clone(),
+                plot.description().y_axis_spec().category_labels.clone(),
             ],
             resolved_x: plot
                 .resolved_facet_x_range()
@@ -155,7 +164,7 @@ impl HeightInputs {
             own_insets,
             parent_insets,
             y_labels: plot.y_tick_labels_visible(),
-            legend: plot.legend_policy_spec(),
+            legend: plot.description().legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
             alpha: plot.alpha_inputs().clone(),
@@ -276,7 +285,7 @@ pub(super) fn cell_height(
 ) -> Result<f64, Error> {
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
-    let sources = plot.prose();
+    let sources = plot.description().prose();
     let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
@@ -286,7 +295,7 @@ pub(super) fn cell_height(
         } else {
             width
         },
-        RootAlignments::resolve(theme, plot.prose_alignments(), [None; 2]),
+        RootAlignments::resolve(theme, plot.description().prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;

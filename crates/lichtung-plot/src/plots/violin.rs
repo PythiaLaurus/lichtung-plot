@@ -77,7 +77,7 @@ impl PreparedViolin {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let raincloud = chart.kind() == crate::PlotKind::Raincloud;
         let fill = theme.marks.get_fills().get_bodies().get_violin_body();
-        let point = chart.distribution_point_style(
+        let point = chart.description().distribution_point_style(
             if raincloud {
                 theme.marks.get_points().get_mandatory_strip()
             } else {
@@ -124,7 +124,7 @@ impl PreparedViolin {
                     .backend_style(),
                 false,
             )?;
-            if raincloud || chart.raw_overlay_spec().is_visible() {
+            if raincloud || chart.description().raw_overlay_spec().is_visible() {
                 let role = if raincloud {
                     AlphaGlyphRole::MandatoryStrip
                 } else {
@@ -201,14 +201,16 @@ pub(crate) fn intrinsic_body_minimum(
         .backend_style();
     let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
     let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
-    let overlay = chart.raw_overlay_spec();
+    let overlay = chart.description().raw_overlay_spec();
     let points_visible = raincloud || overlay.is_visible();
     let role = if raincloud {
         theme.marks.get_points().get_mandatory_strip()
     } else {
         theme.marks.get_points().get_raw_overlay()
     };
-    let style = chart.distribution_point_style(role, (0, 0, 0));
+    let style = chart
+        .description()
+        .distribution_point_style(role, (0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = inner_y;
     let body_half = if raincloud { 0.4 * width } else { width };
@@ -453,7 +455,7 @@ pub(crate) fn measure_marks(
     let base_display_range = layout.projection.y_range();
     let rendered_maxima =
         crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
-    let overlay = chart.raw_overlay_spec();
+    let overlay = chart.description().raw_overlay_spec();
     let panel = context.panel;
     let colors = retained.resolved_colors(chart, theme, data)?;
     let significance = if group_levels.is_empty() {
@@ -723,6 +725,7 @@ pub(crate) fn measure_marks(
             let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
             let color = group_color(group, &colors)?;
             let style = chart
+                .description()
                 .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color);
             let point_ink = crate::alpha::marks::point_ink(
                 &style,
@@ -793,7 +796,9 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                &chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), color),
+                &chart
+                    .description()
+                    .distribution_point_style(theme.marks.get_points().get_raw_overlay(), color),
                 group
                     .observations
                     .iter()

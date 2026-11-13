@@ -61,7 +61,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Regression has no retained observations".into(),
         ));
     }
-    let style = chart.point_style(
+    let style = chart.description().point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_regression(),
@@ -119,7 +119,7 @@ impl PreparedRegression {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(
+        let point = chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_regression(),
@@ -167,12 +167,15 @@ impl PreparedRegression {
 
         color: (u8, u8, u8),
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
+        if !matches!(
+            chart.description().legend_policy_spec(),
+            crate::LegendPolicy::Visible(_)
+        ) {
             return Ok(Vec::new());
         }
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, 2)?;
-        let band = chart.regression_band_spec();
+        let band = chart.description().regression_band_spec();
         let fit_identity = crate::decorations::legend::GuideEntryIdentity::RegressionFit { band };
         let line = theme
             .marks
@@ -196,7 +199,7 @@ impl PreparedRegression {
                 LiteralDomain::RegressionReference,
             )
             .with_point(
-                chart.point_style(
+                chart.description().point_style(
                     theme,
                     color,
                     theme.marks.get_points().get_radii().get_regression(),
@@ -216,9 +219,11 @@ impl PreparedRegression {
             .single()?;
         let fill_alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Single, &[])?;
         let x_col = chart
+            .description()
             .x_col()
             .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
         let y_col = chart
+            .description()
             .y_col()
             .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
         let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "regression")?;
@@ -229,7 +234,7 @@ impl PreparedRegression {
         )?;
         let x = crate::data::source::collect_source(points.iter().map(|p| Ok(p.0)))?;
         let y = crate::data::source::collect_source(points.iter().map(|p| Ok(p.1)))?;
-        let band = chart.regression_band_spec();
+        let band = chart.description().regression_band_spec();
         let minimum = match band {
             RegressionBand::PointwiseMean95 => 3,
             RegressionBand::Hidden => 2,
@@ -274,8 +279,14 @@ impl PreparedRegression {
         }
         let mark_ranges = [(x_min, x_max), (y_min, y_max)];
 
-        let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec())?;
-        let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
+        let x_range = crate::layout::continuous_auto_range(
+            (x_min, x_max),
+            chart.description().x_axis_spec(),
+        )?;
+        let y_range = crate::layout::continuous_auto_range(
+            (y_min, y_max),
+            chart.description().y_axis_spec(),
+        )?;
         Ok(Self {
             ranges: [x_range, y_range],
             mark_ranges,
@@ -348,7 +359,7 @@ pub(crate) fn measure_marks(
     ];
     let mut requests = [None; 2];
     if let Some(ink) = point_ink(
-        &chart.point_style(
+        &chart.description().point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_regression(),
@@ -414,7 +425,7 @@ pub(crate) fn project(
     let marks = theme.marks();
     let color = crate::theme::AccentColors::resolve(marks.get_accents(), 1)?.color(0)?;
     let point_radius = marks.get_points().get_radii().get_regression();
-    let point_style = chart.point_style(theme, color, point_radius);
+    let point_style = chart.description().point_style(theme, color, point_radius);
     crate::alpha::marks::require_aligned_points(prepared.points.len(), prepared.alphas.len())?;
     let mut point_batches = Vec::new();
     for ((x_value, y_value), alpha) in prepared.points.iter().zip(&prepared.alphas) {

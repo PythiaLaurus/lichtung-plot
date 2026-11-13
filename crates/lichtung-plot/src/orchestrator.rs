@@ -163,7 +163,7 @@ impl Plot {
         kind: PlotKind,
         context: PlotRenderContext<'_, '_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self.description())?;
         #[cfg(test)]
         {
             RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -261,7 +261,7 @@ impl Plot {
                 }
             }
         }
-        let guides = layers::GuideSnapshot::measure(self, &result, &mut geometry)?;
+        let guides = layers::GuideSnapshot::measure(self.description(), &result, &mut geometry)?;
         validate_frozen_axes_and_guides(self, &mut result)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             self,
@@ -269,16 +269,20 @@ impl Plot {
             context.theme,
             context.fit_scope(),
         )?;
-        let panel_clip = if self.panel_text_annotations().iter().any(|annotation| {
-            annotation.position().as_corner().is_none()
-                || annotation.content().get_layout().is_some_and(|layout| {
-                    layout
-                        .instructions()
-                        .overflow
-                        .as_ref()
-                        .is_some_and(|overflow| overflow.failure == crate::TextFailure::Visible)
-                })
-        }) {
+        let panel_clip = if self
+            .description()
+            .panel_text_annotations()
+            .iter()
+            .any(|annotation| {
+                annotation.position().as_corner().is_none()
+                    || annotation.content().get_layout().is_some_and(|layout| {
+                        layout
+                            .instructions()
+                            .overflow
+                            .as_ref()
+                            .is_some_and(|overflow| overflow.failure == crate::TextFailure::Visible)
+                    })
+            }) {
             let (width, height) = self.figure_dimensions()?;
             crate::layout::PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height))
         } else {
@@ -290,7 +294,7 @@ impl Plot {
             geometry.text(placed.placement, &placed.plan, Some(canonical_clip))?;
             Ok(placed)
         }))?;
-        let panel_layer = if self.panel_text_annotations().is_empty() {
+        let panel_layer = if self.description().panel_text_annotations().is_empty() {
             None
         } else {
             let mut name = String::new();

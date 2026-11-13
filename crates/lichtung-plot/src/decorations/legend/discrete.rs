@@ -133,19 +133,19 @@ impl PreparedGuide {
         let operation = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
         let data = plot.data().with_operation(&operation);
-        let keys = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        let keys = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
         } else if let Some(matrix) = &inputs.matrix {
             matrix.guide_sources(plot, theme, data)?
         } else {
             inputs.guide_sources(plot, theme, data, plot.axis_scope())?
         };
-        let continuous = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        let continuous = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             None
         } else {
             inputs.continuous_source(plot, theme, plot.axis_scope())?
         };
-        let alpha = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        let alpha = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
         } else {
             inputs

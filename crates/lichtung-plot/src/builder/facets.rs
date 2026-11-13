@@ -1,4 +1,4 @@
-use super::{ComposedInputs, Plot};
+use super::{ComposedInputs, Plot, PlotDescription};
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
@@ -15,9 +15,11 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.description.payload_mut().facet = Some(facet);
         self
     }
+}
 
+impl PlotDescription {
     pub(crate) fn facet_scales_spec(&self) -> FacetScales {
-        match &self.description.payload.facet {
+        match &self.payload.facet {
             Some(facet) => facet.scale_policy(),
             None => FacetScales::Fixed,
         }
@@ -32,32 +34,34 @@ impl<K: crate::kind::Marker> Plot<K> {
         Option<usize>,
     ) {
         (
-            self.description
-                .payload
+            self.payload
                 .facet
                 .as_ref()
                 .and_then(FacetSpec::row_values)
                 .map(|_| FACET_ROW),
-            self.description
-                .payload
+            self.payload
                 .facet
                 .as_ref()
                 .and_then(FacetSpec::column_values)
                 .map(|_| FACET_COLUMN),
-            self.description
-                .payload
+            self.payload
                 .facet
                 .as_ref()
                 .and_then(FacetSpec::wrap_values)
                 .map(|_| FACET_WRAP),
-            self.description
-                .payload
+            self.payload
                 .facet
                 .as_ref()
                 .and_then(FacetSpec::wrap_columns),
         )
     }
 
+    pub(crate) fn has_facets(&self) -> bool {
+        self.payload.facet.is_some()
+    }
+}
+
+impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn without_facets(mut self) -> Self {
         self.description.payload_mut().facet = None;
         self
@@ -77,10 +81,6 @@ impl<K: crate::kind::Marker> Plot<K> {
                     .is_some_and(|cell| cell.matches(selectors.iter().map(|(_, level)| *level)))
             });
         self
-    }
-
-    pub(crate) fn has_facets(&self) -> bool {
-        self.description.payload.facet.is_some()
     }
 
     pub(crate) fn with_resolved_facet_ranges(
@@ -152,8 +152,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             }
         }
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
-        self.same_prose(&other.prose)
-            && self.same_axis_titles(&other.axis_titles)
+        self.description().same_prose(&other.prose)
+            && self.description().same_axis_titles(&other.axis_titles)
             && range(self.description.payload.x_axis_spec.limits) == range(other.x_axis_spec.limits)
             && range(self.description.payload.y_axis_spec.limits) == range(other.y_axis_spec.limits)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
@@ -262,8 +262,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         Ok(ComposedInputs {
             text_layouts: self.description.payload.text_layouts.clone(),
             output_dimensions: self.output_dimensions,
-            prose: self.copy_prose()?,
-            axis_titles: self.copy_axis_titles()?,
+            prose: self.description().copy_prose()?,
+            axis_titles: self.description().copy_axis_titles()?,
             x_axis_spec,
             y_axis_spec,
             global_hue_levels,
@@ -289,7 +289,8 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_global_color_levels(self, levels: Vec<String>) -> Self {
-        if self.kind() == PlotKind::Interaction && self.hue_dimension_key().is_none() {
+        if self.kind() == PlotKind::Interaction && self.description().hue_dimension_key().is_none()
+        {
             self.with_global_group_levels(levels)
         } else {
             self.with_global_hue_levels(levels)

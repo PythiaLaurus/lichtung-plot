@@ -23,7 +23,7 @@ impl PlotLocalTextPlan {
         intrinsics: RootTitleBlockIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
-        let sources = plot.prose();
+        let sources = plot.description().prose();
         let present = sources.iter().any(Option::is_some);
 
         let padding = if present {
@@ -51,7 +51,11 @@ impl PlotLocalTextPlan {
             return Ok(FitOutcome::Miss(reason));
         }
         let minimum = plot.intrinsic_body_minimum(theme)?;
-        let alignments = RootAlignments::resolve(theme, plot.prose_alignments(), panel_alignments);
+        let alignments = RootAlignments::resolve(
+            theme,
+            plot.description().prose_alignments(),
+            panel_alignments,
+        );
         let text = match fit::outcome(RootTitleBlockPlan::measure(
             theme,
             sources,

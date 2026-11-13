@@ -242,7 +242,7 @@ impl<'a> ChildPlans<'a> {
     ) -> Result<FitOutcome<Arc<PlotRenderResult>>, Error> {
         self.validate_owner(owner)?;
         let guides = GuideConsumption {
-            use_kind: if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            use_kind: if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
                 GuideUse::Hidden
             } else {
                 context.guides.use_kind
@@ -293,7 +293,7 @@ impl<'a> ChildPlans<'a> {
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {
         self.validate_owner(owner)?;
-        let use_kind = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        let use_kind = if plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden {
             GuideUse::Hidden
         } else if role == LegendRole::Panel {
             GuideUse::Local

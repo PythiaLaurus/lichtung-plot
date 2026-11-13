@@ -165,7 +165,7 @@ pub(crate) fn measure_marks(
             bar,
             prepared,
             mode,
-            chart.bar_spacing_spec(),
+            chart.description().bar_spacing_spec(),
             false,
             theme.marks.get_extents().get_categories(),
         );

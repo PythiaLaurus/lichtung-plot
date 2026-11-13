@@ -109,7 +109,7 @@ impl ResolvedCanvasThemes {
             .plots()
             .map(|plot| {
                 plot.map(|plot| {
-                    let mut theme = match plot.theme_spec() {
+                    let mut theme = match plot.description().theme_spec() {
                         None => root.clone(),
                         Some(theme) => {
                             let mut theme = Box::new(theme.resolve()?);
@@ -117,7 +117,7 @@ impl ResolvedCanvasThemes {
                             theme
                         }
                     };
-                    theme.text_layouts = plot.text_layouts().clone();
+                    theme.text_layouts = plot.description().text_layouts().clone();
                     theme.apply_text_defaults(plot.kind());
                     Ok(theme)
                 })
@@ -893,11 +893,12 @@ impl Canvas {
         }
         for plot in self.placements.plots().flatten() {
             let kind = plot.kind();
-            plot.validate_configuration(kind)?;
-            crate::layout::interior::CompositionChildPolicy::Canvas.validate_child(plot)?;
+            plot.description().validate_configuration(kind)?;
+            crate::layout::interior::CompositionChildPolicy::Canvas
+                .validate_child(plot.description())?;
             if self.legend_policy == CanvasLegendPolicy::Shared
                 && matches!(
-                    plot.legend_policy_spec(),
+                    plot.description().legend_policy_spec(),
                     crate::LegendPolicy::Visible(position) if position != crate::LegendPosition::Auto
                 )
             {
@@ -919,6 +920,7 @@ impl Canvas {
                     )));
                 }
                 if plot
+                    .description()
                     .automatic_axis_category_values(plot.kind(), true)
                     .is_some()
                 {
@@ -941,7 +943,8 @@ impl Canvas {
                     ));
                 }
                 if footprint.row == title.start
-                    && (plot.title_text().is_some() || plot.subtitle_text().is_some())
+                    && (plot.description().title_text().is_some()
+                        || plot.description().subtitle_text().is_some())
                 {
                     return Err(Error::Data(format!(
                         "canvas row title cannot coexist with a panel title or subtitle in row {}",
@@ -1042,7 +1045,7 @@ impl Canvas {
         crate::data::source::reserve_source(&mut groups, self.placements.len())?;
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
-            let Some(dimension) = plot.categorical_color_field() else {
+            let Some(dimension) = plot.description().categorical_color_field() else {
                 continue;
             };
 
@@ -1093,9 +1096,9 @@ impl Canvas {
                 plot = plot.labels(labels.clone());
             }
             if let Some((_, levels)) = hue_groups.and_then(|groups| {
-                groups
-                    .iter()
-                    .find(|(field, _)| Some(field.as_str()) == plot.categorical_color_field())
+                groups.iter().find(|(field, _)| {
+                    Some(field.as_str()) == plot.description().categorical_color_field()
+                })
             }) {
                 let levels = crate::data::source::collect_source(
                     levels
@@ -1167,7 +1170,7 @@ impl Canvas {
                                 )
                             })?
                             .ranges[0],
-                        plot.x_axis_spec(),
+                        plot.description().x_axis_spec(),
                     )?
                 } else if matches!(
                     plot.kind(),
@@ -1195,10 +1198,10 @@ impl Canvas {
                     .placements
                     .plot(index)
                     .expect("validated shared x member");
-                if let Some(ticks) = plot.explicit_x_ticks() {
+                if let Some(ticks) = plot.description().explicit_x_ticks() {
                     for tick in ticks {
                         let position = if plot.kind() == PlotKind::Forest
-                            && plot.axis_scale_spec() == crate::AxisScale::Log10
+                            && plot.description().axis_scale_spec() == crate::AxisScale::Log10
                         {
                             crate::numeric::log10(tick.position)?
                         } else {
@@ -1295,6 +1298,7 @@ impl Canvas {
                 }) {
                     Some(plot) => {
                         let data = plot
+                            .description()
                             .configured_source_rows()?
                             .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                             .with_operation(&resources);
@@ -1318,6 +1322,7 @@ impl Canvas {
                 }) {
                     Some(plot) => {
                         let data = plot
+                            .description()
                             .configured_source_rows()?
                             .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                             .with_operation(&resources);
@@ -1329,6 +1334,7 @@ impl Canvas {
             scatter.push(match plot.filter(|plot| plot.kind() == PlotKind::Scatter) {
                 Some(plot) => {
                     let data = plot
+                        .description()
                         .configured_source_rows()?
                         .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                         .with_operation(&resources);
@@ -1491,7 +1497,8 @@ impl Canvas {
                             groups
                                 .iter()
                                 .find(|(field, _)| {
-                                    Some(field.as_str()) == plot.categorical_color_field()
+                                    Some(field.as_str())
+                                        == plot.description().categorical_color_field()
                                 })
                                 .map(|(_, levels)| levels.as_slice())
                         });
@@ -1680,7 +1687,7 @@ impl Canvas {
                         &themes
                             .plot_request(index)
                             .expect("configured Canvas Plot theme"),
-                        plot.prose(),
+                        plot.description().prose(),
                         Some(&scope),
                     )
                 })
@@ -2145,7 +2152,7 @@ impl Canvas {
         for slot in &mut plots {
             if let Some(plot) = slot.take() {
                 let levels = hue_groups.iter().find(|(dimension, _)| {
-                    Some(dimension.as_str()) == plot.categorical_color_field()
+                    Some(dimension.as_str()) == plot.description().categorical_color_field()
                 });
                 let plot = if let Some((_, levels)) = levels {
                     let levels = crate::data::source::collect_source(
@@ -2580,7 +2587,7 @@ impl Canvas {
                     first_index,
                     round,
                 )?;
-                let expected_selection = first.y_axis_spec().category_labels.clone();
+                let expected_selection = first.description().y_axis_spec().category_labels.clone();
                 for &index in &band[1..] {
                     let column = index % self.columns;
                     let plot = plots[index].as_ref().ok_or_else(|| {
@@ -2588,7 +2595,7 @@ impl Canvas {
                             "canvas row {row} requires panel ({row}, {column}) for shared category labels"
                         ))
                     })?;
-                    if expected_selection != plot.y_axis_spec().category_labels {
+                    if expected_selection != plot.description().y_axis_spec().category_labels {
                         return Err(Error::Data(
                             "shared category axes require identical label selection policies"
                                 .into(),
@@ -2776,7 +2783,7 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
-            let source_rows = plot.configured_source_rows()?;
+            let source_rows = plot.description().configured_source_rows()?;
             let dependencies =
                 self.consumed_guide_dependencies(index, cell.width(), shared_allocation, round)?;
             let guides = GuideConsumption {
@@ -2815,7 +2822,7 @@ impl Canvas {
                         crate::decorations::legend::discrete::GuideSlot::new(
                             descriptor,
                             &owner,
-                            plot.legend_position_spec(),
+                            plot.description().legend_position_spec(),
                         )
                     })
                     .transpose()?
@@ -3123,8 +3130,9 @@ impl Canvas {
             let plot = self.placements.plot(panel.index).ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
-            plot.configured_source_rows()?;
-            crate::layout::interior::InteriorRoute::classify(panel.kind).validate(plot)?;
+            plot.description().configured_source_rows()?;
+            crate::layout::interior::InteriorRoute::classify(panel.kind)
+                .validate(plot.description())?;
             panel.panel_plan.result.draw_body(backend)?;
             crate::significance::render_selected(&panel.panel_plan.result, backend)?;
             with_layer(backend, &panel.layers[1], |backend| {

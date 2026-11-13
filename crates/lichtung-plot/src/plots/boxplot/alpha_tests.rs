@@ -44,7 +44,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         &source,
         source
             .data()
-            .map_source_rows(source.source_row_map().unwrap()),
+            .map_source_rows(source.description().source_row_map().unwrap()),
         None,
     )
     .unwrap();

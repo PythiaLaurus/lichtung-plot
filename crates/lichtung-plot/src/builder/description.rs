@@ -174,12 +174,12 @@ mod tests {
             &inline.description.payload
         ));
         assert_eq!(
-            original.sizing_request(),
+            original.description().sizing_request(),
             crate::layout::RootRequest::Natural
         );
-        assert_eq!(original.prose_alignments()[0], None);
+        assert_eq!(original.description().prose_alignments()[0], None);
         assert_eq!(
-            inline.prose_alignments()[0],
+            inline.description().prose_alignments()[0],
             Some(crate::TextAlignment::End)
         );
         let edited = inline
@@ -190,17 +190,20 @@ mod tests {
             &original.description.payload,
             &edited.description.payload
         ));
-        assert_eq!(original.x_axis_spec().limits, None);
-        assert_eq!(edited.x_axis_spec().limits, Some((-1.0, 2.0)));
+        assert_eq!(original.description().x_axis_spec().limits, None);
+        assert_eq!(edited.description().x_axis_spec().limits, Some((-1.0, 2.0)));
         assert_eq!(
-            original.copy_axis_titles().unwrap()[0].as_str(),
+            original.description().copy_axis_titles().unwrap()[0].as_str(),
             "Horizontal"
         );
-        assert_eq!(edited.copy_axis_titles().unwrap()[0].as_str(), "Changed");
+        assert_eq!(
+            edited.description().copy_axis_titles().unwrap()[0].as_str(),
+            "Changed"
+        );
         let erased = edited.erase();
         assert_eq!(erased.kind(), PlotKind::Scatter);
         assert_eq!(
-            erased.sizing_request(),
+            erased.description().sizing_request(),
             crate::layout::RootRequest::ExactWidth(640)
         );
     }

@@ -46,11 +46,11 @@ pub(crate) enum PrimaryTitleIdentity {
 impl PrimaryTitleIdentity {
     pub(crate) fn resolved_text(&self, plot: &Plot) -> Result<String> {
         match self {
-            Self::Field(field) => plot.resolve_label(field.as_str()),
+            Self::Field(field) => plot.description().resolve_label(field.as_str()),
             Self::Pair { group, hue } => join(
-                plot.resolve_label(group.as_str())?,
+                plot.description().resolve_label(group.as_str())?,
                 " × ",
-                &plot.resolve_label(hue.as_str())?,
+                &plot.description().resolve_label(hue.as_str())?,
             ),
             Self::Series => crate::data::source::copy_source_string("series"),
             Self::BarSign => crate::data::source::copy_source_string("Change"),
@@ -152,15 +152,15 @@ impl GuideEntryIdentity {
     ) -> Result<String> {
         let literal = crate::data::source::copy_source_string;
         match self {
-            Self::Category { value, .. } => plot.resolve_label(value.as_str()),
+            Self::Category { value, .. } => plot.description().resolve_label(value.as_str()),
             Self::Pair {
                 group_value,
                 hue_value,
                 ..
             } => join(
-                plot.resolve_label(group_value.as_str())?,
+                plot.description().resolve_label(group_value.as_str())?,
                 ", ",
-                &plot.resolve_label(hue_value.as_str())?,
+                &plot.description().resolve_label(hue_value.as_str())?,
             ),
             Self::BarSign { decreasing } => literal(if *decreasing {
                 "Decreasing"
@@ -172,7 +172,7 @@ impl GuideEntryIdentity {
             Self::RegressionFit { band } => literal(band.legend_label()),
             Self::SupplementalLayer { label } => match layer_context {
                 Some(super::source::LayerLabelContext::Categorical) => {
-                    plot.resolve_label(label.as_str())
+                    plot.description().resolve_label(label.as_str())
                 }
                 Some(super::source::LayerLabelContext::LiteralSeries) => literal(label.as_str()),
                 None => Err(Error::Render(

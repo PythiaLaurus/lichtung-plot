@@ -2,12 +2,15 @@
 
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
-use crate::{GuideSpec, Plot};
+use crate::GuideSpec;
+#[cfg(test)]
+use crate::Plot;
 
-impl Plot {
+impl PlotDescription {
     pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<AxisTick>>, Error> {
         self.explicit_x_ticks()
             .map(|ticks| projected_x_ticks(self, ticks))
@@ -81,14 +84,17 @@ pub(crate) struct GuideSnapshot {
 }
 
 impl GuideSnapshot {
-    pub(crate) fn validate_sources(chart: &Plot, ranges: [(f64, f64); 2]) -> Result<(), Error> {
+    pub(crate) fn validate_sources(
+        chart: &PlotDescription,
+        ranges: [(f64, f64); 2],
+    ) -> Result<(), Error> {
         for (index, guide) in chart.guides().iter().enumerate() {
             guide_endpoints(guide, index, ranges[0], ranges[1])?;
         }
         Ok(())
     }
     pub(crate) fn measure(
-        chart: &Plot,
+        chart: &PlotDescription,
         result: &PlotRenderResult,
 
         geometry: &mut crate::render::geometry::GeometrySnapshot,
@@ -140,7 +146,7 @@ impl GuideSnapshot {
     }
 }
 
-fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
+fn projected_x_ticks(chart: &PlotDescription, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
     crate::data::source::collect_source(ticks
         .iter()
         .enumerate()
@@ -176,7 +182,8 @@ fn projected_exact_ticks_validate_positions_and_preserve_labels() {
     )
     .scale(AxisScale::Log10)
     .erase();
-    let error = projected_x_ticks(&chart, &[AxisTick::new(0.0, "invalid")]).unwrap_err();
+    let error =
+        projected_x_ticks(chart.description(), &[AxisTick::new(0.0, "invalid")]).unwrap_err();
     assert!(
         matches!(&error, Error::Data(message) if message.contains("strictly positive")),
         "{error}"
@@ -184,7 +191,7 @@ fn projected_exact_ticks_validate_positions_and_preserve_labels() {
 
     let ticks = [AxisTick::new(0.1, "lower"), AxisTick::new(10.0, "upper")];
     assert_eq!(
-        projected_x_ticks(&chart, &ticks).unwrap(),
+        projected_x_ticks(chart.description(), &ticks).unwrap(),
         [AxisTick::new(-1.0, "lower"), AxisTick::new(1.0, "upper")]
     );
 }
@@ -256,7 +263,7 @@ fn same_coordinate(left: f64, right: f64) -> bool {
     left.to_bits() == right.to_bits() || (left == 0.0 && right == 0.0)
 }
 
-fn numeric_axes(chart: &Plot, kind: PlotKind) -> (bool, bool) {
+fn numeric_axes(chart: &PlotDescription, kind: PlotKind) -> (bool, bool) {
     match kind {
         PlotKind::Scatter
         | PlotKind::Histogram
@@ -269,7 +276,7 @@ fn numeric_axes(chart: &Plot, kind: PlotKind) -> (bool, bool) {
         PlotKind::Trajectory => {
             let numeric_x = chart
                 .x_col()
-                .and_then(|column| chart.data().column(column).ok())
+                .and_then(|column| chart.data_column(column))
                 .is_some_and(crate::data::DataColumn::is_numeric);
             (numeric_x, true)
         }

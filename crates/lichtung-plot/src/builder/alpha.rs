@@ -33,8 +33,11 @@ impl ScopedAlpha<'_> {
         chart: &Plot,
         identity: &crate::data::CollectivePair,
     ) -> crate::Result<Option<ResolvedAlpha>> {
-        let group = chart.group_name().zip(identity.group.as_deref());
-        let hue = chart.hue_name().zip(identity.hue.as_deref());
+        let group = chart
+            .description()
+            .group_name()
+            .zip(identity.group.as_deref());
+        let hue = chart.description().hue_name().zip(identity.hue.as_deref());
         match (group, hue) {
             (Some(group), Some(hue)) => self.keyed(&[group, hue]),
             (Some(group), None) => self.keyed(&[group]),
@@ -191,10 +194,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             crate::data::source::reserve_source(&mut facets, 3)?;
             facets.extend(facet.values().map(crate::CategoryValues::name));
         }
-        let original_len = if let Some(geometry) = self.raincloud_geometry_input() {
+        let original_len = if let Some(geometry) = self.description().raincloud_geometry_input() {
             geometry.point_y.len()
         } else {
-            self.row_count()
+            self.description().row_count()
         };
         self.description.payload.alpha.get(target).prepare(
             unit,
@@ -254,9 +257,9 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> crate::Result<ScopedAlpha<'a>> {
         let mut fields = Vec::new();
         crate::data::source::reserve_source(&mut fields, 2)?;
-        fields.extend(self.group_name());
+        fields.extend(self.description().group_name());
         if include_hue {
-            fields.extend(self.hue_name());
+            fields.extend(self.description().hue_name());
         }
         self.prepare_scoped_alpha(target, unit, &fields, data)
     }

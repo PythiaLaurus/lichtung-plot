@@ -4,13 +4,14 @@ use std::collections::HashSet;
 
 use crate::Error;
 
-use crate::builder::Plot;
+use crate::builder::PlotDescription;
+use crate::data::{strict_source_normalized_strings, strict_source_strings};
 use crate::spec::{
     CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat, LinePathStyle,
     PlotKind, RegressionBand,
 };
 
-impl Plot {
+impl PlotDescription {
     pub(crate) fn validate_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         self.validate_display_text()?;
         self.x_axis_spec().validate("x-axis")?;
@@ -52,12 +53,18 @@ impl Plot {
             let condition = self
                 .x_col()
                 .ok_or_else(|| Error::Data("trajectory: condition column not set".into()))?;
-            crate::data::strict_normalized_strings(
-                self.data(),
-                condition,
-                "trajectory",
-                "condition",
-            )?;
+            let crate::data::DataColumn::Category(values) = self
+                .data_column(condition)
+                .ok_or_else(|| Error::Data(format!("unknown semantic value {condition:?}")))?
+            else {
+                return Err(Error::Data(format!(
+                    "trajectory: value {:?} must be categorical",
+                    self.data_column(condition)
+                        .expect("resolved condition")
+                        .name()
+                )));
+            };
+            strict_source_normalized_strings(values, None, "trajectory", "condition")?;
         }
         self.validate_category_order_configuration(kind)?;
         self.validate_channel_configuration(kind)?;
@@ -109,8 +116,6 @@ impl Plot {
 
     fn validate_faceted_explicit_category_orders(&self, kind: PlotKind) -> Result<(), Error> {
         let configured_source_rows = self.configured_source_rows()?;
-        let data = configured_source_rows
-            .map_or_else(|| self.data(), |rows| self.data().map_source_rows(rows));
         match kind {
             PlotKind::Bar
             | PlotKind::HorizontalBar
@@ -119,9 +124,18 @@ impl Plot {
                 let column = self
                     .x_col()
                     .ok_or_else(|| Error::Data("bar: category column not set".into()))?;
-                let observed = crate::data::stable_levels(&crate::data::strict_strings(
-                    data,
-                    column,
+                let crate::data::DataColumn::Category(values) = self
+                    .data_column(column)
+                    .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?
+                else {
+                    return Err(Error::Data(format!(
+                        "faceted bar category order: value {:?} must be categorical",
+                        self.data_column(column).expect("resolved category").name()
+                    )));
+                };
+                let observed = crate::data::stable_levels(&strict_source_strings(
+                    values,
+                    configured_source_rows,
                     "faceted bar category order",
                 )?);
                 validate_full_explicit_order(
@@ -135,9 +149,18 @@ impl Plot {
                 let column = self
                     .y_col()
                     .ok_or_else(|| Error::Data("point_interval: category column not set".into()))?;
-                let observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
-                    data,
-                    column,
+                let crate::data::DataColumn::Category(values) = self
+                    .data_column(column)
+                    .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?
+                else {
+                    return Err(Error::Data(format!(
+                        "faceted point_interval category order: value {:?} must be categorical",
+                        self.data_column(column).expect("resolved category").name()
+                    )));
+                };
+                let observed = crate::data::stable_levels(&strict_source_normalized_strings(
+                    values,
+                    configured_source_rows,
                     "faceted point_interval category order",
                     "category",
                 )?);
@@ -148,7 +171,9 @@ impl Plot {
                     true,
                 )?;
             }
-            PlotKind::Heatmap => self.validate_faceted_heatmap_category_orders(data)?,
+            PlotKind::Heatmap => {
+                self.validate_faceted_heatmap_category_orders(configured_source_rows)?;
+            }
             _ => {}
         }
         Ok(())
@@ -156,7 +181,7 @@ impl Plot {
 
     fn validate_faceted_heatmap_category_orders(
         &self,
-        data: crate::data::PlotData<'_>,
+        rows: Option<&crate::SourceRows>,
     ) -> Result<(), Error> {
         let x_column = self
             .x_col()
@@ -164,15 +189,33 @@ impl Plot {
         let y_column = self
             .y_col()
             .ok_or_else(|| Error::Data("heatmap: y category column not set".into()))?;
-        let x_observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
-            data,
-            x_column,
+        let crate::data::DataColumn::Category(x_values) = self
+            .data_column(x_column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {x_column:?}")))?
+        else {
+            return Err(Error::Data(format!(
+                "faceted heatmap category order: value {:?} must be categorical",
+                self.data_column(x_column).expect("resolved x").name()
+            )));
+        };
+        let x_observed = crate::data::stable_levels(&strict_source_normalized_strings(
+            x_values,
+            rows,
             "faceted heatmap category order",
             "x",
         )?);
-        let y_observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
-            data,
-            y_column,
+        let crate::data::DataColumn::Category(y_values) = self
+            .data_column(y_column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {y_column:?}")))?
+        else {
+            return Err(Error::Data(format!(
+                "faceted heatmap category order: value {:?} must be categorical",
+                self.data_column(y_column).expect("resolved y").name()
+            )));
+        };
+        let y_observed = crate::data::stable_levels(&strict_source_normalized_strings(
+            y_values,
+            rows,
             "faceted heatmap category order",
             "y",
         )?);
@@ -281,7 +324,7 @@ impl Plot {
                     "{kind:?} does not consume line bands; use BarInput::estimates_with_error_bars for precomputed bar bounds"
                 )));
             }
-            return crate::plots::bar_data::validate_cells(self, self.data());
+            return crate::plots::bar_data::validate_cells(self);
         }
         if matches!(kind, PlotKind::StackedBar | PlotKind::StackedHorizontalBar)
             && self.interval_bound_cols().is_some()
@@ -648,8 +691,8 @@ impl Plot {
             return Ok(());
         };
         let source = self
-            .data()
-            .column(x_column)
+            .data_column(x_column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {x_column:?}")))
             .map_err(|error| Error::Data(format!("trajectory: column {x_column:?}: {error}")))?;
         if source.is_numeric() {
             return Ok(());
@@ -667,8 +710,8 @@ impl Plot {
             return Ok(());
         };
         let source = self
-            .data()
-            .column(x_column)
+            .data_column(x_column)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {x_column:?}")))
             .map_err(|error| Error::Data(format!("line path: column {x_column:?}: {error}")))?;
         if source.is_numeric() {
             Ok(())

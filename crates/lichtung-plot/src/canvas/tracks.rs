@@ -100,7 +100,7 @@ fn plot_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let mut hard = plot.intrinsic_body_minimum(theme)?;
-    let sources = plot.prose();
+    let sources = plot.description().prose();
     hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
         theme, sources, hard.1,
     )?;
@@ -520,7 +520,7 @@ fn measure(
             let title = plot_titles[index]
                 .expect("configured Plot retains prepared text intrinsics")
                 .widths();
-            let sources = plot.prose();
+            let sources = plot.description().prose();
             let present = sources.map(|value| value.is_some());
             let preferred = if content.is_some() {
                 let body = crate::layout::interior::sizing::body_preference(

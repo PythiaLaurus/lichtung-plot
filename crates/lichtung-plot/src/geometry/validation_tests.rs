@@ -90,7 +90,7 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
             )
             .unwrap(),
         );
-    assert_eq!(supplied.row_count(), 0);
+    assert_eq!(supplied.description().row_count(), 0);
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
