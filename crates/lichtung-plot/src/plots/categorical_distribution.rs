@@ -241,6 +241,7 @@ impl PreparedDistribution {
             CoordinatedDomains {
                 colors: Some(crate::data::source::source_arc(hues)?),
                 groups: groups.map(crate::data::source::source_arc).transpose()?,
+                collectives: None,
             },
         ))
     }

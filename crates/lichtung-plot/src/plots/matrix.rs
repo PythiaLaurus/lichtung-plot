@@ -436,6 +436,7 @@ pub(crate) fn prepare_axes(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     plot_id: &PlotOccurrenceId,
+    collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<(PreparedMatrixAxes, PreparedAxesOwner, Vec<String>), Error> {
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
@@ -447,7 +448,7 @@ pub(crate) fn prepare_axes(
     let labels = chart
         .description()
         .resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
-    let (mut groups, hues) = build_groups(chart, &cols, data)?;
+    let (mut groups, hues) = build_groups(chart, &cols, data, collectives)?;
     let fill_alpha = chart.description().prepare_collective_alpha(
         AlphaTarget::Fill,
         AlphaUnitKind::Series,
@@ -1298,6 +1299,7 @@ fn build_groups(
     chart: &Plot,
     cols: &[&str],
     data: crate::data::PlotData<'_, '_>,
+    collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let alpha =
         chart
@@ -1320,9 +1322,7 @@ fn build_groups(
             .iter()
             .map(|level| crate::data::source::copy_source_string(level)),
     )?;
-    let identities = chart
-        .global_collective_pairs()
-        .unwrap_or(&channels.identities);
+    let identities = collectives.unwrap_or(&channels.identities);
 
     let mut groups = Vec::new();
     crate::data::source::reserve_source(&mut groups, identities.len())?;

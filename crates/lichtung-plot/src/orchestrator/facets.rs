@@ -144,7 +144,7 @@ pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
     theme: &TextRequestContext<'_, '_>,
-    inputs: &crate::layout::interior::PreparedInteriorInputs,
+    inputs: &mut crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedFacetGuide, Error> {
     legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
@@ -219,7 +219,7 @@ impl FacetPlan {
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
         theme.text.prepared_font_environment()?;
-        let mut base_plot = data::base_plot(source, kind)?;
+        let (mut base_plot, _) = data::base_plot(source, kind)?;
         if let Some(levels) = &prepared_guide.hue_levels {
             base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
                 levels
@@ -901,7 +901,7 @@ mod feedback_tests {
                 let root = crate::layout::plan_root(
                     source.description().sizing_request(),
                     |stage| {
-                        let inputs = crate::plots::shared_x::prepare_plot(
+                        let mut inputs = crate::plots::shared_x::prepare_plot(
                             &source,
                             &stage.operation(),
                             Some(&crate::theme::Theme::publication()),
@@ -910,7 +910,7 @@ mod feedback_tests {
                             &source,
                             PlotKind::Scatter,
                             &theme,
-                            &inputs,
+                            &mut inputs,
                             &stage.operation(),
                         )?;
                         let requirements = crate::layout::foundational_plot_requirements(
@@ -1108,7 +1108,7 @@ mod feedback_tests {
         crate::layout::plan_root(
             source.description().sizing_request(),
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
+                let mut inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
@@ -1122,7 +1122,7 @@ mod feedback_tests {
                     &source,
                     PlotKind::Scatter,
                     &theme,
-                    &inputs,
+                    &mut inputs,
                     &stage.operation(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
@@ -1274,7 +1274,7 @@ mod feedback_tests {
         let root = crate::layout::plan_root(
             source.description().sizing_request(),
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
+                let mut inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
@@ -1283,7 +1283,7 @@ mod feedback_tests {
                     &source,
                     PlotKind::Scatter,
                     &theme,
-                    &inputs,
+                    &mut inputs,
                     &stage.operation(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(

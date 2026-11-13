@@ -870,9 +870,13 @@ mod tests {
                 let mut hidden =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 hidden.plots[0].policy.axis_text.tick_labels[1] = false;
-                Ok((operation, inputs, hidden))
+                let mut collectives =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                collectives.plots[0].policy.coordinated.collectives =
+                    Some(crate::data::source::source_arc(Vec::new())?);
+                Ok((operation, inputs, hidden, collectives))
             },
-            |(operation, inputs, hidden), assigned, round| {
+            |(operation, inputs, hidden, collectives), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -899,6 +903,11 @@ mod tests {
                             PlotRenderContext::new(registered.data(operation)?, panel, &theme)
                                 .with_registration(registered, hidden.intrinsic(registered));
                         assert!(!key.matches(&source, suppressed, &owner, round)?);
+                        let registered = &collectives.plots[0];
+                        let coordinated =
+                            PlotRenderContext::new(registered.data(operation)?, panel, &theme)
+                                .with_registration(registered, collectives.intrinsic(registered));
+                        assert!(!key.matches(&source, coordinated, &owner, round)?);
                         assert!(!key.matches(
                             &source,
                             context.with_axis_label_width(context.axis_label_width + 1.0),
@@ -934,7 +943,6 @@ mod tests {
                             source
                                 .clone()
                                 .with_global_line_condition_levels(vec!["new condition".into()]),
-                            source.clone().with_global_collective_pairs(Vec::new()),
                             source.clone().with_suppressed_legend(),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(

@@ -994,6 +994,7 @@ pub(crate) fn prepare_scoped<'a>(
         CoordinatedDomains {
             colors: Some(crate::data::source::source_arc(hues)?),
             groups: Some(crate::data::source::source_arc(series)?),
+            collectives: None,
         },
     ))
 }

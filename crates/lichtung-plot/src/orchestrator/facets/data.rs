@@ -202,9 +202,13 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
     })
 }
 
-pub(super) fn base_plot(source: &Plot, kind: PlotKind) -> Result<Plot, Error> {
+pub(super) fn base_plot(
+    source: &Plot,
+    kind: PlotKind,
+) -> Result<(Plot, Option<Vec<crate::data::CollectivePair>>), Error> {
     let source_rows = source.description().configured_source_rows()?;
     let mut base_plot = source.clone().without_facets();
+    let mut collectives = None;
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
@@ -217,8 +221,8 @@ pub(super) fn base_plot(source: &Plot, kind: PlotKind) -> Result<Plot, Error> {
         )?;
         base_plot = base_plot
             .with_global_group_levels(channels.group_levels)
-            .with_global_hue_levels(channels.hue_levels)
-            .with_global_collective_pairs(channels.identities);
+            .with_global_hue_levels(channels.hue_levels);
+        collectives = Some(channels.identities);
     } else if let Some(group_column) = source.description().group_col() {
         let column = source
             .description()
@@ -263,7 +267,7 @@ pub(super) fn base_plot(source: &Plot, kind: PlotKind) -> Result<Plot, Error> {
             }
         }
     }
-    Ok(base_plot)
+    Ok((base_plot, collectives))
 }
 
 #[expect(

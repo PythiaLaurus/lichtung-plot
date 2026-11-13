@@ -139,6 +139,17 @@ pub(crate) fn continuous_guide_suppressed(registered: Option<&PlotRegistration<'
     })
 }
 
+pub(crate) fn collective_pairs<'v>(
+    registered: Option<&'v PlotRegistration<'_>>,
+) -> Option<&'v [crate::data::CollectivePair]> {
+    registered?
+        .policy
+        .coordinated
+        .collectives
+        .as_deref()
+        .map(Vec::as_slice)
+}
+
 impl std::fmt::Debug for PlotRegistration<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

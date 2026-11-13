@@ -271,7 +271,11 @@ impl PreparedLine {
         self.hues.iter().map(String::as_str)
     }
 
-    pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<usize>, Error> {
+    pub(crate) fn group_order(
+        &self,
+        chart: &Plot,
+        collectives: Option<&[crate::data::CollectivePair]>,
+    ) -> Result<Vec<usize>, Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
             && chart.description().line_path_style_spec() == LinePathStyle::Hue;
         let mut order = crate::data::source::collect_source((0..self.groups.len()).map(Ok))?;
@@ -283,8 +287,7 @@ impl PreparedLine {
                     .as_ref()
                     .and_then(|identity| {
                         if chart.kind() == PlotKind::Line || hue_paths {
-                            chart
-                                .global_collective_pairs()
+                            collectives
                                 .and_then(|pairs| pairs.iter().position(|pair| pair == identity))
                         } else {
                             chart.global_group_levels().and_then(|levels| {
@@ -425,8 +428,10 @@ impl PreparedLine {
         chart: &Plot,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
+        collectives: Option<&[crate::data::CollectivePair]>,
     ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
-        let (mut prepared, ranges, conditions) = Self::prepare_scientific(chart, data, conditions)?;
+        let (mut prepared, ranges, conditions) =
+            Self::prepare_scientific(chart, data, conditions, collectives)?;
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
                 && chart.description().line_path_style_spec() == LinePathStyle::Hue);
@@ -471,6 +476,7 @@ impl PreparedLine {
         chart: &Plot,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
+        collectives: Option<&[crate::data::CollectivePair]>,
     ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
         data.validate_row_source()?;
         let alpha = chart.description().prepare_alpha(
@@ -582,9 +588,7 @@ impl PreparedLine {
                 "line path: LinePathStyle::Hue requires a categorical hue column".into(),
             ));
         }
-        let identities = chart
-            .global_collective_pairs()
-            .unwrap_or(&channels.identities);
+        let identities = collectives.unwrap_or(&channels.identities);
         let group_levels = chart
             .global_group_levels()
             .unwrap_or(&channels.group_levels);
@@ -834,7 +838,6 @@ pub(crate) fn measure_marks(
         })?;
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
     project(
         chart,
         prepared,
@@ -845,9 +848,7 @@ pub(crate) fn measure_marks(
             .categories(0)
             .is_some(),
         layout,
-        theme,
-        data,
-        context.fit_scope(),
+        context,
     )
 }
 
@@ -860,10 +861,11 @@ fn project(
     prepared: &PreparedLine,
     categorical_x: bool,
     layout: crate::layout::Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_, '_>,
-    scope: &crate::layout::fit::FitScope,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    let theme = context.theme;
+    let data = context.data;
+    let scope = context.fit_scope();
     let mut payload = LinePayload {
         clip: layout.projection.panel_box(),
         marks: Vec::new(),
@@ -876,7 +878,10 @@ fn project(
     };
     let hue_paths = chart.kind() == PlotKind::LinePath
         && chart.description().line_path_style_spec() == LinePathStyle::Hue;
-    let order = prepared.group_order(chart)?;
+    let order = prepared.group_order(
+        chart,
+        crate::orchestrator::registration::collective_pairs(context.registered),
+    )?;
     let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
 
     for &index in &order {

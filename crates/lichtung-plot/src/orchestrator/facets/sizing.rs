@@ -93,7 +93,7 @@ pub(in crate::orchestrator) fn natural_size(
             .axes
             .retain_axis_labels(labels.each_ref().map(Option::as_ref))?;
     }
-    let base = data::base_plot(source, source.kind())?;
+    let (base, _) = data::base_plot(source, source.kind())?;
     let mut minima = Vec::new();
     crate::data::source::reserve_source(&mut minima, panels.len())?;
     let mut gutters = Vec::new();

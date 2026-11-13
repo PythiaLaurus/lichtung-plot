@@ -251,7 +251,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| PreparedLine::new(&source, data, None).unwrap(),
+        |data| PreparedLine::new(&source, data, None, None).unwrap(),
     )
     .unwrap();
     assert_eq!(prepared.groups[0].line_alpha.unwrap().alpha, 64);

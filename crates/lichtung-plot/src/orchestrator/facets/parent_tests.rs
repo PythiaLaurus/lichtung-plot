@@ -120,11 +120,17 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme)).unwrap();
+    let mut inputs =
+        crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme)).unwrap();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let prepared =
-        prepare_discrete_guide(&source, PlotKind::Interaction, &theme, &inputs, &operation)
-            .unwrap();
+    let prepared = prepare_discrete_guide(
+        &source,
+        PlotKind::Interaction,
+        &theme,
+        &mut inputs,
+        &operation,
+    )
+    .unwrap();
     let guide = prepared.descriptor.unwrap();
     assert_eq!(
         (
@@ -243,16 +249,16 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
             },
             |stage| {
                 let operation = stage.operation();
-                let inputs =
+                let mut inputs =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
                     &theme,
-                    &inputs,
+                    &mut inputs,
                     &operation,
                 )?;
-                let changed_inputs = crate::plots::shared_x::prepare_plot(
+                let mut changed_inputs = crate::plots::shared_x::prepare_plot(
                     &changed_source,
                     &operation,
                     Some(&theme),
@@ -261,7 +267,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &changed_source,
                     PlotKind::Scatter,
                     &theme,
-                    &changed_inputs,
+                    &mut changed_inputs,
                     &operation,
                 )?;
                 assert_ne!(guide.descriptor, changed.descriptor);

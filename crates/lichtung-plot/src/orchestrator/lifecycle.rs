@@ -39,7 +39,7 @@ impl<'src> PreparedPlotInputs<'src> {
         let text = TextService::default();
         let request = TextRequestContext::new(&theme, &text);
         source.description().validate_configuration(kind)?;
-        let axes = crate::plots::shared_x::prepare_plot(
+        let mut axes = crate::plots::shared_x::prepare_plot(
             source,
             &prepared_stage.operation(),
             Some(&theme),
@@ -53,7 +53,7 @@ impl<'src> PreparedPlotInputs<'src> {
                     source,
                     kind,
                     &request,
-                    &axes,
+                    &mut axes,
                     &prepared_stage.operation(),
                 )
             })

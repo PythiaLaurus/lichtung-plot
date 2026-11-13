@@ -166,7 +166,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 other.global_group_levels.as_deref(),
             )
             && same_values(
-                self.global_collective_pairs.as_deref(),
+                crate::orchestrator::registration::collective_pairs(registered),
                 other.global_collective_pairs.as_deref(),
             )
             && same_values(
@@ -254,19 +254,20 @@ impl<K: crate::kind::Marker> Plot<K> {
                 *target = Some(retained);
             }
         }
-        let pairs = if let Some(source) = &self.global_collective_pairs {
-            let mut retained = Vec::new();
-            crate::render::backend::reserve_text_records(&mut retained, source.len())?;
-            for pair in source {
-                retained.push(crate::data::CollectivePair {
-                    group: pair.group.as_deref().map(&copy).transpose()?,
-                    hue: pair.hue.as_deref().map(&copy).transpose()?,
-                });
-            }
-            Some(retained)
-        } else {
-            None
-        };
+        let pairs =
+            if let Some(source) = crate::orchestrator::registration::collective_pairs(registered) {
+                let mut retained = Vec::new();
+                crate::render::backend::reserve_text_records(&mut retained, source.len())?;
+                for pair in source {
+                    retained.push(crate::data::CollectivePair {
+                        group: pair.group.as_deref().map(&copy).transpose()?,
+                        hue: pair.hue.as_deref().map(&copy).transpose()?,
+                    });
+                }
+                Some(retained)
+            } else {
+                None
+            };
         let [x_axis_spec, y_axis_spec] = axes;
         let [global_hue_levels, global_group_levels, global_line_condition_levels] = levels;
         Ok(ComposedInputs {
@@ -324,18 +325,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn global_group_levels(&self) -> Option<&[String]> {
         self.global_group_levels.as_deref()
-    }
-
-    pub(crate) fn with_global_collective_pairs(
-        mut self,
-        identities: Vec<crate::data::CollectivePair>,
-    ) -> Self {
-        self.global_collective_pairs = Some(identities);
-        self
-    }
-
-    pub(crate) fn global_collective_pairs(&self) -> Option<&[crate::data::CollectivePair]> {
-        self.global_collective_pairs.as_deref()
     }
 
     pub(crate) fn with_global_line_condition_levels(mut self, levels: Vec<String>) -> Self {

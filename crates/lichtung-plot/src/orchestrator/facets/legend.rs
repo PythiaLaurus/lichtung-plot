@@ -13,10 +13,20 @@ pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
     theme: &crate::text::TextRequestContext<'_, '_>,
-    inputs: &crate::layout::interior::PreparedInteriorInputs,
+    inputs: &mut crate::layout::interior::PreparedInteriorInputs,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let mut base = super::data::base_plot(source, kind)?;
+    let (mut base, collectives) = super::data::base_plot(source, kind)?;
+    let collectives = collectives
+        .map(crate::data::source::source_arc)
+        .transpose()?;
+    for registered in &mut inputs.plots {
+        registered
+            .policy
+            .coordinated
+            .collectives
+            .clone_from(&collectives);
+    }
     if let Some(column) = source.description().hue_col() {
         let observed = inputs.observed_color_levels(&base)?;
         let raw = source

@@ -187,10 +187,13 @@ impl PreparedDensity {
             .filter_map(|curve| curve.identity.hue.as_deref())
     }
 
-    pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<(usize, usize)>, Error> {
+    pub(crate) fn group_order(
+        &self,
+        collectives: Option<&[crate::data::CollectivePair]>,
+    ) -> Result<Vec<(usize, usize)>, Error> {
         let mut order = crate::data::source::collect_source(self.curves.iter().enumerate().map(
             |(index, curve)| {
-                let pairs = chart.global_collective_pairs().unwrap_or(&[]);
+                let pairs = collectives.unwrap_or(&[]);
 
                 let key = pairs
                     .iter()
@@ -257,13 +260,17 @@ impl PreparedDensity {
         Ok(entries)
     }
 
-    pub(crate) fn new(chart: &Plot, data: PlotData<'_, '_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        chart: &Plot,
+        data: PlotData<'_, '_>,
+        collectives: Option<&[crate::data::CollectivePair]>,
+    ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let column = chart
             .description()
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
-        let mut prepared = prepare_density_for_chart(chart, data, column)?;
+        let mut prepared = prepare_density_for_chart(chart, data, column, collectives)?;
         let alpha = chart.description().prepare_collective_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Series,
@@ -362,9 +369,8 @@ pub(crate) fn measure_marks(
         })?;
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, theme, data)?;
+    let mut result = project(chart, prepared, layout, context)?;
     let automatic = [
         chart.user_x_limits().is_none(),
         chart.user_y_limits().is_none(),
@@ -415,16 +421,19 @@ pub(crate) fn project(
     chart: &Plot,
     prepared: &PreparedDensity,
     layout: Layout,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_, '_>,
+    context: PlotRenderContext<'_, '_>,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
+    let data = context.data;
     let mut payload = DensityPayload {
         clip: layout.projection.panel_box(),
         curves: Vec::new(),
         domain_expansions: [None; 2],
     };
     crate::data::source::reserve_source(&mut payload.curves, prepared.curves.len())?;
-    let order = prepared.group_order(chart)?;
+    let order = prepared.group_order(crate::orchestrator::registration::collective_pairs(
+        context.registered,
+    ))?;
     let (colors, accent) = prepared.resolved_colors(chart, theme, data)?;
 
     for &(_, index) in &order {
@@ -537,6 +546,7 @@ fn prepare_density_for_chart(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     value_col: &str,
+    collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<PreparedDensity, Error> {
     prepare_density_ordered(
         data,
@@ -545,7 +555,7 @@ fn prepare_density_for_chart(
         chart.description().group_name(),
         chart.description().hue_col(),
         chart.description().hue_name(),
-        chart.global_collective_pairs(),
+        collectives,
     )
 }
 
@@ -857,7 +867,7 @@ mod tests {
             &source,
             &resources,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| PreparedDensity::new(&source, data).unwrap_err(),
+            |data| PreparedDensity::new(&source, data, None).unwrap_err(),
         )
         .unwrap();
         assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));
@@ -957,53 +967,66 @@ mod tests {
     fn selected_curves_use_parent_collective_order_and_palette_without_rereading_columns() {
         let source = Plot::density(NumericValues::new(
             "sample",
-            [1.0, 2.0, 3.0, 101.0, 102.0, 103.0],
+            [101.0, 102.0, 103.0, 1.0, 2.0, 3.0, 101.0, 102.0, 103.0],
         ))
-        .hue(CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap())
+        .hue(CategoryValues::new("series", ["b", "b", "b", "a", "a", "a", "b", "b", "b"]).unwrap())
+        .facet(crate::FacetSpec::column(
+            CategoryValues::new(
+                "panel",
+                [
+                    "parent", "parent", "parent", "child", "child", "child", "child", "child",
+                    "child",
+                ],
+            )
+            .unwrap(),
+        ))
         .erase();
-        let chart = source
-            .with_global_hue_levels(vec!["b".into(), "a".into()])
-            .with_global_collective_pairs(vec![
-                crate::data::CollectivePair {
-                    group: None,
-                    hue: Some("b".into()),
-                },
-                crate::data::CollectivePair {
-                    group: None,
-                    hue: Some("a".into()),
-                },
-            ]);
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let text_service = crate::text::TextService::default();
-        let selected = crate::orchestrator::with_prepared_plot_for_test(
-            &chart,
-            &crate::text::TextRequestContext::new(&theme, &text_service),
-            |chart, inputs, request, _operation| {
-                let registered = &inputs.plots[0];
-                let operation = request
-                    .text
-                    .prepared_font_environment()
-                    .unwrap()
-                    .operation();
-                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-                let selected = chart
-                    .measure_selected_interior(
-                        PlotRenderContext::new(
-                            registered.data(&operation).unwrap(),
-                            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                            request,
+        let select = |theme: &crate::theme::ResolvedTheme| {
+            crate::orchestrator::with_prepared_plot_for_test(
+                &source,
+                &crate::text::TextRequestContext::new(theme, &text_service),
+                |chart, inputs, request, operation| {
+                    let registered = &inputs.plots[1];
+                    assert_eq!(
+                        registered
+                            .policy
+                            .coordinated
+                            .collectives
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .map(|pair| pair.hue.as_deref())
+                            .collect::<Vec<_>>(),
+                        [Some("b"), Some("a")]
+                    );
+                    let chart = chart
+                        .clone()
+                        .without_facets()
+                        .with_render_scope(registered.scope.render_name.clone().unwrap())
+                        .with_global_hue_levels(vec!["b".into(), "a".into()]);
+                    let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                    let selected = chart
+                        .measure_selected_interior(
+                            PlotRenderContext::new(
+                                registered.data(operation).unwrap(),
+                                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
+                                request,
+                            )
+                            .with_registration(registered, inputs.intrinsic(registered)),
                         )
-                        .with_registration(registered, inputs.intrinsic(registered)),
-                    )
-                    .unwrap();
-                assert_eq!(
-                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-                    reads
-                );
-                selected
-            },
-        )
-        .unwrap();
+                        .unwrap();
+                    assert_eq!(
+                        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                        reads
+                    );
+                    selected
+                },
+            )
+            .unwrap()
+        };
+        let selected = select(&theme);
         let crate::layout::interior::MarkPayload::Density(payload) =
             &selected.marks.as_ref().unwrap().payload
         else {
@@ -1034,13 +1057,7 @@ mod tests {
             .density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().data_lines(lines).unwrap();
-        let changed = chart
-            .preflight_panel(
-                chart.kind(),
-                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                &crate::text::TextRequestContext::new(&theme, &text_service),
-            )
-            .unwrap();
+        let changed = select(&theme);
         let crate::layout::interior::MarkPayload::Density(changed_payload) =
             &changed.marks.as_ref().unwrap().payload
         else {

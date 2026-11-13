@@ -360,7 +360,10 @@ impl PreparedInteriorInputs<'_> {
                     F::Line { marks, .. } => Some(marks),
                     _ => None,
                 })?;
-                let order = marks.group_order(chart)?;
+                let order = marks.group_order(
+                    chart,
+                    crate::orchestrator::registration::collective_pairs(Some(registered)),
+                )?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Bar
@@ -416,7 +419,9 @@ impl PreparedInteriorInputs<'_> {
                     F::Density(marks) => Some(marks),
                     _ => None,
                 })?;
-                let order = marks.group_order(chart)?;
+                let order = marks.group_order(
+                    crate::orchestrator::registration::collective_pairs(Some(registered)),
+                )?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Interaction => {
@@ -561,6 +566,7 @@ impl PreparedInteriorInputs<'_> {
                 || chart.description().legend_composition_spec(),
                 |registered| registered.policy.guide_composition,
             ),
+            crate::orchestrator::registration::collective_pairs(self.plots.first()),
             &panels,
             facet_cells,
         )?;
@@ -712,6 +718,7 @@ impl PreparedInteriorInputs<'_> {
 fn parent_guide_order(
     chart: &Plot,
     composition: crate::LegendComposition,
+    collectives: Option<&[crate::data::CollectivePair]>,
     panels: &[ScopedGuide],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
@@ -758,7 +765,7 @@ fn parent_guide_order(
                 }
             }
         }
-    } else if let Some(pairs) = chart.global_collective_pairs() {
+    } else if let Some(pairs) = collectives {
         crate::data::source::reserve_source(&mut order, pairs.len())?;
         for pair in pairs
             .iter()

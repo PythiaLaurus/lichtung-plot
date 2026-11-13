@@ -196,7 +196,17 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Heatmap(marks))
         }
         PlotKind::Interaction => {
-            let (marks, conditions) = crate::plots::interaction::prepare(source, data, None)?;
+            let (marks, conditions) = crate::plots::interaction::prepare(
+                source,
+                data,
+                None,
+                panel
+                    .policy
+                    .coordinated
+                    .collectives
+                    .as_deref()
+                    .map(Vec::as_slice),
+            )?;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -307,7 +317,16 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Histogram(marks))
         }
         PlotKind::Density => Ok(PreparedFamily::Density(
-            crate::plots::density::PreparedDensity::new(source, data)?,
+            crate::plots::density::PreparedDensity::new(
+                source,
+                data,
+                panel
+                    .policy
+                    .coordinated
+                    .collectives
+                    .as_deref()
+                    .map(Vec::as_slice),
+            )?,
         )),
         PlotKind::Qq => Ok(PreparedFamily::Qq(crate::plots::qq::PreparedQq::new(
             source.description(),
@@ -595,6 +614,12 @@ pub(crate) fn prepare_plot<'src>(
             source,
             source_data.expect("single plot data"),
             None,
+            registry.panels[0]
+                .policy
+                .coordinated
+                .collectives
+                .as_deref()
+                .map(Vec::as_slice),
         )?;
         registry.panels[0].axes = Some(prepare_pair_axes(
             &registry.panels[0],
@@ -762,8 +787,17 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Scatter(marks)
                 }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                    let (marks, ranges, conditions) =
-                        crate::plots::line::PreparedLine::new(source, data, facet.conditions)?;
+                    let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
+                        source,
+                        data,
+                        facet.conditions,
+                        panel
+                            .policy
+                            .coordinated
+                            .collectives
+                            .as_deref()
+                            .map(Vec::as_slice),
+                    )?;
                     panel.axes = Some(prepare_pair_axes(
                         panel,
                         ranges.map(Some),
@@ -783,9 +817,18 @@ pub(crate) fn prepare_plot<'src>(
                     panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Histogram(marks)
                 }
-                PlotKind::Density => PreparedFamily::Density(
-                    crate::plots::density::PreparedDensity::new(source, data)?,
-                ),
+                PlotKind::Density => {
+                    PreparedFamily::Density(crate::plots::density::PreparedDensity::new(
+                        source,
+                        data,
+                        panel
+                            .policy
+                            .coordinated
+                            .collectives
+                            .as_deref()
+                            .map(Vec::as_slice),
+                    )?)
+                }
                 PlotKind::Qq => PreparedFamily::Qq(crate::plots::qq::PreparedQq::new(
                     source.description(),
                     data,
@@ -883,6 +926,12 @@ pub(crate) fn prepare_plot<'src>(
                         source,
                         data,
                         interaction_parent.as_ref(),
+                        panel
+                            .policy
+                            .coordinated
+                            .collectives
+                            .as_deref()
+                            .map(Vec::as_slice),
                     )?;
                     #[expect(
                         clippy::cast_precision_loss,
@@ -1062,6 +1111,12 @@ pub(crate) fn prepare_plot<'src>(
             source,
             source_data.expect("single plot data"),
             &registry.panels[0].scope.id,
+            registry.panels[0]
+                .policy
+                .coordinated
+                .collectives
+                .as_deref()
+                .map(Vec::as_slice),
         )?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
         registry.panels[0].axes = Some(axes);

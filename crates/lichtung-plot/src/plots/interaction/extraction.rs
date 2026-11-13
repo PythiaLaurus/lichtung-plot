@@ -63,7 +63,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
         &chart,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| prepare(&chart, data, None).unwrap(),
+        |data| prepare(&chart, data, None, None).unwrap(),
     )
     .unwrap();
     assert_eq!(prepared.traces.len(), 2);

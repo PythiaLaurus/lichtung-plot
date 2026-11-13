@@ -26,6 +26,7 @@ pub(crate) enum ContinuousMaterialization {
 pub(crate) struct CoordinatedDomains {
     pub(crate) colors: Option<std::sync::Arc<Vec<String>>>,
     pub(crate) groups: Option<std::sync::Arc<Vec<String>>>,
+    pub(crate) collectives: Option<std::sync::Arc<Vec<crate::data::CollectivePair>>>,
 }
 
 pub(crate) struct AxisTextVisibility {

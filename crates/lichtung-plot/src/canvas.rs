@@ -1357,8 +1357,17 @@ impl Canvas {
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
-                    let (marks, ranges, conditions) =
-                        crate::plots::line::PreparedLine::new(plot, panel.data(&resources)?, None)?;
+                    let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
+                        plot,
+                        panel.data(&resources)?,
+                        None,
+                        panel
+                            .policy
+                            .coordinated
+                            .collectives
+                            .as_deref()
+                            .map(Vec::as_slice),
+                    )?;
                     panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
                         panel,
                         ranges.map(Some),

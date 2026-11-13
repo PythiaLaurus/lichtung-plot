@@ -335,6 +335,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     parent: Option<&ObservedCollectives>,
+    collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<(PreparedInteraction, Vec<String>), Error> {
     data.validate_row_source()?;
     let alpha =
@@ -387,9 +388,7 @@ pub(crate) fn prepare(
     let domain = parent.unwrap_or(&channels);
     let groups = chart.global_group_levels().unwrap_or(&domain.group_levels);
     let hues = chart.global_hue_levels().unwrap_or(&domain.hue_levels);
-    let identities = chart
-        .global_collective_pairs()
-        .unwrap_or(&domain.identities);
+    let identities = collectives.unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
     let line_alpha = chart.description().prepare_collective_alpha(
         AlphaTarget::Line,
