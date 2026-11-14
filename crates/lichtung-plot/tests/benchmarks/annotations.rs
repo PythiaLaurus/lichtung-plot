@@ -25,6 +25,24 @@ fn significance_case(count: usize) -> [Duration; 2] {
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     theme.text.prepare_font_environment().unwrap();
+    let operation = crate::font::canonical::OperationContext::new();
+    let mut registry =
+        crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme)).unwrap();
+    let guide = registry
+        .prepare_discrete_guides(
+            &plot,
+            &theme,
+            &operation,
+            &crate::layout::ComponentAddress::root(),
+            false,
+        )
+        .unwrap();
+    let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+        registry,
+        crate::layout::interior::InteriorRoute::classify(plot.kind()),
+        guide,
+    )
+    .unwrap();
     let panel = crate::layout::PixelRect::new(0.0, 800.0, 0.0, 600.0);
     let mut expected: Option<((f64, f64), [u64; Counter::ALL.len()])> = None;
     let mut elapsed_samples = [Duration::ZERO; 2];
@@ -33,7 +51,7 @@ fn significance_case(count: usize) -> [Duration; 2] {
         measurements::start();
         let start = Instant::now();
         let plan = crate::significance::plan(
-            &plot,
+            &inputs.plots[0],
             plot.description().significance_annotations().iter(),
             &categories,
             &vec![10.0; categories.len()],

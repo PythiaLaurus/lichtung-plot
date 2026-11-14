@@ -139,7 +139,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
     Ok((
         categorical,
-        if chart.user_y_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[1].is_none() {
             numeric
         } else {
             0.0
@@ -490,7 +490,6 @@ struct TracePayload {
 impl InteractionPayload {
     fn measure_ink(
         &mut self,
-        chart: &Plot,
         marks: &PreparedInteraction,
         projection: &crate::layout::Projection,
         context: PlotRenderContext<'_, '_>,
@@ -523,7 +522,12 @@ impl InteractionPayload {
                     )
                     .into());
             }
-            if chart.user_y_limits().is_none() {
+            if context
+                .registered
+                .expect("prepared occurrence")
+                .raw_windows()[1]
+                .is_none()
+            {
                 let count = u32::try_from(
                     context
                         .registered
@@ -687,7 +691,7 @@ pub(crate) fn measure_marks(
         }
         payload.traces.push(selected);
     }
-    payload.measure_ink(chart, marks, &layout.projection, context)?;
+    payload.measure_ink(marks, &layout.projection, context)?;
     let mut result = PlotRenderResult::new(
         layout,
         crate::orchestrator::registration::guide_descriptor(context.registered)?,

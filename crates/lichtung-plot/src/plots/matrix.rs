@@ -947,10 +947,11 @@ pub(crate) fn measure(
                     MatrixPrimitive::Polygon(points, style) => full.polygon(points, style, None)?,
                 }
             }
+            let raw_windows = registered.raw_windows();
             if full.bounds().iter().any(|bounds| {
-                (chart.user_x_limits().is_none()
+                (raw_windows[0].is_none()
                     && (bounds.left < cell_panel.x0 || bounds.right > cell_panel.x1))
-                    || (chart.user_y_limits().is_none()
+                    || (raw_windows[1].is_none()
                         && (bounds.bottom < cell_panel.y0 || bounds.top > cell_panel.y1))
             }) {
                 return Err(layout::fit::FitScope::new(&cell.address, 0)

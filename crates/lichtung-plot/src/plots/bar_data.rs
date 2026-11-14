@@ -283,9 +283,9 @@ pub(crate) fn intrinsic_body_minimum(
         return Err(Error::Render("bar category hard span overflowed".into()));
     }
     let numeric = if (if horizontal {
-        chart.user_x_limits()
+        registered.expect("prepared occurrence").raw_windows()[0]
     } else {
-        chart.user_y_limits()
+        registered.expect("prepared occurrence").raw_windows()[1]
     })
     .is_none()
     {
@@ -496,7 +496,7 @@ pub(crate) struct BarPayload {
 /// One numeric-axis request from the selected complete bar, interval and
 /// supplemental-point paints, merged with its existing significance domain.
 pub(crate) fn automatic_numeric_ink_expansion(
-    chart: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     prepared: &PreparedBars,
     categories: &[String],
     payload: &BarPayload,
@@ -505,13 +505,13 @@ pub(crate) fn automatic_numeric_ink_expansion(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Option<crate::layout::interior::DomainExpansion>, crate::layout::fit::PlanError> {
     let horizontal = matches!(
-        chart.kind(),
+        registered.source.kind(),
         crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
     );
     let automatic = if horizontal {
-        chart.user_x_limits().is_none()
+        registered.raw_windows()[0].is_none()
     } else {
-        chart.user_y_limits().is_none()
+        registered.raw_windows()[1].is_none()
     };
     if !automatic {
         return Ok(payload.domain_expansion);
@@ -598,7 +598,7 @@ impl BarPayload {
         &mut self,
         projection: &crate::layout::Projection,
 
-        chart: &Plot,
+        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
         prepared: &PreparedBars,
         categories: &[String],
 
@@ -606,14 +606,14 @@ impl BarPayload {
     ) -> Result<(), crate::layout::fit::PlanError> {
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         let horizontal = matches!(
-            chart.kind(),
+            registered.source.kind(),
             crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
         );
         let numeric_axis = usize::from(!horizontal);
         let automatic = if horizontal {
-            chart.user_x_limits().is_none()
+            registered.raw_windows()[0].is_none()
         } else {
-            chart.user_y_limits().is_none()
+            registered.raw_windows()[1].is_none()
         };
         if self.text.len() != prepared.significance.len() {
             return Err(Error::Render(
@@ -705,7 +705,7 @@ impl BarPayload {
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         self.measure_attached_text_ink(
             &result.layout.projection,
-            chart,
+            context.registered.expect("prepared Bar occurrence"),
             prepared,
             &context
                 .registered

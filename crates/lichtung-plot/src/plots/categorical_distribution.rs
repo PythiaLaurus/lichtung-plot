@@ -333,7 +333,6 @@ impl DistributionPayload {
         mut self,
         mut result: crate::spec::PlotRenderResult,
         context: crate::spec::PlotRenderContext<'_, '_>,
-        chart: &Plot,
     ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
@@ -368,7 +367,12 @@ impl DistributionPayload {
                     )
                     .into());
             }
-            if chart.user_y_limits().is_none() {
+            if context
+                .registered
+                .expect("prepared occurrence")
+                .raw_windows()[1]
+                .is_none()
+            {
                 let categories = categorical_distribution_count(
                     context.prepared_family(),
                     &context

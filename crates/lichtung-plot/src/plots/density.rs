@@ -42,7 +42,6 @@ pub(crate) struct PreparedDensity {
 /// Group curves, rather than their generated KDE vertices, are the semantic
 /// primary marks. The resolved stroke is measured before parent assignment.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -79,13 +78,14 @@ pub(crate) fn intrinsic_body_minimum(
         ))?;
         area = (area.0.max(next.0), area.1.max(next.1));
     }
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
+        if raw_windows[0].is_none() {
             ink.max(area.0)
         } else {
             0.0
         },
-        if chart.user_y_limits().is_none() {
+        if raw_windows[1].is_none() {
             ink.max(area.1)
         } else {
             0.0
@@ -345,7 +345,6 @@ impl DensityPayload {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
     context: PlotRenderContext<'_, '_>,
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
@@ -364,10 +363,11 @@ pub(crate) fn measure_marks(
     theme.text.prepared_font_environment()?;
     let projection = layout.projection.clone();
     let mut result = project(prepared, layout, context)?;
-    let automatic = [
-        chart.user_x_limits().is_none(),
-        chart.user_y_limits().is_none(),
-    ];
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
+    let automatic = [raw_windows[0].is_none(), raw_windows[1].is_none()];
     let mut requests = [None; 2];
     let crate::layout::interior::MarkPayload::Density(payload) = &result
         .marks

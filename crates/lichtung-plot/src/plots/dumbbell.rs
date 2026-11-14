@@ -115,7 +115,7 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     Ok((
-        if chart.user_x_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[0].is_none() {
             numeric
         } else {
             0.0
@@ -274,7 +274,14 @@ pub(crate) fn measure_marks(
             [prepared.range, (0.0, f64::from(count))],
             &projection,
             ink,
-            [chart.user_x_limits().is_none(), false],
+            [
+                context
+                    .registered
+                    .expect("prepared Dumbbell occurrence")
+                    .raw_windows()[0]
+                    .is_none(),
+                false,
+            ],
             context.fit_scope(),
         )?;
         let marks =

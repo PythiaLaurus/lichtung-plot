@@ -337,7 +337,6 @@ mod geometry_tests {
                     .unwrap();
                 theme.marks = theme.marks.clone().extents(extents).unwrap();
                 assert!(mark_intrinsic_body_minimum(
-                    chart,
                     inputs.plots.first(),
                     &crate::text::TextRequestContext::new(&theme, text_service)
                 )
@@ -360,7 +359,6 @@ mod geometry_tests {
                 let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
                 theme.marks = theme.marks.clone().fills(fills).unwrap();
                 assert!(mark_intrinsic_body_minimum(
-                    chart,
                     inputs.plots.first(),
                     &crate::text::TextRequestContext::new(&theme, text_service)
                 )
@@ -388,7 +386,6 @@ mod geometry_tests {
                     .unwrap();
                 theme.marks = theme.marks.clone().strokes(strokes).unwrap();
                 assert!(mark_intrinsic_body_minimum(
-                    chart,
                     inputs.plots.first(),
                     &crate::text::TextRequestContext::new(&theme, text_service)
                 )
@@ -419,7 +416,6 @@ impl BodyGeometry {
 }
 
 fn mark_intrinsic_body_minimum(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -501,7 +497,7 @@ fn mark_intrinsic_body_minimum(
         ));
     }
     Ok((
-        if chart.user_x_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[0].is_none() {
             numeric
         } else {
             0.0
@@ -517,7 +513,7 @@ pub(crate) fn intrinsic_body_minimum(
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
-    let marks = mark_intrinsic_body_minimum(chart, registered, theme)?;
+    let marks = mark_intrinsic_body_minimum(registered, theme)?;
     let axes = crate::orchestrator::root::coordinate_intrinsic(
         intrinsic,
         &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
@@ -636,18 +632,16 @@ pub(crate) fn natural_body_height(
         PlotRenderContext::new(data, panel, theme).with_registration(registered_owner, intrinsic),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    let hard = mark_intrinsic_body_minimum(chart, registered, theme)?
-        .1
-        .max(
-            crate::orchestrator::root::coordinate_intrinsic(
-                intrinsic,
-                &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
-            )?
-            .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
-                registered, 1,
-            ))
-            .1,
-        );
+    let hard = mark_intrinsic_body_minimum(registered, theme)?.1.max(
+        crate::orchestrator::root::coordinate_intrinsic(
+            intrinsic,
+            &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)?,
+        )?
+        .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
+            registered, 1,
+        ))
+        .1,
+    );
     Ok(hard
         .max(2.0 * theme.typography.axes.tick_label.font_size * labels.len() as f64)
         .max(3.0 * width / 4.0)
@@ -786,7 +780,7 @@ pub(crate) fn measure(
         &selected_totals.totals,
         context,
     )?;
-    let mark_minimum = mark_intrinsic_body_minimum(chart, context.registered, theme)?;
+    let mark_minimum = mark_intrinsic_body_minimum(context.registered, theme)?;
     let axes_minimum = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
         &crate::orchestrator::root::intrinsic_inputs(
@@ -1083,15 +1077,19 @@ pub(crate) fn measure(
     }
     let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
 
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
     for (index, text) in payload.text.iter_mut().enumerate() {
         let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
         let region = PixelRect::new(
-            if chart.user_x_limits().is_some() {
+            if raw_windows[0].is_some() {
                 panel.x0
             } else {
                 bounds.x0.min(panel.x0)
             },
-            if chart.user_x_limits().is_some() {
+            if raw_windows[0].is_some() {
                 panel.x1
             } else {
                 bounds.x1.max(panel.x1)

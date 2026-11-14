@@ -233,10 +233,10 @@ impl Plot {
                 crate::plots::line::intrinsic_body_minimum(self, registered, theme)?,
             ),
             PlotKind::Density => Some(crate::plots::density::intrinsic_body_minimum(
-                self, registered, theme,
+                registered, theme,
             )?),
             PlotKind::Histogram => Some(crate::plots::histogram::intrinsic_body_minimum(
-                self, registered, theme,
+                registered, theme,
             )?),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
                 let prepared = registered
@@ -252,7 +252,7 @@ impl Plot {
                     })?;
                 Some(
                     prepared.mark_intrinsic(
-                        self,
+                        registered.expect("prepared Estimate occurrence"),
                         &registered
                             .expect("prepared Estimate occurrence")
                             .axes

@@ -179,7 +179,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
     Ok((
         category_span,
-        if chart.user_y_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[1].is_none() {
             numeric
         } else {
             0.0
@@ -382,7 +382,7 @@ pub(crate) fn measure_marks(
     };
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
-            chart,
+            context.registered.expect("prepared Boxplot occurrence"),
             context
                 .registered
                 .expect("prepared distribution occurrence")
@@ -396,7 +396,7 @@ pub(crate) fn measure_marks(
         )?
     } else {
         crate::significance::plan_grouped(
-            chart,
+            context.registered.expect("prepared Boxplot occurrence"),
             context
                 .registered
                 .expect("prepared distribution occurrence")
@@ -563,7 +563,6 @@ pub(crate) fn measure_marks(
         )
         .with_significance_plan(significance),
         context,
-        chart,
     )
 }
 

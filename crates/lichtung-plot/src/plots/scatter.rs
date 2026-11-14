@@ -100,13 +100,10 @@ pub(crate) fn intrinsic_body_minimum(
         }),
     )?
     .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
-            width
-        } else {
-            0.0
-        },
-        if chart.user_y_limits().is_none() {
+        if raw_windows[0].is_none() { width } else { 0.0 },
+        if raw_windows[1].is_none() {
             height
         } else {
             0.0
@@ -460,14 +457,15 @@ pub(crate) fn measure_marks(
                 .map(|point| (point.x, point.y, point.alpha))
         }),
     )? {
+        let raw_windows = context
+            .registered
+            .expect("prepared occurrence")
+            .raw_windows();
         payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
             ink.ranges,
             &layout.projection,
             ink.bounds,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?;
     }

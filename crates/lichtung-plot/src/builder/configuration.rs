@@ -274,7 +274,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     {
         let axis = &mut self.description.payload_mut().axes[0];
         *axis = std::mem::take(axis).limits(min, max);
-        self.x_limits_user_explicit = true;
         self
     }
 
@@ -286,7 +285,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     {
         let axis = &mut self.description.payload_mut().axes[1];
         *axis = std::mem::take(axis).limits(min, max);
-        self.y_limits_user_explicit = true;
         self
     }
 

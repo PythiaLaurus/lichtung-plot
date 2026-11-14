@@ -74,13 +74,14 @@ pub(crate) fn intrinsic_body_minimum(
     } else {
         0.0
     };
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
+        if raw_windows[0].is_none() {
             width.max(reference)
         } else {
             0.0
         },
-        if chart.user_y_limits().is_none() {
+        if raw_windows[1].is_none() {
             height.max(reference)
         } else {
             0.0
@@ -224,6 +225,10 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, context)?;
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
     if let Some(ink) = point_ink(
         &chart.description().point_style(
             theme,
@@ -241,10 +246,7 @@ pub(crate) fn measure_marks(
             ink.ranges,
             &projection,
             ink.bounds,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?;
         let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Qq marks"))
@@ -693,7 +695,11 @@ mod tests {
                 &crate::text::TextRequestContext::new(&theme, &text_service),
                 |_| Ok(()),
                 |mapped, inputs, request, _operation| {
-                    intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
+                    let assigned = mapped
+                        .clone()
+                        .with_planned_y_limits((-8.0, 8.0))
+                        .with_resolved_facet_ranges(mapped.kind(), None, Some((-10.0, 10.0)));
+                    intrinsic_body_minimum(&assigned, inputs.plots.first(), request).unwrap()
                 }
             )
             .unwrap()

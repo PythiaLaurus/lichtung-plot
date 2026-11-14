@@ -116,11 +116,13 @@ pub(crate) fn intrinsic_body_minimum(
         registered, 1,
     ));
     Ok((
-        axes.0.max(if chart.user_x_limits().is_none() {
-            numeric
-        } else {
-            0.0
-        }),
+        axes.0.max(
+            if registered.expect("prepared occurrence").raw_windows()[0].is_none() {
+                numeric
+            } else {
+                0.0
+            },
+        ),
         axes.1.max(height),
     ))
 }
@@ -672,7 +674,12 @@ pub(crate) fn measure(
         .copied()
         .reduce(crate::render::geometry::GeometryBox::union)
     {
-        if chart.user_x_limits().is_none() {
+        if context
+            .registered
+            .expect("prepared occurrence")
+            .raw_windows()[0]
+            .is_none()
+        {
             let levels = u32::try_from(levels.len()).map_err(|_| {
                 Error::Render("Beeswarm category count exceeds spatial range".into())
             })?;

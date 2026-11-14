@@ -133,7 +133,7 @@ pub(crate) fn intrinsic_body_minimum(
         .max(point_numeric);
     Ok((
         category_span,
-        if chart.user_y_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[1].is_none() {
             numeric
         } else {
             0.0
@@ -384,7 +384,6 @@ pub(super) fn measure_marks(
             crate::orchestrator::registration::guide_descriptor(context.registered)?,
         ),
         context,
-        chart,
     )
 }
 

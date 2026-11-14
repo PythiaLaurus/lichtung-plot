@@ -1,4 +1,5 @@
 use super::*;
+use crate::Plot;
 
 fn categories() -> Vec<String> {
     ["a", "b", "c", "d"].map(str::to_string).to_vec()
@@ -55,16 +56,24 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     theme.annotations = theme.annotations.clone().significance(geometry).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let selected = plan(
+    let selected = crate::orchestrator::with_prepared_plot_for_test(
         &chart,
-        chart.description().significance_annotations().iter(),
-        &categories(),
-        &[1.0, 2.0, 3.0, 4.0],
-        (0.0, 10.0),
-        panel(),
         &theme,
-        &crate::layout::fit::ROOT_SCOPE,
+        |_| Ok(()),
+        |_, inputs, theme, _| {
+            plan(
+                &inputs.plots[0],
+                chart.description().significance_annotations().iter(),
+                &categories(),
+                &[1.0, 2.0, 3.0, 4.0],
+                (0.0, 10.0),
+                panel(),
+                theme,
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+        },
     )
+    .unwrap()
     .unwrap();
     let bracket = &selected.brackets[0];
     assert!(!bracket.label.exact_override);

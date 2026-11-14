@@ -910,15 +910,13 @@ pub(crate) fn measure(
             fill,
         });
     }
+    let raw_windows = registered.raw_windows();
     let mut domain_expansions = if let Some(ink) = point_bounds {
         crate::layout::interior::automatic_mark_ink_expansions(
             source,
             proj,
             ink,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?
     } else {
@@ -959,8 +957,8 @@ pub(crate) fn measure(
                 &panel.projection,
                 bounds,
                 [
-                    side == 0 && chart.user_x_limits().is_none(),
-                    side == 1 && chart.user_y_limits().is_none(),
+                    side == 0 && raw_windows[0].is_none(),
+                    side == 1 && raw_windows[1].is_none(),
                 ],
                 context.fit_scope(),
             )?;

@@ -133,13 +133,14 @@ pub(crate) fn intrinsic_body_minimum(
             ribbon = (ribbon.0.max(ink.0), ribbon.1.max(ink.1));
         }
     }
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
+        if raw_windows[0].is_none() {
             mark.0.max(path).max(ribbon.0)
         } else {
             0.0
         },
-        if chart.user_y_limits().is_none() {
+        if raw_windows[1].is_none() {
             mark.1.max(path).max(ribbon.1)
         } else {
             0.0
@@ -1179,6 +1180,10 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
     if let (Some(source), Some(bounds)) = (
         label_source,
         label_ink
@@ -1188,8 +1193,8 @@ fn project(
             .reduce(crate::render::geometry::GeometryBox::union),
     ) {
         let automatic = [
-            chart.user_x_limits().is_none() && !categorical_x,
-            chart.user_y_limits().is_none(),
+            raw_windows[0].is_none() && !categorical_x,
+            raw_windows[1].is_none(),
         ];
         let additional = crate::layout::interior::automatic_absolute_ink_expansions(
             source,
@@ -1244,8 +1249,8 @@ fn project(
             &layout.projection,
             bounds,
             [
-                chart.user_x_limits().is_none() && !categorical_x,
-                chart.user_y_limits().is_none(),
+                raw_windows[0].is_none() && !categorical_x,
+                raw_windows[1].is_none(),
             ],
             scope,
         )?;

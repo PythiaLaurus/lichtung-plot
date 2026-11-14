@@ -4,7 +4,7 @@
 use crate::numeric::{format::NumericFormat, set::FormattedSet};
 use crate::render::backend::GradientStop;
 use crate::theme::{Color, ColorStop, ContinuousColorScale};
-use crate::{Error, Plot};
+use crate::Error;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,12 +81,12 @@ impl Eq for ContinuousDescriptor {}
 
 impl<'v> ContinuousContributor<'v> {
     pub(crate) fn for_plot(
-        plot: &'v Plot,
-        input: &crate::orchestrator::registration::PlotRegistrationBuild<'_>,
+        input: &'v crate::orchestrator::registration::PlotRegistrationBuild<'_>,
         theme: &crate::text::TextRequestContext<'_, '_>,
         numeric: crate::numeric::source::NumericBinding<'v>,
     ) -> Result<Option<Self>, Error> {
-        let Some(field) = plot.description().color_dimension_key() else {
+        let plot = input.source;
+        let Some(field) = plot.color_dimension_key() else {
             return Ok(None);
         };
         let field = crate::data::source::copy_source_string(field)?;
@@ -153,12 +153,14 @@ impl<'v> ContinuousContributor<'v> {
             exact,
             format: semantics.format,
             numeric,
-            raw_windows: [
-                plot.user_x_limits()
-                    .and(plot.description().x_axis_spec().window.as_ref()),
-                plot.user_y_limits()
-                    .and(plot.description().y_axis_spec().window.as_ref()),
-            ],
+            raw_windows: [0, 1].map(|side| {
+                input
+                    .axes
+                    .as_ref()
+                    .expect("prepared continuous axes")
+                    .axis(input.source, side)
+                    .raw_window()
+            }),
         }))
     }
 }

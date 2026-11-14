@@ -89,13 +89,14 @@ pub(crate) fn intrinsic_body_minimum(
     } else {
         (0.0, 0.0)
     };
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
+        if raw_windows[0].is_none() {
             width.max(fit).max(band.0)
         } else {
             0.0
         },
-        if chart.user_y_limits().is_none() {
+        if raw_windows[1].is_none() {
             height.max(fit).max(band.1)
         } else {
             0.0
@@ -350,10 +351,11 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, context)?;
-    let automatic = [
-        chart.user_x_limits().is_none(),
-        chart.user_y_limits().is_none(),
-    ];
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
+    let automatic = [raw_windows[0].is_none(), raw_windows[1].is_none()];
     let mut requests = [None; 2];
     if let Some(ink) = point_ink(
         &chart.description().point_style(

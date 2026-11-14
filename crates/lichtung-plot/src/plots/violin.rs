@@ -335,7 +335,7 @@ pub(crate) fn intrinsic_body_minimum(
     }
     Ok((
         categorical,
-        if chart.user_y_limits().is_none() {
+        if registered.expect("prepared occurrence").raw_windows()[1].is_none() {
             numeric
         } else {
             0.0
@@ -494,7 +494,9 @@ pub(crate) fn measure_marks(
     )?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
-            chart,
+            context
+                .registered
+                .expect("prepared distribution occurrence"),
             context
                 .registered
                 .expect("prepared distribution occurrence")
@@ -517,7 +519,9 @@ pub(crate) fn measure_marks(
             grouped_maxima[group.x_index][group.group_index] = support_range.1;
         }
         crate::significance::plan_grouped(
-            chart,
+            context
+                .registered
+                .expect("prepared distribution occurrence"),
             context
                 .registered
                 .expect("prepared distribution occurrence")
@@ -855,7 +859,6 @@ pub(crate) fn measure_marks(
         )
         .with_significance_plan(significance),
         context,
-        chart,
     )
 }
 

@@ -56,7 +56,6 @@ pub(crate) struct HistogramSemantics {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -109,17 +108,10 @@ pub(crate) fn intrinsic_body_minimum(
         )?
     };
     let span = (fill.0.max(fill.1) + 1.0 / 1024.0).max(curve).max(rug);
+    let raw_windows = registered.expect("prepared occurrence").raw_windows();
     Ok((
-        if chart.user_x_limits().is_none() {
-            span
-        } else {
-            0.0
-        },
-        if chart.user_y_limits().is_none() {
-            span
-        } else {
-            0.0
-        },
+        if raw_windows[0].is_none() { span } else { 0.0 },
+        if raw_windows[1].is_none() { span } else { 0.0 },
     ))
 }
 
@@ -338,7 +330,6 @@ impl HistogramPayload {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
     context: PlotRenderContext<'_, '_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
@@ -368,6 +359,10 @@ pub(crate) fn measure_marks(
         unreachable!("Histogram selected its own mark payload")
     };
     let full = payload.geometry(None)?;
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
     if let Some(ink) = full
         .bounds()
         .iter()
@@ -378,10 +373,7 @@ pub(crate) fn measure_marks(
             prepared.source_ranges,
             &projection,
             ink,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?;
         let marks =

@@ -451,8 +451,6 @@ use crate::{
 pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     description: PlotDescription,
     pub(crate) output_dimensions: Option<(u32, u32)>,
-    x_limits_user_explicit: bool,
-    y_limits_user_explicit: bool,
     resolved_facet_x_range: Option<(f64, f64)>,
     marker: PhantomData<K>,
 }
@@ -514,8 +512,6 @@ impl Plot<crate::kind::Any> {
         Plot {
             description: PlotDescription::new(input, kind),
             output_dimensions: None,
-            x_limits_user_explicit: false,
-            y_limits_user_explicit: false,
             resolved_facet_x_range: None,
             marker: PhantomData,
         }
@@ -837,16 +833,12 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
         let Plot {
             description,
             output_dimensions,
-            x_limits_user_explicit,
-            y_limits_user_explicit,
             resolved_facet_x_range,
             marker: _,
         } = self;
         Plot {
             description,
             output_dimensions,
-            x_limits_user_explicit,
-            y_limits_user_explicit,
             resolved_facet_x_range,
             marker: PhantomData,
         }

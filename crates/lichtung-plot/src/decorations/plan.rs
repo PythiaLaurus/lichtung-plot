@@ -844,7 +844,8 @@ fn plan_panel_attempt(
     let cell = context.panel;
     round.begin_owner(address)?;
     round.observe_box(cell)?;
-    let legend_default = kind.legend_default(plot.user_y_limits().is_some());
+    let registered = context.registered.expect("prepared panel occurrence");
+    let legend_default = kind.legend_default(registered.raw_windows()[1].is_some());
 
     let mut planning_plot = plot.clone();
     let planned_x_limits = round
@@ -1186,7 +1187,7 @@ fn plan_panel_attempt(
             let expansion = if position == LegendPosition::Auto {
                 let clearance = match crate::layout::fit::outcome(automatic_clearance(
                     kind,
-                    plot,
+                    registered,
                     &result,
                     &legend.legend,
                     geometry.bounds(),
@@ -1216,7 +1217,7 @@ fn plan_panel_attempt(
                 );
                 explicit_clearance(
                     kind,
-                    plot,
+                    registered,
                     &result,
                     &legend.legend,
                     legend.bounds,
@@ -1778,7 +1779,7 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PixelRect)
 
 fn automatic_clearance(
     kind: PlotKind,
-    plot: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -1788,7 +1789,7 @@ fn automatic_clearance(
     match default {
         LegendDefault::TopRight(clearance) => top_right_clearance(
             kind,
-            plot,
+            registered,
             result,
             legend,
             geometry,
@@ -1796,14 +1797,14 @@ fn automatic_clearance(
             current_candidate,
         ),
         LegendDefault::LowestOverlap | LegendDefault::SelfManaged => {
-            lowest_overlap_clearance(kind, plot, result, legend, geometry)
+            lowest_overlap_clearance(kind, registered, result, legend, geometry)
         }
     }
 }
 
 fn top_right_clearance(
     kind: PlotKind,
-    plot: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -1843,7 +1844,8 @@ fn top_right_clearance(
             }));
         }
         for edge in candidate_edges(candidate_index, clearance) {
-            if let Some(expansion) = expanded_axis_limits(kind, plot, result, legend, bounds, edge)?
+            if let Some(expansion) =
+                expanded_axis_limits(kind, registered, result, legend, bounds, edge)?
             {
                 return Ok(Some(AutomaticClearance {
                     candidate_index,
@@ -1872,7 +1874,7 @@ fn candidate_edges(index: usize, clearance: LegendClearance) -> [ClearanceEdge; 
 
 fn lowest_overlap_clearance(
     kind: PlotKind,
-    plot: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -1903,7 +1905,7 @@ fn lowest_overlap_clearance(
         }
         for (edge_index, edge) in edges[candidate_index].into_iter().enumerate() {
             let Some(DomainExpansion { axis, limits }) =
-                expanded_axis_limits(kind, plot, result, legend, bounds, edge)?
+                expanded_axis_limits(kind, registered, result, legend, bounds, edge)?
             else {
                 continue;
             };
@@ -1949,7 +1951,7 @@ fn lowest_overlap_clearance(
 
 fn explicit_clearance(
     kind: PlotKind,
-    plot: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -1967,7 +1969,7 @@ fn explicit_clearance(
     .enumerate()
     {
         let Some(DomainExpansion { axis, limits }) =
-            expanded_axis_limits(kind, plot, result, legend, bounds, edge)?
+            expanded_axis_limits(kind, registered, result, legend, bounds, edge)?
         else {
             continue;
         };
@@ -2061,7 +2063,7 @@ fn overlap_score_within_panel(
 
 fn expanded_axis_limits(
     kind: PlotKind,
-    plot: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -2103,8 +2105,9 @@ fn expanded_axis_limits(
         ),
         _ => return Ok(None),
     };
-    if matches!(axis, ClearanceAxis::X) && plot.user_x_limits().is_some()
-        || matches!(axis, ClearanceAxis::Y) && plot.user_y_limits().is_some()
+    let raw_windows = registered.raw_windows();
+    if matches!(axis, ClearanceAxis::X) && raw_windows[0].is_some()
+        || matches!(axis, ClearanceAxis::Y) && raw_windows[1].is_some()
     {
         return Ok(None);
     }

@@ -88,7 +88,7 @@ pub(crate) fn measure_marks(
     )?;
     let base_y_range = layout.projection.y_range();
     let mark_range = range_for_bar_marks(
-        chart,
+        context.registered.expect("prepared Bar occurrence"),
         prepared,
         panel,
         base_y_range,
@@ -125,7 +125,7 @@ pub(crate) fn measure_marks(
     }
     let significance = if series.is_empty() {
         crate::significance::plan(
-            chart,
+            context.registered.expect("prepared Bar occurrence"),
             context
                 .registered
                 .expect("prepared Bar occurrence")
@@ -139,7 +139,7 @@ pub(crate) fn measure_marks(
         )?
     } else {
         crate::significance::plan_grouped(
-            chart,
+            context.registered.expect("prepared Bar occurrence"),
             context
                 .registered
                 .expect("prepared Bar occurrence")
@@ -263,7 +263,7 @@ pub(crate) fn measure_marks(
             .push((Point2D::new(projected.0, projected.1), point.style.clone()));
     }
     payload.domain_expansion = bar_data::automatic_numeric_ink_expansion(
-        chart,
+        context.registered.expect("prepared Bar occurrence"),
         prepared,
         categories,
         &payload,
@@ -287,14 +287,14 @@ pub(crate) fn measure_marks(
 }
 
 fn range_for_bar_marks(
-    chart: &Plot,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     prepared: &PreparedBars,
     panel: crate::layout::PixelRect,
     range: (f64, f64),
     text_plans: &[ResolvedTextPlan],
     attached: &bar_data::BarSignificance,
 ) -> Result<(f64, f64), Error> {
-    if prepared.significance.is_empty() || chart.user_y_limits().is_some() {
+    if prepared.significance.is_empty() || registered.raw_windows()[1].is_some() {
         return Ok(range);
     }
     let units_per_pixel = (range.1 - range.0) / panel.height();

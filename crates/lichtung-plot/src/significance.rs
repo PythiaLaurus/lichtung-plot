@@ -9,12 +9,12 @@ use crate::Error;
 
 use crate::layout::kernel::SpatialRounding;
 use crate::layout::{DeferredAnnotationTextPlan, PhysicalTextAlignment, PixelRect};
+use crate::orchestrator::registration::PlotRegistration;
 use crate::render::backend::{
     Backend, BracketOrientation, BracketStyle, PlannedSignificanceCall, SignificanceBracket,
 };
 use crate::theme::annotation::EffectiveSignificance;
 use crate::theme::spacing::ExactLength;
-use crate::Plot;
 #[cfg(test)]
 use crate::SignificanceMarkStyle;
 
@@ -69,7 +69,7 @@ struct ResolvedComparison {
     reason = "scoped annotation references are independent of the original range and geometry inputs"
 )]
 pub(crate) fn plan<'a>(
-    chart: &Plot,
+    registered: &PlotRegistration<'_>,
     annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     rendered_maxima: &[f64],
@@ -79,14 +79,14 @@ pub(crate) fn plan<'a>(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     let effective =
-        theme.effective_significance(chart.description().significance_mark_style_override())?;
+        theme.effective_significance(registered.source.significance_mark_style_override())?;
     plan_comparisons_with_label(
         annotations,
         categories,
         rendered_maxima,
         y_range,
-        chart.user_x_limits(),
-        chart.user_y_limits(),
+        registered.raw_windows()[0].map(|window| window.pair()),
+        registered.raw_windows()[1].map(|window| window.pair()),
         panel,
         LegendAnnotationConstraint::NoObstacle,
         &effective,
@@ -642,7 +642,7 @@ fn label_footprint(
     reason = "grouped anchors require explicit data, geometry, and legend constraints"
 )]
 pub(crate) fn plan_grouped<'a>(
-    chart: &Plot,
+    registered: &PlotRegistration<'_>,
     annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
@@ -655,7 +655,7 @@ pub(crate) fn plan_grouped<'a>(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
-        chart,
+        registered,
         annotations,
         categories,
         groups,
@@ -677,7 +677,7 @@ pub(crate) fn plan_grouped<'a>(
     reason = "horizontal anchors require explicit data, geometry, and stacking policy"
 )]
 pub(crate) fn plan_horizontal<'a>(
-    chart: &Plot,
+    registered: &PlotRegistration<'_>,
     annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
@@ -690,7 +690,7 @@ pub(crate) fn plan_horizontal<'a>(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
-        chart,
+        registered,
         annotations,
         categories,
         groups,
@@ -733,7 +733,7 @@ pub(crate) fn plan_horizontal<'a>(
     reason = "grouped vertical and horizontal planners share one exact-anchor implementation"
 )]
 fn plan_grouped_oriented<'a>(
-    chart: &Plot,
+    registered: &PlotRegistration<'_>,
     annotations: impl Iterator<Item = &'a SignificanceAnnotation> + Clone,
     categories: &[String],
     groups: &[String],
@@ -815,7 +815,7 @@ fn plan_grouped_oriented<'a>(
         }
     }
     let effective =
-        theme.effective_significance(chart.description().significance_mark_style_override())?;
+        theme.effective_significance(registered.source.significance_mark_style_override())?;
     let mut result = plan_comparisons_at_with_label(
         annotations,
         &labels,
@@ -824,14 +824,14 @@ fn plan_grouped_oriented<'a>(
         Some(&targets),
         numeric_range,
         if horizontal {
-            chart.user_y_limits()
+            registered.raw_windows()[1].map(|window| window.pair())
         } else {
-            chart.user_x_limits()
+            registered.raw_windows()[0].map(|window| window.pair())
         },
         if horizontal {
-            chart.user_x_limits()
+            registered.raw_windows()[0].map(|window| window.pair())
         } else {
-            chart.user_y_limits()
+            registered.raw_windows()[1].map(|window| window.pair())
         },
         panel,
         legend_constraint,

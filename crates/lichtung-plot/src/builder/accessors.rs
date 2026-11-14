@@ -1270,24 +1270,4 @@ impl<K: crate::kind::Marker> Plot<K> {
             Some(crate::layout::RawWindow::from_pair(limits));
         self
     }
-
-    pub(crate) fn user_x_limits(&self) -> Option<(f64, f64)> {
-        if self.x_limits_user_explicit {
-            self.description.payload.axes[0]
-                .window
-                .map(crate::layout::RawWindow::pair)
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn user_y_limits(&self) -> Option<(f64, f64)> {
-        if self.y_limits_user_explicit {
-            self.description.payload.axes[1]
-                .window
-                .map(crate::layout::RawWindow::pair)
-        } else {
-            None
-        }
-    }
 }

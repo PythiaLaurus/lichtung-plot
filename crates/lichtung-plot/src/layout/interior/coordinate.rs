@@ -557,10 +557,10 @@ impl InteriorRoute {
                 | StandardCoordinate::LinePath,
             ) => crate::plots::line::measure_marks(plot, context, layout)?,
             Self::StandardCoordinate(StandardCoordinate::Histogram) => {
-                crate::plots::histogram::measure_marks(plot, context, layout)?
+                crate::plots::histogram::measure_marks(context, layout)?
             }
             Self::StandardCoordinate(StandardCoordinate::Density) => {
-                crate::plots::density::measure_marks(plot, context, layout)?
+                crate::plots::density::measure_marks(context, layout)?
             }
             Self::StandardCoordinate(StandardCoordinate::Qq) => {
                 crate::plots::qq::measure_marks(plot, context, layout)?
@@ -680,7 +680,7 @@ mod intrinsic_tests {
                 &source,
                 &theme,
                 |_| Ok(()),
-                |chart, inputs, theme, operation| {
+                |_, inputs, theme, operation| {
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
                         &crate::orchestrator::root::intrinsic_inputs(
@@ -712,8 +712,15 @@ mod intrinsic_tests {
                         assert_eq!(selected.ticks.len(), 1);
                         assert_eq!(selected.ticks[0].label, "0");
                     }
-                    assert_eq!(chart.user_x_limits(), Some((-1.0, 1.0)));
-                    assert_eq!(chart.user_y_limits(), Some((-1.0, 1.0)));
+                    let raw_windows = inputs.plots[0].raw_windows();
+                    assert_eq!(
+                        raw_windows[0].map(|window| window.pair()),
+                        Some((-1.0, 1.0))
+                    );
+                    assert_eq!(
+                        raw_windows[1].map(|window| window.pair()),
+                        Some((-1.0, 1.0))
+                    );
                 },
             )
             .unwrap();

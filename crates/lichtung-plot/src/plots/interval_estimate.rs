@@ -92,11 +92,11 @@ impl PreparedEstimate {
 
     fn point_ink(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Option<crate::alpha::marks::PointInk>, Error> {
         point_ink(
-            &chart.description().point_style(
+            &chart.point_style(
                 theme,
                 (0, 0, 0),
                 theme.marks.get_points().get_radii().get_interval_estimate(),
@@ -138,10 +138,11 @@ impl PreparedEstimate {
     )]
     pub(crate) fn mark_intrinsic(
         &self,
-        chart: &Plot,
+        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
         labels: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
+        let chart = registered.source;
         if labels.len() != self.estimates.len() {
             return Err(Error::Render(
                 "estimate categories and prepared rows differ".into(),
@@ -210,7 +211,7 @@ impl PreparedEstimate {
         }
 
         let significance =
-            theme.effective_significance(chart.description().significance_mark_style_override())?;
+            theme.effective_significance(chart.significance_mark_style_override())?;
         let significance_indices = crate::data::source::collect_source(
             self.text_occurrences()
                 .filter(|(_, _, significance)| *significance)
@@ -229,11 +230,7 @@ impl PreparedEstimate {
             };
             let selected = crate::text::TextAppearance {
                 theme: appearance,
-                exact_override: adjacent.1
-                    && chart
-                        .description()
-                        .significance_mark_style_override()
-                        .is_some(),
+                exact_override: adjacent.1 && chart.significance_mark_style_override().is_some(),
                 layout: if adjacent.1 {
                     theme.text_layouts.significance.as_ref()
                 } else {
@@ -272,7 +269,7 @@ impl PreparedEstimate {
             ));
         }
         Ok((
-            if chart.user_x_limits().is_none() {
+            if registered.raw_windows()[0].is_none() {
                 numeric
             } else {
                 0.0
@@ -1019,6 +1016,10 @@ fn project(
             .filter(|(_, _, significance)| *significance)
             .map(|(index, _, _)| Ok(index)),
     )?;
+    let raw_windows = context
+        .registered
+        .expect("prepared occurrence")
+        .raw_windows();
     let adjacent_label_plans = crate::layout::fit::collect( "estimate adjacent labels", (0..labels.len())
         .map(|index| {
             let Some(tuple) = estimates[index] else {
@@ -1065,7 +1066,7 @@ fn project(
                         TextAnchor::End,
                         end_plan,
                     )
-                } else if chart.user_x_limits().is_none() || start_plan.request.as_ref().and_then(|request|request.instructions().overflow.as_ref()).is_some_and(|overflow|overflow.failure!=crate::TextFailure::Error) {
+                } else if raw_windows[0].is_none() || start_plan.request.as_ref().and_then(|request|request.instructions().overflow.as_ref()).is_some_and(|overflow|overflow.failure!=crate::TextFailure::Error) {
                     // Keep the first legal anchor order. The selected required
                     // glyph requests numeric headroom from the root instead of
                     // failing a feasible automatic domain at this initial fit.
@@ -1253,12 +1254,12 @@ fn project(
         let Some(text) = &mut row.text else { continue };
         let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
         let region = crate::layout::PixelRect::new(
-            if chart.user_x_limits().is_some() || estimates[index].is_none() {
+            if raw_windows[0].is_some() || estimates[index].is_none() {
                 clip.x0
             } else {
                 clip.x0.min(bounds.x0)
             },
-            if chart.user_x_limits().is_some() || estimates[index].is_none() {
+            if raw_windows[0].is_some() || estimates[index].is_none() {
                 clip.x1
             } else {
                 clip.x1.max(bounds.x1)
@@ -1283,7 +1284,7 @@ fn project(
             label_ink.append(&ink)?;
         }
     }
-    if chart.user_x_limits().is_none() {
+    if raw_windows[0].is_none() {
         if let (Some(numeric), Some(bounds)) = (
             label_source,
             label_ink

@@ -912,7 +912,9 @@ impl Canvas {
                         "canvas x-range group references unconfigured panel {index}"
                     ))
                 })?;
-                if plot.user_x_limits().is_some() {
+                if plot.description().x_axis_spec().provenance
+                    == crate::layout::RangeProvenance::Configured
+                {
                     return Err(Error::Data(format!(
                         "canvas x-range group panel {index} has explicit x limits"
                     )));
@@ -989,7 +991,6 @@ impl Canvas {
             })?;
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
-                    plot,
                     registered,
                     theme,
                     registered.scope.axis_numeric_binding(
@@ -1492,9 +1493,10 @@ impl Canvas {
         }
         for group in &self.x_range_groups {
             if !group.iter().any(|&index| {
-                self.placements
-                    .plot(index)
-                    .is_some_and(|plot| plot.user_x_limits().is_none())
+                self.placements.plot(index).is_some_and(|plot| {
+                    plot.description().x_axis_spec().provenance
+                        != crate::layout::RangeProvenance::Configured
+                })
             }) {
                 continue;
             }
