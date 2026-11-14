@@ -3,6 +3,32 @@ use crate::decorations::legend::discrete::scoped::{DependencyUse, GuideAllocatio
 use crate::numeric::{decimal::NegativeZero, format::NumericFormat};
 use std::sync::Arc;
 
+fn prepare_height_inputs<'src>(
+    canvas: &'src Canvas,
+    stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<crate::layout::interior::PreparedInteriorInputs<'src>, Error> {
+    let themes = super::super::ResolvedCanvasThemes::new(
+        &canvas.theme,
+        &canvas.placements,
+        &canvas.guide_text_layouts,
+    )?;
+    let (mut interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
+    let mut inputs = interiors[0].take().expect("prepared Canvas occurrence");
+    let source = canvas.placements.plot(0).expect("configured Canvas plot");
+    let guide = inputs.prepare_discrete_guides(
+        source,
+        &themes.plot_request(0).expect("configured appearance"),
+        &stage.operation(),
+        &ComponentAddress::root(),
+        false,
+    )?;
+    crate::layout::interior::PreparedInteriorInputs::from_registry(
+        inputs,
+        crate::layout::interior::InteriorRoute::classify(source.kind()),
+        guide,
+    )
+}
+
 #[test]
 fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
     let source = Canvas::grid(1, 1)
@@ -121,16 +147,19 @@ fn assert_changed_height_inputs(
             .unwrap();
         spanning
     });
-    let appearance = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let request = crate::text::TextRequestContext::new(&appearance, &text);
-    let themes = super::super::ResolvedCanvasThemes::new(
-        &canvas.theme,
-        &canvas.placements,
-        &canvas.guide_text_layouts,
-    )
-    .unwrap();
-    let variants = variants.into_iter().collect::<Vec<_>>();
+    let variants = variants
+        .into_iter()
+        .map(|plot| {
+            let mut changed = canvas.clone();
+            Arc::make_mut(&mut changed.placements)
+                .replace(
+                    super::super::placement::Footprint::cell(0, 0),
+                    super::super::placement::Payload::Plot(Arc::new(plot)),
+                )
+                .unwrap();
+            changed
+        })
+        .collect::<Vec<_>>();
     let mut measurements = HeightMeasurements::default();
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
@@ -138,22 +167,15 @@ fn assert_changed_height_inputs(
             height: 600,
         },
         |stage| {
-            let (mut interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
-            let mut inputs = interiors[0].take().expect("prepared Canvas occurrence");
-            let root_guide = inputs.prepare_discrete_guides(
-                source,
-                &request,
-                &stage.operation(),
-                &ComponentAddress::root(),
-                false,
+            let inputs = prepare_height_inputs(&canvas, stage)?;
+            let variants = crate::data::source::collect_source(
+                variants
+                    .iter()
+                    .map(|canvas| prepare_height_inputs(canvas, stage)),
             )?;
-            crate::layout::interior::PreparedInteriorInputs::from_registry(
-                inputs,
-                crate::layout::interior::InteriorRoute::classify(source.kind()),
-                root_guide,
-            )
+            Ok((inputs, variants))
         },
-        |inputs, assigned, round| {
+        |(inputs, variant_inputs), assigned, round| {
             inputs.plots[0]
                 .scope
                 .render_name
@@ -222,11 +244,11 @@ fn assert_changed_height_inputs(
             )?;
             assert_eq!(same.width, different.width);
             assert_eq!(measurements.measured(&different, &owner, round)?, None);
-            for changed in &variants {
-                let changed = changed.clone();
+            for (changed, changed_inputs) in variants.iter().zip(variant_inputs) {
+                let changed = changed.placements.plot(0).expect("changed Canvas plot");
                 let different = HeightInputs::new(
-                    &changed,
-                    inputs.plots.first(),
+                    changed,
+                    changed_inputs.plots.first(),
                     &canvas,
                     400.0,
                     [0; 4],
@@ -239,8 +261,8 @@ fn assert_changed_height_inputs(
                 assert_eq!(same.ranges, different.ranges);
                 assert_eq!(measurements.measured(&different, &owner, round)?, None);
                 measurements.record(
-                    &changed,
-                    inputs.plots.first(),
+                    changed,
+                    changed_inputs.plots.first(),
                     &canvas,
                     400.0,
                     120.0,

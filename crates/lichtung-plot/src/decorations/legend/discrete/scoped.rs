@@ -214,9 +214,4 @@ impl ScopedGuideInputs {
             && self.local_guide.as_ref() == local_guide
             && self.dependencies.as_ref() == dependencies
     }
-
-    #[cfg(test)]
-    pub(crate) fn for_test(plot: &Plot) -> Self {
-        Self::new(plot, None, GuideUse::SharedSuppressed, None, &[]).unwrap()
-    }
 }

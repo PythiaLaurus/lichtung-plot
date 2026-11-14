@@ -184,7 +184,10 @@ impl HeightInputs {
             continuous_hidden: crate::orchestrator::registration::continuous_guide_suppressed(
                 registered,
             ),
-            numeric: crate::numeric::inputs::NumericInputs::new(plot, registered, Some(canvas))?,
+            numeric: crate::numeric::inputs::NumericInputs::new(
+                registered.expect("checked height occurrence"),
+                Some(canvas),
+            )?,
             alpha: plot.description().alpha_inputs().clone(),
             guides: ScopedGuideInputs::new(
                 plot,

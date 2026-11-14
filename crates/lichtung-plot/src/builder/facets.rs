@@ -116,7 +116,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self,
         other: &ComposedInputs,
         guides: &crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        registration: &crate::orchestrator::registration::PlotRegistration<'_>,
         canvas: Option<&crate::Canvas>,
     ) -> bool {
         fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
@@ -133,6 +133,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 _ => false,
             }
         }
+        let registered = Some(registration);
         let same_order = |order: Option<CategoryOrderRef<'_>>, values: Option<&[String]>| match (
             order, values,
         ) {
@@ -196,7 +197,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && crate::orchestrator::registration::continuous_guide_suppressed(registered)
                 == other.suppress_continuous_guide
             && self.description.root_size == other.root_size
-            && other.numeric.matches(self, registered, canvas)
+            && other.numeric.matches(registration, canvas)
             && self.description.payload.alpha == other.alpha
             && self.description.payload.text_layouts == other.text_layouts
             && self.output_dimensions == other.output_dimensions
@@ -211,9 +212,10 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn retain_composed_inputs(
         &self,
         guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        registration: &crate::orchestrator::registration::PlotRegistration<'_>,
         canvas: Option<&crate::Canvas>,
     ) -> Result<ComposedInputs, crate::Error> {
+        let registered = Some(registration);
         if !guides.matches_source(self, registered) {
             return Err(crate::Error::Render(
                 "retained guide inputs do not belong to their computed source".into(),
@@ -311,7 +313,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             suppress_continuous_guide:
                 crate::orchestrator::registration::continuous_guide_suppressed(registered),
             root_size: self.description.root_size,
-            numeric: crate::numeric::inputs::NumericInputs::new(self, registered, canvas)?,
+            numeric: crate::numeric::inputs::NumericInputs::new(registration, canvas)?,
             alpha: self.description.payload.alpha.clone(),
             guides,
         })

@@ -194,6 +194,10 @@ fn bin_alpha_requires_exact_intervals_and_owning_facet_keys_without_edge_adjustm
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "alpha target instructions and owning composed copies are checked through the real operation's registrations"
+)]
 fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_composed_copies() {
     let observations = AlphaEncoding::observations(values([127; 3]));
     assert_eq!(observations.values().unwrap().len(), 3);
@@ -265,20 +269,54 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
         erased.description().alpha_inputs(),
         source.description().alpha_inputs()
     );
-    let retained = erased
-        .retain_composed_inputs(
-            crate::decorations::legend::discrete::scoped::ScopedGuideInputs::for_test(&erased),
-            None,
-            None,
-        )
-        .unwrap();
-    assert!(erased.same_composed_inputs(&retained, &retained.guides, None, None));
+    let appearance = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = crate::text::TextRequestContext::new(&appearance, &text);
+    let retained = crate::orchestrator::with_prepared_plot_for_test(
+        &erased,
+        &request,
+        |_| Ok(()),
+        |plot, inputs, _, _| {
+            use crate::decorations::legend::discrete::scoped::{GuideUse, ScopedGuideInputs};
+            let registered = &inputs.plots[0];
+            let retained = plot
+                .retain_composed_inputs(
+                    ScopedGuideInputs::new(
+                        plot,
+                        Some(registered),
+                        GuideUse::SharedSuppressed,
+                        None,
+                        &[],
+                    )
+                    .unwrap(),
+                    registered,
+                    None,
+                )
+                .unwrap();
+            assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
+            retained
+        },
+    )
+    .unwrap();
     for target in [AlphaTarget::Point, AlphaTarget::Line, AlphaTarget::Fill] {
         let changed = source
             .clone()
             .with_alpha(target, AlphaEncoding::theme())
             .erase();
-        assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
+        crate::orchestrator::with_prepared_plot_for_test(
+            &changed,
+            &request,
+            |_| Ok(()),
+            |plot, inputs, _, _| {
+                assert!(!plot.same_composed_inputs(
+                    &retained,
+                    &retained.guides,
+                    &inputs.plots[0],
+                    None
+                ));
+            },
+        )
+        .unwrap();
     }
     let faceted = source.facet(crate::FacetSpec::row(
         CategoryValues::new("experiment", ["left", "right", "left"]).unwrap(),

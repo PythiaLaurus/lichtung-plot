@@ -48,6 +48,31 @@ fn prepare_key_inputs<'src>(
     .unwrap()
 }
 
+fn retain_key(plot: &Plot) -> ComposedInputs {
+    let operation = crate::font::canonical::OperationContext::new();
+    let inputs = prepare_key_inputs(plot, &operation);
+    let registered = &inputs.plots[0];
+    plot.retain_composed_inputs(
+        ScopedGuideInputs::new(
+            plot,
+            Some(registered),
+            GuideUse::SharedSuppressed,
+            None,
+            &[],
+        )
+        .unwrap(),
+        registered,
+        None,
+    )
+    .unwrap()
+}
+
+fn key_matches(plot: &Plot, retained: &ComposedInputs) -> bool {
+    let operation = crate::font::canonical::OperationContext::new();
+    let inputs = prepare_key_inputs(plot, &operation);
+    plot.same_composed_inputs(retained, &retained.guides, &inputs.plots[0], None)
+}
+
 #[test]
 fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_identity() {
     let source = Plot::trajectory(
@@ -84,7 +109,7 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
                 &[],
             )
             .unwrap(),
-            Some(registered),
+            registered,
             None,
         )
         .unwrap();
@@ -92,14 +117,14 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
         retained.global_line_condition_levels.as_deref().unwrap(),
         ["after visit", "before visit", "last visit"]
     );
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(registered), None));
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
     inputs.plots[0].axes.sources_mut()[0]
         .categories
         .as_mut()
         .unwrap()
         .raw
         .swap(0, 1);
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[0]), None));
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[0], None));
     assert!(crate::orchestrator::registration::line_condition_levels(None).is_none());
 }
 
@@ -137,7 +162,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
                 &[],
             )
             .unwrap(),
-            Some(registered),
+            registered,
             None,
         )
         .unwrap();
@@ -145,7 +170,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         retained.global_group_levels.as_deref().unwrap(),
         ["absent", "seen"]
     );
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(registered), None));
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
     assert_eq!(
         retained.global_hue_levels.as_deref().unwrap(),
         ["absent", "seen"]
@@ -165,16 +190,16 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
     assert!(!std::sync::Arc::ptr_eq(&original, &equal));
     inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&equal));
     inputs.plots[1].categorical.as_mut().unwrap().parent = Some(equal);
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
     let reversed = replacement(vec!["seen".into(), "absent".into()]);
     inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&reversed));
     inputs.plots[1].categorical.as_mut().unwrap().parent = Some(reversed);
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
     inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&original));
     inputs.plots[1].categorical.as_mut().unwrap().parent = Some(original);
     inputs.plots[1].parent_orders.groups =
         Some(crate::data::source::source_arc(vec!["seen".into(), "absent".into()]).unwrap());
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
 
     let single = Plot::bar(
         crate::CategoryValues::new("category", ["one"]).unwrap(),
@@ -198,7 +223,7 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
                 &[],
             )
             .unwrap(),
-            Some(&inputs.plots[0]),
+            &inputs.plots[0],
             None,
         )
         .unwrap();
@@ -222,9 +247,7 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         )
         .erase();
 
-    let retained = plot
-        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot), None, None)
-        .unwrap();
+    let retained = retain_key(&plot);
     assert_eq!(
         retained.x_axis_spec.2,
         plot.description().x_axis_spec().generation
@@ -241,14 +264,14 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         retained.y_axis_spec.4,
         plot.description().y_axis_spec().format
     );
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, None, None));
+    assert!(key_matches(&plot, &retained));
     plot.description.payload_mut().axes[0].generation = TickGeneration::additive(3.0).unwrap();
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
+    assert!(!key_matches(&plot, &retained));
     plot.description.payload_mut().axes[0]
         .generation
         .clone_from(&retained.x_axis_spec.2);
     plot.description.payload_mut().axes[1].generation = TickGeneration::automatic();
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, None, None));
+    assert!(!key_matches(&plot, &retained));
     plot.description.payload_mut().axes[1]
         .generation
         .clone_from(&retained.y_axis_spec.2);
@@ -258,18 +281,16 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
     ] {
         let mut changed = plot.clone();
         changed.description.payload_mut().axes[0].generation = selection.clone();
-        assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
-        let counted = changed
-            .retain_composed_inputs(ScopedGuideInputs::for_test(&changed), None, None)
-            .unwrap();
-        assert!(changed.same_composed_inputs(&counted, &counted.guides, None, None));
+        assert!(!key_matches(&changed, &retained));
+        let counted = retain_key(&changed);
+        assert!(key_matches(&changed, &counted));
         changed.description.payload_mut().axes[0].generation = if selection.target_count().is_some()
         {
             TickGeneration::maximum(5).unwrap()
         } else {
             TickGeneration::target(5).unwrap()
         };
-        assert!(!changed.same_composed_inputs(&counted, &counted.guides, None, None));
+        assert!(!key_matches(&changed, &counted));
     }
     for side in 0..2 {
         let mut changed = plot.clone();
@@ -278,7 +299,7 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         } else {
             changed.description.payload_mut().axes[1].format = None;
         }
-        assert!(!changed.same_composed_inputs(&retained, &retained.guides, None, None));
+        assert!(!key_matches(&changed, &retained));
     }
 }
 
@@ -297,9 +318,7 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         Some((0.0, 10.0)),
         Some((0.0, 4.0)),
     );
-    let retained = automatic
-        .retain_composed_inputs(ScopedGuideInputs::for_test(&automatic), None, None)
-        .unwrap();
+    let retained = retain_key(&automatic);
     assert_eq!(
         automatic.description().x_axis_spec().window,
         configured.description().x_axis_spec().window
@@ -308,13 +327,11 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         automatic.description().x_axis_spec().window,
         shared.description().x_axis_spec().window
     );
-    assert!(automatic.same_composed_inputs(&retained, &retained.guides, None, None));
-    assert!(!configured.same_composed_inputs(&retained, &retained.guides, None, None));
-    assert!(!shared.same_composed_inputs(&retained, &retained.guides, None, None));
-    let shared_retained = shared
-        .retain_composed_inputs(ScopedGuideInputs::for_test(&shared), None, None)
-        .unwrap();
-    assert!(shared.same_composed_inputs(&shared_retained, &shared_retained.guides, None, None));
+    assert!(key_matches(&automatic, &retained));
+    assert!(!key_matches(&configured, &retained));
+    assert!(!key_matches(&shared, &retained));
+    let shared_retained = retain_key(&shared);
+    assert!(key_matches(&shared, &shared_retained));
     assert_eq!(
         shared_retained.x_axis_spec.1,
         crate::layout::RangeProvenance::Shared
