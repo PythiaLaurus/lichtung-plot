@@ -1387,7 +1387,7 @@ impl Canvas {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
                     let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
-                        plot,
+                        plot.description(),
                         panel.data(&resources)?,
                         None,
                         panel

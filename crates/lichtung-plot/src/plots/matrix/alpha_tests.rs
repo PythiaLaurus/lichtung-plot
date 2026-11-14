@@ -38,7 +38,12 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         )?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
         let id = registry.reserve(source.description(), scope, &operation)?;
-        prepare_axes(source, registry.data(&id, &operation)?, &id, None)
+        prepare_axes(
+            source.description(),
+            registry.data(&id, &operation)?,
+            &id,
+            None,
+        )
     };
     let (prepared, _, _) = prepare(
         &source,

@@ -255,33 +255,32 @@ impl PreparedDensity {
     }
 
     pub(crate) fn new(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
         collectives: Option<&[crate::data::CollectivePair]>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         let column = chart
-            .description()
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
         let mut prepared = prepare_density_for_chart(chart, data, column, collectives)?;
-        let alpha = chart.description().prepare_collective_alpha(
+        let alpha = chart.prepare_collective_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Series,
             true,
             data.facet_selector()?,
         )?;
-        let fill_alpha = chart.description().prepare_collective_alpha(
+        let fill_alpha = chart.prepare_collective_alpha(
             AlphaTarget::Fill,
             AlphaUnitKind::Series,
             true,
             data.facet_selector()?,
         )?;
         for curve in &mut prepared.curves {
-            curve.line_alpha = alpha.collective(chart.description(), &curve.identity)?;
-            curve.fill_alpha = fill_alpha.collective(chart.description(), &curve.identity)?;
+            curve.line_alpha = alpha.collective(chart, &curve.identity)?;
+            curve.fill_alpha = fill_alpha.collective(chart, &curve.identity)?;
         }
-        if let Some(exact) = chart.description().categorical_map_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for hue in prepared.hue_levels() {
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
@@ -548,7 +547,7 @@ fn density_support(
 }
 
 fn prepare_density_for_chart(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     value_col: &str,
     collectives: Option<&[crate::data::CollectivePair]>,
@@ -556,10 +555,10 @@ fn prepare_density_for_chart(
     prepare_density_ordered(
         data,
         value_col,
-        chart.description().group_col(),
-        chart.description().group_name(),
-        chart.description().hue_col(),
-        chart.description().hue_name(),
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
         collectives,
     )
 }
@@ -872,7 +871,7 @@ mod tests {
             &source,
             &resources,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| PreparedDensity::new(&source, data, None).unwrap_err(),
+            |data| PreparedDensity::new(source.description(), data, None).unwrap_err(),
         )
         .unwrap();
         assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));

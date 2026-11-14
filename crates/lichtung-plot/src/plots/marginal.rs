@@ -1008,21 +1008,21 @@ pub(crate) fn measure(
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     plot_id: &PlotOccurrenceId,
 ) -> Result<(PreparedMarginal, PreparedAxesOwner, Vec<String>), Error> {
     let (mut groups, hues) = build_groups(chart, data)?;
-    let fill_alpha = chart.description().prepare_collective_alpha(
+    let fill_alpha = chart.prepare_collective_alpha(
         AlphaTarget::Fill,
         AlphaUnitKind::Series,
         true,
         data.facet_selector()?,
     )?;
     for group in &mut groups {
-        group.fill_alpha = fill_alpha.collective(chart.description(), &group.identity)?;
+        group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
     }
-    if let Some(exact) = chart.description().categorical_map_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
@@ -1058,9 +1058,9 @@ pub(crate) fn prepare(
             },
             layout::RangePolicy::MarginalSupport,
             if side == 0 {
-                chart.description().x_axis_spec().provenance
+                chart.x_axis_spec().provenance
             } else {
-                chart.description().y_axis_spec().provenance
+                chart.y_axis_spec().provenance
             },
             std::sync::OnceLock::new(),
         )
@@ -1187,14 +1187,14 @@ fn validate_marginal_range<'a>(
     )))
 }
 
-fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 2], Error> {
+fn ranges_from_groups(
+    chart: &crate::builder::PlotDescription,
+    groups: &[HueGroup],
+) -> Result<[(f64, f64); 2], Error> {
     let mut ranges = [(0.0, 1.0); 2];
-    for (index, spec) in [
-        chart.description().x_axis_spec(),
-        chart.description().y_axis_spec(),
-    ]
-    .into_iter()
-    .enumerate()
+    for (index, spec) in [chart.x_axis_spec(), chart.y_axis_spec()]
+        .into_iter()
+        .enumerate()
     {
         let values: fn(&HueGroup) -> &[f64] = if index == 0 {
             |group| &group.x
@@ -1220,20 +1220,15 @@ fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 
 }
 
 fn build_groups(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
 
     let x_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("marginal: x column not set".into()))?;
     let y_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
     let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
@@ -1242,10 +1237,10 @@ fn build_groups(
         crate::data::source::collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.description().group_col(),
-        chart.description().group_name(),
-        chart.description().hue_col(),
-        chart.description().hue_name(),
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
         Some(&retained_rows),
         "marginal",
     )?;

@@ -427,7 +427,7 @@ impl MatrixPayload {
 }
 
 pub(crate) fn prepare_axes(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     plot_id: &PlotOccurrenceId,
     collectives: Option<&[crate::data::CollectivePair]>,
@@ -436,23 +436,21 @@ pub(crate) fn prepare_axes(
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
 
-    let variables = chart.description().matrix_variables().unwrap_or_default();
+    let variables = chart.matrix_variables().unwrap_or_default();
     crate::data::source::reserve_source(&mut cols, variables.len())?;
     cols.extend(variables.iter().map(crate::NumericValues::name));
-    let labels = chart
-        .description()
-        .resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
+    let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (mut groups, hues) = build_groups(chart, &cols, data, collectives)?;
-    let fill_alpha = chart.description().prepare_collective_alpha(
+    let fill_alpha = chart.prepare_collective_alpha(
         AlphaTarget::Fill,
         AlphaUnitKind::Series,
         true,
         data.facet_selector()?,
     )?;
     for group in &mut groups {
-        group.fill_alpha = fill_alpha.collective(chart.description(), &group.identity)?;
+        group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
     }
-    if let Some(exact) = chart.description().categorical_map_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
@@ -468,8 +466,8 @@ pub(crate) fn prepare_axes(
             &groups,
             index,
             column,
-            chart.description().group_name(),
-            chart.description().hue_name(),
+            chart.group_name(),
+            chart.hue_name(),
         )?);
     }
     let axis_source = |slot, (lower, upper), label| PreparedAxisSource {
@@ -1146,7 +1144,7 @@ fn matrix_guide_entries(
 }
 
 fn prepare_density(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     groups: &[HueGroup],
     col_idx: usize,
     column: &str,
@@ -1166,12 +1164,7 @@ fn prepare_density(
     let densities_per_group = crate::data::source::collect_source(groups.iter().map(|g| {
         let mut weighted = gaussian_kde(&g.columns[col_idx], &grid_pts, g.bandwidths[col_idx])
             .map_err(|error| {
-                let context = matrix_group_context(
-                    column,
-                    chart.description().group_name(),
-                    chart.description().hue_name(),
-                    g,
-                );
+                let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
                 Error::Data(format!("matrix: {context}: {error}"))
             })?;
         #[allow(clippy::cast_precision_loss)]
@@ -1182,12 +1175,7 @@ fn prepare_density(
         }
 
         if weighted.iter().any(|density| !density.is_finite()) {
-            let context = matrix_group_context(
-                column,
-                chart.description().group_name(),
-                chart.description().hue_name(),
-                g,
-            );
+            let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
             return Err(Error::Data(format!(
                 "matrix: {context} produced non-finite weighted KDE density"
             )));
@@ -1290,22 +1278,19 @@ fn select_diagonal_kde(
 
 /// Build graphical groups while preserving hue as color-only metadata.
 fn build_groups(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     cols: &[&str],
     data: crate::data::PlotData<'_, '_>,
     collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.description().group_col(),
-        chart.description().group_name(),
-        chart.description().hue_col(),
-        chart.description().hue_name(),
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
         None,
         "matrix",
     )?;
@@ -1359,12 +1344,7 @@ fn build_groups(
     if groups.is_empty() {
         return Err(Error::Data("matrix: no valid finite rows".into()));
     }
-    validate_group_kdes(
-        &mut groups,
-        cols,
-        chart.description().group_name(),
-        chart.description().hue_name(),
-    )?;
+    validate_group_kdes(&mut groups, cols, chart.group_name(), chart.hue_name())?;
     Ok((groups, hue_levels))
 }
 

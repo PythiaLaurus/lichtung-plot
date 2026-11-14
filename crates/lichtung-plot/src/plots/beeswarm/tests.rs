@@ -183,7 +183,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             let scope = &panel.scope;
             let row_source = &panel.row_source;
             let (mut prepared, levels) = prepare(
-                &source,
+                source.description(),
                 registry.data(&id, &operation)?,
                 selection.clone(),
                 scope

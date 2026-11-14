@@ -188,7 +188,7 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<(PreparedBoxplot, Vec<String>, Vec<String>), Error> {

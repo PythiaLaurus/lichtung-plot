@@ -655,19 +655,16 @@ pub(crate) fn natural_body_height(
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
 ) -> Result<(PreparedWaterfall, Vec<String>), Error> {
     let label_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("waterfall: label column not set".into()))?;
     let delta_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
     let base = chart
-        .description()
         .waterfall_base()
         .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
     let labels = crate::data::strict_strings(data, label_col, "waterfall")?;
@@ -684,13 +681,10 @@ pub(crate) fn prepare(
     // Category slots, connectors, and the two named total targets survive
     // caller-window clipping. Bar records are the original row slots above.
 
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let (spans, range) = prepare_spans(base, &deltas, data, &alpha)?;
     let running = spans.last().map_or(base, |span| span.end);
-    let [base_label, terminal_label] = chart.description().waterfall_labels_spec().map_or_else(
+    let [base_label, terminal_label] = chart.waterfall_labels_spec().map_or_else(
         || {
             Ok::<_, Error>([
                 crate::Text::from(crate::data::source::copy_source_string("base")?),

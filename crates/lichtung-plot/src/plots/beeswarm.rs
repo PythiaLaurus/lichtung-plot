@@ -152,26 +152,20 @@ fn packing_radius(
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     selection: crate::theme::ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
     materialization: crate::orchestrator::registration::ContinuousMaterialization,
 ) -> Result<(PreparedBeeswarm, Vec<String>), Error> {
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let category_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
     let x_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("beeswarm: x column not set".into()))?;
     let color_col = chart
-        .description()
         .color_col()
         .ok_or_else(|| Error::Data("beeswarm: continuous color column not set".into()))?;
     let categories = crate::data::strict_strings(data, category_col, "beeswarm")?;
@@ -211,7 +205,7 @@ pub(crate) fn prepare(
         a.0.cmp(&b.0)
             .then_with(|| a.3.source_row.cmp(&b.3.source_row))
     });
-    let format = chart.description().color_label_format_spec().cloned();
+    let format = chart.color_label_format_spec().cloned();
     numeric.check_data(data)?;
     let values =
         if materialization == crate::orchestrator::registration::ContinuousMaterialization::Local {
@@ -247,7 +241,7 @@ pub(crate) fn prepare(
             scale,
             selection,
             colorbar_stops,
-            color_label: chart.description().prepare_color_label(None)?,
+            color_label: chart.prepare_color_label(None)?,
         },
         levels,
     ))

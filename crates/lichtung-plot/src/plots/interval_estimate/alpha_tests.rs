@@ -50,7 +50,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     let row_source =
         crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
     let (prepared, _, labels) = PreparedEstimate::new(
-        &source,
+        source.description(),
         crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
             .unwrap(),
         [],

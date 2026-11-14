@@ -236,7 +236,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         &absent,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| prepare(&absent, data, BarMode::Single).unwrap(),
+        |data| prepare(absent.description(), data, BarMode::Single).unwrap(),
     )
     .unwrap();
     assert!(prepared.bars[0].interval.is_none());
@@ -250,7 +250,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             &invalid,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| prepare(&invalid, data, BarMode::Single).unwrap_err()
+            |data| prepare(invalid.description(), data, BarMode::Single).unwrap_err()
         )
         .unwrap(),
         Error::Data(_)

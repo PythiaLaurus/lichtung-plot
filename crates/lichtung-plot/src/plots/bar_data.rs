@@ -893,21 +893,15 @@ struct GroupedBarCell {
 
 /// Build prepared bar data from category, value, and optional series channels.
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     mode: BarMode,
 ) -> Result<(PreparedBars, Vec<String>, Vec<String>), Error> {
-    prepare_scoped(
-        chart,
-        data,
-        mode,
-        None,
-        chart.description().significance_annotations(),
-    )
+    prepare_scoped(chart, data, mode, None, chart.significance_annotations())
 }
 
 pub(crate) fn prepare_scoped<'a>(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
@@ -917,7 +911,6 @@ pub(crate) fn prepare_scoped<'a>(
     let category = data
         .column(
             chart
-                .description()
                 .x_col()
                 .ok_or_else(|| Error::Data("bar category column is missing".into()))?,
         )?
@@ -925,8 +918,8 @@ pub(crate) fn prepare_scoped<'a>(
     let mut fields = Vec::new();
     crate::data::source::reserve_source(&mut fields, 2)?;
     fields.push(category);
-    fields.extend(chart.description().group_name());
-    let fill_alpha = chart.description().prepare_scoped_alpha(
+    fields.extend(chart.group_name());
+    let fill_alpha = chart.prepare_scoped_alpha(
         AlphaTarget::Fill,
         AlphaUnitKind::Aggregate,
         &fields,
@@ -935,7 +928,7 @@ pub(crate) fn prepare_scoped<'a>(
     let line_alpha = if mode == BarMode::Stacked {
         None
     } else {
-        Some(chart.description().prepare_scoped_alpha(
+        Some(chart.prepare_scoped_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Aggregate,
             &fields,
@@ -945,7 +938,6 @@ pub(crate) fn prepare_scoped<'a>(
     for bar in &mut prepared.bars {
         let key = (category, categories[bar.category_index].as_str());
         let series = chart
-            .description()
             .group_name()
             .zip(bar.series_index.map(|index| series[index].as_str()));
         bar.fill_alpha = fill_alpha.aggregate(key, series)?;
@@ -954,16 +946,14 @@ pub(crate) fn prepare_scoped<'a>(
         }
     }
     apply_attached_significance(annotations, &mut prepared, &categories, &series, mode)?;
-    prepared.points =
-        prepare_point_layers(chart.description(), &prepared, mode, &categories, &series)?;
+    prepared.points = prepare_point_layers(chart, &prepared, mode, &categories, &series)?;
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
     }
     if let Some(exact) = chart
-        .description()
         .categorical_map_spec()
-        .filter(|_| !chart.description().colors_by_sign())
+        .filter(|_| !chart.colors_by_sign())
     {
         let keys = if hues.is_empty() { &categories } else { &hues };
         for key in keys {
@@ -983,18 +973,16 @@ pub(crate) fn prepare_scoped<'a>(
     reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
 )]
 fn prepare_core(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: PlotData<'_, '_>,
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<(PreparedBars, Vec<String>, Vec<String>, Vec<String>), Error> {
     data.validate_row_source()?;
     let x_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
     let y_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("bar: y column not set".into()))?;
 
@@ -1003,8 +991,8 @@ fn prepare_core(
 
     let channels = crate::data::collective_channels(
         data,
-        chart.description().group_col(),
-        chart.description().hue_col(),
+        chart.group_col(),
+        chart.hue_col(),
         Some(&categories),
         "bar",
     )?;
@@ -1022,10 +1010,9 @@ fn prepare_core(
             .iter()
             .map(|s| crate::data::source::copy_source_string(s)),
     )?;
-    let hue_field = chart.description().hue_field();
+    let hue_field = chart.hue_field();
     let hues = hue_field.as_ref().zip(channels.hues.as_deref());
     let units = chart
-        .description()
         .bar_units_col()
         .map(|column| crate::data::strict_strings(data, column, "bar sampling units"))
         .transpose()?;
@@ -1034,7 +1021,6 @@ fn prepare_core(
         Ok(BarSummaryInput {
             units: units.as_deref(),
             input: chart
-                .description()
                 .bar_input()
                 .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?,
             facet_identity: &facet_identity,
@@ -1066,21 +1052,21 @@ fn prepare_core(
     apply_category_order(
         &mut prepared,
         &mut categories,
-        chart.description().category_order_spec(),
+        chart.category_order_spec(),
         mode,
         !data.is_full_plot(),
     )?;
-    if let Some(bounds) = chart.description().bar_bound_cols() {
+    if let Some(bounds) = chart.bar_bound_cols() {
         apply_precomputed_bounds(chart, data, &mut prepared, &categories, &series, bounds)?;
     }
     Ok((prepared, categories, series, hues))
 }
 
 fn facet_identity(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
 ) -> Result<FacetIdentity, Error> {
-    let (row, column, wrap, _) = chart.description().facet_columns();
+    let (row, column, wrap, _) = chart.facet_columns();
     let mut identity = Vec::new();
     for facet_column in [row, column, wrap].into_iter().flatten() {
         let values = crate::data::strict_strings(data, facet_column, "bar facet identity")?;
@@ -1191,7 +1177,7 @@ fn apply_attached_significance<'a>(
 }
 
 fn apply_precomputed_bounds(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     prepared: &mut PreparedBars,
     category_order: &[String],
@@ -1199,12 +1185,10 @@ fn apply_precomputed_bounds(
     (lower_column, upper_column): (&str, &str),
 ) -> Result<(), Error> {
     let category_column = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
     let categories = crate::data::strict_strings(data, category_column, "bar estimate bounds")?;
     let groups = chart
-        .description()
         .group_col()
         .map(|column| crate::data::strict_strings(data, column, "bar estimate bounds"))
         .transpose()?;

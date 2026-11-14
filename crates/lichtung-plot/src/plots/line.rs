@@ -421,7 +421,7 @@ impl PreparedLine {
         reason = "the original seeds and optional category source move directly to the registration without a second retained record"
     )]
     pub(crate) fn new(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
         collectives: Option<&[crate::data::CollectivePair]>,
@@ -430,8 +430,8 @@ impl PreparedLine {
             Self::prepare_scientific(chart, data, conditions, collectives)?;
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
-                && chart.description().line_path_style_spec() == LinePathStyle::Hue);
-        let alpha = chart.description().prepare_collective_alpha(
+                && chart.line_path_style_spec() == LinePathStyle::Hue);
+        let alpha = chart.prepare_collective_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Series,
             include_hue,
@@ -439,7 +439,7 @@ impl PreparedLine {
         )?;
         let fill_alpha = (chart.kind() == PlotKind::Line)
             .then(|| {
-                chart.description().prepare_collective_alpha(
+                chart.prepare_collective_alpha(
                     AlphaTarget::Fill,
                     AlphaUnitKind::Series,
                     true,
@@ -451,12 +451,12 @@ impl PreparedLine {
             let identity = group.identity.as_ref().ok_or_else(|| {
                 Error::Render("prepared line series has no scientific identity".into())
             })?;
-            group.line_alpha = alpha.collective(chart.description(), identity)?;
+            group.line_alpha = alpha.collective(chart, identity)?;
             if let Some(alpha) = fill_alpha
                 .as_ref()
                 .filter(|_| group.points.iter().all(|point| point.interval.is_some()))
             {
-                group.fill_alpha = alpha.collective(chart.description(), identity)?;
+                group.fill_alpha = alpha.collective(chart, identity)?;
             }
         }
         Ok((prepared, ranges, conditions, hues))
@@ -469,17 +469,13 @@ impl PreparedLine {
         reason = "one normalization preserves family order; duplicate scientific coordinates compare exactly including signed zero"
     )]
     fn prepare_scientific(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
         collectives: Option<&[crate::data::CollectivePair]>,
     ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>, Vec<CategoryKey>), Error> {
         data.validate_row_source()?;
-        let alpha = chart.description().prepare_alpha(
-            AlphaTarget::Point,
-            AlphaUnitKind::Observation,
-            &[],
-        )?;
+        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         let kind = chart.kind();
         let family = match kind {
             PlotKind::Line => "line",
@@ -492,29 +488,27 @@ impl PreparedLine {
             }
         };
         let x_col = chart
-            .description()
             .x_col()
             .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
         let y_col = chart
-            .description()
             .y_col()
             .ok_or_else(|| Error::Data(format!("{family}: y column not set")))?;
-        if kind != PlotKind::Line && chart.description().group_col().is_none() {
+        if kind != PlotKind::Line && chart.group_col().is_none() {
             return Err(Error::Data(format!(
                 "{family}: explicit graphical group column not set"
             )));
         }
         let channels = crate::data::observed_collectives(
             data,
-            chart.description().group_col(),
-            chart.description().group_name(),
-            chart.description().hue_col(),
-            chart.description().hue_name(),
+            chart.group_col(),
+            chart.group_name(),
+            chart.hue_col(),
+            chart.hue_name(),
             None,
             family,
         )?;
         // Membership retains raw identity independently of the later palette order.
-        let hue_field = chart.description().hue_field();
+        let hue_field = chart.hue_field();
         let hues = crate::data::source::collect_source(channels.hue_levels.iter().map(|label| {
             let value = crate::data::source::copy_source_string(label)?;
             Ok(CategoryKey::new(
@@ -522,7 +516,7 @@ impl PreparedLine {
                 value,
             ))
         }))?;
-        if let Some(exact) = chart.description().categorical_map_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for hue in &hues {
                 let hue = hue.as_ref().value;
                 if exact.color_in(hue).is_none() {
@@ -566,7 +560,6 @@ impl PreparedLine {
         }
         let bounds = if kind == PlotKind::Line {
             chart
-                .description()
                 .interval_bound_cols()
                 .map(|(lower, upper)| {
                     Ok::<_, Error>((
@@ -578,9 +571,9 @@ impl PreparedLine {
         } else {
             None
         };
-        let hue_paths = kind == PlotKind::LinePath
-            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
-        if hue_paths && chart.description().hue_col().is_none() {
+        let hue_paths =
+            kind == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
+        if hue_paths && chart.hue_col().is_none() {
             return Err(Error::Data(
                 "line path: LinePathStyle::Hue requires a categorical hue column".into(),
             ));
@@ -713,8 +706,8 @@ impl PreparedLine {
             });
         }
         let mut layers = Vec::new();
-        crate::data::source::reserve_source(&mut layers, chart.description().point_layers().len())?;
-        for (index, layer) in chart.description().point_layers().iter().enumerate() {
+        crate::data::source::reserve_source(&mut layers, chart.point_layers().len())?;
+        for (index, layer) in chart.point_layers().iter().enumerate() {
             let mut buffer = [0_u8; 64];
             let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
             std::io::Write::write_fmt(&mut cursor, format_args!("line point layer {index}"))
@@ -778,7 +771,6 @@ impl PreparedLine {
             crate::layout::continuous_auto_range(
                 ranges[0],
                 chart
-                    .description()
                     .x_axis_spec()
                     .window
                     .map(crate::layout::RawWindow::pair),
@@ -787,12 +779,11 @@ impl PreparedLine {
         ranges[1] = crate::layout::continuous_auto_range(
             ranges[1],
             chart
-                .description()
                 .y_axis_spec()
                 .window
                 .map(crate::layout::RawWindow::pair),
         )?;
-        let primary_accent_slots = usize::from(chart.description().hue_col().is_none());
+        let primary_accent_slots = usize::from(chart.hue_col().is_none());
         Ok((
             Self {
                 mark_ranges,

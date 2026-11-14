@@ -45,7 +45,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Full,
-        |data| prepare(&source, data, None).unwrap(),
+        |data| prepare(source.description(), data, None).unwrap(),
     )
     .unwrap();
     assert_eq!(prepared.range, (-10.0, 10.0));

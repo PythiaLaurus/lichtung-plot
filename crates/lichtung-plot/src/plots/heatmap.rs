@@ -1544,22 +1544,22 @@ pub(crate) fn measure(
 }
 
 fn category_levels(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     x: &[String],
     y: &[String],
 ) -> Result<[Vec<String>; 2], Error> {
-    match chart.description().heatmap_layout_spec() {
+    match chart.heatmap_layout_spec() {
         HeatmapLayout::Cartesian => Ok([
             resolve_axis_order(
                 &crate::data::source::source_levels(x)?,
-                chart.description().x_category_order_spec(),
+                chart.x_category_order_spec(),
                 "x",
                 !data.is_full_plot(),
             )?,
             resolve_axis_order(
                 &crate::data::source::source_levels(y)?,
-                chart.description().y_category_order_spec(),
+                chart.y_category_order_spec(),
                 "y",
                 !data.is_full_plot(),
             )?,
@@ -1578,27 +1578,21 @@ fn category_levels(
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     selection: ContinuousColorScale,
     numeric: crate::numeric::source::NumericBinding<'_>,
     materialization: crate::orchestrator::registration::ContinuousMaterialization,
 ) -> Result<(HeatmapData, [Vec<String>; 2]), Error> {
     validate_options(chart)?;
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("heatmap: x category column not set".into()))?;
     let y_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("heatmap: y category column not set".into()))?;
     let color_col = chart
-        .description()
         .color_col()
         .ok_or_else(|| Error::Data("heatmap: numeric color column not set".into()))?;
 
@@ -1606,7 +1600,6 @@ pub(crate) fn prepare(
     let y_values = normalized_categories(data, y_col, "y")?;
     let fills = crate::data::nullable_finite_f64(data, color_col, "heatmap")?;
     let highlights = chart
-        .description()
         .heatmap_highlight_col()
         .map(|column| crate::data::strict_bool(data, column, "heatmap"))
         .transpose()?;
@@ -1624,7 +1617,7 @@ pub(crate) fn prepare(
         ));
     }
 
-    let heatmap_layout = chart.description().heatmap_layout_spec();
+    let heatmap_layout = chart.heatmap_layout_spec();
     let [x_levels, y_levels] = category_levels(chart, data, &x_values, &y_values)?;
     let cell_count = x_levels
         .len()
@@ -1637,13 +1630,8 @@ pub(crate) fn prepare(
     }
 
     let explicit_triangular_order = heatmap_layout != HeatmapLayout::Cartesian
-        && (!matches!(
-            chart.description().x_category_order_spec(),
-            CategoryOrder::Observed
-        ) || !matches!(
-            chart.description().y_category_order_spec(),
-            CategoryOrder::Observed
-        ));
+        && (!matches!(chart.x_category_order_spec(), CategoryOrder::Observed)
+            || !matches!(chart.y_category_order_spec(), CategoryOrder::Observed));
     let mut x_indices = crate::data::source::collect_source(
         x_levels
             .iter()
@@ -1732,7 +1720,7 @@ pub(crate) fn prepare(
     });
 
     let value_presentation = if let HeatmapAnnotations::Values(format) =
-        chart.description().heatmap_annotations_spec()
+        chart.heatmap_annotations_spec()
     {
         let format = crate::data::source::source_arc(format.try_copy()?)?;
         numeric.check_data(data)?;
@@ -1803,7 +1791,7 @@ pub(crate) fn prepare(
             Ok(Some(owner))
         },
     ))?;
-    let color_format = chart.description().color_label_format_spec().cloned();
+    let color_format = chart.color_label_format_spec().cloned();
     numeric.check_data(data)?;
     let colorbar_values =
         if materialization == crate::orchestrator::registration::ContinuousMaterialization::Local {
@@ -1826,7 +1814,7 @@ pub(crate) fn prepare(
             None
         };
     let mut prepared = HeatmapData {
-        color_label: chart.description().prepare_color_label(None)?,
+        color_label: chart.prepare_color_label(None)?,
         layout: heatmap_layout,
         value_labels,
         value_owners,
@@ -1835,11 +1823,7 @@ pub(crate) fn prepare(
         color_format,
         cells,
         fills: resolved_fills,
-        fill_binding: chart
-            .description()
-            .alpha_inputs()
-            .get(AlphaTarget::Fill)
-            .clone(),
+        fill_binding: chart.alpha_inputs().get(AlphaTarget::Fill).clone(),
         fill_alphas: crate::data::source::source_arc(fill_alphas)?,
         highlighted,
         null_row_annotations,
@@ -1851,39 +1835,34 @@ pub(crate) fn prepare(
     Ok((prepared, [x_levels, y_levels]))
 }
 
-fn validate_options(chart: &Plot) -> Result<(), Error> {
-    if [
-        chart.description().x_axis_spec(),
-        chart.description().y_axis_spec(),
-    ]
-    .iter()
-    .any(|spec| {
-        spec.window.is_some()
-            || spec.exact_ticks.is_some()
-            || spec.format.is_some()
-            || !spec.generation.is_automatic()
-    }) {
+fn validate_options(chart: &crate::builder::PlotDescription) -> Result<(), Error> {
+    if [chart.x_axis_spec(), chart.y_axis_spec()]
+        .iter()
+        .any(|spec| {
+            spec.window.is_some()
+                || spec.exact_ticks.is_some()
+                || spec.format.is_some()
+                || !spec.generation.is_automatic()
+        })
+    {
         return Err(Error::Data(
             "heatmap: categorical axis limits are not supported".into(),
         ));
     }
-    if let Some(hue_col) = chart.description().hue_col() {
+    if let Some(hue_col) = chart.hue_col() {
         return Err(Error::Data(format!(
             "heatmap: hue column {hue_col:?} is not supported; use color for numeric fill"
         )));
     }
-    if !matches!(
-        chart.description().category_order_spec(),
-        CategoryOrder::Observed
-    ) {
+    if !matches!(chart.category_order_spec(), CategoryOrder::Observed) {
         return Err(Error::Data(
             "heatmap: primary category order is ambiguous; use x_category_order(...) and y_category_order(...)"
                 .into(),
         ));
     }
     for (axis, order) in [
-        ("x", chart.description().x_category_order_spec()),
-        ("y", chart.description().y_category_order_spec()),
+        ("x", chart.x_category_order_spec()),
+        ("y", chart.y_category_order_spec()),
     ] {
         if let CategoryOrder::Value(sort) = order {
             return Err(Error::Data(format!(
@@ -1895,14 +1874,14 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
 }
 
 fn resolve_null_row_annotations(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     layout: HeatmapLayout,
     y_levels: &[String],
     cells: &[Option<f64>],
     highlighted: &[bool],
     x_count: usize,
 ) -> Result<Vec<Option<crate::Text>>, Error> {
-    let annotations = chart.description().heatmap_null_row_annotations_spec();
+    let annotations = chart.heatmap_null_row_annotations_spec();
     let mut resolved = crate::data::source::collect_source(y_levels.iter().map(|_| Ok(None)))?;
     if annotations.is_empty() {
         return Ok(resolved);
@@ -2007,14 +1986,11 @@ fn resolve_axis_order(
 }
 
 fn resolve_triangular_order(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     observed: &[String],
     is_subset: bool,
 ) -> Result<Vec<String>, Error> {
-    match (
-        chart.description().x_category_order_spec(),
-        chart.description().y_category_order_spec(),
-    ) {
+    match (chart.x_category_order_spec(), chart.y_category_order_spec()) {
         (CategoryOrder::Observed, CategoryOrder::Observed) => crate::data::source::collect_source(
             observed
                 .iter()

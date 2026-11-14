@@ -135,7 +135,7 @@ pub(crate) fn prepare_plot_registration(
         .numeric_binding(panel.source, &panel.row_source, operation)?;
     let family = match source.kind() {
         PlotKind::Waterfall => {
-            let (marks, labels) = crate::plots::waterfall::prepare(source, data)?;
+            let (marks, labels) = crate::plots::waterfall::prepare(source.description(), data)?;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -150,7 +150,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::Beeswarm => {
             let (marks, levels) = crate::plots::beeswarm::prepare(
-                source,
+                source.description(),
                 data,
                 continuous_selection(source, owner)?,
                 numeric,
@@ -170,7 +170,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::Marginal => {
             let (marks, axes, hues) =
-                crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
+                crate::plots::marginal::prepare(source.description(), data, &panel.scope.id)?;
             panel.axes = Some(axes);
             panel
                 .categorical
@@ -181,7 +181,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::Heatmap => {
             let (marks, levels) = crate::plots::heatmap::prepare(
-                source,
+                source.description(),
                 data,
                 continuous_selection(source, owner)?,
                 numeric,
@@ -201,7 +201,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::Interaction => {
             let (marks, conditions) = crate::plots::interaction::prepare(
-                source,
+                source.description(),
                 data,
                 None,
                 panel
@@ -225,7 +225,9 @@ pub(crate) fn prepare_plot_registration(
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             let (marks, categories, domains) =
                 crate::plots::categorical_distribution::PreparedDistribution::new(
-                    source, data, None,
+                    source.description(),
+                    data,
+                    None,
                 )?;
             panel
                 .categorical
@@ -252,7 +254,7 @@ pub(crate) fn prepare_plot_registration(
         | PlotKind::StackedBar
         | PlotKind::StackedHorizontalBar => {
             let (marks, categories, domains) = crate::plots::bar_data::prepare(
-                source,
+                source.description(),
                 data,
                 crate::plots::bar_data::mode(source),
             )?;
@@ -284,7 +286,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
             let (marks, range, labels) = crate::plots::interval_estimate::PreparedEstimate::new(
-                source,
+                source.description(),
                 data,
                 source.description().significance_annotations(),
                 numeric,
@@ -329,7 +331,7 @@ pub(crate) fn prepare_plot_registration(
         }
         PlotKind::Density => Ok(PreparedFamily::Density(
             crate::plots::density::PreparedDensity::new(
-                source,
+                source.description(),
                 data,
                 panel
                     .parent_orders
@@ -618,7 +620,7 @@ pub(crate) fn prepare_plot<'src>(
     ) && !source.description().has_facets()
     {
         let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
-            source,
+            source.description(),
             source_data.expect("single plot data"),
             None,
             registry.panels[0]
@@ -656,7 +658,7 @@ pub(crate) fn prepare_plot<'src>(
             for panel in &mut registry.panels {
                 let (marks, range, labels) =
                     crate::plots::interval_estimate::PreparedEstimate::new(
-                        source,
+                        source.description(),
                         panel.data(resources)?,
                         panel.significance_annotations(),
                         panel.scope.numeric_binding(
@@ -796,7 +798,7 @@ pub(crate) fn prepare_plot<'src>(
                 }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
-                        source,
+                        source.description(),
                         data,
                         facet.conditions,
                         panel
@@ -831,7 +833,7 @@ pub(crate) fn prepare_plot<'src>(
                 }
                 PlotKind::Density => {
                     PreparedFamily::Density(crate::plots::density::PreparedDensity::new(
-                        source,
+                        source.description(),
                         data,
                         panel
                             .parent_orders
@@ -872,7 +874,7 @@ pub(crate) fn prepare_plot<'src>(
                 }
                 PlotKind::Heatmap => {
                     let (marks, levels) = crate::plots::heatmap::prepare(
-                        source,
+                        source.description(),
                         data,
                         continuous_selection(source, owner)?,
                         panel.scope.numeric_binding(
@@ -896,7 +898,7 @@ pub(crate) fn prepare_plot<'src>(
                 }
                 PlotKind::Beeswarm => {
                     let (marks, levels) = crate::plots::beeswarm::prepare(
-                        source,
+                        source.description(),
                         data,
                         continuous_selection(source, owner)?,
                         panel.scope.numeric_binding(
@@ -919,7 +921,8 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Beeswarm(marks)
                 }
                 PlotKind::Waterfall => {
-                    let (marks, labels) = crate::plots::waterfall::prepare(source, data)?;
+                    let (marks, labels) =
+                        crate::plots::waterfall::prepare(source.description(), data)?;
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "category lengths are admitted source rows"
@@ -934,7 +937,7 @@ pub(crate) fn prepare_plot<'src>(
                 }
                 PlotKind::Interaction => {
                     let (marks, conditions) = crate::plots::interaction::prepare(
-                        source,
+                        source.description(),
                         data,
                         interaction_parent.as_ref(),
                         panel
@@ -958,7 +961,7 @@ pub(crate) fn prepare_plot<'src>(
                 PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                     let (marks, categories, domains) =
                         crate::plots::categorical_distribution::PreparedDistribution::new(
-                            source,
+                            source.description(),
                             data,
                             Some(facet),
                         )?;
@@ -987,7 +990,7 @@ pub(crate) fn prepare_plot<'src>(
                 | PlotKind::StackedBar
                 | PlotKind::StackedHorizontalBar => {
                     let (marks, categories, domains) = crate::plots::bar_data::prepare_scoped(
-                        source,
+                        source.description(),
                         data,
                         crate::plots::bar_data::mode(source),
                         Some(facet),
@@ -1126,7 +1129,7 @@ pub(crate) fn prepare_plot<'src>(
         }
     } else if source.kind() == PlotKind::Matrix {
         let (marks, axes, hues) = crate::plots::matrix::prepare_axes(
-            source,
+            source.description(),
             source_data.expect("single plot data"),
             &registry.panels[0].scope.id,
             registry.panels[0]

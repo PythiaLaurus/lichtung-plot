@@ -46,7 +46,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
             input_slots: vec![3, 0, 2],
             diagnostic_rows: vec![200, 900, 800],
         },
-        |data| prepare(&source, data, None).unwrap(),
+        |data| prepare(source.description(), data, None).unwrap(),
     )
     .unwrap();
     assert_eq!(

@@ -324,38 +324,32 @@ impl PreparedInteraction {
     reason = "one admitted semantic preparation boundary"
 )]
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: PlotData<'_, '_>,
     parent: Option<&ObservedCollectives>,
     collectives: Option<&[crate::data::CollectivePair]>,
 ) -> Result<(PreparedInteraction, Vec<String>), Error> {
     data.validate_row_source()?;
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
-        .description()
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
     let estimate_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("interaction: estimate column not set".into()))?;
     chart
-        .description()
         .group_col()
         .ok_or_else(|| Error::Data("interaction: graphical group column not set".into()))?;
-    let (lo, hi) = chart.description().interval_bound_cols().ok_or_else(|| {
+    let (lo, hi) = chart.interval_bound_cols().ok_or_else(|| {
         Error::Data("interaction: complete precomputed interval columns are required".into())
     })?;
     let x = crate::data::strict_strings(data, x_col, "interaction")?;
     let channels = crate::data::observed_collectives(
         data,
-        chart.description().group_col(),
-        chart.description().group_name(),
-        chart.description().hue_col(),
-        chart.description().hue_name(),
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
         None,
         "interaction",
     )?;
@@ -382,7 +376,7 @@ pub(crate) fn prepare(
     let hues = &domain.hue_levels;
     let identities = collectives.unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
-    let line_alpha = chart.description().prepare_collective_alpha(
+    let line_alpha = chart.prepare_collective_alpha(
         AlphaTarget::Line,
         AlphaUnitKind::Series,
         true,
@@ -449,10 +443,10 @@ pub(crate) fn prepare(
                 .as_ref()
                 .map_or_else(TraceStyle::default, |styles| styles[index]),
             cells,
-            line_alpha: line_alpha.collective(chart.description(), identity)?,
+            line_alpha: line_alpha.collective(chart, identity)?,
         });
     }
-    if let Some(exact) = chart.description().categorical_map_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for trace in &traces {
             let key = trace
                 .identity
@@ -708,8 +702,11 @@ pub(crate) fn measure_marks(
     Ok(result)
 }
 
-fn resolve_trace_styles(chart: &Plot, levels: &[String]) -> Result<Option<Vec<TraceStyle>>, Error> {
-    let Some(configured) = chart.description().interaction_styles_spec() else {
+fn resolve_trace_styles(
+    chart: &crate::builder::PlotDescription,
+    levels: &[String],
+) -> Result<Option<Vec<TraceStyle>>, Error> {
+    let Some(configured) = chart.interaction_styles_spec() else {
         return Ok(None);
     };
     let mut styles = crate::data::source::collect_source(levels.iter().map(|_| Ok(None)))?;

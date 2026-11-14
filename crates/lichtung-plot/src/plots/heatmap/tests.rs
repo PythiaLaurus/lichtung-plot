@@ -355,7 +355,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     let row_source =
         crate::data::source::RowSourceContext::new(source.description(), &scope, &operation);
     let (prepared, _) = prepare(
-        &source,
+        source.description(),
         crate::data::PlotData::checked(source.description(), &scope, &row_source, &operation)
             .unwrap(),
         source

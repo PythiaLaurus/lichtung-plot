@@ -286,7 +286,7 @@ impl PreparedEstimate {
         reason = "the original optional seed and raw categories move directly to the registration without a second retained record"
     )]
     pub(crate) fn new<'a>(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         data: crate::data::PlotData<'_, '_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
         numeric: crate::numeric::source::NumericBinding<'_>,
@@ -301,7 +301,6 @@ impl PreparedEstimate {
         let range = estimate_data_range(rows.iter().map(|row| &row.estimate));
         let range = match (
             chart
-                .description()
                 .x_axis_spec()
                 .window
                 .map(crate::layout::RawWindow::pair),
@@ -310,7 +309,7 @@ impl PreparedEstimate {
             (Some(limits), _) => Some(limits),
             (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
                 range,
-                chart.description().x_axis_spec(),
+                chart.x_axis_spec(),
             )?),
             _ => None,
         };
@@ -334,7 +333,7 @@ impl PreparedEstimate {
                 alphas,
                 line_alphas,
                 adjacent: Vec::new(),
-                reference: chart.description().zero_line_visible().then_some(0.0),
+                reference: chart.zero_line_visible().then_some(0.0),
                 value_presentation: None,
             },
             range,
@@ -680,12 +679,11 @@ fn not_estimable_text_x(
 }
 
 pub(crate) fn axis_categories(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     family: &str,
 ) -> Result<Vec<String>, Error> {
     let column = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data(format!("{family}: term/label column not set")))?;
     let labels = crate::data::strict_strings(data, column, family)?;
@@ -705,22 +703,16 @@ pub(crate) fn axis_categories(
     reason = "model semantics validate tuples, attached labels, and transformed domains before fonts"
 )]
 fn prepare_model<'a>(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     numeric: crate::numeric::source::NumericBinding<'_>,
 ) -> Result<(PreparedEstimate, Option<(f64, f64)>, Vec<String>), crate::layout::fit::PlanError> {
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let alphas = crate::data::source::collect_source(
         (0..data.height()).map(|row| ObservationAlpha::resolve(data, &alpha, row)),
     )?;
-    let line_alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
+    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     let line_alphas = crate::data::source::collect_source(
         (0..data.height()).map(|row| ObservationAlpha::resolve(data, &line_alpha, row)),
     )?;
@@ -731,23 +723,20 @@ fn prepare_model<'a>(
         "coefficient"
     };
     let reference = if require_intervals {
-        chart.description().forest_reference_value()
+        chart.forest_reference_value()
     } else {
-        chart
-            .description()
-            .coefficient_reference_line_value()
-            .unwrap_or(0.0)
+        chart.coefficient_reference_line_value().unwrap_or(0.0)
     };
-    if chart.description().hue_col().is_some() || chart.description().color_col().is_some() {
+    if chart.hue_col().is_some() || chart.color_col().is_some() {
         return Err(Error::Data(format!(
             "{family}: hue and continuous color channels are not supported"
         ))
         .into());
     }
     let labels = axis_categories(chart, data, family)?;
-    let estimates = prepare_estimate_tuples(chart.description(), data, family, require_intervals)?;
-    let has_intervals = chart.description().interval_bound_cols().is_some();
-    if chart.description().estimate_labels_spec().is_some() && has_intervals {
+    let estimates = prepare_estimate_tuples(chart, data, family, require_intervals)?;
+    let has_intervals = chart.interval_bound_cols().is_some();
+    if chart.estimate_labels_spec().is_some() && has_intervals {
         return Err(Error::Data(format!(
             "{family}: numeric estimate labels are supported only for point-only displays without intervals"
         )).into());
@@ -821,7 +810,7 @@ fn prepare_model<'a>(
             .into());
         }
     }
-    let scale = chart.description().axis_scale_spec();
+    let scale = chart.axis_scale_spec();
     let transform = |value: f64| -> Result<f64, Error> {
         match scale {
             AxisScale::Linear => Ok(value),
@@ -847,7 +836,6 @@ fn prepare_model<'a>(
     let transformed_reference = transform(reference)?;
 
     let range = if let Some((lower, upper)) = chart
-        .description()
         .x_axis_spec()
         .window
         .map(crate::layout::RawWindow::pair)
@@ -871,7 +859,6 @@ fn prepare_model<'a>(
             .transpose()?
     };
     let value_presentation = chart
-        .description()
         .estimate_labels_spec()
         .map(|format| -> Result<_, Error> {
             let format = crate::data::source::source_arc(format.try_copy()?)?;

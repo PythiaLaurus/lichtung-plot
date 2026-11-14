@@ -7,7 +7,6 @@ use crate::Error;
 
 use crate::layout::AxisSpec;
 use crate::spec::{CategoryOrder, ValueSort};
-use crate::Plot;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct PointIntervalRow {
@@ -18,39 +17,32 @@ pub(crate) struct PointIntervalRow {
 }
 
 pub(crate) fn prepare(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     data: crate::data::PlotData<'_, '_>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
-    let alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
-    let line_alpha =
-        chart
-            .description()
-            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
-    if chart.description().y_axis_spec() != &AxisSpec::default() {
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
+    if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "point_interval: categorical y-axis limits are not supported".into(),
         ));
     }
-    if let Some(hue_col) = chart.description().hue_col() {
+    if let Some(hue_col) = chart.hue_col() {
         return Err(Error::Data(format!(
             "point_interval: hue column {hue_col:?} is not supported"
         )));
     }
-    if let Some(color_col) = chart.description().color_col() {
+    if let Some(color_col) = chart.color_col() {
         return Err(Error::Data(format!(
             "point_interval: color column {color_col:?} is not supported"
         )));
     }
     let category_col = chart
-        .description()
         .y_col()
         .ok_or_else(|| Error::Data("point_interval: y category column not set".into()))?;
     let labels = crate::data::strict_strings(data, category_col, "point_interval")?;
     let estimates = crate::plots::interval_estimate::prepare_estimate_tuples(
-        chart.description(),
+        chart,
         data,
         "point_interval",
         true,
@@ -101,7 +93,7 @@ pub(crate) fn prepare(
         });
     }
 
-    apply_category_order(&mut rows, chart.description().category_order_spec(), data)?;
+    apply_category_order(&mut rows, chart.category_order_spec(), data)?;
     Ok(rows)
 }
 

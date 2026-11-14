@@ -201,7 +201,7 @@ impl PreparedDistribution {
         })
     }
     pub(crate) fn new(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
     ) -> Result<(Self, Vec<String>, Vec<String>), Error> {
@@ -211,9 +211,8 @@ impl PreparedDistribution {
                 let (marks, categories, hues) = crate::plots::boxplot::prepare(chart, data, facet)?;
                 Ok((Self::Boxplot(marks), categories, hues))
             }
-            PlotKind::Raincloud if chart.description().raincloud_geometry_input().is_some() => {
-                let (marks, categories, hues) =
-                    crate::plots::violin::precomputed::prepare(chart.description())?;
+            PlotKind::Raincloud if chart.raincloud_geometry_input().is_some() => {
+                let (marks, categories, hues) = crate::plots::violin::precomputed::prepare(chart)?;
                 Ok((Self::Supplied(marks), categories, hues))
             }
             PlotKind::Violin | PlotKind::Raincloud => {
@@ -224,7 +223,7 @@ impl PreparedDistribution {
                 "categorical distribution preparation requires its family".into(),
             )),
         }?;
-        if let Some(exact) = chart.description().categorical_map_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             let keys = if hues.is_empty() { &categories } else { &hues };
             for key in keys {
                 if exact.color_in(key).is_none() {
