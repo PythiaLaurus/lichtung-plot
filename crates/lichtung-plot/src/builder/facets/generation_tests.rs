@@ -33,7 +33,7 @@ fn prepare_key_inputs<'src>(
     } else {
         registry
             .prepare_discrete_guides(
-                source,
+                source.description(),
                 &theme,
                 operation,
                 &crate::layout::ComponentAddress::root(),

@@ -52,7 +52,7 @@ impl HeatmapData {
     }
     pub(crate) fn alpha_guide(
         &self,
-        _chart: &Plot,
+        _chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {

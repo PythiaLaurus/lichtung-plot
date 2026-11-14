@@ -68,12 +68,12 @@ pub(crate) struct PreparedMarginal {
 impl PreparedMarginal {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.description().point_style(
+        let point = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_marginal(),
@@ -145,7 +145,7 @@ impl PreparedMarginal {
 
     pub(crate) fn guide_entries(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
@@ -156,7 +156,7 @@ impl PreparedMarginal {
 
     fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
@@ -171,14 +171,12 @@ impl PreparedMarginal {
             let color = Self::group_color(group, colors, accents)?;
             entries.push(
                 GuideSourceKey::collective(
-                    chart
-                        .description()
-                        .collective_legend_identity(&group.identity)?,
+                    chart.collective_legend_identity(&group.identity)?,
                     chart,
                     false,
                 )?
                 .with_point(
-                    chart.description().point_style(
+                    chart.point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_marginal(),

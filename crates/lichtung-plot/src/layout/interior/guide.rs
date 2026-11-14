@@ -139,8 +139,11 @@ fn family<'a, T>(
 impl PlotRegistryBuilder<'_> {
     /// Scientific color membership is independent of guide visibility, display
     /// aliases and eventual section projection. No body probe participates.
-    pub(crate) fn observed_color_levels(&self, chart: &Plot) -> Result<Vec<String>, Error> {
-        if chart.description().categorical_color_field().is_none() {
+    pub(crate) fn observed_color_levels(
+        &self,
+        chart: &crate::builder::PlotDescription,
+    ) -> Result<Vec<String>, Error> {
+        if chart.categorical_color_field().is_none() {
             return Ok(Vec::new());
         }
         let mut levels = Vec::new();
@@ -221,7 +224,7 @@ impl PlotRegistryBuilder<'_> {
     /// supply that would silently recolor or fail after fonts have been prepared.
     pub(crate) fn validate_categorical_scale(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::theme::Theme,
         global_hues: Option<&crate::data::category::CategoryDomain>,
     ) -> Result<(), Error> {
@@ -230,9 +233,9 @@ impl PlotRegistryBuilder<'_> {
                 .first()
                 .and_then(|panel| panel.parent_orders.hues.as_deref())
         });
-        let palette = if let Some(scale) = chart.description().categorical_color_scale_spec() {
+        let palette = if let Some(scale) = chart.categorical_color_scale_spec() {
             let Some(palette) = scale.palette() else {
-                if !chart.description().colors_by_sign() {
+                if !chart.colors_by_sign() {
                     for key in global_hues
                         .into_iter()
                         .flat_map(crate::data::category::CategoryDomain::values)
@@ -255,9 +258,7 @@ impl PlotRegistryBuilder<'_> {
         } else {
             theme.color_scales().get_qualitative()
         };
-        if palette.capacity() != crate::theme::PaletteCapacity::Fixed
-            || chart.description().colors_by_sign()
-        {
+        if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
             return Ok(());
         }
         let mut keys = Vec::new();
@@ -324,7 +325,7 @@ impl PlotRegistryBuilder<'_> {
     reason = "the closed guide dispatch borrows each family's actual scientific and axis owners"
 )]
 pub(crate) fn guide_sources(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_, '_>,
     registered: &PlotRegistrationBuild<'_>,
@@ -493,7 +494,7 @@ pub(crate) fn guide_sources(
 impl PlotRegistryBuilder<'_> {
     pub(crate) fn prepare_discrete_guides(
         &mut self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         resources: &crate::font::canonical::OperationContext,
         owner: &crate::layout::ComponentAddress,
@@ -555,7 +556,7 @@ impl PlotRegistryBuilder<'_> {
         let order = parent_guide_order(
             chart,
             self.panels.first().map_or_else(
-                || chart.description().legend_composition_spec(),
+                || chart.legend_composition_spec(),
                 |registered| registered.policy.guide_composition,
             ),
             self.panels
@@ -597,14 +598,14 @@ impl PlotRegistryBuilder<'_> {
 }
 
 pub(crate) fn continuous_source(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     registered: &PlotRegistrationBuild<'_>,
 ) -> Result<
     Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
     Error,
 > {
-    let field = chart.description().color_dimension_key().unwrap_or("");
+    let field = chart.color_dimension_key().unwrap_or("");
     let descriptor = match chart.kind() {
         PlotKind::Heatmap => family(registered, chart.kind(), |family| match family {
             F::Heatmap(marks) => Some(marks),
@@ -622,7 +623,7 @@ pub(crate) fn continuous_source(
 }
 
 pub(crate) fn alpha_sources(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     registered: &PlotRegistrationBuild<'_>,
     owner: &crate::layout::ComponentAddress,
@@ -718,7 +719,7 @@ pub(crate) fn alpha_sources(
     guide.finish()
 }
 fn parent_guide_order(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     composition: crate::LegendComposition,
     collectives: Option<&[crate::data::CollectivePair]>,
     groups: Option<&[String]>,
@@ -737,11 +738,11 @@ fn parent_guide_order(
         if facet_cells {
             for (field, levels) in [
                 (
-                    chart.description().group_name(),
+                    chart.group_name(),
                     groups.map(crate::data::category::CategoryOrderRef::Raw),
                 ),
                 (
-                    chart.description().hue_dimension_key(),
+                    chart.hue_dimension_key(),
                     hues.map(crate::data::category::CategoryOrderRef::Keys),
                 ),
             ] {
@@ -775,12 +776,12 @@ fn parent_guide_order(
             .iter()
             .filter(|pair| pair.group.is_some() || pair.hue.is_some())
         {
-            order.push(chart.description().collective_legend_identity(pair)?);
+            order.push(chart.collective_legend_identity(pair)?);
         }
     } else if let Some(hues) = hues {
         crate::data::source::reserve_source(&mut order, hues.ordered.len())?;
         for hue in hues.values() {
-            order.push(chart.description().point_legend_identity(hue)?);
+            order.push(chart.point_legend_identity(hue)?);
         }
     }
     Ok(order)

@@ -4,9 +4,10 @@
 use super::identity::GuideEntryIdentity;
 use super::ResolvedGuideKey;
 use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaUnitKind};
+use crate::builder::PlotDescription;
 use crate::data::category::{RawCategory, RawField};
 use crate::render::backend::{LineStyle, PointStyle};
-use crate::{Error, Plot, Result};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LiteralDomain {
@@ -207,10 +208,8 @@ pub(crate) enum LayerLabelContext {
 }
 
 impl LayerLabelContext {
-    pub(crate) fn for_plot(plot: &Plot) -> Self {
-        if plot.description().hue_dimension_key().is_some()
-            || plot.description().interaction_styles_spec().is_some()
-        {
+    pub(crate) fn for_plot(plot: &PlotDescription) -> Self {
+        if plot.hue_dimension_key().is_some() || plot.interaction_styles_spec().is_some() {
             Self::Categorical
         } else {
             Self::LiteralSeries
@@ -271,7 +270,7 @@ impl GuideSourceKey {
 
     pub(crate) fn collective(
         identity: GuideEntryIdentity,
-        plot: &Plot,
+        plot: &PlotDescription,
         group_styles: bool,
     ) -> Result<Self> {
         let encoding = match &identity {
@@ -294,10 +293,9 @@ impl GuideSourceKey {
             }
             GuideEntryIdentity::Category { field, .. } => {
                 if plot
-                    .description()
                     .group_name()
-                    .is_some_and(|group| Some(group) == plot.description().hue_name())
-                    || (group_styles && plot.description().hue_name().is_none())
+                    .is_some_and(|group| Some(group) == plot.hue_name())
+                    || (group_styles && plot.hue_name().is_none())
                 {
                     GuideEncoding::Joint {
                         field: field.clone(),
@@ -444,7 +442,7 @@ impl GuideSourceKey {
         Ok(self)
     }
 
-    pub(super) fn validate(&self, plot: &Plot) -> Result<()> {
+    pub(super) fn validate(&self, plot: &PlotDescription) -> Result<()> {
         let paints = &self.mapping.paint_bindings;
         let styles = &self.mapping.style_bindings;
         if self.key.point.is_none() && self.key.line.is_none() && self.key.fill.is_none() {
@@ -493,7 +491,7 @@ impl GuideSourceKey {
             .chain(self.mapping.style_bindings.line_pattern.iter())
             .any(|binding| matches!(binding, StyleBinding::InteractionGroup { .. }))
             && (plot.kind() != crate::PlotKind::Interaction
-                || plot.description().interaction_styles_spec().is_none())
+                || plot.interaction_styles_spec().is_none())
         {
             return Err(invalid(
                 "only configured Interaction styles map a group-style channel",
@@ -502,7 +500,7 @@ impl GuideSourceKey {
         self.validate_bindings()
     }
 
-    pub(super) fn bind_alpha(&mut self, plot: &Plot) -> Result<()> {
+    pub(super) fn bind_alpha(&mut self, plot: &PlotDescription) -> Result<()> {
         let bindings = &mut self.mapping.alpha_bindings;
         bind_alpha(
             &mut bindings.point_fill,
@@ -636,7 +634,7 @@ impl GuideSourceKey {
 fn bind_alpha(
     binding: &mut Option<AlphaBinding>,
     paint: Option<&mut crate::Color>,
-    plot: &Plot,
+    plot: &PlotDescription,
 ) -> Result<()> {
     let Some(binding) = binding else {
         return Ok(());
@@ -677,7 +675,7 @@ fn bind_alpha(
         | MarkPaintRole::FillOutline(_) => None,
     };
     if let Some((target, unit)) = selected {
-        let input = plot.description().alpha_inputs().get(target);
+        let input = plot.alpha_inputs().get(target);
         if !input.is_theme() {
             let paint = paint.ok_or_else(|| invalid("data-alpha binding has no actual paint"))?;
             *paint = paint.alpha(255);

@@ -42,7 +42,7 @@ pub(crate) fn measure_marks(
         .expect("prepared Bar categories")
         .raw;
     let (colors, accents) = bar_data::resolved_colors(
-        chart,
+        chart.description(),
         &context.registered.expect("prepared Bar occurrence").axes,
         binding,
         theme,

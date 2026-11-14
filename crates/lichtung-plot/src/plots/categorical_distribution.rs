@@ -6,7 +6,7 @@ use crate::decorations::legend::GuideSourceKey;
 use crate::orchestrator::registration::{CategoricalBinding, CategoricalDomainSource};
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::theme::CategoryColors;
-use crate::{Error, Plot, PlotKind};
+use crate::{Error, PlotKind};
 
 #[cfg(test)]
 pub(crate) mod extraction;
@@ -52,7 +52,7 @@ impl PreparedDistribution {
     }
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -65,7 +65,7 @@ impl PreparedDistribution {
 
     pub(crate) fn resolved_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         axes: &crate::orchestrator::registration::PreparedAxesOwner,
         binding: &CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
@@ -78,16 +78,15 @@ impl PreparedDistribution {
         if matches!(
             binding.local,
             CategoricalDomainSource::DistributionFacetCategories
-        ) && chart.description().has_facets()
+        ) && chart.has_facets()
             && !matches!(self, Self::Supplied(_))
         {
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
-            let column = chart.description().x_col().ok_or_else(|| {
+            let column = chart.x_col().ok_or_else(|| {
                 Error::Render("distribution category color source is missing".into())
             })?;
             let source = chart
-                .description()
                 .data_column(column)
                 .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?;
             let crate::data::DataColumn::Category(values) = source else {
@@ -120,7 +119,7 @@ impl PreparedDistribution {
 
     pub(crate) fn guide_entries(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         axes: &crate::orchestrator::registration::PreparedAxesOwner,
         binding: &CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
@@ -132,7 +131,7 @@ impl PreparedDistribution {
 
     pub(crate) fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
@@ -151,7 +150,7 @@ impl PreparedDistribution {
         crate::data::source::reserve_source(&mut entries, binding.local_len())?;
         for label in sample.observed_hue_levels(binding.local_values()) {
             let color = colors.color(label)?;
-            let key = GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?;
+            let key = GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?;
             let key = if boxplot {
                 key.with_role_line(
                     theme
@@ -177,7 +176,7 @@ impl PreparedDistribution {
                     key
                 } else {
                     key.with_point(
-                        chart.description().distribution_point_style(
+                        chart.distribution_point_style(
                             theme.marks.get_points().get_mandatory_strip(),
                             color,
                         ),

@@ -342,7 +342,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                     &operation,
                 );
                 let guide = inputs.prepare_discrete_guides(
-                    fault,
+                    fault.description(),
                     &theme,
                     &operation,
                     &crate::layout::ComponentAddress::root(),

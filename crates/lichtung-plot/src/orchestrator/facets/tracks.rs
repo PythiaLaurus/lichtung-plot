@@ -553,7 +553,7 @@ mod tests {
                     let mut inputs =
                         crate::plots::shared_x::prepare_plot(plot.description(), &operation, None)?;
                     let guide = inputs.prepare_discrete_guides(
-                        &plot,
+                        plot.description(),
                         &theme,
                         &operation,
                         &ComponentAddress::root(),

@@ -138,7 +138,7 @@ impl PreparedGuide {
             registered.policy.guide_composition = composition;
         }
         inputs.prepare_discrete_guides(
-            plot,
+            plot.description(),
             theme,
             &operation,
             &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,

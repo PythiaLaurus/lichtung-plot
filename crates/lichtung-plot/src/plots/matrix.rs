@@ -66,13 +66,13 @@ pub(crate) struct PreparedMatrixAxes {
 impl PreparedMatrixAxes {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         axes: &PreparedAxesOwner,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.description().point_style(
+        let point = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_matrix(),
@@ -283,7 +283,7 @@ pub(crate) fn natural_guide_preference(
 impl PreparedMatrixAxes {
     pub(crate) fn guide_sources(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
@@ -1112,13 +1112,13 @@ fn matrix_legend(
 }
 
 fn matrix_guide_entries(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<GuideSourceKey>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
-        || chart.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
         return Ok(Vec::new());
     }
@@ -1131,14 +1131,12 @@ fn matrix_guide_entries(
     {
         entries.push(
             GuideSourceKey::collective(
-                chart
-                    .description()
-                    .collective_legend_identity(&group.identity)?,
+                chart.collective_legend_identity(&group.identity)?,
                 chart,
                 false,
             )?
             .with_point(
-                chart.description().point_style(
+                chart.point_style(
                     theme,
                     color,
                     theme.marks.get_points().get_radii().get_matrix(),

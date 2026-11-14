@@ -107,12 +107,12 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedRegression {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.description().point_style(
+        let point = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_regression(),
@@ -155,20 +155,17 @@ impl PreparedRegression {
     /// Exact marker, fitted-line and optional band legend glyphs. The prepared
     /// fit confirms this producer's semantic input; a panel is not needed.
     pub(crate) fn guide_entries(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         color: (u8, u8, u8),
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        if !matches!(
-            chart.description().legend_policy_spec(),
-            crate::LegendPolicy::Visible(_)
-        ) {
+        if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
             return Ok(Vec::new());
         }
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, 2)?;
-        let band = chart.description().regression_band_spec();
+        let band = chart.regression_band_spec();
         let fit_identity = crate::decorations::legend::GuideEntryIdentity::RegressionFit { band };
         let line = theme
             .marks
@@ -192,7 +189,7 @@ impl PreparedRegression {
                 LiteralDomain::RegressionReference,
             )
             .with_point(
-                chart.description().point_style(
+                chart.point_style(
                     theme,
                     color,
                     theme.marks.get_points().get_radii().get_regression(),

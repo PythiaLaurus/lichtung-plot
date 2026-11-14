@@ -31,7 +31,7 @@ pub(super) fn prepare_discrete_guide(
             .clone_from(&collectives);
     }
     if let Some(column) = source.description().hue_col() {
-        let observed = inputs.observed_color_levels(&base)?;
+        let observed = inputs.observed_color_levels(base.description())?;
         let raw = source
             .description()
             .data_column(column)
@@ -95,7 +95,7 @@ pub(super) fn prepare_discrete_guide(
         }
     }
     let descriptor = inputs.prepare_discrete_guides(
-        &base,
+        base.description(),
         theme,
         resources,
         &crate::layout::ComponentAddress::root(),

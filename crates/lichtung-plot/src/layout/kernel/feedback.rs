@@ -1314,7 +1314,7 @@ mod tests {
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
             let descriptor = inputs
                 .prepare_discrete_guides(
-                    &plot,
+                    plot.description(),
                     &theme,
                     &operation,
                     &ComponentAddress::root(),

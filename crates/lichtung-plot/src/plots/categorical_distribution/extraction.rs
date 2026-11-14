@@ -1,6 +1,4 @@
-use super::*;
-
-use crate::{CategoryValues, NumericValues, RaincloudInput};
+use crate::{CategoryValues, NumericValues, Plot, RaincloudInput};
 
 pub(crate) fn supplied() -> Plot {
     Plot::raincloud(RaincloudInput::geometry(crate::RaincloudGeometry {

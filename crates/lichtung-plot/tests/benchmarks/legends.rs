@@ -434,7 +434,7 @@ fn shared_legend_child_cache_replay_contract() {
                     None,
                 )?;
                 let guide = inputs.prepare_discrete_guides(
-                    &plot,
+                    plot.description(),
                     &theme,
                     &stage.operation(),
                     &owner,
@@ -951,7 +951,7 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             let mut inputs =
                 crate::plots::shared_x::prepare_plot(plot.description(), &stage.operation(), None)?;
             let guide = inputs.prepare_discrete_guides(
-                &plot,
+                plot.description(),
                 &theme,
                 &stage.operation(),
                 &address,

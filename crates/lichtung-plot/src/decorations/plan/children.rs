@@ -391,7 +391,7 @@ fn prepare_child_inputs_for_test<'src>(
     let mut registry =
         crate::plots::shared_x::prepare_plot(source.description(), operation, Some(theme))?;
     let guide = registry.prepare_discrete_guides(
-        source,
+        source.description(),
         theme,
         operation,
         &ComponentAddress::root(),
@@ -972,8 +972,13 @@ mod tests {
                 guide.panels[0].policy.continuous_guide_use = GuideUse::Hidden;
                 let [inputs, hidden, collectives, scales, guide, hues] =
                     [inputs, hidden, collectives, scales, guide, hues].map(|mut registry| {
-                        let guide = registry
-                            .prepare_discrete_guides(&source, &theme, &operation, &owner, false)?;
+                        let guide = registry.prepare_discrete_guides(
+                            source.description(),
+                            &theme,
+                            &operation,
+                            &owner,
+                            false,
+                        )?;
                         crate::layout::interior::PreparedInteriorInputs::from_registry(
                             registry,
                             crate::layout::interior::InteriorRoute::classify(source.kind()),

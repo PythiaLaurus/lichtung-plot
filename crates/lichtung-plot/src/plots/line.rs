@@ -158,7 +158,7 @@ pub(crate) enum LineMark {
 impl PreparedLine {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -173,7 +173,7 @@ impl PreparedLine {
         } else {
             theme.marks.get_points().get_radii().get_trajectory()
         };
-        let point = chart.description().point_style(theme, (0, 0, 0), radius);
+        let point = chart.point_style(theme, (0, 0, 0), radius);
         let band = theme.marks.get_fills().get_bands().get_line_band();
         for group in &self.groups {
             let unit = AlphaUnit::series(chart, group.identity.as_ref())?;
@@ -185,13 +185,13 @@ impl PreparedLine {
                 line.backend_style((0, 0, 0)),
                 false,
             )?;
-            if chart.kind() == PlotKind::Trajectory || chart.description().markers_visible() {
+            if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
                 for vertex in &group.points {
                     guide.point(AlphaGlyphRole::Primary, vertex.alpha, point.clone(), false)?;
                 }
             }
             if chart.kind() == PlotKind::Line
-                && chart.description().line_band_configured()
+                && chart.line_band_configured()
                 && group.points.iter().all(|point| point.interval.is_some())
             {
                 guide.fill(
@@ -225,14 +225,14 @@ impl PreparedLine {
     }
 
     fn group_color(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         group: &LineGroup,
         theme: &crate::text::TextRequestContext<'_, '_>,
         map: &CategoryColors,
         accent: &AccentColors,
     ) -> Result<(u8, u8, u8), Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
         if chart.kind() == PlotKind::Line {
             if let Some(hue) = group
                 .identity
@@ -266,12 +266,12 @@ impl PreparedLine {
 
     pub(crate) fn group_order(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         collectives: Option<&[crate::data::CollectivePair]>,
         groups: Option<&[String]>,
     ) -> Result<Vec<usize>, Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
         let mut order = crate::data::source::collect_source((0..self.groups.len()).map(Ok))?;
         crate::data::source::sort_source_by(&mut order, |a, b| {
             let key = |index: usize| {
@@ -302,7 +302,7 @@ impl PreparedLine {
     /// source reprojection, or font environment is needed.
     pub(crate) fn guide_entries_in_order(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
@@ -314,7 +314,7 @@ impl PreparedLine {
 
     fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
@@ -324,7 +324,7 @@ impl PreparedLine {
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         let hue_paths = chart.kind() == PlotKind::LinePath
-            && chart.description().line_path_style_spec() == LinePathStyle::Hue;
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
         for &index in order {
             let group = &self.groups[index];
             let color = Self::group_color(chart, group, theme, map, accent)?;
@@ -350,12 +350,12 @@ impl PreparedLine {
                 )
             };
             crate::data::source::reserve_source(&mut entries, 1)?;
-            let identity = chart.description().collective_legend_identity(identity)?;
+            let identity = chart.collective_legend_identity(identity)?;
             let mut key = GuideSourceKey::collective(identity, chart, false)?
                 .with_line(line.backend_style(color), line_role);
-            if chart.description().markers_visible() {
+            if chart.markers_visible() {
                 key = key.with_point(
-                    chart.description().point_style(
+                    chart.point_style(
                         theme,
                         color,
                         if chart.kind() == PlotKind::Line {
@@ -377,7 +377,7 @@ impl PreparedLine {
             entries.push(key);
         }
         if chart.kind() != PlotKind::Line
-            && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
+            && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
             && !hue_paths
         {
             let levels = binding.values();
@@ -385,21 +385,20 @@ impl PreparedLine {
             for label in levels.filter(|label| binding.local_values().any(|value| value == *label))
             {
                 entries.push(
-                    GuideSourceKey::row_hue(chart.description().point_legend_identity(label)?)?
-                        .with_point(
-                            chart.description().point_style(
-                                theme,
-                                map.color(label)?,
-                                theme.marks.get_points().get_radii().get_trajectory(),
-                            ),
-                            PointRole::Primary,
+                    GuideSourceKey::row_hue(chart.point_legend_identity(label)?)?.with_point(
+                        chart.point_style(
+                            theme,
+                            map.color(label)?,
+                            theme.marks.get_points().get_radii().get_trajectory(),
                         ),
+                        PointRole::Primary,
+                    ),
                 );
             }
         }
         for layer in &self.layers {
             let index = layer.source_index;
-            let source = &chart.description().point_layers()[index];
+            let source = &chart.point_layers()[index];
             if let Some(label) = source.legend_content() {
                 crate::data::source::reserve_source(&mut entries, 1)?;
                 let style = source.point_style(
@@ -866,7 +865,7 @@ fn project(
     let hue_paths = chart.kind() == PlotKind::LinePath
         && chart.description().line_path_style_spec() == LinePathStyle::Hue;
     let order = prepared.group_order(
-        chart,
+        chart.description(),
         crate::orchestrator::registration::collective_pairs(context.registered),
         crate::orchestrator::registration::group_order_levels(context.registered),
     )?;
@@ -883,7 +882,7 @@ fn project(
 
     for &index in &order {
         let group = &prepared.groups[index];
-        let color = PreparedLine::group_color(chart, group, theme, &map, &accent)?;
+        let color = PreparedLine::group_color(chart.description(), group, theme, &map, &accent)?;
         let fill = fill_style(
             group.fill_alpha,
             theme

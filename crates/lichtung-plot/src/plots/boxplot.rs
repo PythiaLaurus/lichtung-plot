@@ -254,14 +254,14 @@ pub(crate) fn prepare(
 impl PreparedBoxplot {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::alpha::AlphaUnitKind;
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let fill = theme.marks.get_fills().get_bodies().get_box_body();
-        let overlay = chart.description().raw_overlay_spec();
+        let overlay = chart.raw_overlay_spec();
         for (group, stat) in self.sample.groups.iter().zip(&self.stats) {
             let unit = AlphaUnit::aggregate(chart, &group.label, group.group_label.as_deref())?;
             guide.fill(
@@ -287,7 +287,7 @@ impl PreparedBoxplot {
                 false,
             )?;
             if overlay == RawOverlay::Hidden {
-                let point = chart.description().point_style(
+                let point = chart.point_style(
                     theme,
                     (0, 0, 0),
                     theme.marks.get_points().get_radii().get_box_flier(),
@@ -301,7 +301,7 @@ impl PreparedBoxplot {
                     )?;
                 }
             } else {
-                let point = chart.description().distribution_point_style(
+                let point = chart.distribution_point_style(
                     theme.marks.get_points().get_raw_overlay(),
                     (0, 0, 0),
                 );
@@ -365,7 +365,7 @@ pub(crate) fn measure_marks(
     let colors = {
         let retained = categorical_distribution::retained(context.prepared_family())?;
         retained.resolved_colors(
-            chart,
+            chart.description(),
             &context
                 .registered
                 .expect("prepared Boxplot occurrence")

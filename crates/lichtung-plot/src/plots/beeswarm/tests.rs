@@ -285,7 +285,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             )
             .unwrap();
             let root_guide = registry.prepare_discrete_guides(
-                &source,
+                source.description(),
                 &theme,
                 &operation,
                 &crate::layout::ComponentAddress::root(),

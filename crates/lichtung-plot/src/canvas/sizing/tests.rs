@@ -16,7 +16,7 @@ fn prepare_height_inputs<'src>(
     let mut inputs = interiors[0].take().expect("prepared Canvas occurrence");
     let source = canvas.placements.plot(0).expect("configured Canvas plot");
     let guide = inputs.prepare_discrete_guides(
-        source,
+        source.description(),
         &themes.plot_request(0).expect("configured appearance"),
         &stage.operation(),
         &ComponentAddress::root(),

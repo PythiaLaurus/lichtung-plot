@@ -1092,7 +1092,7 @@ impl Canvas {
                 ));
                 &mut groups.last_mut().expect("new guide field").1
             };
-            for level in inputs.observed_color_levels(plot)? {
+            for level in inputs.observed_color_levels(plot.description())? {
                 if crate::data::source::source_position(levels, |existing| existing == &level)
                     .is_none()
                 {
@@ -1157,8 +1157,13 @@ impl Canvas {
                     Error::Render("Canvas guide contributor address overflow".into())
                 })?,
             )?;
-            let root_guide =
-                inputs.prepare_discrete_guides(source, theme, resources, &owner, false)?;
+            let root_guide = inputs.prepare_discrete_guides(
+                source.description(),
+                theme,
+                resources,
+                &owner,
+                false,
+            )?;
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 if let Some(descriptor) = &root_guide {
                     contributions.push(Arc::clone(descriptor));
@@ -1585,7 +1590,7 @@ impl Canvas {
                             })
                             .map(|(_, domain)| domain.as_ref());
                         inputs.validate_categorical_scale(
-                            plot,
+                            plot.description(),
                             themes.plot(index).expect("configured Canvas theme"),
                             global_hues,
                         )?;

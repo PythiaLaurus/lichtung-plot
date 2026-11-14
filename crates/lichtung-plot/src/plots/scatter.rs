@@ -114,11 +114,11 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedScatter {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
-        let style = chart.description().point_style(
+        let style = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_scatter(),
@@ -258,7 +258,7 @@ impl PreparedScatter {
 
     pub(crate) fn guide_entries_in_order(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
@@ -270,7 +270,7 @@ impl PreparedScatter {
 
     fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[usize],
@@ -290,15 +290,14 @@ impl PreparedScatter {
             };
             let color = map.color(label)?;
             entries.push(
-                GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?
-                    .with_point(
-                        chart.description().point_style(
-                            theme,
-                            color,
-                            theme.marks.get_points().get_radii().get_scatter(),
-                        ),
-                        PointRole::Primary,
+                GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_point(
+                    chart.point_style(
+                        theme,
+                        color,
+                        theme.marks.get_points().get_radii().get_scatter(),
                     ),
+                    PointRole::Primary,
+                ),
             );
         }
         Ok(entries)

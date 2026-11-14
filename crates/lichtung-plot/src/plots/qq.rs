@@ -92,12 +92,12 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedQq {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.description().point_style(
+        let point = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_qq(),

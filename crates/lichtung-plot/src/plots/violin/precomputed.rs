@@ -144,20 +144,16 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedRaincloud {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let input = chart
-            .description()
-            .raincloud_geometry_input()
-            .ok_or_else(|| {
-                Error::Render("supplied Raincloud alpha guide has no dimensions".into())
-            })?;
+        let input = chart.raincloud_geometry_input().ok_or_else(|| {
+            Error::Render("supplied Raincloud alpha guide has no dimensions".into())
+        })?;
         let fill = theme.marks.get_fills().get_bodies().get_violin_body();
         let point = chart
-            .description()
             .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
         for group in &self.groups {
             let category = (input.category_dimension.as_str(), group.category.as_str());
@@ -201,7 +197,7 @@ impl PreparedRaincloud {
 }
 
 pub(crate) fn guide_entries(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     binding: &crate::orchestrator::registration::CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
 
@@ -209,21 +205,19 @@ pub(crate) fn guide_entries(
 ) -> Result<Vec<GuideSourceKey>, Error> {
     crate::data::source::collect_source(binding.local_values().map(|hue| {
         let color = colors.color(hue)?;
-        Ok(
-            GuideSourceKey::hue_only(chart.description().point_legend_identity(hue)?)?
-                .with_point(
-                    chart.description().distribution_point_style(
-                        theme.marks.get_points().get_mandatory_strip(),
-                        color,
-                    ),
-                    PointRole::MandatoryStrip,
-                )
-                .with_fill(
-                    theme.marks.get_fills().get_bodies().get_violin_body(),
+        Ok(GuideSourceKey::hue_only(chart.point_legend_identity(hue)?)?
+            .with_point(
+                chart.distribution_point_style(
+                    theme.marks.get_points().get_mandatory_strip(),
                     color,
-                    FillRole::ViolinBody,
                 ),
-        )
+                PointRole::MandatoryStrip,
+            )
+            .with_fill(
+                theme.marks.get_fills().get_bodies().get_violin_body(),
+                color,
+                FillRole::ViolinBody,
+            ))
     }))
 }
 
@@ -344,7 +338,7 @@ pub(super) fn measure_marks(
     let data = context.data;
     let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
         .resolved_colors(
-            chart,
+            chart.description(),
             &context
                 .registered
                 .expect("prepared supplied Raincloud occurrence")

@@ -30,7 +30,7 @@ fn significance_case(count: usize) -> [Duration; 2] {
         crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme)).unwrap();
     let guide = registry
         .prepare_discrete_guides(
-            &plot,
+            plot.description(),
             &theme,
             &operation,
             &crate::layout::ComponentAddress::root(),

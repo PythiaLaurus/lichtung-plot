@@ -150,7 +150,7 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedInteraction {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -158,20 +158,19 @@ impl PreparedInteraction {
         for trace in &self.traces {
             let unit = AlphaUnit::series(chart, Some(&trace.identity))?;
             let point = chart
-                .description()
                 .point_style(
                     theme,
                     (0, 0, 0),
                     theme.marks.get_points().get_radii().get_interaction(),
                 )
                 .with_shape(trace.style.point_shape);
-            if chart.description().markers_visible() {
+            if chart.markers_visible() {
                 for cell in &trace.cells {
                     guide.point(
                         AlphaGlyphRole::Primary,
                         cell.alpha,
                         point.clone(),
-                        chart.description().interaction_styles_spec().is_some(),
+                        chart.interaction_styles_spec().is_some(),
                     )?;
                 }
             }
@@ -187,7 +186,7 @@ impl PreparedInteraction {
                     .backend_style((0, 0, 0)),
                 false,
             )?;
-            if chart.description().interaction_connectors_visible() && trace.cells.len() > 1 {
+            if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
                 let mut line = theme
                     .marks
                     .get_data_lines()
@@ -200,7 +199,7 @@ impl PreparedInteraction {
                     unit,
                     trace.line_alpha,
                     line,
-                    chart.description().interaction_styles_spec().is_some(),
+                    chart.interaction_styles_spec().is_some(),
                 )?;
             }
         }
@@ -254,7 +253,7 @@ impl PreparedInteraction {
 
     pub(crate) fn guide_entries(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
         binding: &crate::orchestrator::registration::CategoricalBinding,
@@ -265,7 +264,7 @@ impl PreparedInteraction {
 
     fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         colors: &CategoryColors,
@@ -273,9 +272,7 @@ impl PreparedInteraction {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, self.traces.len())?;
         for trace in &self.traces {
-            if trace.identity.hue.is_none()
-                && chart.description().interaction_styles_spec().is_none()
-            {
+            if trace.identity.hue.is_none() && chart.interaction_styles_spec().is_none() {
                 continue;
             }
             let key = trace
@@ -285,11 +282,8 @@ impl PreparedInteraction {
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
             let color = colors.color(key)?;
-            let identity = chart
-                .description()
-                .collective_legend_identity(&trace.identity)?;
+            let identity = chart.collective_legend_identity(&trace.identity)?;
             let point = chart
-                .description()
                 .point_style(
                     theme,
                     color,
@@ -302,12 +296,12 @@ impl PreparedInteraction {
                 .get_interaction_connector()
                 .backend_style(color);
             line.pattern = trace.style.line_pattern.stroke_pattern();
-            let mapped_styles = chart.description().interaction_styles_spec().is_some();
+            let mapped_styles = chart.interaction_styles_spec().is_some();
             let mut key = GuideSourceKey::collective(identity, chart, mapped_styles)?;
-            if chart.description().markers_visible() {
+            if chart.markers_visible() {
                 key = key.with_point(point, PointRole::Primary);
             }
-            if chart.description().interaction_connectors_visible() {
+            if chart.interaction_connectors_visible() {
                 key = key.with_line(line, LineRole::InteractionConnector);
             }
             if mapped_styles {

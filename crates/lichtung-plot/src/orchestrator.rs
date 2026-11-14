@@ -52,7 +52,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                     .unwrap();
                     let guide = registry
                         .prepare_discrete_guides(
-                            &source,
+                            source.description(),
                             &theme,
                             &operation,
                             &crate::layout::ComponentAddress::root(),

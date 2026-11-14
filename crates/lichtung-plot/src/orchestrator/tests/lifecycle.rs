@@ -784,7 +784,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         let request = crate::text::TextRequestContext::new(&appearance, &text);
         let guide = prepared
             .prepare_discrete_guides(
-                &plot,
+                plot.description(),
                 &request,
                 &resources,
                 &crate::layout::ComponentAddress::root(),
@@ -1097,7 +1097,7 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
         }
         let descriptor = inputs
             .prepare_discrete_guides(
-                plot,
+                plot.description(),
                 &theme,
                 &operation,
                 &crate::layout::ComponentAddress::root(),
@@ -1136,7 +1136,7 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
                 assert_eq!(descriptor.sections.len(), 1);
                 let color = descriptor.continuous().expect("actual native color body");
                 let source = crate::layout::interior::guide::continuous_source(
-                    plot,
+                    plot.description(),
                     &theme,
                     &inputs.panels[0],
                 )

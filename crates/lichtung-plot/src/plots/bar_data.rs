@@ -358,7 +358,7 @@ pub(crate) struct PreparedBars {
 impl PreparedBars {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         categories: &[String],
         series: &[String],
         theme: &crate::text::TextRequestContext<'_, '_>,
@@ -424,14 +424,14 @@ impl PreparedBars {
 }
 
 pub(crate) fn resolved_colors(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     axes: &crate::orchestrator::registration::PreparedAxesOwner,
     binding: &CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_, '_>,
 ) -> Result<(CategoryColors, AccentColors), Error> {
     let resources = data.source_resources();
-    let colors = if chart.description().colors_by_sign() {
+    let colors = if chart.colors_by_sign() {
         binding.resolve(std::iter::empty(), theme, resources)?
     } else if let Some(categories) = binding.axis_categories(axes) {
         binding.resolve(categories.iter().map(String::as_str), theme, resources)?
@@ -449,11 +449,7 @@ pub(crate) fn resolved_colors(
     };
     let accents = AccentColors::resolve(
         theme.marks.get_accents(),
-        if chart.description().colors_by_sign() {
-            2
-        } else {
-            0
-        },
+        if chart.colors_by_sign() { 2 } else { 0 },
     )?;
     Ok((colors, accents))
 }
@@ -1549,14 +1545,14 @@ fn sort_single_values(
 /// Legend entries for positioned series.
 pub(crate) fn guide_sources(
     prepared: &PreparedBars,
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     binding: &CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
 
     colors: &CategoryColors,
     accents: &AccentColors,
 ) -> Result<Vec<GuideSourceKey>, Error> {
-    if chart.description().colors_by_sign() {
+    if chart.colors_by_sign() {
         let mut present = [false; 2];
         for bar in &prepared.bars {
             present[usize::from(bar.end < bar.start)] = true;
@@ -1585,7 +1581,7 @@ pub(crate) fn guide_sources(
     crate::data::source::reserve_source(&mut entries, binding.local_len())?;
     for label in prepared.observed_hue_levels(binding.local_values()) {
         entries.push(
-            GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?.with_fill(
+            GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_fill(
                 theme.marks.get_fills().get_bodies().get_bar_body(),
                 colors.color(label)?,
                 FillRole::BarBody,

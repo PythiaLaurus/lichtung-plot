@@ -50,7 +50,7 @@ fn prepared(
     )
     .erase();
     PreparedGuide::prepare(
-        &plot,
+        plot.description(),
         &crate::orchestrator::registration::PlotScopePolicy::for_source(plot.description(), None),
         theme,
         &crate::layout::ComponentAddress::root(),

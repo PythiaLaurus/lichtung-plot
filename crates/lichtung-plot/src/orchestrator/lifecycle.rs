@@ -45,7 +45,7 @@ impl<'src> PreparedPlotInputs<'src> {
             &prepared_stage.operation(),
             Some(&theme),
         )?;
-        registry.validate_categorical_scale(source, &request, None)?;
+        registry.validate_categorical_scale(source.description(), &request, None)?;
         Self::complete(source, kind, theme, text, registry, caches, prepared_stage)
     }
 
@@ -78,7 +78,7 @@ impl<'src> PreparedPlotInputs<'src> {
                 .and_then(|guide| guide.descriptor.clone())
         } else {
             registry.prepare_discrete_guides(
-                source,
+                source.description(),
                 &request,
                 &prepared_stage.operation(),
                 &crate::layout::ComponentAddress::root()
@@ -184,7 +184,7 @@ pub(crate) fn with_prepared_plot_for_test<T>(
                 Some(&theme),
             )?;
             registry.validate_categorical_scale(
-                source,
+                source.description(),
                 &TextRequestContext::new(&theme, &text),
                 None,
             )?;
@@ -1438,7 +1438,7 @@ mod root_title_tests {
                         Some(&theme),
                     )?;
                     let guide = inputs.prepare_discrete_guides(
-                        &source,
+                        source.description(),
                         &theme,
                         &stage.operation(),
                         &crate::layout::ComponentAddress::root(),
@@ -1640,7 +1640,7 @@ mod retained_legend_tests {
                     None,
                 )?;
                 let guide = inputs.prepare_discrete_guides(
-                    &source,
+                    source.description(),
                     &theme,
                     &stage.operation(),
                     &crate::layout::ComponentAddress::root()

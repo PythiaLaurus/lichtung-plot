@@ -83,7 +83,8 @@ pub(crate) fn intrinsic_body_minimum(
     for row in &prepared.rows {
         for color in [endpoints.left_color(), endpoints.right_color()] {
             if let Some(ink) = crate::render::geometry::point_ink_bounds(
-                &row.alpha.point(endpoint_style(chart, theme, color)),
+                &row.alpha
+                    .point(endpoint_style(chart.description(), theme, color)),
             )? {
                 outward = outward.max(ink.top.max(-ink.bottom));
                 numeric = numeric.max(ink.right - ink.left);
@@ -127,13 +128,12 @@ pub(crate) fn intrinsic_body_minimum(
 impl DumbbellData {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let endpoints = chart
-            .description()
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide endpoint paints are missing".into()))?;
         for row in &self.rows {
@@ -171,11 +171,10 @@ impl DumbbellData {
     }
 
     pub(crate) fn guide_entries(
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let endpoints = chart
-            .description()
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide requires endpoint metadata".into()))?;
         let mut entries = Vec::new();
@@ -345,10 +344,16 @@ fn project(
             .pairs
             .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
         payload.points.push([
-            row.alpha
-                .point(endpoint_style(chart, theme, endpoints.left_color())),
-            row.alpha
-                .point(endpoint_style(chart, theme, endpoints.right_color())),
+            row.alpha.point(endpoint_style(
+                chart.description(),
+                theme,
+                endpoints.left_color(),
+            )),
+            row.alpha.point(endpoint_style(
+                chart.description(),
+                theme,
+                endpoints.right_color(),
+            )),
         ]);
         payload
             .connectors
@@ -488,11 +493,11 @@ pub(crate) fn prepare(
 }
 
 fn endpoint_style(
-    chart: &Plot,
+    chart: &crate::builder::PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
     color: crate::Color,
 ) -> crate::render::backend::PointStyle {
-    let mut point = chart.description().point_style(
+    let mut point = chart.point_style(
         theme,
         (color.red(), color.green(), color.blue()),
         theme.marks.get_points().get_radii().get_dumbbell(),

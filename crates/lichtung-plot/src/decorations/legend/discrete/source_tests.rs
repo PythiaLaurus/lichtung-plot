@@ -32,7 +32,7 @@ fn prepare(
     }
     let root = inputs
         .prepare_discrete_guides(
-            plot,
+            plot.description(),
             theme,
             &operation,
             &ComponentAddress::root()

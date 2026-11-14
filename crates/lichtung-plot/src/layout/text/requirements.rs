@@ -2532,7 +2532,7 @@ mod tests {
         let text_service = crate::text::TextService::default();
         let guide = inputs
             .prepare_discrete_guides(
-                &plot,
+                plot.description(),
                 &crate::text::TextRequestContext::new(&theme, &text_service),
                 &resources,
                 &ComponentAddress::root(),
@@ -2623,7 +2623,13 @@ mod tests {
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let guide = inputs
-            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .prepare_discrete_guides(
+                plot.description(),
+                &theme,
+                &resources,
+                &ComponentAddress::root(),
+                false,
+            )
             .unwrap();
         let mut inputs = PreparedInteriorInputs::from_registry(
             inputs,
@@ -2736,7 +2742,13 @@ mod tests {
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let guide = inputs
-            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .prepare_discrete_guides(
+                plot.description(),
+                &theme,
+                &resources,
+                &ComponentAddress::root(),
+                false,
+            )
             .unwrap();
         let inputs = PreparedInteriorInputs::from_registry(
             inputs,
@@ -2836,7 +2848,7 @@ mod tests {
                         Some(&crate::theme::Theme::publication()),
                     )?;
                     let guide = inputs.prepare_discrete_guides(
-                        &plot,
+                        plot.description(),
                         &theme,
                         &stage.operation(),
                         &ComponentAddress::root(),

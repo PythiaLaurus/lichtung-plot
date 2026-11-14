@@ -5,6 +5,7 @@ use super::{
     GuideSectionBody, GuideSectionIdentity, PreparedGuide, PreparedGuideEntry,
     PreparedGuideSection,
 };
+use crate::builder::PlotDescription;
 use crate::decorations::legend::identity::PrimaryTitleIdentity;
 use crate::decorations::legend::source::{
     GuideEncoding, GuideExplanation, LiteralDomain, Projection,
@@ -12,7 +13,7 @@ use crate::decorations::legend::source::{
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey, ResolvedGuideKey};
 use crate::layout::ComponentAddress;
 use crate::LegendComposition;
-use crate::{Error, Plot, Result};
+use crate::{Error, Result};
 use std::sync::Arc;
 
 struct Section {
@@ -106,7 +107,7 @@ impl PreparedGuide {
     /// Source keys are consumed once. Only section entries and actual source
     /// occurrence records survive preparation; no complete-pair adapter remains.
     pub(crate) fn prepare(
-        plot: &Plot,
+        plot: &PlotDescription,
         policy: &crate::orchestrator::registration::PlotScopePolicy,
         theme: &crate::text::TextRequestContext<'_, '_>,
         owner: &ComponentAddress,
@@ -117,7 +118,7 @@ impl PreparedGuide {
         let composition = policy.guide_composition;
         let labels = &policy.labels;
         if (keys.is_empty() && continuous.is_none() && alpha.is_empty())
-            || plot.description().legend_policy_spec() == crate::LegendPolicy::Hidden
+            || plot.legend_policy_spec() == crate::LegendPolicy::Hidden
             || policy.discrete_guide_use
                 == crate::decorations::legend::discrete::scoped::GuideUse::Hidden
         {

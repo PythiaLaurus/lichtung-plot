@@ -16,6 +16,7 @@ use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::strict_scott_bandwidth;
 use crate::theme::{AccentColors, CategoryColors};
+#[cfg(test)]
 use crate::Plot;
 
 const MIN_GRID_POINTS: usize = 128;
@@ -96,7 +97,7 @@ pub(crate) fn intrinsic_body_minimum(
 impl PreparedDensity {
     pub(crate) fn alpha_guide(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
@@ -201,7 +202,7 @@ impl PreparedDensity {
 
     pub(crate) fn guide_entries_in_order(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
@@ -213,7 +214,7 @@ impl PreparedDensity {
 
     fn guide_entries_with_colors(
         &self,
-        chart: &Plot,
+        chart: &crate::builder::PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[(usize, usize)],
@@ -230,9 +231,7 @@ impl PreparedDensity {
             let color = Self::curve_color(curve, colors, accent)?;
             entries.push(
                 GuideSourceKey::collective(
-                    chart
-                        .description()
-                        .collective_legend_identity(&curve.identity)?,
+                    chart.collective_legend_identity(&curve.identity)?,
                     chart,
                     false,
                 )?
