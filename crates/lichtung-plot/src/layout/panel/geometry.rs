@@ -1,7 +1,9 @@
 #[cfg(test)]
 use super::range_ticks::resolve_range;
 #[cfg(test)]
-use super::{Axis, AxisSide, AxisSpec, AxisTick, Layout, NumericTickPlan, Projection, TickSource};
+use super::{
+    AuthoredAxisSpec, Axis, AxisSide, AxisTick, Layout, NumericTickPlan, Projection, TickSource,
+};
 #[cfg(not(test))]
 use super::{Axis, AxisSide, AxisTick, Layout, NumericTickPlan, Projection, TickSource};
 #[cfg(test)]
@@ -51,8 +53,8 @@ impl Layout {
         canvas_height: u32,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
-        x_spec: &AxisSpec,
-        y_spec: &AxisSpec,
+        x_spec: &AuthoredAxisSpec,
+        y_spec: &AuthoredAxisSpec,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         // Hardcoded academic-style margins for now.
@@ -72,8 +74,8 @@ impl Layout {
         panel_box: PixelRect,
         x_label: Option<crate::Text>,
         y_label: Option<crate::Text>,
-        x_spec: &AxisSpec,
-        y_spec: &AxisSpec,
+        x_spec: &AuthoredAxisSpec,
+        y_spec: &AuthoredAxisSpec,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<Self, Error> {
         Self::new_with_ticks_and_axis_specs_in_panel_box(
@@ -104,8 +106,8 @@ impl Layout {
         y_label: Option<crate::Text>,
         x_ticks: Vec<AxisTick>,
         y_ticks: Vec<AxisTick>,
-        x_spec: &AxisSpec,
-        y_spec: &AxisSpec,
+        x_spec: &AuthoredAxisSpec,
+        y_spec: &AuthoredAxisSpec,
         theme: &crate::text::TextRequestContext<'_, '_>,
         scope: &crate::layout::fit::FitScope,
         binding: Option<crate::numeric::source::NumericBinding<'_>>,
@@ -198,7 +200,7 @@ impl Layout {
 }
 
 #[cfg(test)]
-impl AxisSpec {
+impl AuthoredAxisSpec {
     pub(crate) fn layout_ticks(
         &self,
         supplied: Vec<AxisTick>,
@@ -250,7 +252,11 @@ impl AxisSpec {
                     domain: crate::numeric::context::DomainInfo::axis(
                         range,
                         crate::AxisScale::Linear,
-                        self.provenance,
+                        if self.window.is_some() {
+                            super::RangeProvenance::Configured
+                        } else {
+                            super::RangeProvenance::Automatic
+                        },
                         Some(range),
                     ),
                     phase: crate::numeric::source::AxisNumericPhase::Actual { parallel_span },

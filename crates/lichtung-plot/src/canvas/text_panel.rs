@@ -40,7 +40,7 @@ impl TextPanel {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct TextPanelIntrinsics {
+pub(crate) struct TextPanelIntrinsics {
     title: (f64, f64),
     body: (f64, f64),
     pub(super) minimum: (f64, f64),

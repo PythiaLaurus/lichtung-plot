@@ -1,7 +1,7 @@
 //! Closed axis inputs, separate from selected ticks and pixel geometry.
 
 use crate::orchestrator::registration::AxisIntentRef;
-use crate::spec::{AxisDomain, AxisScale, PlotKind};
+use crate::spec::{AxisScale, PlotKind};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum RangeProvenance {
@@ -82,37 +82,6 @@ impl AxisSemanticInputs {
         self.category_labels.observe(round)?;
         round.observe_text_layout(self.text_layout.as_ref())?;
         self.generation.observe_feedback(round)
-    }
-}
-
-impl crate::Plot {
-    pub(crate) fn axis_semantic_inputs(&self, domains: [AxisDomain; 2]) -> [AxisSemanticInputs; 2] {
-        let policies = range_policies(self.kind());
-        std::array::from_fn(|index| {
-            let spec = if index == 0 {
-                self.description().x_axis_spec()
-            } else {
-                self.description().y_axis_spec()
-            };
-            let mut inputs = AxisSemanticInputs::new(
-                AxisIntentRef::Authored(spec),
-                spec.provenance,
-                if index == 0 && self.kind() == PlotKind::Forest {
-                    self.description().axis_scale_spec()
-                } else {
-                    AxisScale::Linear
-                },
-                if domains[index] == AxisDomain::Categorical {
-                    RangePolicy::CategorySlots
-                } else {
-                    policies[index]
-                },
-            );
-            inputs
-                .text_layout
-                .clone_from(&self.description().text_layouts().ticks[index]);
-            inputs
-        })
     }
 }
 
@@ -221,27 +190,48 @@ mod tests {
 
     #[test]
     fn automatic_display_and_planned_limits_preserve_semantics() {
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let semantic = |source: &crate::builder::PlotDescription,
+                        ranges: [(f64, f64); 2],
+                        provenance: [RangeProvenance; 2]| {
+            let operation = crate::font::canonical::OperationContext::new();
+            let (registry, _) =
+                crate::plots::shared_x::prepare_plot(source, &operation, &appearance).unwrap();
+            let panel = &registry.panels[0];
+            let axes = panel.axes.as_ref().unwrap();
+            std::array::from_fn::<_, 2, _>(|side| {
+                let domain = crate::orchestrator::assignment::AxisDomainAssignment {
+                    extent: crate::orchestrator::registration::DisplayExtent {
+                        lower: ranges[side].0,
+                        upper: ranges[side].1,
+                    },
+                    provenance: provenance[side],
+                };
+                crate::orchestrator::assignment::AssignedAxisRef {
+                    base: axes.axis(source, side),
+                    domain: &domain,
+                }
+                .semantic_inputs()
+            })
+        };
         let automatic = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 10.0]),
             crate::NumericValues::new("y", [1.0, 2.0]),
         );
-        let displayed = automatic
-            .clone()
-            .erase()
-            .with_planned_x_limits((-1.0, 11.0));
-        let configured = automatic.x_limits(-1.0, 11.0).erase();
-        assert_eq!(
-            displayed.description().x_axis_spec().window,
-            configured.description().x_axis_spec().window
+        let configured = automatic.clone().x_limits(-1.0, 11.0);
+        let displayed = semantic(
+            automatic.description(),
+            [(-1.0, 11.0), (1.0, 2.0)],
+            [RangeProvenance::Automatic; 2],
         );
-        assert_eq!(
-            displayed.axis_semantic_inputs([AxisDomain::Continuous; 2])[0].provenance,
-            RangeProvenance::Automatic
+        assert_eq!(displayed[0].provenance, RangeProvenance::Automatic);
+        assert!(automatic.description().x_axis_spec().window.is_none());
+        let configured_inputs = semantic(
+            configured.description(),
+            [(-1.0, 11.0), (1.0, 2.0)],
+            [RangeProvenance::Configured, RangeProvenance::Automatic],
         );
-        assert_eq!(
-            configured.axis_semantic_inputs([AxisDomain::Continuous; 2])[0].provenance,
-            RangeProvenance::Configured
-        );
+        assert_eq!(configured_inputs[0].provenance, RangeProvenance::Configured);
         let forest = crate::Plot::forest(
             crate::CategoryValues::new("term", ["a"]).unwrap(),
             crate::NumericValues::new("estimate", [1.0]),
@@ -251,18 +241,22 @@ mod tests {
             ),
             1.0,
         )
-        .scale(AxisScale::Log10)
-        .erase()
-        .with_resolved_facet_ranges(PlotKind::Forest, Some((-2.0, 2.0)), None);
-        let inputs = forest.axis_semantic_inputs([AxisDomain::Continuous, AxisDomain::Categorical]);
+        .scale(AxisScale::Log10);
+        let inputs = semantic(
+            forest.description(),
+            [(-2.0, 2.0), (0.0, 1.0)],
+            [RangeProvenance::Shared, RangeProvenance::Automatic],
+        );
         assert_eq!(inputs[0].provenance, RangeProvenance::Shared);
         assert_eq!(inputs[0].scale, AxisScale::Log10);
         assert_eq!(inputs[0].policy, RangePolicy::ContinuousNice);
         assert_eq!(inputs[1].policy, RangePolicy::CategorySlots);
-        let planned = forest.with_planned_x_limits((0.01, 100.0));
-        assert_eq!(
-            inputs,
-            planned.axis_semantic_inputs([AxisDomain::Continuous, AxisDomain::Categorical])
+        let planned = semantic(
+            forest.description(),
+            [(-4.0, 4.0), (0.0, 1.0)],
+            [RangeProvenance::Shared, RangeProvenance::Automatic],
         );
+        assert_eq!(inputs, planned);
+        assert!(forest.description().x_axis_spec().window.is_none());
     }
 }

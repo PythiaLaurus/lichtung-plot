@@ -494,6 +494,8 @@ impl<'v, 'env, 'a, 'b> TextPlanningBackend<'v, 'env, 'a, 'b> {
             |serializer| {
                 for call in &calls {
                     call.emit_svg(serializer)?;
+                    #[cfg(test)]
+                    serializer.overflow_count_after_text_for_test();
                 }
                 Ok(())
             },
@@ -538,26 +540,21 @@ impl<'v, 'env, 'a, 'b> TextPlanningBackend<'v, 'env, 'a, 'b> {
     }
 }
 
-pub(crate) fn capture_text_replay_plan(
-    width: u32,
-    height: u32,
-    _scope: &str,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+pub(crate) fn capture_calls(
+    size: crate::layout::RootSize,
+    verifier: &SealedTextVerifier<'_>,
     final_stage: &mut crate::layout::kernel::FinalStage<'_>,
-    capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
+    draw: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
 ) -> Result<TextReplayPlan, Error> {
     #[cfg(test)]
     let _timer = super::measurements::Timer::new(2);
-    if width == 0 || height == 0 {
-        return Err(Error::Render(
-            "prepared scene dimensions must be positive".into(),
-        ));
-    }
-    let verifier = SealedTextVerifier::new(theme.text.prepared_font_environment()?);
-    let mut backend = TextPlanningBackend::new(&verifier, final_stage, height);
+    let (width, height) = size
+        .dimensions()
+        .map_err(|_| Error::Render("prepared scene dimensions must be positive".into()))?;
+    let mut backend = TextPlanningBackend::new(verifier, final_stage, height);
     #[cfg(test)]
     super::measurements::producer();
-    capture(&mut backend)?;
+    draw(&mut backend)?;
     backend.into_plan(width, height)
 }
 
@@ -1224,25 +1221,18 @@ mod tests {
                 width: 100,
                 height: 100,
             },
-            |stage| {
-                Ok((
-                    crate::Theme::publication().resolve()?,
-                    prepare_capture_text(stage)?,
-                ))
-            },
+            prepare_capture_text,
             |_, assigned, _| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     (),
                 ))
             },
-            |(theme, text), assigned, (), final_stage| {
-                let (width, height) = assigned.dimensions()?;
-                capture_text_replay_plan(
-                    width,
-                    height,
-                    "test capture",
-                    &TextRequestContext::new(theme, text),
+            |text, assigned, (), final_stage| {
+                assigned.dimensions()?;
+                capture_calls(
+                    assigned,
+                    &SealedTextVerifier::new(text.prepared_font_environment()?),
                     final_stage,
                     capture,
                 )
@@ -1402,12 +1392,10 @@ mod tests {
                 ))
             },
             |text, assigned, (plans, labels), final_stage| {
-                let (width, height) = assigned.dimensions()?;
-                capture_text_replay_plan(
-                    width,
-                    height,
-                    "canonical text capture",
-                    &TextRequestContext::new(&theme, text),
+                assigned.dimensions()?;
+                capture_calls(
+                    assigned,
+                    &SealedTextVerifier::new(text.prepared_font_environment()?),
                     final_stage,
                     |backend| {
                         for (anchor, plan) in
@@ -1738,11 +1726,9 @@ mod tests {
                 let (width, height) = assigned.dimensions()?;
                 let environment = text.prepared_font_environment()?;
                 assert!(environment.prepared_pairs_are_sealed().unwrap());
-                let plan = capture_text_replay_plan(
-                    width,
-                    height,
-                    "reserved buffers capture",
-                    &TextRequestContext::new(&theme, text),
+                let plan = capture_calls(
+                    assigned,
+                    &SealedTextVerifier::new(environment),
                     stage,
                     |backend| storage_fixture(backend, &labels),
                 )?;
@@ -1871,11 +1857,9 @@ mod tests {
                 |text, _, (), stage| {
                     let request = TextRequestContext::new(&theme, text);
                     fonts = Some(crate::font::canonical::planning_counts());
-                    capture_text_replay_plan(
-                        100,
-                        100,
-                        "invalid raw font",
-                        &request,
+                    capture_calls(
+                        crate::layout::RootSize::new(100, 100),
+                        &SealedTextVerifier::new(text.prepared_font_environment()?),
                         stage,
                         |backend| {
                             if bracket {
@@ -1937,7 +1921,9 @@ mod tests {
             "canonical SVG gradients",
             "final Null scopes",
         ] {
+            let mut probes = None;
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
             let result = crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
@@ -1953,11 +1939,16 @@ mod tests {
                     ))
                 },
                 |text, _, labels, stage| {
-                    capture_text_replay_plan(
-                        100,
-                        100,
-                        "storage refusal",
-                        &TextRequestContext::new(&theme, text),
+                    let environment = text.prepared_font_environment()?;
+                    let core = environment.liveness_probe();
+                    let operation = environment.operation().liveness_probe();
+                    let analysis = labels.0.analysis_liveness_probe();
+                    let bracket = labels.1.plan.analysis_liveness_probe();
+                    assert!(core() && operation() && analysis() && bracket());
+                    probes = Some((core, operation, analysis, bracket));
+                    capture_calls(
+                        crate::layout::RootSize::new(100, 100),
+                        &SealedTextVerifier::new(environment),
                         stage,
                         |backend| storage_fixture(backend, &labels),
                     )
@@ -1967,10 +1958,150 @@ mod tests {
                 panic!("storage reservation must fail: {payload}");
             };
             assert!(error.to_string().contains(payload), "{error}");
+            let (core, operation, analysis, bracket) = probes.unwrap();
+            assert!(!core() && !operation() && !analysis() && !bracket());
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::svg_backend::REFUSE_STORAGE
                 .with(|refuse| assert_eq!(refuse.get(), None));
         }
+    }
+
+    #[test]
+    fn partial_null_replay_failure_keeps_svg_gated_after_operation_release() {
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let mut probes = None;
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            prepare_capture_text,
+            |text, assigned, _| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    storage_labels(&TextRequestContext::new(&theme, text)),
+                ))
+            },
+            |text, size, labels, stage| {
+                size.dimensions()?;
+                let environment = text.prepared_font_environment()?;
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let analysis = labels.0.analysis_liveness_probe();
+                let bracket = labels.1.plan.analysis_liveness_probe();
+                assert!(core() && operation() && analysis() && bracket());
+                let plan = capture_calls(
+                    size,
+                    &SealedTextVerifier::new(environment),
+                    stage,
+                    |backend| storage_fixture(backend, &labels),
+                )?;
+                assert!(core() && operation() && analysis() && bracket());
+                probes = Some((core, operation, analysis, bracket));
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        let (core, operation, analysis, bracket) = probes.unwrap();
+        assert!(!core() && !operation() && !analysis() && !bracket());
+        let plan = root.plan();
+        {
+            let mut storage = plan.storage.borrow_mut();
+            // One layer fits; its later nested clip reaches the original refusal.
+            storage.null.as_mut().unwrap().recorder.scopes = Vec::with_capacity(1);
+        }
+        NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        NULL_END_CALLS.with(|calls| calls.set(0));
+        crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
+        let fonts = crate::font::canonical::planning_counts();
+        let error = validate_text_replay_plan(100, 100, plan, "partial Null").unwrap_err();
+        assert!(
+            error.to_string().contains("Null exceeded reserved scopes"),
+            "{error}"
+        );
+        NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        NULL_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        let storage = plan.storage.borrow();
+        let recorder = &storage.null.as_ref().unwrap().recorder;
+        assert!(recorder.scopes.is_empty());
+        assert!(recorder.state == NullCanvasState::Closed);
+        drop(storage);
+        assert!(plan.take_svg_backend().is_err());
+        crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        assert_eq!(crate::font::canonical::planning_counts(), fonts);
+        assert!(!core() && !operation() && !analysis() && !bracket());
+    }
+
+    #[test]
+    fn glyph_identity_failure_remains_in_outlining_after_preserved_replay() {
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let mut probes = None;
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            prepare_capture_text,
+            |text, assigned, _| {
+                let mut labels = storage_labels(&TextRequestContext::new(&theme, text));
+                labels.0.edit_for_test().lines[0].runs[0].glyphs[0]
+                    .face
+                    .face_index += 1;
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    labels,
+                ))
+            },
+            |text, size, labels, stage| {
+                size.dimensions()?;
+                let environment = text.prepared_font_environment()?;
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let analysis = labels.0.analysis_liveness_probe();
+                let bracket = labels.1.plan.analysis_liveness_probe();
+                assert!(core() && operation() && analysis() && bracket());
+                let plan = capture_calls(
+                    size,
+                    &SealedTextVerifier::new(environment),
+                    stage,
+                    |backend| storage_fixture(backend, &labels),
+                )?;
+                probes = Some((core, operation, analysis, bracket));
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        let (core, operation, analysis, bracket) = probes.unwrap();
+        assert!(!core() && !operation() && !analysis() && !bracket());
+        let plan = root.plan();
+        let fonts = crate::font::canonical::planning_counts();
+        validate_text_replay_plan(100, 100, plan, "outline-only corruption Null").unwrap();
+        let mut svg = plan.take_svg_backend().unwrap();
+        plan.replay(100, 100, &mut svg, "preserved corruption")
+            .unwrap();
+        let scene = crate::scene::RenderedScene::new(100, 100, svg.into_output()).unwrap();
+        drop(root);
+        let preserved = scene.svg_bytes().to_vec();
+        assert!(std::str::from_utf8(&preserved).unwrap().contains("<text"));
+        let error = scene.svg_with_text_as_paths().unwrap_err().to_string();
+        assert!(
+            error.contains("planned glyph face does not match its immutable shaped run"),
+            "{error}"
+        );
+        let outlines =
+            crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len());
+        assert_eq!(
+            scene.svg_with_text_as_paths().unwrap_err().to_string(),
+            error
+        );
+        assert_eq!(scene.svg_bytes(), preserved);
+        assert_eq!(
+            crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len()),
+            outlines
+        );
+        assert_eq!(crate::font::canonical::planning_counts(), fonts);
+        assert!(!core() && !operation() && !analysis() && !bracket());
     }
 
     #[test]
@@ -2027,7 +2158,9 @@ mod tests {
     fn capture_append_refusal_precedes_frozen_text_materialization() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let mut pass = 0;
+        let mut probes = None;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 100,
@@ -2048,12 +2181,16 @@ mod tests {
                 ))
             },
             |text, _, measured, final_stage| {
+                let environment = text.prepared_font_environment()?;
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let analysis = measured.analysis_liveness_probe();
+                assert!(core() && operation() && analysis());
+                probes = Some((core, operation, analysis));
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-                capture_text_replay_plan(
-                    100,
-                    100,
-                    "append refusal test",
-                    &TextRequestContext::new(&theme, text),
+                capture_calls(
+                    crate::layout::RootSize::new(100, 100),
+                    &SealedTextVerifier::new(environment),
                     final_stage,
                     |backend| {
                         pass += 1;
@@ -2080,11 +2217,18 @@ mod tests {
             "{error}"
         );
         assert_eq!(pass, 1);
+        let (core, operation, analysis) = probes.unwrap();
+        assert!(!core() && !operation() && !analysis());
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "each existing payload refusal follows a real measured-text capture and verifies operation release"
+    )]
     fn retained_capture_payload_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
         for payload in [
@@ -2096,31 +2240,47 @@ mod tests {
             "prepared gradient stops",
         ] {
             let mut pass = 0;
+            let mut probes = None;
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
             let result = crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 100,
                     height: 100,
                 },
                 prepare_capture_text,
-                |_, assigned, _| {
+                |text, assigned, _| {
+                    let labels = storage_labels(&TextRequestContext::new(&theme, text));
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned.assigned_size()?,
-                        (),
+                        labels,
                     ))
                 },
-                |text, _, (), final_stage| {
-                    capture_text_replay_plan(
-                        100,
-                        100,
-                        "payload refusal",
-                        &TextRequestContext::new(&theme, text),
+                |text, _, labels, final_stage| {
+                    let environment = text.prepared_font_environment()?;
+                    let core = environment.liveness_probe();
+                    let operation = environment.operation().liveness_probe();
+                    let analysis = labels.0.analysis_liveness_probe();
+                    let bracket = labels.1.plan.analysis_liveness_probe();
+                    assert!(core() && operation() && analysis() && bracket());
+                    probes = Some((core, operation, analysis, bracket));
+                    capture_calls(
+                        crate::layout::RootSize::new(100, 100),
+                        &SealedTextVerifier::new(environment),
                         final_stage,
                         |backend| {
                             pass += 1;
                             // Leave one admitted command slot available, so refusal
                             // exercises the payload allocation rather than call growth.
-                            for _ in 0..3 {
+                            backend.draw_planned_text(
+                                PlannedTextPlacement::middle(
+                                    Point2D::new(50.0, 50.0),
+                                    TextAnchor::Middle,
+                                    0.0,
+                                ),
+                                &labels.0,
+                            )?;
+                            for _ in 0..2 {
                                 backend.draw_surface(
                                     PixelRect::new(0.0, 10.0, 0.0, 10.0),
                                     Color::rgb(0, 0, 0),
@@ -2177,7 +2337,10 @@ mod tests {
             };
             assert!(error.to_string().contains(payload), "{error}");
             assert_eq!(pass, 1);
+            let (core, operation, analysis, bracket) = probes.unwrap();
+            assert!(!core() && !operation() && !analysis() && !bracket());
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::coordinates::COORDINATE_CONVERSIONS
                 .with(|count| assert_eq!(count.get(), 0));
         }
@@ -2213,12 +2376,10 @@ mod tests {
                 ))
             },
             |text, assigned, labels, stage| {
-                let (width, height) = assigned.dimensions()?;
-                capture_text_replay_plan(
-                    width,
-                    height,
-                    "retained calls capture",
-                    &TextRequestContext::new(&theme, text),
+                assigned.dimensions()?;
+                capture_calls(
+                    assigned,
+                    &SealedTextVerifier::new(text.prepared_font_environment()?),
                     stage,
                     |backend| {
                         backend.draw_planned_text(placement, &labels[0])?;

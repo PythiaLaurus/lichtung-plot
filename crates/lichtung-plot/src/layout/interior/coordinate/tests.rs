@@ -39,32 +39,57 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
             &source,
             &theme,
             |_| Ok(()),
-            |plot, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |plot, inputs, _theme, _operation, round| {
+                let measurement = inputs.assignment_factory().assign(
+                    plot.sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let registered = &inputs.plots[0];
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &registered.scope.id)
+                    .unwrap();
                 for panel in [
                     PixelRect::new(80.25, 550.75, 70.5, 410.25),
                     PixelRect::new(30.0, 810.0, 50.0, 600.0),
                 ] {
                     for ranges in [[(-1.0, 3.0), (0.0, 4.0)], [(-2.0, 5.0), (-1.0, 6.0)]] {
-                        let plot = plot
-                            .clone()
-                            .with_planned_x_limits(ranges[0])
-                            .with_planned_y_limits(ranges[1]);
-                        measurements::start();
-                        let selected = plot
-                            .measure_selected_interior(
-                                crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                                PlotRenderContext::new(
-                                    inputs.plots[0].data(&operation).unwrap(),
+                        let mut entry = factory
+                            .assign(
+                                crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                                    measurement.measurement_size,
                                     panel,
-                                    theme,
-                                )
-                                .with_registration(
-                                    &inputs.plots[0],
-                                    inputs.intrinsic(&inputs.plots[0]),
+                                    round,
+                                    &registered.scope.address,
                                 ),
+                                round,
+                                None,
                             )
                             .unwrap();
+                        // This is the supplied-allocation projection contract,
+                        // not evidence of factory domain derivation.
+                        let crate::orchestrator::assignment::AxisDomainAssignments::Pair(pair) =
+                            &mut entry.domains
+                        else {
+                            unreachable!("coordinate pair")
+                        };
+                        for (domain, (lower, upper)) in pair.iter_mut().zip(ranges) {
+                            domain.extent =
+                                crate::orchestrator::registration::DisplayExtent { lower, upper };
+                        }
+                        measurements::start();
+                        let selected = crate::orchestrator::measure_plot(
+                            &factory,
+                            entry,
+                            crate::decorations::legend::discrete::scoped::GuideConsumption {
+                                use_kind:
+                                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                                ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                            },
+                            &crate::layout::fit::FitScope::root(),
+                        )
+                        .unwrap()
+                        .1;
                         let work = measurements::finish();
                         assert_eq!(
                             work.counters[Counter::StandardCoordinateMeasure as usize],
@@ -109,13 +134,12 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
             &source,
             &theme,
             |_| Ok(()),
-            |plot, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |plot, inputs, theme, operation, round| {
                 let registered = inputs.plots.first();
-                let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+                let intrinsic = inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap();
                 let axes = crate::orchestrator::root::coordinate_intrinsic(
                     intrinsic,
-                    &crate::orchestrator::root::intrinsic_inputs(registered, theme, &operation)
+                    &crate::orchestrator::root::intrinsic_inputs(registered, theme, operation)
                         .unwrap(),
                 )
                 .unwrap()
@@ -123,7 +147,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
                     crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
                 );
                 let minimum = plot
-                    .intrinsic_body_minimum(registered, intrinsic, &operation, theme)
+                    .intrinsic_body_minimum(registered, intrinsic, operation, theme, None)
                     .unwrap();
                 assert!(minimum.0 >= axes.0 && minimum.1 >= axes.1);
                 let scope = fit::FitScope::new(
@@ -134,18 +158,36 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
                 );
                 let before = Projection::test_projection_calls();
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
-                let error = plot
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                        PlotRenderContext::new(
-                            inputs.plots[0].data(&operation).unwrap(),
+                let measurement = inputs.assignment_factory().assign(
+                    plot.sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
+                    .unwrap();
+                let entry = factory
+                    .assign(
+                        crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                            measurement.measurement_size,
                             PixelRect::new(0.0, minimum.0 - 1.0 / 1024.0, 0.0, minimum.1),
-                            theme,
-                        )
-                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0]))
-                        .with_fit_scope(&scope),
+                            round,
+                            &inputs.plots[0].scope.address,
+                        ),
+                        round,
+                        None,
                     )
-                    .unwrap_err();
+                    .unwrap();
+                let error = crate::orchestrator::measure_plot(
+                    &factory,
+                    entry,
+                    crate::decorations::legend::discrete::scoped::GuideConsumption {
+                        use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                        ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                    },
+                    &scope,
+                )
+                .unwrap_err();
                 let PlanError::Fit(failure) = error else {
                     panic!("typed intrinsic fit")
                 };
@@ -196,16 +238,18 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         &source,
         &theme,
         |_| Ok(()),
-        |plot, inputs, theme, _operation| {
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
+        |plot, inputs, _theme, _operation, round| {
             let panel = PixelRect::new(30.0, 810.0, 50.0, 600.0);
-            let selected = plot
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
-                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+            let measurement = inputs.assignment_factory().assign(
+                plot.sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let selected =
+                crate::layout::interior::measure_for_test(&factory, panel, round).unwrap();
             assert_eq!(selected.x_domain, AxisDomain::Categorical);
             assert_eq!(selected.y_domain, AxisDomain::Continuous);
             assert_eq!(selected.layout.projection.x_range(), (0.0, 3.0));
@@ -292,19 +336,8 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 )]
 fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks() {
     for source in all_sources() {
-        let source = source.with_planned_x_limits((0.0, 2.0));
-        let source = if matches!(
-            InteriorRoute::classify(source.kind()),
-            InteriorRoute::StandardCoordinate(_)
-        ) {
-            source.with_planned_y_limits((0.0, 4.0))
-        } else {
-            source
-        };
         let fault_source = std::sync::OnceLock::new();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        let appearance = crate::Theme::publication().resolve().unwrap();
         crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 800,
@@ -312,75 +345,72 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             },
             |stage| {
                 let operation = stage.operation();
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
+                let (mut registry, composition) = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    &appearance,
+                )?;
+                // Supply the original fixture's numeric display domains without
+                // manufacturing authored limits or changing categorical slots.
+                let axes = registry.panels[0].axes.as_mut().unwrap();
+                if axes.categories(0).is_none() {
+                    axes.sources_mut()[0].base_seed =
+                        Some(crate::orchestrator::registration::DisplayExtent {
+                            lower: 0.0,
+                            upper: 2.0,
+                        });
+                }
+                if matches!(
+                    InteriorRoute::classify(source.kind()),
+                    InteriorRoute::StandardCoordinate(_)
+                ) {
+                    axes.sources_mut()[1].base_seed =
+                        Some(crate::orchestrator::registration::DisplayExtent {
+                            lower: 0.0,
+                            upper: 4.0,
+                        });
+                }
                 // Exact text now belongs to authored intent. Rebind this real
                 // occurrence at the original post-science injection point.
                 let fault = source.clone().with_test_axis_ticks(
                     0,
                     vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))],
                 );
-                let fault = if inputs.panels[0]
-                    .axes
-                    .as_ref()
-                    .unwrap()
-                    .coordinate()
-                    .unwrap()
-                    .categories(1)
-                    .is_none()
-                {
+                let fault = if axes.categories(1).is_none() {
                     fault.with_test_axis_ticks(1, vec![crate::layout::AxisTick::new(2.0, "")])
                 } else {
                     fault
                 };
                 let fault = fault_source.get_or_init(|| fault);
-                let registered = &mut inputs.panels[0];
+                let registered = &mut registry.panels[0];
                 registered.source = fault.description();
                 registered.row_source = crate::data::source::RowSourceContext::new(
                     registered.source,
                     &registered.scope,
                     &operation,
                 );
-                let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                crate::orchestrator::complete_prepared_plot_for_test(
                     fault.description(),
-                    &mut inputs.panels,
-                    &operation,
-                    false,
-                )?;
-                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                    inputs,
-                    crate::layout::interior::InteriorRoute::classify(fault.kind()),
-                    guide,
-                )?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    Some(&inputs),
-                    fault.description(),
-                    fault.kind(),
-                    &theme,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
+                    appearance.clone(),
+                    registry,
+                    composition,
+                    stage,
                 )
-                .map_err(|error| Error::Render(error.to_string()))?;
-                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(inputs)
             },
-            |inputs, assigned, _| {
-                let (width, height) = assigned.assigned_size()?.dimensions()?;
-                let plot = fault_source
-                    .get()
-                    .unwrap()
-                    .clone()
-                    .with_canvas_size(width, height);
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |root, assigned, round| {
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let registered = &root.plots[0];
+                let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+                let entry = factory.assign(
+                    crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        PixelRect::new(30.0, 610.0, 50.0, 440.0),
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
+                )?;
                 let scope = fit::FitScope::new(
                     &crate::layout::ComponentAddress::root()
                         .child(crate::layout::AddressRole::PlotBody, 0)
@@ -389,18 +419,16 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                 );
                 let projected = Projection::test_projection_calls();
                 measurements::start();
-                let error = plot
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                        PlotRenderContext::new(
-                            inputs.plots[0].data(&operation).unwrap(),
-                            PixelRect::new(30.0, 610.0, 50.0, 440.0),
-                            &theme,
-                        )
-                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0]))
-                        .with_fit_scope(&scope),
-                    )
-                    .unwrap_err();
+                let error = crate::orchestrator::measure_plot(
+                    &factory,
+                    entry,
+                    crate::decorations::legend::discrete::scoped::GuideConsumption {
+                        use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                        ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                    },
+                    &scope,
+                )
+                .unwrap_err();
                 let work = measurements::finish();
                 let PlanError::Fit(failure) = error else {
                     panic!("exact labels must return a typed fit miss")

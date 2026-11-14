@@ -11,6 +11,11 @@ use crate::{Error, PlotKind};
 #[cfg(test)]
 pub(crate) mod extraction;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FACET_CATEGORY_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Debug)]
 pub(crate) enum PreparedDistribution {
     Boxplot(crate::plots::boxplot::PreparedBoxplot),
@@ -70,6 +75,7 @@ impl PreparedDistribution {
         binding: &CategoricalBinding,
         theme: &crate::theme::ResolvedTheme,
         resources: &crate::font::canonical::OperationContext,
+        facet_categories: bool,
     ) -> Result<CategoryColors, Error> {
         if binding.local_len() != 0 {
             return binding.resolve(binding.values(), theme, resources);
@@ -77,9 +83,11 @@ impl PreparedDistribution {
         if matches!(
             binding.local,
             CategoricalDomainSource::DistributionFacetCategories
-        ) && chart.has_facets()
+        ) && facet_categories
             && !matches!(self, Self::Supplied(_))
         {
+            #[cfg(test)]
+            FACET_CATEGORY_SCANS.with(|scans| scans.set(scans.get() + 1));
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
             let column = chart.x_col().ok_or_else(|| {
@@ -124,7 +132,10 @@ impl PreparedDistribution {
         theme: &crate::theme::ResolvedTheme,
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, axes, binding, theme, operation)?;
+        // Guide construction used the without-facets base carrier. Its
+        // canonical source may still own authored facets, but that is not the
+        // color reader's original projection.
+        let colors = self.resolved_colors(chart, axes, binding, theme, operation, false)?;
         self.guide_entries_with_colors(chart, binding, theme, &colors)
     }
 
@@ -329,9 +340,10 @@ impl DistributionPayload {
 
     pub(crate) fn retain(
         mut self,
-        mut result: crate::spec::PlotRenderResult,
-        context: crate::spec::PlotRenderContext<'_, '_>,
-    ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
+        layout: &crate::layout::Layout,
+        context: &crate::spec::PlotMeasureContext<'_, '_>,
+    ) -> Result<crate::layout::interior::MeasuredCoordinateMarks, crate::layout::fit::PlanError>
+    {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         for mark in &self.marks {
@@ -365,17 +377,11 @@ impl DistributionPayload {
                     )
                     .into());
             }
-            if context
-                .registered
-                .expect("prepared occurrence")
-                .raw_windows()[1]
-                .is_none()
-            {
+            if context.registered.raw_windows()[1].is_none() {
                 let categories = categorical_distribution_count(
-                    context.prepared_family(),
+                    Some(context.family()?),
                     &context
                         .registered
-                        .expect("prepared distribution occurrence")
                         .axes
                         .categories(0)
                         .expect("prepared distribution categories")
@@ -385,23 +391,21 @@ impl DistributionPayload {
                     crate::layout::interior::automatic_absolute_ink_expansions(
                         [
                             (0.0, f64::from(categories)),
-                            retained(context.prepared_family())?.range(),
+                            retained(Some(context.family()?))?.range(),
                         ],
-                        &result.layout.projection,
+                        &layout.projection,
                         bounds,
                         [false, true],
                         context.fit_scope(),
                     )?;
             }
         }
-        result.x_domain = crate::spec::AxisDomain::Categorical;
-        result.marks = Some(crate::data::source::source_arc(
-            crate::layout::interior::SelectedMarkPlan {
+        Ok(crate::layout::interior::MeasuredCoordinateMarks::new(
+            crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
                 payload: crate::layout::interior::MarkPayload::Distribution(self),
                 geometry,
-            },
-        )?);
-        Ok(result)
+            })?,
+        ))
     }
 }
 

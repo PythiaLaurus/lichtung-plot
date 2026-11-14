@@ -800,6 +800,33 @@ impl FeedbackRound {
         })
     }
 
+    pub(crate) fn facet_feedback_domain(&self, kind: FeedbackKind) -> Option<(f64, f64)> {
+        self.state
+            .consumed
+            .iter()
+            .filter_map(|entry| {
+                if entry.kind != kind
+                    || entry.target.root.role != super::AddressRole::Root
+                    || entry.target.root.slot_index != 0
+                    || !matches!(
+                        entry.target.descendants(),
+                        [segment] if segment.role == super::AddressRole::FacetCell
+                    )
+                {
+                    return None;
+                }
+                let FeedbackValue::Domain(values) = entry.value else {
+                    return None;
+                };
+                Some((f64::from_bits(values[0]), f64::from_bits(values[1])))
+            })
+            .fold(None, |union, range| {
+                Some(union.map_or(range, |(lower, upper): (f64, f64)| {
+                    (lower.min(range.0), upper.max(range.1))
+                }))
+            })
+    }
+
     pub(crate) fn request_domain(
         &mut self,
         source: &ComponentAddress,
@@ -1197,6 +1224,78 @@ mod tests {
     use super::*;
 
     #[test]
+    fn facet_feedback_domain_reads_only_consumed_root_local_cells() {
+        use super::super::{AddressRole, AddressSegment};
+        let root = ComponentAddress::root();
+        let first = root.child(AddressRole::FacetCell, 0).unwrap();
+        let second = root.child(AddressRole::FacetCell, 2).unwrap();
+        let mut seed = FeedbackRound::new(None, 0).unwrap();
+        for (target, kind, range) in [
+            (first.clone(), FeedbackKind::AutomaticDomainX, (4.0, 6.0)),
+            (second.clone(), FeedbackKind::AutomaticDomainX, (1.0, 3.0)),
+            (first.clone(), FeedbackKind::AutomaticDomainY, (-2.0, 2.0)),
+            (second, FeedbackKind::AutomaticDomainY, (-1.0, 9.0)),
+            (root.clone(), FeedbackKind::AutomaticDomainX, (-20.0, 20.0)),
+            (
+                first.child(AddressRole::AxisBottom, 0).unwrap(),
+                FeedbackKind::AutomaticDomainX,
+                (-30.0, 30.0),
+            ),
+            (
+                root.child(AddressRole::FacetGrid, 0)
+                    .unwrap()
+                    .child(AddressRole::FacetCell, 1)
+                    .unwrap(),
+                FeedbackKind::AutomaticDomainX,
+                (-40.0, 40.0),
+            ),
+            (
+                root.child(AddressRole::CanvasCell, 0).unwrap(),
+                FeedbackKind::AutomaticDomainX,
+                (-50.0, 50.0),
+            ),
+            (
+                ComponentAddress {
+                    root: AddressSegment {
+                        role: AddressRole::Root,
+                        slot_index: 1,
+                    },
+                    descendants: first.descendants.clone(),
+                },
+                FeedbackKind::AutomaticDomainX,
+                (-60.0, 60.0),
+            ),
+        ] {
+            seed.request_domain(&root, &target, kind, range).unwrap();
+        }
+        seed.request_insets(&root, &first, FeedbackKind::OwnedInk, [1.0; 4])
+            .unwrap();
+        assert_eq!(
+            seed.facet_feedback_domain(FeedbackKind::AutomaticDomainX),
+            None
+        );
+        let state = seed.finish();
+        let mut round = FeedbackRound::new(Some(&state), 1).unwrap();
+        round
+            .request_domain(
+                &root,
+                &first,
+                FeedbackKind::AutomaticDomainX,
+                (-100.0, 100.0),
+            )
+            .unwrap();
+        assert_eq!(
+            round.facet_feedback_domain(FeedbackKind::AutomaticDomainX),
+            Some((1.0, 6.0))
+        );
+        assert_eq!(
+            round.facet_feedback_domain(FeedbackKind::AutomaticDomainY),
+            Some((-2.0, 9.0))
+        );
+        assert_eq!(round.facet_feedback_domain(FeedbackKind::OwnedInk), None);
+    }
+
+    #[test]
     fn feedback_reservation_preserves_the_observed_prefix_and_reference_owners() {
         let mut round = FeedbackRound::new(None, 0).unwrap();
         round.observe_count(1).unwrap();
@@ -1307,7 +1406,7 @@ mod tests {
             let theme = crate::Theme::publication().resolve().unwrap();
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let mut inputs =
+            let (mut inputs, _) =
                 crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme)
                     .unwrap();
             let discoveries =
@@ -1697,32 +1796,59 @@ mod tests {
 
     #[test]
     fn axis_semantics_and_standard_typography_are_feedback_identity() {
+        use crate::orchestrator::assignment::{AssignedAxisRef, AxisDomainAssignment};
+        use crate::orchestrator::registration::DisplayExtent;
+
         let source = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
         );
         let plot = source.clone().erase();
-        let domains = [crate::spec::AxisDomain::Continuous; 2];
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let standard = crate::layout::CoordinateLayoutInputs::new(&theme).unwrap();
-        let state = |plot: &crate::Plot, standard: &crate::layout::CoordinateLayoutInputs| {
+        let operation = crate::font::canonical::OperationContext::new();
+        let state = |plot: &crate::Plot,
+                     x_domain: &AxisDomainAssignment,
+                     standard: &crate::layout::CoordinateLayoutInputs| {
+            let (registry, _) =
+                crate::plots::shared_x::prepare_plot(plot.description(), &operation, theme.theme)
+                    .unwrap();
+            let registered = &registry.panels[0];
+            let axes = registered.axes.as_ref().unwrap();
+            let y_axis = axes.axis(registered.source, 1);
+            let y_domain = AxisDomainAssignment {
+                extent: y_axis.extent().unwrap(),
+                provenance: y_axis.provenance(),
+            };
             let mut round = FeedbackRound::new(None, 0).unwrap();
-            for input in plot.axis_semantic_inputs(domains) {
-                input.observe_feedback(&mut round).unwrap();
+            for (side, domain) in [x_domain, &y_domain].into_iter().enumerate() {
+                AssignedAxisRef {
+                    base: axes.axis(registered.source, side),
+                    domain,
+                }
+                .semantic_inputs()
+                .observe_feedback(&mut round)
+                .unwrap();
             }
             standard.observe_feedback(&mut round).unwrap();
             round.finish()
         };
-        let automatic = state(&plot, &standard);
-        let shared = plot.clone().with_resolved_facet_ranges(
-            crate::spec::PlotKind::Scatter,
-            Some((0.0, 1.0)),
-            None,
-        );
-        assert_ne!(automatic, state(&shared, &standard));
-        let mut generation_states = vec![state(&plot, &standard)];
+        let automatic_domain = AxisDomainAssignment {
+            extent: DisplayExtent {
+                lower: 0.0,
+                upper: 1.0,
+            },
+            provenance: crate::layout::RangeProvenance::Automatic,
+        };
+        let shared_domain = AxisDomainAssignment {
+            extent: automatic_domain.extent,
+            provenance: crate::layout::RangeProvenance::Shared,
+        };
+        let automatic = state(&plot, &automatic_domain, &standard);
+        assert_ne!(automatic, state(&plot, &shared_domain, &standard));
+        let mut generation_states = vec![state(&plot, &automatic_domain, &standard)];
         for side in 0..2 {
             for generation in [
                 crate::TickGeneration::additive(1.0).unwrap(),
@@ -1738,16 +1864,23 @@ mod tests {
                     source.clone().y_tick_generation(generation)
                 }
                 .erase();
-                let selected = state(&changed, &standard);
+                let selected = state(&changed, &automatic_domain, &standard);
                 assert!(generation_states.iter().all(|other| *other != selected));
-                assert_eq!(selected, state(&changed.clone(), &standard));
+                assert_eq!(
+                    selected,
+                    state(&changed.clone(), &automatic_domain, &standard)
+                );
                 generation_states.push(selected);
             }
         }
-        assert_eq!(
-            automatic,
-            state(&plot.with_planned_x_limits((0.0, 1.0)), &standard)
-        );
+        let planned_domain = AxisDomainAssignment {
+            extent: DisplayExtent {
+                lower: -1.0,
+                upper: 2.0,
+            },
+            provenance: crate::layout::RangeProvenance::Automatic,
+        };
+        assert_eq!(automatic, state(&plot, &planned_domain, &standard));
         let mut changed_theme = theme.theme.clone();
         changed_theme
             .typography
@@ -1755,7 +1888,10 @@ mod tests {
             .tick_label
             .line_height_multiplier += 0.25;
         let changed = crate::layout::CoordinateLayoutInputs::new(&changed_theme).unwrap();
-        assert_ne!(state(&shared, &standard), state(&shared, &changed));
+        assert_ne!(
+            state(&plot, &shared_domain, &standard),
+            state(&plot, &shared_domain, &changed)
+        );
     }
 
     #[test]
@@ -1797,6 +1933,24 @@ mod tests {
             .to_string()
             .contains("planning limit"));
         assert_eq!(state, replay.finish());
+
+        let mut partial = FeedbackRound::new(Some(&state), 2).unwrap();
+        partial.claim_guide_trial(&owner, 2, 7).unwrap();
+        let trial = partial.begin_trial().unwrap();
+        assert!(partial
+            .replay_child(&retained)
+            .unwrap_err()
+            .to_string()
+            .contains("planning limit"));
+        assert_eq!(partial.guide_events.len(), 2);
+        assert_eq!(partial.attempt_ordinal(&owner), 0);
+        assert!(partial.state.observations.is_empty());
+        assert!(partial.state.requests.is_empty());
+        partial
+            .record_failure(FitScope::root().failure(FitKind::Text, "rejected replay"))
+            .unwrap();
+        assert!(matches!(partial.finish_trial(trial), TrialOutcome::Miss(_)));
+        assert!(partial.claim_guide_trial(&owner, 2, 2).is_err());
     }
 
     #[test]

@@ -1,8 +1,7 @@
 //! Canonical payload/footprint owners, with a derived slot-to-anchor lookup.
 
-use std::sync::Arc;
-
-use crate::{Error, Plot, TextPanel};
+use crate::builder::PlotDescription;
+use crate::{Error, TextPanel};
 
 #[cfg(test)]
 mod tests;
@@ -27,7 +26,7 @@ impl Footprint {
 
 #[derive(Clone)]
 pub(super) enum Payload {
-    Plot(Arc<Plot>),
+    Plot(PlotDescription),
     Text(TextPanel),
 }
 
@@ -68,7 +67,7 @@ impl Placements {
     pub fn shape(&self) -> (usize, usize) {
         (self.rows, self.columns)
     }
-    pub fn plot(&self, index: usize) -> Option<&Plot> {
+    pub fn plot(&self, index: usize) -> Option<&PlotDescription> {
         match &self.owners.get(index)?.as_ref()?.payload {
             Payload::Plot(plot) => Some(plot),
             Payload::Text(_) => None,
@@ -80,7 +79,7 @@ impl Placements {
             Payload::Plot(_) => None,
         }
     }
-    pub fn plots(&self) -> impl ExactSizeIterator<Item = Option<&Plot>> {
+    pub fn plots(&self) -> impl ExactSizeIterator<Item = Option<&PlotDescription>> {
         (0..self.len()).map(|index| self.plot(index))
     }
     pub fn texts(&self) -> impl ExactSizeIterator<Item = Option<&TextPanel>> {

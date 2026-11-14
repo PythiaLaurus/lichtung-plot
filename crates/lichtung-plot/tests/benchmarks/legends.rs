@@ -1,6 +1,6 @@
 use super::{measure_case, measure_pair, CaseMeasurement};
 use crate::orchestrator::measurements::{Counter, GuideOutcome};
-use crate::{CategoryValues, Error, LegendPolicy, LegendPosition, NumericValues, Plot};
+use crate::{CategoryValues, LegendPolicy, LegendPosition, NumericValues, Plot};
 
 fn scatter(entries: u32, long: bool) -> Plot<crate::kind::Scatter> {
     let count = entries * 2;
@@ -396,14 +396,16 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     reason = "one controlled root lifecycle checks probe identity and body feedback replay together"
 )]
 fn shared_legend_child_cache_replay_contract() {
+    use crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES;
     use crate::decorations::plan::children::{ChildPlans, MeasurementPhase};
     use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout, PixelRect};
+    use crate::orchestrator::assignment::PlotAllocationInputs;
     use crate::orchestrator::measurements;
     use std::sync::Arc;
 
     for facet in [false, true] {
         let plot = scatter(3, false).size(1200, 720).erase();
-        let mut children = if facet {
+        let children = if facet {
             ChildPlans::facets()
         } else {
             ChildPlans::canvas()
@@ -428,81 +430,60 @@ fn shared_legend_child_cache_replay_contract() {
                 height: 720,
             },
             |stage| {
-                let mut inputs = crate::plots::shared_x::prepare_plot(
+                let (mut registry, composition) = crate::plots::shared_x::prepare_plot(
                     plot.description(),
                     &stage.operation(),
                     &theme,
                 )?;
-                let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                // The old caller supplied this child owner to the planner.
+                // Bind it before completion now that the registration owns it.
+                registry.panels[0].scope.address = owner.clone();
+                let mut root = crate::orchestrator::complete_prepared_plot_for_test(
                     plot.description(),
-                    &mut inputs.panels,
-                    &stage.operation(),
-                    false,
+                    theme.theme.clone(),
+                    registry,
+                    composition,
+                    stage,
                 )?;
-                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                    inputs,
-                    crate::layout::interior::InteriorRoute::classify(plot.kind()),
-                    guide,
-                )?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    Some(&inputs),
-                    plot.description(),
-                    plot.kind(),
-                    &theme,
-                    &ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
-                )
-                .map_err(|error| Error::Render(error.to_string()))?;
-                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(inputs)
+                root.caches.get_mut().children = children;
+                Ok(root)
             },
-            |inputs, assigned, round| {
-                let plot = plot.clone();
+            |root, assigned, round| {
                 let panel = PixelRect::new(100.0, 1100.0, 100.0, 620.0);
-                let registered = &inputs.plots[0];
-                let operation = text.prepared_font_environment()?.operation();
-                let context = crate::spec::PlotRenderContext::new(
-                    registered.data(&operation)?,
-                    panel,
-                    &theme,
-                )
-                .with_registration(registered, inputs.intrinsic(registered));
-                let first = children.measure(
-                    &plot,
-                    context,
-                    &owner,
-                    MeasurementPhase::Legend,
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory =
+                    root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
+                let probe = factory.assign(
+                    PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        panel,
+                        round,
+                        &owner,
+                    ),
                     round,
-                    || {
-                        plot.preflight_measurement(
-                            inputs.plots.first(),
-                            Some(inputs.intrinsic(&inputs.plots[0])),
-                            None,
-                            plot.kind(),
-                            panel,
-                            &theme,
-                            &crate::layout::fit::ROOT_SCOPE,
+                    Some(MeasurementPhase::Legend),
+                )?;
+                let context =
+                    factory.context(&probe, SUPPRESSED_GUIDES, &crate::layout::fit::ROOT_SCOPE)?;
+                let mut caches = root.caches.borrow_mut();
+                let children = &mut caches.children;
+                let first =
+                    children.measure(&context, &owner, MeasurementPhase::Legend, round, || {
+                        crate::layout::fit::outcome(
+                            crate::orchestrator::measure_probe(
+                                &factory,
+                                probe.clone(),
+                                SUPPRESSED_GUIDES,
+                                &crate::layout::fit::ROOT_SCOPE,
+                            )
+                            .map(|(_, result)| result),
                         )
-                    },
-                )?;
+                    })?;
                 let scatter_stages = crate::plots::scatter::STAGES.with(std::cell::Cell::get);
-                let second = children.measure(
-                    &plot,
-                    context,
-                    &owner,
-                    MeasurementPhase::Legend,
-                    round,
-                    || panic!("identical shared legend probe must hit the actual cache"),
-                )?;
+                let second =
+                    children.measure(&context, &owner, MeasurementPhase::Legend, round, || {
+                        panic!("identical shared legend probe must hit the actual cache")
+                    })?;
                 let (
                     crate::layout::fit::FitOutcome::Measured(first),
                     crate::layout::fit::FitOutcome::Measured(second),
@@ -523,20 +504,32 @@ fn shared_legend_child_cache_replay_contract() {
                     first.annotations.as_ref().unwrap(),
                     second.annotations.as_ref().unwrap()
                 ));
-                let first = children.plan(
-                    &plot,
-                    crate::decorations::plan::LegendRole::Suppressed,
-                    context,
+                let entry = factory.assign(
+                    PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        panel,
+                        round,
+                        &owner,
+                    ),
+                    round,
                     None,
+                )?;
+                let first = children.plan(
+                    &factory,
+                    entry.clone(),
+                    crate::decorations::plan::LegendRole::Suppressed,
+                    SUPPRESSED_GUIDES,
+                    &crate::layout::fit::ROOT_SCOPE,
                     round,
                     &owner,
                 )?;
                 if round.child_stable(std::slice::from_ref(&owner)) {
                     let second = children.plan(
-                        &plot,
+                        &factory,
+                        entry,
                         crate::decorations::plan::LegendRole::Suppressed,
-                        context,
-                        None,
+                        SUPPRESSED_GUIDES,
+                        &crate::layout::fit::ROOT_SCOPE,
                         round,
                         &owner,
                     )?;
@@ -853,19 +846,18 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, operation| {
-                inputs
-                    .plots
+            |_source, root, theme, operation, _round| {
+                root.plots
                     .iter()
                     .map(|registered| {
-                        chart
-                            .intrinsic_body_minimum(
-                                Some(registered),
-                                inputs.intrinsic(registered),
-                                operation,
-                                theme,
-                            )
-                            .unwrap()
+                        crate::layout::interior::intrinsic_body_minimum(
+                            registered,
+                            crate::builder::RootFrameDomainInput::Prepared,
+                            root.plot_intrinsic(&registered.scope.id).unwrap(),
+                            operation,
+                            theme,
+                        )
+                        .unwrap()
                     })
                     .collect::<Vec<_>>()
             },
@@ -924,16 +916,15 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
     reason = "compare consumed and requested gutters through the complete real prepare/guide/feedback operation"
 )]
 fn native_measured_gutters_are_consumed_before_the_final_frame() {
+    use crate::decorations::legend::discrete::scoped::GuideConsumption;
     use crate::layout::fit::FitOutcome;
-    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
     use crate::layout::kernel::FeedbackKind;
     use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout};
+    use crate::orchestrator::assignment::PlotAllocationInputs;
     use crate::orchestrator::measurements;
 
     let plot = outside("historical_reflow_640x400", LegendPosition::Auto).erase();
-    let theme = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&theme, &text);
+    let appearance = crate::Theme::publication().resolve().unwrap();
     let address = ComponentAddress::root()
         .child(AddressRole::PlotBody, 0)
         .unwrap();
@@ -947,61 +938,61 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             height: 400,
         },
         |stage| {
-            let mut inputs = crate::plots::shared_x::prepare_plot(
+            let (registry, composition) = crate::plots::shared_x::prepare_plot(
                 plot.description(),
                 &stage.operation(),
-                &theme,
+                &appearance,
             )?;
-            let guide = crate::layout::interior::guide::prepare_discrete_guides(
+            crate::orchestrator::complete_prepared_plot_for_test(
                 plot.description(),
-                &mut inputs.panels,
-                &stage.operation(),
-                false,
-            )?;
-            let inputs = PreparedInteriorInputs::from_registry(
-                inputs,
-                InteriorRoute::classify(plot.kind()),
-                guide,
-            )?;
-            let requirements = crate::layout::foundational_plot_requirements(
-                Some(&inputs),
-                plot.description(),
-                plot.kind(),
-                &theme,
-                &ComponentAddress::root(),
-                true,
-                true,
-                true,
-                Some(stage),
-            )?;
-            let mut presence = stage.reserve_scalar_presence_map()?;
-            let mut census = crate::layout::PreparedTextCensus::materialize(
-                requirements,
-                Some(stage),
-                Some(&mut presence),
+                appearance.clone(),
+                registry,
+                composition,
+                stage,
             )
-            .map_err(|error| Error::Render(error.to_string()))?;
-            text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-            Ok((inputs, stage.operation()))
         },
-        |(inputs, operation), assigned, round| {
-            let plot = plot.clone();
-            let canvas = plot.measured_canvas_layout(
-                inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
-                operation,
+        |root, assigned, round| {
+            let registered = &root.plots[0];
+            let intrinsic = root.plot_intrinsic(&registered.scope.id)?;
+            let theme = root.request();
+            let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+            let canvas = crate::builder::measure_root_frame(
+                registered,
+                measurement.measurement_size,
+                crate::builder::RootFrameDomainInput::Prepared,
                 &theme,
-            )?;
-            let FitOutcome::Measured(plan) = crate::decorations::plan::plan_panel(
-                &plot,
-                inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
-                plot.kind(),
-                canvas.panel_box,
-                crate::decorations::plan::LegendRole::Panel,
-                &theme,
+                intrinsic,
+                &root.operation,
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+            .map_err(crate::layout::fit::PlanError::into_error)?;
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let entry = factory.assign(
+                PlotAllocationInputs::for_test(
+                    measurement.measurement_size,
+                    canvas.panel_box,
+                    round,
+                    &address,
+                ),
                 round,
-                &address,
+                None,
+            )?;
+            let guide = registered.local_guide_slot()?;
+            let guides = GuideConsumption {
+                use_kind: crate::orchestrator::registration::discrete_guide_use(
+                    registered.source,
+                    Some(registered),
+                ),
+                local_guide: guide.as_ref(),
+                dependencies: &[],
+            };
+            let FitOutcome::Measured(plan) = crate::decorations::plan::plan_plot(
+                &factory,
+                entry,
+                crate::decorations::plan::LegendRole::Panel,
+                guides,
+                &crate::layout::fit::ROOT_SCOPE,
+                round,
             )?
             else {
                 panic!("preferred guide must fit the native frame")

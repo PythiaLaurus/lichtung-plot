@@ -131,6 +131,7 @@ impl<'src, 'op> PlotData<'src, 'op> {
         self.operation
     }
 
+    #[cfg(test)]
     pub(crate) const fn plot_id(self) -> &'op crate::orchestrator::registration::PlotOccurrenceId {
         self.row_source.owner()
     }

@@ -114,27 +114,47 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         &source,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let chart = chart.clone();
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
+        |chart, inputs, theme, _operation, round| {
             assert_eq!(
-                intrinsic_body_minimum(&chart, inputs.plots.first(), theme)
+                intrinsic_body_minimum(chart, inputs.plots.first(), theme)
                     .unwrap()
                     .1
                     .to_bits(),
                 100.0_f64.to_bits()
             );
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let registered = &inputs.plots[0];
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
+                .unwrap();
+            let entry = factory
+                .assign(
+                    crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
                         crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                        theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
                 )
                 .unwrap();
+            let selected = crate::orchestrator::measure_plot(
+                &factory,
+                entry,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                },
+                &crate::layout::fit::FitScope::root(),
+            )
+            .unwrap()
+            .1;
             let crate::layout::interior::MarkPayload::Distribution(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {

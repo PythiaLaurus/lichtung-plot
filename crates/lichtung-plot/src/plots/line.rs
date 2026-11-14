@@ -4,15 +4,19 @@ use crate::alpha::{
     marks::{fill_style, line_style, point_ink, push_point, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
+use crate::builder::PlotDescription;
 use crate::data::{category::CategoryKey, CollectivePair, PlotData};
 use crate::decorations::legend::source::{FillRole, LayerLabelContext, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
 };
-use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
+use crate::spec::{LinePathStyle, PlotMeasureContext};
 use crate::theme::{AccentColors, CategoryColors};
-use crate::{Error, Plot, PlotKind};
+#[cfg(test)]
+use crate::Plot;
+use crate::{Error, PlotKind};
 
 #[cfg(test)]
 mod tests;
@@ -58,7 +62,7 @@ pub(crate) struct LinePayload {
 
 /// Resolve one prepared path's painted hard span before parent allocation.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -93,15 +97,14 @@ pub(crate) fn intrinsic_body_minimum(
             path_style.clone(),
         ))?);
     }
-    let points_visible =
-        chart.kind() == PlotKind::Trajectory || chart.description().markers_visible();
+    let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
     let mark = if points_visible {
         let radius = if chart.kind() == PlotKind::Line {
             theme.marks.get_points().get_radii().get_path()
         } else {
             theme.marks.get_points().get_radii().get_trajectory()
         };
-        let point_style = chart.description().point_style(theme, (0, 0, 0), radius);
+        let point_style = chart.point_style(theme, (0, 0, 0), radius);
         point_ink(
             &point_style,
             prepared.groups.iter().flat_map(|group| {
@@ -116,7 +119,7 @@ pub(crate) fn intrinsic_body_minimum(
         (0.0, 0.0)
     };
     let mut ribbon = (0.0_f64, 0.0_f64);
-    if chart.kind() == PlotKind::Line && chart.description().line_band_configured() {
+    if chart.kind() == PlotKind::Line && chart.line_band_configured() {
         for group in &prepared.groups {
             if !group.points.iter().all(|point| point.interval.is_some()) {
                 continue;
@@ -806,34 +809,27 @@ fn categorical_index(index: usize) -> Result<f64, Error> {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Line { marks, .. } => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "line measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
-    let theme = context.theme;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Line { marks, .. } => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render("line measurement requires root-prepared semantics for its component".into())
+    })?;
+    let theme = request;
     theme.text.prepared_font_environment()?;
     project(
         chart,
         prepared,
-        context
-            .registered
-            .expect("prepared line occurrence")
-            .axes
-            .categories(0)
-            .is_some(),
+        context.registered.axes.categories(0).is_some(),
         layout,
         context,
+        request,
     )
 }
 
@@ -842,14 +838,15 @@ pub(crate) fn measure_marks(
     reason = "selected projection retains series, ribbon, marker and label order without a backend"
 )]
 fn project(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &PreparedLine,
     categorical_x: bool,
-    layout: crate::layout::Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let data = context.data;
+    layout: &crate::layout::Layout,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let theme = request;
+    let data = context.data()?;
     let scope = context.fit_scope();
     let mut payload = LinePayload {
         clip: layout.projection.panel_box(),
@@ -861,17 +858,16 @@ fn project(
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
     };
-    let hue_paths = chart.kind() == PlotKind::LinePath
-        && chart.description().line_path_style_spec() == LinePathStyle::Hue;
+    let hue_paths =
+        chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
     let order = prepared.group_order(
-        chart.description(),
-        crate::orchestrator::registration::collective_pairs(context.registered),
-        crate::orchestrator::registration::group_order_levels(context.registered),
+        chart,
+        crate::orchestrator::registration::collective_pairs(Some(context.registered)),
+        crate::orchestrator::registration::group_order_levels(Some(context.registered)),
     )?;
     let (map, accent) = prepared.resolved_colors(
         context
             .registered
-            .expect("prepared Line occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
@@ -881,7 +877,7 @@ fn project(
 
     for &index in &order {
         let group = &prepared.groups[index];
-        let color = PreparedLine::group_color(chart.description(), group, theme, &map, &accent)?;
+        let color = PreparedLine::group_color(chart, group, theme, &map, &accent)?;
         let fill = fill_style(
             group.fill_alpha,
             theme
@@ -986,7 +982,7 @@ fn project(
         }
         .backend_style(color);
         let line = line_style(group.line_alpha, line);
-        let point_style = chart.description().point_style(
+        let point_style = chart.point_style(
             theme,
             color,
             if chart.kind() == PlotKind::Line {
@@ -995,7 +991,7 @@ fn project(
                 theme.marks.get_points().get_radii().get_trajectory()
             },
         );
-        if chart.kind() == PlotKind::Line && chart.description().markers_visible() {
+        if chart.kind() == PlotKind::Line && chart.markers_visible() {
             crate::data::source::reserve_source(&mut payload.marks, 1)?;
             let mut markers = Vec::new();
             for (point, source) in points.iter().zip(&group.points) {
@@ -1019,7 +1015,7 @@ fn project(
     }
     // Trajectories and paths paint every connector before any point.
     if chart.kind() != PlotKind::Line
-        && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
+        && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
     {
         for &index in &order {
             let group = &prepared.groups[index];
@@ -1041,7 +1037,7 @@ fn project(
                     crate::data::source::collect_source(std::iter::once(Ok(project(
                         point.x, point.y,
                     ))))?,
-                    point.alpha.point(chart.description().point_style(
+                    point.alpha.point(chart.point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_trajectory(),
@@ -1054,7 +1050,7 @@ fn project(
     let mut label_source: Option<[(f64, f64); 2]> = None;
     for layer in &prepared.layers {
         let index = layer.source_index;
-        let source = &chart.description().point_layers()[index];
+        let source = &chart.point_layers()[index];
         let style = source.point_style(
             accent.color(prepared.primary_accent_slots + index)?,
             theme.marks.get_points().get_supplemental(),
@@ -1178,10 +1174,7 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let raw_windows = context.registered.raw_windows();
     if let (Some(source), Some(bounds)) = (
         label_source,
         label_ink
@@ -1257,25 +1250,12 @@ fn project(
             additional,
         );
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    )
-    .with_axis_domains(
-        if categorical_x {
-            AxisDomain::Categorical
-        } else {
-            AxisDomain::Continuous
-        },
-        AxisDomain::Continuous,
-    );
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Line(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 impl LinePayload {

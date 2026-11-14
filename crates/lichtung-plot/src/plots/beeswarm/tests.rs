@@ -38,20 +38,40 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
             source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, _operation| {
-                let chart = chart.clone();
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
-                let selected = chart
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
-                        PlotRenderContext::new(
-                            inputs.plots[0].data(&operation).unwrap(),
+            |chart, inputs, _theme, _operation, round| {
+                let measurement = inputs.assignment_factory().assign(
+                    chart
+                        .sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let registered = &inputs.plots[0];
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &registered.scope.id)
+                    .unwrap();
+                let entry = factory
+                    .assign(
+                        crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                            measurement.measurement_size,
                             PixelRect::new(20.0, 700.0, 20.0, 420.0),
-                            theme,
-                        )
-                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
+                            round,
+                            &registered.scope.address,
+                        ),
+                        round,
+                        None,
                     )
                     .unwrap();
+                let selected = crate::orchestrator::measure_plot(
+                    &factory,
+                    entry,
+                    crate::decorations::legend::discrete::scoped::GuideConsumption {
+                        use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
+                        ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                    },
+                    &crate::layout::fit::FitScope::root(),
+                )
+                .unwrap()
+                .1;
                 assert!(selected.discrete_guide.is_none());
                 selected
             },
@@ -155,8 +175,6 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     .color_label_format(format.clone())
     .erase();
     let appearance = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&appearance, &text);
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
             width: 700,
@@ -297,53 +315,59 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 &operation,
             )
             .unwrap();
-            let root_guide = crate::layout::interior::guide::prepare_discrete_guides(
+            let root = crate::orchestrator::complete_prepared_plot_for_test(
                 source.description(),
-                &mut registry.panels,
-                &operation,
-                false,
-            )?;
-            let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                appearance.clone(),
                 registry,
-                crate::layout::interior::InteriorRoute::classify(source.kind()),
-                root_guide,
+                crate::orchestrator::root::PreparedComposition::Single { plot_id: id },
+                stage,
             )?;
-            let requirements = crate::layout::foundational_plot_requirements(
-                Some(&inputs),
-                source.description(),
-                source.kind(),
-                &theme,
-                &crate::layout::ComponentAddress::root(),
-                true,
-                true,
-                true,
-                Some(stage),
-            )?;
-            let mut presence = stage.reserve_scalar_presence_map()?;
-            let mut census = crate::layout::PreparedTextCensus::materialize(
-                requirements,
-                Some(stage),
-                Some(&mut presence),
-            )
-            .map_err(|error| Error::Render(error.to_string()))?;
-            text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-            Ok((inputs, expected))
+            Ok((root, expected))
         },
-        |(inputs, expected), assigned, _| {
-            let (width, height) = assigned.assigned_size()?.dimensions()?;
-            let chart = source.clone().with_canvas_size(width, height);
-            let operation = text.prepared_font_environment()?.operation();
-            let measured = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation)?,
-                        PixelRect::new(0.0, 700.0, 0.0, 400.0),
-                        &theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
-                .unwrap();
+        |(root, expected), assigned, round| {
+            let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+            let registered = &root.plots[0];
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let local = registered
+                .local_guide_slot()?
+                .expect("the remapped native guide is present");
+            let entry = factory.assign(
+                crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                    measurement.measurement_size,
+                    PixelRect::new(0.0, 700.0, 0.0, 400.0),
+                    round,
+                    &registered.scope.address,
+                ),
+                round,
+                None,
+            )?;
+            crate::decorations::plan::OUTER_GUIDE_MEASUREMENTS.with(|calls| calls.set(0));
+            let planned = crate::layout::fit::measured(crate::decorations::plan::plan_plot(
+                &factory,
+                entry,
+                crate::decorations::plan::LegendRole::Panel,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    local_guide: Some(&local),
+                    dependencies: &[],
+                },
+                &crate::layout::fit::FitScope::new(&registered.scope.address, 0),
+                round,
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
+            assert_eq!(
+                planned.result.decoration_mode,
+                crate::spec::DecorationMode::Standard
+            );
+            assert!(planned.legend.is_none());
+            assert!(std::sync::Arc::ptr_eq(
+                planned.result.discrete_guide.as_ref().unwrap(),
+                &local.descriptor,
+            ));
+            crate::decorations::plan::OUTER_GUIDE_MEASUREMENTS
+                .with(|calls| assert_eq!(calls.get(), 0));
+            let measured = &planned.result;
+            let theme = root.request();
             let crate::layout::interior::MarkPayload::Beeswarm(payload) =
                 &measured.marks.as_ref().unwrap().payload
             else {

@@ -2,6 +2,8 @@
 
 use crate::Error;
 
+use crate::decorations::legend::discrete::scoped::{GuideAllocation, GuideConsumption};
+use crate::decorations::legend::discrete::GuideSlot;
 use crate::decorations::legend::{Legend, LegendBox};
 use crate::layout::fit::{FitFailure, FitScope};
 use crate::layout::interior::{ClearanceAxis, DomainExpansion, InteriorReserveRequest};
@@ -9,14 +11,24 @@ use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequireme
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
 use crate::layout::PixelRect;
+use crate::orchestrator::assignment::{
+    GuideTrialChoice, PlotAssignmentChange, PlotMeasureAssignment, PlotMeasureAssignmentFactory,
+};
 use crate::render::geometry::GeometrySnapshot;
 use crate::spec::{
-    LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
+    LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotMeasureContext,
     PlotRenderResult,
 };
-use crate::Plot;
 
 pub(crate) mod children;
+#[cfg(test)]
+mod tests;
+
+// Observe the panel-owned slot separately from native producers' right tracks.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static OUTER_GUIDE_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LegendRole {
@@ -169,7 +181,11 @@ impl AssignedGuideFrame {
 }
 
 impl ResolvedLegend {
-    pub(crate) fn observe_feedback(&self, round: &mut FeedbackRound) -> Result<(), Error> {
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut FeedbackRound,
+        available_width: i64,
+    ) -> Result<(), Error> {
         round.observe_box(PixelRect::new(
             self.bounds.left,
             self.bounds.right,
@@ -179,7 +195,7 @@ impl ResolvedLegend {
         let (x, y) = self.bounds.anchor();
         round.observe_number(x)?;
         round.observe_number(y)?;
-        self.legend.observe_feedback(round)
+        self.legend.observe_feedback(round, available_width)
     }
 }
 
@@ -193,8 +209,6 @@ pub(crate) struct MeasuredPlotPlan {
     pub(crate) legend: Option<ResolvedLegend>,
     pub(crate) layers: Option<PlotLayerNames>,
     pub(crate) surface: crate::Color,
-    planned_x_limits: Option<(f64, f64)>,
-    planned_y_limits: Option<(f64, f64)>,
 }
 
 pub(crate) struct PlotLayerNames {
@@ -203,7 +217,7 @@ pub(crate) struct PlotLayerNames {
 }
 
 impl PlotLayerNames {
-    fn prepare(context: PlotRenderContext<'_, '_>) -> Result<Self, Error> {
+    fn prepare(context: &PlotMeasureContext<'_, '_>) -> Result<Self, Error> {
         use std::fmt::Write as _;
         if context.canvas.is_some() {
             let mut layers = [String::new(), String::new()];
@@ -212,18 +226,15 @@ impl PlotLayerNames {
                 write!(
                     layer,
                     "{}-{suffix}",
-                    crate::orchestrator::registration::render_name(context.registered)
+                    crate::orchestrator::registration::render_name(Some(context.registered))
                         .expect("Canvas plot scope")
                 )
                 .expect("admitted Canvas layer name");
             }
             let [grid, axes] = layers;
             Ok(Self { grid, axes })
-        } else if context
-            .registered
-            .is_some_and(|registered| registered.source.has_facets())
-        {
-            let scope = crate::orchestrator::registration::render_name(context.registered)
+        } else if context.registered.source.has_facets() {
+            let scope = crate::orchestrator::registration::render_name(Some(context.registered))
                 .expect("facet plot scope");
             let mut layers = [String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes"]) {
@@ -303,71 +314,26 @@ const fn is_inside(position: LegendPosition) -> bool {
     !is_outside(position)
 }
 
-impl MeasuredPlotPlan {
-    pub(crate) fn plot_with_planned_limits(&self, plot: &Plot) -> Plot {
-        let mut plot = plot.clone();
-        if let Some(limits) = self.planned_x_limits {
-            plot = plot.with_planned_x_limits(limits);
-        }
-        if let Some(limits) = self.planned_y_limits {
-            plot = plot.with_planned_y_limits(limits);
-        }
-        plot
-    }
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "explicit scientific owner accompanies the original test panel assignment"
-)]
-pub(crate) fn plan_panel(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
-    kind: PlotKind,
-    cell: PixelRect,
-    role: LegendRole,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    round: &mut FeedbackRound,
-    address: &ComponentAddress,
-) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
-    plot.description().configured_source_rows()?;
-    let registered = registered.expect("prepared test panel");
-    let operation = theme.text.prepared_font_environment()?.operation();
-    let context = PlotRenderContext::new(registered.data(&operation)?, cell, theme)
-        .with_registration(registered, intrinsic);
-    let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
-        crate::orchestrator::registration::guide_descriptor(Some(registered))?
-            .map(|descriptor| {
-                crate::decorations::legend::discrete::GuideSlot::new(
-                    descriptor,
-                    address,
-                    plot.description().legend_position_spec(),
-                )
-            })
-            .transpose()?
-    } else {
-        None
-    };
-    plan_panel_with_context(plot, kind, role, context, guide.as_ref(), round, address)
-}
-
 #[expect(
     clippy::too_many_lines,
     reason = "the two-pass panel lifecycle keeps discovery, reservation, collision resolution, and frozen output together"
 )]
-pub(crate) fn plan_panel_with_context(
-    plot: &Plot,
-    kind: PlotKind,
+pub(crate) fn plan_plot(
+    factory: &PlotMeasureAssignmentFactory<'_, '_>,
+    mut entry: PlotMeasureAssignment,
     role: LegendRole,
-    mut context: PlotRenderContext<'_, '_>,
-    discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
+    guides: GuideConsumption<'_>,
+    fit_scope: &FitScope,
     round: &mut FeedbackRound,
-    address: &ComponentAddress,
-) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<std::sync::Arc<MeasuredPlotPlan>>, Error> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
+    let plot = factory.registered.source;
+    let kind = plot.kind();
+    let address = &factory.registered.scope.address;
+    let request =
+        crate::text::TextRequestContext::new(&factory.registered.appearance, factory.text);
+    let discrete_guide = guides.local_guide;
 
     // Native color families place the common descriptor in their own measured
     // right track. Transporting that descriptor does not create an outer guide.
@@ -376,70 +342,85 @@ pub(crate) fn plan_panel_with_context(
     } else {
         discrete_guide
     };
-    let minimum = plot.intrinsic_body_minimum(
-        context.registered,
-        context.intrinsic(),
-        context.data.source_resources(),
-        context.theme,
+    let minimum = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+        factory.registered,
+        factory.intrinsic,
+        factory.operation,
+        &request,
+        entry.ranges(),
     )?;
-    let position = plot.description().legend_position_spec();
+    let position = plot.legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
         || discrete_guide.is_none()
-        || crate::orchestrator::registration::legend_policy(plot.description(), context.registered)
+        || crate::orchestrator::registration::legend_policy(plot, Some(factory.registered))
             == LegendPolicy::Hidden
         || (position != LegendPosition::Auto && !is_outside(position));
-    if context.content_height
+    if entry.content_height
         && !matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
-        && (!context.fill_content_height || bypass_outside_guide)
+        && (!entry.fill_content_height || bypass_outside_guide)
     {
-        let (panel, preference) = content_frame(plot, context, round, address, None)?;
-        context.panel = panel;
-        context.content_preference = Some(preference);
+        let (frame, preferred) = content_frame(factory, &entry, &request, round, address, None)?;
+        entry = factory.apply_change(
+            entry,
+            PlotAssignmentChange::ContentPreference { frame, preferred },
+        )?;
     }
     if let FitOutcome::Miss(failure) = (FrameRequirements {
         minimum_body: minimum,
         natural_insets: [0.0; 4],
     })
-    .assign_fit(context.panel, [0.0; 4], &FitScope::new(address, 0))?
+    .assign_fit(entry.frame, [0.0; 4], &FitScope::new(address, 0))?
     {
         return Ok(FitOutcome::Miss(failure));
     }
     if bypass_outside_guide {
-        return plan_panel_attempt(
-            plot,
-            kind,
+        return plan_plot_attempt(
+            factory,
+            &entry,
             role,
-            position,
-            context,
+            GuideTrialChoice {
+                edge: position,
+                compact: false,
+            },
+            guides,
             discrete_guide,
+            fit_scope,
             round,
             address,
             None,
             None,
+            entry.frame,
+            entry.content_preference,
         );
     }
     let initial_scope = FitScope::new(address, 0);
-    let (discovered, discovery) =
-        match measure_geometry(plot, kind, role, context.with_fit_scope(&initial_scope))? {
+    let (discovery_assignment, discovered, discovery) =
+        match measure_geometry(factory, entry.clone(), role, guides, &initial_scope)? {
             FitOutcome::Measured(value) => value,
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         };
     if discovered.decoration_mode == crate::spec::DecorationMode::SelfManaged {
-        if context.content_height && context.fill_content_height {
-            let (_, preference) = content_frame(plot, context, round, address, None)?;
-            context.content_preference = Some(preference);
+        if entry.content_height && entry.fill_content_height {
+            let (_, preference) = content_frame(factory, &entry, &request, round, address, None)?;
+            entry.content_preference = Some(preference);
         }
-        return plan_panel_attempt(
-            plot,
-            kind,
+        return plan_plot_attempt(
+            factory,
+            &entry,
             role,
-            position,
-            context,
+            GuideTrialChoice {
+                edge: position,
+                compact: false,
+            },
+            guides,
             discrete_guide,
+            fit_scope,
             round,
             address,
             None,
-            Some((discovered, discovery)),
+            Some((discovery_assignment, discovered, discovery)),
+            entry.frame,
+            entry.content_preference,
         );
     }
     let automatic_edges = [
@@ -493,10 +474,10 @@ pub(crate) fn plan_panel_with_context(
             );
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
             let ink = round.insets(address, FeedbackKind::OwnedInk);
-            let gap = context.theme.legend_outside_gap()?;
+            let gap = request.legend_outside_gap()?;
             let frame = AssignedGuideFrame::new(edge, minimum, gap);
             let available = frame.available(
-                context.panel,
+                entry.frame,
                 [
                     gutters[0] + ink[0],
                     gutters[1] + ink[1],
@@ -504,17 +485,16 @@ pub(crate) fn plan_panel_with_context(
                     gutters[3] + ink[3],
                 ],
             );
+            #[cfg(test)]
+            OUTER_GUIDE_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
             let guide = match Legend::measure_assigned(
                 std::sync::Arc::clone(
                     &discrete_guide.expect("contributing panel guide").descriptor,
                 ),
-                (
-                    available.0,
-                    (!context.content_height).then_some(available.1),
-                ),
+                (available.0, (!entry.content_height).then_some(available.1)),
                 horizontal,
                 compact,
-                context.theme,
+                &request,
                 &mut compact_changes,
                 &guide_scope,
             )? {
@@ -527,14 +507,18 @@ pub(crate) fn plan_panel_with_context(
                 }
             };
             let size = (guide.compute_box_width(), guide.compute_box_height());
-            let trial_context = if context.content_height {
-                let (panel, preference) =
-                    content_frame(plot, context, round, address, Some((horizontal, size, gap)))?;
-                let mut trial = context.with_panel(panel);
-                trial.content_preference = Some(preference);
-                trial
+            let trial_frame = if entry.content_height {
+                let (panel, preference) = content_frame(
+                    factory,
+                    &entry,
+                    &request,
+                    round,
+                    address,
+                    Some((horizontal, size, gap)),
+                )?;
+                (panel, Some(preference))
             } else {
-                context
+                (entry.frame, entry.content_preference)
             };
             #[cfg(test)]
             guide_trial.body();
@@ -542,27 +526,22 @@ pub(crate) fn plan_panel_with_context(
             for (gutter, reserve) in assigned_gutters.iter_mut().zip(ink) {
                 *gutter += reserve;
             }
-            let panel = match frame.assign_fit(
-                trial_context.panel,
-                Some(size),
-                assigned_gutters,
-                &scope,
-            )? {
-                FitOutcome::Measured(panel) => panel,
-                FitOutcome::Miss(reason) => {
-                    FitFailure::retain_least(&mut first_miss, reason);
-                    #[cfg(test)]
-                    guide_trial.reject();
-                    continue;
-                }
-            };
+            let panel =
+                match frame.assign_fit(trial_frame.0, Some(size), assigned_gutters, &scope)? {
+                    FitOutcome::Measured(panel) => panel,
+                    FitOutcome::Miss(reason) => {
+                        FitFailure::retain_least(&mut first_miss, reason);
+                        #[cfg(test)]
+                        guide_trial.reject();
+                        continue;
+                    }
+                };
             if let FitOutcome::Miss(reason) = check_assigned_body(
-                plot,
-                context.registered,
+                &factory.context(&entry, guides, fit_scope)?,
                 &discovered,
-                context.panel,
+                entry.frame,
                 panel,
-                context.theme,
+                &request,
                 &scope,
             )? {
                 FitFailure::retain_least(&mut first_miss, reason);
@@ -574,17 +553,20 @@ pub(crate) fn plan_panel_with_context(
             round.observe_count(edge as usize)?;
             round.observe_count(usize::from(compact))?;
 
-            let outcome = plan_panel_attempt(
-                plot,
-                kind,
+            let outcome = plan_plot_attempt(
+                factory,
+                &entry,
                 role,
-                edge,
-                trial_context,
+                GuideTrialChoice { edge, compact },
+                guides,
                 discrete_guide,
+                fit_scope,
                 round,
                 address,
                 Some(guide),
                 None,
+                trial_frame.0,
+                trial_frame.1,
             )?;
             let plan = match outcome {
                 FitOutcome::Measured(plan) => plan,
@@ -625,19 +607,15 @@ pub(crate) fn plan_panel_with_context(
 }
 
 fn content_frame(
-    plot: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    factory: &PlotMeasureAssignmentFactory<'_, '_>,
+    entry: &PlotMeasureAssignment,
+    request: &crate::text::TextRequestContext<'_, '_>,
     round: &FeedbackRound,
     address: &ComponentAddress,
     guide: Option<(bool, (f64, f64), f64)>,
 ) -> Result<(PixelRect, f64), Error> {
-    let mut plot = plot.clone();
-    if let Some(domain) = round.feedback_domain(address, FeedbackKind::AutomaticDomainX) {
-        plot = plot.with_planned_x_limits(domain);
-    }
-    if let Some(domain) = round.feedback_domain(address, FeedbackKind::AutomaticDomainY) {
-        plot = plot.with_planned_y_limits(domain);
-    }
+    let plot = factory.registered.source;
+    let ranges = factory.content_ranges(entry, round);
     let mut insets = round.insets(address, FeedbackKind::AxisGutter);
     for (inset, ink) in insets
         .iter_mut()
@@ -645,21 +623,22 @@ fn content_frame(
     {
         *inset += ink;
     }
-    let hard = plot.intrinsic_body_minimum(
-        context.registered,
-        context.intrinsic(),
-        context.data.source_resources(),
-        context.theme,
+    let hard = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+        factory.registered,
+        factory.intrinsic,
+        factory.operation,
+        request,
+        ranges,
     )?;
     let preference = crate::layout::interior::sizing::body_preference(
-        &plot,
-        context.registered,
-        context.intrinsic(),
-        context.data.source_resources(),
-        context.theme,
+        plot,
+        Some(factory.registered),
+        factory.intrinsic,
+        factory.operation,
+        request,
         hard,
     )?;
-    let mut width = context.panel.width() - insets[0] - insets[1];
+    let mut width = entry.frame.width() - insets[0] - insets[1];
     if let Some((false, (guide_width, _), gap)) = guide {
         width -= guide_width + gap;
     }
@@ -669,12 +648,13 @@ fn content_frame(
         ));
     }
     let mut height = plot.natural_body_height(
-        context.registered,
-        context.intrinsic(),
-        context.data.source_resources(),
-        context.theme,
+        Some(factory.registered),
+        factory.intrinsic,
+        factory.operation,
+        request,
         width,
         preference.1,
+        ranges,
     )?;
     if let Some((horizontal, (_, guide_height), gap)) = guide {
         height = if horizontal {
@@ -684,17 +664,17 @@ fn content_frame(
         };
     }
     height += insets[2] + insets[3];
-    let assigned = if context.fill_content_height {
-        height.max(context.panel.height())
+    let assigned = if entry.fill_content_height {
+        height.max(entry.frame.height())
     } else {
         height
     };
     Ok((
         PixelRect::new(
-            context.panel.x0,
-            context.panel.x1,
-            context.panel.y0,
-            context.panel.y0 + assigned,
+            entry.frame.x0,
+            entry.frame.x1,
+            entry.frame.y0,
+            entry.frame.y0 + assigned,
         ),
         height,
     ))
@@ -705,8 +685,7 @@ fn content_frame(
     reason = "one body owner evaluates all assigned fit predicates"
 )]
 pub(crate) fn check_assigned_body(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    context: &PlotMeasureContext<'_, '_>,
     discovered: &PlotRenderResult,
     cell: PixelRect,
     assigned: PixelRect,
@@ -714,6 +693,7 @@ pub(crate) fn check_assigned_body(
     scope: &FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
     use crate::layout::fit::{self, FitOutcome};
+    let plot = context.registered.source;
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::GuideBodyCheck,
@@ -744,25 +724,30 @@ pub(crate) fn check_assigned_body(
     // This partial check covers indivisible sources and titles only. Automatic
     // numeric sources are regenerated by the complete frame trial below.
     if discovered.x_domain == crate::spec::AxisDomain::Continuous
-        && plot.description().explicit_x_ticks().is_none()
+        && plot.explicit_x_ticks().is_none()
     {
         layout.x_axis.ticks.clear();
     }
     if discovered.y_domain == crate::spec::AxisDomain::Continuous
-        && plot.description().explicit_y_ticks().is_none()
+        && plot.explicit_y_ticks().is_none()
     {
         layout.y_axis.ticks.clear();
     }
     if let FitOutcome::Miss(reason) = fit::outcome(layout.measure_axes(
         theme,
         scope,
-        plot.axis_semantic_inputs([discovered.x_domain, discovered.y_domain]),
+        context.semantic_inputs(match &context.assignment.local.domains {
+            crate::orchestrator::assignment::AxisDomainAssignments::Marginal { .. } => {
+                crate::orchestrator::assignment::AxisPairScope::MarginalCentral
+            }
+            _ => crate::orchestrator::assignment::AxisPairScope::Pair,
+        })?,
     ))? {
         FitFailure::retain_least(&mut miss, reason);
     }
     let annotations = match fit::outcome(crate::decorations::panel_text::measure_plans(
-        registered.expect("prepared assigned-body reference"),
-        plot.measure_dimensions()?,
+        context.registered,
+        context.assignment.local.dimensions,
         &discovered.layout,
         theme,
         scope,
@@ -820,39 +805,60 @@ pub(crate) fn check_assigned_body(
     clippy::similar_names,
     reason = "one immutable frame attempt owns discovery, feedback and retained geometry"
 )]
-fn plan_panel_attempt(
-    plot: &Plot,
-    kind: PlotKind,
+fn plan_plot_attempt(
+    factory: &PlotMeasureAssignmentFactory<'_, '_>,
+    entry: &PlotMeasureAssignment,
     role: LegendRole,
-    position: LegendPosition,
-    context: PlotRenderContext<'_, '_>,
-    discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
+    choice: GuideTrialChoice,
+    guides: GuideConsumption<'_>,
+    discrete_guide: Option<&GuideSlot>,
+    _fit_scope: &FitScope,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
     assigned_guide: Option<Legend>,
-    initial: Option<(PlotRenderResult, GeometrySnapshot)>,
-) -> Result<crate::layout::fit::FitOutcome<MeasuredPlotPlan>, Error> {
+    initial: Option<(PlotMeasureAssignment, PlotRenderResult, GeometrySnapshot)>,
+    frame_box: PixelRect,
+    content_preference: Option<f64>,
+) -> Result<crate::layout::fit::FitOutcome<std::sync::Arc<MeasuredPlotPlan>>, Error> {
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address));
-    let context = context.with_fit_scope(&scope);
-    let minimum = plot.intrinsic_body_minimum(
-        context.registered,
-        context.intrinsic(),
-        context.data.source_resources(),
-        context.theme,
+    let plot = factory.registered.source;
+    let kind = plot.kind();
+    let request =
+        crate::text::TextRequestContext::new(&factory.registered.appearance, factory.text);
+    let minimum = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+        factory.registered,
+        factory.intrinsic,
+        factory.operation,
+        &request,
+        entry.ranges(),
     )?;
-    let cell = context.panel;
+    let cell = frame_box;
     round.begin_owner(address)?;
     round.observe_box(cell)?;
-    let registered = context.registered.expect("prepared panel occurrence");
+    let registered = factory.registered;
     let legend_default = kind.legend_default(registered.raw_windows()[1].is_some());
 
-    let mut planning_plot = plot.clone();
+    let branch = factory.fork(entry, choice, round)?;
+    let crate::orchestrator::assignment::PlotMeasureBranch {
+        root,
+        entry: mut selected,
+    } = branch;
+    let factory = factory.for_branch(&root)?;
+    let position = selected.guide.edge;
+    if let Some(preferred) = content_preference {
+        selected = factory.apply_change(
+            selected,
+            PlotAssignmentChange::ContentPreference {
+                frame: frame_box,
+                preferred,
+            },
+        )?;
+    }
     let planned_x_limits = round
         .feedback_domain(address, FeedbackKind::AutomaticDomainX)
         .map(|range| {
-            plot.description()
-                .x_axis_spec()
+            plot.x_axis_spec()
                 .window
                 .map(crate::layout::RawWindow::pair)
                 .map_or(range, |base| (base.0.min(range.0), base.1.max(range.1)))
@@ -860,18 +866,11 @@ fn plan_panel_attempt(
     let planned_y_limits = round
         .feedback_domain(address, FeedbackKind::AutomaticDomainY)
         .map(|range| {
-            plot.description()
-                .y_axis_spec()
+            plot.y_axis_spec()
                 .window
                 .map(crate::layout::RawWindow::pair)
                 .map_or(range, |base| (base.0.min(range.0), base.1.max(range.1)))
         });
-    if let Some(limits) = planned_x_limits {
-        planning_plot = planning_plot.with_planned_x_limits(limits);
-    }
-    if let Some(limits) = planned_y_limits {
-        planning_plot = planning_plot.with_planned_y_limits(limits);
-    }
     let discovery_panel = if let Some(guide) = &assigned_guide {
         let mut gutters = round.insets(address, FeedbackKind::AxisGutter);
         for (gutter, ink) in gutters
@@ -895,14 +894,20 @@ fn plan_panel_attempt(
     };
     // An empty guide can reuse discovery only at the consumed domain. Free
     // facets otherwise keep replaying the pre-feedback provisional payload.
-    let initial = initial.filter(|(result, _)| {
+    let initial = initial.filter(|(_, result, _)| {
         (result.x_domain == crate::spec::AxisDomain::Categorical
             || planned_x_limits.is_none_or(|range| range == result.layout.projection.x_range()))
             && (result.y_domain == crate::spec::AxisDomain::Categorical
                 || planned_y_limits.is_none_or(|range| range == result.layout.projection.y_range()))
     });
-    let (discovered, discovery) = if let Some(initial) = initial {
-        initial
+    let (discovered, discovery) = if let Some((allocation, result, geometry)) = initial {
+        selected = factory.apply_change(
+            selected,
+            PlotAssignmentChange::NumericExplanation {
+                body: allocation.body,
+            },
+        )?;
+        (result, geometry)
     } else {
         let width = if assigned_guide.is_some() {
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
@@ -910,26 +915,34 @@ fn plan_panel_attempt(
             (discovery_panel.width() + gutters[0] + gutters[1] + ink[0] + ink[1] - minimum.0)
                 .max(0.0)
         } else {
-            context.axis_label_width
+            selected.axis_label_width
         };
-        match measure_geometry(
-            &planning_plot,
-            kind,
-            role,
-            context
-                .with_panel(discovery_panel)
-                .with_axis_label_width(width),
-        )? {
-            FitOutcome::Measured(value) => value,
+        selected = factory.apply_change(
+            selected,
+            match assigned_guide.as_ref() {
+                Some(guide) if is_outside(position) => PlotAssignmentChange::OutsideGuide {
+                    body: discovery_panel,
+                    axis_label_width: width,
+                    allocation: GuideAllocation::Width(guide.available_width()),
+                },
+                _ => PlotAssignmentChange::AxisInsets {
+                    body: discovery_panel,
+                    axis_label_width: width,
+                },
+            },
+        )?;
+        match measure_geometry(&factory, selected, role, guides, &scope)? {
+            FitOutcome::Measured((allocation, result, geometry)) => {
+                selected = allocation;
+                (result, geometry)
+            }
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
     };
     let visible = discovered.decoration_mode == crate::spec::DecorationMode::Standard
         && role == LegendRole::Panel
-        && crate::orchestrator::registration::legend_policy(
-            planning_plot.description(),
-            context.registered,
-        ) != LegendPolicy::Hidden
+        && crate::orchestrator::registration::legend_policy(plot, Some(factory.registered))
+            != LegendPolicy::Hidden
         && discrete_guide.is_some();
     let legend = if let Some(guide) = assigned_guide {
         Some(guide)
@@ -938,12 +951,14 @@ fn plan_panel_attempt(
             &discrete_guide.expect("visible panel guide").owner,
             scope.ordinal,
         );
+        #[cfg(test)]
+        OUTER_GUIDE_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         match Legend::measure_assigned(
             std::sync::Arc::clone(&discrete_guide.expect("visible panel guide").descriptor),
             (discovery_panel.width(), discovery_panel.height()),
             false,
-            false,
-            context.theme,
+            selected.guide.compact,
+            &request,
             &mut false,
             &guide_scope,
         )? {
@@ -978,16 +993,27 @@ fn plan_panel_attempt(
     let (result, geometry) = if panel_box == discovery_panel {
         (discovered, discovery)
     } else {
-        match measure_geometry(
-            &planning_plot,
-            kind,
-            role,
-            context.with_panel(panel_box).with_axis_label_width(
-                (panel_box.width() + assigned_gutters[0] + assigned_gutters[1] - minimum.0)
-                    .max(0.0),
-            ),
-        )? {
-            FitOutcome::Measured(value) => value,
+        let width =
+            (panel_box.width() + assigned_gutters[0] + assigned_gutters[1] - minimum.0).max(0.0);
+        selected = factory.apply_change(
+            selected,
+            match legend.as_ref() {
+                Some(guide) if is_outside(position) => PlotAssignmentChange::OutsideGuide {
+                    body: panel_box,
+                    axis_label_width: width,
+                    allocation: GuideAllocation::Width(guide.available_width()),
+                },
+                _ => PlotAssignmentChange::AxisInsets {
+                    body: panel_box,
+                    axis_label_width: width,
+                },
+            },
+        )?;
+        match measure_geometry(&factory, selected, role, guides, &scope)? {
+            FitOutcome::Measured((allocation, result, geometry)) => {
+                selected = allocation;
+                (result, geometry)
+            }
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
     };
@@ -1008,14 +1034,14 @@ fn plan_panel_attempt(
     let mut gutters = result.grid_axis_gutters.unwrap_or([0.0; 4]);
     if let Some(axes) = &panel_axes {
         let required = axes.requirements();
-        if context.registered.is_none_or(|registered| {
-            registered.policy.gutter_owner == crate::orchestrator::registration::GutterOwner::Root
-        }) {
+        if factory.registered.policy.gutter_owner
+            == crate::orchestrator::registration::GutterOwner::Root
+        {
             // The root cell excludes only root-owned padding/title/caption.
             // Replace the entire axis reserve, allowing contraction as well as
             // growth without spending another component's reserved space.
 
-            let clearance = context.theme.panel_edge_length()?;
+            let clearance = request.panel_edge_length()?;
             for (gutter, value) in gutters.iter_mut().zip([
                 required.left,
                 required.right,
@@ -1243,9 +1269,7 @@ fn plan_panel_attempt(
     // Actual scientific alpha identity remains observable even when no guide is
     // explained or placed locally. Native color/Matrix guides also retain their
     // complete descriptor rather than only captured geometry and text.
-    if let Some(registered) = context.registered {
-        round.observe_alpha(&registered.guide.alpha)?;
-    }
+    round.observe_alpha(&factory.registered.guide.alpha)?;
     if let Some(guide) = &result.discrete_guide {
         round.observe_guide(guide)?;
     }
@@ -1279,7 +1303,7 @@ fn plan_panel_attempt(
         payload.observe_sources(round)?;
     }
     if let Some(chrome) = &chrome {
-        let (width, height) = plot.canvas_dimensions()?;
+        let (width, height) = selected.dimensions.canvas_size().dimensions()?;
         let mut overflow = [0.0_f64; 4];
         for bounds in chrome.bounds() {
             round.observe_box(PixelRect::new(
@@ -1303,9 +1327,9 @@ fn plan_panel_attempt(
             *extra = (*extra - (next_axis_gutters[index] - current_axis_gutters[index]).max(0.0))
                 .max(0.0);
         }
-        if context.registered.is_none_or(|registered| {
-            registered.policy.gutter_owner == crate::orchestrator::registration::GutterOwner::Root
-        }) && overflow.iter().any(|value| *value > 0.0)
+        if factory.registered.policy.gutter_owner
+            == crate::orchestrator::registration::GutterOwner::Root
+            && overflow.iter().any(|value| *value > 0.0)
         {
             let mut reserves = owned_ink;
             for (reserve, extra) in reserves.iter_mut().zip(overflow) {
@@ -1345,7 +1369,7 @@ fn plan_panel_attempt(
         crate::layout::fit::FitOutcome::Miss(reason) => {
             // Content height and outside flow use consumed insets. Changed
             // gutters must reach their parent before residual height is final.
-            if context.content_height || (is_outside(position) && resolved.is_some()) {
+            if selected.content_height || (is_outside(position) && resolved.is_some()) {
                 round.miss(
                     address,
                     reason.reason.kind,
@@ -1372,10 +1396,10 @@ fn plan_panel_attempt(
         if auto_annotation_miss && (gutter_request.is_some() || ink_request.is_some()) {
             let annotations =
                 match crate::layout::fit::outcome(crate::decorations::panel_text::measure_plans(
-                    context.registered.expect("prepared planned-body reference"),
-                    planning_plot.measure_dimensions()?,
+                    factory.registered,
+                    selected.dimensions,
                     &result.layout,
-                    context.theme,
+                    &request,
                     &scope,
                 ))? {
                     FitOutcome::Measured(plans) => plans,
@@ -1560,7 +1584,7 @@ fn plan_panel_attempt(
         }
     }
     round.observe_count(geometry.bounds().len())?;
-    let (width, height) = plot.canvas_dimensions()?;
+    let (width, height) = selected.dimensions.canvas_size().dimensions()?;
     for bounds in geometry.bounds() {
         round.observe_box(PixelRect::new(
             bounds.left,
@@ -1572,7 +1596,7 @@ fn plan_panel_attempt(
         if bounds.left < 0.0
             || bounds.right > f64::from(width)
             || bounds.bottom < 0.0
-            || (!context.content_height && bounds.top > f64::from(height))
+            || (!selected.content_height && bounds.top > f64::from(height))
         {
             if result.grid_axis_gutters.is_some()
                 && chrome
@@ -1629,107 +1653,84 @@ fn plan_panel_attempt(
     round.observe_count(auto_candidate_index.map_or(0, |index| index + 1))?;
     round.observe_count(usize::from(resolved.is_some()))?;
     if let Some(legend) = &resolved {
-        legend.observe_feedback(round)?;
+        let available_width = match selected.guide.allocation {
+            Some(GuideAllocation::Width(width)) if is_outside(position) => width,
+            _ => legend.legend.available_width(),
+        };
+        legend.observe_feedback(round, available_width)?;
     }
     geometry.observe_feedback(round)?;
-    let selected = crate::orchestrator::assignment::PlotMeasureAssignment {
-        plot_id: context.data.plot_id().clone(),
-        dimensions: plot.measure_dimensions()?,
-        cell: context.cell,
-        frame: cell,
-        content_height: context.content_height,
-        fill_content_height: context.fill_content_height,
-        content_preference: context.content_preference,
-        insets,
-    };
-    let preference = context.content_height.then(|| {
+    selected.insets = insets;
+    let preference = selected.content_height.then(|| {
         std::sync::Arc::new(crate::orchestrator::assignment::PlotFrameHeightPreference {
             height: crate::orchestrator::assignment::completion_frame(kind, &selected, &result)
                 .height(),
         })
     });
-    Ok(FitOutcome::Measured(MeasuredPlotPlan {
-        plot_id: selected.plot_id.clone(),
-        selected,
-        preference,
-        panel_box,
-        result,
-        legend: resolved,
-        layers: Some(PlotLayerNames::prepare(context)?),
-        surface: context.theme.surfaces.plot_panel,
-        planned_x_limits,
-        planned_y_limits,
-    }))
+    let layers = PlotLayerNames::prepare(&factory.context(&selected, guides, &scope)?)?;
+    Ok(FitOutcome::Measured(crate::data::source::source_arc(
+        MeasuredPlotPlan {
+            plot_id: selected.plot_id.clone(),
+            selected,
+            preference,
+            panel_box,
+            result,
+            legend: resolved,
+            layers: Some(layers),
+            surface: request.surfaces.plot_panel,
+        },
+    )?))
 }
 
 fn measure_geometry(
-    plot: &Plot,
-    kind: PlotKind,
+    factory: &PlotMeasureAssignmentFactory<'_, '_>,
+    entry: PlotMeasureAssignment,
     role: LegendRole,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometrySnapshot)>, Error> {
+    guides: GuideConsumption<'_>,
+    scope: &FitScope,
+) -> Result<
+    crate::layout::fit::FitOutcome<(PlotMeasureAssignment, PlotRenderResult, GeometrySnapshot)>,
+    Error,
+> {
     use crate::decorations::legend::discrete::scoped::GuideUse;
     use crate::layout::fit::{self, FitOutcome};
-    let guide_use =
-        if crate::orchestrator::registration::legend_policy(plot.description(), context.registered)
-            == LegendPolicy::Hidden
-        {
-            GuideUse::Hidden
-        } else if role == LegendRole::Suppressed {
-            GuideUse::SharedSuppressed
-        } else {
-            GuideUse::Local
-        };
-    match kind {
-        PlotKind::Scatter
-        | PlotKind::Line
-        | PlotKind::Trajectory
-        | PlotKind::LinePath
-        | PlotKind::Histogram
-        | PlotKind::Density
-        | PlotKind::Qq
-        | PlotKind::Regression
-        | PlotKind::Dumbbell
-        | PlotKind::PointInterval
-        | PlotKind::Coefficient
-        | PlotKind::Forest
-        | PlotKind::Bar
-        | PlotKind::HorizontalBar
-        | PlotKind::StackedBar
-        | PlotKind::StackedHorizontalBar
-        | PlotKind::Boxplot
-        | PlotKind::Violin
-        | PlotKind::Raincloud
-        | PlotKind::Interaction
-        | PlotKind::Heatmap
-        | PlotKind::Beeswarm
-        | PlotKind::Waterfall
-        | PlotKind::Marginal
-        | PlotKind::Matrix => {
-            match fit::outcome(plot.measure_selected_interior(guide_use, context))? {
-                FitOutcome::Measured(result) => {
-                    let mut geometry = GeometrySnapshot::new();
-                    geometry.append(
-                        &result
-                            .marks
-                            .as_ref()
-                            .ok_or_else(|| Error::Render("selected mark plan missing".into()))?
-                            .geometry,
-                    )?;
-                    geometry.append(
-                        &result
-                            .annotations
-                            .as_ref()
-                            .ok_or_else(|| {
-                                Error::Render("selected annotation plan missing".into())
-                            })?
-                            .geometry,
-                    )?;
-                    Ok(FitOutcome::Measured((result, geometry)))
-                }
-                FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
-            }
+    let guide_use = if crate::orchestrator::registration::legend_policy(
+        factory.registered.source,
+        Some(factory.registered),
+    ) == LegendPolicy::Hidden
+    {
+        GuideUse::Hidden
+    } else if role == LegendRole::Suppressed {
+        GuideUse::SharedSuppressed
+    } else {
+        GuideUse::Local
+    };
+    let guides = GuideConsumption {
+        use_kind: guide_use,
+        ..guides
+    };
+    match fit::outcome(crate::orchestrator::measure_plot(
+        factory, entry, guides, scope,
+    ))? {
+        FitOutcome::Measured((assignment, result)) => {
+            let mut geometry = GeometrySnapshot::new();
+            geometry.append(
+                &result
+                    .marks
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("selected mark plan missing".into()))?
+                    .geometry,
+            )?;
+            geometry.append(
+                &result
+                    .annotations
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("selected annotation plan missing".into()))?
+                    .geometry,
+            )?;
+            Ok(FitOutcome::Measured((assignment, result, geometry)))
         }
+        FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
     }
 }
 

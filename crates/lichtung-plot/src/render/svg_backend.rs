@@ -35,6 +35,40 @@ thread_local! {
     pub(crate) static SVG_END_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static REFUSE_STORAGE: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
     pub(crate) static DERIVED_BUFFER_RESERVATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    // Some((unmodified text-prefix bytes, injection count)) belongs to one guard.
+    static CANONICAL_COUNT_OVERFLOW: std::cell::Cell<Option<(usize, usize)>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+struct CanonicalCountOverflowGuard {
+    _thread_local: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+#[cfg(test)]
+impl CanonicalCountOverflowGuard {
+    fn arm() -> Self {
+        CANONICAL_COUNT_OVERFLOW.with(|state| {
+            assert!(
+                state.get().is_none(),
+                "canonical count overflow fixture cannot be nested"
+            );
+            state.set(Some((0, 0)));
+        });
+        Self {
+            _thread_local: std::marker::PhantomData,
+        }
+    }
+
+    fn observation() -> (usize, usize) {
+        CANONICAL_COUNT_OVERFLOW.with(|state| state.get().expect("armed count overflow fixture"))
+    }
+}
+
+#[cfg(test)]
+impl Drop for CanonicalCountOverflowGuard {
+    fn drop(&mut self) {
+        CANONICAL_COUNT_OVERFLOW.with(|state| state.set(None));
+    }
 }
 
 pub(crate) fn reserve_storage<T>(
@@ -912,6 +946,24 @@ impl CountBuffer {
         }
         self.bytes = total;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl SvgSerializer<CountBuffer> {
+    pub(crate) fn overflow_count_after_text_for_test(&mut self) {
+        CANONICAL_COUNT_OVERFLOW.with(|state| {
+            let Some((_, injections)) = state.get() else {
+                return;
+            };
+            if injections != 0 || self.replacement_count == 0 {
+                return;
+            }
+            assert!(self.body.bytes > 0 && !self.body.failed && !self.body.limit_exceeded);
+            state.set(Some((self.body.bytes, 1)));
+            // Leave failure latching to the next captured call's original write.
+            self.body.bytes = usize::MAX;
+        });
     }
 }
 
@@ -2093,6 +2145,106 @@ mod tests {
     use crate::layout::{PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance};
 
     #[test]
+    fn canonical_count_overflow_releases_the_operation_after_a_real_text_prefix() {
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let mut probes = None;
+        let mut count_prefix = None;
+        let mut draws = 0;
+        let mut draw_completed = false;
+        SVG_BEGIN_CALLS.with(|calls| calls.set(0));
+        SVG_END_CALLS.with(|calls| calls.set(0));
+        crate::orchestrator::measurements::start();
+        let result = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            |stage| {
+                let text = crate::text::TextService::default();
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    Vec::new(),
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                assert!(text
+                    .prepared_font_environment()?
+                    .operation()
+                    .same_operation(&stage.operation()));
+                Ok(text)
+            },
+            |text, assigned, _| {
+                let measured = crate::text::TextRequestContext::new(&appearance, text)
+                    .measure_text(
+                        "A",
+                        &appearance.typography.root.title,
+                        PhysicalTextAlignment::Start,
+                        "count prefix",
+                        false,
+                    )?;
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    measured,
+                ))
+            },
+            |text, size, measured, stage| {
+                size.dimensions()?;
+                let environment = text.prepared_font_environment()?;
+                assert!(environment.prepared_pairs_are_sealed().unwrap());
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let analysis = measured.analysis_liveness_probe();
+                assert!(core() && operation() && analysis());
+                probes = Some((core, operation, analysis));
+                let _guard = CanonicalCountOverflowGuard::arm();
+                let result = crate::orchestrator::capture_calls(
+                    size,
+                    &SealedTextVerifier::new(environment),
+                    stage,
+                    |backend| {
+                        draws += 1;
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::baseline(
+                                Point2D::new(10.0, 20.0),
+                                TextAnchor::Start,
+                                0.0,
+                            ),
+                            &measured,
+                        )?;
+                        backend.draw_line(
+                            &[Point2D::new(10.0, 20.0), Point2D::new(30.0, 40.0)],
+                            &LineStyle::solid(Color::rgb(1, 2, 3), 1.0),
+                        )?;
+                        draw_completed = true;
+                        Ok(())
+                    },
+                );
+                count_prefix = Some(CanonicalCountOverflowGuard::observation());
+                result
+            },
+        );
+        let observations = crate::orchestrator::measurements::finish();
+        let Err(error) = result else {
+            panic!("canonical count must fail before document storage");
+        };
+        assert_eq!(error.to_string(), "render error: SVG token count overflow");
+        let (prefix, injections) = count_prefix.unwrap();
+        assert!(prefix > 0);
+        assert_eq!(injections, 1);
+        CANONICAL_COUNT_OVERFLOW.with(|state| assert!(state.get().is_none()));
+        assert_eq!(draws, 1);
+        assert!(draw_completed);
+        assert_eq!(observations.calls[2], 1);
+        assert_eq!(observations.calls[3], 0);
+        SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        let (core, operation, analysis) = probes.unwrap();
+        assert!(!core() && !operation() && !analysis());
+    }
+
+    #[test]
     fn shared_svg_tokens_count_escaped_utf8_and_refuse_overflow() {
         let escaped = EscapedText("<&\"'\u{03b1}");
         let attribute = EscapedAttribute("\t\n\r<&");
@@ -2156,6 +2308,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the existing document refusal now follows one real font, capture, Null and reserved concrete replay lifecycle"
+    )]
     fn fixed_primitive_and_document_overflows_reject_enclosing_svg_output() {
         let points = [Point2D::new(10.0, 20.0), Point2D::new(30.0, 40.0)];
         let style = LineStyle::solid(Color::rgb(1, 2, 3), 1.0);
@@ -2168,20 +2324,103 @@ mod tests {
         assert!(Backend::end(&mut svg).is_err());
         assert!(svg.into_output().is_none());
 
-        let mut reference = SvgBackend::in_memory(100, 100);
-        Backend::begin(&mut reference, 100, 100).unwrap();
-        Backend::draw_line(&mut reference, &points, &style).unwrap();
-        Backend::end(&mut reference).unwrap();
-        let required = reference.into_bytes().unwrap().len();
-        let mut svg = SvgBackend::in_memory(100, 100);
-        Backend::begin(&mut svg, 100, 100).unwrap();
-        Backend::draw_line(&mut svg, &points, &style).unwrap();
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let mut probes = None;
+        let mut draws = 0;
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            |stage| {
+                let text = crate::text::TextService::default();
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    Vec::new(),
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                assert!(text
+                    .prepared_font_environment()?
+                    .operation()
+                    .same_operation(&stage.operation()));
+                Ok(text)
+            },
+            |text, assigned, _| {
+                let measured = crate::text::TextRequestContext::new(&appearance, text)
+                    .measure_text(
+                        "A",
+                        &appearance.typography.root.title,
+                        PhysicalTextAlignment::Start,
+                        "concrete document text",
+                        false,
+                    )?;
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    measured,
+                ))
+            },
+            |text, size, measured, stage| {
+                size.dimensions()?;
+                let environment = text.prepared_font_environment()?;
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let analysis = measured.analysis_liveness_probe();
+                assert!(core() && operation() && analysis());
+                let plan = crate::orchestrator::capture_calls(
+                    size,
+                    &SealedTextVerifier::new(environment),
+                    stage,
+                    |backend| {
+                        draws += 1;
+                        backend.draw_line(&points, &style)?;
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::baseline(
+                                Point2D::new(10.0, 20.0),
+                                TextAnchor::Start,
+                                0.0,
+                            ),
+                            &measured,
+                        )
+                    },
+                )?;
+                assert!(core() && operation() && analysis());
+                probes = Some((core, operation, analysis));
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        assert_eq!(draws, 1);
+        let (core, operation, analysis) = probes.unwrap();
+        assert!(!core() && !operation() && !analysis());
+        let plan = root.plan();
+        assert!(plan.take_svg_backend().is_err());
+        let fonts = crate::font::canonical::planning_counts();
+        crate::orchestrator::validate_text_replay_plan(100, 100, plan, "document capacity Null")
+            .unwrap();
+        assert!(!core() && !operation() && !analysis());
+        let mut svg = plan.take_svg_backend().unwrap();
+        let required = svg.expected_document_bytes.unwrap();
+        assert!(svg.fixed && svg.document.capacity() >= required);
         svg.document = String::with_capacity(required - 1);
         assert!(svg.document.capacity() < required);
-        svg.fixed = true;
-        let error = Backend::end(&mut svg).unwrap_err();
+        SVG_BEGIN_CALLS.with(|calls| calls.set(0));
+        SVG_END_CALLS.with(|calls| calls.set(0));
+        let error = plan
+            .replay(100, 100, &mut svg, "document capacity concrete replay")
+            .unwrap_err();
         assert!(error.to_string().contains("reserved storage"));
+        SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        assert!(!svg.body.failed && !svg.body.is_empty() && svg.replacement_count > 0);
+        assert!(!svg.text_replacements.is_empty());
+        assert_eq!(svg.text_replacements.len(), svg.replacement_count);
+        assert!(svg.group_stack.is_empty());
         assert!(svg.into_output().is_none());
+        assert_eq!(crate::font::canonical::planning_counts(), fonts);
+        assert!(!core() && !operation() && !analysis());
     }
 
     #[test]

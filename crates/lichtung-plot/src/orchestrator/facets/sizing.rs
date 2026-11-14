@@ -1,34 +1,37 @@
 //! Facets compose their owning Plot's request; cells have no standalone roots.
 
-use super::{data, tracks, PreparedFacetGuide};
+use super::{data, tracks};
+use crate::builder::PlotDescription;
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::text_width;
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::{Error, Plot};
+use crate::orchestrator::registration::RowSelection;
+use crate::orchestrator::root::{GridSlot, PreparedFacetTopology, Root};
+use crate::{Error, FacetCell};
 
 #[expect(
     clippy::too_many_arguments,
     reason = "one owning facet Grid retains semantic inputs and consumed geometry"
 )]
 pub(super) fn grid_height(
-    plot: &Plot,
-    operation: &crate::font::canonical::OperationContext,
-    panels: &[data::FacetPanel],
+    root: &Root<'_>,
+    topology: &PreparedFacetTopology,
+    panels: &[(GridSlot, FacetCell, RowSelection)],
+    windows: [Option<(f64, f64)>; 2],
     shape: (usize, usize),
     minima: &[(f64, f64)],
     theme: &crate::text::TextRequestContext<'_, '_>,
     round: &FeedbackRound,
     width: f64,
-    inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<fit::FitOutcome<f64>, Error> {
     theme.text.prepared_font_environment()?;
     let owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut gutters = Vec::new();
     crate::data::source::reserve_source(&mut gutters, panels.len())?;
-    for (index, panel) in panels.iter().enumerate() {
+    for (index, (slot, _, _)) in panels.iter().enumerate() {
         let address = owner.child(
             AddressRole::FacetCell,
             u32::try_from(index)
@@ -36,8 +39,8 @@ pub(super) fn grid_height(
         )?;
         let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter);
         gutters.push((
-            panel.row,
-            panel.column,
+            slot.0 / shape.1,
+            slot.0 % shape.1,
             EdgeSpaceRequirements {
                 left,
                 right,
@@ -56,9 +59,9 @@ pub(super) fn grid_height(
             theme,
             &FitScope::root(),
             Some(&tracks::ContentSizing {
-                operation,
-                plot,
-                inputs,
+                root,
+                topology,
+                windows,
                 round,
                 natural_width: false,
                 natural_height: true,
@@ -75,36 +78,44 @@ pub(super) fn grid_height(
     reason = "one owning root composes its sparse facet grid, shared titles, guide and root text"
 )]
 pub(in crate::orchestrator) fn natural_size(
-    source: &Plot,
-    operation: &crate::font::canonical::OperationContext,
+    source: &PlotDescription,
+    root: &Root<'_>,
+    topology: &PreparedFacetTopology,
     theme: &crate::text::TextRequestContext<'_, '_>,
     request: crate::layout::RootRequest,
     round: &FeedbackRound,
-    guide: &PreparedFacetGuide,
-    inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<RootSize, Error> {
     theme.text.prepared_font_environment()?;
 
-    let selectors = data::facet_selectors(source.description())?;
-    let panels = data::extract_panels(source.description(), &selectors, None)?;
-    let labels = source.description().prepare_axis_labels(None)?;
-    for registered in &inputs.plots {
+    let selectors = data::facet_selectors(source)?;
+    let (_shell, panels) = data::extract_facet_rows(source, selectors)?;
+    let labels = crate::orchestrator::registration::prepare_axis_labels(
+        root.plot(&topology.shared_titles_from)?,
+    )?;
+    for registered in &root.plots {
         registered
             .axes
             .retain_axis_labels(labels.each_ref().map(Option::as_ref))?;
     }
-    let (base, _, _, _) = data::base_plot(source, source.kind())?;
+    data::parent_orders(source, source.kind())?;
+    let windows = [source.x_axis_spec(), source.y_axis_spec()]
+        .map(|axis| axis.window.map(crate::layout::RawWindow::pair));
     let mut minima = Vec::new();
     crate::data::source::reserve_source(&mut minima, panels.len())?;
     let mut gutters = Vec::new();
     crate::data::source::reserve_source(&mut gutters, panels.len())?;
     let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
-    for (index, panel) in panels.iter().enumerate() {
-        let plot = base.clone();
-        minima.push(plot.intrinsic_body_minimum(
-            inputs.plots.get(index),
-            inputs.intrinsic(&inputs.plots[index]),
-            operation,
+    for (index, (slot, _, _)) in panels.iter().enumerate() {
+        let id = topology.slots[slot.0]
+            .plot_id
+            .as_ref()
+            .expect("facet occurrence");
+        let registered = root.plot(id)?;
+        minima.push(crate::layout::interior::intrinsic_body_minimum(
+            registered,
+            crate::builder::RootFrameDomainInput::Prepared,
+            root.plot_intrinsic(id)?,
+            &root.operation,
             theme,
         )?);
         let owner = grid_owner.child(
@@ -114,8 +125,8 @@ pub(in crate::orchestrator) fn natural_size(
         )?;
         let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter);
         gutters.push((
-            panel.row,
-            panel.column,
+            slot.0 / topology.columns,
+            slot.0 % topology.columns,
             EdgeSpaceRequirements {
                 left,
                 right,
@@ -124,7 +135,7 @@ pub(in crate::orchestrator) fn natural_size(
             },
         ));
     }
-    let position = source.description().legend_position_spec();
+    let position = source.legend_position_spec();
     let outside =
         position == crate::LegendPosition::Auto || crate::decorations::plan::is_outside(position);
     let horizontal = matches!(
@@ -136,8 +147,8 @@ pub(in crate::orchestrator) fn natural_size(
             | crate::LegendPosition::OutsideBottom
             | crate::LegendPosition::OutsideBottomRight
     );
-    let guide_size = if let Some(descriptor) = guide.descriptor.as_ref().filter(|_| outside) {
-        crate::decorations::legend::Legend::natural_preference(descriptor, theme)?
+    let guide_size = if let Some(guide) = topology.parent_guide.as_ref().filter(|_| outside) {
+        crate::decorations::legend::Legend::natural_preference(&guide.descriptor, theme)?
     } else {
         (0.0, 0.0)
     };
@@ -149,16 +160,16 @@ pub(in crate::orchestrator) fn natural_size(
     let allocate = |width: Option<f64>, gutters: &[(usize, usize, EdgeSpaceRequirements)]| {
         fit::measured(tracks::allocate(
             PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
-            (selectors.rows, selectors.columns),
+            (topology.rows, topology.columns),
             &panels,
             &minima,
             gutters,
             theme,
             &FitScope::root(),
             Some(&tracks::ContentSizing {
-                operation,
-                plot: &base,
-                inputs,
+                root,
+                topology,
+                windows,
                 round,
                 natural_width: width.is_none(),
                 natural_height: true,
@@ -174,15 +185,15 @@ pub(in crate::orchestrator) fn natural_size(
             allocate(None, &[])?.size
         } else {
             let width = fit::measured(tracks::natural_width(
-                (selectors.rows, selectors.columns),
+                (topology.rows, topology.columns),
                 &panels,
                 &minima,
                 theme,
                 &FitScope::root(),
                 &tracks::ContentSizing {
-                    operation,
-                    plot: &base,
-                    inputs,
+                    root,
+                    topology,
+                    windows,
                     round,
                     natural_width: true,
                     natural_height: true,
@@ -207,7 +218,7 @@ pub(in crate::orchestrator) fn natural_size(
     } else {
         0.0
     };
-    let sources = source.description().prose();
+    let sources = source.prose();
     if requested_width.is_none() {
         for (text, appearance) in sources
             .into_iter()
@@ -243,7 +254,7 @@ pub(in crate::orchestrator) fn natural_size(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
-        RootAlignments::resolve(theme, source.description().prose_alignments(), [None; 2]),
+        RootAlignments::resolve(theme, source.prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;

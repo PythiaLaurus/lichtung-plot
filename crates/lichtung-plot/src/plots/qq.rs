@@ -9,9 +9,12 @@ use crate::alpha::{
 use crate::data::PlotData;
 use crate::Error;
 
+use crate::builder::PlotDescription;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, PointStyle};
-use crate::spec::{PlotRenderContext, PlotRenderResult, QqLine};
+use crate::spec::{PlotMeasureContext, QqLine};
 use crate::stats::distribution::{sorted_quantile, standard_normal_quantile};
+#[cfg(test)]
 use crate::Plot;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,7 +33,7 @@ pub(crate) struct PreparedQq {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -46,7 +49,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Qq primary quantile pairs are incomplete".into(),
         ));
     }
-    let style = chart.description().point_style(
+    let style = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_qq(),
@@ -206,31 +209,25 @@ impl QqPayload {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Qq(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "Qq measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
-    let theme = context.theme;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Qq(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render("Qq measurement requires root-prepared semantics for its component".into())
+    })?;
+    let theme = request;
 
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, context)?;
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let mut result = project(chart, prepared, layout, context, request)?;
+    let raw_windows = context.registered.raw_windows();
     if let Some(ink) = point_ink(
-        &chart.description().point_style(
+        &chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_qq(),
@@ -249,7 +246,7 @@ pub(crate) fn measure_marks(
             [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?;
-        let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Qq marks"))
+        let marks = std::sync::Arc::get_mut(&mut result.marks)
             .expect("newly selected Qq marks have one owner");
         let crate::layout::interior::MarkPayload::Qq(payload) = &mut marks.payload else {
             unreachable!("Qq selected its own mark payload")
@@ -260,12 +257,13 @@ pub(crate) fn measure_marks(
 }
 
 pub(crate) fn project(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &PreparedQq,
-    layout: crate::layout::Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, Error> {
-    let theme = context.theme;
+    layout: &crate::layout::Layout,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, Error> {
+    let theme = request;
     let mut payload = QqPayload {
         clip: layout.projection.panel_box(),
         line: None,
@@ -281,7 +279,7 @@ pub(crate) fn project(
         ),
         domain_expansions: [None; 2],
     };
-    let point_style = chart.description().point_style(
+    let point_style = chart.point_style(
         theme,
         crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
         theme.marks.get_points().get_radii().get_qq(),
@@ -305,18 +303,11 @@ pub(crate) fn project(
         .zip(&prepared.observed)
         .zip(&prepared.alphas)
     {
-        if chart
-            .description()
-            .x_axis_spec()
-            .window
-            .map(crate::layout::RawWindow::pair)
-            .is_some_and(|(minimum, maximum)| *theoretical < minimum || *theoretical > maximum)
-            || chart
-                .description()
-                .y_axis_spec()
-                .window
-                .map(crate::layout::RawWindow::pair)
-                .is_some_and(|(minimum, maximum)| *observed < minimum || *observed > maximum)
+        let ranges = context.assignment.local.ranges().expect("Qq assigned pair");
+        if *theoretical < ranges[0].0
+            || *theoretical > ranges[0].1
+            || *observed < ranges[1].0
+            || *observed > ranges[1].1
         {
             continue;
         }
@@ -337,22 +328,17 @@ pub(crate) fn project(
     for (points, style) in &payload.point_batches {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    );
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Qq(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 pub(super) fn qq_display_range(
     data_range: (f64, f64),
-    spec: &crate::layout::AxisSpec,
+    spec: &crate::layout::AuthoredAxisSpec,
     axis: &str,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
@@ -694,12 +680,47 @@ mod tests {
                 &mapped,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
                 |_| Ok(()),
-                |mapped, inputs, request, _operation| {
-                    let assigned = mapped
-                        .clone()
-                        .with_planned_y_limits((-8.0, 8.0))
-                        .with_resolved_facet_ranges(mapped.kind(), None, Some((-10.0, 10.0)));
-                    intrinsic_body_minimum(&assigned, inputs.plots.first(), request).unwrap()
+                |mapped, inputs, request, operation, round| {
+                    let measurement = inputs.assignment_factory().assign(
+                        mapped
+                            .sizing_request()
+                            .assigned_size()
+                            .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                    );
+                    let registered = &inputs.plots[0];
+                    let factory = inputs
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
+                        .unwrap();
+                    let mut entry = factory
+                        .assign(
+                            crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                                measurement.measurement_size,
+                                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                                round,
+                                &registered.scope.address,
+                            ),
+                            round,
+                            None,
+                        )
+                        .unwrap();
+                    let crate::orchestrator::assignment::AxisDomainAssignments::Pair(pair) =
+                        &mut entry.domains
+                    else {
+                        unreachable!("Qq pair")
+                    };
+                    pair[1].extent = crate::orchestrator::registration::DisplayExtent {
+                        lower: -10.0,
+                        upper: 10.0,
+                    };
+                    pair[1].provenance = crate::layout::RangeProvenance::Shared;
+                    crate::layout::interior::intrinsic_body_minimum(
+                        registered,
+                        crate::builder::RootFrameDomainInput::Selected(&entry),
+                        factory.intrinsic,
+                        operation,
+                        request,
+                    )
+                    .unwrap()
                 }
             )
             .unwrap()
@@ -784,7 +805,7 @@ mod tests {
 
     #[test]
     fn qq_constant_ranges_use_finite_neighbors_at_zero_and_extremes() {
-        let spec = crate::layout::AxisSpec::default();
+        let spec = crate::layout::AuthoredAxisSpec::default();
 
         assert_eq!(
             qq_display_range((0.0, 0.0), &spec, "y-axis").unwrap(),

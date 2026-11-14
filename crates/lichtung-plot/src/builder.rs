@@ -17,9 +17,11 @@ mod layout;
 mod text_clear;
 mod text_layout;
 
+pub(crate) use layout::{measure_root_frame, RootFrameDomainInput};
+
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
-use crate::layout::AxisSpec;
+use crate::layout::AuthoredAxisSpec;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, DumbbellEndpoints, FacetSpec, HeatmapAnnotations,
     HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat,
@@ -450,8 +452,6 @@ use crate::{
 #[derive(Clone)]
 pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     description: PlotDescription,
-    pub(crate) output_dimensions: Option<(u32, u32)>,
-    resolved_facet_x_range: Option<(f64, f64)>,
     marker: PhantomData<K>,
 }
 
@@ -511,8 +511,6 @@ impl Plot<crate::kind::Any> {
     fn new<K: crate::kind::Marker>(input: PlotInput, kind: PlotKind) -> Plot<K> {
         Plot {
             description: PlotDescription::new(input, kind),
-            output_dimensions: None,
-            resolved_facet_x_range: None,
             marker: PhantomData,
         }
     }
@@ -830,16 +828,8 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
     /// ```
     #[must_use]
     pub fn erase(self) -> Plot<crate::kind::Any> {
-        let Plot {
-            description,
-            output_dimensions,
-            resolved_facet_x_range,
-            marker: _,
-        } = self;
         Plot {
-            description,
-            output_dimensions,
-            resolved_facet_x_range,
+            description: self.description,
             marker: PhantomData,
         }
     }

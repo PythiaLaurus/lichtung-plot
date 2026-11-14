@@ -25,26 +25,21 @@ fn parent_guide(
 
 fn measure(
     children: &mut ChildPlans,
-    source: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    _source: &Plot,
+    context: &PlotMeasureContext<'_, '_>,
     owner: &ComponentAddress,
     round: &FeedbackRound,
     produced: &std::cell::Cell<usize>,
 ) -> Result<Arc<PlotRenderResult>, Error> {
-    fit::measured(children.measure(
-        source,
-        context,
-        owner,
-        MeasurementPhase::Legend,
-        round,
-        || {
+    fit::measured(
+        children.measure(context, owner, MeasurementPhase::Legend, round, || {
             produced.set(produced.get() + 1);
             Ok(FitOutcome::Measured(PlotRenderResult::new(
-                crate::layout::Layout::envelope(context.panel),
+                crate::layout::Layout::envelope(context.assignment.local.body),
                 None,
             )))
-        },
-    ))
+        }),
+    )
     .map_err(fit::PlanError::into_error)
 }
 
@@ -84,13 +79,26 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             height: 600,
         },
         |stage| {
-            let operation = stage.operation();
-            let inputs = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-            Ok((operation, inputs))
+            let inputs = prepare_child_inputs_for_test(&source, stage)?;
+            let mut font = prepare_child_inputs_for_test(&source, stage)?;
+            font.plots[0].appearance.typography.axes.tick_label.stack =
+                crate::font::canonical::FontStack::new(
+                    [crate::font::canonical::FontFamily::named("Noto Sand")?]
+                        .into_iter()
+                        .chain(
+                            theme.typography.axes.tick_label.stack.families()[1..]
+                                .iter()
+                                .cloned(),
+                        ),
+                )?;
+            Ok((inputs, font))
         },
-        |(operation, inputs), assigned, round| {
+        |(inputs, font), assigned, round| {
             let registered = &inputs.plots[0];
-            let data = registered.data(operation)?;
+            let measurement = inputs
+                .assignment_factory()
+                .assign(assigned.assigned_size()?);
+            let factory = inputs.plot_assignment_factory(&measurement, &registered.scope.id)?;
             let mut children = ChildPlans::facets();
             let produced = std::cell::Cell::new(0);
             let panel = PixelRect::new(20.0, 400.0, 20.0, 500.0);
@@ -106,11 +114,15 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
                 local_guide: None,
                 dependencies: &first,
             };
-            let context = PlotRenderContext::new(data, panel, &theme)
-                .with_registration(registered, inputs.intrinsic(registered))
-                .with_guides(&first_view);
-            let original = measure(&mut children, &source, context, &owner, round, &produced)?;
-            let hit = measure(&mut children, &source, context, &owner, round, &produced)?;
+            let entry = factory.assign(
+                child_allocation_for_test(measurement.measurement_size, panel, &owner, round),
+                round,
+                None,
+            )?;
+            let scope = FitScope::root();
+            let context = factory.context(&entry, first_view, &scope)?;
+            let original = measure(&mut children, &source, &context, &owner, round, &produced)?;
+            let hit = measure(&mut children, &source, &context, &owner, round, &produced)?;
             assert!(Arc::ptr_eq(&original, &hit));
 
             // Aliased titles/labels and all glyphs agree; only complete raw/source
@@ -128,7 +140,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let changed = measure(
                 &mut children,
                 &source,
-                context.with_guides(&second_view),
+                &factory.context(&entry, second_view, &scope)?,
                 &owner,
                 round,
                 &produced,
@@ -151,7 +163,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let rotated = measure(
                 &mut children,
                 &source,
-                context.with_guides(&horizontal_view),
+                &factory.context(&entry, horizontal_view, &scope)?,
                 &owner,
                 round,
                 &produced,
@@ -174,7 +186,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let compacted = measure(
                 &mut children,
                 &source,
-                context.with_guides(&compact_view),
+                &factory.context(&entry, compact_view, &scope)?,
                 &owner,
                 round,
                 &produced,
@@ -191,11 +203,11 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
                 dependencies: &only,
                 ..first_view
             };
-            let only_context = context.with_guides(&only_view);
+            let only_context = factory.context(&entry, only_view, &scope)?;
             let allocated = measure(
                 &mut children,
                 &source,
-                only_context,
+                &only_context,
                 &owner,
                 round,
                 &produced,
@@ -216,7 +228,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
                 &measure(
                     &mut children,
                     &source,
-                    context.with_guides(&equal_view),
+                    &factory.context(&entry, equal_view, &scope)?,
                     &owner,
                     round,
                     &produced
@@ -235,7 +247,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let width_only = measure(
                 &mut children,
                 &source,
-                context.with_guides(&width_view),
+                &factory.context(&entry, width_view, &scope)?,
                 &owner,
                 round,
                 &produced,
@@ -244,7 +256,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let baseline = measure(
                 &mut children,
                 &source,
-                only_context,
+                &only_context,
                 &owner,
                 round,
                 &produced,
@@ -263,7 +275,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let hit = measure(
                 &mut children,
                 &source,
-                only_context,
+                &only_context,
                 &owner,
                 round,
                 &produced,
@@ -287,7 +299,7 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             let unstable = measure(
                 &mut children,
                 &source,
-                only_context,
+                &only_context,
                 &owner,
                 round,
                 &produced,
@@ -299,26 +311,13 @@ fn actual_child_hits_require_exact_consumed_guides_and_stable_declared_ancestors
             )?;
             assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
 
-            let mut different_font = theme.theme.clone();
-            different_font.typography.axes.tick_label.stack =
-                crate::font::canonical::FontStack::new(
-                    [crate::font::canonical::FontFamily::named("Noto Sand")?]
-                        .into_iter()
-                        .chain(
-                            theme.typography.axes.tick_label.stack.families()[1..]
-                                .iter()
-                                .cloned(),
-                        ),
-                )?;
-            let request = crate::text::TextRequestContext {
-                theme: &different_font,
-                ..theme
-            };
-            let changed_font = context.with_theme(&request).with_guides(&only_view);
+            let font_factory =
+                font.plot_assignment_factory(&measurement, &font.plots[0].scope.id)?;
+            let changed_font = font_factory.context(&entry, only_view, &scope)?;
             let changed = measure(
                 &mut children,
                 &source,
-                changed_font,
+                &changed_font,
                 &owner,
                 round,
                 &produced,

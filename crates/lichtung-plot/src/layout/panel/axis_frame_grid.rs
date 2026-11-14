@@ -1,7 +1,7 @@
 use crate::Error;
 
 use super::sources::SourceKind;
-use super::{cells, Axis, AxisSide, AxisSpec, AxisTick, Layout, Projection, TickSource};
+use super::{cells, AuthoredAxisSpec, Axis, AxisSide, AxisTick, Layout, Projection, TickSource};
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
@@ -14,7 +14,7 @@ mod appearance_tests;
 #[cfg(test)]
 mod tests;
 
-impl AxisSpec {
+impl AuthoredAxisSpec {
     /// Return a copy with finite, strictly ascending explicit limits.
     #[must_use]
     pub fn limits(mut self, min: f64, max: f64) -> Self {
@@ -23,7 +23,6 @@ impl AxisSpec {
             crate::orchestrator::measurements::Counter::AxisSpecPreparation,
         );
         self.window = Some(super::RawWindow::from_pair((min, max)));
-        self.provenance = super::RangeProvenance::Configured;
         self
     }
 

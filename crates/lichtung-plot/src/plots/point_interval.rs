@@ -5,7 +5,7 @@
 use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
-use crate::layout::AxisSpec;
+use crate::layout::AuthoredAxisSpec;
 use crate::spec::{CategoryOrder, ValueSort};
 
 #[derive(Debug, PartialEq)]
@@ -22,7 +22,7 @@ pub(crate) fn prepare(
 ) -> Result<Vec<PointIntervalRow>, Error> {
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
-    if chart.y_axis_spec() != &AxisSpec::default() {
+    if chart.y_axis_spec() != &AuthoredAxisSpec::default() {
         return Err(Error::Data(
             "point_interval: categorical y-axis limits are not supported".into(),
         ));
@@ -182,7 +182,7 @@ fn sort_rows(rows: &mut [PointIntervalRow], order: &mut [(usize, usize)]) {
 
 pub(crate) fn point_interval_display_range(
     data_range: (f64, f64),
-    spec: &AxisSpec,
+    spec: &AuthoredAxisSpec,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(

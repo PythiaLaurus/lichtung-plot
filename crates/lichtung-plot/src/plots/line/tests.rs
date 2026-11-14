@@ -1,4 +1,5 @@
 use super::*;
+use crate::spec::PlotRenderResult;
 
 fn labeled_layer(value: f64, label: &str) -> crate::PointLayer {
     crate::PointLayer::new(
@@ -338,7 +339,7 @@ fn trajectory_row_hue_identity_survives_parent_palette_order_and_condition_sort(
             registry.panels[0].set_parent_colors(parent);
             Ok(())
         },
-        |plot, inputs, request, _| {
+        |plot, inputs, _request, _, round| {
             let registered = &inputs.plots[0];
             let crate::orchestrator::registration::PreparedFamily::Line {
                 marks: prepared, ..
@@ -375,16 +376,38 @@ fn trajectory_row_hue_identity_survives_parent_palette_order_and_condition_sort(
                     }
                 })
             );
-            crate::layout::fit::measured(plot.preflight_measurement(
-                Some(registered),
-                Some(inputs.intrinsic(registered)),
-                None,
-                plot.kind(),
-                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                request,
-                &crate::layout::fit::ROOT_SCOPE,
-            ))
+            let measurement = inputs.assignment_factory().assign(
+                plot.sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
+                .unwrap();
+            let entry = factory
+                .assign(
+                    crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
+                )
+                .unwrap();
+            let scope = crate::layout::fit::FitScope::root();
+            crate::orchestrator::measure_probe(
+                &factory,
+                entry,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                },
+                &scope,
+            )
             .unwrap()
+            .1
         },
     )
     .unwrap();
@@ -441,18 +464,40 @@ fn hue_path_uses_scientific_pair_identity_instead_of_local_palette_position() {
             registry.panels[0].set_parent_colors(parent);
             Ok(())
         },
-        |plot, inputs, request, _| {
+        |plot, inputs, _request, _, round| {
             let registered = &inputs.plots[0];
-            crate::layout::fit::measured(plot.preflight_measurement(
-                Some(registered),
-                Some(inputs.intrinsic(registered)),
-                None,
-                plot.kind(),
-                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                request,
-                &crate::layout::fit::ROOT_SCOPE,
-            ))
+            let measurement = inputs.assignment_factory().assign(
+                plot.sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
+                .unwrap();
+            let entry = factory
+                .assign(
+                    crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
+                )
+                .unwrap();
+            let scope = crate::layout::fit::FitScope::root();
+            crate::orchestrator::measure_probe(
+                &factory,
+                entry,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                },
+                &scope,
+            )
             .unwrap()
+            .1
         },
     )
     .unwrap();

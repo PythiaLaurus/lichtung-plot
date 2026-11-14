@@ -7,9 +7,19 @@ use crate::orchestrator::registration::{
     CategoricalBinding, FamilyRef as F, GuideContribution, ParentOrders, PlotRegistrationBuild,
     PlotScopePolicy, PreparedAxesOwner, Scope,
 };
-use crate::{Error, Plot, PlotKind};
+use crate::{Error, PlotKind};
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static NATIVE_RIGHT_STAGES: std::cell::RefCell<Vec<&'static str>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
 
 /// One measured mandatory right guide beside the flexible scientific body.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ordered transaction measures the complete legend before track allocation and optional content-height callbacks"
+)]
 pub(crate) fn native_right(
     descriptor: std::sync::Arc<PreparedGuide>,
     panel: crate::layout::PixelRect,
@@ -17,12 +27,7 @@ pub(crate) fn native_right(
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &crate::layout::fit::FitScope,
 
-    content_plot: Option<(
-        &Plot,
-        Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        &crate::orchestrator::root::PlotIntrinsics,
-        &crate::font::canonical::OperationContext,
-    )>,
+    content_plot: Option<&crate::spec::PlotMeasureContext<'_, '_>>,
 ) -> Result<
     (crate::layout::PixelRect, crate::decorations::legend::Legend),
     crate::layout::fit::PlanError,
@@ -58,6 +63,8 @@ pub(crate) fn native_right(
         &mut false,
         scope,
     ))?;
+    #[cfg(test)]
+    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("measured"));
     let hard = crate::layout::kernel::ceil_spatial_quanta(minimum)?;
     let width = crate::layout::kernel::ceil_spatial_quanta(guide.compute_box_width())?;
     let tracks = [
@@ -98,8 +105,22 @@ pub(crate) fn native_right(
         reason = "root-bounded spatial quanta convert exactly to CSS pixels"
     )]
     let body_right = edge as f64 / 1024.0;
-    let top = if let Some((plot, registered, intrinsic, operation)) = content_plot {
-        let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+    #[cfg(test)]
+    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("allocated"));
+    let top = if let Some(context) = content_plot {
+        #[cfg(test)]
+        NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("content"));
+        let plot = context.registered.source;
+        let registered = Some(context.registered);
+        let intrinsic = context.intrinsic;
+        let operation = context.operation;
+        let hard = plot.intrinsic_body_minimum(
+            registered,
+            intrinsic,
+            operation,
+            theme,
+            context.assignment.local.ranges(),
+        )?;
         let preference = crate::layout::interior::sizing::body_preference(
             plot, registered, intrinsic, operation, theme, hard,
         )?;
@@ -112,6 +133,7 @@ pub(crate) fn native_right(
                     theme,
                     body_right - panel.x0,
                     preference.1,
+                    context.assignment.local.ranges(),
                 )?
                 .max(guide.compute_box_height())
     } else {

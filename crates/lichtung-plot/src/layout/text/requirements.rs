@@ -694,7 +694,8 @@ fn prepared_address_child(
     reason = "the closed text census keeps both axis policies and canonical producer order explicit"
 )]
 pub(crate) fn foundational_plot_requirements(
-    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
+    plots: Option<&[crate::orchestrator::registration::PlotRegistration<'_>]>,
+    root_guide: Option<&std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     plot: &PlotDescription,
     kind: PlotKind,
     theme: &crate::text::TextRequestContext<'_, '_>,
@@ -706,8 +707,8 @@ pub(crate) fn foundational_plot_requirements(
 ) -> Result<Vec<PreparedTextRequirement>, Error> {
     let mut requirements = Vec::new();
     PreparedTextRequirement::append_plot(
-        interiors.map(|inputs| inputs.plots.as_slice()),
-        interiors.and_then(|inputs| inputs.root_guide.as_ref()),
+        plots,
+        root_guide,
         &mut requirements,
         plot,
         kind,
@@ -1024,7 +1025,7 @@ fn push_deferred_plot_requirements(
         )?;
     }
     if plot.has_facets() {
-        crate::orchestrator::facet_text_census_labels(plot, |label| {
+        crate::orchestrator::facet_text_census_labels(plot, plots, |label| {
             push_deferred_body(
                 requirements,
                 &body_address,
@@ -1516,7 +1517,7 @@ fn push_plot_axis_ticks(
 fn push_axis_ticks<'a>(
     requirements: &mut Vec<PreparedTextRequirement>,
     axis: &ComponentAddress,
-    spec: &crate::layout::AxisSpec,
+    spec: &crate::layout::AuthoredAxisSpec,
     automatic_categories: Option<Vec<String>>,
     category_generated_alphabet: Option<&[char]>,
     appearance: impl Into<crate::text::TextAppearance<'a>>,
@@ -1710,8 +1711,7 @@ pub(crate) enum PreparedTextCensusError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
-    use crate::orchestrator::root::intrinsic_inputs;
+    use crate::orchestrator::root::{PlotIntrinsicInputs, PlotIntrinsics};
 
     #[test]
     fn text_census_without_an_operation_stage_refuses_before_font_or_address_work() {
@@ -1725,6 +1725,7 @@ mod tests {
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let error = foundational_plot_requirements(
+            None,
             None,
             plot.description(),
             PlotKind::Scatter,
@@ -2340,7 +2341,7 @@ mod tests {
             .unwrap();
         let mut appearance = appearance("Digits", TextWeight::Normal);
         appearance.stack = canonical::named_stack(&["Digits", "Marks", "Whole"]);
-        let spec = crate::layout::AxisSpec {
+        let spec = crate::layout::AuthoredAxisSpec {
             format: Some(std::sync::Arc::new(format.clone())),
             ..Default::default()
         };
@@ -2452,6 +2453,7 @@ mod tests {
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
+                None,
                 None,
                 plot.description(),
                 PlotKind::Scatter,
@@ -2587,7 +2589,7 @@ mod tests {
                 canonical::named_stack(&["Dark missing row"]);
             theme.typography.annotations.contrast.light.font_size = 39.0;
             theme.typography.annotations.contrast.dark.font_size = 9.0;
-            let mut inputs =
+            let (mut inputs, _) =
                 crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
             let text_service = crate::text::TextService::default();
             let guide = crate::layout::interior::guide::prepare_discrete_guides(
@@ -2596,11 +2598,7 @@ mod tests {
                 &resources,
                 false,
             )?;
-            let inputs = PreparedInteriorInputs::from_registry(
-                inputs,
-                InteriorRoute::classify(plot.kind()),
-                guide,
-            )?;
+            let plots = inputs.finish()?;
             for (backdrop, expected) in [
                 (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
                 (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
@@ -2611,7 +2609,8 @@ mod tests {
                     .planning_backdrop(backdrop)
                     .unwrap();
                 let requirements = foundational_plot_requirements(
-                    Some(&inputs),
+                    Some(&plots),
+                    guide.as_ref(),
                     plot.description(),
                     PlotKind::Heatmap,
                     &crate::text::TextRequestContext::new(&theme, &text_service),
@@ -2646,10 +2645,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one real guide/census boundary compares the original and final shared contrast roles"
-    )]
     fn final_shared_heatmap_domain_reselects_complete_contrast_role_before_fonts() {
         let plot = crate::Plot::heatmap(
             crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -2671,7 +2666,7 @@ mod tests {
                 canonical::named_stack(&["Selected dark contrast"]);
             theme.typography.annotations.contrast.light.font_size = 39.0;
             theme.typography.annotations.contrast.dark.font_size = 9.0;
-            let mut inputs =
+            let (mut inputs, _) =
                 crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
@@ -2681,16 +2676,13 @@ mod tests {
                 &resources,
                 false,
             )?;
-            let mut inputs = PreparedInteriorInputs::from_registry(
-                inputs,
-                InteriorRoute::classify(plot.kind()),
-                guide,
-            )?;
+            let mut plots = inputs.finish()?;
             let selected_stack =
-                |inputs: &PreparedInteriorInputs,
+                |plots: &[crate::orchestrator::registration::PlotRegistration<'_>],
                  stage: &mut crate::layout::kernel::PreparedStage<'_>| {
                     let requirements = foundational_plot_requirements(
-                        Some(inputs),
+                        Some(plots),
+                        guide.as_ref(),
                         plot.description(),
                         PlotKind::Heatmap,
                         &theme,
@@ -2710,7 +2702,7 @@ mod tests {
                     )
                 };
             assert_eq!(
-                selected_stack(&inputs, stage)?,
+                selected_stack(&plots, stage)?,
                 canonical::named_stack(&["Selected light contrast"])
             );
             let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
@@ -2742,13 +2734,13 @@ mod tests {
                 .unwrap(),
             };
             let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-                &mut inputs.plots[0].family
+                &mut plots[0].family
             else {
                 panic!("prepared Heatmap")
             };
             marks.install_shared_domain(&descriptor).unwrap();
             assert_eq!(
-                selected_stack(&inputs, stage)?,
+                selected_stack(&plots, stage)?,
                 canonical::named_stack(&["Selected dark contrast"])
             );
             Ok(())
@@ -2786,7 +2778,7 @@ mod tests {
                 canonical::named_stack(&["Estimate detail only"]);
             theme.typography.annotations.estimate_detail.font_size = 20.0;
             theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
-            let mut inputs =
+            let (mut inputs, _) =
                 crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
@@ -2796,13 +2788,10 @@ mod tests {
                 &resources,
                 false,
             )?;
-            let inputs = PreparedInteriorInputs::from_registry(
-                inputs,
-                InteriorRoute::classify(plot.kind()),
-                guide,
-            )?;
+            let plots = inputs.finish()?;
             let requirements = foundational_plot_requirements(
-                Some(&inputs),
+                Some(&plots),
+                guide.as_ref(),
                 plot.description(),
                 PlotKind::Coefficient,
                 &theme,
@@ -2814,7 +2803,7 @@ mod tests {
             )?;
             let crate::orchestrator::registration::PreparedFamily::Estimate {
                 marks: prepared, ..
-            } = &inputs.plots[0].family
+            } = &plots[0].family
             else {
                 panic!("prepared Estimate")
             };
@@ -2887,7 +2876,7 @@ mod tests {
                 |stage| {
                     let text = crate::text::TextService::default();
                     let theme = crate::text::TextRequestContext::new(&theme, &text);
-                    let mut inputs = crate::plots::shared_x::prepare_plot(
+                    let (mut inputs, _) = crate::plots::shared_x::prepare_plot(
                         plot.description(),
                         &stage.operation(),
                         &theme,
@@ -2898,13 +2887,11 @@ mod tests {
                         &stage.operation(),
                         false,
                     )?;
-                    let inputs = PreparedInteriorInputs::from_registry(
-                        inputs,
-                        InteriorRoute::classify(plot.kind()),
-                        guide,
-                    )?;
+                    let plots = inputs.finish()?;
+                    let intrinsic = PlotIntrinsics::for_kind(plot.kind());
                     let requirements = foundational_plot_requirements(
-                        Some(&inputs),
+                        Some(&plots),
+                        guide.as_ref(),
                         plot.description(),
                         PlotKind::Heatmap,
                         &theme,
@@ -2928,9 +2915,16 @@ mod tests {
                         presence,
                         stage,
                     )?;
+                    let registered = &plots[0];
                     let minimum = crate::plots::heatmap::heatmap_minima(
-                        inputs.intrinsic(&inputs.plots[0]),
-                        &intrinsic_inputs(inputs.plots.first(), &theme, &stage.operation())?,
+                        &intrinsic,
+                        &PlotIntrinsicInputs {
+                            registered,
+                            request: theme,
+                            operation: &stage.operation(),
+                            y_visible: registered.policy.axis_text.tick_labels[1],
+                            diagnostic_scope: registered.scope.render_name.as_deref(),
+                        },
                     )?
                     .0;
                     assert!(

@@ -8,7 +8,7 @@ use crate::data::{
 };
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
-use crate::layout::AxisSpec;
+use crate::layout::AuthoredAxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointStyle;
 use crate::spec::{
@@ -1128,7 +1128,7 @@ impl PlotDescription {
 
     /// Borrow x-axis scale configuration.
     #[must_use]
-    pub(crate) fn x_axis_spec(&self) -> &AxisSpec {
+    pub(crate) fn x_axis_spec(&self) -> &AuthoredAxisSpec {
         &self.payload.axes[0]
     }
 
@@ -1136,7 +1136,7 @@ impl PlotDescription {
         self.payload.axes[0].exact_ticks.as_deref()
     }
 
-    pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
+    pub(crate) fn y_axis_spec(&self) -> &AuthoredAxisSpec {
         &self.payload.axes[1]
     }
 
@@ -1222,6 +1222,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.description
     }
 
+    pub(crate) fn into_description(self) -> PlotDescription {
+        self.description
+    }
+
     #[cfg(test)]
     pub(crate) fn with_test_axis_ticks(mut self, side: usize, ticks: Vec<crate::AxisTick>) -> Self {
         if side == 0 {
@@ -1232,42 +1236,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Assigned geometry is available only after the root or parent allocates it.
-    pub(crate) fn canvas_dimensions(&self) -> Result<(u32, u32), Error> {
-        self.description.root_size.dimensions()
-    }
-
-    pub(crate) fn figure_dimensions(&self) -> Result<(u32, u32), Error> {
-        self.output_dimensions
-            .map_or_else(|| self.canvas_dimensions(), Ok)
-    }
-
-    pub(crate) fn measure_dimensions(
-        &self,
-    ) -> Result<crate::orchestrator::assignment::PlotMeasureDimensions, Error> {
-        Ok(crate::orchestrator::assignment::PlotMeasureDimensions {
-            canvas: self.description.root_size.assigned_size()?,
-            output_override: self
-                .output_dimensions
-                .map(|(width, height)| crate::layout::RootSize::new(width, height)),
-        })
-    }
-
     /// Selected semantic plot kind.
     #[must_use]
     pub const fn kind(&self) -> PlotKind {
         self.description.kind
-    }
-
-    pub(crate) fn with_planned_y_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().axes[1].window =
-            Some(crate::layout::RawWindow::from_pair(limits));
-        self
-    }
-
-    pub(crate) fn with_planned_x_limits(mut self, limits: (f64, f64)) -> Self {
-        self.description.payload_mut().axes[0].window =
-            Some(crate::layout::RawWindow::from_pair(limits));
-        self
     }
 }

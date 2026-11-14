@@ -1,6 +1,6 @@
 //! Shared plot specification and render-result types.
 
-use crate::layout::{Layout, PixelRect};
+use crate::layout::Layout;
 use crate::significance::SignificancePlan;
 use crate::{NumericFormat, NumericValues};
 
@@ -639,170 +639,157 @@ pub(crate) enum LegendClearance {
 
 use crate::Error;
 
-/// Shared immutable inputs for one plot renderer.
-#[derive(Clone, Copy)]
-pub(crate) struct PlotRenderContext<'a, 'src> {
+/// A short borrow of one root-issued allocation and its canonical occurrence.
+/// Geometry, domains and dimensions have exactly one owner: the allocation.
+pub(crate) struct PlotMeasureContext<'v, 'src> {
+    pub(crate) registered: &'v crate::orchestrator::registration::PlotRegistration<'src>,
+    pub(crate) assignment: crate::orchestrator::assignment::RootPlotAssignmentRef<'v>,
     pub(crate) canvas: Option<&'src crate::Canvas>,
-    pub(crate) registered: Option<&'a crate::orchestrator::registration::PlotRegistration<'src>>,
-    pub(crate) intrinsic: Option<&'a crate::orchestrator::root::PlotIntrinsics>,
-    pub(crate) data: crate::data::PlotData<'src, 'a>,
-    pub(crate) cell: PixelRect,
-    pub(crate) panel: PixelRect,
-    pub(crate) content_height: bool,
-    // An embedded content-sized child still fills its parent's arranged row.
-    // Its own preferred height is reported separately to that same root driver.
-    pub(crate) fill_content_height: bool,
-    // Derived inside the containing-frame measure, never supplied by callers.
-    pub(crate) content_preference: Option<f64>,
-    // Parent-owned perpendicular capacity; axis feedback must not shrink it a
-    // second time merely because the assigned mark panel became narrower.
-    pub(crate) axis_label_width: f64,
-    prepared: bool,
-    prepared_limits: [Option<(f64, f64)>; 2],
-    pub(crate) theme: &'a crate::text::TextRequestContext<'a, 'src>,
-    pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
-    fit_scope: &'a crate::layout::fit::FitScope,
+    pub(crate) text: &'v crate::text::TextService,
+    pub(crate) operation: &'v crate::font::canonical::OperationContext,
+    pub(crate) intrinsic: &'v crate::orchestrator::root::PlotIntrinsics,
+    pub(crate) guides: crate::decorations::legend::discrete::scoped::GuideConsumption<'v>,
+    pub(crate) fit_scope: &'v crate::layout::fit::FitScope,
 }
 
-impl<'a, 'src> PlotRenderContext<'a, 'src> {
-    pub(crate) fn with_theme<'b>(
-        self,
-        theme: &'b crate::text::TextRequestContext<'b, 'src>,
-    ) -> PlotRenderContext<'b, 'src>
-    where
-        'a: 'b,
-    {
-        PlotRenderContext { theme, ..self }
-    }
-    pub(crate) fn new(
-        data: crate::data::PlotData<'src, 'a>,
-        panel: PixelRect,
-        theme: &'a crate::text::TextRequestContext<'a, 'src>,
-    ) -> Self {
-        Self {
-            canvas: None,
-            registered: None,
-            intrinsic: None,
-            data,
-            cell: panel,
-            panel,
-            content_height: false,
-            fill_content_height: false,
-            content_preference: None,
-            axis_label_width: panel.width().max(0.0),
-            prepared: false,
-            prepared_limits: [None; 2],
-            theme,
-            guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
-            fit_scope: &crate::layout::fit::ROOT_SCOPE,
-        }
-    }
-
-    pub(crate) const fn with_canvas(mut self, canvas: &'src crate::Canvas) -> Self {
-        self.canvas = Some(canvas);
-        self
-    }
-
-    pub(crate) const fn with_panel(mut self, panel: PixelRect) -> Self {
-        self.panel = panel;
-        self
-    }
-
-    pub(crate) const fn with_axis_label_width(mut self, width: f64) -> Self {
-        self.axis_label_width = width;
-        self
-    }
-
-    pub(crate) const fn with_fit_scope(mut self, scope: &'a crate::layout::fit::FitScope) -> Self {
-        self.fit_scope = scope;
-        self
-    }
-
-    pub(crate) const fn with_guides(
-        mut self,
-        guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
-    ) -> Self {
-        self.guides = guides;
-        self
-    }
-    pub(crate) const fn fit_scope(self) -> &'a crate::layout::fit::FitScope {
+impl<'v, 'src> PlotMeasureContext<'v, 'src> {
+    pub(crate) const fn fit_scope(&self) -> &'v crate::layout::fit::FitScope {
         self.fit_scope
     }
 
-    pub(crate) fn intrinsic(self) -> &'a crate::orchestrator::root::PlotIntrinsics {
-        self.intrinsic.expect("prepared measurement intrinsic slot")
+    pub(crate) const fn intrinsic(&self) -> &'v crate::orchestrator::root::PlotIntrinsics {
+        self.intrinsic
     }
 
-    pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
-        match self.registered {
-            Some(registered) => registered.policy.facet_scales,
-            None => None,
-        }
+    pub(crate) fn family(&self) -> Result<crate::orchestrator::registration::FamilyRef<'v>, Error> {
+        crate::layout::interior::InteriorRoute::classify(self.registered.family.kind())
+            .validate(self.registered.source)?;
+        self.registered.family()
     }
 
-    /// Annotation geometry may read the selected range but must not resolve it again.
-    pub(crate) fn axis_range(
-        self,
-        side: crate::layout::AxisSide,
-        prepare: impl FnOnce() -> Result<(f64, f64), Error>,
-    ) -> Result<(f64, f64), Error> {
-        let index = usize::from(side == crate::layout::AxisSide::Left);
-        self.prepared_axes().map_or_else(prepare, |axes| {
-            Ok(self.prepared_limits[index].unwrap_or(axes.ranges()[index]))
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the fixed fallible axis-pair interface projects prepared operands without adding validation"
+    )]
+    pub(crate) fn axis_pair(
+        &self,
+        scope: crate::orchestrator::assignment::AxisPairScope,
+    ) -> Result<crate::orchestrator::assignment::AxisPairRef<'v>, Error> {
+        use crate::layout::AxisSide::{Bottom, Left};
+        use crate::orchestrator::assignment::{AssignedAxisRef, AxisDomainAssignments as D};
+        use crate::orchestrator::assignment::{AxisPairRef, AxisPairScope as S};
+        use crate::orchestrator::registration::{AxisSlot as A, MarginalStrip};
+        let axes = &self.registered.axes;
+        let source = self.registered.source;
+        let pair = match (scope, &self.assignment.local.domains) {
+            (S::Pair, D::Pair(domains)) => {
+                [(A::Pair(Bottom), &domains[0]), (A::Pair(Left), &domains[1])]
+            }
+            (S::MarginalCentral, D::Marginal { central, .. }) => [
+                (A::MarginalCentral(Bottom), &central[0]),
+                (A::MarginalCentral(Left), &central[1]),
+            ],
+            (
+                S::MarginalTop,
+                D::Marginal {
+                    central,
+                    strip_density,
+                },
+            ) => [
+                (A::MarginalCentral(Bottom), &central[0]),
+                (
+                    A::MarginalStripDensity(MarginalStrip::Top),
+                    &strip_density[0],
+                ),
+            ],
+            (
+                S::MarginalRight,
+                D::Marginal {
+                    central,
+                    strip_density,
+                },
+            ) => [
+                (
+                    A::MarginalStripDensity(MarginalStrip::Right),
+                    &strip_density[1],
+                ),
+                (A::MarginalCentral(Left), &central[1]),
+            ],
+            (S::MatrixCell { row, column }, D::Matrix { variables, .. }) => [
+                (A::MatrixVariable(column), &variables[column]),
+                (A::MatrixVariable(row), &variables[row]),
+            ],
+            (
+                S::MatrixDiagonalDensity { variable },
+                D::Matrix {
+                    variables,
+                    diagonal_density,
+                },
+            ) => [
+                (A::MatrixVariable(variable), &variables[variable]),
+                (
+                    A::MatrixDiagonalDensity(variable),
+                    &diagonal_density[variable],
+                ),
+            ],
+            _ => unreachable!("axis pair belongs to the selected interior route"),
+        };
+        Ok(AxisPairRef {
+            axes: pair.map(|(slot, domain)| AssignedAxisRef {
+                base: axes.axis_at(source, slot),
+                domain,
+            }),
         })
     }
 
-    pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
-        self.prepared = true;
-        self.prepared_limits = [
-            plot.description()
-                .x_axis_spec()
-                .window
-                .map(crate::layout::RawWindow::pair),
-            plot.description()
-                .y_axis_spec()
-                .window
-                .map(crate::layout::RawWindow::pair),
-        ];
-        if plot.kind() == PlotKind::Forest
-            && plot.description().axis_scale_spec() == AxisScale::Log10
-        {
-            if let Some((lo, hi)) = self.prepared_limits[0] {
-                self.prepared_limits[0] =
-                    Some((crate::numeric::log10(lo)?, crate::numeric::log10(hi)?));
+    pub(crate) fn data(&self) -> Result<crate::data::PlotData<'src, 'v>, Error> {
+        self.registered.data(self.operation)
+    }
+
+    pub(crate) fn request(&self) -> crate::text::TextRequestContext<'v, 'src> {
+        crate::text::TextRequestContext::new(&self.registered.appearance, self.text)
+    }
+
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "native measurements share the existing fallible range-reader interface"
+    )]
+    pub(crate) fn axis_range(&self, side: crate::layout::AxisSide) -> Result<(f64, f64), Error> {
+        use crate::orchestrator::assignment::AxisDomainAssignments;
+        let index = usize::from(side == crate::layout::AxisSide::Left);
+        let pair = match &self.assignment.local.domains {
+            AxisDomainAssignments::Pair(pair) => pair,
+            AxisDomainAssignments::Marginal { central, .. } => central,
+            AxisDomainAssignments::Matrix { .. } => {
+                unreachable!("Matrix selects an indexed axis pair")
             }
-        }
-        if let Some(shared) = plot.resolved_facet_x_range() {
-            self.prepared_limits[0] = Some(shared);
-        }
-        Ok(self)
-    }
-
-    fn prepared_axes(self) -> Option<&'a crate::orchestrator::registration::PreparedAxesOwner> {
-        self.registered.filter(|_| self.prepared)?.axes.coordinate()
-    }
-
-    pub(crate) fn prepared_family(
-        self,
-    ) -> Option<crate::orchestrator::registration::FamilyRef<'a>> {
-        Some(self.registered.filter(|_| self.prepared)?.family.as_ref())
-    }
-
-    pub(crate) const fn with_registration(
-        mut self,
-        registered: &'a crate::orchestrator::registration::PlotRegistration<'src>,
-        intrinsic: &'a crate::orchestrator::root::PlotIntrinsics,
-    ) -> Self {
-        self.registered = Some(registered);
-        self.intrinsic = Some(intrinsic);
-        self
+        };
+        Ok(pair[index].extent.pair())
     }
 
     pub(crate) fn prepared_category_labels(
-        self,
+        &self,
         side: usize,
-    ) -> Option<&'a [crate::layout::AxisTick]> {
-        Some(&self.prepared_axes()?.categories(side)?.ticks)
+    ) -> Option<&'v [crate::layout::AxisTick]> {
+        Some(&self.registered.axes.coordinate()?.categories(side)?.ticks)
+    }
+
+    pub(crate) fn semantic_inputs(
+        &self,
+        scope: crate::orchestrator::assignment::AxisPairScope,
+    ) -> Result<[crate::layout::AxisSemanticInputs; 2], Error> {
+        use crate::orchestrator::assignment::AssignedAxisRef;
+
+        let mut inputs = self
+            .axis_pair(scope)?
+            .axes
+            .map(AssignedAxisRef::semantic_inputs);
+        for (side, input) in inputs.iter_mut().enumerate() {
+            input
+                .text_layout
+                .clone_from(&self.registered.appearance.text_layouts.ticks[side]);
+        }
+        Ok(inputs)
     }
 }
 
@@ -886,25 +873,6 @@ impl PlotRenderResult {
             annotations: None,
             numeric_presentation: None,
         }
-    }
-
-    pub(crate) fn with_axis_domains(mut self, x: AxisDomain, y: AxisDomain) -> Self {
-        self.x_domain = x;
-        self.y_domain = y;
-        self
-    }
-
-    pub(crate) fn with_significance_plan(mut self, significance: SignificancePlan) -> Self {
-        self.significance = Some(significance);
-        self
-    }
-
-    pub(crate) fn with_deferred_annotation_text(
-        mut self,
-        plans: Vec<crate::layout::DeferredAnnotationTextPlan>,
-    ) -> Self {
-        self.deferred_annotation_text = plans;
-        self
     }
 
     pub(crate) fn with_self_managed_decorations(mut self) -> Self {

@@ -104,8 +104,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |chart, inputs, theme, _operation, round| {
                 let panels = &inputs.plots;
                 assert_eq!(panels.len(), 2);
                 for (registered, (expected, ends, fills)) in panels.iter().zip([
@@ -144,24 +143,27 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
                         ends.map(f64::to_bits)
                     );
                     assert!(prepared.bars.iter().all(|bar| bar.interval.is_some()));
-                    let chart = chart.clone();
-                    let minimum = intrinsic_body_minimum(&chart, Some(registered), theme).unwrap();
+                    let minimum = intrinsic_body_minimum(chart, Some(registered), theme).unwrap();
                     assert_eq!(
                         (if horizontal { minimum.0 } else { minimum.1 }).to_bits(),
                         40.0_f64.to_bits()
                     );
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-                    let selected = chart
-                        .measure_selected_interior(
-                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                            crate::spec::PlotRenderContext::new(
-                                registered.data(&operation).unwrap(),
-                                crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
-                                theme,
-                            )
-                            .with_registration(registered, inputs.intrinsic(registered)),
-                        )
+                    let measurement = inputs.assignment_factory().assign(
+                        chart
+                            .sizing_request()
+                            .assigned_size()
+                            .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                    );
+                    let factory = inputs
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
                         .unwrap();
+                    let selected = crate::layout::interior::measure_for_test(
+                        &factory,
+                        crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
+                        round,
+                    )
+                    .unwrap();
                     assert_eq!(
                         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                         reads
@@ -286,8 +288,7 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |chart, inputs, _theme, _operation, round| {
                 let registered = &inputs.plots[0];
                 let prepared = retained(Some(registered.family.as_ref())).unwrap();
                 assert_eq!(prepared.primary_mark_count(), 5);
@@ -305,17 +306,21 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
                         (0.0_f64.to_bits(), (-2.0_f64).to_bits(), true),
                     ]
                 );
-                let selected = chart
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                        crate::spec::PlotRenderContext::new(
-                            registered.data(&operation).unwrap(),
-                            crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
-                            theme,
-                        )
-                        .with_registration(registered, inputs.intrinsic(registered)),
-                    )
+                let measurement = inputs.assignment_factory().assign(
+                    chart
+                        .sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &registered.scope.id)
                     .unwrap();
+                let selected = crate::layout::interior::measure_for_test(
+                    &factory,
+                    crate::layout::PixelRect::new(20.0, 1000.0, 20.0, 800.0),
+                    round,
+                )
+                .unwrap();
                 let crate::layout::interior::MarkPayload::Bars(payload) =
                     &selected.marks.as_ref().unwrap().payload
                 else {

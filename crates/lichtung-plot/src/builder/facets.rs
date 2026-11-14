@@ -1,8 +1,12 @@
 use super::{ComposedInputs, Plot, PlotDescription};
 use crate::data::category::CategoryOrderRef;
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
-use crate::orchestrator::registration::{legend_policy, render_name};
-use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
+use crate::decorations::legend::discrete::scoped::ScopedGuideInputs;
+use crate::decorations::plan::children::MeasurementPhase;
+use crate::layout::kernel::{FeedbackKind, FeedbackRound};
+use crate::layout::{AddressRole, RangeProvenance};
+use crate::orchestrator::assignment::AxisDomainAssignments;
+use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind, PlotMeasureContext};
 
 #[cfg(test)]
 mod generation_tests;
@@ -25,10 +29,10 @@ impl PlotDescription {
     }
 
     pub(crate) fn facet_scales_spec(&self) -> FacetScales {
-        match &self.payload.facet {
-            Some(facet) => facet.scale_policy(),
-            None => FacetScales::Fixed,
-        }
+        self.payload
+            .facet
+            .as_ref()
+            .map_or(FacetScales::Fixed, FacetSpec::scale_policy)
     }
 
     pub(crate) fn facet_columns(
@@ -67,88 +71,176 @@ impl PlotDescription {
     }
 }
 
-impl<K: crate::kind::Marker> Plot<K> {
-    pub(crate) fn without_facets(mut self) -> Self {
-        self.description.payload_mut().facet = None;
-        self
+fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) if a.len() == b.len() => a.iter().zip(b).all(|(a, b)| a == b),
+        _ => false,
     }
+}
 
-    pub(crate) fn with_resolved_facet_ranges(
-        mut self,
-        kind: PlotKind,
-        x_range: Option<(f64, f64)>,
-        y_range: Option<(f64, f64)>,
-    ) -> Self {
-        if let Some(range) = x_range {
-            if self.description.payload.axes[0].provenance
-                != crate::layout::RangeProvenance::Configured
-            {
-                self.description.payload_mut().axes[0].provenance =
-                    crate::layout::RangeProvenance::Shared;
-            }
-            if kind == PlotKind::Forest && self.description.payload.axis_scale == AxisScale::Log10 {
-                self.resolved_facet_x_range = Some(range);
-            } else {
-                self.description.payload_mut().axes[0].window =
-                    Some(crate::layout::RawWindow::from_pair(range));
-            }
+fn same_order(order: Option<CategoryOrderRef<'_>>, values: Option<&[String]>) -> bool {
+    match (order, values) {
+        (None, None) => true,
+        (Some(order), Some(values)) if order.len() == values.len() => {
+            order.values().zip(values).all(|(a, b)| a == b)
         }
-        if let Some(range) = y_range {
-            if self.description.payload.axes[1].provenance
-                != crate::layout::RangeProvenance::Configured
-            {
-                self.description.payload_mut().axes[1].provenance =
-                    crate::layout::RangeProvenance::Shared;
-            }
-            self.description.payload_mut().axes[1].window =
-                Some(crate::layout::RawWindow::from_pair(range));
+        _ => false,
+    }
+}
+
+/// Recover the old working-window snapshot, not merely its selected display
+/// extent. Forest's resolved-x override deliberately remains a separate value.
+#[expect(
+    clippy::type_complexity,
+    reason = "three original narrow snapshot operands, without another owner"
+)]
+fn working_axes(
+    context: &PlotMeasureContext<'_, '_>,
+    round: &FeedbackRound,
+    measurement_phase: Option<MeasurementPhase>,
+) -> (
+    [Option<(f64, f64)>; 2],
+    [RangeProvenance; 2],
+    Option<(f64, f64)>,
+) {
+    let registered = context.registered;
+    let source = registered.source;
+    let authored = [source.x_axis_spec(), source.y_axis_spec()];
+    let mut windows = authored.map(|axis| axis.window.map(crate::layout::RawWindow::pair));
+    let mut provenance = authored.map(|axis| {
+        if axis.window.is_some() {
+            RangeProvenance::Configured
+        } else {
+            RangeProvenance::Automatic
         }
-        self
-    }
-
-    pub(crate) const fn resolved_facet_x_range(&self) -> Option<(f64, f64)> {
-        self.resolved_facet_x_range
-    }
-
-    /// Compare the computed inputs that Canvas/facet coordination can replace.
-    /// All other source configuration is immutable for a root-local child owner.
-    pub(crate) fn same_composed_inputs(
-        &self,
-        other: &ComposedInputs,
-        guides: &crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
-        registration: &crate::orchestrator::registration::PlotRegistration<'_>,
-        canvas: Option<&crate::Canvas>,
-    ) -> bool {
-        fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
-            match (a, b) {
-                (None, None) => true,
-                (Some(a), Some(b)) if a.len() == b.len() => {
-                    for (a, b) in a.iter().zip(b) {
-                        if a != b {
-                            return false;
-                        }
-                    }
-                    true
+    });
+    let mut resolved_x = None;
+    let forest = source.kind() == PlotKind::Forest && source.axis_scale_spec() == AxisScale::Log10;
+    if let Some(scales) = registered.policy.facet_scales {
+        if context.fit_scope.address.leaf_role() != AddressRole::FacetCell {
+            return (windows, provenance, resolved_x);
+        }
+        for (side, kind) in [
+            FeedbackKind::AutomaticDomainX,
+            FeedbackKind::AutomaticDomainY,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let fixed = matches!(scales, FacetScales::Fixed)
+                || side == 0 && scales == FacetScales::FreeY
+                || side == 1 && scales == FacetScales::FreeX;
+            if fixed && registered.axes.categories(side).is_none() {
+                let shared = registered.axes.sources()[side]
+                    .base_seed
+                    .expect("prepared shared facet seed")
+                    .pair();
+                if authored[side].window.is_none() {
+                    provenance[side] = RangeProvenance::Shared;
                 }
-                _ => false,
+                if side == 0 && forest {
+                    resolved_x = Some(shared);
+                } else {
+                    windows[side] = Some(shared);
+                }
+            }
+            let feedback = if fixed {
+                round.facet_feedback_domain(kind)
+            } else {
+                round.feedback_domain(&registered.scope.address, kind)
+            };
+            if let Some(range) = feedback {
+                windows[side] = Some(range);
             }
         }
-        let registered = Some(registration);
-        let same_order = |order: Option<CategoryOrderRef<'_>>, values: Option<&[String]>| match (
-            order, values,
-        ) {
-            (None, None) => true,
-            (Some(order), Some(values)) if order.len() == values.len() => {
-                order.values().zip(values).all(|(a, b)| a == b)
-            }
-            _ => false,
+    } else if let Some(canvas) = context.canvas {
+        let initial = measurement_phase == Some(MeasurementPhase::Legend);
+        let grouped = canvas.range_group_contains(
+            usize::try_from(registered.scope.address.leaf_slot_index())
+                .expect("Canvas slot fits usize"),
+        );
+        let pair = match &context.assignment.local.domains {
+            AxisDomainAssignments::Pair(pair) => pair,
+            AxisDomainAssignments::Marginal { central, .. } => central,
+            AxisDomainAssignments::Matrix { .. } => return (windows, provenance, resolved_x),
         };
-        for (axis, other) in [
-            (&self.description.payload.axes[0], &other.x_axis_spec),
-            (&self.description.payload.axes[1], &other.y_axis_spec),
-        ] {
-            if axis.window.map(crate::layout::RawWindow::pair) != other.0
-                || axis.provenance != other.1
+        if grouped {
+            let shared = if initial {
+                registered.axes.sources()[0]
+                    .base_seed
+                    .expect("prepared shared Canvas seed")
+                    .pair()
+            } else {
+                pair[0].extent.pair()
+            };
+            if authored[0].window.is_none() {
+                provenance[0] = RangeProvenance::Shared;
+            }
+            if forest {
+                resolved_x = Some(shared);
+            } else {
+                windows[0] = Some(shared);
+            }
+        }
+        if initial {
+            return (windows, provenance, resolved_x);
+        }
+        if !grouped {
+            if let Some(range) =
+                round.feedback_domain(&registered.scope.address, FeedbackKind::AutomaticDomainX)
+            {
+                windows[0] = Some(range);
+            }
+        }
+        if let Some(range) =
+            round.feedback_domain(&registered.scope.address, FeedbackKind::AutomaticDomainY)
+        {
+            windows[1] = Some(range);
+        }
+    }
+    (windows, provenance, resolved_x)
+}
+
+impl ComposedInputs {
+    #[cfg(test)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "observe the three original key operands without another representation"
+    )]
+    pub(crate) fn axis_snapshot_for_test(
+        &self,
+    ) -> (
+        [Option<(f64, f64)>; 2],
+        [RangeProvenance; 2],
+        Option<(f64, f64)>,
+    ) {
+        (
+            [self.x_axis_spec.0, self.y_axis_spec.0],
+            [self.x_axis_spec.1, self.y_axis_spec.1],
+            self.resolved_facet_x_range,
+        )
+    }
+
+    /// Compare only the original computed inputs of a root-local child owner.
+    pub(crate) fn matches(
+        &self,
+        context: &PlotMeasureContext<'_, '_>,
+        round: &FeedbackRound,
+        guides: &ScopedGuideInputs,
+        measurement_phase: Option<MeasurementPhase>,
+    ) -> bool {
+        let registration = context.registered;
+        let registered = Some(registration);
+        let source = registration.source;
+        let (windows, provenance, resolved_x) = working_axes(context, round, measurement_phase);
+        for (side, other) in [&self.x_axis_spec, &self.y_axis_spec]
+            .into_iter()
+            .enumerate()
+        {
+            let axis = &source.payload.axes[side];
+            if windows[side] != other.0
+                || provenance[side] != other.1
                 || axis.generation != other.2
                 || !same_values(axis.exact_ticks.as_deref(), other.5.as_deref())
             {
@@ -156,67 +248,72 @@ impl<K: crate::kind::Marker> Plot<K> {
             }
         }
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
-        self.description().same_prose(&other.prose)
-            && self.description().same_axis_titles(&other.axis_titles)
-            && range(
-                self.description.payload.axes[0]
-                    .window
-                    .map(crate::layout::RawWindow::pair),
-            ) == range(other.x_axis_spec.0)
-            && range(
-                self.description.payload.axes[1]
-                    .window
-                    .map(crate::layout::RawWindow::pair),
-            ) == range(other.y_axis_spec.0)
-            && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
+        source.same_prose(&self.prose)
+            && source.same_axis_titles(&self.axis_titles)
+            && range(windows[0]) == range(self.x_axis_spec.0)
+            && range(windows[1]) == range(self.y_axis_spec.0)
+            && range(resolved_x) == range(self.resolved_facet_x_range)
             && same_order(
                 crate::orchestrator::registration::parent_hues(registered)
                     .map(CategoryOrderRef::Keys),
-                other.global_hue_levels.as_deref(),
+                self.global_hue_levels.as_deref(),
             )
             && same_order(
                 crate::orchestrator::registration::composed_group_levels(registered),
-                other.global_group_levels.as_deref(),
+                self.global_group_levels.as_deref(),
             )
             && same_values(
                 crate::orchestrator::registration::collective_pairs(registered),
-                other.global_collective_pairs.as_deref(),
+                self.global_collective_pairs.as_deref(),
             )
             && same_values(
                 crate::orchestrator::registration::line_condition_levels(registered),
-                other.global_line_condition_levels.as_deref(),
+                self.global_line_condition_levels.as_deref(),
             )
-            && registered.map_or(
-                crate::orchestrator::registration::GutterOwner::Root,
-                |registered| registered.policy.gutter_owner,
-            ) == other.axis_gutter_owner
-            && crate::orchestrator::registration::axis_tick_labels_visible(registered, 1)
-                == other.y_tick_labels_visible
-            && render_name(registered) == other.render_scope.as_deref()
-            && legend_policy(self.description(), registered) == other.legend_policy
+            && registration.policy.gutter_owner == self.axis_gutter_owner
+            && registration.policy.axis_text.tick_labels[1] == self.y_tick_labels_visible
+            && registration.scope.render_name.as_deref() == self.render_scope.as_deref()
+            && crate::orchestrator::registration::legend_policy(source, registered)
+                == self.legend_policy
             && crate::orchestrator::registration::continuous_guide_suppressed(registered)
-                == other.suppress_continuous_guide
-            && self.description.root_size == other.root_size
-            && other.numeric.matches(registration, canvas)
-            && self.description.payload.alpha == other.alpha
-            && self.description.payload.text_layouts == other.text_layouts
-            && self.output_dimensions == other.output_dimensions
-            && guides.matches_source(self, registered)
-            && *guides == other.guides
+                == self.suppress_continuous_guide
+            && context
+                .assignment
+                .local
+                .dimensions
+                .canvas
+                .dimensions()
+                .is_ok_and(|(width, height)| {
+                    self.root_size == crate::layout::RootRequest::ExactSize { width, height }
+                })
+            && self.numeric.matches(registration, context.canvas)
+            && source.payload.alpha == self.alpha
+            && source.payload.text_layouts == self.text_layouts
+            && context
+                .assignment
+                .local
+                .dimensions
+                .output_override
+                .map(|size| size.dimensions().expect("assigned output dimensions"))
+                == self.output_dimensions
+            && guides.matches_source(registration)
+            && *guides == self.guides
     }
 
     #[expect(
         clippy::too_many_lines,
-        reason = "retain only the original narrow comparison values at their original fallible copy boundary"
+        reason = "original narrow copies retain their fallible order"
     )]
-    pub(crate) fn retain_composed_inputs(
-        &self,
-        guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
-        registration: &crate::orchestrator::registration::PlotRegistration<'_>,
-        canvas: Option<&crate::Canvas>,
-    ) -> Result<ComposedInputs, crate::Error> {
+    pub(crate) fn retain(
+        context: &PlotMeasureContext<'_, '_>,
+        round: &FeedbackRound,
+        guides: ScopedGuideInputs,
+        measurement_phase: Option<MeasurementPhase>,
+    ) -> Result<Self, crate::Error> {
+        let registration = context.registered;
         let registered = Some(registration);
-        if !guides.matches_source(self, registered) {
+        let source = registration.source;
+        if !guides.matches_source(registration) {
             return Err(crate::Error::Render(
                 "retained guide inputs do not belong to their computed source".into(),
             ));
@@ -229,23 +326,24 @@ impl<K: crate::kind::Marker> Plot<K> {
             value.push_str(source);
             Ok(value)
         };
+        let (windows, provenance, resolved_x) = working_axes(context, round, measurement_phase);
         let mut axes = std::array::from_fn::<_, 2, _>(|_| {
             (
                 None,
-                crate::layout::RangeProvenance::Automatic,
+                RangeProvenance::Automatic,
                 crate::TickGeneration::automatic(),
                 crate::CategoryLabelSelection::all(),
                 None,
                 None,
             )
         });
-        for (target, source) in axes.iter_mut().zip(&self.description.payload.axes) {
-            target.0 = source.window.map(crate::layout::RawWindow::pair);
-            target.1 = source.provenance;
-            target.2.clone_from(&source.generation);
-            target.3.clone_from(&source.category_labels);
-            target.4.clone_from(&source.format);
-            if let Some(ticks) = &source.exact_ticks {
+        for (side, (target, axis)) in axes.iter_mut().zip(&source.payload.axes).enumerate() {
+            target.0 = windows[side];
+            target.1 = provenance[side];
+            target.2.clone_from(&axis.generation);
+            target.3.clone_from(&axis.category_labels);
+            target.4.clone_from(&axis.format);
+            if let Some(ticks) = &axis.exact_ticks {
                 let mut retained = Vec::new();
                 crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;
                 for tick in ticks {
@@ -289,43 +387,40 @@ impl<K: crate::kind::Marker> Plot<K> {
             };
         let [x_axis_spec, y_axis_spec] = axes;
         let [global_hue_levels, global_group_levels, global_line_condition_levels] = levels;
-        Ok(ComposedInputs {
-            text_layouts: self.description.payload.text_layouts.clone(),
-            output_dimensions: self.output_dimensions,
-            prose: self.description().copy_prose()?,
-            axis_titles: self.description().copy_axis_titles()?,
+        let dimensions = context.assignment.local.dimensions;
+        let (width, height) = dimensions
+            .canvas
+            .dimensions()
+            .expect("assigned canvas dimensions");
+        Ok(Self {
+            text_layouts: source.payload.text_layouts.clone(),
+            output_dimensions: dimensions
+                .output_override
+                .map(|size| size.dimensions().expect("assigned output dimensions")),
+            prose: source.copy_prose()?,
+            axis_titles: source.copy_axis_titles()?,
             x_axis_spec,
             y_axis_spec,
             global_hue_levels,
             global_group_levels,
             global_line_condition_levels,
             global_collective_pairs: pairs,
-            resolved_facet_x_range: self.resolved_facet_x_range,
-            axis_gutter_owner: registered.map_or(
-                crate::orchestrator::registration::GutterOwner::Root,
-                |registered| registered.policy.gutter_owner,
-            ),
-            y_tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
-                registered, 1,
-            ),
-            render_scope: render_name(registered).map(copy).transpose()?,
-            legend_policy: legend_policy(self.description(), registered),
+            resolved_facet_x_range: resolved_x,
+            axis_gutter_owner: registration.policy.gutter_owner,
+            y_tick_labels_visible: registration.policy.axis_text.tick_labels[1],
+            render_scope: registration
+                .scope
+                .render_name
+                .as_deref()
+                .map(copy)
+                .transpose()?,
+            legend_policy: crate::orchestrator::registration::legend_policy(source, registered),
             suppress_continuous_guide:
                 crate::orchestrator::registration::continuous_guide_suppressed(registered),
-            root_size: self.description.root_size,
-            numeric: crate::numeric::inputs::NumericInputs::new(registration, canvas)?,
-            alpha: self.description.payload.alpha.clone(),
+            root_size: crate::layout::RootRequest::ExactSize { width, height },
+            numeric: crate::numeric::inputs::NumericInputs::new(registration, context.canvas)?,
+            alpha: source.payload.alpha.clone(),
             guides,
         })
-    }
-
-    pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {
-        self.description.root_size = crate::layout::RootRequest::ExactSize { width, height };
-        self
-    }
-
-    pub(crate) fn with_output_dimensions(mut self, width: u32, height: u32) -> Self {
-        self.output_dimensions = Some((width, height));
-        self
     }
 }

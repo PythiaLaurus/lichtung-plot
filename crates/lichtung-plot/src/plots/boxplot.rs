@@ -17,11 +17,15 @@
 
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::data::PlotData;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::Point2D;
-use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::{Plot, RawOverlay};
+use crate::spec::PlotMeasureContext;
+#[cfg(test)]
+use crate::Plot;
+use crate::RawOverlay;
 
 #[derive(Debug, PartialEq)]
 struct BoxSummary {
@@ -52,7 +56,7 @@ pub(crate) struct PreparedBoxplot {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -88,13 +92,11 @@ pub(crate) fn intrinsic_body_minimum(
         .get_bodies()
         .get_box_body()
         .backend_style((0, 0, 0));
-    let overlay = chart.description().raw_overlay_spec();
+    let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
-        chart
-            .description()
-            .distribution_point_style(theme.marks.get_points().get_raw_overlay(), (0, 0, 0))
+        chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), (0, 0, 0))
     } else {
-        chart.description().point_style(
+        chart.point_style(
             theme,
             theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
             theme.marks.get_points().get_radii().get_box_flier(),
@@ -320,23 +322,23 @@ impl PreparedBoxplot {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
     let PreparedDistribution::Boxplot(prepared) =
-        categorical_distribution::retained(context.prepared_family())?
+        categorical_distribution::retained(Some(context.family()?))?
     else {
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
-    let theme = context.theme;
+    let theme = request;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
+    let data = context.data()?;
     let sample = &prepared.sample;
     let stats = &prepared.stats;
     let x_levels = &context
         .registered
-        .expect("prepared Boxplot occurrence")
         .axes
         .categories(0)
         .expect("prepared distribution categories")
@@ -360,33 +362,27 @@ pub(crate) fn measure_marks(
         rendered_maxima[stat.x_index] = rendered_maxima[stat.x_index].max(maximum);
         grouped_maxima[stat.x_index][stat.group_index] = maximum;
     }
-    let overlay = chart.description().raw_overlay_spec();
-    let panel = context.panel;
+    let overlay = chart.raw_overlay_spec();
+    let panel = context.assignment.local.body;
     let colors = {
-        let retained = categorical_distribution::retained(context.prepared_family())?;
+        let retained = categorical_distribution::retained(Some(context.family()?))?;
         retained.resolved_colors(
-            chart.description(),
-            &context
-                .registered
-                .expect("prepared Boxplot occurrence")
-                .axes,
+            chart,
+            &context.registered.axes,
             context
                 .registered
-                .expect("prepared Boxplot occurrence")
                 .categorical
                 .as_ref()
                 .expect("prepared color binding"),
             theme,
             data.source_resources(),
+            false,
         )?
     };
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
-            context.registered.expect("prepared Boxplot occurrence"),
-            context
-                .registered
-                .expect("prepared distribution occurrence")
-                .significance_annotations(),
+            context.registered,
+            context.registered.significance_annotations(),
             x_levels,
             &rendered_maxima,
             base_y_range,
@@ -396,11 +392,8 @@ pub(crate) fn measure_marks(
         )?
     } else {
         crate::significance::plan_grouped(
-            context.registered.expect("prepared Boxplot occurrence"),
-            context
-                .registered
-                .expect("prepared distribution occurrence")
-                .significance_annotations(),
+            context.registered,
+            context.registered.significance_annotations(),
             x_levels,
             group_levels,
             &grouped_maxima,
@@ -509,7 +502,7 @@ pub(crate) fn measure_marks(
         )?;
 
         if overlay == RawOverlay::Hidden {
-            let flier_style = chart.description().point_style(
+            let flier_style = chart.point_style(
                 theme,
                 theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
                 theme.marks.get_points().get_radii().get_box_flier(),
@@ -545,7 +538,7 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                &chart.description().distribution_point_style(
+                &chart.distribution_point_style(
                     theme.marks.get_points().get_raw_overlay(),
                     colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
                 ),
@@ -556,14 +549,9 @@ pub(crate) fn measure_marks(
             )?;
         }
     }
-    payload.retain(
-        PlotRenderResult::new(
-            layout,
-            crate::orchestrator::registration::guide_descriptor(context.registered)?,
-        )
-        .with_significance_plan(significance),
-        context,
-    )
+    let mut result = payload.retain(layout, context)?;
+    result.significance = Some(significance);
+    Ok(result)
 }
 
 fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {

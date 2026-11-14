@@ -29,7 +29,7 @@ fn marginal_hue_colors_follow_source_order_not_group_major_pairs() {
         &source,
         &crate::text::TextRequestContext::new(&theme, &text),
         |_| Ok(()),
-        |chart, inputs, request, operation| {
+        |chart, inputs, _request, _operation, round| {
             let registered = &inputs.plots[0];
             assert_eq!(
                 registered
@@ -40,17 +40,21 @@ fn marginal_hue_colors_follow_source_order_not_group_major_pairs() {
                     .collect::<Vec<_>>(),
                 ["first", "second", "third"]
             );
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        registered.data(operation).unwrap(),
-                        PixelRect::new(20.0, 800.0, 20.0, 620.0),
-                        request,
-                    )
-                    .with_registration(registered, inputs.intrinsic(registered)),
-                )
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
                 .unwrap();
+            let selected = crate::layout::interior::measure_for_test(
+                &factory,
+                PixelRect::new(20.0, 800.0, 20.0, 620.0),
+                round,
+            )
+            .unwrap();
             let layout::interior::MarkPayload::Marginal(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {
@@ -85,7 +89,11 @@ use crate::orchestrator::registration::{PlotRegistryBuilder, PreparedFamily, Row
 
 #[test]
 fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_fit() {
+    use crate::orchestrator::assignment::{
+        GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions,
+    };
     use std::sync::{Arc, Mutex};
+
     let actual = Arc::new(Mutex::new(Vec::new()));
     let x_calls = Arc::clone(&actual);
     let y_calls = Arc::clone(&actual);
@@ -123,26 +131,62 @@ fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_f
         }),
     )
     .erase();
-    let appearance = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let request = crate::text::TextRequestContext::new(&appearance, &text);
-    crate::orchestrator::with_prepared_plot_for_test(
-        &source,
-        &request,
-        |_| Ok(()),
-        |plot, inputs, request, operation| {
-            let registered = &inputs.plots[0];
-            let error = plot
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        registered.data(operation).unwrap(),
-                        PixelRect::new(0.0, 800.0, 0.0, 600.0),
-                        request,
-                    )
-                    .with_registration(registered, inputs.intrinsic(registered)),
-                )
-                .unwrap_err();
+    let mut witnessed = false;
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 1000,
+            height: 800,
+        },
+        |stage| {
+            crate::orchestrator::root::Root::prepare(
+                crate::orchestrator::root::RootSource::Plot(source.description()),
+                stage,
+            )
+        },
+        |root, assigned, round| {
+            let size = assigned.assigned_size()?;
+            if witnessed {
+                return Ok(crate::layout::MeasuredLayout::new(size, ()));
+            }
+            let registered = &root.plots[0];
+            let measurement = root.assignment_factory().assign(size);
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let panel = PixelRect::new(0.0, 800.0, 0.0, 600.0);
+            let entry = factory.assign(
+                PlotAllocationInputs {
+                    dimensions: PlotMeasureDimensions {
+                        canvas: size,
+                        output_override: None,
+                    },
+                    cell: panel,
+                    frame: panel,
+                    body: panel,
+                    axis_label_width: panel.width(),
+                    content_height: false,
+                    fill_content_height: false,
+                    content_preference: None,
+                    insets: ParentInsets::consumed(round, &registered.scope.address),
+                    guide: GuideTrialAssignment {
+                        edge: crate::LegendPosition::Auto,
+                        compact: false,
+                        allocation: None,
+                    },
+                },
+                round,
+                None,
+            )?;
+            let scope = crate::layout::fit::FitScope::new(&registered.scope.address, 0);
+            let local = registered.local_guide_slot()?;
+            let context = factory.context(
+                &entry,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    local_guide: local.as_ref(),
+                    dependencies: &[],
+                },
+                &scope,
+            )?;
+            let error = crate::layout::interior::measure(&context, &context.request()).unwrap_err();
             let PlanError::Fatal(error) = error else {
                 panic!("later y-axis failure must outrank x-axis fit: {error:?}")
             };
@@ -153,9 +197,13 @@ fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_f
                 "{error}"
             );
             assert_eq!(*actual.lock().unwrap(), ["x", "y"]);
+            witnessed = true;
+            Ok(crate::layout::MeasuredLayout::new(size, ()))
         },
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
+    assert!(witnessed);
 }
 
 #[test]

@@ -774,7 +774,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let resources = crate::font::canonical::OperationContext::new();
         let appearance = crate::Theme::publication().resolve().unwrap();
-        let mut prepared =
+        let (mut prepared, _) =
             crate::plots::shared_x::prepare_plot(plot.description(), &resources, &appearance)
                 .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
         let guide = crate::layout::interior::guide::prepare_discrete_guides(
@@ -785,19 +785,14 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         )
         .unwrap();
         assert_actual_alpha_sections(kind, guide.as_ref().unwrap());
-        let prepared = crate::layout::interior::PreparedInteriorInputs::from_registry(
-            prepared,
-            crate::layout::interior::InteriorRoute::classify(kind),
-            guide,
-        )
-        .unwrap();
+        let prepared = prepared.finish().unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0,
             "{kind:?}"
         );
         if kind != PlotKind::Matrix {
-            let axes = prepared.plots[0].axes.coordinate().unwrap();
+            let axes = prepared[0].axes.coordinate().unwrap();
             for side in 0..2 {
                 if axes.categories(side).is_some() {
                     continue;
@@ -811,7 +806,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     )],
                 );
                 let error = invalid
-                    .render_kind_erased(kind, &mut RecordingBackend::default())
+                    .render_with_backend(&mut RecordingBackend::default())
                     .unwrap_err();
                 assert!(
                     error.to_string().contains("outside"),
@@ -830,28 +825,54 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 &plot,
                 &theme,
                 |_| Ok(()),
-                |plot, inputs, theme, operation| {
+                |plot, root, theme, operation, round| {
                     let preparations =
                         crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-                    let registered = inputs.plots.first();
-                    let panel = plot
-                        .measured_canvas_layout(
-                            registered,
-                            inputs.intrinsic(registered.unwrap()),
-                            operation,
-                            theme,
-                        )
-                        .unwrap()
-                        .panel_box;
-                    crate::layout::fit::measured(plot.preflight_measurement(
+                    let registered = &root.plots[0];
+                    let size = plot.sizing_request().assigned_size().unwrap();
+                    let panel = crate::builder::measure_root_frame(
                         registered,
-                        Some(inputs.intrinsic(registered.unwrap())),
-                        None,
-                        kind,
-                        panel,
+                        size,
+                        crate::builder::RootFrameDomainInput::Prepared,
                         theme,
+                        root.plot_intrinsic(&registered.scope.id).unwrap(),
+                        operation,
                         &crate::layout::fit::ROOT_SCOPE,
-                    ))
+                    )
+                    .unwrap()
+                    .panel_box;
+                    crate::layout::interior::InteriorRoute::classify(kind)
+                        .validate(plot)
+                        .unwrap();
+                    plot.validate_category_order_configuration(kind).unwrap();
+                    assert!(
+                        plot.significance_annotations().is_empty()
+                            || kind.supports_significance_annotations()
+                    );
+                    plot.configured_source_rows().unwrap();
+                    theme.text.prepared_font_environment().unwrap();
+                    let measurement = root.assignment_factory().assign(size);
+                    let factory = root
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
+                        .unwrap();
+                    let entry = factory
+                        .assign(
+                            crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                                size,
+                                panel,
+                                round,
+                                &registered.scope.address,
+                            ),
+                            round,
+                            None,
+                        )
+                        .unwrap();
+                    crate::orchestrator::measure_probe(
+                        &factory,
+                        entry,
+                        crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
+                        &crate::layout::fit::ROOT_SCOPE,
+                    )
                     .unwrap_or_else(|error| panic!("{kind:?}: {error:?}"));
                     assert_eq!(
                         crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
@@ -1077,12 +1098,10 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
         | PlotKind::Waterfall => None,
     };
     let theme = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     for composition in [Combined, Separate] {
         let operation = crate::font::canonical::OperationContext::new();
-        let mut inputs =
+        let (mut inputs, _) =
             crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme).unwrap();
         for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;

@@ -2,7 +2,9 @@
 
 use crate::layout::PhysicalTextAlignment;
 use crate::orchestrator::registration::PreparedFamily as F;
-use crate::{Error, Plot, PlotKind};
+#[cfg(test)]
+use crate::Plot;
+use crate::{Error, PlotKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StandardSizePreference {
@@ -43,17 +45,15 @@ fn ceil_ratio(numerator: i128, denominator: i128) -> Result<i64, Error> {
     reason = "one closed categorical owner lookup and checked pitch/aspect composition"
 )]
 pub(crate) fn categorical_preference(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    _domains: crate::builder::RootFrameDomainInput<'_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<CategoricalSizePreference, Error> {
+    let plot = registered.source;
     macro_rules! family {
         ($missing:literal, $owner:literal, $pattern:pat => $marks:ident) => {{
-            if registered.is_none() {
-                return Err(Error::Render($missing.into()));
-            }
-            let $pattern = panel(registered, $owner)? else {
+            let $pattern = panel(Some(registered), $owner)? else {
                 return Err(Error::Render($missing.into()));
             };
             $marks
@@ -65,7 +65,6 @@ pub(crate) fn categorical_preference(
             (
                 crate::layout::AxisSide::Left,
                 registered
-                    .expect("prepared Estimate occurrence")
                     .axes
                     .categories(1)
                     .expect("prepared Estimate categories")
@@ -79,7 +78,6 @@ pub(crate) fn categorical_preference(
             (
                 crate::layout::AxisSide::Left,
                 registered
-                    .expect("prepared Dumbbell occurrence")
                     .axes
                     .categories(1)
                     .expect("prepared Dumbbell categories")
@@ -102,7 +100,6 @@ pub(crate) fn categorical_preference(
             (
                 axis,
                 registered
-                    .expect("prepared Bar occurrence")
                     .axes
                     .categories(usize::from(axis == crate::layout::AxisSide::Left))
                     .expect("prepared Bar categories")
@@ -116,7 +113,6 @@ pub(crate) fn categorical_preference(
             (
                 crate::layout::AxisSide::Bottom,
                 registered
-                    .expect("prepared distribution occurrence")
                     .axes
                     .categories(0)
                     .expect("prepared distribution categories")
@@ -130,7 +126,6 @@ pub(crate) fn categorical_preference(
             (
                 crate::layout::AxisSide::Bottom,
                 registered
-                    .expect("prepared Interaction occurrence")
                     .axes
                     .categories(0)
                     .expect("prepared Interaction categories")
@@ -230,11 +225,13 @@ fn ceil_sqrt(value: u128) -> Result<u32, Error> {
     reason = "one exhaustive closed standard-family summary and its checked soft composition"
 )]
 pub(crate) fn mark_preference(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    occurrence: &crate::orchestrator::registration::PlotRegistration<'_>,
+    _domains: crate::builder::RootFrameDomainInput<'_>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     hard: (f64, f64),
 ) -> Result<StandardSizePreference, Error> {
+    let plot = occurrence.source;
+    let registered = Some(occurrence);
     macro_rules! standard {
         ($owner:literal, $pattern:pat => $marks:ident) => {{
             if registered.is_none() {
@@ -253,7 +250,7 @@ pub(crate) fn mark_preference(
         }};
     }
     let point_ink = |radius| -> Result<f64, Error> {
-        let point = plot.description().point_style(theme, (0, 0, 0), radius);
+        let point = plot.point_style(theme, (0, 0, 0), radius);
         let (x, y) = crate::render::geometry::point_ink_dimensions(&point)?;
         Ok(x.max(y))
     };
@@ -273,16 +270,15 @@ pub(crate) fn mark_preference(
                 theme.marks.get_data_lines().get_path_line()
             };
             let line = crate::render::geometry::line_ink_width(&stroke.backend_style((0, 0, 0)))?;
-            let marker =
-                if plot.kind() == PlotKind::Trajectory || plot.description().markers_visible() {
-                    point_ink(if plot.kind() == PlotKind::Line {
-                        theme.marks.get_points().get_radii().get_path()
-                    } else {
-                        theme.marks.get_points().get_radii().get_trajectory()
-                    })?
+            let marker = if plot.kind() == PlotKind::Trajectory || plot.markers_visible() {
+                point_ink(if plot.kind() == PlotKind::Line {
+                    theme.marks.get_points().get_radii().get_path()
                 } else {
-                    0.0
-                };
+                    theme.marks.get_points().get_radii().get_trajectory()
+                })?
+            } else {
+                0.0
+            };
             (marks.checked_primary_mark_count()?, line.max(marker))
         }
         PlotKind::Histogram => {
@@ -393,13 +389,15 @@ mod tests {
             plot,
             theme,
             |_| Ok(()),
-            |plot, inputs, request, operation| {
-                super::super::coordinate::canvas_layout(
-                    plot,
-                    inputs.plots.first(),
-                    inputs.intrinsic(&inputs.plots[0]),
-                    operation,
+            |plot, inputs, request, operation, _round| {
+                crate::builder::measure_root_frame(
+                    &inputs.plots[0],
+                    plot.sizing_request().assigned_size().unwrap(),
+                    crate::builder::RootFrameDomainInput::Prepared,
                     request,
+                    inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
+                    operation,
+                    &crate::layout::fit::FitScope::root(),
                 )
                 .unwrap()
             },

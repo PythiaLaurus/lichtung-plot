@@ -33,10 +33,6 @@ impl sealed::Sealed for Any {
 }
 impl Marker for Any {}
 
-pub(crate) fn into_erased<K: Marker>(plot: crate::Plot<K>) -> crate::Plot<Any> {
-    <K as sealed::Sealed>::into_erased(plot)
-}
-
 macro_rules! markers {
     ($($name:ident => $documentation:literal),+ $(,)?) => {
         $(

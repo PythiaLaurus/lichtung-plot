@@ -1,6 +1,5 @@
 //! One complete embedded Plot title/subtitle/caption block in its Canvas cell.
 
-use crate::builder::Plot;
 use crate::decorations::title_block::plan::{
     RootAlignments, RootTitleBlockIntrinsics, RootTitleBlockPlan,
 };
@@ -20,8 +19,7 @@ impl PlotLocalTextPlan {
         reason = "local prose retains its own title intrinsics while reading the same occurrence's body intrinsic slot"
     )]
     pub(super) fn measure(
-        plot: &Plot,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         operation: &crate::font::canonical::OperationContext,
         cell: PixelRect,
@@ -29,8 +27,9 @@ impl PlotLocalTextPlan {
         panel_alignments: [Option<TextAlignment>; 2],
         intrinsics: RootTitleBlockIntrinsics,
         scope: &FitScope,
+        ranges: [(f64, f64); 2],
     ) -> Result<FitOutcome<Self>, Error> {
-        let sources = plot.description().prose();
+        let sources = registered.source.prose();
         let present = sources.iter().any(Option::is_some);
 
         let padding = if present {
@@ -57,10 +56,16 @@ impl PlotLocalTextPlan {
         {
             return Ok(FitOutcome::Miss(reason));
         }
-        let minimum = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
+        let minimum = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+            registered,
+            intrinsic,
+            operation,
+            theme,
+            Some(ranges),
+        )?;
         let alignments = RootAlignments::resolve(
             theme,
-            plot.description().prose_alignments(),
+            registered.source.prose_alignments(),
             panel_alignments,
         );
         let text = match fit::outcome(RootTitleBlockPlan::measure(

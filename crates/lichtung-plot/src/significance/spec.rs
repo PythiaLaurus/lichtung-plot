@@ -164,20 +164,6 @@ impl FacetCell {
         }
     }
 
-    pub(crate) fn matches<'a>(&self, levels: impl IntoIterator<Item = &'a str>) -> bool {
-        let mut levels = levels.into_iter();
-        let matched = match &self.layout {
-            FacetCellLayout::Single(expected) => {
-                levels.next().is_some_and(|level| expected == level)
-            }
-            FacetCellLayout::Grid { row, column } => {
-                levels.next().is_some_and(|level| row == level)
-                    && levels.next().is_some_and(|level| column == level)
-            }
-        };
-        matched && levels.next().is_none()
-    }
-
     fn validate(&self) -> Result<(), Error> {
         match &self.layout {
             FacetCellLayout::Single(level) => validate_text("facet level", level),

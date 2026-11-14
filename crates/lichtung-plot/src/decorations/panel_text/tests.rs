@@ -20,14 +20,16 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
         crate::NumericValues::new("y", [0.0, 10.0]),
     )
     .size(400, 300)
-    .erase()
-    .with_output_dimensions(1000, 800);
+    .erase();
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
         |_| Ok(()),
-        |plot, inputs, theme, _operation| {
-            let dimensions = plot.measure_dimensions().unwrap();
+        |plot, inputs, theme, _operation, _round| {
+            let dimensions = PlotMeasureDimensions {
+                canvas: plot.sizing_request().assigned_size().unwrap(),
+                output_override: Some(crate::layout::RootSize::new(1000, 800)),
+            };
             let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
             let layout = Layout {
                 projection: crate::layout::Projection::new(
@@ -113,7 +115,7 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
         &source,
         &theme,
         |_| Ok(()),
-        |_, inputs, theme, _operation| {
+        |_, inputs, theme, _operation, _round| {
             let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
             let mut layout = Layout::envelope(panel);
             layout.x_axis.assigned_cells = Some(vec![(20.0, 120.0), (120.0, 420.0)]);
@@ -158,7 +160,7 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
         &source,
         &theme,
         |_| Ok(()),
-        |_, inputs, theme, _operation| {
+        |_, inputs, theme, _operation, _round| {
             let data = |x, y| {
                 DataPosition::new(
                     DataCoordinate::numeric(x).unwrap(),
@@ -268,20 +270,18 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
         &source,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
+        |chart, inputs, theme, _operation, round| {
             let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);
-            let result = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    crate::spec::PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        panel,
-                        theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let result = crate::layout::interior::measure_for_test(&factory, panel, round).unwrap();
             let plan = &result.panel_text[0];
             assert!(plan.text_plan.style.exact_override);
             assert_eq!(
@@ -325,7 +325,10 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
             );
             assert!(measure_plans(
                 &inputs.plots[0],
-                chart.measure_dimensions().unwrap(),
+                PlotMeasureDimensions {
+                    canvas: measurement.measurement_size,
+                    output_override: None,
+                },
                 &short,
                 theme,
                 &crate::layout::fit::ROOT_SCOPE

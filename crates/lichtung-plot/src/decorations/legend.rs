@@ -652,9 +652,15 @@ impl Legend {
         )
     }
 
+    /// Original outer-width measurement capacity, in 1/1024 CSS pixels.
+    pub(crate) const fn available_width(&self) -> i64 {
+        self.available_width
+    }
+
     pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
+        available_width: i64,
     ) -> Result<(), Error> {
         round.observe_guide(&self.descriptor)?;
         self.metrics.source.observe_feedback(round)?;
@@ -662,7 +668,7 @@ impl Legend {
         round.observe_number(self.compute_box_height())?;
         round.observe_count(self.layout.sections.len())?;
         round.observe_count(usize::from(self.available_height.is_some()))?;
-        round.observe_number(measurement::pixels(self.available_width))?;
+        round.observe_number(measurement::pixels(available_width))?;
         if let Some(height) = self.available_height {
             round.observe_number(measurement::pixels(height))?;
         }

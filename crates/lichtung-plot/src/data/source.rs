@@ -10,6 +10,7 @@ pub(crate) struct RowSourceContext<'src> {
 }
 
 impl<'src> RowSourceContext<'src> {
+    #[cfg(test)]
     pub(super) const fn owner(&self) -> &crate::orchestrator::registration::PlotOccurrenceId {
         &self.owner
     }

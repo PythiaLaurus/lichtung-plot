@@ -11,11 +11,14 @@ use crate::alpha::{
 };
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{LiteralDomain, PointRole};
 use crate::decorations::legend::GuideSourceKey;
-use crate::layout::AxisSpec;
+use crate::layout::interior::MeasuredCoordinateMarks;
+use crate::layout::AuthoredAxisSpec;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
-use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult};
+use crate::spec::{CategoryOrder, PlotMeasureContext};
+#[cfg(test)]
 use crate::Plot;
 
 #[derive(Debug)]
@@ -36,7 +39,7 @@ pub(crate) struct DumbbellData {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -75,7 +78,6 @@ pub(crate) fn intrinsic_body_minimum(
         offset = offset.max((0.36 - slot * (row.group_index as f64 + 0.5)).abs());
     }
     let endpoints = chart
-        .description()
         .dumbbell_endpoints_spec()
         .ok_or_else(|| Error::Render("Dumbbell endpoint paints are missing".into()))?;
     let mut outward = 0.0_f64;
@@ -83,8 +85,7 @@ pub(crate) fn intrinsic_body_minimum(
     for row in &prepared.rows {
         for color in [endpoints.left_color(), endpoints.right_color()] {
             if let Some(ink) = crate::render::geometry::point_ink_bounds(
-                &row.alpha
-                    .point(endpoint_style(chart.description(), theme, color)),
+                &row.alpha.point(endpoint_style(chart, theme, color)),
             )? {
                 outward = outward.max(ink.top.max(-ink.bottom));
                 numeric = numeric.max(ink.right - ink.left);
@@ -220,33 +221,26 @@ impl DumbbellPayload {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Dumbbell(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Dumbbell(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
 
     let projection = layout.projection.clone();
     let categories = &context
         .registered
-        .expect("prepared Dumbbell occurrence")
         .axes
         .categories(1)
         .expect("prepared Dumbbell categories")
         .raw;
-    let mut result = project(chart, prepared, categories, layout, context)?;
-    let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result
-        .marks
-        .as_ref()
-        .expect("selected Dumbbell marks")
-        .payload
-    else {
+    let mut result = project(chart, prepared, categories, layout, request)?;
+    let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result.marks.payload else {
         unreachable!("Dumbbell selected its own mark payload")
     };
     let mut full = crate::render::geometry::GeometrySnapshot::new();
@@ -273,19 +267,11 @@ pub(crate) fn measure_marks(
             [prepared.range, (0.0, f64::from(count))],
             &projection,
             ink,
-            [
-                context
-                    .registered
-                    .expect("prepared Dumbbell occurrence")
-                    .raw_windows()[0]
-                    .is_none(),
-                false,
-            ],
+            [context.registered.raw_windows()[0].is_none(), false],
             context.fit_scope(),
         )?;
-        let marks =
-            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Dumbbell marks"))
-                .expect("newly selected Dumbbell marks have one owner");
+        let marks = std::sync::Arc::get_mut(&mut result.marks)
+            .expect("newly selected Dumbbell marks have one owner");
         let crate::layout::interior::MarkPayload::Dumbbell(payload) = &mut marks.payload else {
             unreachable!("Dumbbell selected its own mark payload")
         };
@@ -295,15 +281,14 @@ pub(crate) fn measure_marks(
 }
 
 fn project(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &DumbbellData,
     categories: &[String],
-    layout: crate::layout::Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, Error> {
-    let theme = context.theme;
+    layout: &crate::layout::Layout,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, Error> {
+    let theme = request;
     let endpoints = chart
-        .description()
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
     let category_count = categories.len();
@@ -344,16 +329,10 @@ fn project(
             .pairs
             .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
         payload.points.push([
-            row.alpha.point(endpoint_style(
-                chart.description(),
-                theme,
-                endpoints.left_color(),
-            )),
-            row.alpha.point(endpoint_style(
-                chart.description(),
-                theme,
-                endpoints.right_color(),
-            )),
+            row.alpha
+                .point(endpoint_style(chart, theme, endpoints.left_color())),
+            row.alpha
+                .point(endpoint_style(chart, theme, endpoints.right_color())),
         ]);
         payload
             .connectors
@@ -371,18 +350,12 @@ fn project(
         geometry.scatter(&pair[..1], &points[0], clip)?;
         geometry.scatter(&pair[1..], &points[1], clip)?;
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    );
-    result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Dumbbell(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 pub(crate) fn prepare(
@@ -393,7 +366,7 @@ pub(crate) fn prepare(
     let source = chart;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
-    if source.y_axis_spec() != &AxisSpec::default() {
+    if source.y_axis_spec() != &AuthoredAxisSpec::default() {
         return Err(Error::Data(
             "dumbbell: categorical y-axis limits are not supported".into(),
         ));

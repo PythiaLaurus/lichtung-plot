@@ -52,8 +52,7 @@ use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 
 /// User-configurable axis behavior.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct AxisSpec {
-    pub(crate) provenance: RangeProvenance,
+pub(crate) struct AuthoredAxisSpec {
     /// Explicit visible data range. When `None`, the renderer computes one.
     pub(crate) window: Option<RawWindow>,
     /// Exact numeric tick source, selected before any automatic text is measured.

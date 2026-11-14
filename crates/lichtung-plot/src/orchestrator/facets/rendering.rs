@@ -2,11 +2,14 @@
 
 use crate::Error;
 
-use super::data::{FacetCell, FacetPanel};
+#[cfg(test)]
 use crate::builder::Plot;
+use crate::builder::PlotDescription;
 use crate::layout::{PhysicalTextAlignment, PixelRect};
+use crate::orchestrator::root::GridSlot;
 use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::PlotKind;
+use crate::FacetCell;
 
 pub(super) fn observe_arranged_chrome(
     plan: &super::OwnedFacetPlan,
@@ -34,7 +37,7 @@ pub(super) fn observe_arranged_chrome(
 }
 
 pub(super) fn render_scene(
-    source: &Plot,
+    source: &PlotDescription,
     kind: PlotKind,
     children: &[super::OwnedFacetChild],
     parent_guide: Option<&(String, crate::decorations::legend::LegendDrawPlan)>,
@@ -69,7 +72,7 @@ pub(super) fn render_scene(
 
     for (index, child) in children.iter().enumerate() {
         let panel_plan = &child.plot;
-        crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
         panel_plan.result.draw_body(backend)?;
         crate::significance::render_selected(&panel_plan.result, backend)?;
         crate::render::backend::with_layer(
@@ -95,9 +98,7 @@ pub(super) fn render_scene(
         draw_facet_strip(&child.strip_layer, &child.strips, backend)?;
     }
     draw_shared_facet_axis_labels(shared_axis_text, backend)?;
-    canvas_layout
-        .root_text
-        .draw(source.description().prose(), backend)
+    canvas_layout.root_text.draw(source.prose(), backend)
 }
 
 #[expect(
@@ -105,19 +106,21 @@ pub(super) fn render_scene(
     reason = "small facet-line indexes are projected into backend coordinates"
 )]
 pub(super) fn plan_facet_strip(
-    plot: &Plot,
-    facet: &FacetPanel,
+    plot: &PlotDescription,
+    cell: &FacetCell,
+    slot: GridSlot,
+    panel: PixelRect,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     theme.text.prepared_font_environment()?;
     let spacing = theme.facet_strip_lengths()?;
     let plans = strip_plans(
         plot,
-        &facet.cell,
+        cell,
         theme,
-        facet.panel.width(),
+        panel.width(),
         &crate::layout::fit::FitScope::root()
-            .child(crate::layout::AddressRole::FacetCell, facet.panel_index)?
+            .child(crate::layout::AddressRole::FacetCell, slot.0)?
             .child(crate::layout::AddressRole::FacetHeader, 0)?,
     )?;
     let mut top = spacing
@@ -134,17 +137,17 @@ pub(super) fn plan_facet_strip(
             .ok_or_else(|| {
                 Error::Render("facet strip baseline exceeds its complete extent".into())
             })?
-            .after_pixels(facet.panel.y1)?;
+            .after_pixels(panel.y1)?;
         let placement = crate::render::backend::PlannedTextPlacement::baseline(
-            Point2D::new(f64::midpoint(facet.panel.x0, facet.panel.x1), first_y),
+            Point2D::new(f64::midpoint(panel.x0, panel.x1), first_y),
             TextAnchor::Middle,
             0.0,
         );
         let region = PixelRect::new(
-            facet.panel.x0,
-            facet.panel.x1,
-            top.after_pixels(facet.panel.y1)? - plan.occupied_size().1,
-            top.after_pixels(facet.panel.y1)?,
+            panel.x0,
+            panel.x1,
+            top.after_pixels(panel.y1)? - plan.occupied_size().1,
+            top.after_pixels(panel.y1)?,
         );
         let placement = crate::layout::text::placement::resolve(placement, &plan, Some(region))?;
         top = top
@@ -277,11 +280,11 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> Result<String, Error> {
+pub(super) fn facet_label(plot: &PlotDescription, cell: &FacetCell) -> Result<String, Error> {
     let mut label = String::new();
-    for (index, selector) in cell.iter().enumerate() {
-        let variable = plot.description().resolve_label(&selector.variable)?;
-        let level = plot.description().resolve_label(&selector.level)?;
+    for (index, (_, values, raw_level)) in super::data::fields(plot, cell).iter().enumerate() {
+        let variable = plot.resolve_label(values.name())?;
+        let level = plot.resolve_label(raw_level)?;
         let length = variable
             .len()
             .checked_add(level.len())
@@ -299,38 +302,42 @@ pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> Result<String, Error
 }
 
 pub(super) fn strip_sources(
-    plot: &Plot,
+    plot: &PlotDescription,
     cell: &FacetCell,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<Vec<crate::Text>, Error> {
     if theme.text_layouts.facet.iter().all(Option::is_none) {
         return Ok(vec![facet_label(plot, cell)?.into()]);
     }
-    crate::data::source::collect_source(cell.iter().enumerate().map(|(index, selector)| {
-        let role = if cell.as_slice().len() == 1 { 1 } else { index };
-        let variable = plot.description().resolve_label(&selector.variable)?;
-        let level = plot.description().resolve_label(&selector.level)?;
-        let length = variable
-            .len()
-            .checked_add(level.len())
-            .and_then(|length| length.checked_add(3))
-            .ok_or_else(|| Error::Render("facet text source length overflow".into()))?;
-        let mut source = String::new();
-        crate::data::source::reserve_source_string(&mut source, length)?;
-        source.push_str(&variable);
-        source.push_str(" = ");
-        source.push_str(&level);
-        let source = crate::Text::from(source);
-        Ok(if let Some(layout) = &theme.text_layouts.facet[role] {
-            source.layout(layout.clone())
-        } else {
-            source
-        })
-    }))
+    crate::data::source::collect_source(
+        super::data::fields(plot, cell).into_iter().enumerate().map(
+            |(index, (_, values, raw_level))| {
+                let role = if cell.dimensions() == 1 { 1 } else { index };
+                let variable = plot.resolve_label(values.name())?;
+                let level = plot.resolve_label(raw_level)?;
+                let length = variable
+                    .len()
+                    .checked_add(level.len())
+                    .and_then(|length| length.checked_add(3))
+                    .ok_or_else(|| Error::Render("facet text source length overflow".into()))?;
+                let mut source = String::new();
+                crate::data::source::reserve_source_string(&mut source, length)?;
+                source.push_str(&variable);
+                source.push_str(" = ");
+                source.push_str(&level);
+                let source = crate::Text::from(source);
+                Ok(if let Some(layout) = &theme.text_layouts.facet[role] {
+                    source.layout(layout.clone())
+                } else {
+                    source
+                })
+            },
+        ),
+    )
 }
 
 pub(super) fn strip_plans(
-    plot: &Plot,
+    plot: &PlotDescription,
     cell: &FacetCell,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
@@ -355,7 +362,7 @@ pub(super) fn strip_plans(
 }
 
 pub(super) fn strip_widths(
-    plot: &Plot,
+    plot: &PlotDescription,
     cell: &FacetCell,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -375,7 +382,7 @@ pub(super) fn strip_widths(
 
 pub(super) fn strip_requirement(
     axes: &crate::layout::AxisSystemPlan,
-    plot: &Plot,
+    plot: &PlotDescription,
     cell: &FacetCell,
     theme: &crate::text::TextRequestContext<'_, '_>,
     panel: PixelRect,
@@ -406,12 +413,11 @@ mod tests {
             crate::NumericValues::new("y", [2.0, 3.0]),
         )
         .labels(crate::Labels::raw())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("ab", ["cd", "cd"]).unwrap(),
+        ))
         .erase();
-        let cell = vec![super::super::data::FacetSelector {
-            column: "facet",
-            variable: "ab".into(),
-            level: "cd".into(),
-        }];
+        let cell = FacetCell::single("cd");
         let rows = [1];
         let ids = [29];
         {
@@ -437,7 +443,7 @@ mod tests {
             let data =
                 crate::data::PlotData::checked(plot.description(), &scope, &binding, &resources)
                     .unwrap();
-            let result = facet_label(&plot, &cell);
+            let result = facet_label(plot.description(), &cell);
             assert_eq!(result.unwrap(), "ab = cd");
 
             assert_eq!(data.source_row(0), 29);
@@ -451,6 +457,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .labels(crate::Labels::raw())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("Group", ["First\nSecond", "First\nSecond"]).unwrap(),
+        ))
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.composition.facet_header = theme
@@ -464,22 +473,9 @@ mod tests {
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
         let grid = PixelRect::new(71.25, 372.75, 83.25, 304.75);
-        let facet = FacetPanel {
-            panel_index: 0,
-            row: 0,
-            column: 0,
-            cell: vec![super::super::data::FacetSelector {
-                column: "facet",
-                variable: "Group".into(),
-                level: "First\nSecond".into(),
-            }],
-            rows: crate::orchestrator::registration::RowSelection::Selected {
-                input_slots: vec![0, 1],
-                diagnostic_rows: vec![0, 1],
-            },
-            panel: grid,
-        };
-        let strips = plan_facet_strip(&plot, &facet, &theme).unwrap();
+        let cell = FacetCell::single("First\nSecond");
+        let strips =
+            plan_facet_strip(plot.description(), &cell, GridSlot(0), grid, &theme).unwrap();
         let strip = &strips[0];
         let origin = (57.25, 67.75);
         let axes = plan_shared_facet_axis_labels(

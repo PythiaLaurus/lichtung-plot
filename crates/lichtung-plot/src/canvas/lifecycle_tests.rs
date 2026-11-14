@@ -49,13 +49,7 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
         .unwrap()
         .panel(1, 2, source("second").theme(child))
         .unwrap();
-    let authored = canvas
-        .placements
-        .plot(5)
-        .unwrap()
-        .description()
-        .theme_spec()
-        .unwrap();
+    let authored = canvas.placements.plot(5).unwrap().theme_spec().unwrap();
     let stages = crate::plots::scatter::STAGES.with(std::cell::Cell::get);
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
@@ -69,7 +63,8 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
                 &canvas.placements,
                 &canvas.guide_text_layouts,
             )?;
-            let (mut registry, slots, _) = canvas.prepare_interiors(stage, appearances)?;
+            let (mut registry, topology) = canvas.prepare_interiors(stage, appearances)?;
+            let slots = &topology.slots;
             assert_eq!(registry.panels.len(), 2);
             assert!(matches!(
                 slots[1],
@@ -83,6 +78,7 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
             for (slot, id) in ids.iter().enumerate() {
                 assert_eq!(id.slot, slot);
                 let data = registry.data(id, &operation)?;
+                assert_eq!(data.plot_id(), id);
                 assert_eq!(
                     (data.height(), data.row_index(1), data.source_row(1)),
                     (2, 1, 70)
@@ -98,7 +94,7 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
                     Some(if slot == 0 { "panel-0" } else { "panel-5" })
                 );
             }
-            let domains = canvas.prepare_color_domains(&registry, &slots)?;
+            let domains = canvas.prepare_color_domains(&registry, slots)?;
             for panel in &registry.panels {
                 crate::layout::interior::guide::validate_categorical_scale(
                     panel.source,
@@ -108,19 +104,48 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
                 )?;
             }
             assert!(canvas
-                .prepare_continuous_shared_guide(&registry, &slots, &operation)?
+                .prepare_continuous_shared_guide(&registry, slots, &operation)?
                 .is_none());
             let shared = canvas
-                .prepare_discrete_guides(&mut registry, &slots, &domains, &operation)?
+                .prepare_discrete_guides(&mut registry, slots, &domains, &operation)?
                 .unwrap();
             for id in &ids {
-                registry.data(id, &operation)?;
+                assert_eq!(registry.data(id, &operation)?.plot_id(), id);
             }
             let plots = registry.finish()?;
             for (slot, anchor) in [0, 5].into_iter().enumerate() {
-                let panel = plot_at(&plots, &slots, anchor).unwrap();
+                let panel = plot_at(&plots, slots, anchor).unwrap();
                 assert_eq!(panel.scope.id, ids[slot]);
-                assert_eq!(panel.data(&operation)?.source_row(0), 9001);
+                let data = panel.data(&operation)?;
+                assert_eq!(data.plot_id(), &panel.scope.id);
+                assert_eq!(data.source_row(0), 9001);
+                let numeric = panel.numeric_binding(&operation)?;
+                assert!(numeric.operation.same_operation(&operation));
+                assert_eq!(numeric.plot_id, Some(&panel.scope.id));
+                assert!(std::ptr::eq(
+                    numeric.owner,
+                    std::ptr::from_ref(&panel.scope.numeric_owner)
+                ));
+                assert!(numeric.owner.scope.is_none());
+                assert_eq!(
+                    numeric.owner.canvas,
+                    Some(if slot == 0 { (0, 0) } else { (1, 2) })
+                );
+                assert_eq!(
+                    panel.scope.axis_numeric_owner.scope.as_deref(),
+                    Some(if slot == 0 { "panel-0" } else { "panel-5" })
+                );
+                numeric.check_data(data)?;
+                let other_data = plots[1 - slot].data(&operation)?;
+                assert!(numeric
+                    .operation
+                    .same_operation(other_data.source_resources()));
+                assert_ne!(numeric.plot_id, Some(other_data.plot_id()));
+                assert!(matches!(
+                    numeric.check_data(other_data),
+                    Err(Error::Render(message))
+                        if message == "row source belongs to a different source or operation"
+                ));
                 let alpha = &panel.guide.alpha.sources[0];
                 assert_eq!(alpha.owner, panel.scope.address);
                 assert_eq!(alpha.scope.as_deref(), panel.scope.render_name.as_deref());
@@ -133,6 +158,31 @@ fn canvas_registry_keeps_dense_occurrences_and_distinct_appearances_through_guid
                     }
                 );
             }
+            crate::layout::plan_root(
+                crate::layout::RootRequest::ExactSize {
+                    width: 1,
+                    height: 1,
+                },
+                |foreign_stage| {
+                    let foreign = foreign_stage.operation();
+                    assert!(!foreign.same_operation(&operation));
+                    for panel in &plots {
+                        assert!(matches!(
+                            panel.numeric_binding(&foreign),
+                            Err(Error::Render(message))
+                                if message == "row source belongs to a different source or operation"
+                        ));
+                    }
+                    Ok(())
+                },
+                |(), assigned, _| {
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ))
+                },
+                |(), _, (), _| Ok(()),
+            )?;
             assert_eq!(shared.sections[0].entries().len(), 2);
             assert!(plots[0].source.theme_spec().is_none());
             assert!(std::ptr::eq(
@@ -180,7 +230,7 @@ fn fixed_guide_use_keeps_shared_contributions_and_authored_visibility_distinct()
         canvas
             .build_preflight_plan(|prepared, _| {
                 for index in 0..2 {
-                    let registered = prepared.plot(index).unwrap();
+                    let registered = prepared.canvas_plot(index).unwrap();
                     let expected = if index == 1 || policy == CanvasLegendPolicy::Hidden {
                         GuideUse::Hidden
                     } else if policy == CanvasLegendPolicy::Shared {
@@ -318,7 +368,7 @@ fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
         let root = canvas
             .build_preflight_plan(|prepared, _| {
                 second_color = prepared
-                    .plot(1)
+                    .canvas_plot(1)
                     .unwrap()
                     .appearance
                     .color_scales
@@ -326,7 +376,7 @@ fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
                     .colors()[1]
                     .as_rgb();
                 for (index, raw) in ["first", "second"].into_iter().enumerate() {
-                    let registered = prepared.plot(index).unwrap();
+                    let registered = prepared.canvas_plot(index).unwrap();
                     let groups =
                         crate::orchestrator::registration::composed_group_levels(Some(registered));
                     if policy == CanvasLegendPolicy::Shared {
@@ -379,9 +429,9 @@ fn shared_bar_palette_preserves_raw_color_identity_without_guide_contributions()
     let mut second_color = (0, 0, 0);
     let root = canvas
         .build_preflight_plan(|prepared, _| {
-            assert!(prepared.shared_guide.is_none());
+            assert!(prepared.canvas_guide().is_none());
             let first = prepared
-                .plot(0)
+                .canvas_plot(0)
                 .unwrap()
                 .categorical
                 .as_ref()
@@ -391,7 +441,7 @@ fn shared_bar_palette_preserves_raw_color_identity_without_guide_contributions()
                 .unwrap();
             assert_eq!(first.values().collect::<Vec<_>>(), ["first", "second"]);
             for (index, raw) in ["first", "second"].into_iter().enumerate() {
-                let registered = prepared.plot(index).unwrap();
+                let registered = prepared.canvas_plot(index).unwrap();
                 let binding = registered.categorical.as_ref().unwrap();
                 assert_eq!(binding.local_values().collect::<Vec<_>>(), [raw]);
                 assert!(Arc::ptr_eq(first, binding.parent.as_ref().unwrap()));
@@ -411,7 +461,7 @@ fn shared_bar_palette_preserves_raw_color_identity_without_guide_contributions()
                 assert!(registered.guide.alpha.sources.is_empty());
             }
             second_color = prepared
-                .plot(1)
+                .canvas_plot(1)
                 .unwrap()
                 .appearance
                 .color_scales
@@ -457,7 +507,7 @@ fn hidden_native_materialization_distinguishes_authored_visibility_from_canvas_p
         .panel(0, 0, source)
         .unwrap()
         .build_preflight_plan(|prepared, _| {
-            let registered = prepared.plot(0).unwrap();
+            let registered = prepared.canvas_plot(0).unwrap();
             assert_eq!(
                 registered.policy.continuous_materialization,
                 crate::orchestrator::registration::ContinuousMaterialization::Suppressed
@@ -773,16 +823,13 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
             let plan = crate::layout::fit::measured(tracks::allocate(
                 outer,
                 &canvas.placements,
-                &[None, None],
                 prepared,
-                &prepared.operation,
-                &prepared.text_panel_intrinsics,
-                &prepared.plot_titles,
+                None,
                 &canvas.column_headers,
                 &canvas.row_headers,
                 &canvas.row_titles,
                 &[],
-                &prepared.root_request(),
+                &prepared.request(),
                 &FitScope::root(),
                 None,
             ))
@@ -850,13 +897,15 @@ fn spanning_owner_uses_declared_header_rows_and_one_prepared_source_per_anchor()
         .unwrap();
     let root = canvas
         .build_preflight_plan(|prepared, _| {
-            assert!(prepared.plot(2).is_none());
+            assert!(prepared.canvas_plot(2).is_none());
             assert_eq!(prepared.plots.len(), 3);
             assert_eq!(prepared.plot_intrinsics.len(), 3);
             for (slot, anchor) in [0, 1, 3].into_iter().enumerate() {
-                let registered = prepared.plot(anchor).unwrap();
+                let registered = prepared.canvas_plot(anchor).unwrap();
                 assert!(std::ptr::eq(registered, &raw const prepared.plots[slot]));
-                assert_eq!(registered.data(&prepared.operation).unwrap().height(), 2);
+                let data = registered.data(&prepared.operation).unwrap();
+                assert_eq!(data.height(), 2);
+                assert_eq!(data.plot_id(), &registered.scope.id);
                 assert_eq!(registered.scope.id.slot, slot);
                 assert_eq!(
                     registered.scope.address,
@@ -1018,7 +1067,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
     let root = canvas
         .build_preflight_plan(|prepared, replay| {
             assert!(prepared
-                .text_census
+                .census
                 .requirements
                 .iter()
                 .all(|text| !text.source.contains('\u{10ffff}')));
@@ -1047,7 +1096,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
                     assert_eq!(text.style.weight, style.get_weight());
                     assert_eq!(&text.style.stack, style.get_stack());
                     let requirement = prepared
-                        .text_census
+                        .census
                         .requirements
                         .iter()
                         .find(|text| text.source == source)
@@ -1057,7 +1106,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
             }
             let frame = crate::layout::RootFramePlan::measure(
                 (650, 900),
-                &prepared.root_request(),
+                &prepared.request(),
                 canvas.prose(),
                 crate::decorations::title_block::plan::RootAlignments::resolve(
                     &prepared.root_appearance,
@@ -1180,7 +1229,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
             );
             for (source, appearance) in [(TITLE, &title_style), (BODY, &body_style)] {
                 let requirement = prepared
-                    .text_census
+                    .census
                     .requirements
                     .iter()
                     .find(|text| text.source == source)
@@ -1188,7 +1237,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
                 assert_eq!(&requirement.stack, appearance.get_stack());
                 assert_eq!(requirement.weight, appearance.get_weight());
                 assert!(prepared
-                    .text_census
+                    .census
                     .requirements
                     .iter()
                     .any(|text| text.source == "0"
@@ -1216,7 +1265,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
                 assert!(text.style.exact_override);
                 assert_eq!(text.line_texts().concat(), source.replace('\n', ""));
             }
-            let theme = &prepared.root_request();
+            let theme = &prepared.request();
             let wide = text_panel::natural_height(&panel, 600.0, theme).unwrap();
             let narrow = text_panel::natural_height(&panel, 280.0, theme).unwrap();
             assert!(
@@ -1228,7 +1277,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
                 0,
                 PixelRect::new(0.0, 600.0, 0.0, 900.0),
                 theme,
-                prepared.text_panel_intrinsics[0].unwrap(),
+                prepared.canvas_text()[0].unwrap(),
                 &crate::layout::fit::FitScope::root(),
             ))
             .unwrap();
@@ -1342,7 +1391,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
         };
         let root = canvas
             .build_preflight_plan(|prepared, _| {
-                let Some(descriptor) = &prepared.shared_guide else {
+                let Some(descriptor) = prepared.canvas_guide() else {
                     panic!("prepared Shared discrete descriptor");
                 };
                 assert_eq!(descriptor.composition, composition);
@@ -1361,7 +1410,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                     .child(crate::layout::AddressRole::CanvasSharedLegend, 0)
                     .unwrap();
                 let guide_text = prepared
-                    .text_census
+                    .census
                     .requirements
                     .iter()
                     .filter(|requirement| {
@@ -1438,7 +1487,6 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                 .placements
                 .plot(layer_slot)
                 .unwrap()
-                .description()
                 .legend_composition_spec(),
             Separate
         );
@@ -1446,10 +1494,10 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
             canvas.legend_policy = CanvasLegendPolicy::PerPlot;
             canvas
                 .build_preflight_plan(|prepared, _| {
-                    assert!(prepared.shared_guide.is_none());
+                    assert!(prepared.canvas_guide().is_none());
                     let composition = |index: usize| {
                         prepared
-                            .plot(index)
+                            .canvas_plot(index)
                             .unwrap()
                             .guide
                             .descriptor
@@ -1509,7 +1557,7 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
     let source = canvas(title.clone());
     let root = source
         .build_preflight_plan(|prepared, _| {
-            let descriptor = prepared.shared_guide.as_ref().unwrap();
+            let descriptor = prepared.canvas_guide().unwrap();
             assert_eq!(
                 descriptor.sections[0].entries()[0].identity,
                 crate::decorations::legend::GuideEntryIdentity::supplemental("Selected\nshort")
@@ -2578,7 +2626,7 @@ fn assert_shared_alpha_declarations() {
         scatter(values.select([1]).unwrap()),
     )
     .build_preflight_plan(|prepared, _| {
-        let descriptor = prepared.shared_guide.as_ref().unwrap();
+        let descriptor = prepared.canvas_guide().unwrap();
         assert_eq!(descriptor.sections.len(), 1);
         assert_eq!(
             descriptor.sections[0]
@@ -2717,7 +2765,7 @@ fn assert_shared_color_and_alpha_sections() {
         .panel(0, 1, cells)
         .unwrap()
         .build_preflight_plan(|prepared, _| {
-            let descriptor = prepared.shared_guide.as_ref().unwrap();
+            let descriptor = prepared.canvas_guide().unwrap();
             assert_eq!(descriptor.sections.len(), 3);
             assert!(matches!(
                 descriptor.sections[0].body,
@@ -2903,7 +2951,7 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
             Arc::make_mut(&mut rejected.placements)
                 .insert(
                     placement::Footprint::cell(0, 0),
-                    placement::Payload::Plot(Arc::new(plot.clone())),
+                    placement::Payload::Plot(plot.clone().into_description()),
                 )
                 .unwrap();
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -2923,7 +2971,9 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
         Arc::make_mut(&mut canvas.placements)
             .insert(
                 placement::Footprint::cell(index / 2, index % 2),
-                placement::Payload::Plot(Arc::new(plot.clone().title(format!("{kind:?}")))),
+                placement::Payload::Plot(
+                    plot.clone().title(format!("{kind:?}")).into_description(),
+                ),
             )
             .unwrap();
         index += 1;

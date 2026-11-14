@@ -16,11 +16,14 @@ use crate::alpha::{
 };
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::PointRole;
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::PlotMeasureContext;
 use crate::theme::{AccentColors, CategoryColors};
+#[cfg(test)]
 use crate::Plot;
 
 #[cfg(test)]
@@ -59,7 +62,7 @@ pub(crate) struct ScatterPayload {
 /// Pre-selection hard size for a complete primary point. Exact data windows
 /// may clip a point at their boundary; only automatic axes require full ink.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -82,7 +85,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Scatter has no retained primary marks".into(),
         ));
     }
-    let style = chart.description().point_style(
+    let style = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_scatter(),
@@ -330,7 +333,7 @@ impl PreparedScatter {
 
     fn project(
         &self,
-        chart: &Plot,
+        chart: &PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
         projection: &crate::layout::Projection,
         theme: &crate::text::TextRequestContext<'_, '_>,
@@ -363,7 +366,7 @@ impl PreparedScatter {
                     .ok_or_else(|| Error::Render("Scatter accent owner is missing".into()))?
                     .color(0)?
             };
-            let style = chart.description().point_style(
+            let style = chart.point_style(
                 theme,
                 color,
                 theme.marks.get_points().get_radii().get_scatter(),
@@ -405,35 +408,33 @@ impl ScatterPayload {
 /// Measure the assigned Scatter payload from root-prepared scientific inputs.
 /// Projection may change with the assignment; capture only draws this payload.
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
     #[cfg(test)]
     STAGES.with(|stages| {
         let mut counts = stages.get();
         counts[1] += 1;
         stages.set(counts);
     });
-    let theme = context.theme;
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Scatter(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "Scatter measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
+    let theme = request;
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Scatter(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render(
+            "Scatter measurement requires root-prepared semantics for its component".into(),
+        )
+    })?;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
+    let data = context.data()?;
     let mut payload = prepared.project(
         chart,
         context
             .registered
-            .expect("prepared Scatter occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
@@ -441,7 +442,7 @@ pub(crate) fn measure_marks(
         theme,
         data,
     )?;
-    let point_style = chart.description().point_style(
+    let point_style = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_scatter(),
@@ -455,10 +456,7 @@ pub(crate) fn measure_marks(
                 .map(|point| (point.x, point.y, point.alpha))
         }),
     )? {
-        let raw_windows = context
-            .registered
-            .expect("prepared occurrence")
-            .raw_windows();
+        let raw_windows = context.registered.raw_windows();
         payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
             ink.ranges,
             &layout.projection,
@@ -472,15 +470,10 @@ pub(crate) fn measure_marks(
     for (points, style) in &payload.groups {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    );
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Scatter(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }

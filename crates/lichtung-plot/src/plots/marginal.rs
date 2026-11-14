@@ -26,19 +26,21 @@ use crate::alpha::{
     },
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::fit::PlanError;
-use crate::layout::{self, AxisSpec, PixelRect};
+use crate::layout::{self, AuthoredAxisSpec, PixelRect};
 use crate::orchestrator::registration::{
     AxisSlot, AxisSourceWitness, AxisSpace, DisplayExtent, MarginalStrip, PlotOccurrenceId,
     PreparedAxesOwner, PreparedAxisSource,
 };
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotMeasureContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde, kde_support_range, strict_scott_bandwidth};
 use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
+#[cfg(test)]
 use crate::Plot;
 
 const MARGINAL_KDE_CUT: f64 = 3.0;
@@ -200,7 +202,7 @@ impl PreparedMarginal {
 /// Retained central point and marginal-density ink supply the linked-panel
 /// parent's hard input; the fixed strip/gap packing remains local until T5e3.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
@@ -222,7 +224,7 @@ pub(crate) fn intrinsic_body_minimum(
     ));
 
     for group in &prepared.groups {
-        let style = chart.description().point_style(
+        let style = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_marginal(),
@@ -301,7 +303,7 @@ fn measure_linked_panel(
     panel: PixelRect,
     ranges: [(f64, f64); 2],
     role: layout::AddressRole,
-    context: PlotRenderContext<'_, '_>,
+    context: &PlotMeasureContext<'_, '_>,
 ) -> Result<MarginalRegionProjection, crate::layout::fit::PlanError> {
     if ![panel.x0, panel.x1, panel.y0, panel.y1]
         .into_iter()
@@ -394,7 +396,7 @@ impl MarginalPayload {
 }
 
 pub(crate) fn natural_body_preference(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
@@ -414,8 +416,12 @@ pub(crate) fn natural_body_preference(
         (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
         (hard.1 - gap - (2.0 * ink.1).max(1.0 / 1024.0)).max(axes.1),
     );
-    let preference =
-        layout::interior::preference::mark_preference(chart, registered, theme, central)?;
+    let preference = layout::interior::preference::mark_preference(
+        registered.expect("prepared Marginal preference"),
+        crate::builder::RootFrameDomainInput::Prepared,
+        theme,
+        central,
+    )?;
     let width = preference.body_quanta.0 as f64 / 1024.0;
     let height = preference.body_quanta.1 as f64 / 1024.0;
     let quarter = |value: i64| -> Result<f64, Error> {
@@ -430,7 +436,7 @@ pub(crate) fn natural_body_preference(
 }
 
 pub(crate) fn natural_body_height(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
@@ -453,8 +459,12 @@ pub(crate) fn natural_body_height(
         (hard.0 - gap - right_hard).max(axes.0),
         (hard.1 - gap - top_hard).max(axes.1),
     );
-    let preference =
-        layout::interior::preference::mark_preference(chart, registered, theme, central_hard)?;
+    let preference = layout::interior::preference::mark_preference(
+        registered.expect("prepared Marginal preference"),
+        crate::builder::RootFrameDomainInput::Prepared,
+        theme,
+        central_hard,
+    )?;
     let track = |min: f64, preferred: i64| -> Result<_, Error> {
         let min = layout::kernel::ceil_spatial_quanta(min)?;
         Ok(layout::kernel::TrackSpec {
@@ -491,31 +501,30 @@ pub(crate) fn natural_body_height(
 }
 
 pub(crate) fn measure(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
+    let theme = request;
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Marginal(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
-    let registered = context.registered.expect("prepared Marginal occurrence");
+    let registered = context.registered;
     let base_ranges = registered.axes.ranges();
     theme.text.prepared_font_environment()?;
-    let data = context.data;
+    let data = context.data()?;
 
     // --- Layout geometry ---
-    let outer = context.panel;
+    let outer = context.assignment.local.body;
     let gap = theme.composition_grid_gap()?;
     let hard = intrinsic_body_minimum(
         chart,
-        context.registered,
+        Some(context.registered),
         context.intrinsic(),
-        context.data.source_resources(),
+        context.operation,
         theme,
     )?;
     if outer.width() < hard.0 || outer.height() < hard.1 {
@@ -524,15 +533,15 @@ pub(crate) fn measure(
             "marginal linked strips leave less than the prepared central mark and density ink minimum",
         ).into());
     }
-    let ink = density_ink(context.registered, theme)?;
+    let ink = density_ink(Some(context.registered), theme)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes_hard = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
         &crate::orchestrator::root::intrinsic_inputs(
-            context.registered,
+            Some(context.registered),
             theme,
-            context.data.source_resources(),
+            context.operation,
         )?,
     )?
     .minimum(registered.policy.axis_text.tick_labels[1]);
@@ -541,8 +550,8 @@ pub(crate) fn measure(
         (hard.1 - gap - top_hard).max(axes_hard.1),
     );
     let preference = layout::interior::preference::mark_preference(
-        chart,
         context.registered,
+        crate::builder::RootFrameDomainInput::Selected(context.assignment.local),
         theme,
         central_hard,
     )?;
@@ -585,8 +594,8 @@ pub(crate) fn measure(
     let (right_x0, right_x1) = columns[1];
 
     // --- Data ranges ---
-    let (x_low, x_high) = context.axis_range(layout::AxisSide::Bottom, || Ok(base_ranges[0]))?;
-    let (y_low, y_high) = context.axis_range(layout::AxisSide::Left, || Ok(base_ranges[1]))?;
+    let (x_low, x_high) = context.axis_range(layout::AxisSide::Bottom)?;
+    let (y_low, y_high) = context.axis_range(layout::AxisSide::Left)?;
     let ranges = [(x_low, x_high), (y_low, y_high)];
     // Automatic clearance expands the projection around the retained density
     // source. Regenerating endpoints on each expanded boundary would recreate
@@ -602,11 +611,8 @@ pub(crate) fn measure(
         axes.copy_label(registered, 0)?,
         axes.copy_label(registered, 1)?,
     ];
-    let specs = [
-        chart.description().x_axis_spec(),
-        chart.description().y_axis_spec(),
-    ];
-    let numeric = registered.axis_numeric_binding(context.data.source_resources())?;
+    let specs = [chart.x_axis_spec(), chart.y_axis_spec()];
+    let numeric = registered.axis_numeric_binding(context.operation)?;
     // The old temporary specs had these already selected limits. Keep the
     // original two range-helper calls, without cloning an authored axis owner.
     let central_ranges = [
@@ -618,22 +624,12 @@ pub(crate) fn measure(
         central_ranges[1],
         (central_x0, central_x1, central_y0, central_y1),
     );
-    let domains = std::array::from_fn::<_, 2, _>(|side| {
-        crate::orchestrator::assignment::AxisDomainAssignment {
-            extent: DisplayExtent {
-                lower: central_ranges[side].0,
-                upper: central_ranges[side].1,
-            },
-            provenance: specs[side].provenance,
-        }
-    });
+    let assigned = context
+        .axis_pair(crate::orchestrator::assignment::AxisPairScope::MarginalCentral)?
+        .axes;
     let ticks = [layout::AxisSide::Bottom, layout::AxisSide::Left].map(|side| {
         let index = usize::from(side == layout::AxisSide::Left);
-        crate::orchestrator::assignment::AssignedAxisRef {
-            base: axes.axis(registered.source, index),
-            domain: &domains[index],
-        }
-        .layout_ticks(
+        assigned[index].layout_ticks(
             Vec::new(),
             &projection,
             side,
@@ -654,7 +650,7 @@ pub(crate) fn measure(
         }
         (Ok(x), Ok(y)) => (x, y),
     };
-    let make_axis = |spec: &AxisSpec, label, ticks: layout::NumericTickPlan| layout::Axis {
+    let make_axis = |spec: &AuthoredAxisSpec, label, ticks: layout::NumericTickPlan| layout::Axis {
         label,
         ticks: ticks.ticks,
         tick_labels_visible: true,
@@ -760,16 +756,10 @@ pub(crate) fn measure(
             [
                 ranges[0],
                 context
-                    .registered
-                    .expect("prepared Marginal occurrence")
-                    .axes
-                    .axis_at(
-                        context.registered.unwrap().source,
-                        crate::orchestrator::registration::AxisSlot::MarginalStripDensity(
-                            crate::orchestrator::registration::MarginalStrip::Top,
-                        ),
-                    )
-                    .extent()?
+                    .axis_pair(crate::orchestrator::assignment::AxisPairScope::MarginalTop)?
+                    .axes[1]
+                    .domain
+                    .extent
                     .pair(),
             ],
             layout::AddressRole::MarginalTop,
@@ -779,16 +769,10 @@ pub(crate) fn measure(
             right_panel,
             [
                 context
-                    .registered
-                    .expect("prepared Marginal occurrence")
-                    .axes
-                    .axis_at(
-                        context.registered.unwrap().source,
-                        crate::orchestrator::registration::AxisSlot::MarginalStripDensity(
-                            crate::orchestrator::registration::MarginalStrip::Right,
-                        ),
-                    )
-                    .extent()?
+                    .axis_pair(crate::orchestrator::assignment::AxisPairScope::MarginalRight)?
+                    .axes[0]
+                    .domain
+                    .extent
                     .pair(),
                 ranges[1],
             ],
@@ -810,7 +794,7 @@ pub(crate) fn measure(
     let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color = PreparedMarginal::group_color(group, &colors, &accents)?;
-        let point_style = chart.description().point_style(
+        let point_style = chart.point_style(
             theme,
             color,
             theme.marks.get_points().get_radii().get_marginal(),
@@ -985,20 +969,16 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(
         layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+        crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
     );
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
         std::array::from_fn(|side| {
-            let mut input = crate::orchestrator::assignment::AssignedAxisRef {
-                base: axes.axis(registered.source, side),
-                domain: &domains[side],
-            }
-            .semantic_inputs();
+            let mut input = assigned[side].semantic_inputs();
             input
                 .text_layout
-                .clone_from(&chart.description().text_layouts().ticks[side]);
+                .clone_from(&theme.text_layouts.ticks[side]);
             input
         }),
         || layout::CoordinateLayoutInputs::new(theme),
@@ -1062,10 +1042,17 @@ pub(crate) fn prepare(
                 upper: ranges[side].1,
             },
             layout::RangePolicy::MarginalSupport,
-            if side == 0 {
-                chart.x_axis_spec().provenance
+            if (if side == 0 {
+                chart.x_axis_spec()
             } else {
-                chart.y_axis_spec().provenance
+                chart.y_axis_spec()
+            })
+            .window
+            .is_some()
+            {
+                layout::RangeProvenance::Configured
+            } else {
+                layout::RangeProvenance::Automatic
             },
             std::sync::OnceLock::new(),
         )
@@ -1316,7 +1303,7 @@ fn build_groups(
 fn marginal_display_range<'a>(
     groups: impl Iterator<Item = &'a [f64]> + Clone,
     data_range: (f64, f64),
-    spec: &AxisSpec,
+    spec: &AuthoredAxisSpec,
 ) -> Result<(f64, f64), Error> {
     let data_display_range = marginal_data_display_range(data_range, spec);
     if spec.window.is_some() {
@@ -1335,7 +1322,7 @@ fn marginal_display_range<'a>(
     ))
 }
 
-fn marginal_data_display_range(data_range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
+fn marginal_data_display_range(data_range: (f64, f64), spec: &AuthoredAxisSpec) -> (f64, f64) {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,

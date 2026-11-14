@@ -1,5 +1,5 @@
 #[cfg(test)]
-use super::{AxisSide, AxisSpec, AxisTick, Projection};
+use super::{AuthoredAxisSpec, AxisSide, AxisTick, Projection};
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
@@ -7,7 +7,10 @@ const NICE_RANGE_SEED_COUNT: usize = 5;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
 
 #[cfg(test)]
-pub(super) fn resolve_range(range: (f64, f64), spec: &AxisSpec) -> Result<(f64, f64), Error> {
+pub(super) fn resolve_range(
+    range: (f64, f64),
+    spec: &AuthoredAxisSpec,
+) -> Result<(f64, f64), Error> {
     continuous_auto_range(range, spec.window.map(super::RawWindow::pair))
 }
 

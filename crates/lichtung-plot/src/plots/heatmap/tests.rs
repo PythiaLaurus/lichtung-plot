@@ -64,23 +64,22 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
         &source.erase(),
         &resolved,
         |_| Ok(()),
-        |chart, inputs, resolved, _operation| {
-            let operation = resolved
-                .text
-                .prepared_font_environment()
-                .unwrap()
-                .operation();
-            let result = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        PixelRect::new(0.0, 500.0, 0.0, 200.0),
-                        resolved,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+        |chart, inputs, resolved, operation, round| {
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let result = crate::layout::interior::measure_for_test(
+                &factory,
+                PixelRect::new(0.0, 500.0, 0.0, 200.0),
+                round,
+            )
+            .unwrap();
             let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
             assert_eq!(plan.source, "Unavailable\nshort");
             assert_eq!(plan.style.font_size.to_bits(), 23.0_f64.to_bits());
@@ -89,8 +88,8 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
             assert_eq!(plan.lines.len(), 2);
             let minimum = intrinsic_body_minimum(
                 inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
-                &operation,
+                inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
+                operation,
                 resolved,
             )
             .unwrap();
@@ -157,28 +156,31 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         &mapped,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
-            let transparent = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(inputs.plots[0].data(&operation).unwrap(), panel, theme)
-                        .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+        |chart, inputs, theme, operation, round| {
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let transparent =
+                crate::layout::interior::measure_for_test(&factory, panel, round).unwrap();
             let cell = &payload(&transparent).cells[0];
             assert_eq!(cell.fill.color.get_alpha(), 0);
             let plan = &cell.text.as_ref().unwrap().plan;
             assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
             let (marks, levels) = retained_in(inputs.plots.first()).unwrap();
             let axes = inputs.plots[0].axes.coordinate().unwrap();
-            let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+            let intrinsic = inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap();
             let original = heatmap_minima(
                 intrinsic,
                 &crate::orchestrator::root::intrinsic_inputs(
                     inputs.plots.first(),
                     theme,
-                    &operation,
+                    operation,
                 )
                 .unwrap(),
             )
@@ -194,8 +196,8 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 )
                 .unwrap(),
             );
-            let same_paint_inputs =
-                crate::plots::shared_x::prepare_plot(same_paint.description(), &operation, theme)
+            let (same_paint_inputs, _) =
+                crate::plots::shared_x::prepare_plot(same_paint.description(), operation, theme)
                     .unwrap();
             let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks)) =
                 &same_paint_inputs.panels[0].family
@@ -222,9 +224,9 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                     crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
                 ),
             );
-            let changed_inputs = crate::plots::shared_x::prepare_plot(
+            let (changed_inputs, _) = crate::plots::shared_x::prepare_plot(
                 changed_source.description(),
-                &operation,
+                operation,
                 theme,
             )
             .unwrap();
@@ -259,7 +261,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 &crate::orchestrator::root::intrinsic_inputs(
                     inputs.plots.first(),
                     &theme,
-                    &operation,
+                    operation,
                 )
                 .unwrap(),
             )
@@ -394,14 +396,73 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let selected = source
-        .preflight_panel(
-            source.kind(),
-            PixelRect::new(20.0, 800.0, 20.0, 620.0),
-            &theme,
-        )
-        .unwrap();
-    let cells = &payload(&selected).cells;
+    let frozen = crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 1200,
+            height: 900,
+        },
+        |stage| {
+            crate::orchestrator::root::Root::prepare(
+                crate::orchestrator::root::RootSource::Plot(source.description()),
+                stage,
+            )
+        },
+        |root, assigned, round| {
+            let size = assigned.assigned_size()?;
+            let measurement = root.assignment_factory().assign(size);
+            let registered = &root.plots[0];
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let local = registered
+                .local_guide_slot()?
+                .expect("the color-plus-alpha native guide is present");
+            let entry = factory.assign(
+                crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                    size,
+                    PixelRect::new(20.0, 800.0, 20.0, 620.0),
+                    round,
+                    &registered.scope.address,
+                ),
+                round,
+                None,
+            )?;
+            crate::decorations::plan::OUTER_GUIDE_MEASUREMENTS.with(|calls| calls.set(0));
+            let planned = crate::layout::fit::measured(crate::decorations::plan::plan_plot(
+                &factory,
+                entry,
+                crate::decorations::plan::LegendRole::Panel,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    local_guide: Some(&local),
+                    dependencies: &[],
+                },
+                &crate::layout::fit::FitScope::new(&registered.scope.address, 0),
+                round,
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
+            assert_eq!(
+                planned.result.decoration_mode,
+                crate::spec::DecorationMode::Standard
+            );
+            assert!(planned.legend.is_none());
+            assert!(std::sync::Arc::ptr_eq(
+                planned.result.discrete_guide.as_ref().unwrap(),
+                &local.descriptor,
+            ));
+            assert!(!payload(&planned.result)
+                .colorbar
+                .as_ref()
+                .unwrap()
+                .calls
+                .is_empty());
+            crate::decorations::plan::OUTER_GUIDE_MEASUREMENTS
+                .with(|calls| assert_eq!(calls.get(), 0));
+            Ok(crate::layout::MeasuredLayout::new(size, planned))
+        },
+        |_, _, selected, _| Ok(selected),
+    )
+    .unwrap();
+    let selected = frozen.plan();
+    let cells = &payload(&selected.result).cells;
     assert_eq!(
         cells
             .iter()
@@ -416,7 +477,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     );
     assert!(cells[0].cross.is_some());
     assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));
-    let descriptor = selected.discrete_guide.as_ref().unwrap();
+    let descriptor = selected.result.discrete_guide.as_ref().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let destination = directory.path().join("native.svg");
     source

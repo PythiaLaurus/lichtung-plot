@@ -112,20 +112,22 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         &source,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let chart = chart.clone();
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
-                        theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+        |chart, inputs, _theme, _operation, round| {
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let selected = crate::layout::interior::measure_for_test(
+                &factory,
+                crate::layout::PixelRect::new(40.0, 600.0, 40.0, 420.0),
+                round,
+            )
+            .unwrap();
             let crate::layout::interior::MarkPayload::Estimate(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {

@@ -12,12 +12,7 @@ pub(super) fn measure(
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 
-    content_plot: Option<(
-        &crate::Plot,
-        Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        &crate::orchestrator::root::PlotIntrinsics,
-        &crate::font::canonical::OperationContext,
-    )>,
+    content_plot: Option<&crate::spec::PlotMeasureContext<'_, '_>>,
 ) -> Result<(PixelRect, Legend), PlanError> {
     let descriptor = crate::orchestrator::registration::guide_descriptor(registered)?
         .ok_or_else(|| Error::Render("native Heatmap guide was not prepared".into()))?;

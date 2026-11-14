@@ -1,5 +1,11 @@
 use super::*;
-use crate::decorations::legend::discrete::scoped::{GuideUse, ScopedGuideInputs};
+use crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES;
+use crate::decorations::plan::children::MeasurementPhase;
+use crate::layout::fit::FitScope;
+use crate::orchestrator::assignment::{
+    GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions,
+};
+use crate::orchestrator::root::{Root, RootSource};
 use crate::TickGeneration;
 
 fn plot() -> Plot<crate::kind::Scatter> {
@@ -11,60 +17,97 @@ fn plot() -> Plot<crate::kind::Scatter> {
     .y_limits(0.0, 4.0)
 }
 
-fn prepare_key_inputs<'src>(
-    source: &'src Plot,
-    operation: &crate::font::canonical::OperationContext,
-) -> crate::layout::interior::PreparedInteriorInputs<'src> {
-    let mut registry = crate::plots::shared_x::prepare_plot(
-        source.description(),
-        operation,
-        &source.description().resolve_theme().unwrap(),
+fn with_composed<T>(
+    source: &Plot,
+    slot: usize,
+    full: bool,
+    edit: impl FnOnce(&mut Root<'_>),
+    inspect: impl FnOnce(&PlotMeasureContext<'_, '_>, &FeedbackRound) -> T,
+) -> T {
+    let mut result = None;
+    let mut inspect = Some(inspect);
+    crate::layout::plan_root(
+        crate::layout::RootRequest::ExactSize {
+            width: 800,
+            height: 600,
+        },
+        |stage| {
+            let mut root = Root::prepare(RootSource::Plot(source.description()), stage)?;
+            edit(&mut root);
+            Ok(root)
+        },
+        |root, assigned, round| {
+            let registered = &root.plots[slot];
+            let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let panel = crate::layout::PixelRect::new(20.0, 700.0, 20.0, 500.0);
+            let entry = factory.assign(
+                PlotAllocationInputs {
+                    dimensions: PlotMeasureDimensions {
+                        canvas: measurement.measurement_size,
+                        output_override: None,
+                    },
+                    cell: panel,
+                    frame: panel,
+                    body: panel,
+                    axis_label_width: panel.width(),
+                    content_height: false,
+                    fill_content_height: false,
+                    content_preference: None,
+                    insets: ParentInsets::consumed(round, &registered.scope.address),
+                    guide: GuideTrialAssignment {
+                        edge: crate::LegendPosition::Auto,
+                        compact: false,
+                        allocation: None,
+                    },
+                },
+                round,
+                (!full).then_some(MeasurementPhase::Probe),
+            )?;
+            let scope = if full {
+                FitScope::new(&registered.scope.address, 0)
+            } else {
+                FitScope::root()
+            };
+            let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+            result = Some(inspect.take().unwrap()(&context, round));
+            Ok(crate::layout::MeasuredLayout::new(
+                measurement.measurement_size,
+                (),
+            ))
+        },
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
-    let guide = if source.description().has_facets() {
-        crate::orchestrator::prepare_discrete_guide(source, source.kind(), &mut registry, operation)
+    result.unwrap()
+}
+
+fn retain_key(source: &Plot) -> ComposedInputs {
+    with_composed(
+        source,
+        0,
+        true,
+        |_| {},
+        |context, round| {
+            ComposedInputs::retain(
+                context,
+                round,
+                ScopedGuideInputs::capture(context).unwrap(),
+                None,
+            )
             .unwrap()
-            .descriptor
-    } else {
-        crate::layout::interior::guide::prepare_discrete_guides(
-            source.description(),
-            &mut registry.panels,
-            operation,
-            false,
-        )
-        .unwrap()
-    };
-    crate::layout::interior::PreparedInteriorInputs::from_registry(
-        registry,
-        crate::layout::interior::InteriorRoute::classify(source.kind()),
-        guide,
+        },
     )
-    .unwrap()
 }
 
-fn retain_key(plot: &Plot) -> ComposedInputs {
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = prepare_key_inputs(plot, &operation);
-    let registered = &inputs.plots[0];
-    plot.retain_composed_inputs(
-        ScopedGuideInputs::new(
-            plot,
-            Some(registered),
-            GuideUse::SharedSuppressed,
-            None,
-            &[],
-        )
-        .unwrap(),
-        registered,
-        None,
+fn key_matches(source: &Plot, retained: &ComposedInputs) -> bool {
+    with_composed(
+        source,
+        0,
+        true,
+        |_| {},
+        |context, round| retained.matches(context, round, &retained.guides, None),
     )
-    .unwrap()
-}
-
-fn key_matches(plot: &Plot, retained: &ComposedInputs) -> bool {
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = prepare_key_inputs(plot, &operation);
-    plot.same_composed_inputs(retained, &retained.guides, &inputs.plots[0], None)
 }
 
 #[test]
@@ -89,36 +132,26 @@ fn composed_conditions_borrow_the_normalized_parent_axis_and_preserve_raw_order_
         crate::CategoryValues::new("panel", ["a", "a", "a", "b", "b", "b"]).unwrap(),
     ))
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs = prepare_key_inputs(&source, &operation);
-    let plot = source.clone().without_facets();
-    let registered = &inputs.plots[0];
-    let retained = plot
-        .retain_composed_inputs(
-            ScopedGuideInputs::new(
-                &plot,
-                Some(registered),
-                GuideUse::SharedSuppressed,
-                None,
-                &[],
-            )
-            .unwrap(),
-            registered,
-            None,
-        )
-        .unwrap();
+    let retained = retain_key(&source);
     assert_eq!(
         retained.global_line_condition_levels.as_deref().unwrap(),
         ["after visit", "before visit", "last visit"]
     );
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
-    inputs.plots[0].axes.sources_mut()[0]
-        .categories
-        .as_mut()
-        .unwrap()
-        .raw
-        .swap(0, 1);
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[0], None));
+    assert!(key_matches(&source, &retained));
+    assert!(!with_composed(
+        &source,
+        0,
+        true,
+        |root| {
+            root.plots[0].axes.sources_mut()[0]
+                .categories
+                .as_mut()
+                .unwrap()
+                .raw
+                .swap(0, 1);
+        },
+        |context, round| retained.matches(context, round, &retained.guides, None)
+    ));
     assert!(crate::orchestrator::registration::line_condition_levels(None).is_none());
 }
 
@@ -133,147 +166,128 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         crate::CategoryValues::new("panel", ["parent", "parent", "child", "child"]).unwrap(),
     ))
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs = prepare_key_inputs(&source, &operation);
-    let plot = source.clone().without_facets();
-    let registered = &inputs.plots[1];
-    let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } = &registered.family
-    else {
-        panic!("prepared Bars")
-    };
-    assert!(marks.bars.iter().all(|bar| bar.series_index == Some(1)
-        && bar.hue_key.as_ref().is_some_and(|key| {
-            let raw = key.as_ref();
-            raw.field == "cohort" && raw.value == "seen"
-        })));
-    let retained = plot
-        .retain_composed_inputs(
-            ScopedGuideInputs::new(
-                &plot,
-                Some(registered),
-                GuideUse::SharedSuppressed,
+    let retained = with_composed(
+        &source,
+        1,
+        true,
+        |_| {},
+        |context, round| {
+            let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } =
+                &context.registered.family
+            else {
+                panic!("prepared Bars")
+            };
+            assert!(marks.bars.iter().all(|bar| bar.series_index == Some(1)
+                && bar.hue_key.as_ref().is_some_and(|key| {
+                    let raw = key.as_ref();
+                    raw.field == "cohort" && raw.value == "seen"
+                })));
+            ComposedInputs::retain(
+                context,
+                round,
+                ScopedGuideInputs::capture(context).unwrap(),
                 None,
-                &[],
             )
-            .unwrap(),
-            registered,
-            None,
-        )
-        .unwrap();
+            .unwrap()
+        },
+    );
     assert_eq!(
         retained.global_group_levels.as_deref().unwrap(),
         ["absent", "seen"]
     );
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
     assert_eq!(
         retained.global_hue_levels.as_deref().unwrap(),
         ["absent", "seen"]
     );
-    let original = std::sync::Arc::clone(registered.parent_orders.hues.as_ref().unwrap());
-    let replacement = |values| {
-        crate::data::source::source_arc(
-            crate::data::category::CategoryDomain::from_values(
-                source.description().hue_field().as_ref(),
-                values,
-            )
-            .unwrap(),
-        )
-        .unwrap()
-    };
-    let equal = replacement(vec!["absent".into(), "seen".into()]);
-    assert!(!std::sync::Arc::ptr_eq(&original, &equal));
-    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&equal));
-    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(equal);
-    assert!(plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
-    let reversed = replacement(vec!["seen".into(), "absent".into()]);
-    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&reversed));
-    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(reversed);
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
-    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&original));
-    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(original);
-    inputs.plots[1].parent_orders.groups =
-        Some(crate::data::source::source_arc(vec!["seen".into(), "absent".into()]).unwrap());
-    assert!(!plot.same_composed_inputs(&retained, &retained.guides, &inputs.plots[1], None));
-
+    for (values, expected) in [
+        (vec!["absent".into(), "seen".into()], true),
+        (vec!["seen".into(), "absent".into()], false),
+    ] {
+        assert_eq!(
+            with_composed(
+                &source,
+                1,
+                true,
+                |root| {
+                    let panel = &mut root.plots[1];
+                    let original = panel.parent_orders.hues.as_ref().unwrap();
+                    let replacement = crate::data::source::source_arc(
+                        crate::data::category::CategoryDomain::from_values(
+                            source.description().hue_field().as_ref(),
+                            values,
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap();
+                    assert!(!std::sync::Arc::ptr_eq(original, &replacement));
+                    panel.parent_orders.hues = Some(std::sync::Arc::clone(&replacement));
+                    panel.categorical.as_mut().unwrap().parent = Some(replacement);
+                },
+                |context, round| retained.matches(context, round, &retained.guides, None)
+            ),
+            expected
+        );
+    }
+    assert!(!with_composed(
+        &source,
+        1,
+        true,
+        |root| {
+            root.plots[1].parent_orders.groups = Some(
+                crate::data::source::source_arc(vec!["seen".into(), "absent".into()]).unwrap(),
+            );
+        },
+        |context, round| retained.matches(context, round, &retained.guides, None)
+    ));
     let single = Plot::bar(
         crate::CategoryValues::new("category", ["one"]).unwrap(),
         crate::BarInput::estimates(crate::NumericValues::new("value", [1.0])),
     )
     .erase();
-    let inputs = prepare_key_inputs(&single, &operation);
-    assert!(inputs.plots[0]
-        .family
-        .as_ref()
-        .positioned_groups()
-        .unwrap()
-        .is_empty());
-    let retained = single
-        .retain_composed_inputs(
-            ScopedGuideInputs::new(
-                &single,
-                Some(&inputs.plots[0]),
-                GuideUse::SharedSuppressed,
-                None,
-                &[],
-            )
-            .unwrap(),
-            &inputs.plots[0],
-            None,
-        )
-        .unwrap();
-    assert!(retained.global_group_levels.is_none());
+    assert!(retain_key(&single).global_group_levels.is_none());
 }
 
 #[test]
 fn generation_cloning_and_composed_identity_include_both_axes() {
-    let mut plot = plot()
+    let mut source = plot()
         .x_tick_generation(TickGeneration::additive(2.0).unwrap())
         .y_tick_generation(TickGeneration::additive(1.0).unwrap())
-        .x_tick_format(
-            crate::numeric::format::NumericFormat::default()
-                .prefix("x ")
-                .unwrap(),
-        )
-        .y_tick_format(
-            crate::numeric::format::NumericFormat::default()
-                .suffix(" y")
-                .unwrap(),
-        )
+        .x_tick_format(crate::NumericFormat::default().prefix("x ").unwrap())
+        .y_tick_format(crate::NumericFormat::default().suffix(" y").unwrap())
         .erase();
-
-    let retained = retain_key(&plot);
+    let retained = retain_key(&source);
     assert_eq!(
         retained.x_axis_spec.2,
-        plot.description().x_axis_spec().generation
+        source.description().x_axis_spec().generation
     );
     assert_eq!(
         retained.y_axis_spec.2,
-        plot.description().y_axis_spec().generation
+        source.description().y_axis_spec().generation
     );
     assert_eq!(
         retained.x_axis_spec.4,
-        plot.description().x_axis_spec().format
+        source.description().x_axis_spec().format
     );
     assert_eq!(
         retained.y_axis_spec.4,
-        plot.description().y_axis_spec().format
+        source.description().y_axis_spec().format
     );
-    assert!(key_matches(&plot, &retained));
-    plot.description.payload_mut().axes[0].generation = TickGeneration::additive(3.0).unwrap();
-    assert!(!key_matches(&plot, &retained));
-    plot.description.payload_mut().axes[0]
+    assert!(key_matches(&source, &retained));
+    source.description.payload_mut().axes[0].generation = TickGeneration::additive(3.0).unwrap();
+    assert!(!key_matches(&source, &retained));
+    source.description.payload_mut().axes[0]
         .generation
         .clone_from(&retained.x_axis_spec.2);
-    plot.description.payload_mut().axes[1].generation = TickGeneration::automatic();
-    assert!(!key_matches(&plot, &retained));
-    plot.description.payload_mut().axes[1]
+    source.description.payload_mut().axes[1].generation = TickGeneration::automatic();
+    assert!(!key_matches(&source, &retained));
+    source.description.payload_mut().axes[1]
         .generation
         .clone_from(&retained.y_axis_spec.2);
     for selection in [
         TickGeneration::target(5).unwrap(),
         TickGeneration::maximum(5).unwrap(),
     ] {
-        let mut changed = plot.clone();
+        let mut changed = source.clone();
         changed.description.payload_mut().axes[0].generation = selection.clone();
         assert!(!key_matches(&changed, &retained));
         let counted = retain_key(&changed);
@@ -287,48 +301,56 @@ fn generation_cloning_and_composed_identity_include_both_axes() {
         assert!(!key_matches(&changed, &counted));
     }
     for side in 0..2 {
-        let mut changed = plot.clone();
-        if side == 0 {
-            changed.description.payload_mut().axes[0].format = None;
-        } else {
-            changed.description.payload_mut().axes[1].format = None;
-        }
+        let mut changed = source.clone();
+        changed.description.payload_mut().axes[side].format = None;
         assert!(!key_matches(&changed, &retained));
     }
 }
 
 #[test]
 fn equal_composed_endpoints_do_not_erase_range_provenance() {
-    let configured = plot().erase();
-    let automatic = Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 10.0]),
-        crate::NumericValues::new("y", [0.0, 4.0]),
-    )
-    .erase()
-    .with_planned_x_limits((0.0, 10.0))
-    .with_planned_y_limits((0.0, 4.0));
-    let shared = automatic.clone().with_resolved_facet_ranges(
-        PlotKind::Scatter,
-        Some((0.0, 10.0)),
-        Some((0.0, 4.0)),
-    );
-    let retained = retain_key(&automatic);
-    assert_eq!(
-        automatic.description().x_axis_spec().window,
-        configured.description().x_axis_spec().window
-    );
-    assert_eq!(
-        automatic.description().x_axis_spec().window,
-        shared.description().x_axis_spec().window
-    );
-    assert!(key_matches(&automatic, &retained));
+    let make = || {
+        Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 10.0]),
+            crate::NumericValues::new("y", [0.0, 4.0]),
+        )
+        .facet(FacetSpec::column(
+            crate::CategoryValues::new("panel", ["one"; 2]).unwrap(),
+        ))
+    };
+    let source = make().erase();
+    let retained = retain_key(&source);
+    assert_eq!(retained.x_axis_spec.1, RangeProvenance::Shared);
+    assert!(key_matches(&source, &retained));
+    let x = retained.x_axis_spec.0.unwrap();
+    let y = retained.y_axis_spec.0.unwrap();
+    let configured = make().x_limits(x.0, x.1).y_limits(y.0, y.1).erase();
+    let configured_key = retain_key(&configured);
+    assert_eq!(configured_key.x_axis_spec.0, retained.x_axis_spec.0);
+    assert_eq!(configured_key.x_axis_spec.1, RangeProvenance::Configured);
     assert!(!key_matches(&configured, &retained));
-    assert!(!key_matches(&shared, &retained));
-    let shared_retained = retain_key(&shared);
-    assert!(key_matches(&shared, &shared_retained));
-    assert_eq!(
-        shared_retained.x_axis_spec.1,
-        crate::layout::RangeProvenance::Shared
+    with_composed(
+        &source,
+        0,
+        false,
+        |_| {},
+        |context, round| {
+            let preflight = ComposedInputs::retain(
+                context,
+                round,
+                ScopedGuideInputs::capture(context).unwrap(),
+                Some(MeasurementPhase::Probe),
+            )
+            .unwrap();
+            assert_eq!(preflight.x_axis_spec.1, RangeProvenance::Automatic);
+            assert!(preflight.x_axis_spec.0.is_none());
+            assert!(!retained.matches(
+                context,
+                round,
+                &retained.guides,
+                Some(MeasurementPhase::Probe),
+            ));
+        },
     );
 }
 
@@ -344,7 +366,7 @@ fn invalid_generation_rejects_before_font_discovery() {
             step,
             0.0,
             crate::TickSpace::Data,
-            crate::TickRequirement::Fixed
+            crate::TickRequirement::Fixed,
         )
         .is_err());
     }
@@ -352,12 +374,12 @@ fn invalid_generation_rejects_before_font_discovery() {
         1.0,
         f64::NAN,
         crate::TickSpace::Data,
-        crate::TickRequirement::Fixed
+        crate::TickRequirement::Fixed,
     )
     .is_err());
     assert!(TickGeneration::log10_decades(0).is_err());
-    let plot = plot().x_tick_generation(TickGeneration::log10_decades(2).unwrap());
-    assert!(matches!(plot.preflight(), Err(crate::Error::Data(_))));
+    let source = plot().x_tick_generation(TickGeneration::log10_decades(2).unwrap());
+    assert!(matches!(source.preflight(), Err(crate::Error::Data(_))));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         discoveries
@@ -422,25 +444,21 @@ fn categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canv
 #[test]
 fn generation_rendering_and_exact_precedence_are_cache_independent() {
     for exact in [false, true] {
-        let mut plot = plot()
+        let mut source = plot()
             .x_tick_generation(TickGeneration::additive(2.0).unwrap())
             .y_tick_generation(TickGeneration::additive(1.0).unwrap())
-            .x_tick_format(
-                crate::numeric::format::NumericFormat::default()
-                    .suffix(" u")
-                    .unwrap(),
-            );
+            .x_tick_format(crate::NumericFormat::default().suffix(" u").unwrap());
         if exact {
-            plot = plot.x_ticks(vec![
+            source = source.x_ticks(vec![
                 crate::AxisTick::new(1.0, "one exact"),
                 crate::AxisTick::new(9.0, ""),
             ]);
         }
         let canvas = crate::Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, plot.clone())
+            .panel(0, 0, source.clone())
             .unwrap()
-            .panel(0, 1, plot.title("Interval source identity"))
+            .panel(0, 1, source.title("Interval source identity"))
             .unwrap()
             .width(1000);
         let mut outputs = Vec::new();

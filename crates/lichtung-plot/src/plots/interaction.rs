@@ -4,13 +4,17 @@ use crate::alpha::{
     marks::{line_style, point_ink, push_point, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
+use crate::builder::PlotDescription;
 use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::source::{LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
-use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
+use crate::spec::{LinePattern, PlotMeasureContext, PointShape};
 use crate::theme::CategoryColors;
-use crate::{Error, Plot};
+use crate::Error;
+#[cfg(test)]
+use crate::Plot;
 
 #[cfg(test)]
 pub(crate) mod extraction;
@@ -45,7 +49,7 @@ pub(crate) struct PreparedInteraction {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -81,9 +85,8 @@ pub(crate) fn intrinsic_body_minimum(
                 .get_interaction_interval()
                 .backend_style((0, 0, 0)),
         ))?;
-        let marker = if chart.description().markers_visible() {
+        let marker = if chart.markers_visible() {
             let point = chart
-                .description()
                 .point_style(
                     theme,
                     (0, 0, 0),
@@ -101,19 +104,18 @@ pub(crate) fn intrinsic_body_minimum(
         } else {
             None
         };
-        let connector =
-            if chart.description().interaction_connectors_visible() && trace.cells.len() > 1 {
-                crate::render::geometry::line_ink_width(&line_style(
-                    trace.line_alpha,
-                    theme
-                        .marks
-                        .get_data_lines()
-                        .get_interaction_connector()
-                        .backend_style((0, 0, 0)),
-                ))?
-            } else {
-                0.0
-            };
+        let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
+            crate::render::geometry::line_ink_width(&line_style(
+                trace.line_alpha,
+                theme
+                    .marks
+                    .get_data_lines()
+                    .get_interaction_connector()
+                    .backend_style((0, 0, 0)),
+            ))?
+        } else {
+            0.0
+        };
         let stroke = interval.max(connector);
         numeric = numeric.max(stroke);
         pitch = pitch.max(stroke);
@@ -482,7 +484,7 @@ impl InteractionPayload {
         &mut self,
         marks: &PreparedInteraction,
         projection: &crate::layout::Projection,
-        context: PlotRenderContext<'_, '_>,
+        context: &PlotMeasureContext<'_, '_>,
     ) -> Result<(), crate::layout::fit::PlanError> {
         let mut full = crate::render::geometry::GeometrySnapshot::new();
 
@@ -512,16 +514,10 @@ impl InteractionPayload {
                     )
                     .into());
             }
-            if context
-                .registered
-                .expect("prepared occurrence")
-                .raw_windows()[1]
-                .is_none()
-            {
+            if context.registered.raw_windows()[1].is_none() {
                 let count = u32::try_from(
                     context
                         .registered
-                        .expect("prepared Interaction occurrence")
                         .axes
                         .categories(0)
                         .expect("prepared Interaction categories")
@@ -568,21 +564,20 @@ impl InteractionPayload {
     reason = "selected bounded categories and ordered interval, connector and point paints share one frozen trace"
 )]
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let marks = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Interaction(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render("interaction measurement requires root-prepared semantics".into())
-        })?;
-    context.theme.text.prepared_font_environment()?;
-    let data = context.data;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let marks = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Interaction(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render("interaction measurement requires root-prepared semantics".into())
+    })?;
+    request.text.prepared_font_environment()?;
+    let data = context.data()?;
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),
         traces: Vec::new(),
@@ -591,11 +586,10 @@ pub(crate) fn measure_marks(
     let colors = marks.resolved_colors(
         context
             .registered
-            .expect("prepared Interaction occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
-        context.theme,
+        request,
         data.source_resources(),
     )?;
     crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
@@ -610,20 +604,13 @@ pub(crate) fn measure_marks(
             .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
         let color = colors.color(key)?;
         let point = chart
-            .description()
             .point_style(
-                context.theme,
+                request,
                 color,
-                context
-                    .theme
-                    .marks
-                    .get_points()
-                    .get_radii()
-                    .get_interaction(),
+                request.marks.get_points().get_radii().get_interaction(),
             )
             .with_shape(trace.style.point_shape);
-        let mut line = context
-            .theme
+        let mut line = request
             .marks
             .get_data_lines()
             .get_interaction_connector()
@@ -635,15 +622,13 @@ pub(crate) fn measure_marks(
             points: Vec::new(),
             interval: line_style(
                 trace.line_alpha,
-                context
-                    .theme
+                request
                     .marks
                     .get_data_lines()
                     .get_interaction_interval()
                     .backend_style(color),
             ),
-            connector: (chart.description().interaction_connectors_visible()
-                && trace.cells.len() > 1)
+            connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
                 .then(|| line.clone()),
             markers: Vec::new(),
         };
@@ -665,7 +650,7 @@ pub(crate) fn measure_marks(
             geometry.line(&interval, &selected.interval, Some(clip))?;
             selected.intervals.push(interval);
             selected.points.push(Point2D::new(px, py));
-            if chart.description().markers_visible() {
+            if chart.markers_visible() {
                 push_point(
                     &mut selected.markers,
                     Point2D::new(px, py),
@@ -682,18 +667,12 @@ pub(crate) fn measure_marks(
         payload.traces.push(selected);
     }
     payload.measure_ink(marks, &layout.projection, context)?;
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    );
-    result.x_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Interaction(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 fn resolve_trace_styles(

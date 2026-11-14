@@ -264,7 +264,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     )
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs =
+    let (inputs, _) =
         crate::plots::shared_x::prepare_plot(source.description(), &resources, &theme).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
@@ -290,19 +290,22 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         &source,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    crate::spec::PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
-                        theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
-                )
+        |chart, inputs, theme, _operation, round| {
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &inputs.plots[0].scope.id)
                 .unwrap();
+            let selected = crate::layout::interior::measure_for_test(
+                &factory,
+                crate::layout::PixelRect::new(20.0, 640.0, 20.0, 480.0),
+                round,
+            )
+            .unwrap();
             let crate::layout::interior::MarkPayload::Heatmap(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {

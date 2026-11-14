@@ -14,11 +14,12 @@ use crate::data::PlotData;
 use crate::geometry::finite;
 use crate::{Error, NumericValues};
 
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{
-    HistogramBins, HistogramComposite, HistogramKde, HistogramStat, PlotRenderContext,
-    PlotRenderResult,
+    HistogramBins, HistogramComposite, HistogramKde, HistogramStat, PlotMeasureContext,
 };
+#[cfg(test)]
 #[cfg(test)]
 use crate::Plot;
 
@@ -165,7 +166,7 @@ impl HistogramSemantics {
     pub(crate) fn new(
         source: &crate::builder::PlotDescription,
         data: PlotData<'_, '_>,
-        owner: Option<&crate::theme::Theme>,
+        owner: &crate::theme::Theme,
     ) -> Result<(Self, [(f64, f64); 2]), Error> {
         data.validate_row_source()?;
         let curve_alpha = source
@@ -211,13 +212,6 @@ impl HistogramSemantics {
                 maximum = curve.iter().map(|p| p.y).fold(maximum, f64::max);
             }
             let rugs = if curve.is_some() {
-                let default;
-                let owner = if let Some(owner) = owner {
-                    owner
-                } else {
-                    default = crate::theme::Theme::publication();
-                    &default
-                };
                 let top = maximum
                     * owner
                         .marks()
@@ -331,39 +325,28 @@ impl HistogramPayload {
 }
 
 pub(crate) fn measure_marks(
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Histogram(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "Histogram measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
-    let theme = context.theme;
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Histogram(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render(
+            "Histogram measurement requires root-prepared semantics for its component".into(),
+        )
+    })?;
+    let theme = request;
 
     let projection = layout.projection.clone();
     let mut result = project(prepared, layout, theme)?;
-    result.discrete_guide =
-        crate::orchestrator::registration::guide_descriptor(context.registered)?;
-    let crate::layout::interior::MarkPayload::Histogram(payload) = &result
-        .marks
-        .as_ref()
-        .expect("selected Histogram marks")
-        .payload
-    else {
+    let crate::layout::interior::MarkPayload::Histogram(payload) = &result.marks.payload else {
         unreachable!("Histogram selected its own mark payload")
     };
     let full = payload.geometry(None)?;
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let raw_windows = context.registered.raw_windows();
     if let Some(ink) = full
         .bounds()
         .iter()
@@ -377,9 +360,8 @@ pub(crate) fn measure_marks(
             [raw_windows[0].is_none(), raw_windows[1].is_none()],
             context.fit_scope(),
         )?;
-        let marks =
-            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Histogram marks"))
-                .expect("newly selected Histogram marks have one owner");
+        let marks = std::sync::Arc::get_mut(&mut result.marks)
+            .expect("newly selected Histogram marks have one owner");
         let crate::layout::interior::MarkPayload::Histogram(payload) = &mut marks.payload else {
             unreachable!("Histogram selected its own mark payload")
         };
@@ -390,9 +372,9 @@ pub(crate) fn measure_marks(
 
 pub(crate) fn project(
     prepared: &HistogramSemantics,
-    layout: crate::layout::Layout,
+    layout: &crate::layout::Layout,
     theme: &crate::text::TextRequestContext<'_, '_>,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<MeasuredCoordinateMarks, Error> {
     let project = |x, y| {
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
@@ -477,14 +459,12 @@ pub(crate) fn project(
     };
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     let geometry = payload.geometry(Some(clip))?;
-    let mut result = PlotRenderResult::new(layout, None);
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Histogram(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 #[derive(Debug)]
@@ -1021,14 +1001,14 @@ mod tests {
             &source,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| HistogramSemantics::new(source.description(), data, Some(&original)).unwrap(),
+            |data| HistogramSemantics::new(source.description(), data, &original).unwrap(),
         )
         .unwrap();
         let (after, _) = crate::data::with_source_data_for_test(
             &source,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| HistogramSemantics::new(source.description(), data, Some(&edited)).unwrap(),
+            |data| HistogramSemantics::new(source.description(), data, &edited).unwrap(),
         )
         .unwrap();
         assert_eq!(before.bins, after.bins);
@@ -1077,7 +1057,7 @@ mod tests {
             &mapped,
             &operation,
             crate::orchestrator::registration::RowSelection::Full,
-            |data| HistogramSemantics::new(mapped.description(), data, Some(&original)).unwrap(),
+            |data| HistogramSemantics::new(mapped.description(), data, &original).unwrap(),
         )
         .unwrap();
         assert_eq!(prepared.bins, before.bins);
@@ -1176,8 +1156,7 @@ mod tests {
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |chart, inputs, _theme, _operation, round| {
                 let panels = &inputs.plots;
                 assert_eq!(panels.len(), 2);
                 for (registered, (edges, alphas)) in panels.iter().zip([
@@ -1212,18 +1191,21 @@ mod tests {
                             .collect::<Vec<_>>(),
                         alphas
                     );
-                    let chart = chart.clone();
-                    let selected = chart
-                        .measure_selected_interior(
-                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                            PlotRenderContext::new(
-                                registered.data(&operation).unwrap(),
-                                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                                theme,
-                            )
-                            .with_registration(registered, inputs.intrinsic(registered)),
-                        )
+                    let measurement = inputs.assignment_factory().assign(
+                        chart
+                            .sizing_request()
+                            .assigned_size()
+                            .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                    );
+                    let factory = inputs
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
                         .unwrap();
+                    let selected = crate::layout::interior::measure_for_test(
+                        &factory,
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        round,
+                    )
+                    .unwrap();
                     let crate::layout::interior::MarkPayload::Histogram(payload) =
                         &selected.marks.as_ref().unwrap().payload
                     else {

@@ -252,6 +252,70 @@ mod tests {
         format::{NumericFormat, NumericPrecision},
     };
 
+    fn prepare_with_total_window<'src>(
+        plot: &'src crate::builder::PlotDescription,
+        operation: &crate::font::canonical::OperationContext,
+        window: [(f64, f64); 2],
+    ) -> crate::orchestrator::registration::PlotRegistryBuilder<'src> {
+        use crate::orchestrator::registration::{
+            PlotRegistryBuilder, PlotScopePolicy, RowSelection, Scope,
+        };
+
+        let scope = Scope::new(
+            plot,
+            operation,
+            0,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::PlotBody, 0)
+                .unwrap(),
+            RowSelection::Full,
+            None,
+            None,
+        )
+        .unwrap();
+        let mut registry = PlotRegistryBuilder::new(operation.root_identity());
+        let id = registry
+            .reserve(
+                plot,
+                scope.address,
+                scope.numeric_owner,
+                scope.axis_numeric_owner,
+                scope.rows,
+                scope.render_name,
+                PlotScopePolicy::for_source(plot, None),
+                plot.resolve_theme().unwrap(),
+                operation,
+            )
+            .unwrap();
+        let panel = &mut registry.panels[id.slot];
+        crate::plots::shared_x::prepare_plot_registration(panel, operation).unwrap();
+        let axes = panel.axes.as_mut().unwrap();
+        // Supply the original pre-font total window after science. This tests
+        // mask preparation, not authored categorical limits or domain derivation.
+        for (axis, (lower, upper)) in axes.sources_mut().iter_mut().zip(window) {
+            axis.base_seed = Some(DisplayExtent { lower, upper });
+        }
+        let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
+            &mut panel.family
+        else {
+            panic!("prepared Waterfall")
+        };
+        marks
+            .prepare_totals(
+                super::super::WaterfallTotalsPrepare {
+                    numeric: panel
+                        .scope
+                        .numeric_binding(plot, &panel.row_source, operation)
+                        .unwrap(),
+                    axes: [axes.axis(plot, 0), axes.axis(plot, 1)],
+                    format: plot.total_format_spec(),
+                },
+                false,
+            )
+            .unwrap();
+        registry
+    }
+
     #[test]
     fn eligible_total_masks_resolve_before_fonts_and_select_only_retained_results() {
         let format = NumericFormat::new(
@@ -274,16 +338,9 @@ mod tests {
             ((1.015, 1.03), (0.0, 1.0), vec!["total 1"]),
             ((1.0, 1.03), (0.0, 0.75), vec![]),
         ] {
-            let plot = source()
-                .x_limits(limits.0, limits.1)
-                .erase()
-                .with_planned_y_limits(y_limits);
-            let inputs = crate::plots::shared_x::prepare_plot(
-                plot.description(),
-                &operation,
-                &plot.description().resolve_theme().unwrap(),
-            )
-            .unwrap();
+            let plot = source().x_limits(limits.0, limits.1).erase();
+            let inputs =
+                prepare_with_total_window(plot.description(), &operation, [limits, y_limits]);
             let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
                 &inputs.panels[0].family
             else {
@@ -355,7 +412,7 @@ mod tests {
             .total_format(limited_format)
             .x_limits(1.0, 1.015)
             .erase();
-        let mut inputs = crate::plots::shared_x::prepare_plot(
+        let (mut inputs, _) = crate::plots::shared_x::prepare_plot(
             limited.description(),
             &operation,
             &limited.description().resolve_theme().unwrap(),

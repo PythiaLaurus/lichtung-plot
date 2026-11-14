@@ -199,6 +199,12 @@ fn bin_alpha_requires_exact_intervals_and_owning_facet_keys_without_edge_adjustm
     reason = "alpha target instructions and owning composed copies are checked through the real operation's registrations"
 )]
 fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_composed_copies() {
+    use crate::builder::ComposedInputs;
+    use crate::decorations::legend::discrete::scoped::{ScopedGuideInputs, SUPPRESSED_GUIDES};
+    use crate::layout::fit::FitScope;
+    use crate::orchestrator::assignment::PlotAllocationInputs;
+    use crate::orchestrator::root::{Root, RootSource};
+
     let observations = AlphaEncoding::observations(values([127; 3]));
     assert_eq!(observations.values().unwrap().len(), 3);
     assert!(observations
@@ -269,33 +275,44 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
         erased.description().alpha_inputs(),
         source.description().alpha_inputs()
     );
-    let appearance = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let request = crate::text::TextRequestContext::new(&appearance, &text);
-    let retained = crate::orchestrator::with_prepared_plot_for_test(
-        &erased,
-        &request,
-        |_| Ok(()),
-        |plot, inputs, _, _| {
-            use crate::decorations::legend::discrete::scoped::{GuideUse, ScopedGuideInputs};
-            let registered = &inputs.plots[0];
-            let retained = plot
-                .retain_composed_inputs(
-                    ScopedGuideInputs::new(
-                        plot,
-                        Some(registered),
-                        GuideUse::SharedSuppressed,
-                        None,
-                        &[],
-                    )
-                    .unwrap(),
-                    registered,
-                    None,
-                )
-                .unwrap();
-            assert!(plot.same_composed_inputs(&retained, &retained.guides, registered, None));
-            retained
+    let sizing = crate::layout::RootRequest::ExactSize {
+        width: 800,
+        height: 600,
+    };
+    let panel = crate::layout::PixelRect::new(20.0, 700.0, 20.0, 500.0);
+    let retained = crate::layout::plan_root(
+        sizing,
+        |stage| Root::prepare(RootSource::Plot(erased.description()), stage),
+        |root, assigned, round| {
+            let registered = &root.plots[0];
+            let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+            let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+            let entry = factory.assign(
+                PlotAllocationInputs::for_test(
+                    measurement.measurement_size,
+                    panel,
+                    round,
+                    &registered.scope.address,
+                ),
+                round,
+                None,
+            )?;
+            let scope = FitScope::new(&registered.scope.address, 0);
+            let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+            assert!(context.operation.same_operation(&root.operation));
+            let retained = ComposedInputs::retain(
+                &context,
+                round,
+                ScopedGuideInputs::capture(&context)?,
+                None,
+            )?;
+            assert!(retained.matches(&context, round, &retained.guides, None));
+            Ok(crate::layout::MeasuredLayout::new(
+                measurement.measurement_size,
+                retained,
+            ))
         },
+        |_, _, retained, _| Ok(retained),
     )
     .unwrap();
     for target in [AlphaTarget::Point, AlphaTarget::Line, AlphaTarget::Fill] {
@@ -303,18 +320,35 @@ fn explicit_unit_instructions_replace_each_target_and_survive_owned_plot_and_com
             .clone()
             .with_alpha(target, AlphaEncoding::theme())
             .erase();
-        crate::orchestrator::with_prepared_plot_for_test(
-            &changed,
-            &request,
-            |_| Ok(()),
-            |plot, inputs, _, _| {
-                assert!(!plot.same_composed_inputs(
-                    &retained,
-                    &retained.guides,
-                    &inputs.plots[0],
-                    None
-                ));
+        crate::layout::plan_root(
+            sizing,
+            |stage| Root::prepare(RootSource::Plot(changed.description()), stage),
+            |root, assigned, round| {
+                let registered = &root.plots[0];
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+                let entry = factory.assign(
+                    PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        panel,
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
+                )?;
+                let scope = FitScope::new(&registered.scope.address, 0);
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                assert!(context.operation.same_operation(&root.operation));
+                assert!(!retained
+                    .plan()
+                    .matches(&context, round, &retained.plan().guides, None));
+                Ok(crate::layout::MeasuredLayout::new(
+                    measurement.measurement_size,
+                    (),
+                ))
             },
+            |_, _, (), _| Ok(()),
         )
         .unwrap();
     }

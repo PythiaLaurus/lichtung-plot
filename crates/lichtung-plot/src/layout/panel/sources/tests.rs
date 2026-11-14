@@ -796,16 +796,14 @@ fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let x = super::super::AxisSpec {
-        provenance: super::super::RangeProvenance::Configured,
+    let x = super::super::AuthoredAxisSpec {
         window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         generation: TickGeneration::maximum(1).unwrap(),
         category_labels: crate::CategoryLabelSelection::all(),
         format: None,
         exact_ticks: Some(vec![AxisTick::new(1.0, ""), AxisTick::new(9.0, "same")]),
     };
-    let y = super::super::AxisSpec {
-        provenance: super::super::RangeProvenance::Configured,
+    let y = super::super::AuthoredAxisSpec {
         window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         generation: TickGeneration::additive(2.0).unwrap(),
         category_labels: crate::CategoryLabelSelection::all(),

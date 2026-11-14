@@ -29,7 +29,7 @@ fn matrix_hue_colors_follow_source_order_not_group_major_pairs() {
         &source,
         &crate::text::TextRequestContext::new(&theme, &text),
         |_| Ok(()),
-        |chart, inputs, request, operation| {
+        |chart, inputs, _request, _operation, round| {
             let registered = &inputs.plots[0];
             assert_eq!(
                 registered
@@ -40,17 +40,21 @@ fn matrix_hue_colors_follow_source_order_not_group_major_pairs() {
                     .collect::<Vec<_>>(),
                 ["first", "second", "third"]
             );
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                    PlotRenderContext::new(
-                        registered.data(operation).unwrap(),
-                        PixelRect::new(20.0, 800.0, 20.0, 620.0),
-                        request,
-                    )
-                    .with_registration(registered, inputs.intrinsic(registered)),
-                )
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
                 .unwrap();
+            let selected = crate::layout::interior::measure_for_test(
+                &factory,
+                PixelRect::new(20.0, 800.0, 20.0, 620.0),
+                round,
+            )
+            .unwrap();
             let layout::interior::MarkPayload::Matrix(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {

@@ -5,7 +5,9 @@ use std::sync::Arc;
 use super::{GuideSlot, PreparedGuide};
 use crate::layout::kernel::{ChildFeedbackInputs, FeedbackRound, LayoutScalar, SpatialRounding};
 use crate::layout::{ComponentAddress, PixelRect};
-use crate::{Error, LegendComposition, Plot};
+use crate::orchestrator::registration::PlotRegistration;
+use crate::spec::PlotMeasureContext;
+use crate::{Error, LegendComposition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GuideUse {
@@ -129,73 +131,55 @@ pub(crate) struct ScopedGuideInputs {
 }
 
 impl ScopedGuideInputs {
-    pub(crate) fn new(
-        plot: &Plot<impl crate::kind::Marker>,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        use_kind: GuideUse,
-        local_guide: Option<&GuideSlot>,
-        dependencies: &[ConsumedGuideDependency],
+    pub(crate) fn capture(context: &PlotMeasureContext<'_, '_>) -> Result<Self, Error> {
+        let use_kind = if crate::orchestrator::registration::legend_policy(
+            context.registered.source,
+            Some(context.registered),
+        ) == crate::LegendPolicy::Hidden
+        {
+            GuideUse::Hidden
+        } else {
+            context.guides.use_kind
+        };
+        Self::capture_sizing(
+            context.registered,
+            GuideConsumption {
+                use_kind,
+                ..context.guides
+            },
+        )
+    }
+
+    pub(crate) fn capture_sizing(
+        registered: &PlotRegistration<'_>,
+        guides: GuideConsumption<'_>,
     ) -> Result<Self, Error> {
-        if use_kind != GuideUse::Local && local_guide.is_some() {
-            return Err(Error::Render(
-                "suppressed guide scope has a local placement descriptor".into(),
-            ));
-        }
-        let contribution = registered.and_then(|registered| registered.guide.descriptor.clone());
-        let composition =
-            crate::orchestrator::registration::guide_composition(plot.description(), registered);
-        if contribution
-            .iter()
-            .chain(local_guide.map(|slot| &slot.descriptor))
-            .any(|guide| guide.composition != composition)
-        {
-            return Err(Error::Render(
-                "consumed guide composition differs from its effective source".into(),
-            ));
-        }
-        if dependencies
-            .windows(2)
-            .any(|pair| pair[0].owner >= pair[1].owner)
-        {
-            return Err(Error::Render(
-                "consumed guide dependencies are not unique canonical owners".into(),
-            ));
-        }
+        let contribution = validate_consumption(registered, guides)?;
         let mut retained = Vec::new();
         crate::layout::fit::reserve(
             &mut retained,
-            dependencies.len(),
+            guides.dependencies.len(),
             "consumed guide dependencies",
         )?;
-        retained.extend_from_slice(dependencies);
+        retained.extend_from_slice(guides.dependencies);
         Ok(Self {
-            color_title: plot.description().copy_color_title()?,
-            composition,
-            use_kind,
-            contribution_prepared: registered.is_some(),
+            color_title: registered.source.copy_color_title()?,
+            composition: registered.policy.guide_composition,
+            use_kind: guides.use_kind,
+            contribution_prepared: true,
             contribution,
-            alpha: registered.map(|registered| Arc::clone(&registered.guide.alpha)),
-            local_guide: local_guide.cloned(),
+            alpha: Some(Arc::clone(&registered.guide.alpha)),
+            local_guide: guides.local_guide.cloned(),
             dependencies: super::shared_slice(retained)?,
         })
     }
 
-    pub(crate) fn matches_source(
-        &self,
-        plot: &Plot<impl crate::kind::Marker>,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    ) -> bool {
-        self.composition
-            == crate::orchestrator::registration::guide_composition(plot.description(), registered)
-            && plot.description().same_color_title(&self.color_title)
-            && self.contribution_prepared == registered.is_some()
-            && match registered {
-                Some(registered) => {
-                    registered.guide.descriptor == self.contribution
-                        && Some(&registered.guide.alpha) == self.alpha.as_ref()
-                }
-                None => self.contribution.is_none() && self.alpha.is_none(),
-            }
+    pub(crate) fn matches_source(&self, registered: &PlotRegistration<'_>) -> bool {
+        self.composition == registered.policy.guide_composition
+            && registered.source.same_color_title(&self.color_title)
+            && self.contribution_prepared
+            && registered.guide.descriptor == self.contribution
+            && Some(&registered.guide.alpha) == self.alpha.as_ref()
     }
 
     pub(crate) fn stable(&self, round: &FeedbackRound) -> bool {
@@ -214,4 +198,35 @@ impl ScopedGuideInputs {
             && self.local_guide.as_ref() == local_guide
             && self.dependencies.as_ref() == dependencies
     }
+}
+
+fn validate_consumption(
+    registered: &PlotRegistration<'_>,
+    guides: GuideConsumption<'_>,
+) -> Result<Option<Arc<PreparedGuide>>, Error> {
+    if guides.use_kind != GuideUse::Local && guides.local_guide.is_some() {
+        return Err(Error::Render(
+            "suppressed guide scope has a local placement descriptor".into(),
+        ));
+    }
+    let contribution = registered.guide.descriptor.clone();
+    if contribution
+        .iter()
+        .chain(guides.local_guide.map(|slot| &slot.descriptor))
+        .any(|guide| guide.composition != registered.policy.guide_composition)
+    {
+        return Err(Error::Render(
+            "consumed guide composition differs from its effective source".into(),
+        ));
+    }
+    if guides
+        .dependencies
+        .windows(2)
+        .any(|pair| pair[0].owner >= pair[1].owner)
+    {
+        return Err(Error::Render(
+            "consumed guide dependencies are not unique canonical owners".into(),
+        ));
+    }
+    Ok(contribution)
 }

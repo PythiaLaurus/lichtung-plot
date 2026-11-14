@@ -1,8 +1,8 @@
 //! Owned native inputs and authored configuration, separate from an operation.
 
 use super::{
-    Arc, AxisScale, AxisSpec, BarPointLayer, BarSpacing, BooleanValues, Bounds, CategoryOrders,
-    CategoryValues, FacetSpec, GuideSpec, HeatmapAnnotations, HeatmapLayout,
+    Arc, AuthoredAxisSpec, AxisScale, BarPointLayer, BarSpacing, BooleanValues, Bounds,
+    CategoryOrders, CategoryValues, FacetSpec, GuideSpec, HeatmapAnnotations, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, Labels,
     LegendPolicy, LinePathStyle, NumericFormat, PlotInput, PlotKind, PlotTextAnnotation,
     PointLayer, QqLine, RawOverlay, RegressionBand, SourceRows, Theme, WaterfallLabels,
@@ -39,7 +39,7 @@ pub(super) struct SharedPayload {
     pub(super) x_label: crate::Text,
     pub(super) y_label: crate::Text,
     pub(super) labels: Labels,
-    pub(super) axes: [AxisSpec; 2],
+    pub(super) axes: [AuthoredAxisSpec; 2],
     pub(super) text_layouts: crate::text::roles::TextRoles,
     pub(super) theme: Option<Arc<Theme>>,
     pub(super) significance: Vec<crate::significance::SignificanceAnnotation>,
@@ -105,7 +105,7 @@ impl PlotDescription {
                 x_label: crate::Text::UNSET,
                 y_label: crate::Text::UNSET,
                 labels: Labels::default(),
-                axes: [AxisSpec::default(), AxisSpec::default()],
+                axes: [AuthoredAxisSpec::default(), AuthoredAxisSpec::default()],
                 text_layouts: crate::text::roles::TextRoles::default(),
                 theme: None,
                 significance: Vec::new(),
@@ -157,6 +157,10 @@ mod tests {
 
     #[test]
     fn authored_clones_share_one_payload_and_edits_keep_sibling_intent() {
+        fn erase_generic<K: crate::kind::Marker>(plot: Plot<K>) -> Plot {
+            K::into_erased(plot)
+        }
+
         let original = Plot::scatter(
             NumericValues::new("x", [0.0, 1.0]),
             NumericValues::new("y", [1.0, 0.0]),
@@ -209,11 +213,17 @@ mod tests {
             edited.description().copy_axis_titles().unwrap()[0].as_str(),
             "Changed"
         );
-        let erased = edited.erase();
+        let erased = erase_generic(edited);
         assert_eq!(erased.kind(), PlotKind::Scatter);
         assert_eq!(
             erased.description().sizing_request(),
             crate::layout::RootRequest::ExactWidth(640)
+        );
+        let description = erased.into_description();
+        assert_eq!(description.kind(), PlotKind::Scatter);
+        assert_eq!(
+            description.copy_axis_titles().unwrap()[0].as_str(),
+            "Changed"
         );
     }
 }

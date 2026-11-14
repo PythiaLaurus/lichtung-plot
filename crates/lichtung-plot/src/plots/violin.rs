@@ -29,11 +29,14 @@ pub(crate) mod precomputed;
 
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::data::PlotData;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::Point2D;
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::PlotMeasureContext;
 use crate::stats::distribution::{kde, kde_support_range};
+#[cfg(test)]
 use crate::Plot;
 
 #[derive(Debug, PartialEq)]
@@ -163,7 +166,7 @@ pub(crate) fn raincloud_strip_pitch(
 /// Sampled Violin and Raincloud retain the same group centers and box/cloud
 /// grammar consumed by their selected polygons, without KDE-vertex counting.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -212,16 +215,14 @@ pub(crate) fn intrinsic_body_minimum(
         .backend_style();
     let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
     let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
-    let overlay = chart.description().raw_overlay_spec();
+    let overlay = chart.raw_overlay_spec();
     let points_visible = raincloud || overlay.is_visible();
     let role = if raincloud {
         theme.marks.get_points().get_mandatory_strip()
     } else {
         theme.marks.get_points().get_raw_overlay()
     };
-    let style = chart
-        .description()
-        .distribution_point_style(role, (0, 0, 0));
+    let style = chart.distribution_point_style(role, (0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = inner_y;
     let body_half = if raincloud { 0.4 * width } else { width };
@@ -443,13 +444,14 @@ pub(crate) fn prepare(
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let retained = categorical_distribution::retained(context.prepared_family())?;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let retained = categorical_distribution::retained(Some(context.family()?))?;
     if let PreparedDistribution::Supplied(input) = retained {
-        return precomputed::measure_marks(chart, input, context, layout);
+        return precomputed::measure_marks(chart, input, context, request, layout);
     }
     let PreparedDistribution::Violin(prepared) = retained else {
         return Err(Error::Render("violin requires retained density samples".into()).into());
@@ -459,13 +461,12 @@ pub(crate) fn measure_marks(
     } else {
         DistributionLayout::Raincloud
     };
-    let theme = context.theme;
+    let theme = request;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
+    let data = context.data()?;
     let sample = &prepared.sample;
     let x_levels = &context
         .registered
-        .expect("prepared sampled distribution occurrence")
         .axes
         .categories(0)
         .expect("prepared distribution categories")
@@ -475,32 +476,24 @@ pub(crate) fn measure_marks(
     let base_display_range = layout.projection.y_range();
     let rendered_maxima =
         crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
-    let overlay = chart.description().raw_overlay_spec();
-    let panel = context.panel;
+    let overlay = chart.raw_overlay_spec();
+    let panel = context.assignment.local.body;
     let colors = retained.resolved_colors(
-        chart.description(),
-        &context
-            .registered
-            .expect("prepared sampled distribution occurrence")
-            .axes,
+        chart,
+        &context.registered.axes,
         context
             .registered
-            .expect("prepared sampled distribution occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
         theme,
         data.source_resources(),
+        false,
     )?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
-            context
-                .registered
-                .expect("prepared distribution occurrence"),
-            context
-                .registered
-                .expect("prepared distribution occurrence")
-                .significance_annotations(),
+            context.registered,
+            context.registered.significance_annotations(),
             x_levels,
             &rendered_maxima,
             base_display_range,
@@ -519,13 +512,8 @@ pub(crate) fn measure_marks(
             grouped_maxima[group.x_index][group.group_index] = support_range.1;
         }
         crate::significance::plan_grouped(
-            context
-                .registered
-                .expect("prepared distribution occurrence"),
-            context
-                .registered
-                .expect("prepared distribution occurrence")
-                .significance_annotations(),
+            context.registered,
+            context.registered.significance_annotations(),
             x_levels,
             group_levels,
             &grouped_maxima,
@@ -771,7 +759,6 @@ pub(crate) fn measure_marks(
             let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
             let color = group_color(group, &colors)?;
             let style = chart
-                .description()
                 .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color);
             let point_ink = crate::alpha::marks::point_ink(
                 &style,
@@ -842,9 +829,7 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                &chart
-                    .description()
-                    .distribution_point_style(theme.marks.get_points().get_raw_overlay(), color),
+                &chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), color),
                 group
                     .observations
                     .iter()
@@ -852,14 +837,9 @@ pub(crate) fn measure_marks(
             )?;
         }
     }
-    payload.retain(
-        PlotRenderResult::new(
-            layout,
-            crate::orchestrator::registration::guide_descriptor(context.registered)?,
-        )
-        .with_significance_plan(significance),
-        context,
-    )
+    let mut result = payload.retain(layout, context)?;
+    result.significance = Some(significance);
+    Ok(result)
 }
 
 fn group_color(

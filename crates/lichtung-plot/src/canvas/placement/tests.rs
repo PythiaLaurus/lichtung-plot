@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 #[test]
 fn complete_footprints_are_atomic_occupied_and_owned_only_at_their_anchor() {
@@ -91,13 +92,13 @@ fn region_replacement_removes_whole_owners_and_commits_only_valid_topology() {
         assert_eq!(placements.footprint(0), original.footprint(0));
     }
     let plot = || {
-        Payload::Plot(Arc::new(
+        Payload::Plot(
             crate::Plot::scatter(
                 crate::NumericValues::new("x", [0., 1.]),
                 crate::NumericValues::new("y", [1., 2.]),
             )
-            .erase(),
-        ))
+            .into_description(),
+        )
     };
     placements.replace(Footprint::cell(1, 1), plot()).unwrap();
     assert_eq!(
@@ -158,7 +159,7 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
     assert!(Arc::ptr_eq(&canvas.placements, &snapshot.placements));
     let source = source.title("external later edit");
     assert_eq!(
-        snapshot.placements.plot(0).unwrap().description().prose()[0]
+        snapshot.placements.plot(0).unwrap().prose()[0]
             .unwrap()
             .as_str(),
         "captured"
@@ -179,12 +180,19 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
         .place_text_panel(0, 1, TextPanel::new("Independent note", "Body").unwrap())
         .unwrap();
     assert!(!Arc::ptr_eq(&canvas.placements, &snapshot.placements));
+    let original = snapshot.placements.plot(0).unwrap();
+    let edited = canvas.placements.plot(0).unwrap();
+    let Some(crate::data::DataColumn::Numeric(a)) = original.data_column(original.x_col().unwrap())
+    else {
+        panic!("native x source")
+    };
+    let Some(crate::data::DataColumn::Numeric(b)) = edited.data_column(edited.x_col().unwrap())
+    else {
+        panic!("native x source")
+    };
     assert!(
-        std::ptr::eq(
-            canvas.placements.plot(0).unwrap(),
-            snapshot.placements.plot(0).unwrap()
-        ),
-        "unchanged native plot payloads remain shared"
+        std::ptr::eq(a, b),
+        "placement COW keeps the original native input backing"
     );
     assert!(snapshot.placements.text(1).is_none());
     assert!(canvas

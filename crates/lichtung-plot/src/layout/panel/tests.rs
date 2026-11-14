@@ -114,8 +114,7 @@ fn continuous_auto_range_keeps_nice_ticks_inside_limits() {
 #[test]
 fn exact_tick_configuration_validates_count_before_fonts() {
     for count in [0_u32, 1, 10_000, 10_001] {
-        let spec = AxisSpec {
-            provenance: RangeProvenance::Automatic,
+        let spec = AuthoredAxisSpec {
             window: None,
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
@@ -140,8 +139,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
         vec![1.0, 0.0],
         vec![-0.0, 0.0],
     ] {
-        let spec = AxisSpec {
-            provenance: RangeProvenance::Automatic,
+        let spec = AuthoredAxisSpec {
             window: None,
             generation: crate::TickGeneration::automatic(),
             category_labels: crate::CategoryLabelSelection::all(),
@@ -162,8 +160,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
 
 #[test]
 fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_known_limits() {
-    let mut spec = AxisSpec {
-        provenance: RangeProvenance::Automatic,
+    let mut spec = AuthoredAxisSpec {
         window: None,
         generation: crate::TickGeneration::automatic(),
         category_labels: crate::CategoryLabelSelection::all(),
@@ -197,12 +194,12 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
     theme.typography.axes.tick_label.font_size = 0.0;
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let mut x = AxisSpec::default().limits(0.0, 1.0);
+    let mut x = AuthoredAxisSpec::default().limits(0.0, 1.0);
     x.exact_ticks = Some(vec![
         AxisTick::new(0.25, "left exact"),
         AxisTick::new(0.75, "right exact"),
     ]);
-    let mut y = AxisSpec::default().limits(0.0, 1.0);
+    let mut y = AuthoredAxisSpec::default().limits(0.0, 1.0);
     y.exact_ticks = Some(vec![AxisTick::new(0.5, "")]);
     let panel = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0);
     let numeric = Layout::new_with_axis_specs_in_panel_box(
@@ -271,10 +268,10 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
     let scope = FitScope::root()
         .child(crate::layout::AddressRole::FacetCell, 2)
         .unwrap();
-    let x = AxisSpec::default().limits(1.1, 1.2);
-    let y = AxisSpec {
+    let x = AuthoredAxisSpec::default().limits(1.1, 1.2);
+    let y = AuthoredAxisSpec {
         exact_ticks: Some(Vec::new()),
-        ..AxisSpec::default().limits(0.0, 1.0)
+        ..AuthoredAxisSpec::default().limits(0.0, 1.0)
     };
     let result = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (1.1, 1.2),
@@ -307,8 +304,8 @@ fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range()
         crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -318,8 +315,8 @@ fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range()
         crate::layout::PixelRect::new(0.0, 40.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -339,8 +336,8 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
         crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0),
         Some("x".into()),
         Some("y".into()),
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -350,8 +347,8 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
         crate::layout::PixelRect::new(0.0, 400.0, 0.0, 40.0),
         Some("x".into()),
         Some("y".into()),
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -366,8 +363,8 @@ fn wider_numeric_labels_reduce_automatic_x_tick_density() {
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let panel_box = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 100.0);
-    let wider_label_spec = AxisSpec::default().limits(0.0, 1e12);
-    let shorter_label_spec = AxisSpec::default().limits(0.0, 1.0);
+    let wider_label_spec = AuthoredAxisSpec::default().limits(0.0, 1e12);
+    let shorter_label_spec = AuthoredAxisSpec::default().limits(0.0, 1.0);
     let wider_labels = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 1.0),
@@ -414,7 +411,7 @@ fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let spec = AxisSpec::default().limits(0.0, 100.0);
+    let spec = AuthoredAxisSpec::default().limits(0.0, 100.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
@@ -440,7 +437,7 @@ fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
 
 #[test]
 fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
-    let spec = AxisSpec::default().limits(0.0, 100.0);
+    let spec = AuthoredAxisSpec::default().limits(0.0, 100.0);
     let panel = crate::layout::PixelRect::new(0.0, 400.0, 0.0, 400.0);
     let default_theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
@@ -519,8 +516,8 @@ fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
         crate::layout::PixelRect::new(40.0, 360.0, 40.0, 360.0),
         None,
         None,
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -541,8 +538,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
     let appearance = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&appearance, &text);
-    let spec = AxisSpec {
-        provenance: RangeProvenance::Configured,
+    let spec = AuthoredAxisSpec {
         window: Some(crate::layout::RawWindow::from_pair((0.0, 10.0))),
         exact_ticks: Some(vec![
             AxisTick::new(0.0, ""),
@@ -600,8 +596,8 @@ fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
         crate::layout::PixelRect::new(40.0, 360.0, 40.0, 360.0),
         Some("horizontal".into()),
         Some("vertical".into()),
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -631,7 +627,7 @@ fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let spec = AxisSpec::default().limits(5.0, 30.0);
+    let spec = AuthoredAxisSpec::default().limits(5.0, 30.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (5.0, 30.0),
         (0.0, 1.0),
@@ -639,7 +635,7 @@ fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
         Some("x".into()),
         Some("y".into()),
         &spec,
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
     )
     .unwrap();
@@ -688,8 +684,8 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
         Some("y".into()),
         Vec::new(),
         y_ticks,
-        &AxisSpec::default(),
-        &AxisSpec::default(),
+        &AuthoredAxisSpec::default(),
+        &AuthoredAxisSpec::default(),
         &theme,
         &crate::layout::fit::ROOT_SCOPE,
         None,
@@ -789,7 +785,7 @@ fn numeric_layout_preserves_explicit_adjacent_range_and_ticks() {
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let upper = f64::from_bits(1);
-    let spec = AxisSpec::default().limits(0.0, upper);
+    let spec = AuthoredAxisSpec::default().limits(0.0, upper);
     let layout = Layout::new_with_axis_specs(
         (0.0, upper),
         (0.0, upper),

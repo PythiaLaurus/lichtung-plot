@@ -11,11 +11,13 @@ use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, LineRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::PlotMeasureContext;
 use crate::stats::distribution::strict_scott_bandwidth;
 use crate::theme::{AccentColors, CategoryColors};
+#[cfg(test)]
 #[cfg(test)]
 use crate::Plot;
 
@@ -343,36 +345,27 @@ impl DensityPayload {
 }
 
 pub(crate) fn measure_marks(
-    context: PlotRenderContext<'_, '_>,
-    layout: Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Density(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "Density measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
-    let theme = context.theme;
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Density(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render(
+            "Density measurement requires root-prepared semantics for its component".into(),
+        )
+    })?;
+    let theme = request;
     theme.text.prepared_font_environment()?;
     let projection = layout.projection.clone();
-    let mut result = project(prepared, layout, context)?;
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let mut result = project(prepared, layout, context, request)?;
+    let raw_windows = context.registered.raw_windows();
     let automatic = [raw_windows[0].is_none(), raw_windows[1].is_none()];
     let mut requests = [None; 2];
-    let crate::layout::interior::MarkPayload::Density(payload) = &result
-        .marks
-        .as_ref()
-        .expect("selected Density marks")
-        .payload
-    else {
+    let crate::layout::interior::MarkPayload::Density(payload) = &result.marks.payload else {
         unreachable!("Density selected its own mark payload")
     };
     let mut area = crate::render::geometry::GeometrySnapshot::new();
@@ -399,7 +392,7 @@ pub(crate) fn measure_marks(
         )?;
         requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
     }
-    let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Density marks"))
+    let marks = std::sync::Arc::get_mut(&mut result.marks)
         .expect("newly selected Density marks have one owner");
     let crate::layout::interior::MarkPayload::Density(payload) = &mut marks.payload else {
         unreachable!("Density selected its own mark payload")
@@ -410,24 +403,24 @@ pub(crate) fn measure_marks(
 
 pub(crate) fn project(
     prepared: &PreparedDensity,
-    layout: Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, Error> {
-    let theme = context.theme;
-    let data = context.data;
+    layout: &Layout,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, Error> {
+    let theme = request;
+    let data = context.data()?;
     let mut payload = DensityPayload {
         clip: layout.projection.panel_box(),
         curves: Vec::new(),
         domain_expansions: [None; 2],
     };
     crate::data::source::reserve_source(&mut payload.curves, prepared.curves.len())?;
-    let order = prepared.group_order(crate::orchestrator::registration::collective_pairs(
+    let order = prepared.group_order(crate::orchestrator::registration::collective_pairs(Some(
         context.registered,
-    ))?;
+    )))?;
     let (colors, accent) = prepared.resolved_colors(
         context
             .registered
-            .expect("prepared Density occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
@@ -450,7 +443,7 @@ pub(crate) fn project(
         let fill = clip_polygon_y(fill, layout.projection.y_range())?;
         let mut projected = DensityCurvePayload {
             fill: if fill.len() >= 3 {
-                project_points(&fill, &layout, true)?
+                project_points(&fill, layout, true)?
             } else {
                 Vec::new()
             },
@@ -478,7 +471,7 @@ pub(crate) fn project(
             if let Some(segment) = clip_line_y(pair[0], pair[1], layout.projection.y_range()) {
                 projected
                     .segments
-                    .push(project_points(&segment, &layout, false)?);
+                    .push(project_points(&segment, layout, false)?);
             }
         }
         payload.curves.push(projected);
@@ -492,17 +485,12 @@ pub(crate) fn project(
             geometry.line(segment, &curve.line_style, clip)?;
         }
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    );
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Density(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 #[cfg(test)]
@@ -990,7 +978,7 @@ mod tests {
                 &source,
                 &crate::text::TextRequestContext::new(theme, &text_service),
                 |_| Ok(()),
-                |chart, inputs, request, operation| {
+                |chart, inputs, _request, _operation, round| {
                     let registered = &inputs.plots[1];
                     assert_eq!(
                         registered
@@ -1003,19 +991,22 @@ mod tests {
                             .collect::<Vec<_>>(),
                         [Some("b"), Some("a")]
                     );
-                    let chart = chart.clone().without_facets();
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-                    let selected = chart
-                        .measure_selected_interior(
-                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                            PlotRenderContext::new(
-                                registered.data(operation).unwrap(),
-                                crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
-                                request,
-                            )
-                            .with_registration(registered, inputs.intrinsic(registered)),
-                        )
+                    let measurement = inputs.assignment_factory().assign(
+                        chart
+                            .sizing_request()
+                            .assigned_size()
+                            .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                    );
+                    let factory = inputs
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
                         .unwrap();
+                    let selected = crate::layout::interior::measure_for_test(
+                        &factory,
+                        crate::layout::PixelRect::new(10.0, 600.0, 20.0, 400.0),
+                        round,
+                    )
+                    .unwrap();
                     assert_eq!(
                         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                         reads
@@ -1155,8 +1146,7 @@ mod tests {
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, theme, _operation| {
-                let operation = theme.text.prepared_font_environment().unwrap().operation();
+            |chart, inputs, _theme, _operation, round| {
                 let panels = &inputs.plots;
                 assert_eq!(panels.len(), 2);
                 for (registered, (expected, fills)) in panels
@@ -1185,19 +1175,22 @@ mod tests {
                         expected
                     );
                     let scope = &registered.scope.render_name;
-                    let chart = chart.clone();
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-                    let selected = chart
-                        .measure_selected_interior(
-                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                            PlotRenderContext::new(
-                                registered.data(&operation).unwrap(),
-                                crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
-                                theme,
-                            )
-                            .with_registration(registered, inputs.intrinsic(registered)),
-                        )
+                    let measurement = inputs.assignment_factory().assign(
+                        chart
+                            .sizing_request()
+                            .assigned_size()
+                            .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                    );
+                    let factory = inputs
+                        .plot_assignment_factory(&measurement, &registered.scope.id)
                         .unwrap();
+                    let selected = crate::layout::interior::measure_for_test(
+                        &factory,
+                        crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+                        round,
+                    )
+                    .unwrap();
                     assert_eq!(
                         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                         reads

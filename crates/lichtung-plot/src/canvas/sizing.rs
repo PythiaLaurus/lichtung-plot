@@ -1,8 +1,8 @@
 //! Content sizing uses the rendering Grid's canonical track requirements.
 
-use super::{Canvas, PreparedCanvasInputs};
+use super::Canvas;
 use crate::decorations::legend::discrete::scoped::{
-    ConsumedGuideDependency, GuideUse, ScopedGuideInputs,
+    ConsumedGuideDependency, GuideConsumption, GuideUse, ScopedGuideInputs,
 };
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
 use crate::layout::canvas::EdgeSpaceRequirements;
@@ -10,10 +10,79 @@ use crate::layout::fit::{self, FitScope};
 use crate::layout::interior::sizing::{body_preference, text_width};
 use crate::layout::kernel::{root_dimension, FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::{Error, Plot};
+use crate::orchestrator::registration::{PlotOccurrenceId, PlotRegistration};
+use crate::orchestrator::root::Root;
+use crate::Error;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+thread_local! {
+    static HEIGHT_TRACES_ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static CELL_HEIGHT_STEPS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(super) static CHILD_HEIGHT_STEPS: std::cell::RefCell<Vec<(&'static str, usize, [f64; 3])>> = const { std::cell::RefCell::new(Vec::new()) };
+    #[expect(clippy::type_complexity, reason = "test-only observation at the original HeightInputs constructor")]
+    static HEIGHT_AXIS_INPUTS: std::cell::RefCell<Vec<(Option<RootSize>, [[u64; 2]; 2], Option<[u64; 2]>)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Only the height fixtures arm these value-only observations. The marker keeps
+/// cleanup on the thread whose TLS was armed, including during unwinding.
+#[cfg(test)]
+#[must_use]
+struct HeightTraceGuard {
+    _same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+#[cfg(test)]
+impl HeightTraceGuard {
+    fn start() -> Self {
+        assert!(!HEIGHT_TRACES_ARMED.with(|armed| armed.replace(true)));
+        let guard = Self {
+            _same_thread: std::marker::PhantomData,
+        };
+        CELL_HEIGHT_STEPS.with(|steps| steps.borrow_mut().clear());
+        CHILD_HEIGHT_STEPS.with(|steps| steps.borrow_mut().clear());
+        HEIGHT_AXIS_INPUTS.with(|inputs| inputs.borrow_mut().clear());
+        guard
+    }
+}
+
+#[cfg(test)]
+impl Drop for HeightTraceGuard {
+    fn drop(&mut self) {
+        let _ = HEIGHT_TRACES_ARMED.try_with(|armed| armed.set(false));
+        let _ = CELL_HEIGHT_STEPS.try_with(|steps| {
+            if let Ok(mut steps) = steps.try_borrow_mut() {
+                *steps = Vec::new();
+            }
+        });
+        let _ = CHILD_HEIGHT_STEPS.try_with(|steps| {
+            if let Ok(mut steps) = steps.try_borrow_mut() {
+                *steps = Vec::new();
+            }
+        });
+        let _ = HEIGHT_AXIS_INPUTS.try_with(|inputs| {
+            if let Ok(mut inputs) = inputs.try_borrow_mut() {
+                *inputs = Vec::new();
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+fn cell_height_step(step: &'static str) {
+    if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
+        CELL_HEIGHT_STEPS.with(|steps| steps.borrow_mut().push(step));
+    }
+}
+
+#[cfg(test)]
+pub(super) fn child_height_step(step: &'static str, index: usize, operands: [f64; 3]) {
+    if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
+        CHILD_HEIGHT_STEPS.with(|steps| steps.borrow_mut().push((step, index, operands)));
+    }
+}
 
 /// Root-local measured consequences. Source data, labels, typography and guide
 /// semantics are immutable under this owner; coordinated inputs below are not.
@@ -24,8 +93,9 @@ pub(crate) struct HeightMeasurements {
 
 #[derive(Debug, Clone, PartialEq)]
 struct HeightInputs {
+    plot_id: PlotOccurrenceId,
     text_layouts: crate::text::roles::TextRoles,
-    output_dimensions: Option<(u32, u32)>,
+    output_dimensions: Option<RootSize>,
     prose: [crate::Text; 3],
     axis_titles: [crate::Text; 2],
     width: i64,
@@ -52,7 +122,8 @@ struct HeightMeasurement {
 
 impl HeightInputs {
     fn matches_assignment(&self, other: &Self) -> bool {
-        if self.width != other.width
+        if self.plot_id != other.plot_id
+            || self.width != other.width
             || self.prose != other.prose
             || self.text_layouts != other.text_layouts
             || self.output_dimensions != other.output_dimensions
@@ -91,9 +162,12 @@ impl HeightInputs {
         reason = "capture the selected scientific owner and its complete consumed assignment inputs"
     )]
     fn new(
-        plot: &Plot,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        canvas: &Canvas,
+        registered: &PlotRegistration<'_>,
+        canvas: Option<&Canvas>,
+        output_dimensions: Option<RootSize>,
+        ranges: [(f64, f64); 2],
+        provenance: [crate::layout::RangeProvenance; 2],
+        resolved_x: Option<(f64, f64)>,
         width: f64,
         parent_insets: [i64; 4],
         round: &FeedbackRound,
@@ -101,22 +175,11 @@ impl HeightInputs {
         per_plot: bool,
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<Self, Error> {
-        let axes = registered
-            .and_then(|registered| registered.axes.coordinate())
-            .ok_or_else(|| {
-                Error::Render("height measurement requires prepared cell axes".into())
-            })?;
-        let ranges = [
-            plot.description()
-                .x_axis_spec()
-                .window
-                .map_or(axes.ranges()[0], crate::layout::RawWindow::pair),
-            plot.description()
-                .y_axis_spec()
-                .window
-                .map_or(axes.ranges()[1], crate::layout::RawWindow::pair),
-        ]
-        .map(|range| [range.0.to_bits(), range.1.to_bits()]);
+        registered.axes.coordinate().ok_or_else(|| {
+            Error::Render("height measurement requires prepared cell axes".into())
+        })?;
+        let ranges = ranges.map(|range| [range.0.to_bits(), range.1.to_bits()]);
+        let source = registered.source;
         let child =
             ComponentAddress::root().child(AddressRole::CanvasCell, owner.leaf_slot_index())?;
         let mut own_insets = [[0; 4]; 2];
@@ -129,77 +192,81 @@ impl HeightInputs {
             }
         }
 
-        let use_kind =
-            if crate::orchestrator::registration::legend_policy(plot.description(), registered)
-                == crate::LegendPolicy::Hidden
-            {
-                GuideUse::Hidden
-            } else if per_plot {
-                GuideUse::Local
-            } else {
-                GuideUse::SharedSuppressed
-            };
+        let use_kind = if crate::orchestrator::registration::legend_policy(source, Some(registered))
+            == crate::LegendPolicy::Hidden
+        {
+            GuideUse::Hidden
+        } else if per_plot {
+            GuideUse::Local
+        } else {
+            GuideUse::SharedSuppressed
+        };
         let local = if use_kind == GuideUse::Local {
-            crate::orchestrator::registration::guide_descriptor(registered)?
+            crate::orchestrator::registration::guide_descriptor(Some(registered))?
                 .map(|descriptor| {
                     crate::decorations::legend::discrete::GuideSlot::new(
                         descriptor,
                         &child,
-                        plot.description().legend_position_spec(),
+                        source.legend_position_spec(),
                     )
                 })
                 .transpose()?
         } else {
             None
         };
-        Ok(Self {
-            prose: plot.description().copy_prose()?,
-            text_layouts: plot.description().text_layouts().clone(),
-            output_dimensions: plot.output_dimensions,
-            axis_titles: plot.description().copy_axis_titles()?,
+        let inputs = Self {
+            plot_id: registered.scope.id.clone(),
+            prose: source.copy_prose()?,
+            text_layouts: source.text_layouts().clone(),
+            output_dimensions,
+            axis_titles: source.copy_axis_titles()?,
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
-            provenance: [
-                plot.description().x_axis_spec().provenance,
-                plot.description().y_axis_spec().provenance,
-            ],
+            provenance,
             generation: [
-                plot.description().x_axis_spec().generation.clone(),
-                plot.description().y_axis_spec().generation.clone(),
+                source.x_axis_spec().generation.clone(),
+                source.y_axis_spec().generation.clone(),
             ],
             category_labels: [
-                plot.description().x_axis_spec().category_labels.clone(),
-                plot.description().y_axis_spec().category_labels.clone(),
+                source.x_axis_spec().category_labels.clone(),
+                source.y_axis_spec().category_labels.clone(),
             ],
-            resolved_x: plot
-                .resolved_facet_x_range()
-                .map(|range| [range.0.to_bits(), range.1.to_bits()]),
+            resolved_x: resolved_x.map(|range| [range.0.to_bits(), range.1.to_bits()]),
             own_insets,
             parent_insets,
-            y_labels: crate::orchestrator::registration::axis_tick_labels_visible(registered, 1),
-            legend: crate::orchestrator::registration::legend_policy(
-                plot.description(),
-                registered,
-            ),
+            y_labels: registered.policy.axis_text.tick_labels[1],
+            legend: crate::orchestrator::registration::legend_policy(source, Some(registered)),
             continuous_hidden: crate::orchestrator::registration::continuous_guide_suppressed(
-                registered,
+                Some(registered),
             ),
-            numeric: crate::numeric::inputs::NumericInputs::new(
-                registered.expect("checked height occurrence"),
-                Some(canvas),
-            )?,
-            alpha: plot.description().alpha_inputs().clone(),
-            guides: ScopedGuideInputs::new(
-                plot,
+            numeric: crate::numeric::inputs::NumericInputs::new(registered, canvas)?,
+            alpha: source.alpha_inputs().clone(),
+            guides: ScopedGuideInputs::capture_sizing(
                 registered,
-                use_kind,
-                local.as_ref(),
-                dependencies,
+                GuideConsumption {
+                    use_kind,
+                    local_guide: local.as_ref(),
+                    dependencies,
+                },
             )?,
-            scope: crate::orchestrator::registration::render_name(registered)
+            scope: registered
+                .scope
+                .render_name
+                .as_deref()
                 .map(crate::data::source::copy_source_string)
                 .transpose()?,
-        })
+        };
+        #[cfg(test)]
+        if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
+            HEIGHT_AXIS_INPUTS.with(|snapshots| {
+                snapshots.borrow_mut().push((
+                    inputs.output_dimensions,
+                    inputs.ranges,
+                    inputs.resolved_x,
+                ));
+            });
+        }
+        Ok(inputs)
     }
 }
 
@@ -228,9 +295,12 @@ impl HeightMeasurements {
     )]
     pub(super) fn record(
         &mut self,
-        plot: &Plot,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        canvas: &Canvas,
+        registered: &PlotRegistration<'_>,
+        canvas: Option<&Canvas>,
+        output_dimensions: Option<RootSize>,
+        ranges: [(f64, f64); 2],
+        provenance: [crate::layout::RangeProvenance; 2],
+        resolved_x: Option<(f64, f64)>,
         width: f64,
         height: f64,
         parent_insets: [i64; 4],
@@ -239,9 +309,12 @@ impl HeightMeasurements {
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<(), Error> {
         let inputs = HeightInputs::new(
-            plot,
             registered,
             canvas,
+            output_dimensions,
+            ranges,
+            provenance,
+            resolved_x,
             width,
             parent_insets,
             round,
@@ -265,6 +338,8 @@ impl HeightMeasurements {
             inputs,
             height: crate::layout::kernel::required_length(height)?,
         });
+        #[cfg(test)]
+        child_height_step("record", index, [width, height, 0.0]);
         Ok(())
     }
 }
@@ -274,8 +349,7 @@ impl HeightMeasurements {
     reason = "successful child height reads the same occurrence's intrinsic slot before recording the original height inputs"
 )]
 pub(super) fn measured_preference(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    registered: &PlotRegistration<'_>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     plan: &crate::decorations::plan::MeasuredPlotPlan,
@@ -283,16 +357,31 @@ pub(super) fn measured_preference(
     round: &FeedbackRound,
     owner: &ComponentAddress,
     theme: &crate::text::TextRequestContext<'_, '_>,
+    ranges: [(f64, f64); 2],
 ) -> Result<f64, Error> {
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
-    let mut height = plot.natural_body_height(
+    let source = registered.source;
+    let hard = crate::layout::interior::intrinsic_body_minimum_for_ranges(
         registered,
+        intrinsic,
+        operation,
+        theme,
+        Some(ranges),
+    )?;
+    let preference = body_preference(source, Some(registered), intrinsic, operation, theme, hard)?;
+    #[cfg(test)]
+    child_height_step(
+        "measured-preference",
+        usize::try_from(owner.leaf_slot_index()).expect("Canvas slot fits usize"),
+        [plan.panel_box.width(), local_text_height, 0.0],
+    );
+    let mut height = source.natural_body_height(
+        Some(registered),
         intrinsic,
         operation,
         theme,
         plan.panel_box.width(),
         preference.1,
+        Some(ranges),
     )?;
     if let Some(guide) = &plan.legend {
         let panel = plan.panel_box;
@@ -315,16 +404,23 @@ pub(super) fn measured_preference(
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "one width-dependent cell call receives its prepared and coordinated identity"
+    clippy::too_many_lines,
+    clippy::type_complexity,
+    reason = "keep the ordered hard/preference/prose/key/lookup program and its three original narrow axis operands together"
 )]
 pub(super) fn cell_height(
-    plot: &Plot,
+    registered: &PlotRegistration<'_>,
     operation: &crate::font::canonical::OperationContext,
     canvas: &Canvas,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
-    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    output_dimensions: Option<RootSize>,
+    axes: (
+        [(f64, f64); 2],
+        [crate::layout::RangeProvenance; 2],
+        Option<(f64, f64)>,
+    ),
     per_plot: bool,
     round: &FeedbackRound,
     owner: &ComponentAddress,
@@ -332,11 +428,23 @@ pub(super) fn cell_height(
     measurements: Option<&HeightMeasurements>,
     dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
-    let registered = Some(registered);
-    let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
-    let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
-    let sources = plot.description().prose();
+    let source = registered.source;
+    #[cfg(test)]
+    cell_height_step("hard");
+    let hard = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+        registered,
+        intrinsic,
+        operation,
+        theme,
+        Some(axes.0),
+    )?;
+    #[cfg(test)]
+    cell_height_step("preference");
+    let preference = body_preference(source, Some(registered), intrinsic, operation, theme, hard)?;
+    let sources = registered.source.prose();
     let present = sources.iter().any(Option::is_some);
+    #[cfg(test)]
+    cell_height_step("prose");
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
@@ -345,14 +453,19 @@ pub(super) fn cell_height(
         } else {
             width
         },
-        RootAlignments::resolve(theme, plot.description().prose_alignments(), [None; 2]),
+        RootAlignments::resolve(theme, registered.source.prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
+    #[cfg(test)]
+    cell_height_step("key");
     let identity = HeightInputs::new(
-        plot,
         registered,
-        canvas,
+        Some(canvas),
+        output_dimensions,
+        axes.0,
+        axes.1,
+        axes.2,
         width,
         parent_insets,
         round,
@@ -361,10 +474,16 @@ pub(super) fn cell_height(
         dependencies,
     )?;
     if let Some(measurements) = measurements {
+        #[cfg(test)]
+        cell_height_step("lookup");
         if let Some(height) = measurements.measured(&identity, owner, round)? {
+            #[cfg(test)]
+            cell_height_step("hit");
             return Ok(height);
         }
     }
+    #[cfg(test)]
+    cell_height_step("computed");
     let mut local = [0.0; 4];
     for (index, value) in local.iter_mut().enumerate() {
         let quanta = identity.own_insets[0][index]
@@ -380,29 +499,31 @@ pub(super) fn cell_height(
     }
     let body_width = width - local[0] - local[1];
     let guide = if per_plot {
-        crate::layout::interior::sizing::guided_preference(plot, registered)?
+        crate::layout::interior::sizing::guided_preference(source, Some(registered))?
     } else {
         None
     };
     let height = if guide.is_some() {
         crate::layout::interior::sizing::guided_body_height(
-            plot,
-            registered,
+            source,
+            Some(registered),
             intrinsic,
             operation,
             theme,
             body_width,
             guide.as_ref(),
             &FitScope::new(owner, 0),
+            Some(axes.0),
         )?
     } else {
-        plot.natural_body_height(
-            registered,
+        source.natural_body_height(
+            Some(registered),
             intrinsic,
             operation,
             theme,
             body_width,
             preference.1,
+            Some(axes.0),
         )?
     };
 
@@ -414,9 +535,88 @@ pub(super) fn cell_height(
     }
 }
 
+/// Original working windows, including the raw Forest window that a resolved
+/// x override can mask. These are sizing/key operands, not assigned domains.
+#[expect(
+    clippy::type_complexity,
+    reason = "the original three narrow axis operands need no new retained input type"
+)]
+pub(super) fn axis_inputs(
+    root: &Root<'_>,
+    registered: &PlotRegistration<'_>,
+    round: &FeedbackRound,
+    initial_sizing: bool,
+) -> (
+    [(f64, f64); 2],
+    [crate::layout::RangeProvenance; 2],
+    Option<(f64, f64)>,
+) {
+    use crate::layout::RangeProvenance::{Automatic, Configured, Shared};
+    let source = registered.source;
+    let authored = [source.x_axis_spec(), source.y_axis_spec()];
+    let base = registered.axes.ranges();
+    let mut ranges = std::array::from_fn(|side| {
+        authored[side]
+            .window
+            .map_or(base[side], crate::layout::RawWindow::pair)
+    });
+    let mut provenance = authored.map(|axis| {
+        if axis.window.is_some() {
+            Configured
+        } else {
+            Automatic
+        }
+    });
+    let mut resolved_x = None;
+    let mut grouped = false;
+    for group in &root.canvas_topology().range_groups {
+        if !group.contains(&registered.scope.id) {
+            continue;
+        }
+        let mut shared: Option<(f64, f64)> = None;
+        for id in group {
+            let member = &root.plots[id.slot];
+            let base = member.axes.ranges()[0];
+            let range = round
+                .feedback_domain(&member.scope.address, FeedbackKind::AutomaticDomainX)
+                .map_or(base, |range| (base.0.min(range.0), base.1.max(range.1)));
+            shared =
+                Some(shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))));
+        }
+        let shared = shared.expect("validated nonempty shared x group");
+        if source.kind() == crate::PlotKind::Forest
+            && source.axis_scale_spec() == crate::AxisScale::Log10
+        {
+            if initial_sizing {
+                ranges[0] = base[0];
+            }
+            resolved_x = Some(shared);
+        } else {
+            ranges[0] = shared;
+        }
+        if authored[0].window.is_none() {
+            provenance[0] = Shared;
+        }
+        grouped = true;
+    }
+    if !grouped {
+        if let Some(range) =
+            round.feedback_domain(&registered.scope.address, FeedbackKind::AutomaticDomainX)
+        {
+            ranges[0] = range;
+        }
+    }
+    if let Some(range) =
+        round.feedback_domain(&registered.scope.address, FeedbackKind::AutomaticDomainY)
+    {
+        ranges[1] = range;
+    }
+    (ranges, provenance, resolved_x)
+}
+
 pub(super) fn grid_gutters(
     source: &Canvas,
-
+    root: &Root<'_>,
     round: &FeedbackRound,
 ) -> Result<Vec<(usize, usize, EdgeSpaceRequirements)>, Error> {
     let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
@@ -445,14 +645,16 @@ pub(super) fn grid_gutters(
             },
         ));
     }
-    for (index, group) in source.x_range_groups.iter().enumerate() {
+    for (index, group) in root.canvas_topology().range_groups.iter().enumerate() {
         let owner = grid_owner.child(
             AddressRole::CanvasRangeGroup,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas range group address overflow".into()))?,
         )?;
         let alignment = round.insets(&owner, FeedbackKind::SharedAlignment);
-        for &index in group {
+        for id in group {
+            let index = usize::try_from(root.plots[id.slot].scope.address.leaf_slot_index())
+                .expect("Canvas slot fits usize");
             gutters[index].2.left = gutters[index].2.left.max(alignment[0]);
             gutters[index].2.right = gutters[index].2.right.max(alignment[1]);
         }
@@ -496,7 +698,7 @@ pub(super) fn content_frame(
 )]
 pub(super) fn measure(
     source: &Canvas,
-    prepared: &PreparedCanvasInputs,
+    prepared: &Root<'_>,
     requested: crate::layout::RootRequest,
     round: &FeedbackRound,
     measurements: &HeightMeasurements,
@@ -505,40 +707,25 @@ pub(super) fn measure(
     if let crate::layout::RootRequest::ExactSize { width, height } = requested {
         return Ok(RootSize::new(width, height));
     }
-    let theme = &prepared.root_request();
-
-    let mut plots = Vec::new();
-    fit::reserve(
-        &mut plots,
-        source.placements.len(),
-        "Canvas content sizing children",
-    )?;
+    let theme = &prepared.request();
     for (index, panel) in source.placements.plots().enumerate() {
-        let Some(panel) = panel else {
-            plots.push(None);
-            continue;
-        };
-        let registered = prepared.plot(index).expect("prepared Canvas plot");
-
-        let mut plot = panel.clone();
-        if let Some(labels) = &source.labels {
-            plot = plot.labels(labels.clone());
-        }
+        let Some(panel) = panel else { continue };
+        let registered = prepared.canvas_plot(index).expect("prepared Canvas plot");
         registered.scope.render_name.as_deref().ok_or_else(|| {
             Error::Render("Canvas content child requires its prepared scope".into())
         })?;
         crate::layout::interior::InteriorRoute::classify(registered.source.kind())
-            .validate(plot.description())?;
-        if let Some(limits) = prepared.shared_x.get(index).copied().flatten() {
-            plot = plot.with_planned_x_limits(limits);
-        }
-        plots.push(Some(plot));
+            .validate(panel)?;
     }
-    source.coordinate_plots(&mut plots, &prepared.shared_x, round)?;
+    source.coordinate_domains(prepared, round)?;
     let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut gutters = Vec::new();
-    fit::reserve(&mut gutters, plots.len(), "Canvas content gutters")?;
-    for index in 0..plots.len() {
+    fit::reserve(
+        &mut gutters,
+        source.placements.len(),
+        "Canvas content gutters",
+    )?;
+    for index in 0..source.placements.len() {
         let owner = grid_owner.child(
             AddressRole::CanvasCell,
             u32::try_from(index)
@@ -557,21 +744,23 @@ pub(super) fn measure(
             },
         ));
     }
-    for (index, group) in source.x_range_groups.iter().enumerate() {
+    for (index, group) in prepared.canvas_topology().range_groups.iter().enumerate() {
         let owner = grid_owner.child(
             AddressRole::CanvasRangeGroup,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas range group address overflow".into()))?,
         )?;
         let alignment = round.insets(&owner, FeedbackKind::SharedAlignment);
-        for &index in group {
+        for id in group {
+            let index = usize::try_from(prepared.plots[id.slot].scope.address.leaf_slot_index())
+                .expect("Canvas slot fits usize");
             gutters[index].2.left = gutters[index].2.left.max(alignment[0]);
             gutters[index].2.right = gutters[index].2.right.max(alignment[1]);
         }
     }
     let mut guide = (0.0, 0.0);
-    if let Some(descriptor) = &prepared.shared_guide {
-        guide = crate::decorations::legend::Legend::natural_preference(descriptor, theme)?;
+    if let Some(slot) = &prepared.canvas_topology().shared_guide {
+        guide = crate::decorations::legend::Legend::natural_preference(&slot.descriptor, theme)?;
     }
     let guide_gap = if guide.0 > 0.0 {
         theme.legend_shared_gap()?
@@ -582,11 +771,8 @@ pub(super) fn measure(
         fit::measured(super::tracks::allocate(
             PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             &source.placements,
-            &plots,
             prepared,
-            &prepared.operation,
-            &prepared.text_panel_intrinsics,
-            &prepared.plot_titles,
+            Some(round),
             &source.column_headers,
             &source.row_headers,
             &source.row_titles,
@@ -595,8 +781,9 @@ pub(super) fn measure(
             &FitScope::root(),
             Some(&super::tracks::ContentSizing {
                 source,
-                inputs: prepared,
-                operation: &prepared.operation,
+                root: prepared,
+                output_dimensions: None,
+                initial_sizing: true,
                 round,
                 measurements: Some(measurements),
                 shared_allocation: None,
@@ -611,9 +798,6 @@ pub(super) fn measure(
     let mut preferred_width = if requested_width.is_none() {
         let width = fit::measured(super::tracks::natural_width(
             &source.placements,
-            &plots,
-            &prepared.text_panel_intrinsics,
-            &prepared.plot_titles,
             &source.column_headers,
             &source.row_headers,
             &source.row_titles,
@@ -621,8 +805,9 @@ pub(super) fn measure(
             &FitScope::root(),
             &super::tracks::ContentSizing {
                 source,
-                inputs: prepared,
-                operation: &prepared.operation,
+                root: prepared,
+                output_dimensions: None,
+                initial_sizing: true,
                 round,
                 measurements: Some(measurements),
                 shared_allocation: None,

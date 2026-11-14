@@ -2,12 +2,15 @@
 //! selects its axes once and hands the resulting projection to retained marks.
 
 use super::{InteriorRoute, OneCategoricalAxis, StandardCoordinate};
+use crate::builder::PlotDescription;
 use crate::layout::fit::{self, FitKind, PlanError};
 #[cfg(test)]
 use crate::layout::PixelRect;
 use crate::layout::{Axis, AxisSide, CoordinateLayoutInputs, Layout, Projection};
-use crate::spec::{AxisDomain, PlotRenderContext, PlotRenderResult};
-use crate::{Error, Plot};
+use crate::spec::{AxisDomain, PlotMeasureContext, PlotRenderResult};
+use crate::Error;
+#[cfg(test)]
+use crate::Plot;
 
 /// Foundational axis text contributes hard requirements independently from
 /// the prepared mark and annotation intrinsics of each family.
@@ -317,8 +320,9 @@ impl InteriorRoute {
     )]
     pub(crate) fn measure(
         self,
-        plot: &Plot,
-        context: PlotRenderContext<'_, '_>,
+        plot: &PlotDescription,
+        context: &PlotMeasureContext<'_, '_>,
+        request: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, PlanError> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(match self {
@@ -327,13 +331,10 @@ impl InteriorRoute {
             }
             _ => crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
         });
-        self.validate(plot.description())?;
-        let inputs = context
-            .registered
-            .and_then(|registered| registered.axes.coordinate())
-            .ok_or_else(|| {
-                Error::Render("native coordinate panel requires root-prepared axes".into())
-            })?;
+        self.validate(plot)?;
+        let inputs = context.registered.axes.coordinate().ok_or_else(|| {
+            Error::Render("native coordinate panel requires root-prepared axes".into())
+        })?;
         let valid = match self {
             Self::StandardCoordinate(family) => {
                 !inputs.logarithmic()
@@ -368,12 +369,13 @@ impl InteriorRoute {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
         let minimum = plot.intrinsic_body_minimum(
-            context.registered,
+            Some(context.registered),
             context.intrinsic(),
-            context.data.source_resources(),
-            context.theme,
+            context.operation,
+            request,
+            context.assignment.local.ranges(),
         )?;
-        let panel = context.panel;
+        let panel = context.assignment.local.body;
         if ![panel.x0, panel.x1, panel.y0, panel.y1]
             .into_iter()
             .all(f64::is_finite)
@@ -394,7 +396,7 @@ impl InteriorRoute {
             if inputs.categories(index).is_some() {
                 Ok(inputs.ranges()[index])
             } else {
-                context.axis_range(side, || unreachable!("prepared native axes"))
+                context.axis_range(side)
             }
         });
         let projection = Projection::new(x_range?, y_range?, panel.as_tuple()).with_categories(
@@ -410,34 +412,13 @@ impl InteriorRoute {
                 AxisDomain::Continuous
             }
         });
-        let assigned_domains = std::array::from_fn::<_, 2, _>(|side| {
-            let range = if side == 0 {
-                projection.x_range()
-            } else {
-                projection.y_range()
-            };
-            crate::orchestrator::assignment::AxisDomainAssignment {
-                extent: crate::orchestrator::registration::DisplayExtent {
-                    lower: range.0,
-                    upper: range.1,
-                },
-                provenance: if side == 0 {
-                    plot.description().x_axis_spec().provenance
-                } else {
-                    plot.description().y_axis_spec().provenance
-                },
-            }
-        });
+        let assigned = context
+            .axis_pair(crate::orchestrator::assignment::AxisPairScope::Pair)?
+            .axes;
         let mut axes = fit::collect(
             "native coordinate axes",
             (0..2).map(|side| {
-                let base = inputs.axis(
-                    context
-                        .registered
-                        .expect("prepared coordinate occurrence")
-                        .source,
-                    side,
-                );
+                let base = inputs.axis(context.registered.source, side);
                 let supplied = if let Some(categories) = inputs.categories(side) {
                     let display = &categories.ticks;
                     if display.len() != categories.raw.len() {
@@ -461,21 +442,15 @@ impl InteriorRoute {
                 } else {
                     Vec::new()
                 };
-                let assigned = crate::orchestrator::assignment::AssignedAxisRef {
-                    base,
-                    domain: &assigned_domains[side],
-                };
+                let assigned = assigned[side];
                 let ticks = if side == 0 && inputs.logarithmic() && base.exact_ticks()?.is_none() {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
                         assigned,
                         panel,
-                        context.theme,
+                        request,
                         context.fit_scope(),
-                        context
-                            .registered
-                            .expect("prepared coordinate occurrence")
-                            .axis_numeric_binding(context.data.source_resources())?,
+                        context.registered.axis_numeric_binding(context.operation)?,
                     )?
                 } else {
                     assigned.layout_ticks(
@@ -486,23 +461,17 @@ impl InteriorRoute {
                         } else {
                             AxisSide::Left
                         },
-                        context.theme,
+                        request,
                         context.fit_scope(),
-                        context
-                            .registered
-                            .expect("prepared coordinate occurrence")
-                            .axis_numeric_binding(context.data.source_resources())?,
+                        context.registered.axis_numeric_binding(context.operation)?,
                     )?
                 };
                 Ok(Axis {
-                    label: inputs.copy_label(
-                        context.registered.expect("prepared coordinate occurrence"),
-                        side,
-                    )?,
+                    label: inputs.copy_label(context.registered, side)?,
                     ticks: ticks.ticks,
                     tick_labels_visible: side == 0
                         || crate::orchestrator::registration::axis_tick_labels_visible(
-                            context.registered,
+                            Some(context.registered),
                             1,
                         ),
                     category_labels: base
@@ -526,129 +495,32 @@ impl InteriorRoute {
             y_axis,
         };
         let frozen = layout.measure_axes_with_inputs(
-            context.theme,
+            request,
             context.fit_scope(),
             std::array::from_fn(|side| {
-                let mut input = crate::orchestrator::assignment::AssignedAxisRef {
-                    base: inputs.axis(
-                        context
-                            .registered
-                            .expect("prepared coordinate occurrence")
-                            .source,
-                        side,
-                    ),
-                    domain: &assigned_domains[side],
-                }
-                .semantic_inputs();
+                let mut input = assigned[side].semantic_inputs();
                 input
                     .text_layout
-                    .clone_from(&plot.description().text_layouts().ticks[side]);
+                    .clone_from(&request.text_layouts.ticks[side]);
                 input
             }),
-            || CoordinateLayoutInputs::new(context.theme),
+            || CoordinateLayoutInputs::new(request),
         )?;
-        let mut result = match self {
-            Self::StandardCoordinate(StandardCoordinate::Scatter) => {
-                crate::plots::scatter::measure_marks(plot, context, layout)?
-            }
-            Self::StandardCoordinate(
-                StandardCoordinate::Line
-                | StandardCoordinate::Trajectory
-                | StandardCoordinate::LinePath,
-            ) => crate::plots::line::measure_marks(plot, context, layout)?,
-            Self::StandardCoordinate(StandardCoordinate::Histogram) => {
-                crate::plots::histogram::measure_marks(context, layout)?
-            }
-            Self::StandardCoordinate(StandardCoordinate::Density) => {
-                crate::plots::density::measure_marks(context, layout)?
-            }
-            Self::StandardCoordinate(StandardCoordinate::Qq) => {
-                crate::plots::qq::measure_marks(plot, context, layout)?
-            }
-            Self::StandardCoordinate(StandardCoordinate::Regression) => {
-                crate::plots::regression::measure_marks(plot, context, layout)?
-            }
-            Self::OneCategoricalAxis(
-                OneCategoricalAxis::PointInterval
-                | OneCategoricalAxis::Coefficient
-                | OneCategoricalAxis::Forest,
-            ) => crate::plots::interval_estimate::measure_marks(plot, context, layout)?,
-            Self::OneCategoricalAxis(OneCategoricalAxis::Dumbbell) => {
-                crate::plots::dumbbell::measure_marks(plot, context, layout)?
-            }
-            Self::OneCategoricalAxis(OneCategoricalAxis::Bar | OneCategoricalAxis::StackedBar) => {
-                crate::plots::bar::measure_marks(plot, context, layout)?
-            }
-            Self::OneCategoricalAxis(
-                OneCategoricalAxis::HorizontalBar | OneCategoricalAxis::StackedHorizontalBar,
-            ) => crate::plots::horizontal_bar::measure_marks(plot, context, layout)?,
-            Self::OneCategoricalAxis(OneCategoricalAxis::Boxplot) => {
-                crate::plots::boxplot::measure_marks(plot, context, layout)?
-            }
-            Self::OneCategoricalAxis(
-                OneCategoricalAxis::Violin | OneCategoricalAxis::Raincloud,
-            ) => crate::plots::violin::measure_marks(plot, context, layout)?,
-            Self::OneCategoricalAxis(OneCategoricalAxis::Interaction) => {
-                crate::plots::interaction::measure_marks(plot, context, layout)?
-            }
-            Self::SpecializedGrid(_) => {
-                unreachable!("native route validated")
-            }
-        };
+        let marks = super::measure_selected_interior(context, &layout, request)?;
+        let mut result = PlotRenderResult::new(
+            layout,
+            crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
+        );
+        result.marks = Some(marks.marks);
+        result.significance = marks.significance;
+        result.deferred_annotation_text = marks.deferred_annotation_text;
+        result.numeric_presentation = marks.numeric_presentation;
         result.axes = Some(frozen);
         [result.x_tick_keys, result.y_tick_keys] = keys;
         result.x_domain = domains[0];
         result.y_domain = domains[1];
         Ok(result)
     }
-}
-
-/// Exact standalone Plot frame, using the same carrier as constrained panels.
-/// Facet/Canvas track allocation remains with the existing parent adapters.
-pub(crate) fn canvas_layout(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
-    operation: &crate::font::canonical::OperationContext,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-) -> Result<crate::layout::RootFramePlan, PlanError> {
-    use crate::decorations::title_block::plan::RootAlignments;
-    let minimum = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
-    // Only root-owned padding and text are hard reservations. Axis gutters are
-    // measured from selected sources at the assigned span by the root round;
-    // endpoint estimates must not reject a body before tick selection.
-    let mut root = crate::layout::RootFramePlan::measure(
-        plot.canvas_dimensions()?,
-        theme,
-        plot.description().prose(),
-        RootAlignments::resolve(theme, plot.description().prose_alignments(), [None; 2]),
-        minimum,
-    )?;
-    root.native_preference = match super::InteriorRoute::classify(plot.kind()) {
-        super::InteriorRoute::StandardCoordinate(_) => {
-            Some(super::preference::CoordinateSizePreference::Standard(
-                super::preference::mark_preference(plot, registered, theme, minimum)?,
-            ))
-        }
-        super::InteriorRoute::OneCategoricalAxis(
-            super::OneCategoricalAxis::PointInterval
-            | super::OneCategoricalAxis::Coefficient
-            | super::OneCategoricalAxis::Forest
-            | super::OneCategoricalAxis::Dumbbell
-            | super::OneCategoricalAxis::Bar
-            | super::OneCategoricalAxis::HorizontalBar
-            | super::OneCategoricalAxis::StackedBar
-            | super::OneCategoricalAxis::StackedHorizontalBar
-            | super::OneCategoricalAxis::Boxplot
-            | super::OneCategoricalAxis::Violin
-            | super::OneCategoricalAxis::Raincloud
-            | super::OneCategoricalAxis::Interaction,
-        ) => Some(super::preference::CoordinateSizePreference::Categorical(
-            super::preference::categorical_preference(plot, registered, theme, minimum)?,
-        )),
-        _ => None,
-    };
-    Ok(root)
 }
 
 #[cfg(test)]
@@ -680,9 +552,9 @@ mod intrinsic_tests {
                 &source,
                 &theme,
                 |_| Ok(()),
-                |_, inputs, theme, operation| {
+                |_, inputs, theme, operation, _round| {
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
-                        inputs.intrinsic(&inputs.plots[0]),
+                        inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
                         &crate::orchestrator::root::intrinsic_inputs(
                             inputs.plots.first(),
                             theme,
@@ -767,7 +639,7 @@ mod intrinsic_tests {
                 &source,
                 &theme,
                 |_| Ok(()),
-                |chart, inputs, theme, operation| {
+                |chart, inputs, theme, operation, _round| {
                     let measured = theme
                         .measure_text(
                             label,
@@ -778,7 +650,7 @@ mod intrinsic_tests {
                         )
                         .unwrap();
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
-                        inputs.intrinsic(&inputs.plots[0]),
+                        inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
                         &crate::orchestrator::root::intrinsic_inputs(
                             inputs.plots.first(),
                             theme,

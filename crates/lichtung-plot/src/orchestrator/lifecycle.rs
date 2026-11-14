@@ -2,150 +2,348 @@
 
 use crate::Error;
 
-use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
+use super::assignment::{
+    GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions, RootAssignment,
+};
 use super::plan::{MeasuredOwnedPlan, MeasuredRootContent};
+use super::registration::PlotRegistration;
 use super::root::{CachedRootFrame, RootLayoutCaches};
+use super::root::{CompositionIntrinsics, PreparedComposition, Root, RootSource};
+use super::{capture_calls, validate_text_replay_plan, TextReplayPlan};
+#[cfg(test)]
 use crate::builder::Plot;
+use crate::builder::PlotDescription;
 use crate::decorations::plan::MeasuredPlotPlan;
 use crate::layout::PixelRect;
 use crate::render::backend::{Backend, SurfaceRole};
-use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
+#[cfg(test)]
+use crate::spec::PlotRenderResult;
+use crate::spec::{DecorationMode, PlotKind};
 use crate::text::{TextRequestContext, TextService};
 use crate::theme::ResolvedTheme;
 
-pub(super) struct PlotPlan {
-    root: crate::layout::FrozenRoot<TextReplayPlan>,
-}
-
-struct PreparedPlotInputs<'src> {
-    operation: crate::font::canonical::OperationContext,
-    axes: crate::layout::interior::PreparedInteriorInputs<'src>,
-    facet_guide: Option<super::facets::PreparedFacetGuide>,
-    theme: Box<ResolvedTheme>,
-    text: TextService,
-    text_census: crate::layout::PreparedTextCensus,
-    root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
-    caches: std::cell::RefCell<RootLayoutCaches>,
-}
-
-impl<'src> PreparedPlotInputs<'src> {
-    fn prepare(
-        source: &'src Plot,
-        kind: PlotKind,
-        resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
-        caches: std::cell::RefCell<RootLayoutCaches>,
-        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
-    ) -> Result<Self, Error> {
-        let theme = resolve_theme()?;
-        let text = TextService::default();
-        source.description().validate_configuration(kind)?;
-        let registry = crate::plots::shared_x::prepare_plot(
-            source.description(),
-            &prepared_stage.operation(),
-            &theme,
-        )?;
-        crate::layout::interior::guide::validate_categorical_scale(
-            source.description(),
-            &registry.panels,
-            &theme,
-            None,
-        )?;
-        Self::complete(source, kind, theme, text, registry, caches, prepared_stage)
+pub(crate) fn plan_scene(
+    source: RootSource<'_>,
+) -> Result<crate::layout::FrozenRoot<TextReplayPlan>, Error> {
+    #[cfg(test)]
+    if matches!(source, RootSource::Plot(_)) {
+        super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
     }
+    let frozen = crate::layout::plan_root(
+        source.request(),
+        |stage| Root::prepare(source, stage),
+        Root::measure,
+        |root, size, plan, stage| {
+            let _ = &root.census;
+            size.dimensions()?;
+            let verifier = root.sealed_verifier()?;
+            super::capture_selected(root, plan, &verifier, stage)
+        },
+    )?;
+    let (width, height) = frozen.dimensions();
+    validate_text_replay_plan(
+        width,
+        height,
+        frozen.plan(),
+        match source {
+            RootSource::Plot(_) => "prepared plot Null replay",
+            RootSource::Canvas(_) => "prepared canvas Null replay",
+        },
+    )?;
+    Ok(frozen)
+}
 
-    fn complete(
-        source: &'src Plot,
-        kind: PlotKind,
-        theme: Box<ResolvedTheme>,
-        text: TextService,
-        mut registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
-        caches: std::cell::RefCell<RootLayoutCaches>,
-        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
-    ) -> Result<Self, Error> {
-        let request = TextRequestContext::new(&theme, &text);
-        let facet_guide = source
-            .description()
-            .has_facets()
-            .then(|| {
-                super::prepare_discrete_guide(
-                    source,
-                    kind,
-                    &mut registry,
-                    &prepared_stage.operation(),
+pub(crate) fn render_scene(source: RootSource<'_>) -> Result<crate::scene::RenderedScene, Error> {
+    let frozen = plan_scene(source)?;
+    let (width, height) = frozen.dimensions();
+    let mut backend = frozen.plan().take_svg_backend()?;
+    #[cfg(test)]
+    if matches!(source, RootSource::Plot(_)) {
+        super::FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
+    }
+    frozen.plan().replay(
+        width,
+        height,
+        &mut backend,
+        match source {
+            RootSource::Plot(_) => "prepared plot scene replay",
+            RootSource::Canvas(_) => "prepared canvas scene replay",
+        },
+    )?;
+    crate::scene::RenderedScene::new(width, height, backend.into_output())
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "capture consumes the selected plan but keeps it alive through command and SVG-storage finalization"
+)]
+pub(crate) fn capture_selected(
+    root: &Root<'_>,
+    plan: MeasuredOwnedPlan,
+    verifier: &crate::font::canonical::SealedTextVerifier<'_>,
+    stage: &mut crate::layout::kernel::FinalStage<'_>,
+) -> Result<TextReplayPlan, Error> {
+    capture_calls(plan.size, verifier, stage, |backend| {
+        let (width, height) = plan.size.dimensions()?;
+        match root.source {
+            RootSource::Plot(source) => {
+                render_plot_scene(source, source.kind(), width, height, &plan, backend)
+            }
+            RootSource::Canvas(source) => {
+                source.render_planned_canvas(&plan, width, height, backend)
+            }
+        }
+    })
+}
+
+pub(super) fn measure_plot_root(
+    root: &Root<'_>,
+    source: &PlotDescription,
+    assigned: crate::layout::RootRequest,
+    round: &mut crate::layout::kernel::FeedbackRound,
+    children: &mut crate::decorations::plan::children::ChildPlans,
+    frames: &mut Option<CachedRootFrame>,
+) -> Result<MeasuredOwnedPlan, Error> {
+    let request = root.request();
+    let route = crate::layout::interior::InteriorRoute::classify(source.kind());
+    let size = if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
+        crate::layout::RootSize::new(width, height)
+    } else {
+        route.validate(source)?;
+        match &root.composition {
+            PreparedComposition::Facets(topology) => {
+                super::facets::natural_size(source, root, topology, &request, assigned, round)?
+            }
+            PreparedComposition::Single { plot_id } => crate::layout::interior::sizing::plot_size(
+                root.plot(plot_id)?,
+                root.plot_intrinsic(plot_id)?,
+                &root.operation,
+                &request,
+                assigned,
+                round,
+            )?,
+            PreparedComposition::Canvas(_) => unreachable!("Plot composition"),
+        }
+    };
+    let (width, _) = size.dimensions()?;
+    root.root_text
+        .check_width(
+            root.root_appearance.root_inner_width(f64::from(width))?,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .map_err(crate::layout::fit::PlanError::into_error)?;
+    route.validate(source)?;
+    let measurement = root.assignment_factory().assign(size);
+    match &root.composition {
+        PreparedComposition::Facets(topology) => super::facets::OwnedFacetPlan::measure(
+            source,
+            root,
+            topology,
+            measurement,
+            &request,
+            round,
+            children,
+            root.source.request().automatic_height(),
+        )
+        .map_err(crate::layout::fit::PlanError::into_error),
+        PreparedComposition::Single { plot_id } => {
+            let registered = root.plot(plot_id)?;
+            let intrinsic = root.plot_intrinsic(plot_id)?;
+            let frame = cached_root_frame(
+                registered,
+                size,
+                &request,
+                intrinsic,
+                &root.operation,
+                frames,
+            )?;
+            measure_single_plot(root, registered, measurement, &request, frame, round)
+        }
+        PreparedComposition::Canvas(_) => unreachable!("Plot composition"),
+    }
+}
+
+pub(super) fn prepare_plot_root<'src>(
+    source: &'src PlotDescription,
+    prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<Root<'src>, Error> {
+    prepare_plot_root_with_theme(source, source.resolve_theme()?, prepared_stage)
+}
+
+pub(super) fn prepare_plot_root_with_theme<'src>(
+    source: &'src PlotDescription,
+    theme: ResolvedTheme,
+    prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<Root<'src>, Error> {
+    let text = TextService::default();
+    source.validate_configuration(source.kind())?;
+    let (registry, composition) =
+        crate::plots::shared_x::prepare_plot(source, &prepared_stage.operation(), &theme)?;
+    crate::layout::interior::guide::validate_categorical_scale(
+        source,
+        &registry.panels,
+        &theme,
+        None,
+    )?;
+    complete_plot_root(source, theme, text, registry, composition, prepared_stage)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one preparation tail preserves the original guide, font census and post-font intrinsic producer order"
+)]
+pub(super) fn complete_plot_root<'src>(
+    source: &'src PlotDescription,
+    theme: ResolvedTheme,
+    text: TextService,
+    mut registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
+    mut composition: PreparedComposition,
+    prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<Root<'src>, Error> {
+    let request = TextRequestContext::new(&theme, &text);
+    let facet_guide = source
+        .has_facets()
+        .then(|| {
+            super::prepare_discrete_guide(
+                source,
+                source.kind(),
+                &mut registry,
+                &prepared_stage.operation(),
+            )
+        })
+        .transpose()?;
+    let root_guide = if source.has_facets() {
+        facet_guide
+            .as_ref()
+            .and_then(|guide| guide.descriptor.clone())
+    } else {
+        crate::layout::interior::guide::prepare_discrete_guides(
+            source,
+            &mut registry.panels,
+            &prepared_stage.operation(),
+            false,
+        )?
+    };
+    if let PreparedComposition::Facets(topology) = &mut composition {
+        topology.parent_guide = root_guide
+            .as_ref()
+            .map(|descriptor| {
+                crate::decorations::legend::discrete::GuideSlot::new(
+                    descriptor.clone(),
+                    &crate::layout::ComponentAddress::root(),
+                    source.legend_position_spec(),
                 )
             })
             .transpose()?;
-        let root_guide = if source.description().has_facets() {
-            facet_guide
-                .as_ref()
-                .and_then(|guide| guide.descriptor.clone())
-        } else {
-            crate::layout::interior::guide::prepare_discrete_guides(
-                source.description(),
-                &mut registry.panels,
-                &prepared_stage.operation(),
-                false,
-            )?
-        };
-        let axes = crate::layout::interior::PreparedInteriorInputs::from_registry(
-            registry,
-            crate::layout::interior::InteriorRoute::classify(kind),
-            root_guide,
-        )?;
-        let mut requirements = crate::layout::foundational_plot_requirements(
-            Some(&axes),
-            source.description(),
-            kind,
-            &request,
-            &crate::layout::ComponentAddress::root(),
-            true,
-            true,
-            true,
-            Some(prepared_stage),
-        )?;
-        crate::layout::PreparedTextRequirement::append_preference_metrics(
-            &mut requirements,
-            &request,
-            &crate::layout::ComponentAddress::root(),
-            prepared_stage,
-        )?;
-        let text_topology =
-            crate::layout::PreparedTextCensus::structural_address_count(&requirements)
-                .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
-        let mut scalar_presence = prepared_stage.reserve_scalar_presence_map()?;
-        let mut census = crate::layout::PreparedTextCensus::materialize(
-            requirements,
-            Some(prepared_stage),
-            Some(&mut scalar_presence),
-        )
-        .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
-        if census.counts.structural_addresses != text_topology {
-            return Err(Error::Render(format!(
-                "prepared text topology counted {text_topology} addresses but materialized {}",
-                census.counts.structural_addresses
-            )));
-        }
-        text.prepare_font_environment_from_census(&mut census, scalar_presence, prepared_stage)?;
-        // Scientific preparation and the font census are complete. No
-        // parent width has been allocated when these summaries are retained.
-        axes.prepare_intrinsics(source, &request, &prepared_stage.operation())?;
-        let root_text =
-            crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-                &request,
-                source.description().prose(),
-                None,
-            )?;
-        Ok(Self {
-            operation: prepared_stage.operation(),
-            axes,
-            facet_guide,
-            theme,
-            text,
-            text_census: census,
-            root_text,
-            caches,
-        })
     }
+    let plots = registry.finish()?;
+    let plot_intrinsics = crate::data::source::collect_source(plots.iter().map(|plot| {
+        Ok((
+            plot.scope.id.clone(),
+            super::root::PlotIntrinsics::for_kind(plot.source.kind()),
+        ))
+    }))?;
+    let mut requirements = crate::layout::foundational_plot_requirements(
+        Some(&plots),
+        root_guide.as_ref(),
+        source,
+        source.kind(),
+        &request,
+        &crate::layout::ComponentAddress::root(),
+        true,
+        true,
+        true,
+        Some(prepared_stage),
+    )?;
+    crate::layout::PreparedTextRequirement::append_preference_metrics(
+        &mut requirements,
+        &request,
+        &crate::layout::ComponentAddress::root(),
+        prepared_stage,
+    )?;
+    let text_topology = crate::layout::PreparedTextCensus::structural_address_count(&requirements)
+        .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
+    let mut scalar_presence = prepared_stage.reserve_scalar_presence_map()?;
+    let mut census = crate::layout::PreparedTextCensus::materialize(
+        requirements,
+        Some(prepared_stage),
+        Some(&mut scalar_presence),
+    )
+    .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
+    if census.counts.structural_addresses != text_topology {
+        return Err(Error::Render(format!(
+            "prepared text topology counted {text_topology} addresses but materialized {}",
+            census.counts.structural_addresses
+        )));
+    }
+    text.prepare_font_environment_from_census(&mut census, scalar_presence, prepared_stage)?;
+    // Scientific preparation and the font census are complete. No
+    // parent width has been allocated when these summaries are retained.
+    crate::layout::interior::InteriorRoute::classify(source.kind()).validate(source)?;
+    for (registered, (_, intrinsic)) in plots.iter().zip(&plot_intrinsics) {
+        if registered.axes.coordinate().is_none() {
+            continue;
+        }
+        super::root::prepare_plot_intrinsics(
+            intrinsic,
+            &super::root::PlotIntrinsicInputs {
+                registered,
+                request: TextRequestContext {
+                    theme: &registered.appearance,
+                    ..request
+                },
+                operation: &prepared_stage.operation(),
+                diagnostic_scope: registered.scope.render_name.as_deref(),
+                y_visible: registered.policy.axis_text.tick_labels[1],
+            },
+        )?;
+    }
+    let root_text = crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
+        &request,
+        source.prose(),
+        None,
+    )?;
+    Ok(Root {
+        source: RootSource::Plot(source),
+        identity: prepared_stage.operation().root_identity(),
+        next_candidate: std::cell::Cell::new(0),
+        operation: prepared_stage.operation(),
+        plots,
+        plot_intrinsics,
+        composition,
+        composition_intrinsics: if source.has_facets() {
+            CompositionIntrinsics::Facets
+        } else {
+            CompositionIntrinsics::Single
+        },
+        root_appearance: theme,
+        text,
+        census,
+        root_text,
+        caches: std::cell::RefCell::new(RootLayoutCaches::new(
+            crate::decorations::plan::children::ChildPlans::facets(),
+        )),
+    })
+}
+
+/// Continue a fixture's real, already completed scientific registry at the
+/// original guide/census/font boundary. No statistics or scope is prepared here.
+#[cfg(test)]
+pub(crate) fn complete_prepared_plot_for_test<'src>(
+    source: &'src PlotDescription,
+    appearance: ResolvedTheme,
+    registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
+    composition: PreparedComposition,
+    stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<Root<'src>, Error> {
+    complete_plot_root(
+        source,
+        appearance,
+        TextService::default(),
+        registry,
+        composition,
+        stage,
+    )
 }
 
 /// Keep producer fixtures inside the production prepare/font/measure operation.
@@ -158,10 +356,11 @@ pub(crate) fn with_prepared_plot_for_test<T>(
         &mut crate::orchestrator::registration::PlotRegistryBuilder<'_>,
     ) -> Result<(), Error>,
     visit: impl FnOnce(
-        &Plot,
-        &crate::layout::interior::PreparedInteriorInputs<'_>,
+        &PlotDescription,
+        &Root<'_>,
         &TextRequestContext<'_, '_>,
         &crate::font::canonical::OperationContext,
+        &mut crate::layout::kernel::FeedbackRound,
     ) -> T,
 ) -> Result<T, Error> {
     let mut visit = Some(visit);
@@ -176,10 +375,10 @@ pub(crate) fn with_prepared_plot_for_test<T>(
     crate::layout::plan_root(
         sizing,
         |stage| {
-            let theme = Box::new(appearance.theme.clone());
+            let theme = appearance.theme.clone();
             let text = TextService::default();
             source.description().validate_configuration(source.kind())?;
-            let mut registry = crate::plots::shared_x::prepare_plot(
+            let (mut registry, composition) = crate::plots::shared_x::prepare_plot(
                 source.description(),
                 &stage.operation(),
                 &theme,
@@ -191,28 +390,26 @@ pub(crate) fn with_prepared_plot_for_test<T>(
                 None,
             )?;
             configure(&mut registry)?;
-            PreparedPlotInputs::complete(
-                source,
-                source.kind(),
+            complete_plot_root(
+                source.description(),
                 theme,
                 text,
                 registry,
-                std::cell::RefCell::new(RootLayoutCaches::new(
-                    crate::decorations::plan::children::ChildPlans::facets(),
-                )),
+                composition,
                 stage,
             )
         },
-        |prepared, assigned, _| {
-            let (width, height) = assigned.assigned_size()?.dimensions()?;
-            prepared.axes.route.validate(source.description())?;
-            let plot = source.clone().with_canvas_size(width, height);
-            let request = TextRequestContext::new(&prepared.theme, &prepared.text);
+        |prepared, assigned, round| {
+            assigned.assigned_size()?.dimensions()?;
+            crate::layout::interior::InteriorRoute::classify(source.kind())
+                .validate(source.description())?;
+            let request = prepared.request();
             result = Some(visit.take().expect("one feedback-free producer fixture")(
-                &plot,
-                &prepared.axes,
+                source.description(),
+                prepared,
                 &request,
                 &prepared.operation,
+                round,
             ));
             Ok(crate::layout::MeasuredLayout::new(
                 assigned.assigned_size()?,
@@ -224,49 +421,58 @@ pub(crate) fn with_prepared_plot_for_test<T>(
     Ok(result.expect("producer fixture was measured"))
 }
 
-impl PreparedPlotInputs<'_> {
-    /// This prepared owner freezes its source, theme, fonts and instructions for
-    /// one operation. Only root constraints and traced body minima can change.
-    fn root_frame(
-        &self,
-        source: &Plot,
-        frames: &mut Option<CachedRootFrame>,
-    ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
-        let dimensions = source.canvas_dimensions()?;
-        let request = TextRequestContext::new(&self.theme, &self.text);
-        let intrinsic = self.axes.intrinsic(&self.axes.plots[0]);
-        let minimum = source.intrinsic_body_minimum(
-            self.axes.plots.first(),
-            intrinsic,
-            &self.operation,
-            &request,
-        )?;
-        let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
+pub(crate) fn cached_root_frame(
+    registered: &PlotRegistration<'_>,
+    size: crate::layout::RootSize,
+    request: &TextRequestContext<'_, '_>,
+    intrinsic: &super::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
+    frames: &mut Option<CachedRootFrame>,
+) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
+    let source = registered.source;
+    let dimensions = size.dimensions()?;
+    #[cfg(test)]
+    super::root::FRAME_CACHE_READS.with(|events| events.borrow_mut().push("dimensions"));
+    let minimum = crate::layout::interior::intrinsic_body_minimum(
+        registered,
+        crate::builder::RootFrameDomainInput::Prepared,
+        intrinsic,
+        operation,
+        request,
+    )?;
+    let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
+    #[cfg(test)]
+    super::root::FRAME_CACHE_READS.with(|events| events.borrow_mut().push("minimum"));
 
-        if let Some(cached) = frames.as_ref() {
-            if cached.dimensions == dimensions
-                && cached.minimum == minimum
-                && source.description().same_prose(&cached.prose)
-            {
-                return Ok(std::sync::Arc::clone(&cached.frame));
-            }
+    if let Some(cached) = frames.as_ref() {
+        if cached.dimensions == dimensions
+            && cached.minimum == minimum
+            && source.same_prose(&cached.prose)
+        {
+            #[cfg(test)]
+            super::root::FRAME_CACHE_READS.with(|events| events.borrow_mut().push("hit"));
+            return Ok(std::sync::Arc::clone(&cached.frame));
         }
-        let frame = source.measured_canvas_layout(
-            self.axes.plots.first(),
-            intrinsic,
-            &self.operation,
-            &request,
-        )?;
-
-        let frame = frame.into_shared();
-        *frames = Some(CachedRootFrame {
-            prose: source.description().copy_prose()?,
-            dimensions,
-            minimum,
-            frame: std::sync::Arc::clone(&frame),
-        });
-        Ok(frame)
     }
+    let frame = crate::builder::measure_root_frame(
+        registered,
+        size,
+        crate::builder::RootFrameDomainInput::Prepared,
+        request,
+        intrinsic,
+        operation,
+        &crate::layout::fit::FitScope::root(),
+    )
+    .map_err(crate::layout::fit::PlanError::into_error)?;
+
+    let frame = frame.into_shared();
+    *frames = Some(CachedRootFrame {
+        prose: source.copy_prose()?,
+        dimensions,
+        minimum,
+        frame: std::sync::Arc::clone(&frame),
+    });
+    Ok(frame)
 }
 
 #[cfg(test)]
@@ -323,6 +529,10 @@ fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
 
 #[cfg(test)]
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one prepared operation witnesses minimum-before-cache order and complete prose changes across misses and hits"
+)]
 fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_its_operation() {
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -338,16 +548,42 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
         source.kind(),
         || Ok(Box::new(source.description().resolve_theme()?)),
         |prepared, _| {
-            prepared.axes.route.validate(source.description()).unwrap();
-            let source = source.clone();
+            crate::layout::interior::InteriorRoute::classify(source.kind())
+                .validate(source.description())
+                .unwrap();
+            let registered = &prepared.plots[0];
+            let intrinsic = prepared.plot_intrinsic(&registered.scope.id).unwrap();
+            let request = prepared.request();
+            let frame = |width, frames: &mut Option<CachedRootFrame>| {
+                cached_root_frame(
+                    registered,
+                    crate::layout::RootSize::new(width, 480),
+                    &request,
+                    intrinsic,
+                    &prepared.operation,
+                    frames,
+                )
+                .unwrap()
+            };
 
             let mut caches = prepared.caches.borrow_mut();
             let frames = &mut caches.frames;
             frames.take();
-            let original = prepared.root_frame(&source, frames).unwrap();
+            super::root::FRAME_CACHE_READS.with(|events| events.borrow_mut().clear());
+            let original = frame(640, frames);
+            super::root::FRAME_CACHE_READS.with(|events| {
+                assert_eq!(
+                    &*events.borrow(),
+                    &["dimensions", "minimum", "frame minimum"]
+                );
+                events.borrow_mut().clear();
+            });
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
 
-            let repeated = prepared.root_frame(&source, frames).unwrap();
+            let repeated = frame(640, frames);
+            super::root::FRAME_CACHE_READS.with(|events| {
+                assert_eq!(&*events.borrow(), &["dimensions", "minimum", "hit"]);
+            });
             assert_eq!(original, repeated);
 
             assert_eq!(
@@ -361,9 +597,7 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
             {
                 assert!(left.shares_payload(right));
             }
-            let changed = prepared
-                .root_frame(&source.clone().with_canvas_size(641, 480), frames)
-                .unwrap();
+            let changed = frame(641, frames);
             assert_ne!(changed.panel_box, repeated.panel_box);
 
             assert_eq!(
@@ -375,15 +609,13 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
                 ["Root title", "Independent subtitle", "Immutable caption"]
             );
 
-            let repeated_changed = prepared
-                .root_frame(&source.clone().with_canvas_size(641, 480), frames)
-                .unwrap();
+            let repeated_changed = frame(641, frames);
             assert!(std::sync::Arc::ptr_eq(&changed, &repeated_changed));
 
             let styled = source.clone().title(
                 crate::Text::new("Root title").style(
                     prepared
-                        .theme
+                        .root_appearance
                         .typography
                         .root
                         .title
@@ -392,17 +624,16 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
                         .unwrap(),
                 ),
             );
-            let styled_frame = prepared.root_frame(&styled, frames).unwrap();
-            assert!(!std::sync::Arc::ptr_eq(&original, &styled_frame));
-            assert!(styled_frame.insets.top > original.insets.top);
-            let repeated_style = prepared.root_frame(&styled, frames).unwrap();
-            assert!(std::sync::Arc::ptr_eq(&styled_frame, &repeated_style));
+            frames.as_mut().unwrap().prose = styled.description().copy_prose().unwrap();
+            let restored = frame(641, frames);
+            assert!(!std::sync::Arc::ptr_eq(&changed, &restored));
+            assert_eq!(restored.panel_box, changed.panel_box);
             let reset =
                 styled.title(crate::Text::new("Root title").layout(crate::TextLayout::default()));
-            let reset_frame = prepared.root_frame(&reset, frames).unwrap();
-            assert!(!std::sync::Arc::ptr_eq(&styled_frame, &reset_frame));
-            assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
-            let error = styled_frame
+            frames.as_mut().unwrap().prose = reset.description().copy_prose().unwrap();
+            let reset_frame = frame(641, frames);
+            assert!(!std::sync::Arc::ptr_eq(&restored, &reset_frame));
+            let error = reset_frame
                 .root_text
                 .draw(
                     reset.description().prose(),
@@ -462,7 +693,7 @@ mod soft_hyphen_tests {
                         .unwrap()
                         .1;
                     assert_eq!(title_plan.lines[0].selected_soft_hyphen.is_some(), wrapped);
-                    let census = &prepared.text_census;
+                    let census = &prepared.census;
                     assert!(census
                         .requirements
                         .iter()
@@ -700,12 +931,64 @@ mod natural_sizing_tests {
             )
             .unwrap(),
         )
+        .text_annotation(
+            crate::PlotTextAnnotation::at(
+                crate::TextPosition::new(
+                    crate::TextCoordinate::figure_fraction(0.5).unwrap(),
+                    crate::TextCoordinate::figure_fraction(0.5).unwrap(),
+                ),
+                crate::Text::new("Initial Figure")
+                    .layout(crate::TextLayout::default().anchor(crate::TextAnchor::center())),
+            )
+            .unwrap(),
+        )
         .width(300)
         .erase();
         crate::orchestrator::measurements::start();
-        let plan = PlotPlan::new(&plot, plot.kind()).unwrap();
+        let plan = crate::layout::plan_root(
+            plot.description().sizing_request(),
+            |stage| Root::prepare(RootSource::Plot(plot.description()), stage),
+            Root::measure,
+            |root, size, plan, stage| {
+                let MeasuredRootContent::Single { plot, .. } = &plan.content else {
+                    panic!("selected standalone plot")
+                };
+                let dimensions = plot.selected.dimensions;
+                let figure = dimensions.figure_size();
+                assert_eq!(dimensions.output_override, None);
+                assert_eq!(figure, plan.measurement.measurement_size);
+                assert_eq!(plan.size, size);
+                assert_ne!(figure, size, "the top guide completes a different height");
+
+                let note = plot
+                    .result
+                    .panel_text
+                    .iter()
+                    .find(|note| note.text_plan.source == "Initial Figure")
+                    .expect("actual Figure-reference consumer");
+                let point = note.retained_placement().placement.position;
+                let (width, height) = figure.dimensions()?;
+                assert!(
+                    (point.x + note.text_plan.width() / 2.0 - f64::from(width) / 2.0).abs()
+                        <= 1.0 / 1024.0
+                );
+                assert!((point.y - f64::from(height) / 2.0).abs() <= 1.0 / 1024.0);
+                assert!((point.y - f64::from(size.dimensions()?.1) / 2.0).abs() > 1.0 / 1024.0);
+                let verifier = root.sealed_verifier()?;
+                capture_selected(root, plan, &verifier, stage)
+            },
+        )
+        .unwrap();
+        let (width, height) = plan.dimensions();
+        validate_text_replay_plan(
+            width,
+            height,
+            plan.plan(),
+            "content guide Figure reference Null replay",
+        )
+        .unwrap();
         let observed = crate::orchestrator::measurements::finish();
-        assert_eq!(plan.dimensions().0, 300);
+        assert_eq!(width, 300);
         assert!(observed
             .guides
             .iter()
@@ -734,7 +1017,7 @@ mod natural_sizing_tests {
             || Ok(Box::new(theme)),
             |prepared, _| {
                 assert!(prepared
-                    .text_census
+                    .census
                     .requirements
                     .iter()
                     .any(|entry| entry.text_role
@@ -950,6 +1233,12 @@ mod natural_sizing_tests {
     }
 }
 
+#[cfg(test)]
+pub(super) struct PlotPlan {
+    root: crate::layout::FrozenRoot<TextReplayPlan>,
+}
+
+#[cfg(test)]
 impl PlotPlan {
     pub(super) fn new(source: &Plot, kind: PlotKind) -> Result<Self, Error> {
         Self::new_with_theme_factory(
@@ -970,117 +1259,31 @@ impl PlotPlan {
         Self::new_with_theme_factory(source, kind, || Ok(Box::new(theme)), |_, _| {})
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "ordered axis preparation, font preparation, measurement, and capture lifecycle"
-    )]
     fn new_with_theme_factory(
         source: &Plot,
-        kind: PlotKind,
+        _kind: PlotKind,
         resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
-        #[cfg(test)] inspect: impl FnOnce(&PreparedPlotInputs, &TextReplayPlan),
+        inspect: impl FnOnce(&Root<'_>, &TextReplayPlan),
     ) -> Result<Self, Error> {
         let sizing = source.description().sizing_request();
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let caches = std::cell::RefCell::new(RootLayoutCaches::new(
-            crate::decorations::plan::children::ChildPlans::facets(),
-        ));
         let root = crate::layout::plan_root(
             sizing,
             |prepared_stage| {
-                PreparedPlotInputs::prepare(source, kind, resolve_theme, caches, prepared_stage)
+                prepare_plot_root_with_theme(
+                    source.description(),
+                    *resolve_theme()?,
+                    prepared_stage,
+                )
             },
-            |prepared, assigned, round| {
-                let mut caches = prepared.caches.borrow_mut();
-                let RootLayoutCaches {
-                    children, frames, ..
-                } = &mut *caches;
-                let request = TextRequestContext::new(&prepared.theme, &prepared.text);
-                let assigned =
-                    if let crate::layout::RootRequest::ExactSize { width, height } = assigned {
-                        crate::layout::RootSize::new(width, height)
-                    } else {
-                        prepared.axes.route.validate(source.description())?;
-                        let attached = source.clone();
-                        if source.description().has_facets() {
-                            super::facets::natural_size(
-                                &attached,
-                                &prepared.operation,
-                                &request,
-                                assigned,
-                                round,
-                                prepared.facet_guide.as_ref().expect("prepared facet guide"),
-                                &prepared.axes,
-                            )?
-                        } else {
-                            crate::layout::interior::sizing::plot_size(
-                                &attached,
-                                &prepared.axes,
-                                &prepared.operation,
-                                &request,
-                                assigned,
-                                round,
-                            )?
-                        }
-                    };
-                let (width, height) = assigned.dimensions()?;
-                prepared
-                    .root_text
-                    .check_width(
-                        prepared.theme.root_inner_width(f64::from(width))?,
-                        &crate::layout::fit::FitScope::root(),
-                    )
-                    .map_err(crate::layout::fit::PlanError::into_error)?;
-
-                prepared.axes.route.validate(source.description())?;
-                let source = source.clone().with_canvas_size(width, height);
-                let plan = if source.description().has_facets() {
-                    super::facets::OwnedFacetPlan::measure(
-                        &source,
-                        &prepared.operation,
-                        kind,
-                        &request,
-                        round,
-                        children,
-                        prepared
-                            .facet_guide
-                            .as_ref()
-                            .expect("faceted root guide was prepared"),
-                        sizing.automatic_height(),
-                        &prepared.axes,
-                    )
-                    .map_err(crate::layout::fit::PlanError::into_error)?
-                } else {
-                    measure_single_plot(
-                        &source,
-                        prepared.axes.plots.first(),
-                        prepared.axes.intrinsic(&prepared.axes.plots[0]),
-                        kind,
-                        &request,
-                        prepared.root_frame(&source, frames)?,
-                        round,
-                        sizing.automatic_height(),
-                    )?
-                };
-                children.finish_round(round);
-                let assigned = plan.size;
-                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
-            },
+            Root::measure,
             |prepared, assigned, layout, final_stage| {
-                let request = TextRequestContext::new(&prepared.theme, &prepared.text);
-                let _ = &prepared.text_census;
-                let (width, height) = assigned.dimensions()?;
+                assigned.dimensions()?;
                 #[cfg(test)]
                 let fonts = crate::font::canonical::planning_counts();
-                let replay = capture_text_replay_plan(
-                    width,
-                    height,
-                    "prepared plot scene capture",
-                    &request,
-                    final_stage,
-                    |backend| render_plot_scene(source, kind, width, height, &layout, backend),
-                )?;
+                let verifier = prepared.sealed_verifier()?;
+                let replay = capture_selected(prepared, layout, &verifier, final_stage)?;
                 #[cfg(test)]
                 assert_eq!(
                     crate::font::canonical::planning_counts(),
@@ -1116,7 +1319,7 @@ impl PlotPlan {
 }
 
 fn render_plot_scene(
-    source: &Plot,
+    source: &PlotDescription,
     kind: PlotKind,
     width: u32,
     height: u32,
@@ -1137,63 +1340,105 @@ fn render_plot_scene(
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    reason = "one selected standalone panel retains its original frame completion and legend checks"
-)]
 fn measure_single_plot(
-    source: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
-    kind: PlotKind,
+    root: &Root<'_>,
+    registered: &PlotRegistration<'_>,
+    measurement: RootAssignment,
     theme: &TextRequestContext<'_, '_>,
-    mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
+    canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
     round: &mut crate::layout::kernel::FeedbackRound,
-    content_height: bool,
 ) -> Result<MeasuredOwnedPlan, Error> {
+    let source = registered.source;
+    let kind = source.kind();
+    let intrinsic = root.plot_intrinsic(&registered.scope.id)?;
     let cell = canvas_layout.panel_box;
-    source.description().configured_source_rows()?;
-    let operation = theme.text.prepared_font_environment()?.operation();
-    let mut context = PlotRenderContext::new(
-        registered
-            .expect("prepared standalone plot")
-            .data(&operation)?,
-        cell,
-        theme,
-    )
-    .with_registration(registered.expect("prepared standalone plot"), intrinsic);
-    context.content_height = content_height;
-    source.validate_interior_preparation(registered)?;
+    source.configured_source_rows()?;
+    theme.text.prepared_font_environment()?;
+    let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+    let scope = crate::layout::fit::FitScope::root();
+    let entry = factory.assign(
+        PlotAllocationInputs {
+            dimensions: PlotMeasureDimensions {
+                canvas: measurement.measurement_size,
+                output_override: None,
+            },
+            cell,
+            frame: cell,
+            body: cell,
+            axis_label_width: cell.width(),
+            content_height: root.source.request().automatic_height(),
+            fill_content_height: false,
+            content_preference: None,
+            insets: ParentInsets::consumed(round, &registered.scope.address),
+            guide: GuideTrialAssignment {
+                edge: source.legend_position_spec(),
+                compact: false,
+                allocation: None,
+            },
+        },
+        round,
+        None,
+    )?;
+    super::validate_interior_preparation(registered)?;
     let discrete_guide = if kind == PlotKind::Matrix {
         None
     } else {
-        super::registration::guide_descriptor(registered)?
+        super::registration::guide_descriptor(Some(registered))?
             .map(|descriptor| {
                 crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
                     &crate::layout::ComponentAddress::root()
                         .child(crate::layout::AddressRole::PlotBody, 0)?,
-                    source.description().legend_position_spec(),
+                    source.legend_position_spec(),
                 )
             })
             .transpose()?
     };
-    let panel_plan =
-        crate::layout::fit::measured(crate::decorations::plan::plan_panel_with_context(
-            source,
-            kind,
-            crate::decorations::plan::LegendRole::Panel,
-            context,
-            discrete_guide.as_ref(),
-            round,
-            &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::PlotBody, 0)?,
-        ))
-        .map_err(crate::layout::fit::PlanError::into_error)?;
+    let guides = crate::decorations::legend::discrete::scoped::GuideConsumption {
+        use_kind: super::registration::discrete_guide_use(source, Some(registered)),
+        local_guide: discrete_guide.as_ref(),
+        dependencies: &[],
+    };
+    let panel_plan = crate::layout::fit::measured(crate::decorations::plan::plan_plot(
+        &factory,
+        entry,
+        crate::decorations::plan::LegendRole::Panel,
+        guides,
+        &scope,
+        round,
+    ))
+    .map_err(crate::layout::fit::PlanError::into_error)?;
 
-    let mut plot = panel_plan.plot_with_planned_limits(source);
-    if content_height {
+    complete_single(
+        registered,
+        measurement,
+        canvas_layout,
+        panel_plan,
+        theme,
+        intrinsic,
+        &root.operation,
+        round,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "standalone completion keeps selected geometry and its original intrinsic, operation and feedback owners explicit"
+)]
+pub(crate) fn complete_single(
+    registered: &PlotRegistration<'_>,
+    measurement: RootAssignment,
+    mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
+    panel_plan: std::sync::Arc<MeasuredPlotPlan>,
+    theme: &TextRequestContext<'_, '_>,
+    intrinsic: &super::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
+    round: &mut crate::layout::kernel::FeedbackRound,
+) -> Result<MeasuredOwnedPlan, Error> {
+    let source = registered.source;
+    let kind = source.kind();
+    let mut size = measurement.measurement_size;
+    if panel_plan.selected.content_height {
         let height = crate::layout::kernel::root_dimension(
             canvas_layout.height_for_body(
                 panel_plan
@@ -1204,11 +1449,20 @@ fn measure_single_plot(
                 theme,
             )?,
         )?;
-        plot = plot.with_canvas_size(
+        size = crate::layout::RootSize::new(
             panel_plan.selected.dimensions.canvas_size().dimensions()?.0,
             height,
         );
-        let mut resized = plot.measured_canvas_layout(registered, intrinsic, &operation, theme)?;
+        let mut resized = crate::builder::measure_root_frame(
+            registered,
+            size,
+            crate::builder::RootFrameDomainInput::Selected(&panel_plan.selected),
+            theme,
+            intrinsic,
+            operation,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .map_err(crate::layout::fit::PlanError::into_error)?;
         resized.panel_box = crate::orchestrator::assignment::completion_frame(
             kind,
             &panel_plan.selected,
@@ -1229,12 +1483,10 @@ fn measure_single_plot(
             let scope = crate::layout::fit::FitScope::root()
                 .child(crate::layout::AddressRole::PlotBody, 0)?
                 .child(
-                    crate::decorations::legend::address_role(
-                        source.description().legend_position_spec(),
-                    ),
+                    crate::decorations::legend::address_role(source.legend_position_spec()),
                     0,
                 )?;
-            let (width, height) = plot.canvas_dimensions()?;
+            let (width, height) = size.dimensions()?;
             if geometry.bounds().iter().any(|ink| {
                 ink.left < 0.0
                     || ink.right > f64::from(width)
@@ -1247,11 +1499,11 @@ fn measure_single_plot(
                 ))?;
             }
             let mut layer = String::new();
-            let length = super::registration::render_name(registered)
+            let length = super::registration::render_name(Some(registered))
                 .map_or(Some(6), |scope| scope.len().checked_add(7))
                 .ok_or_else(|| Error::Render("standalone legend layer length overflow".into()))?;
             crate::data::source::reserve_source_string(&mut layer, length)?;
-            if let Some(scope) = super::registration::render_name(registered) {
+            if let Some(scope) = super::registration::render_name(Some(registered)) {
                 layer.push_str(scope);
                 layer.push('-');
             }
@@ -1259,20 +1511,20 @@ fn measure_single_plot(
             Ok::<_, Error>((layer, draw))
         })
         .transpose()?;
-    let (width, height) = plot.canvas_dimensions()?;
     Ok(MeasuredOwnedPlan {
-        size: crate::layout::RootSize::new(width, height),
+        measurement,
+        size,
         frame: canvas_layout,
         root_paint: theme.surfaces.canvas_root,
         content: MeasuredRootContent::Single {
-            plot: std::sync::Arc::new(panel_plan),
+            plot: panel_plan,
             legend,
         },
     })
 }
 
 fn render_single_plot(
-    source: &Plot,
+    source: &PlotDescription,
     kind: PlotKind,
     plot: &MeasuredPlotPlan,
     legend: Option<&(String, crate::decorations::legend::LegendDrawPlan)>,
@@ -1287,8 +1539,8 @@ fn render_single_plot(
             backend,
         )?;
     }
-    source.description().configured_source_rows()?;
-    crate::layout::interior::InteriorRoute::classify(kind).validate(source.description())?;
+    source.configured_source_rows()?;
+    crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
     let rendered = plot.result.draw_body(backend)?;
 
     crate::significance::render_selected(&plot.result, backend)?;
@@ -1306,14 +1558,12 @@ fn render_single_plot(
         }
         DecorationMode::SelfManaged => {}
     }
-    frame
-        .root_text
-        .draw(source.description().prose(), backend)?;
+    frame.root_text.draw(source.prose(), backend)?;
     debug_assert_eq!(rendered, plot.result.decoration_mode);
     Ok(())
 }
+#[cfg(test)]
 impl Plot {
-    #[cfg(test)]
     pub(crate) fn intrinsic_for_test(
         &self,
         theme: &TextRequestContext<'_, '_>,
@@ -1322,10 +1572,11 @@ impl Plot {
             self,
             theme,
             |_| Ok(()),
-            |plot, inputs, request, operation| {
-                plot.intrinsic_body_minimum(
-                    inputs.plots.first(),
-                    inputs.intrinsic(&inputs.plots[0]),
+            |_plot, inputs, request, operation, _round| {
+                crate::layout::interior::intrinsic_body_minimum(
+                    &inputs.plots[0],
+                    crate::builder::RootFrameDomainInput::Prepared,
+                    inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
                     operation,
                     request,
                 )
@@ -1333,16 +1584,6 @@ impl Plot {
         )?
     }
 
-    #[cfg(test)]
-    pub(super) fn render_kind_erased(
-        &self,
-        kind: PlotKind,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        PlotPlan::new(self, kind)?.render(backend)
-    }
-
-    #[cfg(test)]
     pub(crate) fn preflight_panel(
         &self,
         kind: PlotKind,
@@ -1353,53 +1594,48 @@ impl Plot {
             self,
             theme,
             |_| Ok(()),
-            |plot, inputs, request, _operation| {
-                crate::layout::fit::measured(plot.preflight_measurement(
-                    inputs.plots.first(),
-                    Some(inputs.intrinsic(&inputs.plots[0])),
+            |source, root, request, _operation, round| {
+                crate::layout::interior::InteriorRoute::classify(kind).validate(source)?;
+                source.validate_category_order_configuration(kind)?;
+                if !source.significance_annotations().is_empty()
+                    && !kind.supports_significance_annotations()
+                {
+                    return Err(Error::Data(format!(
+                        "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
+                    )));
+                }
+                source.configured_source_rows()?;
+                request.text.prepared_font_environment()?;
+                let measurement = root.assignment_factory().assign(
+                    source
+                        .sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let registered = &root.plots[0];
+                let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+                let entry = factory.assign(
+                    super::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
+                        panel,
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
                     None,
-                    kind,
-                    panel,
-                    request,
-                    &crate::layout::fit::ROOT_SCOPE,
+                )?;
+                crate::layout::fit::measured(crate::layout::fit::outcome(
+                    super::measure_probe(
+                        &factory,
+                        entry,
+                        crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
+                        &crate::layout::fit::ROOT_SCOPE,
+                    )
+                    .map(|(_, result)| result),
                 ))
                 .map_err(crate::layout::fit::PlanError::into_error)
             },
         )?
-    }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the probe borrows its occurrence, intrinsic slot and containing Canvas without storing owner data in Plot"
-    )]
-    pub(crate) fn preflight_measurement(
-        &self,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-        intrinsic: Option<&crate::orchestrator::root::PlotIntrinsics>,
-        canvas: Option<&crate::Canvas>,
-        kind: PlotKind,
-        panel: crate::layout::PixelRect,
-        theme: &TextRequestContext<'_, '_>,
-        scope: &crate::layout::fit::FitScope,
-    ) -> Result<crate::layout::fit::FitOutcome<PlotRenderResult>, Error> {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self.description())?;
-        self.description()
-            .validate_category_order_configuration(kind)?;
-        if !self.description().significance_annotations().is_empty()
-            && !kind.supports_significance_annotations()
-        {
-            return Err(Error::Data(format!(
-                "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
-            )));
-        }
-        self.description().configured_source_rows()?;
-        let operation = theme.text.prepared_font_environment()?.operation();
-        let registered = registered.expect("prepared plot measurement");
-        let mut context = PlotRenderContext::new(registered.data(&operation)?, panel, theme)
-            .with_registration(registered, intrinsic.expect("prepared plot intrinsic slot"))
-            .with_fit_scope(scope);
-        context.canvas = canvas;
-        crate::layout::fit::outcome(self.measure_panel(kind, context))
     }
 }
 
@@ -1409,10 +1645,6 @@ mod root_title_tests {
     use crate::TextAlignment::{Center, End, Start};
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the same root operation prepares fonts and measures independent caption and native-axis reserves"
-    )]
     fn specialized_axis_feedback_cannot_spend_the_root_caption_reserve() {
         let source = Plot::beeswarm(
             crate::CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
@@ -1425,79 +1657,31 @@ mod root_title_tests {
         let mut reserves = Vec::new();
         for caption in ["", "Independent caption\nSecond caption line"] {
             let source = source.clone().caption(caption);
-            let theme = crate::Theme::publication().resolve().unwrap();
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
             let root = crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 800,
                     height: 600,
                 },
-                |stage| {
-                    let mut inputs = crate::plots::shared_x::prepare_plot(
-                        source.description(),
-                        &stage.operation(),
-                        &theme,
-                    )?;
-                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
-                        source.description(),
-                        &mut inputs.panels,
-                        &stage.operation(),
-                        false,
-                    )?;
-                    let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                        inputs,
-                        crate::layout::interior::InteriorRoute::classify(source.kind()),
-                        guide,
-                    )?;
-                    let requirements = crate::layout::foundational_plot_requirements(
-                        Some(&inputs),
-                        source.description(),
-                        source.kind(),
-                        &theme,
-                        &crate::layout::ComponentAddress::root(),
-                        true,
-                        true,
-                        true,
-                        Some(stage),
-                    )?;
-                    let mut presence = stage.reserve_scalar_presence_map()?;
-                    let mut census = crate::layout::PreparedTextCensus::materialize(
-                        requirements,
-                        Some(stage),
-                        Some(&mut presence),
-                    )
-                    .map_err(|error| Error::Render(error.to_string()))?;
-                    text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                    Ok((inputs, stage.operation()))
-                },
-                |(inputs, operation), assigned, round| {
-                    let plot = source.clone();
-                    let plan = measure_single_plot(
-                        &plot,
-                        inputs.plots.first(),
-                        inputs.intrinsic(&inputs.plots[0]),
-                        plot.kind(),
-                        &theme,
-                        plot.measured_canvas_layout(
-                            inputs.plots.first(),
-                            inputs.intrinsic(&inputs.plots[0]),
-                            operation,
+                |stage| Root::prepare(RootSource::Plot(source.description()), stage),
+                Root::measure,
+                |prepared, _, plan, _| {
+                    let theme = prepared.request();
+                    let sizes =
+                        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
                             &theme,
-                        )?
-                        .into_shared(),
-                        round,
-                        false,
+                            source.description().prose(),
+                        )
+                        .map(|role| role.theme.get_font_size());
+                    let clearance = crate::theme::composition::hard(
+                        &theme
+                            .root_title_lengths(sizes)?
+                            .caption_to_content_clearance,
                     )?;
-                    Ok(crate::layout::MeasuredLayout::new(
-                        assigned.assigned_size()?,
-                        plan,
-                    ))
+                    Ok((plan, clearance))
                 },
-                |_, _, plan, _| Ok(plan),
             )
             .unwrap();
-            let plan = root.plan();
+            let (plan, caption_clearance) = root.plan();
             let MeasuredRootContent::Single { plot, .. } = &plan.content else {
                 panic!("measured single plot")
             };
@@ -1510,26 +1694,17 @@ mod root_title_tests {
             );
             let required = plot.result.axes.as_ref().unwrap().requirements();
             let axis_ink_bottom = panel.y0 - required.bottom;
-            let text_sizes =
-                crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
-                    &theme,
-                    source.description().prose(),
-                )
-                .map(|role| role.theme.get_font_size());
             let caption_top = if caption.is_empty() {
                 0.0
             } else {
                 8.0 + crate::theme::composition::hard(&plan.frame.root_text.reserves.bottom)
                     .unwrap()
-                    - crate::theme::composition::hard(
-                        &theme
-                            .root_title_lengths(text_sizes)
-                            .unwrap()
-                            .caption_to_content_clearance,
-                    )
-                    .unwrap()
+                    - caption_clearance
             };
-            assert!(axis_ink_bottom >= caption_top, "caption={caption:?}, body={body:?}, panel={panel:?}, required={required:?}, caption_top={caption_top}, axis_bottom={axis_ink_bottom}");
+            assert!(
+                axis_ink_bottom >= caption_top,
+                "caption={caption:?}, body={body:?}, panel={panel:?}, required={required:?}, caption_top={caption_top}, axis_bottom={axis_ink_bottom}"
+            );
         }
         assert_eq!(reserves[0], reserves[1]);
     }
@@ -1610,10 +1785,6 @@ mod retained_legend_tests {
     use crate::orchestrator::measurements::{self, Counter};
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one prepared font operation carries selected legend operands through mutation, capture and replay"
-    )]
     fn standalone_capture_uses_selected_legend_operands_not_measured_style_or_position() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
@@ -1625,82 +1796,20 @@ mod retained_legend_tests {
             crate::LegendPosition::OutsideRight,
         ))
         .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         measurements::start();
         let root = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 800,
                 height: 600,
             },
-            |stage| {
-                let mut inputs = crate::plots::shared_x::prepare_plot(
-                    source.description(),
-                    &stage.operation(),
-                    &theme,
-                )?;
-                let guide = crate::layout::interior::guide::prepare_discrete_guides(
-                    source.description(),
-                    &mut inputs.panels,
-                    &stage.operation(),
-                    false,
-                )?;
-                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                    inputs,
-                    crate::layout::interior::InteriorRoute::classify(source.kind()),
-                    guide,
-                )?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    Some(&inputs),
-                    source.description(),
-                    source.kind(),
-                    &theme,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
-                )
-                .map_err(|error| Error::Render(error.to_string()))?;
-                theme
-                    .text
-                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, stage.operation()))
-            },
-            |(inputs, operation), assigned, round| {
-                let plot = source.clone();
-                Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
-                    measure_single_plot(
-                        &plot,
-                        inputs.plots.first(),
-                        inputs.intrinsic(&inputs.plots[0]),
-                        plot.kind(),
-                        &theme,
-                        plot.measured_canvas_layout(
-                            inputs.plots.first(),
-                            inputs.intrinsic(&inputs.plots[0]),
-                            operation,
-                            &theme,
-                        )?
-                        .into_shared(),
-                        round,
-                        false,
-                    )?,
-                ))
-            },
-            |(inputs, _), _, mut plan, stage| {
+            |stage| Root::prepare(RootSource::Plot(source.description()), stage),
+            Root::measure,
+            |prepared, _, mut plan, stage| {
+                let theme = prepared.request();
                 let MeasuredRootContent::Single { plot, legend } = &mut plan.content else {
                     panic!("measured single plot")
                 };
-                assert_eq!(plot.plot_id, inputs.plots[0].scope.id);
+                assert_eq!(plot.plot_id, prepared.plots[0].scope.id);
                 assert_eq!(plot.selected.plot_id, plot.plot_id);
                 let (layer, draw) = legend.as_ref().unwrap();
                 assert_eq!(layer, "legend");
@@ -1718,23 +1827,17 @@ mod retained_legend_tests {
                     .unwrap();
                 std::sync::Arc::make_mut(&mut measured.legend.metrics).font_size = f64::NAN;
                 measured.bounds = measured.bounds.translated(10_000.0, 10_000.0);
-                capture_text_replay_plan(
-                    800,
-                    600,
-                    "retained standalone legend",
-                    &theme,
-                    stage,
-                    |backend| {
-                        render_single_plot(
-                            &source,
-                            source.kind(),
-                            plot,
-                            legend.as_ref(),
-                            &plan.frame,
-                            backend,
-                        )
-                    },
-                )
+                let verifier = prepared.sealed_verifier()?;
+                capture_calls(plan.size, &verifier, stage, |backend| {
+                    render_single_plot(
+                        source.description(),
+                        source.kind(),
+                        plot,
+                        legend.as_ref(),
+                        &plan.frame,
+                        backend,
+                    )
+                })
             },
         )
         .unwrap();

@@ -1,11 +1,10 @@
-//! Render orchestration: stable chart entry points and coordinated child modules.
-
-use crate::Error;
+//! Render orchestration over stable descriptions and one root operation.
 
 use crate::builder::Plot;
 #[cfg(test)]
 use crate::render::backend::Backend;
-use crate::spec::{PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotKind, PlotMeasureContext, PlotRenderResult};
+use crate::Error;
 
 mod artifacts;
 pub(crate) mod assignment;
@@ -15,7 +14,7 @@ pub(crate) use facets::{prepare_discrete_guide, prepare_facet_scopes};
 pub(crate) mod layers;
 mod lifecycle;
 #[cfg(test)]
-pub(crate) use lifecycle::with_prepared_plot_for_test;
+pub(crate) use lifecycle::{complete_prepared_plot_for_test, with_prepared_plot_for_test};
 #[cfg(test)]
 pub(crate) mod measurements;
 mod output;
@@ -24,115 +23,12 @@ pub(crate) mod registration;
 pub(crate) mod root;
 mod validation;
 
-#[cfg(test)]
-#[test]
-fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
-    let source = Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 1.0]),
-        crate::NumericValues::new("y", [1.0, 2.0]),
-    )
-    .erase();
-    for prepared in [false, true] {
-        let operation = crate::font::canonical::OperationContext::new();
-        crate::data::with_source_data_for_test(
-            &source,
-            &operation,
-            registration::RowSelection::Full,
-            |data| {
-                let plot = &source;
-                let theme = crate::Theme::publication().resolve().unwrap();
-                let text = crate::text::TextService::default();
-                let theme = crate::text::TextRequestContext::new(&theme, &text);
-                let inputs = prepared.then(|| {
-                    let mut registry = crate::plots::shared_x::prepare_plot(
-                        source.description(),
-                        &operation,
-                        &theme,
-                    )
-                    .unwrap();
-                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
-                        source.description(),
-                        &mut registry.panels,
-                        &operation,
-                        false,
-                    )
-                    .unwrap();
-                    crate::layout::interior::PreparedInteriorInputs::from_registry(
-                        registry,
-                        crate::layout::interior::InteriorRoute::classify(source.kind()),
-                        guide,
-                    )
-                    .unwrap()
-                });
-                let mut context = PlotRenderContext::new(
-                    data,
-                    crate::layout::PixelRect::new(0.0, 400.0, 0.0, 300.0),
-                    &theme,
-                );
-                if let Some(registered) = inputs.as_ref().and_then(|inputs| inputs.plots.first()) {
-                    context = context.with_registration(
-                        registered,
-                        inputs.as_ref().unwrap().intrinsic(registered),
-                    );
-                }
-                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-                RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-                SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(0));
-                measurements::start();
-                let error = plot.measure_panel(PlotKind::Line, context).unwrap_err();
-                assert!(matches!(
-                    error,
-                    crate::layout::fit::PlanError::Fatal(Error::Data(_))
-                ));
-                assert_eq!(
-                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-                    0
-                );
-                assert_eq!(
-                    measurements::finish().counters,
-                    [0; measurements::Counter::ALL.len()]
-                );
-
-                measurements::start();
-                for error in [
-                    plot.measure_panel(PlotKind::Line, context).unwrap_err(),
-                    plot.measure_panel(PlotKind::Line, context).unwrap_err(),
-                ] {
-                    assert!(matches!(
-                        error,
-                        crate::layout::fit::PlanError::Fatal(Error::Data(_))
-                    ));
-                }
-                assert!(matches!(
-                    plot.preflight_measurement(
-                        context.registered,
-                        context.intrinsic,
-                        context.canvas,
-                        PlotKind::Line,
-                        context.panel,
-                        &theme,
-                        &crate::layout::fit::FitScope::root(),
-                    ),
-                    Err(Error::Data(_))
-                ));
-
-                assert_eq!(
-                    measurements::finish().counters,
-                    [0; measurements::Counter::ALL.len()]
-                );
-                assert_eq!(RENDER_PANEL_CALLS.with(std::cell::Cell::get), 0);
-                assert_eq!(SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get), 0);
-            },
-        )
-        .unwrap();
-    }
-}
-
 pub(crate) use artifacts::write_atomic;
-pub(crate) use backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
+pub(crate) use backend::{capture_calls, validate_text_replay_plan, TextReplayPlan};
 #[cfg(test)]
 pub(crate) use backend::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
 pub(crate) use facets::text_census_labels as facet_text_census_labels;
+pub(crate) use lifecycle::{capture_selected, plan_scene, render_scene};
 
 #[cfg(test)]
 thread_local! {
@@ -143,22 +39,23 @@ thread_local! {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
-    /// Validate the complete selected chart without opening or publishing an output.
-    ///
-    /// This erases the compile-time marker and runs the same closed runtime
-    /// dispatch, data, geometry, facet, decoration, and representability path
-    /// used by rendering through a validating null backend.
+    /// Validate the complete selected chart without publishing an output.
     ///
     /// # Errors
     ///
-    /// Returns every error that would be detected before or during rendering.
+    /// Returns an error when preparation, measurement or validating replay fails.
     pub fn preflight(&self) -> Result<(), Error> {
-        crate::kind::into_erased(self.clone()).preflight_erased()
+        plan_scene(root::RootSource::Plot(self.description())).map(|_| ())
     }
 
     #[cfg(test)]
     pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        crate::kind::into_erased(self.clone()).render_with_backend_erased(backend)
+        let frozen = plan_scene(root::RootSource::Plot(self.description()))?;
+        let (width, height) = frozen.dimensions();
+        FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
+        frozen
+            .plan()
+            .replay(width, height, backend, "prepared plot scene replay")
     }
 
     #[cfg(test)]
@@ -167,216 +64,184 @@ impl<K: crate::kind::Marker> Plot<K> {
         kind: PlotKind,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        crate::kind::into_erased(self.clone()).render_kind_erased(kind, backend)
+        self.description().validate_configuration(kind)?;
+        self.render_with_backend(backend)
     }
 }
 
-impl Plot {
-    /// Render the selected plot through a caller-owned backend.
-    ///
-    /// This performs the canonical one-canvas lifecycle but does not create or
-    /// publish files. After a successful `begin`, `end` is attempted exactly
-    /// once even if plot rendering fails. If rendering and finalization both
-    /// fail, the returned error preserves both contexts.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when backend startup or finalization fails, or the
-    /// selected renderer rejects its data or options.
+pub(crate) fn validate_interior_preparation(
+    registered: &registration::PlotRegistration<'_>,
+) -> Result<(), Error> {
+    if crate::layout::interior::InteriorRoute::classify(registered.source.kind()).is_coordinate()
+        && registered.axes.coordinate().is_none()
+    {
+        return Err(Error::Render(
+            "native coordinate panel requires root-prepared axes".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn measure_plot(
+    factory: &assignment::PlotMeasureAssignmentFactory<'_, '_>,
+    entry: assignment::PlotMeasureAssignment,
+    guides: crate::decorations::legend::discrete::scoped::GuideConsumption<'_>,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(assignment::PlotMeasureAssignment, PlotRenderResult), crate::layout::fit::PlanError> {
+    let request =
+        crate::text::TextRequestContext::new(&factory.registered.appearance, factory.text);
+    measure_plot_with_request(factory, entry, guides, scope, &request)
+}
+
+pub(crate) fn measure_probe(
+    factory: &assignment::PlotMeasureAssignmentFactory<'_, '_>,
+    entry: assignment::PlotMeasureAssignment,
+    guides: crate::decorations::legend::discrete::scoped::GuideConsumption<'_>,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(assignment::PlotMeasureAssignment, PlotRenderResult), crate::layout::fit::PlanError> {
+    let source = factory.registered.source;
+    crate::layout::interior::InteriorRoute::classify(source.kind()).validate(source)?;
     #[cfg(test)]
-    fn render_with_backend_erased(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        lifecycle::PlotPlan::new(self, self.kind())?.render(backend)
-    }
-
-    fn preflight_erased(&self) -> Result<(), Error> {
-        lifecycle::PlotPlan::new(self, self.kind()).map(|_| ())
-    }
-
-    pub(crate) fn measure_panel(
-        &self,
-        kind: PlotKind,
-        context: PlotRenderContext<'_, '_>,
-    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self.description())?;
-        #[cfg(test)]
-        {
-            RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
-        }
-        let context = context.with_prepared_axes(self)?;
-        let mut frame = crate::layout::Layout::envelope(context.panel);
-        frame.projection = crate::layout::Projection::new(
-            context.axis_range(crate::layout::AxisSide::Bottom, || Ok((0.0, 1.0)))?,
-            context.axis_range(crate::layout::AxisSide::Left, || Ok((0.0, 1.0)))?,
-            context.panel.as_tuple(),
-        );
-        let appearance = context.theme.theme.clone();
-        let request = crate::text::TextRequestContext {
-            theme: &appearance,
-            ..*context.theme
-        };
-        let directional = request.with_text_projection(
-            context.registered.expect("prepared directional reference"),
-            &frame,
-            self.measure_dimensions()?,
-        );
-        let context = context.with_theme(&directional);
-        match kind {
-            PlotKind::Scatter
-            | PlotKind::Line
-            | PlotKind::Trajectory
-            | PlotKind::LinePath
-            | PlotKind::Histogram
-            | PlotKind::Density
-            | PlotKind::Qq
-            | PlotKind::Regression
-            | PlotKind::Dumbbell
-            | PlotKind::PointInterval
-            | PlotKind::Coefficient
-            | PlotKind::Forest
-            | PlotKind::Bar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar
-            | PlotKind::Boxplot
-            | PlotKind::Violin
-            | PlotKind::Raincloud
-            | PlotKind::Interaction
-            | PlotKind::Heatmap
-            | PlotKind::Beeswarm
-            | PlotKind::Waterfall
-            | PlotKind::Marginal
-            | PlotKind::Matrix => self.measure_selected_interior(
-                crate::orchestrator::registration::discrete_guide_use(
-                    self.description(),
-                    context.registered,
-                ),
-                context,
-            ),
-        }
-    }
-
-    fn validate_interior_preparation(
-        &self,
-        registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
-    ) -> Result<(), Error> {
-        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_coordinate()
-            && registered
-                .and_then(|registered| registered.axes.coordinate())
-                .is_none()
-        {
-            return Err(Error::Render(
-                "native coordinate panel requires root-prepared axes".into(),
-            ));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn measure_selected_interior(
-        &self,
-        guide_use: crate::decorations::legend::discrete::scoped::GuideUse,
-        context: PlotRenderContext<'_, '_>,
-    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        use crate::layout::interior::{InteriorRoute as R, SpecializedGrid as G};
-        let guides = crate::decorations::legend::discrete::scoped::GuideConsumption {
-            use_kind: guide_use,
-            ..*context.guides
-        };
-        let context = context.with_guides(&guides);
-        self.validate_interior_preparation(context.registered)?;
-        #[cfg(test)]
-        SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
-        let context = context.with_prepared_axes(self)?;
-        let (context, explanation) = crate::numeric::values::reserve(self, context)?;
-        let mut result = match R::classify(self.kind()) {
-            route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {
-                route.measure(self, context)?
-            }
-            R::SpecializedGrid(G::Matrix) => crate::plots::matrix::measure(self, context)?,
-            R::SpecializedGrid(G::Marginal) => crate::plots::marginal::measure(self, context)?,
-            R::SpecializedGrid(G::Heatmap) => crate::plots::heatmap::measure(self, context)?,
-            R::SpecializedGrid(G::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
-            R::SpecializedGrid(G::Waterfall) => crate::plots::waterfall::measure(self, context)?,
-        };
-
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        if let Some(explanation) = &explanation {
-            geometry.text(explanation.placement, &explanation.plan, None)?;
-        }
-        if matches!(
-            self.kind(),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
+    RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
+    let mut frame = crate::layout::Layout::envelope(entry.body);
+    {
+        let context = factory.context(&entry, guides, scope)?;
+        let [x, y] = if matches!(
+            entry.domains,
+            assignment::AxisDomainAssignments::Matrix { .. }
         ) {
-            if let Some(significance) = &result.significance {
-                for bracket in &significance.brackets {
-                    geometry.bracket(crate::render::backend::PlannedSignificanceCall {
-                        bracket: &bracket.geometry,
-                        style: &bracket.style,
-                        label: &bracket.label,
-                    })?;
-                }
+            [(0.0, 1.0); 2]
+        } else {
+            [
+                context.axis_range(crate::layout::AxisSide::Bottom)?,
+                context.axis_range(crate::layout::AxisSide::Left)?,
+            ]
+        };
+        frame.projection = crate::layout::Projection::new(x, y, entry.body.as_tuple());
+    }
+    let appearance = factory.registered.appearance.clone();
+    let request = crate::text::TextRequestContext::new(&appearance, factory.text);
+    let request = request.with_text_projection(factory.registered, &frame, entry.dimensions);
+    let guides = crate::decorations::legend::discrete::scoped::GuideConsumption {
+        use_kind: registration::discrete_guide_use(source, Some(factory.registered)),
+        ..guides
+    };
+    measure_plot_with_request(factory, entry, guides, scope, &request)
+}
+
+fn measure_plot_with_request(
+    factory: &assignment::PlotMeasureAssignmentFactory<'_, '_>,
+    entry: assignment::PlotMeasureAssignment,
+    guides: crate::decorations::legend::discrete::scoped::GuideConsumption<'_>,
+    scope: &crate::layout::fit::FitScope,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<(assignment::PlotMeasureAssignment, PlotRenderResult), crate::layout::fit::PlanError> {
+    validate_interior_preparation(factory.registered)?;
+    #[cfg(test)]
+    SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
+    let (entry, explanation) =
+        crate::numeric::values::reserve(factory, entry, guides, request, scope)?;
+    let result = {
+        let context = factory.context(&entry, guides, scope)?;
+        let result = crate::layout::interior::measure(&context, request)?;
+        finish_selected_interior(&context, result, explanation, request)?
+    };
+    Ok((entry, result))
+}
+
+/// Finish the original selected-interior tail after the scientific producer.
+/// The caller supplies its already selected request and explanation, never a
+/// second measurement or a reconstructed context.
+fn finish_selected_interior(
+    context: &PlotMeasureContext<'_, '_>,
+    mut result: PlotRenderResult,
+    explanation: Option<crate::render::backend::PlacedText>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    let source = context.registered.source;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
+    if let Some(explanation) = &explanation {
+        geometry.text(explanation.placement, &explanation.plan, None)?;
+    }
+    if matches!(
+        source.kind(),
+        PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
+    ) {
+        if let Some(significance) = &result.significance {
+            for bracket in &significance.brackets {
+                geometry.bracket(crate::render::backend::PlannedSignificanceCall {
+                    bracket: &bracket.geometry,
+                    style: &bracket.style,
+                    label: &bracket.label,
+                })?;
             }
         }
-        let guides = layers::GuideSnapshot::measure(self.description(), &result, &mut geometry)?;
-        validate_frozen_axes_and_guides(context.registered, &mut result)?;
-        result.panel_text = crate::decorations::panel_text::measure_plans(
-            context.registered.expect("prepared panel text reference"),
-            self.measure_dimensions()?,
-            &result.layout,
-            context.theme,
-            context.fit_scope(),
-        )?;
-        let panel_clip = if self
-            .description()
-            .panel_text_annotations()
-            .iter()
-            .any(|annotation| {
-                annotation.position().as_corner().is_none()
-                    || annotation.content().get_layout().is_some_and(|layout| {
-                        layout
-                            .instructions()
-                            .overflow
-                            .as_ref()
-                            .is_some_and(|overflow| overflow.failure == crate::TextFailure::Visible)
-                    })
-            }) {
-            let (width, height) = self.figure_dimensions()?;
-            crate::layout::PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height))
-        } else {
-            result.layout.projection.panel_box()
-        };
-        let canonical_clip = crate::render::backend::validate_clip_region(panel_clip)?.panel();
-        let text = crate::data::source::collect_source(result.panel_text.iter().map(|plan| {
-            let placed = plan.retained_placement();
-            geometry.text(placed.placement, &placed.plan, Some(canonical_clip))?;
-            Ok(placed)
-        }))?;
-        let panel_layer = if self.description().panel_text_annotations().is_empty() {
-            None
-        } else {
-            let mut name = String::new();
-            let length = registration::render_name(context.registered)
-                .map_or(Some(10), |scope| scope.len().checked_add(11))
-                .ok_or_else(|| Error::Render("panel text layer name overflow".into()))?;
-            crate::data::source::reserve_source_string(&mut name, length)?;
-            if let Some(scope) = registration::render_name(context.registered) {
-                name.push_str(scope);
-                name.push('-');
-            }
-            name.push_str("panel-text");
-            Some(name)
-        };
-        result.annotations = Some(crate::data::source::source_arc(
-            crate::layout::interior::SelectedAnnotationPlan {
-                guides,
-                panel_layer,
-                panel_clip,
-                text,
-                geometry,
-                explanation,
-            },
-        )?);
-        Ok(result)
     }
+    let guides = layers::GuideSnapshot::measure(source, &result, &mut geometry)?;
+    validate_frozen_axes_and_guides(Some(context.registered), &mut result)?;
+    result.panel_text = crate::decorations::panel_text::measure_plans(
+        context.registered,
+        context.assignment.local.dimensions,
+        &result.layout,
+        request,
+        context.fit_scope,
+    )?;
+    let panel_clip = if source.panel_text_annotations().iter().any(|annotation| {
+        annotation.position().as_corner().is_none()
+            || annotation.content().get_layout().is_some_and(|layout| {
+                layout
+                    .instructions()
+                    .overflow
+                    .as_ref()
+                    .is_some_and(|overflow| overflow.failure == crate::TextFailure::Visible)
+            })
+    }) {
+        let (width, height) = context
+            .assignment
+            .local
+            .dimensions
+            .figure_size()
+            .dimensions()?;
+        crate::layout::PixelRect::new(0.0, f64::from(width), 0.0, f64::from(height))
+    } else {
+        result.layout.projection.panel_box()
+    };
+    let canonical_clip = crate::render::backend::validate_clip_region(panel_clip)?.panel();
+    let text = crate::data::source::collect_source(result.panel_text.iter().map(|plan| {
+        let placed = plan.retained_placement();
+        geometry.text(placed.placement, &placed.plan, Some(canonical_clip))?;
+        Ok(placed)
+    }))?;
+    let panel_layer = if source.panel_text_annotations().is_empty() {
+        None
+    } else {
+        let mut name = String::new();
+        let length = context
+            .registered
+            .scope
+            .render_name
+            .as_ref()
+            .map_or(Some(10), |scope| scope.len().checked_add(11))
+            .ok_or_else(|| Error::Render("panel text layer name overflow".into()))?;
+        crate::data::source::reserve_source_string(&mut name, length)?;
+        if let Some(scope) = &context.registered.scope.render_name {
+            name.push_str(scope);
+            name.push('-');
+        }
+        name.push_str("panel-text");
+        Some(name)
+    };
+    result.annotations = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedAnnotationPlan {
+            guides,
+            panel_layer,
+            panel_clip,
+            text,
+            geometry,
+            explanation,
+        },
+    )?);
+    Ok(result)
 }
 
 fn validate_frozen_axes_and_guides(
@@ -403,6 +268,21 @@ fn validate_axis_text(
     layout
         .measure_axes(theme, scope, layout.test_semantics())
         .map(|_| ())
+}
+
+#[cfg(test)]
+#[test]
+fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 2.0]),
+    );
+    let before = crate::font::canonical::planning_counts();
+    let error = crate::layout::interior::InteriorRoute::classify(PlotKind::Line)
+        .validate(source.description())
+        .unwrap_err();
+    assert!(matches!(error, Error::Data(_)));
+    assert_eq!(crate::font::canonical::planning_counts(), before);
 }
 
 #[cfg(test)]

@@ -6,9 +6,12 @@ use crate::alpha::{
 };
 use crate::Error;
 
+use crate::builder::PlotDescription;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::layout::{Layout, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor};
-use crate::spec::{AxisScale, EstimateStatus, PlotRenderContext, PlotRenderResult};
+use crate::spec::{AxisScale, EstimateStatus, PlotMeasureContext};
+#[cfg(test)]
 use crate::Plot;
 
 #[cfg(test)]
@@ -933,21 +936,18 @@ fn prepare_model<'a>(
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Estimate { marks, .. } => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render("estimate measurement requires root-prepared semantics".into())
-        })?;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Estimate { marks, .. } => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| Error::Render("estimate measurement requires root-prepared semantics".into()))?;
 
-    project(chart, prepared, layout, context)
+    project(chart, prepared, layout, context, request)
 }
 
 #[expect(
@@ -956,15 +956,15 @@ pub(crate) fn measure_marks(
     reason = "project rows and their selected text in scientific order before capture"
 )]
 fn project(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &PreparedEstimate,
-    layout: Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    layout: &Layout,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let theme = request;
     let labels = &context
         .registered
-        .expect("prepared Estimate occurrence")
         .axes
         .categories(1)
         .expect("prepared Estimate categories")
@@ -978,8 +978,7 @@ fn project(
         .reference
         .filter(|value| *value >= x_range.0 && *value <= x_range.1)
         .map(|value| layout.projection.project(value, 0.0).0);
-    let significance =
-        theme.effective_significance(chart.description().significance_mark_style_override())?;
+    let significance = theme.effective_significance(chart.significance_mark_style_override())?;
     let reference_style = if point_interval {
         theme
             .marks
@@ -1016,10 +1015,7 @@ fn project(
             .filter(|(_, _, significance)| *significance)
             .map(|(index, _, _)| Ok(index)),
     )?;
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let raw_windows = context.registered.raw_windows();
     let adjacent_label_plans = crate::layout::fit::collect( "estimate adjacent labels", (0..labels.len())
         .map(|index| {
             let Some(tuple) = estimates[index] else {
@@ -1111,7 +1107,7 @@ fn project(
         reference_style,
         rows: Vec::new(),
     };
-    let point_style = chart.description().point_style(
+    let point_style = chart.point_style(
         theme,
         crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
         theme.marks.get_points().get_radii().get_interval_estimate(),
@@ -1201,7 +1197,7 @@ fn project(
             let (plan, x) = plan_not_estimable(
                 theme,
                 &detail_label,
-                &layout,
+                layout,
                 reference_line_x,
                 &payload.reference_style,
                 &context
@@ -1335,21 +1331,16 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    )
-    .with_deferred_annotation_text(deferred_annotation_text);
-    result
-        .numeric_presentation
-        .clone_from(&prepared.value_presentation);
-    result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(crate::data::source::source_arc(
+    let mut result = MeasuredCoordinateMarks::new(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Estimate(payload),
             geometry,
         },
     )?);
+    result.deferred_annotation_text = deferred_annotation_text;
+    result
+        .numeric_presentation
+        .clone_from(&prepared.value_presentation);
     Ok(result)
 }
 

@@ -4,7 +4,12 @@ use crate::Error;
 use std::fmt::Write;
 
 use super::plan::{MeasuredOwnedPlan, MeasuredRootContent};
+#[cfg(test)]
+use super::registration::PlotOccurrenceId;
+use super::root::{GridSlot, PreparedFacetTopology, Root};
+#[cfg(test)]
 use crate::builder::Plot;
+use crate::builder::PlotDescription;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
@@ -22,19 +27,70 @@ mod sizing;
 mod tracks;
 pub(super) use sizing::natural_size;
 
+#[cfg(test)]
+thread_local! {
+    #[expect(
+        clippy::type_complexity,
+        reason = "one test observation retains occurrence, phase, extents and provenance without another owner record"
+    )]
+    static FACTORY_PHASES: std::cell::RefCell<Vec<(
+        PlotOccurrenceId,
+        Option<crate::decorations::plan::children::MeasurementPhase>,
+        [(f64, f64); 2],
+        [crate::layout::RangeProvenance; 2],
+    )>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn observe_factory_phase(
+    id: &PlotOccurrenceId,
+    phase: Option<crate::decorations::plan::children::MeasurementPhase>,
+    assignment: &super::assignment::PlotMeasureAssignment,
+) {
+    if let super::assignment::AxisDomainAssignments::Pair(axes) = &assignment.domains {
+        FACTORY_PHASES.with(|events| {
+            events.borrow_mut().push((
+                id.clone(),
+                phase,
+                axes.each_ref().map(|axis| axis.extent.pair()),
+                axes.each_ref().map(|axis| axis.provenance),
+            ));
+        });
+    }
+}
+
 pub(crate) fn text_census_labels(
     source: &crate::builder::PlotDescription,
+    plots: Option<&[super::registration::PlotRegistration<'_>]>,
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let selectors = data::facet_selectors(source)?;
-    for panel in data::extract_panels(source, &selectors, None)? {
+    for (index, (_, extracted_cell, _)) in data::extract_facet_rows(source, selectors)?
+        .1
+        .into_iter()
+        .enumerate()
+    {
+        let (source, cell) = match plots {
+            // Source-only census still visits authored facet labels without
+            // requiring an occurrence inventory.
+            None | Some([]) => (source, &extracted_cell),
+            Some(plots) => {
+                let registered = &plots[index];
+                (
+                    registered.source,
+                    registered
+                        .scope
+                        .numeric_owner
+                        .facet
+                        .as_ref()
+                        .expect("prepared facet occurrence"),
+                )
+            }
+        };
+        let fields = data::fields(source, cell);
         if source.text_layouts().facet.iter().any(Option::is_some) {
-            for (index, selector) in panel.cell.iter().enumerate() {
-                let role = if panel.cell.as_slice().len() == 1 {
-                    1
-                } else {
-                    index
-                };
+            for (index, (_, values, level)) in fields.iter().enumerate() {
+                let role = if cell.dimensions() == 1 { 1 } else { index };
                 if source.text_layouts().facet[role]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
@@ -44,38 +100,38 @@ pub(crate) fn text_census_labels(
                 visit(
                     format_args!(
                         "{} = {}",
-                        source.resolve_label(&selector.variable)?,
-                        source.resolve_label(&selector.level)?
+                        source.resolve_label(values.name())?,
+                        source.resolve_label(level)?
                     )
                     .into(),
                 )?;
             }
             continue;
         }
-        match panel.cell.as_slice() {
+        match fields.as_slice() {
             [] => visit("".into())?,
-            [selector] => visit(
+            [(_, values, level)] => visit(
                 format_args!(
                     "{} = {}",
-                    source.resolve_label(&selector.variable)?,
-                    source.resolve_label(&selector.level)?
+                    source.resolve_label(values.name())?,
+                    source.resolve_label(level)?
                 )
                 .into(),
             )?,
-            [row, column] => visit(
+            [(_, row, row_level), (_, column, column_level)] => visit(
                 format_args!(
                     "{} = {} | {} = {}",
-                    source.resolve_label(&row.variable)?,
-                    source.resolve_label(&row.level)?,
-                    source.resolve_label(&column.variable)?,
-                    source.resolve_label(&column.level)?
+                    source.resolve_label(row.name())?,
+                    source.resolve_label(row_level)?,
+                    source.resolve_label(column.name())?,
+                    source.resolve_label(column_level)?
                 )
                 .into(),
             )?,
             _ => {
                 return Err(Error::Render(
                     "facet text census has more than two selectors".into(),
-                ))
+                ));
             }
         }
     }
@@ -87,7 +143,7 @@ pub(crate) fn prepare_facet_scopes<'src>(
     builder: &mut super::registration::PlotRegistryBuilder<'src>,
     appearance: &crate::theme::ResolvedTheme,
     operation: &crate::font::canonical::OperationContext,
-) -> Result<(), Error> {
+) -> Result<PreparedFacetTopology, Error> {
     if !source.significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
@@ -97,25 +153,14 @@ pub(crate) fn prepare_facet_scopes<'src>(
         )));
     }
     let selectors = data::facet_selectors(source)?;
-    let panels = data::extract_panels(source, &selectors, None)?;
+    let (mut shell, panels) = data::extract_facet_rows(source, selectors)?;
     data::validate_significance_facet_anchors(source, &panels)?;
-    for (slot, panel) in panels.into_iter().enumerate() {
-        let cell = match panel.cell.as_slice() {
-            [one] => Some(crate::FacetCell::single(
-                crate::data::source::copy_source_string(&one.level)?,
-            )),
-            [row, column] => Some(crate::FacetCell::grid(
-                crate::data::source::copy_source_string(&row.level)?,
-                crate::data::source::copy_source_string(&column.level)?,
-            )),
-            [] => None,
-            _ => {
-                return Err(Error::Render(
-                    "numeric facet identity requires at most two selectors".into(),
-                ))
-            }
-        };
-        let render_name = panel.render_scope()?;
+    let mut producers = Vec::new();
+    crate::data::source::reserve_source(&mut producers, panels.len())?;
+    let mut shared_axis_members = [Vec::new(), Vec::new()];
+    let mut shared_titles_from = None;
+    for (slot, (grid_slot, cell, rows)) in panels.into_iter().enumerate() {
+        let render_name = data::render_scope(source, &cell)?;
         let scope = super::registration::Scope::new(
             source,
             operation,
@@ -125,12 +170,12 @@ pub(crate) fn prepare_facet_scopes<'src>(
                 u32::try_from(slot)
                     .map_err(|_| Error::Render("facet address overflowed".into()))?,
             )?,
-            panel.rows,
-            cell.as_ref(),
+            rows,
+            Some(&cell),
             Some(render_name),
         )?;
-        let policy = super::registration::PlotScopePolicy::for_source(source, cell.as_ref());
-        builder.reserve(
+        let policy = super::registration::PlotScopePolicy::for_source(source, Some(&cell));
+        let id = builder.reserve(
             source,
             scope.address,
             scope.numeric_owner,
@@ -141,8 +186,37 @@ pub(crate) fn prepare_facet_scopes<'src>(
             appearance.clone(),
             operation,
         )?;
+        shared_titles_from.get_or_insert_with(|| id.clone());
+        for (side, fixed) in [
+            matches!(
+                source.facet_scales_spec(),
+                FacetScales::Fixed | FacetScales::FreeY
+            ),
+            matches!(
+                source.facet_scales_spec(),
+                FacetScales::Fixed | FacetScales::FreeX
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if fixed {
+                crate::data::source::reserve_source(&mut shared_axis_members[side], 1)?;
+                shared_axis_members[side].push(id.clone());
+            }
+        }
+        shell.slots[grid_slot.0].plot_id = Some(id);
+        producers.push(grid_slot);
     }
-    Ok(())
+    Ok(PreparedFacetTopology {
+        rows: shell.rows,
+        columns: shell.columns,
+        slots: shell.slots,
+        producers,
+        shared_axis_members,
+        shared_titles_from: shared_titles_from.expect("observed facet producer"),
+        parent_guide: None,
+    })
 }
 
 pub(crate) struct PreparedFacetGuide {
@@ -151,7 +225,7 @@ pub(crate) struct PreparedFacetGuide {
 }
 
 pub(crate) fn prepare_discrete_guide(
-    source: &Plot,
+    source: &PlotDescription,
     kind: PlotKind,
     inputs: &mut super::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
@@ -169,7 +243,7 @@ pub(crate) struct OwnedFacetPlan {
 }
 
 pub(super) struct OwnedFacetChild {
-    slot: super::root::GridSlot,
+    slot: GridSlot,
     plot: std::sync::Arc<crate::decorations::plan::MeasuredPlotPlan>,
     strips: Vec<crate::render::backend::PlacedText>,
     strip_layer: String,
@@ -184,17 +258,18 @@ impl OwnedFacetPlan {
         reason = "the legacy parent adapter keeps complete-frame guide trials explicit"
     )]
     pub(super) fn measure(
-        source: &Plot,
-        operation: &crate::font::canonical::OperationContext,
-        kind: PlotKind,
+        source: &PlotDescription,
+        root: &Root<'_>,
+        topology: &PreparedFacetTopology,
+        measurement: super::assignment::RootAssignment,
         theme: &TextRequestContext<'_, '_>,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
-        prepared_guide: &PreparedFacetGuide,
         content_sizing: bool,
-        inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
     ) -> Result<MeasuredOwnedPlan, crate::layout::fit::PlanError> {
-        if !source.description().significance_annotations().is_empty()
+        let kind = source.kind();
+        let operation = &root.operation;
+        if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
@@ -203,10 +278,10 @@ impl OwnedFacetPlan {
             .into());
         }
 
-        let selectors = data::facet_selectors(source.description())?;
+        let selectors = data::facet_selectors(source)?;
         let [horizontal_axis_label, vertical_axis_label] =
-            source.description().prepare_axis_labels(None)?;
-        for registered in &inputs.plots {
+            super::registration::prepare_axis_labels(root.plot(&topology.shared_titles_from)?)?;
+        for registered in &root.plots {
             registered.axes.retain_axis_labels([
                 horizontal_axis_label.as_ref(),
                 vertical_axis_label.as_ref(),
@@ -214,6 +289,7 @@ impl OwnedFacetPlan {
         }
         let mut canvas_layout = planning::canvas_layout(
             source,
+            measurement.measurement_size,
             theme,
             horizontal_axis_label.as_ref(),
             vertical_axis_label.as_ref(),
@@ -222,31 +298,38 @@ impl OwnedFacetPlan {
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
         theme.text.prepared_font_environment()?;
-        let (base_plot, _, _, _) = data::base_plot(source, kind)?;
-        let mut panels = data::extract_panels(source.description(), &selectors, None)?;
-        data::validate_significance_facet_anchors(source.description(), &panels)?;
+        data::parent_orders(source, kind)?;
+        let (_shell, panels) = data::extract_facet_rows(source, selectors)?;
+        data::validate_significance_facet_anchors(source, &panels)?;
         let mut minima = Vec::new();
         crate::data::source::reserve_source(&mut minima, panels.len())?;
         for index in 0..panels.len() {
-            let scoped = base_plot.clone();
-            minima.push(scoped.intrinsic_body_minimum(
-                inputs.plots.get(index),
-                inputs.intrinsic(&inputs.plots[index]),
+            let registered = root.plot(
+                topology.slots[topology.producers[index].0]
+                    .plot_id
+                    .as_ref()
+                    .expect("facet occurrence"),
+            )?;
+            minima.push(crate::layout::interior::intrinsic_body_minimum(
+                registered,
+                crate::builder::RootFrameDomainInput::Prepared,
+                root.plot_intrinsic(&registered.scope.id)?,
                 operation,
                 theme,
             )?);
         }
         let provisional_content = content_sizing.then_some(tracks::ContentSizing {
-            operation,
-            plot: &base_plot,
-            inputs,
+            root,
+            topology,
+            windows: [source.x_axis_spec(), source.y_axis_spec()]
+                .map(|axis| axis.window.map(crate::layout::RawWindow::pair)),
             round,
             natural_width: false,
             natural_height: false,
         });
         let provisional = fit::measured(tracks::allocate(
             outer,
-            (selectors.rows, selectors.columns),
+            (topology.rows, topology.columns),
             &panels,
             &minima,
             &[],
@@ -255,23 +338,35 @@ impl OwnedFacetPlan {
             provisional_content.as_ref(),
         ))?
         .cells;
-        for facet in &mut panels {
-            facet.panel = provisional[facet.row * selectors.columns + facet.column];
-        }
-        let facet_scales = source.description().facet_scales_spec();
+        let facet_scales = source.facet_scales_spec();
 
-        let (base_plot, preflight) = legend::preflight_coordinated_panels(
-            source, base_plot, kind, &panels, inputs, theme, children, round,
+        let preflight = legend::preflight_coordinated_panels(
+            source,
+            root,
+            topology,
+            &measurement,
+            &panels,
+            &provisional,
+            theme,
+            children,
+            round,
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
-        let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
-        let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
-        let shared_plot =
-            base_plot.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
-        let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
-        let discrete_guide = prepared_guide.descriptor.as_ref();
-        let position = source.description().legend_position_spec();
+        let horizontal = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
+        let vertical = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
+        let windows = planning::feedback_domains(
+            source,
+            &panels,
+            [horizontal, vertical],
+            facet_scales,
+            round,
+        )?;
+        let discrete_guide = topology
+            .parent_guide
+            .as_ref()
+            .map(|guide| &guide.descriptor);
+        let position = source.legend_position_spec();
         let automatic = position == LegendPosition::Auto && discrete_guide.is_some();
         let automatic_edges = [
             LegendPosition::OutsideRight,
@@ -288,19 +383,19 @@ impl OwnedFacetPlan {
             .child(crate::decorations::legend::address_role(position), 0)?;
         let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
         let mut columns =
-            crate::data::source::collect_source((0..selectors.columns).map(|_| Ok(positive_span)))?;
+            crate::data::source::collect_source((0..topology.columns).map(|_| Ok(positive_span)))?;
         let mut rows =
-            crate::data::source::collect_source((0..selectors.rows).map(|_| Ok(positive_span)))?;
+            crate::data::source::collect_source((0..topology.rows).map(|_| Ok(positive_span)))?;
 
-        for (facet, hard) in panels.iter().zip(&minima) {
-            columns[facet.column] = columns[facet.column].max(hard.0);
-            rows[facet.row] = rows[facet.row].max(hard.1);
+        for ((slot, _, _), hard) in panels.iter().zip(&minima) {
+            columns[slot.0 % topology.columns] = columns[slot.0 % topology.columns].max(hard.0);
+            rows[slot.0 / topology.columns] = rows[slot.0 / topology.columns].max(hard.1);
         }
         let mut minimum = (
             columns.iter().sum::<f64>()
-                + selectors.columns.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
+                + topology.columns.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
             rows.iter().sum::<f64>()
-                + selectors.rows.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
+                + topology.rows.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
         );
         if !minimum.0.is_finite() || !minimum.1.is_finite() {
             return Err(Error::Render("facet intrinsic grid span overflowed".into()).into());
@@ -310,12 +405,12 @@ impl OwnedFacetPlan {
         let grid = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::FacetGrid, 0)?;
         let mut columns = Vec::new();
-        crate::data::source::reserve_source(&mut columns, selectors.columns)?;
-        columns.resize(selectors.columns, [0.0_f64; 2]);
+        crate::data::source::reserve_source(&mut columns, topology.columns)?;
+        columns.resize(topology.columns, [0.0_f64; 2]);
         let mut rows = Vec::new();
-        crate::data::source::reserve_source(&mut rows, selectors.rows)?;
-        rows.resize(selectors.rows, [0.0_f64; 2]);
-        for (index, panel) in panels.iter().enumerate() {
+        crate::data::source::reserve_source(&mut rows, topology.rows)?;
+        rows.resize(topology.rows, [0.0_f64; 2]);
+        for (index, (slot, _, _)) in panels.iter().enumerate() {
             let address = grid.child(
                 crate::layout::AddressRole::FacetCell,
                 u32::try_from(index)
@@ -323,10 +418,11 @@ impl OwnedFacetPlan {
             )?;
             let [left, right, bottom, top] =
                 round.insets(&address, crate::layout::kernel::FeedbackKind::AxisGutter);
-            columns[panel.column][0] = columns[panel.column][0].max(left);
-            columns[panel.column][1] = columns[panel.column][1].max(right);
-            rows[panel.row][0] = rows[panel.row][0].max(bottom);
-            rows[panel.row][1] = rows[panel.row][1].max(top);
+            columns[slot.0 % topology.columns][0] = columns[slot.0 % topology.columns][0].max(left);
+            columns[slot.0 % topology.columns][1] =
+                columns[slot.0 % topology.columns][1].max(right);
+            rows[slot.0 / topology.columns][0] = rows[slot.0 / topology.columns][0].max(bottom);
+            rows[slot.0 / topology.columns][1] = rows[slot.0 / topology.columns][1].max(top);
         }
         minimum.0 += columns.iter().flatten().sum::<f64>();
         minimum.1 += rows.iter().flatten().sum::<f64>();
@@ -407,15 +503,15 @@ impl OwnedFacetPlan {
                                 guide.compute_box_width() + gap
                             };
                         let height = match sizing::grid_height(
-                            &shared_plot,
-                            operation,
+                            root,
+                            topology,
                             &panels,
-                            (selectors.rows, selectors.columns),
+                            windows,
+                            (topology.rows, topology.columns),
                             &minima,
                             theme,
                             round,
                             grid_width,
-                            inputs,
                         )? {
                             FitOutcome::Measured(height) => height,
                             FitOutcome::Miss(reason) => {
@@ -431,11 +527,12 @@ impl OwnedFacetPlan {
                         let height = crate::layout::kernel::root_dimension(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source
-                            .clone()
-                            .with_canvas_size(source.canvas_dimensions()?.0, height);
                         canvas_layout = planning::canvas_layout(
-                            &owner,
+                            source,
+                            crate::layout::RootSize::new(
+                                measurement.measurement_size.dimensions()?.0,
+                                height,
+                            ),
                             theme,
                             horizontal_axis_label.as_ref(),
                             vertical_axis_label.as_ref(),
@@ -462,24 +559,25 @@ impl OwnedFacetPlan {
                 } else {
                     if content_sizing {
                         let height = fit::measured(sizing::grid_height(
-                            &shared_plot,
-                            operation,
+                            root,
+                            topology,
                             &panels,
-                            (selectors.rows, selectors.columns),
+                            windows,
+                            (topology.rows, topology.columns),
                             &minima,
                             theme,
                             round,
                             canvas_layout.panel_box.width(),
-                            inputs,
                         ))?;
                         let height = crate::layout::kernel::root_dimension(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source
-                            .clone()
-                            .with_canvas_size(source.canvas_dimensions()?.0, height);
                         canvas_layout = planning::canvas_layout(
-                            &owner,
+                            source,
+                            crate::layout::RootSize::new(
+                                measurement.measurement_size.dimensions()?.0,
+                                height,
+                            ),
                             theme,
                             horizontal_axis_label.as_ref(),
                             vertical_axis_label.as_ref(),
@@ -557,12 +655,14 @@ impl OwnedFacetPlan {
                     outside_legend.as_mut(),
                 );
                 let measured = planning::native_parent(
-                    operation,
-                    &shared_plot,
-                    &mut panels,
+                    source,
+                    root,
+                    topology,
+                    &measurement,
+                    &panels,
+                    windows,
                     outer,
-                    (selectors.rows, selectors.columns),
-                    facet_scales,
+                    (topology.rows, topology.columns),
                     theme,
                     round,
                     &preflight,
@@ -573,9 +673,8 @@ impl OwnedFacetPlan {
                     &scope,
                     children,
                     content_sizing,
-                    inputs,
                 )?;
-                let (planned_plot, mut children, grid) = match measured {
+                let (mut children, grid) = match measured {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
                         #[cfg(test)]
@@ -613,8 +712,20 @@ impl OwnedFacetPlan {
                 }
                 let mut strip_text = Vec::new();
                 crate::render::backend::reserve_text_records(&mut strip_text, panels.len())?;
-                for facet in &panels {
-                    strip_text.push(rendering::plan_facet_strip(&planned_plot, facet, theme)?);
+                for (index, (slot, _, _)) in panels.iter().enumerate() {
+                    let registered = &root.plots[children[index].plot.plot_id.slot];
+                    strip_text.push(rendering::plan_facet_strip(
+                        registered.source,
+                        registered
+                            .scope
+                            .numeric_owner
+                            .facet
+                            .as_ref()
+                            .expect("prepared facet occurrence"),
+                        *slot,
+                        grid.cells[slot.0],
+                        theme,
+                    )?);
                 }
                 for role in 0..2 {
                     let members = crate::data::source::collect_source(
@@ -657,9 +768,18 @@ impl OwnedFacetPlan {
 
                 crate::data::source::reserve_source(&mut legends, panels.len())?;
                 crate::data::source::reserve_source(&mut strip_layers, panels.len())?;
-                for (index, (facet, child)) in panels.iter().zip(&children).enumerate() {
+                for (index, ((slot, _, _), child)) in panels.iter().zip(&children).enumerate() {
                     let panel = &child.plot;
-                    let scope = facet.render_scope()?;
+                    let registered = &root.plots[child.plot.plot_id.slot];
+                    let scope = data::render_scope(
+                        registered.source,
+                        registered
+                            .scope
+                            .numeric_owner
+                            .facet
+                            .as_ref()
+                            .expect("prepared facet occurrence"),
+                    )?;
                     let mut layers = [String::new()];
                     for (layer, suffix) in layers.iter_mut().zip(["legend"]) {
                         let length = scope
@@ -688,11 +808,11 @@ impl OwnedFacetPlan {
                     );
                     let mut layer = String::new();
                     crate::data::source::reserve_source_string(&mut layer, 32)?;
-                    write!(layer, "facet-strip-{}", facet.panel_index).expect("reserved index");
+                    write!(layer, "facet-strip-{}", slot.0).expect("reserved index");
                     strip_layers.push(layer);
                 }
                 let dimensions = (
-                    source.canvas_dimensions()?.0,
+                    measurement.measurement_size.dimensions()?.0,
                     crate::layout::kernel::root_dimension(
                         canvas_layout.panel_box.y1 + canvas_layout.insets.top,
                     )?,
@@ -737,6 +857,7 @@ impl OwnedFacetPlan {
                     trial.complete(&guide_outcome);
                 }
                 return Ok(MeasuredOwnedPlan {
+                    measurement,
                     size: crate::layout::RootSize::new(dimensions.0, dimensions.1),
                     frame: canvas_layout.into_shared(),
                     root_paint: theme.surfaces.canvas_root,
@@ -760,6 +881,8 @@ impl OwnedFacetPlan {
         outside_legend: Option<&ResolvedLegend>,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
+        use crate::decorations::legend::discrete::scoped::GuideAllocation;
+
         round.begin_owner(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::FacetGrid, 0)?,
@@ -781,7 +904,20 @@ impl OwnedFacetPlan {
             };
             round.observe_count(usize::from(legend.is_some()))?;
             if let Some(legend) = legend {
-                legend.observe_feedback(round)?;
+                let available_width = match (
+                    index,
+                    outside_legend,
+                    plan.selected.guide.allocation.as_ref(),
+                ) {
+                    (0, Some(parent), _) => parent.legend.available_width(),
+                    (_, _, Some(GuideAllocation::Width(width)))
+                        if crate::decorations::plan::is_outside(plan.selected.guide.edge) =>
+                    {
+                        *width
+                    }
+                    _ => legend.legend.available_width(),
+                };
+                legend.observe_feedback(round, available_width)?;
             }
         }
         rendering::observe_arranged_chrome(self, round)
@@ -789,7 +925,7 @@ impl OwnedFacetPlan {
 
     pub(super) fn render(
         &self,
-        source: &Plot,
+        source: &PlotDescription,
         kind: PlotKind,
         frame: &crate::layout::RootFramePlan,
         backend: &mut dyn Backend,
@@ -847,9 +983,7 @@ mod feedback_tests {
         reason = "the production regression compares free and fixed scales through complete cached and uncached roots"
     )]
     fn dirty_facet_child_reuses_only_independent_neighbors_with_exact_output() {
-        use crate::decorations::plan::children::{
-            ChildPlans, CHILD_MEASUREMENTS, DISABLE_CHILD_REUSE,
-        };
+        use crate::decorations::plan::children::{CHILD_MEASUREMENTS, DISABLE_CHILD_REUSE};
         use crate::layout::{AddressRole, ComponentAddress};
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
@@ -884,77 +1018,53 @@ mod feedback_tests {
             for disabled in [true, false] {
                 DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
                 CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
-                let theme = crate::Theme::publication().resolve().unwrap();
-                let text = crate::text::TextService::default();
-                let theme = crate::text::TextRequestContext::new(&theme, &text);
-                let mut children = ChildPlans::facets();
+                let appearance = crate::Theme::publication().resolve().unwrap();
                 let mut calls = 0;
                 let mut retained_neighbor = None;
                 let root = crate::layout::plan_root(
                     source.description().sizing_request(),
                     |stage| {
-                        let mut inputs = crate::plots::shared_x::prepare_plot(
+                        let (registry, composition) = crate::plots::shared_x::prepare_plot(
                             source.description(),
                             &stage.operation(),
-                            &theme,
+                            &appearance,
                         )?;
-                        let guide = prepare_discrete_guide(
-                            &source,
-                            PlotKind::Scatter,
-                            &mut inputs,
-                            &stage.operation(),
-                        )?;
-                        let inputs =
-                            crate::layout::interior::PreparedInteriorInputs::from_registry(
-                                inputs,
-                                crate::layout::interior::InteriorRoute::classify(source.kind()),
-                                guide.descriptor.clone(),
-                            )?;
-                        let requirements = crate::layout::foundational_plot_requirements(
-                            Some(&inputs),
+                        super::super::complete_prepared_plot_for_test(
                             source.description(),
-                            PlotKind::Scatter,
-                            &theme,
-                            &ComponentAddress::root(),
-                            true,
-                            true,
-                            true,
-                            Some(stage),
-                        )?;
-                        let mut presence = stage.reserve_scalar_presence_map()?;
-                        let mut census = crate::layout::PreparedTextCensus::materialize(
-                            requirements,
-                            Some(stage),
-                            Some(&mut presence),
-                        )
-                        .map_err(|error| Error::Render(error.to_string()))?;
-                        theme.text.prepare_font_environment_from_census(
-                            &mut census,
-                            presence,
+                            appearance,
+                            registry,
+                            composition,
                             stage,
-                        )?;
-                        Ok((inputs, guide, stage.operation()))
+                        )
                     },
-                    |(inputs, guide, operation), assigned, round| {
-                        let source = source.clone();
+                    |prepared, assigned, round| {
                         calls += 1;
+                        let super::super::root::PreparedComposition::Facets(topology) =
+                            &prepared.composition
+                        else {
+                            panic!("facet topology")
+                        };
+                        let theme = prepared.request();
+                        let mut caches = prepared.caches.borrow_mut();
+                        let children = &mut caches.children;
                         let plan = OwnedFacetPlan::measure(
-                            &source,
-                            operation,
-                            PlotKind::Scatter,
+                            source.description(),
+                            prepared,
+                            topology,
+                            prepared
+                                .assignment_factory()
+                                .assign(assigned.assigned_size()?),
                             &theme,
                             round,
-                            &mut children,
-                            guide,
+                            children,
                             false,
-                            inputs,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?;
                         let MeasuredRootContent::Facets(content) = &plan.content else {
                             panic!("measured facet content")
                         };
                         for (index, (child, registered)) in
-                            content.children.iter().zip(&inputs.plots).enumerate()
+                            content.children.iter().zip(&prepared.plots).enumerate()
                         {
                             assert_eq!(child.plot.plot_id, registered.scope.id);
                             assert_eq!(child.plot.selected.plot_id, child.plot.plot_id);
@@ -992,7 +1102,7 @@ mod feedback_tests {
                             plan,
                         ))
                     },
-                    |_, assigned, plan, stage| {
+                    |prepared, assigned, plan, stage| {
                         let MeasuredRootContent::Facets(content) = &plan.content else {
                             panic!("measured facet content")
                         };
@@ -1025,14 +1135,18 @@ mod feedback_tests {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        let replay = crate::orchestrator::capture_text_replay_plan(
-                            width,
-                            height,
-                            "facet child reuse test",
-                            &theme,
+                        let verifier = prepared.sealed_verifier()?;
+                        let replay = crate::orchestrator::capture_calls(
+                            assigned,
+                            &verifier,
                             stage,
                             |backend| {
-                                content.render(&source, PlotKind::Scatter, &plan.frame, backend)
+                                content.render(
+                                    source.description(),
+                                    PlotKind::Scatter,
+                                    &plan.frame,
+                                    backend,
+                                )
                             },
                         )?;
                         crate::orchestrator::validate_text_replay_plan(
@@ -1123,87 +1237,65 @@ mod feedback_tests {
         .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
-        let theme = source.description().resolve_theme().unwrap();
-        let text_service = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text_service);
         crate::layout::plan_root(
             source.description().sizing_request(),
             |stage| {
-                let mut inputs = crate::plots::shared_x::prepare_plot(
+                let appearance = source.description().resolve_theme()?;
+                let (inputs, composition) = crate::plots::shared_x::prepare_plot(
                     source.description(),
                     &stage.operation(),
-                    &theme,
+                    &appearance,
                 )?;
-                assert!(inputs.panels.iter().all(|registered| registered
-                    .axes
-                    .as_ref()
-                    .unwrap()
-                    .sources()
-                    .iter()
-                    .all(|source| source.label.get().is_none())));
-                let guide = prepare_discrete_guide(
-                    &source,
-                    PlotKind::Scatter,
-                    &mut inputs,
-                    &stage.operation(),
-                )?;
-                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
+                assert!(inputs.panels.iter().all(|registered| {
+                    registered
+                        .axes
+                        .as_ref()
+                        .unwrap()
+                        .sources()
+                        .iter()
+                        .all(|source| source.label.get().is_none())
+                }));
+                super::super::complete_prepared_plot_for_test(
+                    source.description(),
+                    appearance,
                     inputs,
-                    crate::layout::interior::InteriorRoute::classify(source.kind()),
-                    guide.descriptor.clone(),
-                )?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    Some(&inputs),
-                    source.description(),
-                    PlotKind::Scatter,
-                    &theme,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
+                    composition,
+                    stage,
                 )
-                .map_err(|error| Error::Render(error.to_string()))?;
-                theme
-                    .text
-                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, guide, stage.operation()))
             },
-            |(inputs, guide, operation), assigned, round| {
-                let source = source.clone();
-                assert!(inputs
-                    .plots
-                    .iter()
-                    .all(
-                        |registered| (0..2).all(|side| registered.axes.sources()[side]
-                            .label
-                            .get()
-                            .is_some()
-                            && registered.axes.label(registered, side).is_none())
-                    ));
+            |prepared, assigned, round| {
+                assert!(prepared.plots.iter().all(|registered| {
+                    (0..2).all(|side| {
+                        registered.axes.sources()[side].label.get().is_some()
+                            && registered.axes.label(registered, side).is_none()
+                    })
+                }));
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    OwnedFacetPlan::measure(
-                        &source,
-                        operation,
-                        PlotKind::Scatter,
-                        &theme,
-                        round,
-                        &mut crate::decorations::plan::children::ChildPlans::facets(),
-                        guide,
-                        false,
-                        inputs,
-                    )
-                    .map_err(crate::layout::fit::PlanError::into_error)?,
+                    {
+                        let super::super::root::PreparedComposition::Facets(topology) =
+                            &prepared.composition
+                        else {
+                            panic!("facet topology")
+                        };
+                        let mut caches = prepared.caches.borrow_mut();
+                        OwnedFacetPlan::measure(
+                            source.description(),
+                            prepared,
+                            topology,
+                            prepared
+                                .assignment_factory()
+                                .assign(assigned.assigned_size()?),
+                            &prepared.request(),
+                            round,
+                            &mut caches.children,
+                            false,
+                        )
+                        .map_err(crate::layout::fit::PlanError::into_error)?
+                    },
                 ))
             },
-            |_, assigned, plan, stage| {
+            |prepared, assigned, plan, stage| {
                 let MeasuredRootContent::Facets(content) = &plan.content else {
                     panic!("measured facet content")
                 };
@@ -1213,11 +1305,12 @@ mod feedback_tests {
                     .flat_map(|child| &child.strips)
                     .chain(&content.shared_titles)
                     .collect::<Vec<_>>();
-                assert!(expected.iter().any(|text| text
-                    .plan
-                    .lines
-                    .iter()
-                    .any(|line| line.selected_soft_hyphen.is_some())));
+                assert!(expected.iter().any(|text| {
+                    text.plan
+                        .lines
+                        .iter()
+                        .any(|line| line.selected_soft_hyphen.is_some())
+                }));
                 assert!(content
                     .shared_titles
                     .iter()
@@ -1235,15 +1328,17 @@ mod feedback_tests {
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
                 let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                 let projections = crate::layout::Projection::test_projection_calls();
-                let (width, height) = assigned.dimensions()?;
-                let replay = crate::orchestrator::capture_text_replay_plan(
-                    width,
-                    height,
-                    "facet producer closure",
-                    &theme,
-                    stage,
-                    |backend| content.render(&source, PlotKind::Scatter, &plan.frame, backend),
-                )?;
+                let (_, height) = assigned.dimensions()?;
+                let verifier = prepared.sealed_verifier()?;
+                let replay =
+                    crate::orchestrator::capture_calls(assigned, &verifier, stage, |backend| {
+                        content.render(
+                            source.description(),
+                            PlotKind::Scatter,
+                            &plan.frame,
+                            backend,
+                        )
+                    })?;
                 crate::font::canonical::FONT_SHAPE_CALLS
                     .with(|calls| assert_eq!(calls.get(), 0, "first capture must not shape"));
                 assert_eq!(
@@ -1275,10 +1370,6 @@ mod feedback_tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one actual containing-frame trial verifies the selected parent guide and shared title after the complete grid remeasurement"
-    )]
     fn automatic_shared_facet_guide_remeasures_the_whole_grid() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),
@@ -1302,75 +1393,25 @@ mod feedback_tests {
         .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM")
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let root = crate::layout::plan_root(
             source.description().sizing_request(),
             |stage| {
-                let mut inputs = crate::plots::shared_x::prepare_plot(
-                    source.description(),
-                    &stage.operation(),
-                    &theme,
-                )?;
-                let guide = prepare_discrete_guide(
-                    &source,
-                    PlotKind::Scatter,
-                    &mut inputs,
-                    &stage.operation(),
-                )?;
-                let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-                    inputs,
-                    crate::layout::interior::InteriorRoute::classify(source.kind()),
-                    guide.descriptor.clone(),
-                )?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    Some(&inputs),
-                    source.description(),
-                    PlotKind::Scatter,
-                    &theme,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
+                Root::prepare(
+                    super::super::root::RootSource::Plot(source.description()),
+                    stage,
                 )
-                .map_err(|error| Error::Render(format!("facet D1 census: {error}")))?;
-                theme
-                    .text
-                    .prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok((inputs, guide, stage.operation()))
             },
-            |(inputs, guide, operation), assigned, round| {
-                let source = source.clone();
-                Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
-                    OwnedFacetPlan::measure(
-                        &source,
-                        operation,
-                        PlotKind::Scatter,
-                        &theme,
-                        round,
-                        &mut crate::decorations::plan::children::ChildPlans::facets(),
-                        guide,
-                        false,
-                        inputs,
-                    )
-                    .map_err(crate::layout::fit::PlanError::into_error)?,
-                ))
-            },
+            Root::measure,
             |_, _, plan, _| Ok(plan),
         )
         .unwrap();
         let MeasuredRootContent::Facets(plan) = &root.plan().content else {
             panic!("measured facet content")
         };
+        assert!(plan.parent_guide.is_some());
+        assert!(plan.children.iter().all(|child| {
+            child.plot.legend.is_none() && child.plot.selected.guide.allocation.is_none()
+        }));
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         plan.parent_guide
             .as_ref()

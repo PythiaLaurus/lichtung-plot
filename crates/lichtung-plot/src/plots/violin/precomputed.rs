@@ -4,15 +4,16 @@ use crate::alpha::{
 };
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::geometry::{category_value, finite};
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
 use crate::render::backend::Point2D;
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::PlotMeasureContext;
 use crate::theme::CategoryColors;
-use crate::Plot;
 
 #[derive(Debug)]
 pub(crate) struct PreparedRaincloud {
@@ -21,7 +22,7 @@ pub(crate) struct PreparedRaincloud {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -88,9 +89,8 @@ pub(crate) fn intrinsic_body_minimum(
         };
     }
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let point = chart
-        .description()
-        .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
+    let point =
+        chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
     let point = crate::alpha::marks::point_ink(
         &point,
         prepared.groups.iter().flat_map(|group| {
@@ -328,57 +328,47 @@ pub(crate) fn prepare(
 }
 
 pub(super) fn measure_marks(
-    chart: &Plot,
+    chart: &PlotDescription,
     input: &PreparedRaincloud,
-    context: PlotRenderContext<'_, '_>,
-    layout: Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let theme = request;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
-    let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
+    let data = context.data()?;
+    let colors = crate::plots::categorical_distribution::retained(Some(context.family()?))?
         .resolved_colors(
-            chart.description(),
-            &context
-                .registered
-                .expect("prepared supplied Raincloud occurrence")
-                .axes,
+            chart,
+            &context.registered.axes,
             context
                 .registered
-                .expect("prepared supplied Raincloud occurrence")
                 .categorical
                 .as_ref()
                 .expect("prepared color binding"),
             theme,
             data.source_resources(),
+            false,
         )?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());
     for (index, group) in input.groups.iter().enumerate() {
         let color = colors.color(group.hue.as_deref().unwrap_or(&group.category))?;
-        project_cloud_and_summary(&layout, group, color, index, theme, &mut payload)?;
+        project_cloud_and_summary(layout, group, color, index, theme, &mut payload)?;
     }
     for (index, group) in input.groups.iter().enumerate() {
         let color = colors.color(group.hue.as_deref().unwrap_or(&group.category))?;
         project_strip(
-            &layout,
+            layout,
             group,
-            &chart
-                .description()
-                .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color),
+            &chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color),
             index,
             theme,
             &mut payload,
             context.fit_scope(),
         )?;
     }
-    payload.retain(
-        PlotRenderResult::new(
-            layout,
-            crate::orchestrator::registration::guide_descriptor(context.registered)?,
-        ),
-        context,
-    )
+    payload.retain(layout, context)
 }
 
 fn project_cloud_and_summary(

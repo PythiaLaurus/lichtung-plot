@@ -10,49 +10,50 @@
 
 use crate::Error;
 
+use crate::builder::PlotDescription;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::layout::{Layout, PhysicalTextAlignment, PixelRect, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
-use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::Plot;
+use crate::spec::PlotMeasureContext;
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let theme = request;
 
-    let mode = bar_data::mode(chart.description());
-    let prepared = bar_data::retained(context.prepared_family())?;
+    let mode = bar_data::mode(chart);
+    let prepared = bar_data::retained(Some(context.family()?))?;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
+    let data = context.data()?;
     let series = &prepared.series;
     let binding = context
         .registered
-        .expect("prepared Bar occurrence")
         .categorical
         .as_ref()
         .expect("prepared color binding");
     let categories = &context
         .registered
-        .expect("prepared Bar occurrence")
         .axes
         .categories(1)
         .expect("prepared Bar categories")
         .raw;
     let (colors, accents) = bar_data::resolved_colors(
-        chart.description(),
-        &context.registered.expect("prepared Bar occurrence").axes,
+        chart,
+        &context.registered.axes,
         binding,
         theme,
         data.source_resources(),
     )?;
     let y_count = categories.len() as f64;
-    let panel_box = context.panel;
+    let panel_box = context.assignment.local.body;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;
     let mut attached_label_plans = bar_data::attached_significance_text_plans(
         context,
+        request,
         &prepared.significance,
         &attached.appearance.label,
         |mark| {
@@ -67,7 +68,7 @@ pub(crate) fn measure_marks(
     )?;
     let base_x_range = layout.projection.x_range();
     let mark_range = range_for_bar_marks(
-        context.registered.expect("prepared Bar occurrence"),
+        context.registered,
         prepared,
         panel_box,
         base_x_range,
@@ -123,11 +124,8 @@ pub(crate) fn measure_marks(
         }
     }
     let significance = crate::significance::plan_horizontal(
-        context.registered.expect("prepared Bar occurrence"),
-        context
-            .registered
-            .expect("prepared Bar occurrence")
-            .significance_annotations(),
+        context.registered,
+        context.registered.significance_annotations(),
         categories,
         series,
         &rendered_maxima,
@@ -151,7 +149,7 @@ pub(crate) fn measure_marks(
         context.fit_scope(),
         true,
         domain_expansion.is_some(),
-        |mark, plan| place_bar_significance(&attached, mark, plan, series.len(), &layout),
+        |mark, plan| place_bar_significance(&attached, mark, plan, series.len(), layout),
     )?;
 
     let mut payload = bar_data::BarPayload {
@@ -171,7 +169,7 @@ pub(crate) fn measure_marks(
     crate::data::source::reserve_source(&mut payload.bars, prepared.bars.len())?;
     crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;
     crate::data::source::reserve_source(&mut payload.points, prepared.points.len())?;
-    if chart.description().zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
+    if chart.zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, y_count);
         payload.zero = Some([Point2D::new(x, y0), Point2D::new(x, y1)]);
@@ -181,7 +179,7 @@ pub(crate) fn measure_marks(
             bar,
             series.len(),
             mode,
-            chart.description().bar_spacing_spec(),
+            chart.bar_spacing_spec(),
             true,
             theme.marks.get_extents().get_categories(),
         );
@@ -233,7 +231,7 @@ pub(crate) fn measure_marks(
             mark,
             text_plan,
             series.len(),
-            &layout,
+            layout,
         )?);
     }
     for point in &prepared.points {
@@ -250,27 +248,20 @@ pub(crate) fn measure_marks(
             .push((Point2D::new(projected.0, projected.1), point.style.clone()));
     }
     payload.domain_expansion = bar_data::automatic_numeric_ink_expansion(
-        context.registered.expect("prepared Bar occurrence"),
+        context.registered,
         prepared,
         categories,
         &payload,
         &layout.projection,
         context.fit_scope(),
     )?;
-    let mut result = PlotRenderResult::new(
-        layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
-    )
-    .with_significance_plan(significance)
-    .with_deferred_annotation_text(crate::data::source::collect_source(
-        attached_label_plans.into_iter().map(|plan| {
+    let deferred =
+        crate::data::source::collect_source(attached_label_plans.into_iter().map(|plan| {
             Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
                 plan,
             ))
-        }),
-    )?);
-    result.y_domain = crate::spec::AxisDomain::Categorical;
-    payload.retain(result, context, chart, prepared)
+        }))?;
+    payload.retain(layout, significance, deferred, context, chart, prepared)
 }
 
 fn range_for_bar_marks(

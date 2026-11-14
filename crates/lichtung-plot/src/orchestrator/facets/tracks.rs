@@ -1,14 +1,16 @@
 //! Facet Grid assignments retain sparse coordinates and separate measured
 //! decoration gutters from the aligned data-panel tracks.
 
-use super::data::FacetPanel;
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{FitOutcome, FitScope};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
+use crate::orchestrator::registration::RowSelection;
+use crate::orchestrator::root::{GridSlot, PreparedFacetTopology, Root};
 use crate::Error;
+use crate::FacetCell;
 
 #[expect(
     clippy::cast_precision_loss,
@@ -26,10 +28,10 @@ fn checked(value: i128) -> Result<i64, Error> {
     i64::try_from(value).map_err(|_| Error::Render("facet track arithmetic overflowed".into()))
 }
 
-pub(super) struct ContentSizing<'a> {
-    pub operation: &'a crate::font::canonical::OperationContext,
-    pub plot: &'a crate::Plot,
-    pub inputs: &'a crate::layout::interior::PreparedInteriorInputs<'a>,
+pub(super) struct ContentSizing<'a, 'src> {
+    pub root: &'a Root<'src>,
+    pub topology: &'a PreparedFacetTopology,
+    pub windows: [Option<(f64, f64)>; 2],
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub natural_width: bool,
     pub natural_height: bool,
@@ -47,12 +49,12 @@ pub(super) struct GridAssignment {
 pub(super) fn allocate(
     outer: PixelRect,
     shape: (usize, usize),
-    panels: &[FacetPanel],
+    panels: &[(GridSlot, FacetCell, RowSelection)],
     minima: &[(f64, f64)],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
-    content: Option<&ContentSizing<'_>>,
+    content: Option<&ContentSizing<'_, '_>>,
 ) -> Result<FitOutcome<GridAssignment>, Error> {
     Ok(
         match measure(
@@ -77,11 +79,11 @@ pub(super) fn allocate(
 
 pub(super) fn natural_width(
     shape: (usize, usize),
-    panels: &[FacetPanel],
+    panels: &[(GridSlot, FacetCell, RowSelection)],
     minima: &[(f64, f64)],
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
-    content: &ContentSizing<'_>,
+    content: &ContentSizing<'_, '_>,
 ) -> Result<FitOutcome<f64>, Error> {
     if !content.natural_width {
         return Err(Error::Render(
@@ -127,12 +129,12 @@ enum Measurement {
 fn measure(
     outer: PixelRect,
     shape: (usize, usize),
-    panels: &[FacetPanel],
+    panels: &[(GridSlot, FacetCell, RowSelection)],
     minima: &[(f64, f64)],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
     theme: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
-    content: Option<&ContentSizing<'_>>,
+    content: Option<&ContentSizing<'_, '_>>,
     phase: Phase,
 ) -> Result<FitOutcome<Measurement>, Error> {
     let (rows, columns) = shape;
@@ -158,15 +160,19 @@ fn measure(
         // Initial root width owns the same external axis columns as assigned
         // layout. Feedback can refine those requirements, but cannot grow a
         // root whose natural selection omitted them entirely.
-        for (index, panel) in panels.iter().enumerate() {
-            let plot = content.plot.clone();
+        for (slot, _, _) in panels {
+            let id = content.topology.slots[slot.0]
+                .plot_id
+                .as_ref()
+                .expect("facet producer");
+            let registered = content.root.plot(id)?;
             let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
-                &plot,
-                content.inputs.plots.get(index),
-                content.operation,
+                registered.source,
+                Some(registered),
+                &content.root.operation,
                 theme,
             )?;
-            let insets = column_insets.get_mut(panel.column).ok_or_else(|| {
+            let insets = column_insets.get_mut(slot.0 % columns).ok_or_else(|| {
                 Error::Render("facet child is outside declared Grid topology".into())
             })?;
             insets[0] = insets[0].max(required(left)?);
@@ -189,8 +195,8 @@ fn measure(
     let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut owners = Vec::new();
     crate::data::source::reserve_source(&mut owners, panels.len())?;
-    for panel in panels {
-        if panel.row >= rows || panel.column >= columns {
+    for (slot, _, _) in panels {
+        if slot.0 / columns >= rows {
             return Err(Error::Render(
                 "facet child is outside declared Grid topology".into(),
             ));
@@ -198,7 +204,7 @@ fn measure(
         owners.push(
             grid.child(
                 AddressRole::FacetCell,
-                u32::try_from(panel.panel_index)
+                u32::try_from(slot.0)
                     .map_err(|_| Error::Render("facet cell address overflowed".into()))?,
             )?,
         );
@@ -207,24 +213,28 @@ fn measure(
     let mut heights = Vec::new();
     crate::data::source::reserve_source(&mut widths, panels.len())?;
     crate::data::source::reserve_source(&mut heights, panels.len())?;
-    for (index, ((panel, minimum), address)) in panels.iter().zip(minima).zip(&owners).enumerate() {
+    for (((slot, _, _), minimum), address) in panels.iter().zip(minima).zip(&owners) {
         let preferred = if let Some(content) = content {
-            let plot = content.plot.clone();
+            let id = content.topology.slots[slot.0]
+                .plot_id
+                .as_ref()
+                .expect("facet producer");
+            let registered = content.root.plot(id)?;
             let preference = crate::layout::interior::sizing::body_preference(
-                &plot,
-                content.inputs.plots.get(index),
-                content.inputs.intrinsic(&content.inputs.plots[index]),
-                content.operation,
+                registered.source,
+                Some(registered),
+                content.root.plot_intrinsic(id)?,
+                &content.root.operation,
                 theme,
                 *minimum,
             )?;
             let guided = if matches!(
-                plot.kind(),
+                registered.source.kind(),
                 crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
             ) {
                 crate::layout::interior::sizing::guided_preference(
-                    &plot,
-                    content.inputs.plots.first(),
+                    registered.source,
+                    content.root.plots.first(),
                 )?
             } else {
                 None
@@ -240,15 +250,25 @@ fn measure(
                 preference.0
             };
             preferred.max(crate::theme::composition::hard(
-                &strip_lengths
-                    .horizontal_inset
-                    .add_pixels(super::rendering::strip_widths(&plot, &panel.cell, theme)?.1)?,
+                &strip_lengths.horizontal_inset.add_pixels(
+                    super::rendering::strip_widths(
+                        registered.source,
+                        registered
+                            .scope
+                            .numeric_owner
+                            .facet
+                            .as_ref()
+                            .expect("prepared facet occurrence"),
+                        theme,
+                    )?
+                    .1,
+                )?,
             )?)
         } else {
             minimum.0
         };
         widths.push(GridRequirement {
-            start: panel.column,
+            start: slot.0 % columns,
             span: 1,
             hard: required(minimum.0)?,
             preferred: required(preferred.max(minimum.0))?,
@@ -256,7 +276,7 @@ fn measure(
             address,
         });
         heights.push(GridRequirement {
-            start: panel.row,
+            start: slot.0 / columns,
             span: 1,
             hard: required(minimum.1)?,
             preferred: required(minimum.1)?,
@@ -338,83 +358,97 @@ fn measure(
         ))));
     }
     if let Some(content) = content {
-        for (index, ((panel, child), minimum)) in
+        for (index, (((slot, _, _), child), minimum)) in
             panels.iter().zip(&mut heights).zip(minima).enumerate()
         {
-            let mut plot = content.plot.clone();
+            let id = content.topology.slots[slot.0]
+                .plot_id
+                .as_ref()
+                .expect("facet producer");
+            let registered = content.root.plot(id)?;
             let address = ComponentAddress::root().child(
                 AddressRole::FacetCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("facet content domain address overflowed".into()))?,
             )?;
+            let mut windows = content.windows;
             if let Some(domain) = content.round.feedback_domain(
                 &address,
                 crate::layout::kernel::FeedbackKind::AutomaticDomainX,
             ) {
-                let domain = plot
-                    .description()
-                    .x_axis_spec()
-                    .window
-                    .map(crate::layout::RawWindow::pair)
-                    .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
-                plot = plot.with_planned_x_limits(domain);
+                windows[0] = Some(
+                    windows[0].map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1))),
+                );
             }
             if let Some(domain) = content.round.feedback_domain(
                 &address,
                 crate::layout::kernel::FeedbackKind::AutomaticDomainY,
             ) {
-                let domain = plot
-                    .description()
-                    .y_axis_spec()
-                    .window
-                    .map(crate::layout::RawWindow::pair)
-                    .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
-                plot = plot.with_planned_y_limits(domain);
+                windows[1] = Some(
+                    windows[1].map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1))),
+                );
             }
             let preference = crate::layout::interior::sizing::body_preference(
-                &plot,
-                content.inputs.plots.get(index),
-                content.inputs.intrinsic(&content.inputs.plots[index]),
-                content.operation,
+                registered.source,
+                Some(registered),
+                content.root.plot_intrinsic(id)?,
+                &content.root.operation,
                 theme,
                 *minimum,
             )?;
-            let width = pixels(columns[panel.column]);
+            let width = pixels(columns[slot.0 % columns.len()]);
             let guide = if matches!(
-                plot.kind(),
+                registered.source.kind(),
                 crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
             ) {
                 crate::layout::interior::sizing::guided_preference(
-                    &plot,
-                    content.inputs.plots.first(),
+                    registered.source,
+                    content.root.plots.first(),
                 )?
             } else {
                 None
             };
             let mut height = if guide.is_some() {
                 crate::layout::interior::sizing::guided_body_height(
-                    &plot,
-                    content.inputs.plots.get(index),
-                    content.inputs.intrinsic(&content.inputs.plots[index]),
-                    content.operation,
+                    registered.source,
+                    Some(registered),
+                    content.root.plot_intrinsic(id)?,
+                    &content.root.operation,
                     theme,
                     width,
                     guide.as_ref(),
                     scope,
+                    Some(std::array::from_fn(|side| {
+                        windows[side].unwrap_or(registered.axes.ranges()[side])
+                    })),
                 )?
             } else {
-                plot.natural_body_height(
-                    content.inputs.plots.get(index),
-                    content.inputs.intrinsic(&content.inputs.plots[index]),
-                    content.operation,
+                registered.source.natural_body_height(
+                    Some(registered),
+                    content.root.plot_intrinsic(id)?,
+                    &content.root.operation,
                     theme,
                     width,
                     preference.1,
+                    Some(std::array::from_fn(|side| {
+                        windows[side].unwrap_or(registered.axes.ranges()[side])
+                    })),
                 )?
             };
-            if row_insets[panel.row][1] == 0 {
-                let strips = super::rendering::strip_plans(&plot, &panel.cell, theme, width, scope)
-                    .map_err(crate::layout::fit::PlanError::into_error)?;
+            if row_insets[slot.0 / columns.len()][1] == 0 {
+                let strips = super::rendering::strip_plans(
+                    registered.source,
+                    registered
+                        .scope
+                        .numeric_owner
+                        .facet
+                        .as_ref()
+                        .expect("prepared facet occurrence"),
+                    theme,
+                    width,
+                    scope,
+                )
+                .map_err(crate::layout::fit::PlanError::into_error)?;
                 height = crate::theme::composition::hard(
                     &strip_lengths
                         .content_clearance
@@ -506,7 +540,6 @@ fn measure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 
     #[test]
     #[expect(
@@ -518,6 +551,9 @@ mod tests {
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [1.0, 0.0]),
         )
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("facet", ["one", "one"]).unwrap(),
+        ))
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.composition = theme
@@ -555,26 +591,19 @@ mod tests {
                     height: 1,
                 },
                 |stage| {
-                    let operation = stage.operation();
-                    let mut inputs = crate::plots::shared_x::prepare_plot(
+                    super::super::super::lifecycle::prepare_plot_root_with_theme(
                         plot.description(),
-                        &operation,
-                        &theme,
-                    )?;
-                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
-                        plot.description(),
-                        &mut inputs.panels,
-                        &operation,
-                        false,
-                    )?;
-                    let inputs = PreparedInteriorInputs::from_registry(
-                        inputs,
-                        InteriorRoute::classify(plot.kind()),
-                        guide,
-                    )?;
-                    Ok((inputs, operation))
+                        theme.theme.clone(),
+                        stage,
+                    )
                 },
-                |(inputs, operation), assigned, round| {
+                |root, assigned, round| {
+                    let crate::orchestrator::root::PreparedComposition::Facets(topology) =
+                        &root.composition
+                    else {
+                        panic!("prepared facet topology")
+                    };
+                    let theme = root.request();
                     let FitOutcome::Measured(grid) = allocate(
                         PixelRect::new(0.0, 0.0, 0.0, 0.0),
                         (1, 2),
@@ -584,9 +613,9 @@ mod tests {
                         &theme,
                         &FitScope::root(),
                         Some(&ContentSizing {
-                            operation,
-                            plot: &plot,
-                            inputs,
+                            root,
+                            topology,
+                            windows: [None; 2],
                             round,
                             natural_width: true,
                             natural_height: true,
@@ -692,16 +721,15 @@ mod tests {
         let theme = crate::Theme::publication().resolve().unwrap();
         let text = crate::text::TextService::default();
         let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let panels = [0, 1].map(|index| FacetPanel {
-            panel_index: index,
-            row: 0,
-            column: index,
-            cell: Vec::new(),
-            rows: crate::orchestrator::registration::RowSelection::Selected {
-                input_slots: vec![index],
-                diagnostic_rows: vec![index],
-            },
-            panel: PixelRect::new(0.0, 1.0, 0.0, 1.0),
+        let panels = [0, 1].map(|index| {
+            (
+                GridSlot(index),
+                FacetCell::single("unused"),
+                crate::orchestrator::registration::RowSelection::Selected {
+                    input_slots: vec![index],
+                    diagnostic_rows: vec![index],
+                },
+            )
         });
         let gutters = [
             (

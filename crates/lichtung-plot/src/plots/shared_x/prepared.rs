@@ -8,6 +8,7 @@ use crate::orchestrator::registration::{
 use crate::orchestrator::registration::{
     PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily, RowSelection, Scope,
 };
+use crate::orchestrator::root::PreparedComposition;
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::Error;
 
@@ -313,11 +314,8 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Dumbbell(marks))
         }
         PlotKind::Histogram => {
-            let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
-                source,
-                data,
-                Some(&panel.appearance),
-            )?;
+            let (marks, ranges) =
+                crate::plots::histogram::HistogramSemantics::new(source, data, &panel.appearance)?;
             panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
             Ok(PreparedFamily::Histogram(marks))
         }
@@ -531,7 +529,7 @@ pub(crate) fn prepare_plot<'src>(
     source: &'src PlotDescription,
     resources: &crate::font::canonical::OperationContext,
     appearance: &crate::theme::ResolvedTheme,
-) -> Result<PlotRegistryBuilder<'src>, Error> {
+) -> Result<(PlotRegistryBuilder<'src>, PreparedComposition), Error> {
     let mut registry = PlotRegistryBuilder::new(resources.root_identity());
     let source_rows = source.configured_source_rows()?;
     let source_id = (!source.has_facets())
@@ -561,6 +559,18 @@ pub(crate) fn prepare_plot<'src>(
             )
         })
         .transpose()?;
+    let composition = if let Some(id) = &source_id {
+        PreparedComposition::Single {
+            plot_id: id.clone(),
+        }
+    } else {
+        PreparedComposition::Facets(crate::orchestrator::prepare_facet_scopes(
+            source,
+            &mut registry,
+            appearance,
+            resources,
+        )?)
+    };
     if matches!(
         source.kind(),
         PlotKind::Histogram
@@ -587,7 +597,7 @@ pub(crate) fn prepare_plot<'src>(
     {
         prepare_plot_registration(&mut registry.panels[0], resources)?;
         prepare_reference_plot(source, &mut registry.panels[0], None, false, resources)?;
-        return Ok(registry);
+        return Ok((registry, composition));
     }
     let source_data = source_id
         .as_ref()
@@ -605,7 +615,7 @@ pub(crate) fn prepare_plot<'src>(
         )?);
         registry.panels[0].family = Some(PreparedFamily::Scatter(marks));
         prepare_scatter_plot(source, &mut registry.panels[0], None)?;
-        return Ok(registry);
+        return Ok((registry, composition));
     }
     if matches!(
         source.kind(),
@@ -637,10 +647,9 @@ pub(crate) fn prepare_plot<'src>(
             marks,
         });
         prepare_line_plot(source, &mut registry.panels[0], None)?;
-        return Ok(registry);
+        return Ok((registry, composition));
     }
     if source.has_facets() {
-        crate::orchestrator::prepare_facet_scopes(source, &mut registry, appearance, resources)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| crate::data::observed_source_collectives(source, "interaction"))
             .transpose()?;
@@ -813,7 +822,7 @@ pub(crate) fn prepare_plot<'src>(
                     let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
                         source,
                         data,
-                        Some(&panel.appearance),
+                        &panel.appearance,
                     )?;
                     panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Histogram(marks)
@@ -1029,24 +1038,7 @@ pub(crate) fn prepare_plot<'src>(
             panel.family = Some(family);
             panel.axes = Some(axes);
         }
-        for (side, fixed) in [
-            matches!(
-                source.facet_scales_spec(),
-                FacetScales::Fixed | FacetScales::FreeY
-            ),
-            matches!(
-                source.facet_scales_spec(),
-                FacetScales::Fixed | FacetScales::FreeX
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            if !fixed {
-                continue;
-            }
-            reconcile_facet_axis(&mut registry.panels, side)?;
-        }
+        complete_shared_bases(&mut registry.panels, &composition)?;
         for panel in &mut registry.panels {
             if let Some(PreparedFamily::Waterfall(marks)) = &mut panel.family {
                 marks.prepare_totals(
@@ -1124,7 +1116,7 @@ pub(crate) fn prepare_plot<'src>(
         let axes = prepare(source, &registry.panels[0].scope.id, None, None, None, None)?;
         registry.panels[0].axes = Some(axes);
     }
-    Ok(registry)
+    Ok((registry, composition))
 }
 
 fn facet_source_strings(
@@ -1196,20 +1188,140 @@ pub(crate) fn prepare_line_plot(
     Ok(())
 }
 
+/// Complete only the parent's base-domain coordination. Per-occurrence source
+/// completion and numeric passes retain their original caller order.
+#[expect(
+    clippy::too_many_lines,
+    reason = "shared Canvas and facet bases preserve their different original reductions and error order"
+)]
+pub(crate) fn complete_shared_bases(
+    panels: &mut [PlotRegistrationBuild<'_>],
+    composition: &PreparedComposition,
+) -> Result<(), Error> {
+    match composition {
+        PreparedComposition::Single { .. } => Ok(()),
+        PreparedComposition::Facets(topology) => {
+            for (side, members) in topology.shared_axis_members.iter().enumerate() {
+                reconcile_facet_axis(panels, members, side)?;
+            }
+            Ok(())
+        }
+        PreparedComposition::Canvas(topology) => {
+            for members in &topology.range_groups {
+                let mut shared: Option<(f64, f64)> = None;
+                for id in members {
+                    let panel = &panels[id.slot];
+                    let family = panel.family.as_ref();
+                    let range = if let Some(marks) = family.filter(|family| {
+                        !matches!(
+                            family,
+                            PreparedFamily::Scatter(_) | PreparedFamily::Line { .. }
+                        )
+                    }) {
+                        marks.x_range(panel.source, panel.axes.as_ref())?
+                    } else if panel.source.kind() == PlotKind::Scatter {
+                        family
+                            .filter(|family| matches!(family, PreparedFamily::Scatter(_)))
+                            .ok_or_else(|| {
+                                Error::Render(
+                                    "shared Scatter range requires root-prepared inputs".into(),
+                                )
+                            })?;
+                        crate::layout::continuous_auto_range(
+                            panel.axes.as_ref().expect("prepared Scatter axes").ranges()[0],
+                            panel
+                                .source
+                                .x_axis_spec()
+                                .window
+                                .map(crate::layout::RawWindow::pair),
+                        )?
+                    } else if matches!(
+                        panel.source.kind(),
+                        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                    ) {
+                        family
+                            .filter(|family| matches!(family, PreparedFamily::Line { .. }))
+                            .ok_or_else(|| {
+                                Error::Render(
+                                    "shared line range requires root-prepared inputs".into(),
+                                )
+                            })?;
+                        let axes = panel.axes.as_ref().expect("prepared line axes");
+                        if axes.categories(0).is_some() {
+                            return Err(Error::Data(
+                                "canvas x-range group has a categorical x axis".into(),
+                            ));
+                        }
+                        axes.ranges()[0]
+                    } else {
+                        return Err(Error::Data(
+                            "canvas x-range group requires a continuous single x axis".into(),
+                        ));
+                    };
+                    shared = Some(
+                        shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
+                    );
+                }
+                let shared = shared.expect("validated nonempty shared x group");
+                for id in members {
+                    let panel = &mut panels[id.slot];
+                    if let Some(ticks) = panel.source.explicit_x_ticks() {
+                        for tick in ticks {
+                            let position = if panel.source.kind() == PlotKind::Forest
+                                && panel.source.axis_scale_spec() == AxisScale::Log10
+                            {
+                                crate::numeric::log10(tick.position)?
+                            } else {
+                                tick.position
+                            };
+                            if !position.is_finite() || position < shared.0 || position > shared.1 {
+                                return Err(Error::Data(format!("x-axis explicit tick position {} is outside resolved shared range {}..{}", tick.position, shared.0, shared.1)));
+                            }
+                        }
+                    }
+                    if panel.axes.is_none() {
+                        panel.axes = Some(prepare_pair_axes(
+                            panel,
+                            [Some(shared), None],
+                            [None, None],
+                        )?);
+                    }
+                    let source = &mut panel
+                        .axes
+                        .as_mut()
+                        .expect("prepared shared x axes")
+                        .sources_mut()[0];
+                    source.base_seed = Some(DisplayExtent {
+                        lower: shared.0,
+                        upper: shared.1,
+                    });
+                    if source.base_provenance != crate::layout::RangeProvenance::Configured {
+                        source.base_provenance = crate::layout::RangeProvenance::Shared;
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 #[expect(
     clippy::float_cmp,
     reason = "fixed categories preserve the original derived raw AxisTick equality, including signed zero"
 )]
 fn reconcile_facet_axis(
     retained: &mut [PlotRegistrationBuild<'_>],
+    members: &[crate::orchestrator::registration::PlotOccurrenceId],
     side: usize,
 ) -> Result<(), Error> {
-    let Some(first) = retained.first() else {
+    let Some(first_id) = members.first() else {
         return Ok(());
     };
+    let first = &retained[first_id.slot];
     let first_source = first.source;
     let first = first.axes.as_ref().expect("prepared facet axes");
-    for panel in retained.iter() {
+    for id in members {
+        let panel = &retained[id.slot];
         let axes = panel.axes.as_ref().expect("prepared facet axes");
         let same = match (axes.categories(side), first.categories(side)) {
             (None, None) => true,
@@ -1246,7 +1358,8 @@ fn reconcile_facet_axis(
                 },
             ))
         }
-        for panel in &*retained {
+        for id in members {
+            let panel = &retained[id.slot];
             let axes = panel.axes.as_ref().expect("prepared facet axes");
             if presentation(axes, panel.source, side)? != presentation(first, first_source, side)? {
                 return Err(Error::Data(
@@ -1255,15 +1368,22 @@ fn reconcile_facet_axis(
                 ));
             }
         }
-        let union = retained
+        let union = members
             .iter()
-            .map(|panel| panel.axes.as_ref().expect("prepared facet axes").ranges()[side])
+            .map(|id| {
+                retained[id.slot]
+                    .axes
+                    .as_ref()
+                    .expect("prepared facet axes")
+                    .ranges()[side]
+            })
             .fold((f64::INFINITY, f64::NEG_INFINITY), |a, b| {
                 (a.0.min(b.0), a.1.max(b.1))
             });
         validate_range(union)?;
 
-        for panel in retained {
+        for id in members {
+            let panel = &mut retained[id.slot];
             let axes = panel.axes.as_mut().expect("prepared facet axes");
             axes.sources_mut()[side].base_seed =
                 Some(crate::orchestrator::registration::DisplayExtent {
@@ -1512,7 +1632,13 @@ fn prepare(
     let logarithmic =
         chart.kind() == PlotKind::Forest && chart.axis_scale_spec() == AxisScale::Log10;
     let specs = [chart.x_axis_spec(), chart.y_axis_spec()];
-    let mut provenance = specs.map(|spec| spec.provenance);
+    let mut provenance = specs.map(|spec| {
+        if spec.window.is_some() {
+            crate::layout::RangeProvenance::Configured
+        } else {
+            crate::layout::RangeProvenance::Automatic
+        }
+    });
     if (x_limits.is_some() || shared_x_window.is_some())
         && provenance[0] != crate::layout::RangeProvenance::Configured
     {
@@ -1666,4 +1792,129 @@ fn prepare(
         }
     }
     Ok(axes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::orchestrator::root::{CanvasAnchor, GridSlot, PreparedCanvasTopology};
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one real builder fixture observes parent reduction and local completion without a second scientific path"
+    )]
+    fn shared_canvas_bases_keep_raw_requests_and_complete_qq_before_local_exact_validation() {
+        let sources = [
+            crate::Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+                "sample",
+                [10.0, 11.0, 12.0],
+            )))
+            .erase(),
+            crate::Plot::qq(crate::NumericValues::new("sample", [1.0, 2.0, 3.0]))
+                .x_ticks(vec![AxisTick::new(10.0, "shared")])
+                .erase(),
+            crate::Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+                "sample",
+                [1.0, 2.0, 3.0],
+            )))
+            .x_limits(-0.0, 20.0)
+            .erase(),
+        ];
+        let operation = crate::font::canonical::OperationContext::new();
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let mut registry = PlotRegistryBuilder::new(operation.root_identity());
+        let mut ids = Vec::new();
+        for (slot, source) in sources.iter().enumerate() {
+            let source = source.description();
+            source.validate_configuration(source.kind()).unwrap();
+            let scope = Scope::new(
+                source,
+                &operation,
+                slot,
+                crate::layout::ComponentAddress::root()
+                    .child(
+                        crate::layout::AddressRole::CanvasCell,
+                        u32::try_from(slot).unwrap(),
+                    )
+                    .unwrap(),
+                RowSelection::Full,
+                None,
+                None,
+            )
+            .unwrap();
+            let id = registry
+                .reserve(
+                    source,
+                    scope.address,
+                    scope.numeric_owner,
+                    scope.axis_numeric_owner,
+                    scope.rows,
+                    scope.render_name,
+                    crate::orchestrator::registration::PlotScopePolicy::for_source(source, None),
+                    appearance.clone(),
+                    &operation,
+                )
+                .unwrap();
+            prepare_plot_registration(&mut registry.panels[id.slot], &operation).unwrap();
+            ids.push(id);
+        }
+        assert!(registry.panels[1].axes.is_none());
+        let composition = PreparedComposition::Canvas(PreparedCanvasTopology {
+            slots: ids
+                .iter()
+                .map(|id| Some(CanvasAnchor::Plot(id.clone())))
+                .collect(),
+            producers: (0..sources.len()).map(GridSlot).collect(),
+            headers: Vec::new(),
+            range_groups: vec![vec![ids[0].clone(), ids[1].clone()]],
+            category_bands: Vec::new(),
+            shared_guide: None,
+        });
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        complete_shared_bases(&mut registry.panels, &composition).unwrap();
+        let shared = registry.panels[0].axes.as_ref().unwrap().sources()[0]
+            .base_seed
+            .unwrap()
+            .pair();
+        let bits = |(lower, upper): (f64, f64)| (lower.to_bits(), upper.to_bits());
+        assert!(shared.0 < 0.0 && shared.1 >= 12.0);
+        for id in &ids[..2] {
+            let panel = &registry.panels[id.slot];
+            let axis = panel.axes.as_ref().unwrap().axis(panel.source, 0);
+            assert!(axis.raw_window().is_none());
+            assert_eq!(axis.provenance(), crate::layout::RangeProvenance::Shared);
+            assert_eq!(bits(axis.extent().unwrap().pair()), bits(shared));
+        }
+        for (slot, source) in sources.iter().enumerate() {
+            prepare_reference_plot(
+                source.description(),
+                &mut registry.panels[slot],
+                (slot < 2).then_some(shared),
+                false,
+                &operation,
+            )
+            .unwrap();
+        }
+        let panel = &registry.panels[1];
+        let exact = panel.axes.as_ref().unwrap().axis(panel.source, 0);
+        let ticks = exact.exact_ticks().unwrap().unwrap();
+        let (position, label) = ticks.tick(0).unwrap();
+        assert_eq!(position.to_bits(), 10.0_f64.to_bits());
+        assert_eq!(label, "shared");
+        let configured = &registry.panels[2];
+        let axis = configured.axes.as_ref().unwrap().axis(configured.source, 0);
+        assert_eq!(
+            axis.provenance(),
+            crate::layout::RangeProvenance::Configured
+        );
+        assert_eq!(
+            axis.raw_window().unwrap().lower.to_bits(),
+            (-0.0_f64).to_bits()
+        );
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
 }

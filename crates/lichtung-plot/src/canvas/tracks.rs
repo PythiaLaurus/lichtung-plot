@@ -1,7 +1,7 @@
 //! Canvas Grid tracks use the same quantized allocator as facet and TextPanel
 //! owners while keeping each Plot's theme and declared sparse coordinates.
 
-use super::{text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan};
+use super::{CanvasHeader, CanvasHeaderPlan};
 use crate::decorations::legend::discrete::scoped::GuideAllocation;
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitOutcome, FitScope};
@@ -10,8 +10,10 @@ use crate::layout::kernel::{
 };
 use crate::layout::PhysicalTextAlignment;
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
+use crate::orchestrator::registration::PlotRegistration;
+use crate::orchestrator::root::{CanvasHeaderRole, Root};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
-use crate::{Error, Plot};
+use crate::Error;
 
 #[expect(
     clippy::cast_precision_loss,
@@ -92,16 +94,41 @@ fn interior_insets(insets: &[[i64; 2]], start: usize, span: usize, rows: bool) -
         .sum()
 }
 
+fn declared_headers<'a>(
+    root: &'a Root<'_>,
+    role: CanvasHeaderRole,
+    declarations: &'a [CanvasHeader],
+) -> impl Iterator<Item = &'a CanvasHeader> {
+    root.canvas_topology()
+        .headers
+        .iter()
+        .filter(move |source| {
+            matches!(
+                (&source.role, &role),
+                (CanvasHeaderRole::Column, CanvasHeaderRole::Column)
+                    | (CanvasHeaderRole::Row, CanvasHeaderRole::Row)
+                    | (CanvasHeaderRole::RowTitle, CanvasHeaderRole::RowTitle)
+            )
+        })
+        .map(move |source| &declarations[source.declaration])
+}
+
 fn plot_minimum(
-    plot: &Plot,
-    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
+    registered: &PlotRegistration<'_>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     title: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     theme: &crate::text::TextRequestContext<'_, '_>,
+    ranges: [(f64, f64); 2],
 ) -> Result<(f64, f64), Error> {
-    let mut hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
-    let sources = plot.description().prose();
+    let mut hard = crate::layout::interior::intrinsic_body_minimum_for_ranges(
+        registered,
+        intrinsic,
+        operation,
+        theme,
+        Some(ranges),
+    )?;
+    let sources = registered.source.prose();
     hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
         theme, sources, hard.1,
     )?;
@@ -114,17 +141,10 @@ fn plot_minimum(
     Ok(hard)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each child intrinsic receives the containing root's explicit operation"
-)]
 pub(super) fn minimum(
     placements: &super::placement::Placements,
-    plots: &[Option<Plot>],
-    inputs: &super::PreparedCanvasInputs<'_>,
-    operation: &crate::font::canonical::OperationContext,
-    text: &[Option<TextPanelIntrinsics>],
-    titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    root: &Root<'_>,
+    round: &crate::layout::kernel::FeedbackRound,
     request: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<FitOutcome<(f64, f64)>, Error> {
@@ -141,17 +161,16 @@ pub(super) fn minimum(
         let Some(footprint) = placements.footprint(index) else {
             continue;
         };
-        let hard = if let Some(plot) = &plots[index] {
-            let registered = inputs.plot(index).expect("prepared Canvas plot");
+        let hard = if let Some(registered) = root.canvas_plot(index) {
             plot_minimum(
-                plot,
-                Some(registered),
-                inputs.intrinsic(registered),
-                operation,
-                titles[index].expect("Plot title intrinsics"),
+                registered,
+                root.plot_intrinsic(&registered.scope.id)?,
+                &root.operation,
+                root.canvas_prose(&registered.scope.id),
                 &crate::text::TextRequestContext::new(&registered.appearance, request.text),
+                super::sizing::axis_inputs(root, registered, round, false).0,
             )?
-        } else if let Some(text) = text[index] {
+        } else if let Some(text) = root.canvas_text()[index] {
             text.minimum
         } else {
             continue;
@@ -246,9 +265,10 @@ impl DeclaredTracks {
 }
 
 pub(super) struct ContentSizing<'a> {
-    pub operation: &'a crate::font::canonical::OperationContext,
     pub source: &'a super::Canvas,
-    pub inputs: &'a super::PreparedCanvasInputs<'a>,
+    pub root: &'a Root<'a>,
+    pub output_dimensions: Option<crate::layout::RootSize>,
+    pub initial_sizing: bool,
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub measurements: Option<&'a super::sizing::HeightMeasurements>,
     pub shared_allocation: Option<GuideAllocation>,
@@ -263,11 +283,8 @@ pub(super) struct ContentSizing<'a> {
 pub(super) fn allocate(
     outer: PixelRect,
     placements: &super::placement::Placements,
-    plots: &[Option<Plot>],
-    inputs: &super::PreparedCanvasInputs<'_>,
-    operation: &crate::font::canonical::OperationContext,
-    text_panels: &[Option<TextPanelIntrinsics>],
-    plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    root: &Root<'_>,
+    round: Option<&crate::layout::kernel::FeedbackRound>,
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
@@ -280,11 +297,8 @@ pub(super) fn allocate(
         match measure(
             outer,
             placements,
-            plots,
-            inputs,
-            operation,
-            text_panels,
-            plot_titles,
+            root,
+            round,
             column_headers,
             row_headers,
             row_titles,
@@ -303,15 +317,8 @@ pub(super) fn allocate(
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "natural columns consume the same span/header/prose/guide summaries as assigned Grid layout"
-)]
 pub(super) fn natural_width(
     placements: &super::placement::Placements,
-    plots: &[Option<Plot>],
-    text_panels: &[Option<TextPanelIntrinsics>],
-    plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
@@ -328,11 +335,8 @@ pub(super) fn natural_width(
         match measure(
             PixelRect::new(0.0, 0.0, 0.0, 0.0),
             placements,
-            plots,
-            content.inputs,
-            content.operation,
-            text_panels,
-            plot_titles,
+            content.root,
+            Some(content.round),
             column_headers,
             row_headers,
             row_titles,
@@ -369,11 +373,8 @@ enum Measurement {
 fn measure(
     outer: PixelRect,
     placements: &super::placement::Placements,
-    plots: &[Option<Plot>],
-    inputs: &super::PreparedCanvasInputs<'_>,
-    operation: &crate::font::canonical::OperationContext,
-    text_panels: &[Option<TextPanelIntrinsics>],
-    plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    root: &Root<'_>,
+    round: Option<&crate::layout::kernel::FeedbackRound>,
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
@@ -389,9 +390,8 @@ fn measure(
         .ok_or_else(|| Error::Render("Canvas Grid topology overflowed".into()))?;
     if rows == 0
         || columns == 0
-        || plots.len() != count
-        || text_panels.len() != count
-        || plot_titles.len() != count
+        || root.canvas_topology().slots.len() != count
+        || root.canvas_text().len() != count
     {
         return Err(Error::Render(
             "Canvas Grid has mismatched declared slots".into(),
@@ -415,7 +415,7 @@ fn measure(
         "Canvas row-header plans",
     )?;
     let mut row_header_width = 0.0_f64;
-    for header in row_headers {
+    for header in declared_headers(root, CanvasHeaderRole::Row, row_headers) {
         if header.span == 0
             || header
                 .start
@@ -458,19 +458,18 @@ fn measure(
     crate::layout::fit::reserve(&mut row_insets, rows, "Canvas row gutters")?;
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
-    if let Some(content) = content.filter(|value| value.natural_width) {
+    if content.is_some_and(|value| value.natural_width) {
         // Natural selection uses the same external gutter columns as assigned
         // layout. Header/body requirements remain inner-track requirements.
-        for (index, plot) in plots.iter().enumerate() {
-            let Some(plot) = plot else { continue };
-            let theme = &crate::text::TextRequestContext::new(
-                &inputs.plot(index).expect("prepared Plot theme").appearance,
-                request.text,
-            );
+        for index in 0..count {
+            let Some(registered) = root.canvas_plot(index) else {
+                continue;
+            };
+            let theme = &crate::text::TextRequestContext::new(&registered.appearance, request.text);
             let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
-                plot,
-                inputs.plot(index),
-                content.operation,
+                registered.source,
+                Some(registered),
+                &root.operation,
                 theme,
             )?;
             let footprint = placements.footprint(index).expect("Plot owner");
@@ -479,15 +478,19 @@ fn measure(
             let end = footprint.column + footprint.column_span - 1;
             column_insets[end][1] = column_insets[end][1].max(required(right)?);
         }
-        for group in &content.source.x_range_groups {
-            let aligned = group.iter().fold([0_i64; 2], |maximum, &index| {
+        for group in &root.canvas_topology().range_groups {
+            let aligned = group.iter().fold([0_i64; 2], |maximum, id| {
+                let index = usize::try_from(root.plots[id.slot].scope.address.leaf_slot_index())
+                    .expect("Canvas slot fits usize");
                 let footprint = placements.footprint(index).expect("range group owner");
                 [
                     maximum[0].max(column_insets[footprint.column][0]),
                     maximum[1].max(column_insets[footprint.column + footprint.column_span - 1][1]),
                 ]
             });
-            for &index in group {
+            for id in group {
+                let index = usize::try_from(root.plots[id.slot].scope.address.leaf_slot_index())
+                    .expect("Canvas slot fits usize");
                 let footprint = placements.footprint(index).expect("range group owner");
                 column_insets[footprint.column][0] = aligned[0];
                 column_insets[footprint.column + footprint.column_span - 1][1] = aligned[1];
@@ -534,45 +537,52 @@ fn measure(
         .checked_add(row_headers.len())
         .ok_or_else(|| Error::Render("Canvas row-header requirement count overflowed".into()))?;
     crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
-    for index in 0..count {
-        let minimum = if let Some(plot) = &plots[index] {
-            let registered = inputs.plot(index);
-            let intrinsic = inputs.intrinsic(registered.expect("prepared Canvas plot"));
-            let child_theme = &crate::text::TextRequestContext::new(
-                &registered
-                    .expect("configured Plot retains its theme")
-                    .appearance,
-                request.text,
-            );
+    for (index, address) in owners.iter().enumerate() {
+        let minimum = if let Some(registered) = root.canvas_plot(index) {
+            let intrinsic = root.plot_intrinsic(&registered.scope.id)?;
+            let ranges = super::sizing::axis_inputs(
+                root,
+                registered,
+                round.expect("Plot tracks consume their root round"),
+                content.is_some_and(|value| value.initial_sizing),
+            )
+            .0;
+            let child_theme =
+                &crate::text::TextRequestContext::new(&registered.appearance, request.text);
             let hard = plot_minimum(
-                plot,
                 registered,
                 intrinsic,
-                operation,
-                plot_titles[index].expect("Plot text intrinsics"),
+                &root.operation,
+                root.canvas_prose(&registered.scope.id),
                 child_theme,
+                ranges,
             )?;
-            let title = plot_titles[index]
-                .expect("configured Plot retains prepared text intrinsics")
-                .widths();
-            let sources = plot.description().prose();
+            let title = root.canvas_prose(&registered.scope.id).widths();
+            let sources = registered.source.prose();
             let present = sources.map(|value| value.is_some());
             let preferred = if content.is_some() {
                 let body = crate::layout::interior::sizing::body_preference(
-                    plot,
-                    registered,
+                    registered.source,
+                    Some(registered),
                     intrinsic,
-                    operation,
+                    &root.operation,
                     child_theme,
-                    plot.intrinsic_body_minimum(registered, intrinsic, operation, child_theme)?,
+                    crate::layout::interior::intrinsic_body_minimum_for_ranges(
+                        registered,
+                        intrinsic,
+                        &root.operation,
+                        child_theme,
+                        Some(ranges),
+                    )?,
                 )?;
                 let mut width = body.0;
                 if content.is_some_and(|content| {
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot
                 }) {
-                    if let Some(guide) =
-                        crate::layout::interior::sizing::guided_preference(plot, registered)?
-                    {
+                    if let Some(guide) = crate::layout::interior::sizing::guided_preference(
+                        registered.source,
+                        Some(registered),
+                    )? {
                         let size = guide.preference(child_theme)?;
                         width = if guide.horizontal() {
                             width.max(size.0)
@@ -605,7 +615,7 @@ fn measure(
             };
             Some((hard, hard.0.max(preferred)))
         } else {
-            text_panels[index].map(|text| (text.minimum, text.preferred_width))
+            root.canvas_text()[index].map(|text| (text.minimum, text.preferred_width))
         };
         let Some((hard, preferred_width)) = minimum else {
             continue;
@@ -628,7 +638,7 @@ fn measure(
                 (i128::from(required(preferred_width.max(hard.0))?) - horizontal).max(0),
             )?,
             fill: true,
-            address: &owners[index],
+            address,
         });
         heights.push(GridRequirement {
             start: footprint.row,
@@ -636,7 +646,7 @@ fn measure(
             hard: checked((i128::from(required(hard.1)?) - vertical).max(0))?,
             preferred: checked((i128::from(required(hard.1)?) - vertical).max(0))?,
             fill: true,
-            address: &owners[index],
+            address,
         });
     }
     let mut row_header_owners = Vec::new();
@@ -653,8 +663,7 @@ fn measure(
             .ok_or_else(|| Error::Render("Canvas row-header address overflowed".into()))?;
         row_header_owners.push(ComponentAddress::root().child(AddressRole::CanvasHeader, ordinal)?);
     }
-    for ((header, plan), owner) in row_headers
-        .iter()
+    for ((header, plan), owner) in declared_headers(root, CanvasHeaderRole::Row, row_headers)
         .zip(&row_header_plans)
         .zip(&row_header_owners)
     {
@@ -674,7 +683,9 @@ fn measure(
         column_headers.len(),
         "Canvas header owners",
     )?;
-    for (index, header) in column_headers.iter().enumerate() {
+    for (index, header) in
+        declared_headers(root, CanvasHeaderRole::Column, column_headers).enumerate()
+    {
         if header.span == 0
             || header
                 .start
@@ -693,7 +704,9 @@ fn measure(
             )?,
         );
     }
-    for (header, owner) in column_headers.iter().zip(&header_owners) {
+    for (header, owner) in
+        declared_headers(root, CanvasHeaderRole::Column, column_headers).zip(&header_owners)
+    {
         let (hard, preferred) = crate::layout::fit::intrinsic_widths(
             theme,
             header.text.as_str(),
@@ -715,7 +728,8 @@ fn measure(
         row_titles.len(),
         "Canvas row-title owners",
     )?;
-    for (index, title) in row_titles.iter().enumerate() {
+    for (index, title) in declared_headers(root, CanvasHeaderRole::RowTitle, row_titles).enumerate()
+    {
         if title.span != 1 || title.start >= rows {
             return Err(Error::Render(
                 "Canvas row title lies outside declared Grid tracks".into(),
@@ -728,7 +742,9 @@ fn measure(
         )?;
         row_title_owners.push(owner);
     }
-    for (title, owner) in row_titles.iter().zip(&row_title_owners) {
+    for (title, owner) in
+        declared_headers(root, CanvasHeaderRole::RowTitle, row_titles).zip(&row_title_owners)
+    {
         let appearance = title.text.appearance(header_role);
         let (hard, preferred) = fit::intrinsic_widths(
             theme,
@@ -829,7 +845,9 @@ fn measure(
         "Canvas measured column headers",
     )?;
     let mut header_height = 0.0_f64;
-    for (index, header) in column_headers.iter().enumerate() {
+    for (index, header) in
+        declared_headers(root, CanvasHeaderRole::Column, column_headers).enumerate()
+    {
         let end = header.start + header.span - 1;
         let left = pixels(x_positions[header.start]);
         let right = pixels(checked(
@@ -873,7 +891,8 @@ fn measure(
     let mut row_title_heights = Vec::new();
     crate::layout::fit::reserve(&mut row_title_heights, rows, "Canvas row-title heights")?;
     row_title_heights.resize(rows, 0_i64);
-    for (index, title) in row_titles.iter().enumerate() {
+    for (index, title) in declared_headers(root, CanvasHeaderRole::RowTitle, row_titles).enumerate()
+    {
         let appearance = title.text.appearance(header_role);
         let header_lengths = theme.header_lengths(appearance.theme.get_font_size())?;
         let plan = match fit::single_text(
@@ -928,7 +947,7 @@ fn measure(
                 i128::from(x_positions[end_column]) + i128::from(columns[end_column])
                     - i128::from(x_positions[footprint.column]),
             )?);
-            let height = if let Some(plot) = &plots[index] {
+            let height = if let Some(registered) = root.canvas_plot(index) {
                 let dependencies = content.source.consumed_guide_dependencies(
                     index,
                     width,
@@ -936,16 +955,19 @@ fn measure(
                     content.round,
                 )?;
                 super::sizing::cell_height(
-                    plot,
-                    content.operation,
+                    registered,
+                    &root.operation,
                     content.source,
-                    &crate::text::TextRequestContext::new(
-                        &inputs.plot(index).expect("prepared Plot theme").appearance,
-                        request.text,
-                    ),
+                    &crate::text::TextRequestContext::new(&registered.appearance, request.text),
                     width,
-                    inputs.plot(index).expect("prepared Canvas interior"),
-                    inputs.intrinsic(inputs.plot(index).expect("prepared Canvas interior")),
+                    root.plot_intrinsic(&registered.scope.id)?,
+                    content.output_dimensions,
+                    super::sizing::axis_inputs(
+                        root,
+                        registered,
+                        content.round,
+                        content.initial_sizing,
+                    ),
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot,
                     content.round,
                     child.address,
@@ -1073,7 +1095,9 @@ fn measure(
         .ok_or_else(|| Error::Render("Canvas header storage overflowed".into()))?;
     crate::render::backend::reserve_text_records(&mut headers, header_count)?;
     for (index, (header, (plan, left, right))) in
-        column_headers.iter().zip(column_plans).enumerate()
+        declared_headers(root, CanvasHeaderRole::Column, column_headers)
+            .zip(column_plans)
+            .enumerate()
     {
         let (x, anchor) = centered_x(left, right, &plan)?;
         let inset = theme
@@ -1103,7 +1127,10 @@ fn measure(
             text,
         });
     }
-    for (index, (header, plan)) in row_headers.iter().zip(row_header_plans).enumerate() {
+    for (index, (header, plan)) in declared_headers(root, CanvasHeaderRole::Row, row_headers)
+        .zip(row_header_plans)
+        .enumerate()
+    {
         let top = tracks.rows[header.start].1;
         let bottom = tracks.rows[header.start + header.span - 1].0;
         let (x, anchor) = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
@@ -1136,7 +1163,10 @@ fn measure(
     }
     let mut measured_row_titles = Vec::new();
     crate::render::backend::reserve_text_records(&mut measured_row_titles, row_titles.len())?;
-    for (index, (title, plan)) in row_titles.iter().zip(row_title_plans).enumerate() {
+    for (index, (title, plan)) in declared_headers(root, CanvasHeaderRole::RowTitle, row_titles)
+        .zip(row_title_plans)
+        .enumerate()
+    {
         let row = title.start;
         let (x, anchor) = centered_x(title_left, title_right, &plan)?;
         let spacing = theme.header_lengths(plan.style.font_size)?;

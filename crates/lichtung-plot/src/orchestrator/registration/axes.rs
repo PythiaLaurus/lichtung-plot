@@ -1,6 +1,6 @@
 //! Prepared axis sources own scientific coordinates, not authored policies.
 
-use crate::layout::{AxisSide, AxisSpec, AxisTick, RangePolicy, RangeProvenance};
+use crate::layout::{AuthoredAxisSpec, AxisSide, AxisTick, RangePolicy, RangeProvenance};
 use crate::{AxisScale, Error, Text};
 
 #[derive(Debug, Clone, Copy)]
@@ -193,6 +193,18 @@ pub(crate) fn axis_label<'v>(
     source.label.get().and_then(Text::provided)
 }
 
+pub(crate) fn prepare_axis_labels(
+    registered: &super::PlotRegistration<'_>,
+) -> Result<[Option<Text>; 2], Error> {
+    let labels = registered
+        .source
+        .prepare_axis_labels(Some(&registered.policy.labels))?;
+    registered
+        .axes
+        .retain_axis_labels(labels.each_ref().map(Option::as_ref))?;
+    Ok(labels)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum AxisSpace {
     Categorical,
@@ -235,12 +247,17 @@ pub(crate) fn prepare_axis_source(
     categories: Option<PreparedCategorySource>,
     label: Option<Text>,
 ) -> Result<PreparedAxisSource, Error> {
-    let provenance = match slot {
+    let authored = match slot {
         AxisSlot::Pair(side) | AxisSlot::MarginalCentral(side) => match side {
-            AxisSide::Bottom => build.source.x_axis_spec().provenance,
-            AxisSide::Left => build.source.y_axis_spec().provenance,
+            AxisSide::Bottom => Some(build.source.x_axis_spec()),
+            AxisSide::Left => Some(build.source.y_axis_spec()),
         },
-        _ => RangeProvenance::Automatic,
+        _ => None,
+    };
+    let provenance = if authored.is_some_and(|axis| axis.window.is_some()) {
+        RangeProvenance::Configured
+    } else {
+        RangeProvenance::Automatic
     };
     let source = PreparedAxisSource {
         witness: AxisSourceWitness {
@@ -275,7 +292,7 @@ pub(crate) fn prepare_axis_source(
 
 #[derive(Clone, Copy)]
 pub(crate) enum AxisIntentRef<'a> {
-    Authored(&'a AxisSpec),
+    Authored(&'a AuthoredAxisSpec),
     MatrixVariable,
     NativeAmplitude,
 }
@@ -307,11 +324,11 @@ impl ExactTicksRef<'_> {
 }
 
 impl<'a> BaseAxisRef<'a> {
-    pub(crate) const fn witness(self) -> &'a AxisSourceWitness {
+    pub(crate) const fn witness(&self) -> &'a AxisSourceWitness {
         &self.source.witness
     }
 
-    pub(crate) const fn authored(self) -> Option<&'a AxisSpec> {
+    pub(crate) const fn authored(&self) -> Option<&'a AuthoredAxisSpec> {
         match self.intent {
             AxisIntentRef::Authored(spec) => Some(spec),
             AxisIntentRef::MatrixVariable | AxisIntentRef::NativeAmplitude => None,
@@ -322,23 +339,19 @@ impl<'a> BaseAxisRef<'a> {
         clippy::unnecessary_wraps,
         reason = "the base reader preserves the original prepared-seed boundary without adding an earlier validator"
     )]
-    pub(crate) fn extent(self) -> Result<DisplayExtent, Error> {
+    pub(crate) fn extent(&self) -> Result<DisplayExtent, Error> {
         Ok(self.source.base_seed.expect("prepared axis display seed"))
     }
 
-    pub(crate) const fn provenance(self) -> RangeProvenance {
+    pub(crate) const fn provenance(&self) -> RangeProvenance {
         self.source.base_provenance
     }
 
-    pub(crate) fn raw_window(self) -> Option<&'a crate::layout::RawWindow> {
-        self.authored().and_then(|spec| {
-            spec.window
-                .as_ref()
-                .filter(|_| spec.provenance == RangeProvenance::Configured)
-        })
+    pub(crate) fn raw_window(&self) -> Option<&'a crate::layout::RawWindow> {
+        self.authored().and_then(|spec| spec.window.as_ref())
     }
 
-    pub(crate) fn can_expand(self) -> bool {
+    pub(crate) fn can_expand(&self) -> bool {
         self.raw_window().is_none()
     }
 
@@ -346,7 +359,7 @@ impl<'a> BaseAxisRef<'a> {
         clippy::unnecessary_wraps,
         reason = "exact sources retain the shared fallible reader boundary without a new validation pass"
     )]
-    pub(crate) fn exact_ticks(self) -> Result<Option<ExactTicksRef<'a>>, Error> {
+    pub(crate) fn exact_ticks(&self) -> Result<Option<ExactTicksRef<'a>>, Error> {
         let Some(raw) = self.authored().and_then(|spec| spec.exact_ticks.as_deref()) else {
             return Ok(None);
         };

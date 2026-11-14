@@ -2,8 +2,7 @@
 
 use crate::Error;
 
-use super::data::FacetPanel;
-use crate::builder::Plot;
+use crate::builder::PlotDescription;
 use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideConsumption, GuideOrientation,
     SUPPRESSED_GUIDES,
@@ -13,22 +12,29 @@ use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{PixelRect, RootFramePlan};
-use crate::spec::{FacetScales, PlotRenderContext};
+use crate::orchestrator::assignment::{
+    GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions, RootAssignment,
+};
+use crate::orchestrator::registration::RowSelection;
+use crate::orchestrator::root::{GridSlot, PreparedFacetTopology, Root};
+use crate::spec::FacetScales;
+use crate::FacetCell;
 
 pub(super) fn canvas_layout(
-    plot: &Plot,
+    plot: &PlotDescription,
+    size: crate::layout::RootSize,
     theme: &crate::text::TextRequestContext<'_, '_>,
     horizontal_axis_label: Option<&crate::Text>,
     vertical_axis_label: Option<&crate::Text>,
     round: &mut FeedbackRound,
 ) -> Result<RootFramePlan, crate::layout::fit::PlanError> {
     let mut canvas = RootFramePlan::measure(
-        plot.canvas_dimensions()?,
+        size.dimensions()?,
         theme,
-        plot.description().prose(),
+        plot.prose(),
         crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            plot.description().prose_alignments(),
+            plot.prose_alignments(),
             [None; 2],
         ),
         (
@@ -182,12 +188,14 @@ fn adjusted_shared_axis_panel(
     reason = "facet measurement keeps immutable grid, scale, theme, and child-plan inputs explicit"
 )]
 pub(super) fn native_parent(
-    operation: &crate::font::canonical::OperationContext,
-    plot: &Plot,
-    panels: &mut [FacetPanel],
+    plot: &PlotDescription,
+    root: &Root<'_>,
+    topology: &PreparedFacetTopology,
+    measurement: &RootAssignment,
+    panels: &[(GridSlot, FacetCell, RowSelection)],
+    windows: [Option<(f64, f64)>; 2],
     outer: PixelRect,
     shape: (usize, usize),
-    facet_scales: FacetScales,
     theme: &crate::text::TextRequestContext<'_, '_>,
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
@@ -198,42 +206,43 @@ pub(super) fn native_parent(
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
-    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
 ) -> Result<
-    crate::layout::fit::FitOutcome<(
-        Plot,
-        Vec<super::OwnedFacetChild>,
-        super::tracks::GridAssignment,
-    )>,
+    crate::layout::fit::FitOutcome<(Vec<super::OwnedFacetChild>, super::tracks::GridAssignment)>,
     Error,
 > {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
-    let resources = theme.text.prepared_font_environment()?.operation();
+    theme.text.prepared_font_environment()?;
     let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();
     crate::data::source::reserve_source(&mut requirements, panels.len())?;
-    for (index, facet) in panels.iter().enumerate() {
+    for (index, (slot, _, _)) in panels.iter().enumerate() {
         let address = grid_owner.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
         let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter);
+        let registered = &root.plots[index];
         let measured = super::rendering::strip_requirement(
             probes[index]
                 .axes
                 .as_ref()
                 .ok_or_else(|| Error::Render("facet probe is missing its measured axes".into()))?,
-            plot,
-            &facet.cell,
+            registered.source,
+            registered
+                .scope
+                .numeric_owner
+                .facet
+                .as_ref()
+                .expect("prepared facet occurrence"),
             theme,
-            probe_cells[facet.row * columns + facet.column],
+            probe_cells[slot.0],
             &scope.child(AddressRole::FacetCell, index)?,
         )
         .map_err(fit::PlanError::into_error)?;
         requirements.push((
-            facet.row,
-            facet.column,
+            slot.0 / columns,
+            slot.0 % columns,
             EdgeSpaceRequirements {
                 left: left.max(measured.left),
                 right: right.max(measured.right),
@@ -243,9 +252,9 @@ pub(super) fn native_parent(
         ));
     }
     let track_sizing = content_sizing.then_some(super::tracks::ContentSizing {
-        operation,
-        plot,
-        inputs,
+        root,
+        topology,
+        windows,
         round,
         natural_width: false,
         natural_height: false,
@@ -272,38 +281,54 @@ pub(super) fn native_parent(
             crate::decorations::legend::discrete::GuideSlot::new(
                 std::sync::Arc::clone(descriptor),
                 &ComponentAddress::root(),
-                plot.description().legend_position_spec(),
+                plot.legend_position_spec(),
             )
         })
         .transpose()?;
-    for (index, facet) in panels.iter().enumerate() {
-        let mut panel_plot = plot.clone();
-        let registered = &inputs.plots[index];
+    for (index, (slot, _, _)) in panels.iter().enumerate() {
+        let id = topology.slots[slot.0]
+            .plot_id
+            .as_ref()
+            .expect("facet producer");
+        let factory = root.plot_assignment_factory(measurement, id)?;
+        let registered = root.plot(id)?;
         let domain_address = &registered.scope.address;
-        if matches!(facet_scales, FacetScales::Free | FacetScales::FreeX) {
-            if let Some(range) =
-                round.feedback_domain(domain_address, FeedbackKind::AutomaticDomainX)
-            {
-                panel_plot = panel_plot.with_planned_x_limits(range);
-            }
-        }
-        if matches!(facet_scales, FacetScales::Free | FacetScales::FreeY) {
-            if let Some(range) =
-                round.feedback_domain(domain_address, FeedbackKind::AutomaticDomainY)
-            {
-                panel_plot = panel_plot.with_planned_y_limits(range);
-            }
-        }
-        let cell = grid.cells[facet.row * columns + facet.column];
+        let cell = grid.cells[slot.0];
+        let assignment = factory.assign(
+            PlotAllocationInputs {
+                dimensions: PlotMeasureDimensions {
+                    canvas: measurement.measurement_size,
+                    output_override: None,
+                },
+                cell,
+                frame: cell,
+                body: cell,
+                axis_label_width: cell.width(),
+                content_height: false,
+                fill_content_height: false,
+                content_preference: None,
+                insets: ParentInsets::consumed(round, domain_address),
+                guide: GuideTrialAssignment {
+                    edge: plot.legend_position_spec(),
+                    compact: false,
+                    allocation: None,
+                },
+            },
+            round,
+            None,
+        )?;
+        #[cfg(test)]
+        super::observe_factory_phase(id, None, &assignment);
         if containing_trial {
+            let body_scope = scope.child(AddressRole::FacetCell, index)?;
+            let context = factory.context(&assignment, SUPPRESSED_GUIDES, &body_scope)?;
             if let FitOutcome::Miss(reason) = crate::decorations::plan::check_assigned_body(
-                &panel_plot,
-                inputs.plots.get(index),
+                &context,
                 &probes[index],
-                probe_cells[facet.row * columns + facet.column],
+                probe_cells[slot.0],
                 cell,
                 theme,
-                &scope.child(AddressRole::FacetCell, index)?,
+                &body_scope,
             )? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
@@ -311,8 +336,13 @@ pub(super) fn native_parent(
                 .child(AddressRole::FacetCell, index)?
                 .child(AddressRole::FacetHeader, 0)?;
             if let FitOutcome::Miss(reason) = fit::outcome(super::rendering::strip_plans(
-                &panel_plot,
-                &facet.cell,
+                registered.source,
+                registered
+                    .scope
+                    .numeric_owner
+                    .facet
+                    .as_ref()
+                    .expect("prepared facet occurrence"),
                 theme,
                 cell.width(),
                 &strip_scope,
@@ -354,19 +384,19 @@ pub(super) fn native_parent(
             dependencies: dependency.as_slice(),
             ..SUPPRESSED_GUIDES
         };
-        let context = PlotRenderContext::new(registered.data(&resources)?, cell, theme)
-            .with_registration(registered, inputs.intrinsic(registered))
-            .with_fit_scope(&cell_scope)
-            .with_guides(&guides);
         let result = match children.plan(
-            &panel_plot,
+            &factory,
+            assignment,
             role,
-            context,
-            if role == LegendRole::Panel {
-                guide_slot.as_ref()
-            } else {
-                None
+            GuideConsumption {
+                local_guide: if role == LegendRole::Panel {
+                    guide_slot.as_ref()
+                } else {
+                    None
+                },
+                ..guides
             },
+            &cell_scope,
             round,
             domain_address,
         )? {
@@ -379,14 +409,19 @@ pub(super) fn native_parent(
         if result.legend.is_some() {
             legend_owner = false;
         }
-        let cell = grid.cells[facet.row * columns + facet.column];
+        let cell = grid.cells[slot.0];
         let requirement =
             match fit::outcome(super::rendering::strip_requirement(
                 result.result.axes.as_ref().ok_or_else(|| {
                     Error::Render("facet panel is missing its measured axes".into())
                 })?,
-                &panel_plot,
-                &facet.cell,
+                registered.source,
+                registered
+                    .scope
+                    .numeric_owner
+                    .facet
+                    .as_ref()
+                    .expect("prepared facet occurrence"),
                 theme,
                 cell,
                 &cell_scope,
@@ -423,7 +458,7 @@ pub(super) fn native_parent(
             )?;
         }
         panel_plans.push(super::OwnedFacetChild {
-            slot: crate::orchestrator::root::GridSlot(facet.row * columns + facet.column),
+            slot: *slot,
             plot: result,
             strips: Vec::new(),
             strip_layer: String::new(),
@@ -433,18 +468,27 @@ pub(super) fn native_parent(
     if let Some(failure) = child_miss {
         return Ok(FitOutcome::Miss(failure));
     }
-    for facet in panels {
-        facet.panel = grid.cells[facet.row * columns + facet.column];
-    }
-    Ok(FitOutcome::Measured((plot.clone(), panel_plans, grid)))
+    Ok(FitOutcome::Measured((panel_plans, grid)))
 }
 
-pub(super) fn feedback_plot(
-    mut plot: Plot,
-    panels: &[FacetPanel],
+pub(super) fn feedback_domains(
+    plot: &PlotDescription,
+    panels: &[(GridSlot, FacetCell, RowSelection)],
+    shared: [Option<(f64, f64)>; 2],
     facet_scales: FacetScales,
     round: &FeedbackRound,
-) -> Result<Plot, Error> {
+) -> Result<[Option<(f64, f64)>; 2], Error> {
+    let mut windows = [plot.x_axis_spec(), plot.y_axis_spec()]
+        .map(|axis| axis.window.map(crate::layout::RawWindow::pair));
+    for side in 0..2 {
+        if shared[side].is_some()
+            && !(side == 0
+                && plot.kind() == crate::PlotKind::Forest
+                && plot.axis_scale_spec() == crate::AxisScale::Log10)
+        {
+            windows[side] = shared[side];
+        }
+    }
     let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
     let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
     for (fixed, kind) in [
@@ -468,12 +512,8 @@ pub(super) fn feedback_plot(
             }
         }
         if let Some(range) = shared {
-            plot = if kind == FeedbackKind::AutomaticDomainX {
-                plot.with_planned_x_limits(range)
-            } else {
-                plot.with_planned_y_limits(range)
-            };
+            windows[usize::from(kind == FeedbackKind::AutomaticDomainY)] = Some(range);
         }
     }
-    Ok(plot)
+    Ok(windows)
 }

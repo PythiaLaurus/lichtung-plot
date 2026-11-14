@@ -10,14 +10,16 @@
 use crate::alpha::{marks::ObservationAlpha, AlphaEncoding, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::layout::{AxisTick, Layout, PhysicalTextAlignment, PixelRect, TextBlock};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
-    CategoryOrder, HeatmapAnnotations, HeatmapLayout, PlotRenderContext, PlotRenderResult,
+    CategoryOrder, HeatmapAnnotations, HeatmapLayout, PlotMeasureContext, PlotRenderResult,
 };
 use crate::theme::{ContinuousColorScale, OpaqueColor};
+#[cfg(test)]
 use crate::Plot;
 
 #[cfg(test)]
@@ -331,13 +333,12 @@ fn assigned_rows(
     selection: &crate::CategoryLabelSelection,
     labels_visible: bool,
     tick_width: f64,
-    context: PlotRenderContext<'_, '_>,
+    context: &PlotMeasureContext<'_, '_>,
+    theme: &crate::text::TextRequestContext<'_, '_>,
+    panel: PixelRect,
 ) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::{GridRequirement, TrackSpec};
-
-    let panel = context.panel;
-    let theme = context.theme;
 
     let count = levels[1].len();
     let width = levels[0].len();
@@ -703,7 +704,7 @@ pub(crate) fn natural_body_preference(
 }
 
 pub(crate) fn natural_body_height(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
@@ -1184,43 +1185,39 @@ impl HeatmapData {
 }
 
 pub(crate) fn measure(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let (prepared, levels) = retained_in(context.registered)?;
-    let theme = context.theme;
+    let (prepared, levels) = retained_in(Some(context.registered))?;
+    let theme = request;
 
     let minimum = intrinsic_body_minimum(
-        context.registered,
+        Some(context.registered),
         context.intrinsic(),
-        context.data.source_resources(),
+        context.operation,
         theme,
     )?;
     let (body, colorbar) =
-        if crate::orchestrator::registration::continuous_guide_suppressed(context.registered)
+        if crate::orchestrator::registration::continuous_guide_suppressed(Some(context.registered))
             || crate::orchestrator::registration::continuous_guide_use(
-                chart.description(),
-                context.registered,
+                chart,
+                Some(context.registered),
             ) != crate::decorations::legend::discrete::scoped::GuideUse::Local
             || context.guides.use_kind
                 != crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
-            (context.panel, None)
+            (context.assignment.local.body, None)
         } else {
             let (body, guide) = guide::measure(
-                context.registered,
-                context.panel,
+                Some(context.registered),
+                context.assignment.local.body,
                 minimum.0,
                 theme,
                 &context
                     .fit_scope()
                     .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
-                context.content_height.then_some((
-                    chart,
-                    context.registered,
-                    context.intrinsic(),
-                    context.data.source_resources(),
-                )),
+                context.assignment.local.content_height.then_some(context),
             )?;
             (body, Some(guide))
         };
@@ -1245,7 +1242,7 @@ pub(crate) fn measure(
         let wrap_labels = theme.text_layouts.ticks[1].as_ref().is_none_or(|layout| {
             layout.instructions().wrapping != Some(crate::TextWrapping::NoSoftWrap)
         });
-        let available = context.axis_label_width.max(1.0 / 1024.0);
+        let available = context.assignment.local.axis_label_width.max(1.0 / 1024.0);
         if available <= 0.0 {
             return Err(context
                 .fit_scope()
@@ -1258,19 +1255,17 @@ pub(crate) fn measure(
         let mut natural = 1.0 / 1024.0;
         let eligible = crate::data::source::collect_source(
             chart
-                .description()
                 .y_axis_spec()
                 .category_labels
                 .indices(y_labels.len())
                 .map(Ok),
         )?;
         for (_, label) in y_labels.iter().enumerate().filter(|(index, _)| {
-            crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
+            crate::orchestrator::registration::axis_tick_labels_visible(Some(context.registered), 1)
                 && theme
                     .tick_text_appearance(crate::layout::AxisSide::Left)
                     .includes(*index, &eligible)
                 && chart
-                    .description()
                     .y_axis_spec()
                     .category_labels
                     .includes(*index, y_labels.len())
@@ -1289,7 +1284,6 @@ pub(crate) fn measure(
             theme
                 .intrinsic_tick_label_width(
                     chart
-                        .description()
                         .y_axis_spec()
                         .category_labels
                         .indices(y_labels.len())
@@ -1312,7 +1306,7 @@ pub(crate) fn measure(
             levels,
             x_labels.len(),
             |index| &x_labels[index],
-            &chart.description().x_axis_spec().category_labels,
+            &chart.x_axis_spec().category_labels,
             panel,
             theme,
             context.fit_scope(),
@@ -1333,10 +1327,15 @@ pub(crate) fn measure(
             &measured,
             column_edges,
             &y_labels,
-            &chart.description().y_axis_spec().category_labels,
-            crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1),
+            &chart.y_axis_spec().category_labels,
+            crate::orchestrator::registration::axis_tick_labels_visible(
+                Some(context.registered),
+                1,
+            ),
             tick_width,
-            context.with_panel(panel),
+            context,
+            request,
+            panel,
         )?;
         for (index, plan) in measured.values.iter_mut().enumerate() {
             if let Some(text) = plan {
@@ -1400,7 +1399,8 @@ pub(crate) fn measure(
         ))?;
         let axes = context
             .registered
-            .and_then(|registered| registered.axes.coordinate())
+            .axes
+            .coordinate()
             .ok_or_else(|| Error::Render("Heatmap requires prepared native axes".into()))?;
         let mut layout = Layout {
             projection: crate::layout::Projection::new(
@@ -1409,18 +1409,11 @@ pub(crate) fn measure(
                 panel.as_tuple(),
             ),
             x_axis: crate::layout::Axis {
-                label: axes
-                    .copy_label(context.registered.expect("prepared Heatmap occurrence"), 0)?,
+                label: axes.copy_label(context.registered, 0)?,
                 ticks: x_ticks,
                 tick_labels_visible: true,
                 category_labels: axes
-                    .axis(
-                        context
-                            .registered
-                            .expect("prepared Heatmap occurrence")
-                            .source,
-                        0,
-                    )
+                    .axis(context.registered.source, 0)
                     .authored()
                     .expect("coordinate authored intent")
                     .category_labels
@@ -1432,21 +1425,14 @@ pub(crate) fn measure(
                 numeric: None,
             },
             y_axis: crate::layout::Axis {
-                label: axes
-                    .copy_label(context.registered.expect("prepared Heatmap occurrence"), 1)?,
+                label: axes.copy_label(context.registered, 1)?,
                 ticks: y_ticks,
                 tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
-                    context.registered,
+                    Some(context.registered),
                     1,
                 ),
                 category_labels: axes
-                    .axis(
-                        context
-                            .registered
-                            .expect("prepared Heatmap occurrence")
-                            .source,
-                        1,
-                    )
+                    .axis(context.registered.source, 1)
                     .authored()
                     .expect("coordinate authored intent")
                     .category_labels
@@ -1494,7 +1480,7 @@ pub(crate) fn measure(
 
     let mut result = PlotRenderResult::new(
         layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+        crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
     )
     .with_resolved_axis_keys(
         crate::data::source::collect_source(
@@ -1516,7 +1502,7 @@ pub(crate) fn measure(
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
-        chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
+        context.semantic_inputs(crate::orchestrator::assignment::AxisPairScope::Pair)?,
         || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
 
@@ -2340,7 +2326,7 @@ struct AnnotationPlans {
 }
 
 fn measure_annotations(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &HeatmapData,
     levels: [&[String]; 2],
     columns: &[f64],
@@ -2365,7 +2351,7 @@ fn measure_annotations(
         .map_err(|_| Error::Render("heatmap row plans allocation failed".into()))?;
     plans.values.resize(prepared.cells.len(), None);
     plans.rows.resize(prepared.null_row_annotations.len(), None);
-    if let HeatmapAnnotations::Values(_) = chart.description().heatmap_annotations_spec() {
+    if let HeatmapAnnotations::Values(_) = chart.heatmap_annotations_spec() {
         let eligible = crate::data::source::collect_source(
             prepared
                 .value_labels

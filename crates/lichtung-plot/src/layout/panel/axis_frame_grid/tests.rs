@@ -101,9 +101,19 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     )
     .x_tick_generation(TickGeneration::target(5).unwrap())
     .y_tick_generation(TickGeneration::maximum(5).unwrap())
-    .erase()
-    .with_resolved_facet_ranges(crate::spec::PlotKind::Scatter, Some((0.0, 3.0)), None);
-    let inputs = plot.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]);
+    .erase();
+    let inputs = [
+        plot.description().x_axis_spec(),
+        plot.description().y_axis_spec(),
+    ]
+    .map(|spec| {
+        crate::layout::AxisSemanticInputs::new(
+            crate::orchestrator::registration::AxisIntentRef::Authored(spec),
+            crate::layout::RangeProvenance::Shared,
+            crate::AxisScale::Linear,
+            crate::layout::RangePolicy::ContinuousNice,
+        )
+    });
     let plan = layout
         .measure_axes(&theme, &FitScope::root(), inputs.clone())
         .unwrap();
@@ -123,15 +133,16 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one operation per family keeps the supplied-provenance callback trace beside the native content allocation and dimensions"
+)]
 fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
     use crate::{CategoryValues, NumericRangeOrigin, NumericValues, Plot, PlotKind};
     use std::sync::{Arc, Mutex};
 
     let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
     let y = NumericValues::new("y", [2.0, 4.0, 3.0]);
-    let theme = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let request = crate::text::TextRequestContext::new(&theme, &text);
     let actual = Arc::new(Mutex::new(Vec::new()));
     let calls = Arc::clone(&actual);
     let format = crate::NumericFormat::default().set_function(move |context| {
@@ -139,6 +150,7 @@ fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
             calls.lock().unwrap().push((
                 context.domain().unwrap().origin(),
                 context.domain().unwrap().scale_limits(),
+                context.owner().0.clone(),
             ));
         }
         context.format_builtin()
@@ -165,32 +177,191 @@ fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
             .x_tick_format(format.clone())
             .erase(),
     ] {
-        crate::orchestrator::with_prepared_plot_for_test(
-            &source,
-            &request,
-            |_| Ok(()),
-            |plot, inputs, request, operation| {
-                let registered = &inputs.plots[0];
+        use crate::decorations::legend::discrete::scoped::{GuideConsumption, GuideUse};
+        use crate::orchestrator::assignment::{
+            GuideTrialAssignment, GuideTrialChoice, ParentInsets, PlotAllocationInputs,
+            PlotMeasureDimensions,
+        };
+        use crate::orchestrator::root::{Root, RootSource};
+        let mut witnessed = false;
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 1000,
+                height: 800,
+            },
+            |stage| Root::prepare(RootSource::Plot(source.description()), stage),
+            |root, assigned, round| {
+                let registered = &root.plots[0];
                 assert_eq!(
                     registered.axes.sources()[0].base_provenance,
                     super::super::RangeProvenance::Automatic
                 );
                 let range = (-10.0, 20.0);
-                let plot = plot
-                    .clone()
-                    .with_resolved_facet_ranges(plot.kind(), Some(range), None);
-                actual.lock().unwrap().clear();
-                let selected = plot
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                        crate::spec::PlotRenderContext::new(
-                            registered.data(operation).unwrap(),
-                            PixelRect::new(20.0, 900.0, 20.0, 720.0),
-                            request,
-                        )
-                        .with_registration(registered, inputs.intrinsic(registered)),
+                let owner = &registered.scope.address;
+                let kind = crate::layout::kernel::FeedbackKind::AutomaticDomainX;
+                if witnessed || round.feedback_domain(owner, kind).is_none() {
+                    round.request_domain(owner, owner, kind, range)?;
+                    return Ok(crate::layout::MeasuredLayout::new(
+                        assigned.assigned_size()?,
+                        (),
+                    ));
+                }
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory = root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+                let panel = PixelRect::new(20.0, 900.0, 20.0, 720.0);
+                let dimensions = PlotMeasureDimensions {
+                    canvas: measurement.measurement_size,
+                    output_override: Some(crate::layout::RootSize::new(1100, 900)),
+                };
+                let entry = factory.assign(
+                    PlotAllocationInputs {
+                        dimensions,
+                        cell: panel,
+                        frame: panel,
+                        body: panel,
+                        axis_label_width: panel.width(),
+                        content_height: source.kind() == PlotKind::Beeswarm,
+                        fill_content_height: false,
+                        content_preference: None,
+                        insets: ParentInsets::consumed(round, owner),
+                        guide: GuideTrialAssignment {
+                            edge: crate::LegendPosition::Auto,
+                            compact: false,
+                            allocation: None,
+                        },
+                    },
+                    round,
+                    None,
+                )?;
+                // Single full entry keeps the base. The real consumed round is
+                // installed only by its original attempt program.
+                assert_ne!(entry.ranges().unwrap()[0], range);
+                let mut branch = factory.fork(
+                    &entry,
+                    GuideTrialChoice {
+                        edge: crate::LegendPosition::Auto,
+                        compact: false,
+                    },
+                    round,
+                )?;
+                // Preserve the original supplied-provenance reader contract.
+                // The range above comes from real feedback; this Shared value
+                // is a fixture input, not evidence of factory coordination.
+                match &mut branch.entry.domains {
+                    crate::orchestrator::assignment::AxisDomainAssignments::Pair(pair) => {
+                        pair[0].provenance = super::super::RangeProvenance::Shared;
+                    }
+                    crate::orchestrator::assignment::AxisDomainAssignments::Marginal {
+                        central,
+                        ..
+                    } => central[0].provenance = super::super::RangeProvenance::Shared,
+                    crate::orchestrator::assignment::AxisDomainAssignments::Matrix { .. } => {
+                        unreachable!("four coordinate fixtures")
+                    }
+                }
+                let factory = factory.for_branch(&branch.root)?;
+                let scope = FitScope::new(owner, 0);
+                let local = registered.local_guide_slot()?;
+                let context = factory.context(
+                    &branch.entry,
+                    GuideConsumption {
+                        use_kind: GuideUse::Local,
+                        local_guide: local.as_ref(),
+                        dependencies: &[],
+                    },
+                    &scope,
+                )?;
+                assert!(std::ptr::eq(context.registered, registered));
+                assert!(std::ptr::eq(
+                    std::ptr::from_ref(context.operation),
+                    std::ptr::from_ref(&root.operation),
+                ));
+                assert!(std::ptr::eq(
+                    std::ptr::from_ref(context.assignment.local),
+                    std::ptr::from_ref(&branch.entry),
+                ));
+                assert!(std::ptr::eq(
+                    std::ptr::from_ref(context.assignment.root),
+                    std::ptr::from_ref(&branch.root),
+                ));
+                assert!(std::ptr::eq(
+                    context.intrinsic,
+                    root.plot_intrinsic(&registered.scope.id)?,
+                ));
+                assert_eq!(context.assignment.local.ranges().unwrap()[0], range);
+                assert_eq!(
+                    context
+                        .assignment
+                        .local
+                        .dimensions
+                        .canvas_size()
+                        .dimensions()?,
+                    (1000, 800)
+                );
+                assert_eq!(
+                    context
+                        .assignment
+                        .local
+                        .dimensions
+                        .figure_size()
+                        .dimensions()?,
+                    (1100, 900)
+                );
+                let request = context.request();
+                let native = if source.kind() == PlotKind::Beeswarm {
+                    use crate::layout::interior::guide::{native_right, NATIVE_RIGHT_STAGES};
+                    let minimum = crate::layout::interior::intrinsic_body_minimum(
+                        registered,
+                        crate::builder::RootFrameDomainInput::Selected(&branch.entry),
+                        factory.intrinsic,
+                        factory.operation,
+                        &request,
+                    )?;
+                    let guide_scope =
+                        scope.child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+                    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().clear());
+                    let (body, legend) = native_right(
+                        std::sync::Arc::clone(registered.guide.descriptor.as_ref().unwrap()),
+                        panel,
+                        minimum.0,
+                        &request,
+                        &guide_scope,
+                        Some(&context),
                     )
-                    .unwrap();
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    NATIVE_RIGHT_STAGES.with(|stages| {
+                        assert_eq!(*stages.borrow(), ["measured", "allocated", "content"]);
+                    });
+                    assert!(body.x1 < panel.x1);
+                    assert_eq!(body.x0.to_bits(), panel.x0.to_bits());
+                    assert_eq!(body.y0.to_bits(), panel.y0.to_bits());
+                    assert!(body.height() >= legend.compute_box_height());
+                    assert!(!legend.select(body.x1, body.y0)?.calls.is_empty());
+                    // A later allocation failure must not precede successful
+                    // measurement of the complete native guide.
+                    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().clear());
+                    assert!(matches!(
+                        native_right(
+                            std::sync::Arc::clone(registered.guide.descriptor.as_ref().unwrap()),
+                            panel,
+                            f64::NAN,
+                            &request,
+                            &guide_scope,
+                            Some(&context),
+                        ),
+                        Err(crate::layout::fit::PlanError::Fatal(_))
+                    ));
+                    NATIVE_RIGHT_STAGES.with(|stages| assert_eq!(*stages.borrow(), ["measured"]));
+                    Some(body)
+                } else {
+                    None
+                };
+                actual.lock().unwrap().clear();
+                let selected = crate::layout::interior::measure(&context, &request)
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                if let Some(body) = native {
+                    assert_eq!(selected.layout.projection.panel_box(), body);
+                }
                 assert_eq!(
                     selected.axes.as_ref().unwrap().semantics[0].provenance,
                     super::super::RangeProvenance::Shared
@@ -204,7 +375,8 @@ fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
                             } else {
                                 NumericRangeOrigin::Automatic
                             },
-                            range
+                            range,
+                            registered.scope.axis_numeric_owner.clone(),
                         );
                         if source.kind() == PlotKind::Beeswarm {
                             2
@@ -215,9 +387,17 @@ fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
                     "{:?}",
                     source.kind()
                 );
+                witnessed = true;
+                round.request_domain(owner, owner, kind, range)?;
+                Ok(crate::layout::MeasuredLayout::new(
+                    measurement.measurement_size,
+                    (),
+                ))
             },
+            |_, _, (), _| Ok(()),
         )
         .unwrap();
+        assert!(witnessed);
     }
 }
 use crate::layout::PixelRect;
@@ -255,8 +435,8 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
             None,
             ticks(),
             ticks(),
-            &AxisSpec::default(),
-            &AxisSpec::default(),
+            &AuthoredAxisSpec::default(),
+            &AuthoredAxisSpec::default(),
             &theme,
             &FitScope::root(),
             None,

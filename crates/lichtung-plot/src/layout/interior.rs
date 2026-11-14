@@ -2,10 +2,11 @@
 //! selected payloads. Parent composition adapters remain separately classified.
 //! Native coordinate axes and frames share one orientation-aware producer.
 
+use crate::builder::PlotDescription;
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
 use crate::spec::PlotKind;
-use crate::{Error, Plot};
+use crate::Error;
 
 pub(crate) mod coordinate;
 pub(crate) mod guide;
@@ -83,6 +84,119 @@ impl InteriorRoute {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct MeasuredCoordinateMarks {
+    pub(crate) marks: std::sync::Arc<SelectedMarkPlan>,
+    pub(crate) significance: Option<crate::significance::SignificancePlan>,
+    pub(crate) deferred_annotation_text: Vec<crate::layout::DeferredAnnotationTextPlan>,
+    pub(crate) numeric_presentation:
+        Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
+}
+
+impl MeasuredCoordinateMarks {
+    pub(crate) fn new(marks: std::sync::Arc<SelectedMarkPlan>) -> Self {
+        Self {
+            marks,
+            significance: None,
+            deferred_annotation_text: Vec::new(),
+            numeric_presentation: None,
+        }
+    }
+}
+
+pub(crate) fn measure(
+    context: &crate::spec::PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
+    let source = context.registered.source;
+    match InteriorRoute::classify(source.kind()) {
+        route @ (InteriorRoute::StandardCoordinate(_) | InteriorRoute::OneCategoricalAxis(_)) => {
+            route.measure(source, context, request)
+        }
+        InteriorRoute::SpecializedGrid(SpecializedGrid::Matrix) => {
+            crate::plots::matrix::measure(source, context, request)
+        }
+        InteriorRoute::SpecializedGrid(SpecializedGrid::Marginal) => {
+            crate::plots::marginal::measure(source, context, request)
+        }
+        InteriorRoute::SpecializedGrid(SpecializedGrid::Heatmap) => {
+            crate::plots::heatmap::measure(source, context, request)
+        }
+        InteriorRoute::SpecializedGrid(SpecializedGrid::Beeswarm) => {
+            crate::plots::beeswarm::measure(source, context, request)
+        }
+        InteriorRoute::SpecializedGrid(SpecializedGrid::Waterfall) => {
+            crate::plots::waterfall::measure(context, request)
+        }
+    }
+}
+
+pub(crate) fn measure_selected_interior(
+    context: &crate::spec::PlotMeasureContext<'_, '_>,
+    layout: &crate::layout::Layout,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let plot = context.registered.source;
+    match plot.kind() {
+        PlotKind::Scatter => crate::plots::scatter::measure_marks(plot, context, request, layout),
+        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+            crate::plots::line::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::Histogram => crate::plots::histogram::measure_marks(context, request, layout),
+        PlotKind::Density => crate::plots::density::measure_marks(context, request, layout),
+        PlotKind::Qq => crate::plots::qq::measure_marks(plot, context, request, layout),
+        PlotKind::Regression => {
+            crate::plots::regression::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            crate::plots::interval_estimate::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::Dumbbell => crate::plots::dumbbell::measure_marks(plot, context, request, layout),
+        PlotKind::Bar | PlotKind::StackedBar => {
+            crate::plots::bar::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
+            crate::plots::horizontal_bar::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::Boxplot => crate::plots::boxplot::measure_marks(plot, context, request, layout),
+        PlotKind::Violin | PlotKind::Raincloud => {
+            crate::plots::violin::measure_marks(plot, context, request, layout)
+        }
+        PlotKind::Interaction => {
+            crate::plots::interaction::measure_marks(plot, context, request, layout)
+        }
+        _ => unreachable!("coordinate route selected its own marks"),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn measure_for_test(
+    factory: &crate::orchestrator::assignment::PlotMeasureAssignmentFactory<'_, '_>,
+    panel: crate::layout::PixelRect,
+    round: &FeedbackRound,
+) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
+    let entry = factory.assign(
+        crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+            factory.root.measurement_size,
+            panel,
+            round,
+            &factory.registered.scope.address,
+        ),
+        round,
+        None,
+    )?;
+    crate::orchestrator::measure_plot(
+        factory,
+        entry,
+        crate::decorations::legend::discrete::scoped::GuideConsumption {
+            use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+            ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+        },
+        &crate::layout::fit::FitScope::root(),
+    )
+    .map(|(_, result)| result)
+}
+
 /// Composition support is independent of the child's interior route.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CompositionChildPolicy {
@@ -113,103 +227,44 @@ impl CompositionChildPolicy {
     }
 }
 
-/// Completed occurrences and their original root-level guide union.
-pub(crate) struct PreparedInteriorInputs<'src> {
-    pub(crate) plots: Vec<crate::orchestrator::registration::PlotRegistration<'src>>,
-    pub(crate) plot_intrinsics: Vec<(
-        crate::orchestrator::registration::PlotOccurrenceId,
-        crate::orchestrator::root::PlotIntrinsics,
-    )>,
-    pub(crate) root_guide:
-        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
-    pub(crate) route: InteriorRoute,
+pub(crate) fn intrinsic_body_minimum(
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    domains: crate::builder::RootFrameDomainInput<'_>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<(f64, f64), Error> {
+    let ranges = match domains {
+        crate::builder::RootFrameDomainInput::Prepared => None,
+        crate::builder::RootFrameDomainInput::Selected(assignment) => assignment.ranges(),
+    };
+    intrinsic_body_minimum_for_ranges(registered, intrinsic, operation, request, ranges)
 }
 
-impl<'src> PreparedInteriorInputs<'src> {
-    pub(crate) fn from_registry(
-        registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
-        route: InteriorRoute,
-        root_guide: Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
-    ) -> Result<Self, Error> {
-        let plots = registry.finish()?;
-        let plot_intrinsics = Self::intrinsic_slots(&plots)?;
-        Ok(Self {
-            plots,
-            plot_intrinsics,
-            root_guide,
-            route,
-        })
-    }
-
-    pub(crate) fn intrinsic_slots(
-        plots: &[crate::orchestrator::registration::PlotRegistration<'_>],
-    ) -> Result<
-        Vec<(
-            crate::orchestrator::registration::PlotOccurrenceId,
-            crate::orchestrator::root::PlotIntrinsics,
-        )>,
-        Error,
-    > {
-        crate::data::source::collect_source(plots.iter().map(|registered| {
-            Ok((
-                registered.scope.id.clone(),
-                crate::orchestrator::root::PlotIntrinsics::for_kind(registered.family.kind()),
-            ))
-        }))
-    }
-
-    pub(crate) fn intrinsic(
-        &self,
-        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
-    ) -> &crate::orchestrator::root::PlotIntrinsics {
-        &self
-            .plot_intrinsics
-            .iter()
-            .find(|(id, _)| id == &registered.scope.id)
-            .expect("registered intrinsic slot")
-            .1
-    }
-
-    /// Semantic attachment does not discover fonts. Each attached panel obtains
-    /// its post-font summary before the parent starts width allocation.
-    pub(crate) fn prepare_intrinsics(
-        &self,
-        plot: &Plot,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        operation: &crate::font::canonical::OperationContext,
-    ) -> Result<(), Error> {
-        self.route.validate(plot.description())?;
-        for registered in &self.plots {
-            if registered.axes.coordinate().is_none() {
-                continue;
-            }
-            let scope = &registered.scope.render_name;
-            let intrinsic = self.intrinsic(registered);
-            crate::orchestrator::root::prepare_plot_intrinsics(
-                intrinsic,
-                &crate::orchestrator::root::PlotIntrinsicInputs {
-                    registered,
-                    request: crate::text::TextRequestContext {
-                        theme: &registered.appearance,
-                        ..*theme
-                    },
-                    operation,
-                    diagnostic_scope: scope.as_deref(),
-                    y_visible: registered.policy.axis_text.tick_labels[1],
-                },
-            )?;
-        }
-        Ok(())
-    }
+pub(crate) fn intrinsic_body_minimum_for_ranges(
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
+    operation: &crate::font::canonical::OperationContext,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    ranges: Option<[(f64, f64); 2]>,
+) -> Result<(f64, f64), Error> {
+    registered.source.intrinsic_body_minimum(
+        Some(registered),
+        intrinsic,
+        operation,
+        request,
+        ranges,
+    )
 }
 
-impl Plot {
-    pub(crate) fn intrinsic_body_minimum(
+impl PlotDescription {
+    fn intrinsic_body_minimum(
         &self,
         registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
         intrinsic: &crate::orchestrator::root::PlotIntrinsics,
         operation: &crate::font::canonical::OperationContext,
         theme: &crate::text::TextRequestContext<'_, '_>,
+        ranges: Option<[(f64, f64); 2]>,
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
             crate::orchestrator::root::coordinate_intrinsic(
@@ -278,7 +333,7 @@ impl Plot {
             PlotKind::Boxplot => Some(crate::plots::boxplot::intrinsic_body_minimum(
                 self, registered, theme,
             )?),
-            PlotKind::Raincloud if self.description().raincloud_geometry_input().is_some() => Some(
+            PlotKind::Raincloud if self.raincloud_geometry_input().is_some() => Some(
                 crate::plots::violin::precomputed::intrinsic_body_minimum(self, registered, theme)?,
             ),
             PlotKind::Violin | PlotKind::Raincloud => Some(
@@ -294,7 +349,7 @@ impl Plot {
                 self, registered, intrinsic, operation, theme,
             )?),
             PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
-                self, registered, intrinsic, operation, theme,
+                self, registered, intrinsic, operation, theme, ranges,
             )?),
             PlotKind::Marginal => Some(crate::plots::marginal::intrinsic_body_minimum(
                 self, registered, intrinsic, operation, theme,

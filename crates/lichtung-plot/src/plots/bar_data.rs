@@ -13,6 +13,7 @@ use crate::data::{
 };
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{FillRole, LiteralDomain};
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey};
 use crate::orchestrator::registration::CategoricalBinding;
@@ -22,7 +23,9 @@ use crate::spec::{
     StandardDeviation, StandardError,
 };
 use crate::theme::{AccentColors, CategoryColors};
-use crate::{CategoryOrder, Plot, ValueSort};
+#[cfg(test)]
+use crate::Plot;
+use crate::{CategoryOrder, ValueSort};
 
 #[cfg(test)]
 thread_local! {
@@ -48,14 +51,13 @@ pub(crate) struct BarSignificance {
 
 impl BarSignificance {
     pub(crate) fn new(
-        chart: &Plot,
+        chart: &PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
         horizontal: bool,
     ) -> Result<Self, Error> {
         Ok(Self {
-            appearance: theme
-                .effective_significance(chart.description().significance_mark_style_override())?,
-            mode: mode(chart.description()),
+            appearance: theme.effective_significance(chart.significance_mark_style_override())?,
+            mode: mode(chart),
             group_span: theme
                 .marks
                 .get_extents()
@@ -132,7 +134,7 @@ pub(crate) fn category_bar_geometry(
     reason = "one categorical scan accounts for bar bodies, uncertainty caps, and supplemental points in either orientation"
 )]
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -153,7 +155,7 @@ pub(crate) fn intrinsic_body_minimum(
             "bar intrinsic has no prepared category or segment".into(),
         ));
     }
-    let mode = mode(chart.description());
+    let mode = mode(chart);
 
     let body = theme
         .marks
@@ -189,7 +191,7 @@ pub(crate) fn intrinsic_body_minimum(
             bar,
             series.len(),
             mode,
-            chart.description().bar_spacing_spec(),
+            chart.bar_spacing_spec(),
             horizontal,
             theme.marks.get_extents().get_categories(),
         );
@@ -454,13 +456,13 @@ pub(crate) fn resolved_colors(
 }
 
 pub(crate) fn bar_color(
-    chart: &Plot,
+    chart: &PlotDescription,
     categories: &[String],
     bar: &PreparedBar,
     colors: &CategoryColors,
     accents: &AccentColors,
 ) -> Result<(u8, u8, u8), Error> {
-    if chart.description().colors_by_sign() {
+    if chart.colors_by_sign() {
         accents.color(usize::from(bar.end < bar.start))
     } else if let Some(hue) = &bar.hue_key {
         colors.color(hue.as_ref().value)
@@ -691,20 +693,22 @@ impl BarPayload {
 
     pub(crate) fn retain(
         mut self,
-        mut result: crate::spec::PlotRenderResult,
-        context: crate::spec::PlotRenderContext<'_, '_>,
-        chart: &Plot,
+        layout: &crate::layout::Layout,
+        significance: crate::significance::SignificancePlan,
+        deferred_annotation_text: Vec<crate::layout::DeferredAnnotationTextPlan>,
+        context: &crate::spec::PlotMeasureContext<'_, '_>,
+        chart: &PlotDescription,
         prepared: &PreparedBars,
-    ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
+    ) -> Result<crate::layout::interior::MeasuredCoordinateMarks, crate::layout::fit::PlanError>
+    {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         self.measure_attached_text_ink(
-            &result.layout.projection,
-            context.registered.expect("prepared Bar occurrence"),
+            &layout.projection,
+            context.registered,
             prepared,
             &context
                 .registered
-                .expect("prepared Bar occurrence")
                 .axes
                 .categories(usize::from(matches!(
                     chart.kind(),
@@ -729,21 +733,21 @@ impl BarPayload {
         for (point, style) in &self.points {
             geometry.scatter(std::slice::from_ref(point), style, clip)?;
         }
-        if let Some(significance) = &result.significance {
-            for bracket in &significance.brackets {
-                geometry.bracket(crate::render::backend::PlannedSignificanceCall {
-                    bracket: &bracket.geometry,
-                    style: &bracket.style,
-                    label: &bracket.label,
-                })?;
-            }
+        for bracket in &significance.brackets {
+            geometry.bracket(crate::render::backend::PlannedSignificanceCall {
+                bracket: &bracket.geometry,
+                style: &bracket.style,
+                label: &bracket.label,
+            })?;
         }
-        result.marks = Some(crate::data::source::source_arc(
-            crate::layout::interior::SelectedMarkPlan {
+        let mut result = crate::layout::interior::MeasuredCoordinateMarks::new(
+            crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
                 payload: crate::layout::interior::MarkPayload::Bars(self),
                 geometry,
-            },
-        )?);
+            })?,
+        );
+        result.significance = Some(significance);
+        result.deferred_annotation_text = deferred_annotation_text;
         Ok(result)
     }
 }
@@ -793,7 +797,8 @@ pub(crate) fn domain_expansion(
 }
 
 pub(crate) fn attached_significance_text_plans(
-    context: crate::spec::PlotRenderContext<'_, '_>,
+    context: &crate::spec::PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
     marks: &[PreparedBarSignificance],
     appearance: &crate::theme::TextTheme,
     alignment: impl Fn(&PreparedBarSignificance) -> crate::layout::PhysicalTextAlignment,
@@ -804,12 +809,12 @@ pub(crate) fn attached_significance_text_plans(
         crate::data::source::collect_source(marks.iter().map(|mark| Ok(mark.source_index)))?;
     let mut plans = crate::data::source::collect_source(marks.iter().map(|mark| {
         crate::layout::fit::measured(crate::layout::text::request::measure_occurrence(
-            context.theme,
+            request,
             &mark.label,
             crate::text::TextAppearance {
                 theme: appearance,
                 exact_override,
-                layout: context.theme.text_layouts.significance.as_ref(),
+                layout: request.text_layouts.significance.as_ref(),
             },
             i64::MAX,
             alignment(mark),
@@ -819,7 +824,7 @@ pub(crate) fn attached_significance_text_plans(
         ))
         .map_err(crate::layout::fit::PlanError::into_error)
     }))?;
-    crate::layout::text::font_fit::uniform(context.theme, &mut plans, context.fit_scope())
+    crate::layout::text::font_fit::uniform(request, &mut plans, context.fit_scope())
         .map_err(crate::layout::fit::PlanError::into_error)?;
     Ok(plans)
 }

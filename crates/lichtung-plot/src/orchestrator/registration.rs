@@ -6,9 +6,9 @@ mod axes;
 mod colors;
 mod policy;
 pub(crate) use axes::{
-    axis_label, prepare_axis_source, AxisIntentRef, AxisSlot, AxisSourceWitness, AxisSpace,
-    BaseAxisRef, DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
-    PreparedAxisSource, PreparedCategorySource,
+    axis_label, prepare_axis_labels, prepare_axis_source, AxisIntentRef, AxisSlot,
+    AxisSourceWitness, AxisSpace, BaseAxisRef, DisplayExtent, ExactTicksRef, MarginalStrip,
+    PreparedAxes, PreparedAxesOwner, PreparedAxisSource, PreparedCategorySource,
 };
 pub(crate) use colors::{CategoricalBinding, CategoricalDomainSource};
 pub(crate) use policy::{ContinuousMaterialization, GutterOwner, PlotScopePolicy};
@@ -23,6 +23,12 @@ impl PartialEq for RootIdentity {
 }
 
 impl Eq for RootIdentity {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CandidateId {
+    pub(crate) root: RootIdentity,
+    pub(crate) serial: usize,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlotOccurrenceId {
@@ -156,16 +162,6 @@ pub(crate) fn axis_tick_labels_visible(
     side: usize,
 ) -> bool {
     registered.is_none_or(|registered| registered.policy.axis_text.tick_labels[side])
-}
-
-pub(crate) fn guide_composition(
-    source: &PlotDescription,
-    registered: Option<&PlotRegistration<'_>>,
-) -> crate::LegendComposition {
-    registered.map_or_else(
-        || source.legend_composition_spec(),
-        |registered| registered.policy.guide_composition,
-    )
 }
 
 pub(crate) fn continuous_guide_suppressed(registered: Option<&PlotRegistration<'_>>) -> bool {
@@ -309,6 +305,18 @@ impl std::fmt::Debug for PlotRegistration<'_> {
 }
 
 impl<'src> PlotRegistration<'src> {
+    pub(crate) const fn kind(&self) -> crate::PlotKind {
+        self.source.kind()
+    }
+
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "the family reader preserves its fallible measurement boundary without adding a validation stage"
+    )]
+    pub(crate) const fn family(&self) -> Result<FamilyRef<'_>, Error> {
+        Ok(self.family.as_ref())
+    }
+
     pub(crate) fn significance_annotations(
         &self,
     ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> + Clone {
@@ -319,11 +327,23 @@ impl<'src> PlotRegistration<'src> {
     }
 
     pub(crate) fn raw_windows(&self) -> [Option<&crate::layout::RawWindow>; 2] {
-        [self.source.x_axis_spec(), self.source.y_axis_spec()].map(|axis| {
-            axis.window
-                .as_ref()
-                .filter(|_| axis.provenance == crate::layout::RangeProvenance::Configured)
-        })
+        [self.source.x_axis_spec(), self.source.y_axis_spec()].map(|axis| axis.window.as_ref())
+    }
+
+    pub(crate) fn local_guide_slot(
+        &self,
+    ) -> Result<Option<crate::decorations::legend::discrete::GuideSlot>, Error> {
+        self.guide
+            .descriptor
+            .as_ref()
+            .map(|descriptor| {
+                crate::decorations::legend::discrete::GuideSlot::new(
+                    std::sync::Arc::clone(descriptor),
+                    &self.scope.address,
+                    self.source.legend_position_spec(),
+                )
+            })
+            .transpose()
     }
 
     pub(crate) fn data<'op>(
@@ -339,6 +359,21 @@ impl<'src> PlotRegistration<'src> {
     ) -> Result<crate::numeric::source::NumericBinding<'v>, Error> {
         self.scope
             .axis_numeric_binding(self.source, &self.row_source, operation)
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "non-axis materialization occurs during registry construction; canonical registrations retain this checked accessor"
+        )
+    )]
+    pub(crate) fn numeric_binding<'v>(
+        &'v self,
+        operation: &'v crate::font::canonical::OperationContext,
+    ) -> Result<crate::numeric::source::NumericBinding<'v>, Error> {
+        self.scope
+            .numeric_binding(self.source, &self.row_source, operation)
     }
 }
 

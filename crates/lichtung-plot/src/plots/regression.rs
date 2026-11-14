@@ -13,14 +13,18 @@ use crate::alpha::{
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
-use crate::orchestrator::registration::guide_descriptor;
 use crate::Error;
 
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{FillRole, LineRole, LiteralDomain, PointRole};
 use crate::decorations::legend::GuideSourceKey;
+use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle};
-use crate::spec::{PlotRenderContext, PlotRenderResult, RegressionBand};
+#[cfg(test)]
+use crate::spec::PlotRenderResult;
+use crate::spec::{PlotMeasureContext, RegressionBand};
 use crate::stats::regression::OlsFit;
+#[cfg(test)]
 use crate::Plot;
 
 const BAND_POINTS: usize = 40;
@@ -37,7 +41,7 @@ pub(crate) struct PreparedRegression {
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -53,7 +57,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Regression has no retained observations".into(),
         ));
     }
-    let style = chart.description().point_style(
+    let style = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_regression(),
@@ -329,33 +333,29 @@ impl RegressionPayload {
 }
 
 pub(crate) fn measure_marks(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
-    layout: crate::layout::Layout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Regression(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::Render(
-                "Regression measurement requires root-prepared semantics for its component".into(),
-            )
-        })?;
-    let theme = context.theme;
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    layout: &crate::layout::Layout,
+) -> Result<MeasuredCoordinateMarks, crate::layout::fit::PlanError> {
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Regression(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| {
+        Error::Render(
+            "Regression measurement requires root-prepared semantics for its component".into(),
+        )
+    })?;
+    let theme = request;
 
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, context)?;
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let mut result = project(chart, prepared, layout, request)?;
+    let raw_windows = context.registered.raw_windows();
     let automatic = [raw_windows[0].is_none(), raw_windows[1].is_none()];
     let mut requests = [None; 2];
     if let Some(ink) = point_ink(
-        &chart.description().point_style(
+        &chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_regression(),
@@ -374,12 +374,7 @@ pub(crate) fn measure_marks(
             context.fit_scope(),
         )?;
     }
-    let crate::layout::interior::MarkPayload::Regression(payload) = &result
-        .marks
-        .as_ref()
-        .expect("selected Regression marks")
-        .payload
-    else {
+    let crate::layout::interior::MarkPayload::Regression(payload) = &result.marks.payload else {
         unreachable!("Regression selected its own mark payload")
     };
     let mut scientific_ink = crate::render::geometry::GeometrySnapshot::new();
@@ -402,7 +397,7 @@ pub(crate) fn measure_marks(
         )?;
         requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
     }
-    let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Regression marks"))
+    let marks = std::sync::Arc::get_mut(&mut result.marks)
         .expect("newly selected Regression marks have one owner");
     let crate::layout::interior::MarkPayload::Regression(payload) = &mut marks.payload else {
         unreachable!("Regression selected its own mark payload")
@@ -412,17 +407,17 @@ pub(crate) fn measure_marks(
 }
 
 pub(crate) fn project(
-    chart: &Plot,
+    chart: &PlotDescription,
     prepared: &PreparedRegression,
-    layout: crate::layout::Layout,
-    context: PlotRenderContext<'_, '_>,
-) -> Result<PlotRenderResult, Error> {
-    let theme = context.theme;
+    layout: &crate::layout::Layout,
+    request: &crate::text::TextRequestContext<'_, '_>,
+) -> Result<MeasuredCoordinateMarks, Error> {
+    let theme = request;
     let projection = &layout.projection;
     let marks = theme.marks();
     let color = crate::theme::AccentColors::resolve(marks.get_accents(), 1)?.color(0)?;
     let point_radius = marks.get_points().get_radii().get_regression();
-    let point_style = chart.description().point_style(theme, color, point_radius);
+    let point_style = chart.point_style(theme, color, point_radius);
     crate::alpha::marks::require_aligned_points(prepared.points.len(), prepared.alphas.len())?;
     let mut point_batches = Vec::new();
     for ((x_value, y_value), alpha) in prepared.points.iter().zip(&prepared.alphas) {
@@ -512,14 +507,12 @@ pub(crate) fn project(
         geometry.scatter(points, style, clip)?;
     }
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
-    let mut result = PlotRenderResult::new(layout, guide_descriptor(context.registered)?);
-    result.marks = Some(crate::data::source::source_arc(
-        crate::layout::interior::SelectedMarkPlan {
+    Ok(MeasuredCoordinateMarks::new(
+        crate::data::source::source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Regression(payload),
             geometry,
-        },
-    )?);
-    Ok(result)
+        })?,
+    ))
 }
 
 #[cfg(test)]
@@ -590,25 +583,24 @@ mod style_tests {
             &source,
             &theme,
             |_| Ok(()),
-            |chart, inputs, request, _operation| {
+            |chart, inputs, request, _operation, round| {
                 let registered = &inputs.plots[0];
-                let operation = request
-                    .text
-                    .prepared_font_environment()
-                    .unwrap()
-                    .operation();
                 let minimum = intrinsic_body_minimum(chart, Some(registered), request).unwrap();
-                let selected = chart
-                    .measure_selected_interior(
-                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                        PlotRenderContext::new(
-                            registered.data(&operation).unwrap(),
-                            crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
-                            request,
-                        )
-                        .with_registration(registered, inputs.intrinsic(registered)),
-                    )
+                let measurement = inputs.assignment_factory().assign(
+                    chart
+                        .sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &registered.scope.id)
                     .unwrap();
+                let selected = crate::layout::interior::measure_for_test(
+                    &factory,
+                    crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
+                    round,
+                )
+                .unwrap();
                 (minimum, selected)
             },
         )
@@ -617,7 +609,7 @@ mod style_tests {
             &base,
             &theme,
             |_| Ok(()),
-            |chart, inputs, request, _operation| {
+            |chart, inputs, request, _operation, _round| {
                 intrinsic_body_minimum(chart, inputs.plots.first(), request).unwrap()
             },
         )
@@ -740,7 +732,7 @@ mod style_tests {
                 &mapped,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
                 |_| Ok(()),
-                |mapped, inputs, request, _operation| {
+                |mapped, inputs, request, _operation, _round| {
                     intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
                 }
             )

@@ -60,7 +60,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         &chart,
         &theme,
         |_| Ok(()),
-        |_, inputs, theme, _| {
+        |_, inputs, theme, _, _round| {
             plan(
                 &inputs.plots[0],
                 chart.description().significance_annotations().iter(),

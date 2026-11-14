@@ -132,16 +132,14 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     theme.marks = theme.marks.clone().points(points).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
-    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_| Ok(()), |chart, inputs, theme, _operation| {
-    let chart = chart.clone();
-    let operation = theme.text.prepared_font_environment().unwrap().operation();
-    let selected = chart
-        .measure_selected_interior(crate::decorations::legend::discrete::scoped::GuideUse::Local, PlotRenderContext::new(
-            inputs.plots[0].data(&operation).unwrap(),
-            PixelRect::new(20.0, 800.0, 20.0, 620.0),
-            theme,
-        ).with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])))
-        .unwrap();
+    crate::orchestrator::with_prepared_plot_for_test(&source, &theme, |_| Ok(()), |chart, inputs, _theme, _operation, round| {
+    let measurement = inputs.assignment_factory().assign(
+        chart.sizing_request().assigned_size().unwrap_or(crate::layout::RootSize::new(1, 1)),
+    );
+    let factory = inputs.plot_assignment_factory(&measurement, &inputs.plots[0].scope.id).unwrap();
+    let selected = crate::layout::interior::measure_for_test(
+        &factory, PixelRect::new(20.0, 800.0, 20.0, 620.0), round,
+    ).unwrap();
     let layout::interior::MarkPayload::Matrix(payload) = &selected.marks.as_ref().unwrap().payload
     else {
         panic!("Matrix payload")

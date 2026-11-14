@@ -52,24 +52,44 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         &source,
         &theme,
         |_| Ok(()),
-        |chart, inputs, theme, _operation| {
-            let chart = chart.clone();
-            let operation = theme.text.prepared_font_environment().unwrap().operation();
+        |chart, inputs, theme, _operation, round| {
             let hidden_alpha = &inputs.plots[0].guide.alpha;
             assert!(inputs.plots[0].guide.descriptor.is_none());
             assert_eq!(hidden_alpha.inputs, *source.description().alpha_inputs());
             assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
-            let selected = chart
-                .measure_selected_interior(
-                    crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
+            let measurement = inputs.assignment_factory().assign(
+                chart
+                    .sizing_request()
+                    .assigned_size()
+                    .unwrap_or(crate::layout::RootSize::new(1, 1)),
+            );
+            let registered = &inputs.plots[0];
+            let factory = inputs
+                .plot_assignment_factory(&measurement, &registered.scope.id)
+                .unwrap();
+            let entry = factory
+                .assign(
+                    crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                        measurement.measurement_size,
                         crate::layout::PixelRect::new(10.0, 600.0, 20.0, 420.0),
-                        theme,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
+                        round,
+                        &registered.scope.address,
+                    ),
+                    round,
+                    None,
                 )
                 .unwrap();
+            let selected = crate::orchestrator::measure_plot(
+                &factory,
+                entry,
+                crate::decorations::legend::discrete::scoped::GuideConsumption {
+                    use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Hidden,
+                    ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                },
+                &crate::layout::fit::FitScope::root(),
+            )
+            .unwrap()
+            .1;
             let crate::layout::interior::MarkPayload::Scatter(payload) =
                 &selected.marks.as_ref().unwrap().payload
             else {
@@ -84,7 +104,6 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
                 [(1, 0), (1, 128), (1, 0)]
             );
             let outline = chart
-                .description()
                 .point_style(
                     theme,
                     (0, 0, 0),

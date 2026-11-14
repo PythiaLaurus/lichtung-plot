@@ -3,50 +3,43 @@
 use std::path::Path;
 
 use crate::builder::Plot;
-use crate::scene::RenderedScene;
 use crate::{Error, Output};
-
-impl Plot {
-    fn render_scene(&self) -> Result<RenderedScene, Error> {
-        let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
-        let (width, height) = plan.dimensions();
-        let mut backend = plan.take_svg_backend()?;
-        plan.render(&mut backend)?;
-        RenderedScene::new(width, height, backend.into_output())
-    }
-}
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Borrow this configuration, render once and publish an outlined SVG.
     /// Each call performs a new render and returns a reusable frozen output.
     /// The output filename is completed with `.svg` after conversion.
     pub fn svg(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = crate::kind::into_erased(self.clone());
-        let output = Output::new(plot.render_scene()?);
+        let output = Output::new(super::render_scene(super::root::RootSource::Plot(
+            self.description(),
+        ))?);
         output.svg(path)
     }
 
     /// Render once, publish SVG with selectable text, and return a reusable output.
     /// The output filename is completed with `.svg` after rendering.
     pub fn svg_preserve_text(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = crate::kind::into_erased(self.clone());
-        let output = Output::new(plot.render_scene()?);
+        let output = Output::new(super::render_scene(super::root::RootSource::Plot(
+            self.description(),
+        ))?);
         output.svg_preserve_text(path)
     }
 
     /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
     /// The output filename is completed with `.png` after rasterization.
     pub fn png(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = crate::kind::into_erased(self.clone());
-        let output = Output::new(plot.render_scene()?);
+        let output = Output::new(super::render_scene(super::root::RootSource::Plot(
+            self.description(),
+        ))?);
         output.png(path)
     }
 
     /// Render once, publish a balanced source-sized PNG without density metadata.
     /// The output filename is completed with `.png` after rasterization.
     pub fn png_preview(&self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = crate::kind::into_erased(self.clone());
-        let output = Output::new(plot.render_scene()?);
+        let output = Output::new(super::render_scene(super::root::RootSource::Plot(
+            self.description(),
+        ))?);
         output.png_preview(path)
     }
 
@@ -57,8 +50,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         path: impl AsRef<Path>,
         options: crate::PngOptions,
     ) -> Result<Output, Error> {
-        let plot = crate::kind::into_erased(self.clone());
-        let output = Output::new(plot.render_scene()?);
+        let output = Output::new(super::render_scene(super::root::RootSource::Plot(
+            self.description(),
+        ))?);
         output.png_with_options(path, options)
     }
 }

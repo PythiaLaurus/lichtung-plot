@@ -28,6 +28,7 @@ use crate::alpha::{
     },
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
+use crate::builder::PlotDescription;
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
 use crate::layout::{self, Layout, PixelRect};
@@ -38,11 +39,13 @@ use crate::orchestrator::registration::{
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotMeasureContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde, strict_scott_bandwidth};
 use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
-use crate::{LegendPosition, Plot};
+use crate::LegendPosition;
+#[cfg(test)]
+use crate::Plot;
 
 /// One graphical group for the matrix plot.
 #[derive(Debug)]
@@ -114,10 +117,10 @@ impl PreparedMatrixAxes {
 
     fn point_dimensions(
         &self,
-        chart: &Plot,
+        chart: &PlotDescription,
         theme: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
-        let style = chart.description().point_style(
+        let style = chart.point_style(
             theme,
             (0, 0, 0),
             theme.marks.get_points().get_radii().get_matrix(),
@@ -162,7 +165,7 @@ impl PreparedMatrixAxes {
 /// off-diagonal cells. Painted primary points and diagonal density outlines
 /// determine the hard area of each variable's native tracks.
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -223,7 +226,7 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 pub(crate) fn natural_body_preference(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
@@ -515,28 +518,26 @@ pub(crate) fn prepare_axes(
 }
 
 pub(crate) fn measure(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    let theme = request;
     theme.text.prepared_font_environment()?;
-    let data = context.data;
-    let prepared = context
-        .prepared_family()
-        .and_then(|family| match family {
-            crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
-            _ => None,
-        })
-        .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
-    let registered = context.registered.expect("prepared Matrix occurrence");
-    let (variables, diagonal_density) = registered.axes.matrix().expect("native Matrix axes");
+    let data = context.data()?;
+    let prepared = (match context.family()? {
+        crate::orchestrator::registration::FamilyRef::Matrix(marks) => Some(marks),
+        _ => None,
+    })
+    .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
+    let registered = context.registered;
+    let (variables, _) = registered.axes.matrix().expect("native Matrix axes");
     let n = variables.len();
 
     let groups = &prepared.groups;
     let (colors, accents) = prepared.resolved_colors(
         context
             .registered
-            .expect("prepared Matrix occurrence")
             .categorical
             .as_ref()
             .expect("prepared color binding"),
@@ -549,10 +550,11 @@ pub(crate) fn measure(
             .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents)),
     )?;
     let legend = match matrix_legend(
-        context.registered,
+        Some(context.registered),
         (
-            context.panel.width(),
-            (!context.content_height).then_some(context.panel.height()),
+            context.assignment.local.body.width(),
+            (!context.assignment.local.content_height)
+                .then_some(context.assignment.local.body.height()),
         ),
         theme,
         context.fit_scope(),
@@ -565,14 +567,14 @@ pub(crate) fn measure(
         }
     };
 
-    let mut outer = context.panel;
+    let mut outer = context.assignment.local.body;
     let legend_reserve = if let Some(legend) = &legend {
         legend.compute_box_width() + theme.legend_outside_gap()?
     } else {
         0.0
     };
-    if context.content_height {
-        let hard = intrinsic_body_minimum(chart, context.registered, theme)?;
+    if context.assignment.local.content_height {
+        let hard = intrinsic_body_minimum(chart, Some(context.registered), theme)?;
         let height = (outer.width() - legend_reserve).max(hard.1).max(
             legend
                 .as_ref()
@@ -652,13 +654,14 @@ pub(crate) fn measure(
     // canonical range wherever it appears, not one range as x and another
     // as y. The range includes the diagonal KDE evaluation extent so the
     // diagonal and off-diagonal cells stay visually aligned.
-    let prepared_ranges = crate::data::source::collect_source(variables.iter().map(|source| {
-        Ok(registered
-            .axes
-            .axis_at(registered.source, source.witness.slot)
-            .extent()?
-            .pair())
-    }))?;
+    let crate::orchestrator::assignment::AxisDomainAssignments::Matrix {
+        variables: domains, ..
+    } = &context.assignment.local.domains
+    else {
+        unreachable!("Matrix assigned domains")
+    };
+    let prepared_ranges =
+        crate::data::source::collect_source(domains.iter().map(|domain| Ok(domain.extent.pair())))?;
 
     // --- Styles ---
     let frame_style = theme
@@ -813,27 +816,10 @@ pub(crate) fn measure(
                 x_axis,
                 y_axis,
             };
-            let mut semantics = [col, row].map(|index| {
-                let base = registered
-                    .axes
-                    .axis_at(registered.source, AxisSlot::MatrixVariable(index));
-                let domain = crate::orchestrator::assignment::AxisDomainAssignment {
-                    extent: DisplayExtent {
-                        lower: variable_ranges[index].0,
-                        upper: variable_ranges[index].1,
-                    },
-                    provenance: base.provenance(),
-                };
-                crate::orchestrator::assignment::AssignedAxisRef {
-                    base,
-                    domain: &domain,
-                }
-                .semantic_inputs()
-            });
-            for (semantic, tick_layout) in semantics
-                .iter_mut()
-                .zip(&chart.description().text_layouts().ticks)
-            {
+            let mut semantics = context.semantic_inputs(
+                crate::orchestrator::assignment::AxisPairScope::MatrixCell { row, column: col },
+            )?;
+            for (semantic, tick_layout) in semantics.iter_mut().zip(&theme.text_layouts.ticks) {
                 semantic.text_layout.clone_from(tick_layout);
             }
             let cell_axes = cell_layout.measure_axes(&axis_theme, &scope, semantics)?;
@@ -894,10 +880,15 @@ pub(crate) fn measure(
                     &group_colors,
                     groups,
                     &prepared.diagonals[row],
-                    registered
-                        .axes
-                        .axis_at(registered.source, diagonal_density[row].witness.slot)
-                        .extent()?
+                    context
+                        .axis_pair(
+                            crate::orchestrator::assignment::AxisPairScope::MatrixDiagonalDensity {
+                                variable: row,
+                            },
+                        )?
+                        .axes[1]
+                        .domain
+                        .extent
                         .pair(),
                     &cell_layout.projection,
                 )?;
@@ -906,7 +897,7 @@ pub(crate) fn measure(
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
                     require_aligned_points(xs.len(), group.alphas.len())?;
-                    let ps = chart.description().point_style(
+                    let ps = chart.point_style(
                         theme,
                         color,
                         theme.marks.get_points().get_radii().get_matrix(),
@@ -982,7 +973,7 @@ pub(crate) fn measure(
         let legend_w = legend.compute_box_width();
         let legend_h = legend.compute_box_height();
         let left = right_edge - legend_w;
-        let bottom = match chart.description().legend_position_spec() {
+        let bottom = match chart.legend_position_spec() {
             LegendPosition::OutsideRight => f64::midpoint(grid_bottom, top_edge) - legend_h / 2.0,
             LegendPosition::OutsideRightBottom => grid_bottom,
             _ => top_edge - legend_h,
@@ -998,7 +989,7 @@ pub(crate) fn measure(
 
     let mut result = PlotRenderResult::new(
         layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+        crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
     )
     .with_self_managed_decorations();
     result.grid_axis_gutters = Some(gutters.map(f64::ceil));

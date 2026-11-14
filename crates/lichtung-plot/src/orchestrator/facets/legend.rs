@@ -2,20 +2,24 @@
 
 use crate::Error;
 
-use super::data::FacetPanel;
-use crate::builder::Plot;
+use crate::builder::PlotDescription;
 use crate::decorations::plan::children::MeasurementPhase;
-use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::orchestrator::assignment::{
+    GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions, RootAssignment,
+};
+use crate::orchestrator::registration::RowSelection;
+use crate::orchestrator::root::{GridSlot, PreparedFacetTopology, Root};
+use crate::spec::{AxisDomain, PlotKind, PlotRenderResult};
 
 /// Prepare the real shared discrete identity and glyph set at the root's
 /// semantic boundary, before any font census or panel assignment.
 pub(super) fn prepare_discrete_guide(
-    source: &Plot,
+    source: &PlotDescription,
     kind: PlotKind,
     inputs: &mut crate::orchestrator::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let (base, groups, collectives, mut hues) = super::data::base_plot(source, kind)?;
+    let (groups, collectives, mut hues) = super::data::parent_orders(source, kind)?;
     let groups = groups.map(crate::data::source::source_arc).transpose()?;
     let collectives = collectives
         .map(crate::data::source::source_arc)
@@ -29,13 +33,10 @@ pub(super) fn prepare_discrete_guide(
             .collectives
             .clone_from(&collectives);
     }
-    if let Some(column) = source.description().hue_col() {
-        let observed = crate::layout::interior::guide::observed_color_levels(
-            base.description(),
-            &inputs.panels,
-        )?;
+    if let Some(column) = source.hue_col() {
+        let observed =
+            crate::layout::interior::guide::observed_color_levels(source, &inputs.panels)?;
         let raw = source
-            .description()
             .data_column(column)
             .ok_or_else(|| Error::Data(format!("unknown semantic value {column:?}")))?;
         let crate::data::DataColumn::Category(values) = raw else {
@@ -60,13 +61,12 @@ pub(super) fn prepare_discrete_guide(
     let hues = hues
         .map(|values| {
             crate::data::source::source_arc(crate::data::category::CategoryDomain::from_values(
-                source.description().hue_field().as_ref(),
+                source.hue_field().as_ref(),
                 values,
             )?)
         })
         .transpose()?;
-    let group_colors = if kind == PlotKind::Interaction && source.description().hue_col().is_none()
-    {
+    let group_colors = if kind == PlotKind::Interaction && source.hue_col().is_none() {
         groups
             .as_deref()
             .map(|values| {
@@ -76,7 +76,7 @@ pub(super) fn prepare_discrete_guide(
                         .map(|value| crate::data::source::copy_source_string(value)),
                 )?;
                 crate::data::source::source_arc(crate::data::category::CategoryDomain::from_values(
-                    source.description().categorical_field().as_ref(),
+                    source.categorical_field().as_ref(),
                     values,
                 )?)
             })
@@ -88,7 +88,7 @@ pub(super) fn prepare_discrete_guide(
         registered.parent_orders.hues.clone_from(&hues);
         if let Some(binding) = &mut registered.categorical {
             binding.parent.clone_from(
-                if kind == PlotKind::Interaction && source.description().hue_col().is_none() {
+                if kind == PlotKind::Interaction && source.hue_col().is_none() {
                     &group_colors
                 } else {
                     &hues
@@ -97,7 +97,7 @@ pub(super) fn prepare_discrete_guide(
         }
     }
     let descriptor = crate::layout::interior::guide::prepare_discrete_guides(
-        base.description(),
+        source,
         &mut inputs.panels,
         resources,
         true,
@@ -110,30 +110,31 @@ pub(super) fn prepare_discrete_guide(
     reason = "the same prepared occurrence inventory accompanies the existing facet probe inputs"
 )]
 pub(super) fn preflight_coordinated_panels(
-    source: &Plot,
-    base_plot: Plot,
-    kind: PlotKind,
-    panels: &[FacetPanel],
-    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
+    source: &PlotDescription,
+    root: &Root<'_>,
+    topology: &PreparedFacetTopology,
+    measurement: &RootAssignment,
+    panels: &[(GridSlot, crate::FacetCell, RowSelection)],
+    cells: &[crate::layout::PixelRect],
     theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
-) -> Result<(Plot, Vec<std::sync::Arc<PlotRenderResult>>), crate::layout::fit::PlanError> {
-    let preflight = preflight_panels(
-        &base_plot,
-        kind,
+) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, crate::layout::fit::PlanError> {
+    preflight_panels(
+        root,
+        topology,
+        measurement,
         panels,
-        inputs,
+        cells,
         theme,
         children,
         round,
-        if source.description().hue_dimension_key().is_some() {
+        if source.hue_dimension_key().is_some() {
             MeasurementPhase::Hue
         } else {
             MeasurementPhase::Probe
         },
-    )?;
-    Ok((base_plot, preflight))
+    )
 }
 
 #[expect(
@@ -141,27 +142,70 @@ pub(super) fn preflight_coordinated_panels(
     reason = "root-local child reuse keeps computed hue inputs explicit"
 )]
 fn preflight_panels(
-    base_plot: &Plot,
-    kind: PlotKind,
-    panels: &[FacetPanel],
-    inputs: &crate::layout::interior::PreparedInteriorInputs<'_>,
+    root: &Root<'_>,
+    topology: &PreparedFacetTopology,
+    measurement: &RootAssignment,
+    panels: &[(GridSlot, crate::FacetCell, RowSelection)],
+    cells: &[crate::layout::PixelRect],
     theme: &crate::text::TextRequestContext<'_, '_>,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
     phase: MeasurementPhase,
 ) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, crate::layout::fit::PlanError> {
-    let resources = theme.text.prepared_font_environment()?.operation();
+    theme.text.prepared_font_environment()?;
 
     let mut preflight = Vec::new();
     crate::data::source::reserve_source(&mut preflight, panels.len())?;
-    for (index, facet) in panels.iter().enumerate() {
-        let panel_plot = base_plot.clone();
-        let registered = &inputs.plots[index];
-        let context = PlotRenderContext::new(registered.data(&resources)?, facet.panel, theme)
-            .with_registration(registered, inputs.intrinsic(registered));
+    for (slot, _, _) in panels {
+        let id = topology.slots[slot.0]
+            .plot_id
+            .as_ref()
+            .expect("facet producer");
+        let factory = root.plot_assignment_factory(measurement, id)?;
+        let registered = factory.registered;
+        let panel = cells[slot.0];
         let owner = &registered.scope.address;
-        let result = children.measure(&panel_plot, context, owner, phase, round, || {
-            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context))
+        let assignment = factory.assign(
+            PlotAllocationInputs {
+                dimensions: PlotMeasureDimensions {
+                    canvas: measurement.measurement_size,
+                    output_override: None,
+                },
+                cell: panel,
+                frame: panel,
+                body: panel,
+                axis_label_width: panel.width(),
+                content_height: false,
+                fill_content_height: false,
+                content_preference: None,
+                insets: ParentInsets::consumed(round, owner),
+                guide: GuideTrialAssignment {
+                    edge: registered.source.legend_position_spec(),
+                    compact: false,
+                    allocation: None,
+                },
+            },
+            round,
+            Some(phase),
+        )?;
+        let scope = crate::layout::fit::FitScope::root();
+        #[cfg(test)]
+        super::observe_factory_phase(id, Some(phase), &assignment);
+        let context = factory.context(
+            &assignment,
+            crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
+            &scope,
+        )?;
+        let result = children.measure(&context, owner, phase, round, || {
+            crate::layout::fit::outcome(
+                crate::orchestrator::measure_probe(
+                    &factory,
+                    assignment.clone(),
+                    crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
+                    &scope,
+                )
+                .map(|(_, result)| result),
+            )
         })?;
         preflight.push(crate::layout::fit::measured(Ok(result))?);
     }
@@ -201,14 +245,14 @@ pub(super) fn resolve_shared_facet_axis(
                 match (expected.next(), actual.next()) {
                     (None, None) => break,
                     (Some(a), Some(b)) if crate::decorations::legend::legend_text_eq(a, b) => {
-                        continue
+                        continue;
                     }
                     _ => {}
                 }
                 return Err(Error::Render(format!(
-                "fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data",
-                if x_axis { "x" } else { "y" }
-            )));
+                    "fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data",
+                    if x_axis { "x" } else { "y" }
+                )));
             }
         }
         return Ok(None);

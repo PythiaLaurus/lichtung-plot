@@ -2,62 +2,59 @@
 
 use crate::Error;
 
-use crate::builder::{Plot, PlotDescription};
-use crate::layout::PixelRect;
+use crate::builder::PlotDescription;
 use crate::orchestrator::registration::{select_rows, RowSelection};
+use crate::orchestrator::root::{
+    DeclaredFacetSelector, FacetSelectors, FacetSlot, FacetTopologyShell, GridSlot,
+};
 use crate::spec::PlotKind;
+use crate::FacetCell;
 
-pub(super) struct FacetSelector {
-    pub(super) column: &'static str,
-    pub(super) variable: String,
-    pub(super) level: String,
+pub(super) fn fields<'a>(
+    source: &'a PlotDescription,
+    cell: &'a FacetCell,
+) -> Vec<(&'static str, &'a crate::CategoryValues, &'a str)> {
+    let (row, column, wrap, _) = source.facet_columns();
+    let levels = if let Some((row, column)) = cell.grid_levels() {
+        vec![row, column]
+    } else {
+        vec![cell.single_level().expect("single facet selector")]
+    };
+    [row, column, wrap]
+        .into_iter()
+        .flatten()
+        .zip(levels)
+        .map(|(key, level)| {
+            let crate::data::DataColumn::Category(values) =
+                source.data_column(key).expect("validated facet column")
+            else {
+                unreachable!("categorical facet")
+            };
+            (key, values, level)
+        })
+        .collect()
 }
 
-pub(super) type FacetCell = Vec<FacetSelector>;
-type PositionedFacetCell = (usize, usize, FacetCell);
-
-pub(super) struct FacetSelectors {
-    cells: Vec<PositionedFacetCell>,
-    pub(super) rows: usize,
-    pub(super) columns: usize,
-}
-
-pub(super) struct FacetPanel {
-    pub(super) panel_index: usize,
-    pub(super) row: usize,
-    pub(super) column: usize,
-    pub(super) cell: FacetCell,
-    pub(super) rows: RowSelection,
-    pub(super) panel: PixelRect,
-}
-
-impl FacetPanel {
-    pub(super) fn render_scope(&self) -> Result<String, Error> {
-        let mut scope = String::new();
-        crate::data::source::reserve_source_string(&mut scope, 32)?;
-        if self.cell.is_empty() {
-            use std::fmt::Write;
-            write!(scope, "facet-{}", self.panel_index).expect("reserved index");
-        } else {
-            scope.push_str("facet ");
-            for (index, selector) in self.cell.iter().enumerate() {
-                let length = selector
-                    .variable
-                    .len()
-                    .checked_add(selector.level.len())
-                    .and_then(|length| length.checked_add(3))
-                    .ok_or_else(|| Error::Render("facet scope length overflow".into()))?;
-                crate::data::source::reserve_source_string(&mut scope, length)?;
-                if index != 0 {
-                    scope.push_str(", ");
-                }
-                scope.push_str(&selector.variable);
-                scope.push('=');
-                scope.push_str(&selector.level);
-            }
+pub(super) fn render_scope(source: &PlotDescription, cell: &FacetCell) -> Result<String, Error> {
+    let mut scope = String::new();
+    crate::data::source::reserve_source_string(&mut scope, 32)?;
+    scope.push_str("facet ");
+    for (index, (_, values, level)) in fields(source, cell).into_iter().enumerate() {
+        let variable = values.name();
+        let length = variable
+            .len()
+            .checked_add(level.len())
+            .and_then(|length| length.checked_add(3))
+            .ok_or_else(|| Error::Render("facet scope length overflow".into()))?;
+        crate::data::source::reserve_source_string(&mut scope, length)?;
+        if index != 0 {
+            scope.push_str(", ");
         }
-        Ok(scope)
+        scope.push_str(variable);
+        scope.push('=');
+        scope.push_str(level);
     }
+    Ok(scope)
 }
 
 #[expect(
@@ -103,17 +100,13 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
                 "wrapped facets require at least one column".into(),
             ));
         }
-        let variable = column(wrap)?.name();
         crate::data::source::collect_source(levels.into_iter().enumerate().map(
             |(index, level)| {
                 Ok((
                     index / columns,
                     index % columns,
-                    crate::data::source::collect_source(std::iter::once(Ok(FacetSelector {
-                        column: wrap,
-                        variable: crate::data::source::copy_source_string(variable)?,
-                        level,
-                    })))?,
+                    FacetCell::single(level),
+                    DeclaredFacetSelector::Single { level: index },
                 ))
             },
         ))?
@@ -146,38 +139,30 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
         crate::data::source::reserve_source(&mut cells, count)?;
         for (row_index, row_level) in row_levels.iter().enumerate() {
             for (column_index, column_level) in column_levels.iter().enumerate() {
-                let mut cell = Vec::new();
-                crate::data::source::reserve_source(
-                    &mut cell,
-                    usize::from(row_column.is_some()) + usize::from(column_column.is_some()),
-                )?;
-                if let Some(column) = row_column {
-                    cell.push(FacetSelector {
-                        column,
-                        variable: crate::data::source::copy_source_string(
-                            plot.data_column(column)
-                                .ok_or_else(|| {
-                                    Error::Data(format!("unknown semantic value {column:?}"))
-                                })?
-                                .name(),
-                        )?,
-                        level: crate::data::source::copy_source_string(row_level)?,
-                    });
-                }
-                if let Some(column) = column_column {
-                    cell.push(FacetSelector {
-                        column,
-                        variable: crate::data::source::copy_source_string(
-                            plot.data_column(column)
-                                .ok_or_else(|| {
-                                    Error::Data(format!("unknown semantic value {column:?}"))
-                                })?
-                                .name(),
-                        )?,
-                        level: crate::data::source::copy_source_string(column_level)?,
-                    });
-                }
-                cells.push((row_index, column_index, cell));
+                let (cell, selector) = match (row_column, column_column) {
+                    (Some(_), Some(_)) => (
+                        FacetCell::grid(
+                            crate::data::source::copy_source_string(row_level)?,
+                            crate::data::source::copy_source_string(column_level)?,
+                        ),
+                        DeclaredFacetSelector::Grid {
+                            row_level: row_index,
+                            column_level: column_index,
+                        },
+                    ),
+                    (Some(_), None) => (
+                        FacetCell::single(crate::data::source::copy_source_string(row_level)?),
+                        DeclaredFacetSelector::Single { level: row_index },
+                    ),
+                    (None, Some(_)) => (
+                        FacetCell::single(crate::data::source::copy_source_string(column_level)?),
+                        DeclaredFacetSelector::Single {
+                            level: column_index,
+                        },
+                    ),
+                    (None, None) => unreachable!("faceted source"),
+                };
+                cells.push((row_index, column_index, cell, selector));
             }
         }
         cells
@@ -188,17 +173,36 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
         ));
     }
 
-    let rows = cells.iter().map(|(row, _, _)| *row).max().unwrap_or(0) + 1;
+    let rows = cells.iter().map(|(row, _, _, _)| *row).max().unwrap_or(0) + 1;
     let columns = cells
         .iter()
-        .map(|(_, column, _)| *column)
+        .map(|(_, column, _, _)| *column)
         .max()
         .unwrap_or(0)
         + 1;
+    let count = rows
+        .checked_mul(columns)
+        .ok_or_else(|| Error::Render("facet cell count overflow".into()))?;
+    let mut slots = Vec::new();
+    crate::data::source::reserve_source(&mut slots, count)?;
+    slots.resize_with(count, || FacetSlot {
+        selector: None,
+        plot_id: None,
+    });
+    let cells = crate::data::source::collect_source(cells.into_iter().map(
+        |(row, column, cell, selector)| {
+            let slot = GridSlot(row * columns + column);
+            slots[slot.0].selector = Some(selector);
+            Ok((slot, cell))
+        },
+    ))?;
     Ok(FacetSelectors {
+        shell: FacetTopologyShell {
+            rows,
+            columns,
+            slots,
+        },
         cells,
-        rows,
-        columns,
     })
 }
 
@@ -206,20 +210,18 @@ pub(super) fn facet_selectors(plot: &PlotDescription) -> Result<FacetSelectors, 
     clippy::type_complexity,
     reason = "the original parent scans return their owning group and pair results directly for publication at the guide boundary"
 )]
-pub(super) fn base_plot(
-    source: &Plot,
+pub(super) fn parent_orders(
+    source: &PlotDescription,
     kind: PlotKind,
 ) -> Result<
     (
-        Plot,
         Option<Vec<String>>,
         Option<Vec<crate::data::CollectivePair>>,
         Option<Vec<String>>,
     ),
     Error,
 > {
-    let source_rows = source.description().configured_source_rows()?;
-    let base_plot = source.clone().without_facets();
+    let source_rows = source.configured_source_rows()?;
     let mut collectives = None;
     let mut groups = None;
     let mut hues = None;
@@ -227,18 +229,15 @@ pub(super) fn base_plot(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
     ) || kind == PlotKind::LinePath
-        && source.description().line_path_style_spec() == crate::LinePathStyle::Hue;
+        && source.line_path_style_spec() == crate::LinePathStyle::Hue;
     if independent_collectives {
-        let channels = crate::data::observed_source_collectives(
-            source.description(),
-            "facet collective channels",
-        )?;
+        let channels =
+            crate::data::observed_source_collectives(source, "facet collective channels")?;
         groups = Some(channels.group_levels);
         hues = Some(channels.hue_levels);
         collectives = Some(channels.identities);
-    } else if let Some(group_column) = source.description().group_col() {
+    } else if let Some(group_column) = source.group_col() {
         let column = source
-            .description()
             .data_column(group_column)
             .ok_or_else(|| Error::Data(format!("unknown semantic value {group_column:?}")))?;
         let crate::data::DataColumn::Category(values) = column else {
@@ -255,9 +254,8 @@ pub(super) fn base_plot(
         groups = Some(levels);
     }
     if kind == PlotKind::Trajectory {
-        if let Some(x_column) = source.description().x_col() {
+        if let Some(x_column) = source.x_col() {
             let column = source
-                .description()
                 .data_column(x_column)
                 .ok_or_else(|| Error::Data(format!("unknown semantic value {x_column:?}")))
                 .map_err(|error| {
@@ -279,40 +277,42 @@ pub(super) fn base_plot(
             }
         }
     }
-    Ok((base_plot, groups, collectives, hues))
+    Ok((groups, collectives, hues))
 }
 
 #[expect(
     clippy::needless_range_loop,
-    reason = "row index addresses every selector column, not the outer column vector"
+    clippy::type_complexity,
+    reason = "the fixed shell and cell/row tuples preserve ownership while each row index addresses every selector column"
 )]
-pub(super) fn extract_panels(
+pub(super) fn extract_facet_rows(
     plot: &PlotDescription,
-    selectors: &FacetSelectors,
-    provisional: Option<&[PixelRect]>,
-) -> Result<Vec<FacetPanel>, Error> {
+    selectors: FacetSelectors,
+) -> Result<(FacetTopologyShell, Vec<(GridSlot, FacetCell, RowSelection)>), Error> {
     let configured_source_rows = plot.configured_source_rows()?;
     let mut panels = Vec::new();
     crate::data::source::reserve_source(&mut panels, selectors.cells.len())?;
-    for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
-        let columns_data = crate::data::source::collect_source(cell.iter().map(|selector| {
-            let column = plot.data_column(selector.column).ok_or_else(|| {
-                Error::Data(format!("unknown semantic value {:?}", selector.column))
-            })?;
-            let crate::data::DataColumn::Category(values) = column else {
-                return Err(Error::Data(format!(
-                    "facet: value {:?} must be categorical",
-                    column.name()
-                )));
-            };
-            crate::data::strict_source_strings(values, configured_source_rows, "facet")
-        }))?;
+    for (slot, cell) in selectors.cells {
+        let fields = fields(plot, &cell);
+        let columns_data =
+            crate::data::source::collect_source(fields.iter().map(|(key, _, _)| {
+                let column = plot
+                    .data_column(key)
+                    .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))?;
+                let crate::data::DataColumn::Category(values) = column else {
+                    return Err(Error::Data(format!(
+                        "facet: value {:?} must be categorical",
+                        column.name()
+                    )));
+                };
+                crate::data::strict_source_strings(values, configured_source_rows, "facet")
+            }))?;
         let mut source_indices = Vec::new();
         crate::data::source::reserve_source(&mut source_indices, plot.row_count())?;
         for index in 0..plot.row_count() {
             let mut matches = true;
-            for (selector_index, selector) in cell.iter().enumerate() {
-                if columns_data[selector_index][index] != selector.level {
+            for (selector_index, (_, _, level)) in fields.iter().enumerate() {
+                if columns_data[selector_index][index] != *level {
                     matches = false;
                     break;
                 }
@@ -325,32 +325,16 @@ pub(super) fn extract_panels(
             continue;
         }
         let rows = select_rows(plot, source_indices)?;
-        let panel = provisional.map_or(PixelRect::new(0.0, 1.0, 0.0, 1.0), |boxes| {
-            boxes[*row * selectors.columns + *column]
-        });
-        panels.push(FacetPanel {
-            panel_index,
-            row: *row,
-            column: *column,
-            cell: crate::data::source::collect_source(cell.iter().map(|selector| {
-                Ok(FacetSelector {
-                    column: selector.column,
-                    variable: crate::data::source::copy_source_string(&selector.variable)?,
-                    level: crate::data::source::copy_source_string(&selector.level)?,
-                })
-            }))?,
-            rows,
-            panel,
-        });
+        panels.push((slot, cell, rows));
     }
-    Ok(panels)
+    Ok((selectors.shell, panels))
 }
 
 pub(super) fn validate_significance_facet_anchors(
     plot: &PlotDescription,
-    panels: &[FacetPanel],
+    panels: &[(GridSlot, FacetCell, RowSelection)],
 ) -> Result<(), Error> {
-    let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
+    let dimensions = panels.first().map_or(0, |(_, cell, _)| cell.dimensions());
     for annotation in plot.significance_annotations() {
         let Some(cell) = annotation.facet_cell() else {
             return Err(Error::Render(
@@ -363,8 +347,8 @@ pub(super) fn validate_significance_facet_anchors(
             ));
         }
         let mut anchored = false;
-        for panel in panels {
-            if cell.matches(panel.cell.iter().map(|selector| selector.level.as_str())) {
+        for (_, panel, _) in panels {
+            if cell == panel {
                 anchored = true;
                 break;
             }
@@ -391,6 +375,7 @@ pub(super) fn stable_levels(values: Vec<String>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Plot;
 
     #[test]
     fn source_facet_extraction_preserves_sparse_slots_and_selected_diagnostic_rows() {
@@ -408,28 +393,37 @@ mod tests {
         );
         let selectors = facet_selectors(source.description()).unwrap();
         assert_eq!(
-            (selectors.rows, selectors.columns, selectors.cells.len()),
+            (
+                selectors.shell.rows,
+                selectors.shell.columns,
+                selectors.cells.len()
+            ),
             (2, 2, 4)
         );
-        let panels = extract_panels(source.description(), &selectors, None).unwrap();
+        let (shell, panels) = extract_facet_rows(source.description(), selectors).unwrap();
         assert_eq!(panels.len(), 2);
         assert_eq!(
-            (panels[0].panel_index, panels[0].row, panels[0].column),
+            (
+                panels[0].0 .0,
+                panels[0].0 .0 / shell.columns,
+                panels[0].0 .0 % shell.columns
+            ),
             (0, 0, 0)
         );
         assert_eq!(
-            (panels[1].panel_index, panels[1].row, panels[1].column),
+            (
+                panels[1].0 .0,
+                panels[1].0 .0 / shell.columns,
+                panels[1].0 .0 % shell.columns
+            ),
             (3, 1, 1)
         );
+        assert_eq!(panels[0].2.selected(), Some((&[0, 2][..], &[91, 9001][..])));
+        assert_eq!(panels[1].2.selected(), Some((&[1, 3][..], &[700, 32][..])));
         assert_eq!(
-            panels[0].rows.selected(),
-            Some((&[0, 2][..], &[91, 9001][..]))
+            render_scope(source.description(), &panels[0].1).unwrap(),
+            "facet row=B, column=C"
         );
-        assert_eq!(
-            panels[1].rows.selected(),
-            Some((&[1, 3][..], &[700, 32][..]))
-        );
-        assert_eq!(panels[0].render_scope().unwrap(), "facet row=B, column=C");
     }
 
     #[test]

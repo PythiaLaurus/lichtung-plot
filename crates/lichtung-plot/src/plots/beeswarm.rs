@@ -8,10 +8,12 @@
 )]
 
 use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
+use crate::builder::PlotDescription;
 use crate::layout::{Layout, PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotMeasureContext, PlotRenderResult};
 use crate::Error;
+#[cfg(test)]
 use crate::Plot;
 
 #[derive(Debug)]
@@ -52,7 +54,7 @@ fn retained<'v>(
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
@@ -65,7 +67,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Beeswarm source rows and prepared points differ".into(),
         ));
     }
-    let point = chart.description().point_style(
+    let point = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_beeswarm(),
@@ -95,10 +97,7 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let mut numeric = ink.map_or(0.0, |ink| ink.dimensions().0);
-    if chart.description().zero_line_visible()
-        && prepared.x_data.0 <= 0.0
-        && prepared.x_data.1 >= 0.0
-    {
+    if chart.zero_line_visible() && prepared.x_data.0 <= 0.0 && prepared.x_data.1 >= 0.0 {
         numeric = numeric.max(crate::render::geometry::line_ink_width(
             &theme
                 .marks
@@ -132,22 +131,17 @@ fn quanta_pixels(value: i64) -> f64 {
 }
 
 fn packing_radius(
-    chart: &Plot,
+    chart: &PlotDescription,
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<i64, Error> {
-    let mut style = chart.description().point_style(
+    let mut style = chart.point_style(
         theme,
         (0, 0, 0),
         theme.marks.get_points().get_radii().get_beeswarm(),
     );
     // A data-alpha binding retains every observation's full glyph in the
     // scientific packing input, independent of which bytes are transparent.
-    if !chart
-        .description()
-        .alpha_inputs()
-        .get(AlphaTarget::Point)
-        .is_theme()
-    {
+    if !chart.alpha_inputs().get(AlphaTarget::Point).is_theme() {
         style.color = style.color.alpha(255);
     }
     packing::radius(&style)
@@ -335,12 +329,13 @@ impl PreparedBeeswarm {
 }
 
 pub(crate) fn natural_body_height(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
+    selected_range: Option<(f64, f64)>,
 ) -> Result<f64, Error> {
     if registered.is_none() {
         return Err(Error::Render("natural Beeswarm rows missing".into()));
@@ -353,11 +348,12 @@ pub(crate) fn natural_body_height(
     let axes = registered
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
-    let range = chart
-        .description()
-        .x_axis_spec()
-        .window
-        .map_or(axes.ranges()[0], crate::layout::RawWindow::pair);
+    let range = selected_range.unwrap_or_else(|| {
+        chart
+            .x_axis_spec()
+            .window
+            .map_or(axes.ranges()[0], crate::layout::RawWindow::pair)
+    });
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(
@@ -380,86 +376,69 @@ pub(crate) fn natural_body_height(
 }
 
 pub(crate) fn measure(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    chart: &PlotDescription,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let (prepared, levels) = retained(context.registered)?;
-    let theme = context.theme;
+    let (prepared, levels) = retained(Some(context.registered))?;
+    let theme = request;
 
     let minimum = intrinsic_body_minimum(
         chart,
-        context.registered,
+        Some(context.registered),
         context.intrinsic(),
-        context.data.source_resources(),
+        context.operation,
         theme,
     )?;
     let (panel, colorbar) =
-        if crate::orchestrator::registration::continuous_guide_suppressed(context.registered)
+        if crate::orchestrator::registration::continuous_guide_suppressed(Some(context.registered))
             || crate::orchestrator::registration::continuous_guide_use(
-                chart.description(),
-                context.registered,
+                chart,
+                Some(context.registered),
             ) != crate::decorations::legend::discrete::scoped::GuideUse::Local
             || context.guides.use_kind
                 != crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
-            (context.panel, None)
+            (context.assignment.local.body, None)
         } else {
             let guide_scope = context
                 .fit_scope()
                 .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
             let descriptor =
-                crate::orchestrator::registration::guide_descriptor(context.registered)?
+                crate::orchestrator::registration::guide_descriptor(Some(context.registered))?
                     .ok_or_else(|| {
                         Error::Render("native Beeswarm guide was not prepared".into())
                     })?;
             let (body, guide) = crate::layout::interior::guide::native_right(
                 descriptor,
-                context.panel,
+                context.assignment.local.body,
                 minimum.0,
                 theme,
                 &guide_scope,
-                context.content_height.then_some((
-                    chart,
-                    context.registered,
-                    context.intrinsic(),
-                    context.data.source_resources(),
-                )),
+                context.assignment.local.content_height.then_some(context),
             )?;
             (body, Some(guide))
         };
     let axes = context
         .registered
-        .and_then(|registered| registered.axes.coordinate())
+        .axes
+        .coordinate()
         .ok_or_else(|| Error::Render("Beeswarm axes require preparation".into()))?;
-    let range = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(prepared.x_data))?;
+    let range = context.axis_range(crate::layout::AxisSide::Bottom)?;
     let projection =
         crate::layout::Projection::new(range, (0.0, levels.len() as f64), panel.as_tuple());
-    let source = context
-        .registered
-        .expect("prepared Beeswarm occurrence")
-        .source;
+    let source = context.registered.source;
     let pair = [axes.axis(source, 0), axes.axis(source, 1)];
-    let domain = crate::orchestrator::assignment::AxisDomainAssignment {
-        extent: crate::orchestrator::registration::DisplayExtent {
-            lower: range.0,
-            upper: range.1,
-        },
-        provenance: chart.description().x_axis_spec().provenance,
-    };
-    let x = crate::orchestrator::assignment::AssignedAxisRef {
-        base: pair[0],
-        domain: &domain,
-    }
-    .layout_ticks(
+    let assigned = context
+        .axis_pair(crate::orchestrator::assignment::AxisPairScope::Pair)?
+        .axes;
+    let x = assigned[0].layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
-        context
-            .registered
-            .expect("prepared Beeswarm occurrence")
-            .axis_numeric_binding(context.data.source_resources())?,
+        context.registered.axis_numeric_binding(context.operation)?,
     )?;
     let radius = packing_radius(chart, theme)?;
     let packed = packing::pack(
@@ -475,9 +454,9 @@ pub(crate) fn measure(
         .ok_or_else(|| Error::Render("Beeswarm category labels missing".into()))?;
     let labels = &labels.ticks;
     let mut hard_pitch = packed.hard_pitch;
-    let width = context.axis_label_width.max(1.0 / 1024.0);
+    let width = context.assignment.local.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
-    if crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
+    if crate::orchestrator::registration::axis_tick_labels_visible(Some(context.registered), 1)
         && !tick_appearance.hidden()
         && !tick_appearance.layout.is_some_and(|request| {
             request
@@ -550,7 +529,7 @@ pub(crate) fn measure(
     let layout = Layout {
         projection,
         x_axis: crate::layout::Axis {
-            label: axes.copy_label(context.registered.expect("prepared Beeswarm occurrence"), 0)?,
+            label: axes.copy_label(context.registered, 0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
             category_labels: pair[0]
@@ -565,10 +544,10 @@ pub(crate) fn measure(
             assigned_cells: None,
         },
         y_axis: crate::layout::Axis {
-            label: axes.copy_label(context.registered.expect("prepared Beeswarm occurrence"), 1)?,
+            label: axes.copy_label(context.registered, 1)?,
             ticks,
             tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
-                context.registered,
+                Some(context.registered),
                 1,
             ),
             category_labels: pair[1]
@@ -586,7 +565,7 @@ pub(crate) fn measure(
         },
     };
     let x_range = layout.projection.x_range();
-    let zero = if chart.description().zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
+    let zero = if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, levels.len() as f64);
         Some((
@@ -616,7 +595,7 @@ pub(crate) fn measure(
                     .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
                 Ok((
                     Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
-                    row.3.point(chart.description().point_style(
+                    row.3.point(chart.point_style(
                         theme,
                         color.as_rgb(),
                         theme.marks.get_points().get_radii().get_beeswarm(),
@@ -674,12 +653,7 @@ pub(crate) fn measure(
         .copied()
         .reduce(crate::render::geometry::GeometryBox::union)
     {
-        if context
-            .registered
-            .expect("prepared occurrence")
-            .raw_windows()[0]
-            .is_none()
-        {
+        if context.registered.raw_windows()[0].is_none() {
             let levels = u32::try_from(levels.len()).map_err(|_| {
                 Error::Render("Beeswarm category count exceeds spatial range".into())
             })?;
@@ -694,7 +668,7 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(
         layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+        crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
     );
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =
@@ -704,7 +678,7 @@ pub(crate) fn measure(
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
-        chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
+        context.semantic_inputs(crate::orchestrator::assignment::AxisPairScope::Pair)?,
         || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
     if let Some(bar) = &payload.colorbar {

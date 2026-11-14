@@ -528,18 +528,40 @@ mod tests {
                         }
                         Ok(())
                     },
-                    |plot, inputs, request, _| {
+                    |plot, inputs, _request, _, round| {
                         let registered = &inputs.plots[0];
-                        crate::layout::fit::measured(plot.preflight_measurement(
-                            Some(registered),
-                            Some(inputs.intrinsic(registered)),
-                            None,
-                            plot.kind(),
-                            panel,
-                            request,
+                        let measurement = inputs.assignment_factory().assign(
+                            plot.sizing_request()
+                                .assigned_size()
+                                .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                        );
+                        let factory = inputs
+                            .plot_assignment_factory(&measurement, &registered.scope.id)
+                            .unwrap();
+                        let entry = factory
+                            .assign(
+                                crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                                    measurement.measurement_size,
+                                    panel,
+                                    round,
+                                    &registered.scope.address,
+                                ),
+                                round,
+                                None,
+                            )
+                            .unwrap();
+                        crate::orchestrator::measure_probe(
+                            &factory,
+                            entry,
+                            crate::decorations::legend::discrete::scoped::GuideConsumption {
+                                use_kind:
+                                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                                ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                            },
                             &crate::layout::fit::ROOT_SCOPE,
-                        ))
+                        )
                         .unwrap()
+                        .1
                     },
                 )
                 .unwrap()

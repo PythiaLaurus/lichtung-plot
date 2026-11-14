@@ -1,28 +1,62 @@
 //! Latest successful outcomes of immutable Canvas/facet child owners, not a
 //! general plot cache. One instance belongs to one prepared root operation.
 
-use std::sync::Arc;
-
 use super::{LegendRole, MeasuredPlotPlan};
 use crate::decorations::legend::discrete::scoped::{GuideConsumption, GuideUse, ScopedGuideInputs};
 use crate::layout::fit::FitOutcome;
 use crate::layout::kernel::{ChildFeedback, ChildFeedbackInputs, FeedbackRound};
 use crate::layout::{AddressRole, ComponentAddress, PixelRect};
-use crate::spec::{FacetScales, PlotRenderContext, PlotRenderResult};
-use crate::{Error, Plot};
+use crate::orchestrator::assignment::{PlotMeasureAssignment, PlotMeasureAssignmentFactory};
+use crate::spec::{FacetScales, PlotMeasureContext, PlotRenderResult};
+use crate::Error;
+use std::sync::Arc;
 
 #[cfg(test)]
 use crate::orchestrator::measurements::{child_cache, Counter};
+#[cfg(test)]
+use crate::Plot;
 
 #[cfg(test)]
 thread_local! {
     pub(crate) static DISABLE_CHILD_REUSE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     pub(crate) static CHILD_MEASUREMENTS: std::cell::RefCell<Vec<(ComponentAddress, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
+    static CHILD_AXIS_INPUTS_ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    #[expect(clippy::type_complexity, reason = "test-only observation of the retained working windows and resolved Forest override")]
+    pub(crate) static CHILD_AXIS_INPUTS: std::cell::RefCell<Vec<(ComponentAddress, [Option<(f64, f64)>; 2], Option<(f64, f64)>)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-// These boundaries construct fresh producer contexts. Source rows, source
-// configuration and prepared fonts are fixed by the borrowed root and cell;
-// coordination's computed replacements are compared by value, not pointers.
+/// A Forest fixture's raw-window observations must not accumulate in other
+/// tests, or be cleared from a thread other than the one that armed them.
+#[cfg(test)]
+#[must_use]
+pub(crate) struct ChildAxisInputsTraceGuard {
+    _same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+#[cfg(test)]
+impl ChildAxisInputsTraceGuard {
+    pub(crate) fn start() -> Self {
+        assert!(!CHILD_AXIS_INPUTS_ARMED.with(|armed| armed.replace(true)));
+        let guard = Self {
+            _same_thread: std::marker::PhantomData,
+        };
+        CHILD_AXIS_INPUTS.with(|inputs| inputs.borrow_mut().clear());
+        guard
+    }
+}
+
+#[cfg(test)]
+impl Drop for ChildAxisInputsTraceGuard {
+    fn drop(&mut self) {
+        let _ = CHILD_AXIS_INPUTS_ARMED.try_with(|armed| armed.set(false));
+        let _ = CHILD_AXIS_INPUTS.try_with(|inputs| {
+            if let Ok(mut inputs) = inputs.try_borrow_mut() {
+                *inputs = Vec::new();
+            }
+        });
+    }
+}
+
 struct PlotEntryInputs {
     plot_id: crate::orchestrator::registration::PlotOccurrenceId,
     owners: [ComponentAddress; 2],
@@ -38,7 +72,7 @@ struct PlotEntryInputs {
     )]
     direction: Option<(
         [(f64, f64); 2],
-        crate::layout::PixelRect,
+        PixelRect,
         [Option<Vec<(f64, f64)>>; 2],
         Option<String>,
     )>,
@@ -48,17 +82,14 @@ struct PlotEntryInputs {
 
 impl PlotEntryInputs {
     fn new(
-        plot: &Plot,
-        context: PlotRenderContext<'_, '_>,
-        plot_id: &crate::orchestrator::registration::PlotOccurrenceId,
+        context: &PlotMeasureContext<'_, '_>,
         owner: &ComponentAddress,
         round: &FeedbackRound,
+        measurement_phase: Option<MeasurementPhase>,
     ) -> Result<Self, Error> {
-        let theme = context.theme.theme.clone();
-        let direction = context
-            .theme
-            .reference
-            .map(|reference| reference.snapshot());
+        let request = context.request();
+        let theme = request.theme.clone();
+        let direction = request.reference.map(|reference| reference.snapshot());
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
@@ -66,64 +97,81 @@ impl PlotEntryInputs {
         };
         let grid_owner = owner.under_grid(grid_role)?;
         let owners = [owner.clone(), grid_owner];
-        Ok(Self {
-            plot_id: plot_id.clone(),
-            geometry: geometry(context.panel),
-            axis_label_width: context.axis_label_width.to_bits(),
-            content_height: context.content_height,
-            fill_content_height: context.fill_content_height,
-            plot: plot.retain_composed_inputs(
-                ScopedGuideInputs::new(
-                    plot,
-                    context.registered,
-                    context.guides.use_kind,
-                    context.guides.local_guide,
-                    context.guides.dependencies,
-                )?,
-                context.registered.expect("prepared child occurrence"),
-                context.canvas,
+        let inputs = Self {
+            plot_id: context.registered.scope.id.clone(),
+            geometry: geometry(context.assignment.local.body),
+            axis_label_width: context.assignment.local.axis_label_width.to_bits(),
+            content_height: context.assignment.local.content_height,
+            fill_content_height: context.assignment.local.fill_content_height,
+            plot: crate::builder::ComposedInputs::retain(
+                context,
+                round,
+                ScopedGuideInputs::capture(context)?,
+                measurement_phase,
             )?,
             theme,
             direction,
-            scales: context.facet_scales(),
+            scales: context.registered.policy.facet_scales,
             feedback: round.child_inputs(&owners)?,
             owners,
-        })
+        };
+        #[cfg(test)]
+        if CHILD_AXIS_INPUTS_ARMED.with(std::cell::Cell::get) {
+            CHILD_AXIS_INPUTS.with(|snapshots| {
+                let (windows, _, resolved_x) = inputs.plot.axis_snapshot_for_test();
+                snapshots
+                    .borrow_mut()
+                    .push((owner.clone(), windows, resolved_x));
+            });
+        }
+        Ok(inputs)
     }
 
     fn matches(
         &self,
-        plot: &Plot,
-        context: PlotRenderContext<'_, '_>,
+        context: &PlotMeasureContext<'_, '_>,
         owner: &ComponentAddress,
         round: &FeedbackRound,
+        measurement_phase: Option<MeasurementPhase>,
     ) -> Result<bool, Error> {
         Ok(self.owners[0] == *owner
-            && self.plot_id == *context.data.plot_id()
-            && self.geometry == geometry(context.panel)
-            && self.axis_label_width == context.axis_label_width.to_bits()
-            && self.content_height == context.content_height
-            && self.fill_content_height == context.fill_content_height
+            && self.plot_id == context.registered.scope.id
+            && self.geometry == geometry(context.assignment.local.body)
+            && self.axis_label_width == context.assignment.local.axis_label_width.to_bits()
+            && self.content_height == context.assignment.local.content_height
+            && self.fill_content_height == context.assignment.local.fill_content_height
             && self.plot.guides.matches_consumption(
-                context.guides.use_kind,
+                measurement_guides(context).use_kind,
                 context.guides.local_guide,
                 context.guides.dependencies,
             )
-            && plot.same_composed_inputs(
-                &self.plot,
-                &self.plot.guides,
-                context.registered.expect("prepared child occurrence"),
-                context.canvas,
-            )
+            && self
+                .plot
+                .matches(context, round, &self.plot.guides, measurement_phase)
             && self.plot.guides.stable(round)
             && self.theme.same_validated(
-                context.theme.theme,
+                context.request().theme,
                 &self.direction,
-                context.theme.reference,
+                context.request().reference,
             )?
-            && self.scales == context.facet_scales()
+            && self.scales == context.registered.policy.facet_scales
             && round.child_inputs_equal(&self.feedback, &self.owners)
             && round.child_stable(&self.owners))
+    }
+}
+
+fn measurement_guides<'v>(context: &PlotMeasureContext<'v, '_>) -> GuideConsumption<'v> {
+    GuideConsumption {
+        use_kind: if crate::orchestrator::registration::legend_policy(
+            context.registered.source,
+            Some(context.registered),
+        ) == crate::LegendPolicy::Hidden
+        {
+            GuideUse::Hidden
+        } else {
+            context.guides.use_kind
+        },
+        ..context.guides
     }
 }
 
@@ -196,37 +244,9 @@ impl ChildPlans {
         Ok(())
     }
 
-    pub(crate) fn canvas_probe(
-        &mut self,
-        plot: &Plot,
-        context: PlotRenderContext<'_, '_>,
-        index: usize,
-        phase: MeasurementPhase,
-        round: &FeedbackRound,
-    ) -> Result<crate::layout::fit::FitOutcome<Arc<PlotRenderResult>>, Error> {
-        let owner = ComponentAddress::root().child(
-            AddressRole::CanvasCell,
-            u32::try_from(index).map_err(|_| Error::Render("canvas address overflowed".into()))?,
-        )?;
-        self.measure(plot, context, &owner, phase, round, || {
-            plot.preflight_measurement(
-                context.registered,
-                context.intrinsic,
-                context.canvas,
-                plot.kind(),
-                context.panel,
-                context.theme,
-                context.fit_scope(),
-            )
-        })
-    }
-
-    /// Called after all siblings and parent requests have been measured. A
-    /// provisional result must not become an active entry for the next round.
+    /// A provisional result must not become an active entry for the next round.
     pub(crate) fn finish_round(&mut self, round: &FeedbackRound) {
         if round.child_stable(&[ComponentAddress::root()]) {
-            // The driver will freeze this plan. Do not retain discarded probes
-            // and child keys through final capture and output admission.
             self.measurements.clear();
             self.panels.clear();
             return;
@@ -241,31 +261,18 @@ impl ChildPlans {
 
     pub(crate) fn measure(
         &mut self,
-        plot: &Plot,
-        context: PlotRenderContext<'_, '_>,
+        context: &PlotMeasureContext<'_, '_>,
         owner: &ComponentAddress,
         phase: MeasurementPhase,
         round: &FeedbackRound,
         measure: impl FnOnce() -> Result<FitOutcome<PlotRenderResult>, Error>,
     ) -> Result<FitOutcome<Arc<PlotRenderResult>>, Error> {
         self.validate_owner(owner)?;
-        let guides = GuideConsumption {
-            use_kind: if crate::orchestrator::registration::legend_policy(
-                plot.description(),
-                context.registered,
-            ) == crate::LegendPolicy::Hidden
-            {
-                GuideUse::Hidden
-            } else {
-                context.guides.use_kind
-            },
-            local_guide: context.guides.local_guide,
-            dependencies: context.guides.dependencies,
-        };
-        let context = context.with_guides(&guides);
         if reuse_enabled() {
             for entry in &self.measurements {
-                if entry.phase == phase && entry.inputs.matches(plot, context, owner, round)? {
+                if entry.phase == phase
+                    && entry.inputs.matches(context, owner, round, Some(phase))?
+                {
                     #[cfg(test)]
                     child_cache(owner, phase.label(), Counter::ChildCacheHit);
                     return Ok(FitOutcome::Measured(Arc::clone(&entry.result)));
@@ -283,31 +290,35 @@ impl ChildPlans {
         if !reuse_enabled() {
             return Ok(FitOutcome::Measured(result));
         }
-
         self.measurements
             .retain(|entry| entry.inputs.owners[0] != *owner || entry.phase != phase);
         crate::render::backend::reserve_text_records(&mut self.measurements, 1)?;
         self.measurements.push(Measurement {
-            inputs: PlotEntryInputs::new(plot, context, context.data.plot_id(), owner, round)?,
+            inputs: PlotEntryInputs::new(context, owner, round, Some(phase))?,
             phase,
             result: Arc::clone(&result),
         });
         Ok(FitOutcome::Measured(result))
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the original child cache receives the unique factory, selected entry and unchanged guide/feedback operands"
+    )]
     pub(crate) fn plan(
         &mut self,
-        plot: &Plot,
+        factory: &PlotMeasureAssignmentFactory<'_, '_>,
+        entry: PlotMeasureAssignment,
         role: LegendRole,
-        context: PlotRenderContext<'_, '_>,
-        discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
+        guides: GuideConsumption<'_>,
+        fit_scope: &crate::layout::fit::FitScope,
         round: &mut FeedbackRound,
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<MeasuredPlotPlan>>, Error> {
         self.validate_owner(owner)?;
         let use_kind = if crate::orchestrator::registration::legend_policy(
-            plot.description(),
-            context.registered,
+            factory.registered.source,
+            Some(factory.registered),
         ) == crate::LegendPolicy::Hidden
         {
             GuideUse::Hidden
@@ -316,21 +327,18 @@ impl ChildPlans {
         } else {
             GuideUse::SharedSuppressed
         };
-        let guides = GuideConsumption {
-            use_kind,
-            local_guide: discrete_guide,
-            dependencies: context.guides.dependencies,
-        };
-        let context = context.with_guides(&guides);
+        let guides = GuideConsumption { use_kind, ..guides };
+        let retained = entry.clone();
+        let context = factory.context(&retained, guides, fit_scope)?;
         if reuse_enabled() {
-            for entry in &self.panels {
-                if entry.role == role && entry.inputs.matches(plot, context, owner, round)? {
+            for cached in &self.panels {
+                if cached.role == role && cached.inputs.matches(&context, owner, round, None)? {
                     #[cfg(test)]
                     child_cache(owner, "panel", Counter::ChildCacheHit);
-                    round.replay_child(&entry.feedback)?;
+                    round.replay_child(&cached.feedback)?;
                     #[cfg(test)]
                     child_cache(owner, "panel", Counter::ChildFeedbackReplay);
-                    return Ok(FitOutcome::Measured(Arc::clone(&entry.result)));
+                    return Ok(FitOutcome::Measured(Arc::clone(&cached.result)));
                 }
             }
         }
@@ -339,24 +347,17 @@ impl ChildPlans {
         #[cfg(test)]
         CHILD_MEASUREMENTS.with(|events| events.borrow_mut().push((owner.clone(), "panel")));
         let checkpoint = round.child_checkpoint();
-        let result = match super::plan_panel_with_context(
-            plot,
-            plot.kind(),
-            role,
-            context,
-            discrete_guide,
-            round,
-            owner,
-        )? {
-            FitOutcome::Measured(result) => crate::data::source::source_arc(result)?,
+        let result = match super::plan_plot(factory, entry, role, guides, fit_scope, round)? {
+            FitOutcome::Measured(result) => result,
             FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
         };
         if !reuse_enabled() {
             return Ok(FitOutcome::Measured(result));
         }
-        self.panels.retain(|entry| entry.inputs.owners[0] != *owner);
+        self.panels
+            .retain(|cached| cached.inputs.owners[0] != *owner);
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
-            let inputs = PlotEntryInputs::new(plot, context, &result.plot_id, owner, round)?;
+            let inputs = PlotEntryInputs::new(&context, owner, round, None)?;
             if round.child_stable(&inputs.owners) {
                 crate::render::backend::reserve_text_records(&mut self.panels, 1)?;
                 self.panels.push(CompleteChildCacheEntry {
@@ -385,94 +386,109 @@ mod scoped_tests;
 #[cfg(test)]
 fn prepare_child_inputs_for_test<'src>(
     source: &'src Plot,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    operation: &crate::font::canonical::OperationContext,
-) -> Result<crate::layout::interior::PreparedInteriorInputs<'src>, Error> {
-    let mut registry =
-        crate::plots::shared_x::prepare_plot(source.description(), operation, theme)?;
-    let guide = crate::layout::interior::guide::prepare_discrete_guides(
-        source.description(),
-        &mut registry.panels,
-        operation,
-        false,
-    )?;
-    crate::layout::interior::PreparedInteriorInputs::from_registry(
-        registry,
-        crate::layout::interior::InteriorRoute::classify(source.kind()),
-        guide,
+    stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<crate::orchestrator::root::Root<'src>, Error> {
+    crate::orchestrator::root::Root::prepare(
+        crate::orchestrator::root::RootSource::Plot(source.description()),
+        stage,
     )
+}
+
+#[cfg(test)]
+fn child_allocation_for_test(
+    size: crate::layout::RootSize,
+    panel: PixelRect,
+    owner: &ComponentAddress,
+    round: &FeedbackRound,
+) -> crate::orchestrator::assignment::PlotAllocationInputs {
+    use crate::orchestrator::assignment::{
+        GuideTrialAssignment, ParentInsets, PlotAllocationInputs, PlotMeasureDimensions,
+    };
+    PlotAllocationInputs {
+        dimensions: PlotMeasureDimensions {
+            canvas: size,
+            output_override: None,
+        },
+        cell: panel,
+        frame: panel,
+        body: panel,
+        axis_label_width: panel.width(),
+        content_height: false,
+        fill_content_height: false,
+        content_preference: None,
+        insets: ParentInsets::consumed(round, owner),
+        guide: GuideTrialAssignment {
+            edge: crate::LegendPosition::Auto,
+            compact: false,
+            allocation: None,
+        },
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES;
+    use crate::layout::fit::FitScope;
 
-    #[test]
-    fn content_height_and_row_fill_each_invalidate_the_actual_child_input_key() {
-        let source = Plot::scatter(
+    fn source() -> Plot<crate::kind::Scatter> {
+        Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
-        .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        theme.text.prepare_font_environment().unwrap();
-        let root = crate::layout::plan_root(
+    }
+
+    #[test]
+    fn content_height_and_row_fill_each_invalidate_the_actual_child_input_key() {
+        let source = source().erase();
+        let frozen = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 800,
                 height: 600,
             },
-            |stage| {
-                let operation = stage.operation();
-                let inputs = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                Ok((operation, inputs))
-            },
-            |(operation, inputs), assigned, round| {
-                let registered = &inputs.plots[0];
-                let data = registered.data(operation)?;
+            |stage| prepare_child_inputs_for_test(&source, stage),
+            |root, assigned, round| {
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory =
+                    root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
                 let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
-                let context = PlotRenderContext::new(
-                    data,
-                    crate::layout::PixelRect::new(20.0, 400.0, 20.0, 500.0),
-                    &theme,
-                )
-                .with_registration(registered, inputs.intrinsic(registered));
-                let key = PlotEntryInputs::new(&source, context, data.plot_id(), &owner, round)?;
-                assert!(key.matches(&source, context, &owner, round)?);
+                let entry = factory.assign(
+                    child_allocation_for_test(
+                        measurement.measurement_size,
+                        PixelRect::new(20.0, 400.0, 20.0, 500.0),
+                        &owner,
+                        round,
+                    ),
+                    round,
+                    None,
+                )?;
+                let scope = FitScope::root();
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                let key = PlotEntryInputs::new(&context, &owner, round, None)?;
+                assert!(key.matches(&context, &owner, round, None)?);
                 for (content_height, fill_content_height) in
                     [(true, false), (false, true), (true, true)]
                 {
-                    let mut changed = context;
+                    let mut changed = entry.clone();
                     changed.content_height = content_height;
                     changed.fill_content_height = fill_content_height;
-                    assert!(!key.matches(&source, changed, &owner, round)?);
+                    let context = factory.context(&changed, SUPPRESSED_GUIDES, &scope)?;
+                    assert!(!key.matches(&context, &owner, round, None)?);
                 }
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
+                    measurement.measurement_size,
                     (),
                 ))
             },
             |_, _, (), _| Ok(()),
         )
         .unwrap();
-        assert_eq!(root.dimensions(), (800, 600));
+        assert_eq!(frozen.dimensions(), (800, 600));
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "compares actual child hits against independent legend paint and geometry edits"
-    )]
     fn actual_child_hit_is_invalidated_by_legend_only_paint_and_geometry_changes() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        let source = source().erase();
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -484,52 +500,20 @@ mod tests {
                 height: 600,
             },
             |stage| {
-                let operation = stage.operation();
-                let inputs = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                Ok((operation, inputs))
-            },
-            |(operation, inputs), assigned, round| {
-                let registered = &inputs.plots[0];
-                let data = registered.data(operation)?;
-                let panel = PixelRect::new(10.0, 200.0, 30.0, 400.0);
-                let context = PlotRenderContext::new(data, panel, &theme)
-                    .with_registration(registered, inputs.intrinsic(registered));
-                let mut produce = || {
-                    produced += 1;
-                    Ok(FitOutcome::Measured(PlotRenderResult::new(
-                        crate::layout::Layout::envelope(panel),
-                        None,
-                    )))
-                };
-                let first = crate::layout::fit::measured(children.measure(
-                    &source,
-                    context,
-                    &owner,
-                    MeasurementPhase::Legend,
-                    round,
-                    &mut produce,
-                ))
-                .map_err(crate::layout::fit::PlanError::into_error)?;
-                let hit = crate::layout::fit::measured(children.measure(
-                    &source,
-                    context,
-                    &owner,
-                    MeasurementPhase::Legend,
-                    round,
-                    &mut produce,
-                ))
-                .map_err(crate::layout::fit::PlanError::into_error)?;
-                assert!(Arc::ptr_eq(&first, &hit));
-                let mut paint = theme.theme.clone();
-                let frame = paint
+                let root = prepare_child_inputs_for_test(&source, stage)?;
+                let mut paint = prepare_child_inputs_for_test(&source, stage)?;
+                let mut geometry = prepare_child_inputs_for_test(&source, stage)?;
+                let appearance = &mut paint.plots[0].appearance;
+                let frame = appearance
                     .legend
                     .get_frame()
                     .unwrap()
                     .clone()
                     .fill(crate::theme::Color::rgba(1, 2, 3, 120))?;
-                paint.legend = paint.legend.clone().frame(Some(frame))?;
-                let mut geometry = paint.clone();
-                let frame = geometry.legend.get_frame().unwrap();
+                appearance.legend = appearance.legend.clone().frame(Some(frame))?;
+                geometry.plots[0].appearance = appearance.clone();
+                let appearance = &mut geometry.plots[0].appearance;
+                let frame = appearance.legend.get_frame().unwrap();
                 let changed = crate::theme::LegendFrameTheme::new(
                     frame.get_fill(),
                     Some(crate::theme::OutlineTheme::new(
@@ -538,26 +522,44 @@ mod tests {
                     )?),
                     frame.get_radius().clone(),
                 )?;
-                geometry.legend = geometry.legend.clone().frame(Some(changed))?;
-                for custom in [&paint, &geometry] {
-                    let request = crate::text::TextRequestContext {
-                        theme: custom,
-                        ..theme
+                appearance.legend = appearance.legend.clone().frame(Some(changed))?;
+                Ok([root, paint, geometry])
+            },
+            |roots, assigned, round| {
+                let mut first = None;
+                for root in roots {
+                    let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                    let factory =
+                        root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
+                    let entry = factory.assign(
+                        child_allocation_for_test(
+                            measurement.measurement_size,
+                            PixelRect::new(10.0, 200.0, 30.0, 400.0),
+                            &owner,
+                            round,
+                        ),
+                        round,
+                        None,
+                    )?;
+                    let scope = FitScope::root();
+                    let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                    let mut produce = || {
+                        produced += 1;
+                        Ok(FitOutcome::Measured(PlotRenderResult::new(
+                            crate::layout::Layout::envelope(entry.body),
+                            None,
+                        )))
                     };
-                    let custom = &request;
                     let changed = crate::layout::fit::measured(children.measure(
-                        &source,
-                        context.with_theme(custom),
+                        &context,
                         &owner,
                         MeasurementPhase::Legend,
                         round,
                         &mut produce,
                     ))
                     .map_err(crate::layout::fit::PlanError::into_error)?;
-                    assert!(!Arc::ptr_eq(&first, &changed));
                     let hit = crate::layout::fit::measured(children.measure(
-                        &source,
-                        context.with_theme(custom),
+                        &context,
                         &owner,
                         MeasurementPhase::Legend,
                         round,
@@ -565,6 +567,11 @@ mod tests {
                     ))
                     .map_err(crate::layout::fit::PlanError::into_error)?;
                     assert!(Arc::ptr_eq(&changed, &hit));
+                    if let Some(first) = &first {
+                        assert!(!Arc::ptr_eq(first, &changed));
+                    } else {
+                        first = Some(changed);
+                    }
                 }
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
@@ -580,215 +587,184 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one actual child cache verifies hits and full normalized policy invalidation"
+        reason = "one actual cache retains the complete original numeric-policy matrix"
     )]
     fn child_measurement_reuses_hits_and_replaces_changed_numeric_policies() {
         use crate::numeric::{
             decimal::{NegativeZero, NumericNotation, TrailingZeros},
             format::{NumericFormat, NumericPrecision},
         };
-        {
-            let format = NumericFormat::default();
-            let make = |format| {
-                Plot::scatter(
-                    crate::NumericValues::new("x", [0.0, 1.0]),
-                    crate::NumericValues::new("y", [0.0, 1.0]),
-                )
-                .x_tick_format(format)
-            };
-            let source = make(format.clone()).erase();
-            let formats = [
-                format
-                    .clone()
-                    .notation(NumericNotation::Scientific)
-                    .unwrap(),
-                format
-                    .clone()
-                    .precision(NumericPrecision::Significant(2))
-                    .unwrap(),
-                format
-                    .clone()
-                    .precision(NumericPrecision::AdaptiveFractional { min: 2, max: 3 })
-                    .unwrap(),
-                format.clone().decimal_scale(1).unwrap(),
-                format.clone().prefix("raw ").unwrap(),
-                format.clone().suffix(" u").unwrap(),
-                format
-                    .clone()
-                    .negative_zero(NegativeZero::Normalize)
-                    .unwrap(),
-                format.clone().trailing_zeros(TrailingZeros::Trim).unwrap(),
-            ];
-            let mut variants = formats.map(|format| make(format).erase()).to_vec();
-            for generation in [
-                crate::TickGeneration::target(5).unwrap(),
-                crate::TickGeneration::maximum(5).unwrap(),
-            ] {
-                variants.push(
-                    make(format.clone())
-                        .x_tick_generation(generation.clone())
-                        .erase(),
-                );
-                variants.push(make(format.clone()).y_tick_generation(generation).erase());
-            }
-            for alpha in [
-                crate::alpha::AlphaValues::new("confidence", [127; 2]).unwrap(),
-                crate::alpha::AlphaValues::linear(
-                    crate::NumericValues::new("confidence", [0.0, 1.0]),
-                    (0.0, 1.0),
-                    (127, 127),
-                )
+        let format = NumericFormat::default();
+        let make = |format| source().x_tick_format(format);
+        let source = make(format.clone()).erase();
+        let formats = [
+            format
+                .clone()
+                .notation(NumericNotation::Scientific)
                 .unwrap(),
-                crate::alpha::AlphaValues::continuous(
-                    crate::NumericValues::new("confidence", [0.0, 1.0]),
-                    (0.0, 1.0),
-                    |_| 127,
-                )
+            format
+                .clone()
+                .precision(NumericPrecision::Significant(2))
                 .unwrap(),
-            ] {
-                variants.push(
-                    make(format.clone())
-                        .with_alpha(
-                            crate::alpha::AlphaTarget::Point,
-                            crate::alpha::AlphaEncoding::observations(alpha),
-                        )
-                        .erase(),
-                );
-            }
-            let theme = crate::Theme::publication().resolve().unwrap();
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
-            let owner = ComponentAddress::root()
-                .child(AddressRole::FacetCell, 0)
-                .unwrap();
-            let mut children = ChildPlans::facets();
-            let mut produced = 0;
-            crate::layout::plan_root(
-                crate::layout::RootRequest::ExactSize {
-                    width: 800,
-                    height: 600,
-                },
-                |stage| {
-                    let operation = stage.operation();
-                    let inputs = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                    let variants = crate::data::source::collect_source(
-                        variants
-                            .iter()
-                            .map(|plot| prepare_child_inputs_for_test(plot, &theme, &operation)),
-                    )?;
-                    Ok((operation, inputs, variants))
-                },
-                |(operation, inputs, variant_inputs), assigned, round| {
-                    let registered = &inputs.plots[0];
-                    let data = registered.data(operation)?;
-                    let context = PlotRenderContext::new(
-                        data,
-                        PixelRect::new(10.0, 200.0, 30.0, 400.0),
-                        &theme,
-                    )
-                    .with_registration(registered, inputs.intrinsic(registered));
-                    let mut produce = || {
-                        produced += 1;
-                        Ok(FitOutcome::Measured(PlotRenderResult::new(
-                            crate::layout::Layout::envelope(crate::layout::PixelRect::new(
-                                80.0, 770.0, 60.0, 570.0,
-                            )),
-                            None,
-                        )))
-                    };
-                    let first = crate::layout::fit::measured(children.measure(
-                        &source,
-                        context,
-                        &owner,
-                        MeasurementPhase::Probe,
-                        round,
-                        &mut produce,
-                    ))
-                    .map_err(crate::layout::fit::PlanError::into_error)?;
-
-                    let hit = crate::layout::fit::measured(children.measure(
-                        &source,
-                        context,
-                        &owner,
-                        MeasurementPhase::Probe,
-                        round,
-                        &mut produce,
-                    ))
-                    .map_err(crate::layout::fit::PlanError::into_error)?;
-                    assert!(Arc::ptr_eq(&first, &hit));
-
-                    let changed = crate::layout::fit::measured(children.measure(
-                        &source,
-                        context.with_axis_label_width(1.0),
-                        &owner,
-                        MeasurementPhase::Probe,
-                        round,
-                        &mut produce,
-                    ))
-                    .map_err(crate::layout::fit::PlanError::into_error)?;
-                    assert_eq!(children.measurements.len(), 1);
-                    assert!(!Arc::ptr_eq(&first, &changed));
-                    assert!(Arc::ptr_eq(&changed, &children.measurements[0].result));
-                    for (plot, inputs) in variants.iter().zip(variant_inputs) {
-                        let variant = &inputs.plots[0];
-                        assert_eq!(registered.scope.id, variant.scope.id);
-                        let changed_context =
-                            PlotRenderContext::new(variant.data(operation)?, context.panel, &theme)
-                                .with_registration(variant, inputs.intrinsic(variant));
-                        let changed = crate::layout::fit::measured(children.measure(
-                            plot,
-                            changed_context,
-                            &owner,
-                            MeasurementPhase::Probe,
-                            round,
-                            &mut produce,
-                        ))
-                        .map_err(crate::layout::fit::PlanError::into_error)?;
-                        let hit = crate::layout::fit::measured(children.measure(
-                            plot,
-                            changed_context,
-                            &owner,
-                            MeasurementPhase::Probe,
-                            round,
-                            &mut produce,
-                        ))
-                        .map_err(crate::layout::fit::PlanError::into_error)?;
-                        assert!(!Arc::ptr_eq(&first, &changed));
-                        assert!(Arc::ptr_eq(&changed, &hit));
-                        let inputs = &children.measurements[0].inputs.plot;
-                        assert!(!source.same_composed_inputs(
-                            inputs,
-                            &inputs.guides,
-                            registered,
-                            context.canvas
-                        ));
-                    }
-                    Ok(crate::layout::MeasuredLayout::new(
-                        assigned.assigned_size()?,
-                        (),
-                    ))
-                },
-                |_, _, (), _| Ok(()),
-            )
-            .unwrap();
-            assert_eq!(produced, 2 + variants.len());
+            format
+                .clone()
+                .precision(NumericPrecision::AdaptiveFractional { min: 2, max: 3 })
+                .unwrap(),
+            format.clone().decimal_scale(1).unwrap(),
+            format.clone().prefix("raw ").unwrap(),
+            format.clone().suffix(" u").unwrap(),
+            format
+                .clone()
+                .negative_zero(NegativeZero::Normalize)
+                .unwrap(),
+            format.clone().trailing_zeros(TrailingZeros::Trim).unwrap(),
+        ];
+        let mut variants = formats.map(|format| make(format).erase()).to_vec();
+        for generation in [
+            crate::TickGeneration::target(5).unwrap(),
+            crate::TickGeneration::maximum(5).unwrap(),
+        ] {
+            variants.push(
+                make(format.clone())
+                    .x_tick_generation(generation.clone())
+                    .erase(),
+            );
+            variants.push(make(format.clone()).y_tick_generation(generation).erase());
         }
+        for alpha in [
+            crate::alpha::AlphaValues::new("confidence", [127; 2]).unwrap(),
+            crate::alpha::AlphaValues::linear(
+                crate::NumericValues::new("confidence", [0.0, 1.0]),
+                (0.0, 1.0),
+                (127, 127),
+            )
+            .unwrap(),
+            crate::alpha::AlphaValues::continuous(
+                crate::NumericValues::new("confidence", [0.0, 1.0]),
+                (0.0, 1.0),
+                |_| 127,
+            )
+            .unwrap(),
+        ] {
+            variants.push(
+                make(format.clone())
+                    .with_alpha(
+                        crate::alpha::AlphaTarget::Point,
+                        crate::alpha::AlphaEncoding::observations(alpha),
+                    )
+                    .erase(),
+            );
+        }
+        let owner = ComponentAddress::root()
+            .child(AddressRole::FacetCell, 0)
+            .unwrap();
+        let mut children = ChildPlans::facets();
+        let mut produced = 0;
+        crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 800,
+                height: 600,
+            },
+            |stage| {
+                let root = prepare_child_inputs_for_test(&source, stage)?;
+                let variants = crate::data::source::collect_source(
+                    variants
+                        .iter()
+                        .map(|source| prepare_child_inputs_for_test(source, stage)),
+                )?;
+                Ok((root, variants))
+            },
+            |(root, variants), assigned, round| {
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory =
+                    root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
+                let mut entry = factory.assign(
+                    child_allocation_for_test(
+                        measurement.measurement_size,
+                        PixelRect::new(10.0, 200.0, 30.0, 400.0),
+                        &owner,
+                        round,
+                    ),
+                    round,
+                    None,
+                )?;
+                let scope = FitScope::root();
+                let mut produce = || {
+                    produced += 1;
+                    Ok(FitOutcome::Measured(PlotRenderResult::new(
+                        crate::layout::Layout::envelope(PixelRect::new(80.0, 770.0, 60.0, 570.0)),
+                        None,
+                    )))
+                };
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                let first = crate::layout::fit::measured(children.measure(
+                    &context,
+                    &owner,
+                    MeasurementPhase::Probe,
+                    round,
+                    &mut produce,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                let hit = crate::layout::fit::measured(children.measure(
+                    &context,
+                    &owner,
+                    MeasurementPhase::Probe,
+                    round,
+                    &mut produce,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert!(Arc::ptr_eq(&first, &hit));
+                entry.axis_label_width = 1.0;
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                let changed = crate::layout::fit::measured(children.measure(
+                    &context,
+                    &owner,
+                    MeasurementPhase::Probe,
+                    round,
+                    &mut produce,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert_eq!(children.measurements.len(), 1);
+                assert!(!Arc::ptr_eq(&first, &changed));
+                assert!(Arc::ptr_eq(&changed, &children.measurements[0].result));
+                for variant in variants {
+                    assert_eq!(root.plots[0].scope.id, variant.plots[0].scope.id);
+                    let factory = variant
+                        .plot_assignment_factory(&measurement, &variant.plots[0].scope.id)?;
+                    let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                    let changed = crate::layout::fit::measured(children.measure(
+                        &context,
+                        &owner,
+                        MeasurementPhase::Probe,
+                        round,
+                        &mut produce,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    let hit = crate::layout::fit::measured(children.measure(
+                        &context,
+                        &owner,
+                        MeasurementPhase::Probe,
+                        round,
+                        &mut produce,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    assert!(!Arc::ptr_eq(&first, &changed));
+                    assert!(Arc::ptr_eq(&changed, &hit));
+                }
+                Ok(crate::layout::MeasuredLayout::new(
+                    measurement.measurement_size,
+                    (),
+                ))
+            },
+            |_, _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(produced, 2 + variants.len());
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the actual cache entry and both feedback rounds remain together to isolate replay without remeasurement"
-    )]
     fn later_panel_cache_replays_feedback_without_remeasurement() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        let source = source().erase();
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -798,77 +774,60 @@ mod tests {
         let mut children = ChildPlans::facets();
         let mut rounds = 0;
         let mut finalized = false;
-        let result = crate::layout::plan_root(
+        crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 800,
                 height: 600,
             },
-            |stage| {
-                let operation = stage.operation();
-                let inputs = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                Ok((operation, inputs))
-            },
-            |(operation, inputs), assigned, round| {
-                let registered = &inputs.plots[0];
-                let data = registered.data(operation)?;
+            |stage| prepare_child_inputs_for_test(&source, stage),
+            |root, assigned, round| {
                 rounds += 1;
-                let context =
-                    PlotRenderContext::new(data, PixelRect::new(10.0, 200.0, 30.0, 400.0), &theme)
-                        .with_registration(registered, inputs.intrinsic(registered));
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory =
+                    root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
+                let entry = factory.assign(
+                    child_allocation_for_test(
+                        measurement.measurement_size,
+                        PixelRect::new(10.0, 200.0, 30.0, 400.0),
+                        &owner,
+                        round,
+                    ),
+                    round,
+                    None,
+                )?;
+                let scope = FitScope::root();
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
                 if rounds == 1 {
                     let start = round.child_checkpoint();
                     round.observe_number(1.0)?;
-                    // Seed a successful immutable panel to isolate the replay boundary.
                     children.panels.push(CompleteChildCacheEntry {
-                        inputs: PlotEntryInputs::new(
-                            &source,
-                            context,
-                            data.plot_id(),
-                            &owner,
-                            round,
-                        )?,
+                        inputs: PlotEntryInputs::new(&context, &owner, round, None)?,
                         role: LegendRole::Suppressed,
                         result: Arc::new(MeasuredPlotPlan {
-                            plot_id: data.plot_id().clone(),
-                            selected: crate::orchestrator::assignment::PlotMeasureAssignment {
-                                plot_id: data.plot_id().clone(),
-                                dimensions:
-                                    crate::orchestrator::assignment::PlotMeasureDimensions {
-                                        canvas: assigned.assigned_size()?,
-                                        output_override: None,
-                                    },
-                                cell: context.cell,
-                                frame: context.panel,
-                                content_height: context.content_height,
-                                fill_content_height: context.fill_content_height,
-                                content_preference: context.content_preference,
-                                insets: crate::orchestrator::assignment::ParentInsets::consumed(
-                                    round, &owner,
-                                ),
-                            },
+                            plot_id: root.plots[0].scope.id.clone(),
+                            selected: entry.clone(),
                             preference: None,
-                            panel_box: context.panel,
+                            panel_box: entry.body,
                             result: PlotRenderResult::new(
-                                crate::layout::Layout::envelope(crate::layout::PixelRect::new(
+                                crate::layout::Layout::envelope(PixelRect::new(
                                     80.0, 770.0, 60.0, 570.0,
                                 )),
                                 None,
                             ),
                             legend: None,
                             layers: None,
-                            surface: theme.surfaces.plot_panel,
-                            planned_x_limits: None,
-                            planned_y_limits: None,
+                            surface: root.plots[0].appearance.surfaces.plot_panel,
                         }),
                         feedback: round.retain_child_feedback(start)?.unwrap(),
                     });
                 } else {
                     CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
                     let replayed = crate::layout::fit::measured(children.plan(
-                        &source,
+                        &factory,
+                        entry,
                         LegendRole::Suppressed,
-                        context,
-                        None,
+                        SUPPRESSED_GUIDES,
+                        &scope,
                         round,
                         &owner,
                     ))
@@ -883,7 +842,7 @@ mod tests {
                     [1.0; 4],
                 )?;
                 Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
+                    measurement.measurement_size,
                     (),
                 ))
             },
@@ -891,8 +850,8 @@ mod tests {
                 finalized = true;
                 Ok(())
             },
-        );
-        result.unwrap();
+        )
+        .unwrap();
         assert_eq!(rounds, 2);
         assert!(finalized);
     }
@@ -900,17 +859,18 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one key matrix keeps all concrete parent-input invalidation cases together"
+        reason = "one key matrix preserves computed policy and relevant feedback coverage"
     )]
     fn child_keys_include_exact_origin_computed_policy_and_relevant_feedback() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
+        let source_variants = [
+            source().x_limits(-1.0, 2.0).erase(),
+            source().y_limits(-1.0, 2.0).erase(),
+            source().title_alignment(crate::TextAlignment::End).erase(),
+            source()
+                .x_label(crate::Text::new("x").layout(crate::TextLayout::default()))
+                .erase(),
+        ];
+        let source = source().erase();
         let owner = ComponentAddress::root()
             .child(AddressRole::CanvasCell, 0)
             .unwrap();
@@ -923,150 +883,100 @@ mod tests {
                 height: 600,
             },
             |stage| {
-                let operation = stage.operation();
-                let base = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                inputs.panels[0].policy.gutter_owner =
-                    crate::orchestrator::registration::GutterOwner::Composition;
-                let mut hidden =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                hidden.panels[0].policy.axis_text.tick_labels[1] = false;
-                let mut collectives =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                collectives.panels[0].parent_orders.collectives =
-                    Some(crate::data::source::source_arc(Vec::new())?);
-                let mut hues =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                hues.panels[0].parent_orders.hues = Some(crate::data::source::source_arc(
-                    crate::data::category::CategoryDomain::from_values(
-                        Some(&crate::data::category::RawField::new("cohort")?),
-                        Vec::new(),
-                    )?,
-                )?);
-                let mut scales =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                scales.panels[0].policy.facet_scales = Some(FacetScales::Free);
-                let mut guide =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
-                guide.panels[0].policy.discrete_guide_use = GuideUse::Hidden;
-                guide.panels[0].policy.continuous_guide_use = GuideUse::Hidden;
-                let [inputs, hidden, collectives, scales, guide, hues] =
-                    [inputs, hidden, collectives, scales, guide, hues].map(|mut registry| {
-                        let guide = crate::layout::interior::guide::prepare_discrete_guides(
-                            source.description(),
-                            &mut registry.panels,
-                            &operation,
-                            false,
-                        )?;
-                        crate::layout::interior::PreparedInteriorInputs::from_registry(
-                            registry,
-                            crate::layout::interior::InteriorRoute::classify(source.kind()),
-                            guide,
-                        )
-                    });
-                Ok((
-                    operation,
-                    base,
-                    inputs?,
-                    hidden?,
-                    collectives?,
-                    scales?,
-                    guide?,
-                    hues?,
-                ))
+                let root = prepare_child_inputs_for_test(&source, stage)?;
+                let mut variants = Vec::new();
+                for index in 0..7 {
+                    let mut variant = prepare_child_inputs_for_test(&source, stage)?;
+                    let panel = &mut variant.plots[0];
+                    match index {
+                        0 => {
+                            panel.policy.gutter_owner =
+                                crate::orchestrator::registration::GutterOwner::Composition;
+                        }
+                        1 => panel.policy.axis_text.tick_labels[1] = false,
+                        2 => {
+                            panel.parent_orders.collectives =
+                                Some(crate::data::source::source_arc(Vec::new())?);
+                        }
+                        3 => {
+                            panel.parent_orders.hues = Some(crate::data::source::source_arc(
+                                crate::data::category::CategoryDomain::from_values(
+                                    Some(&crate::data::category::RawField::new("cohort")?),
+                                    Vec::new(),
+                                )?,
+                            )?);
+                        }
+                        4 => panel.policy.facet_scales = Some(FacetScales::Free),
+                        5 => {
+                            panel.policy.discrete_guide_use = GuideUse::Hidden;
+                            panel.policy.continuous_guide_use = GuideUse::Hidden;
+                        }
+                        _ => panel.appearance.typography.axes.tick_label.font_size += 1.0,
+                    }
+                    variants.push(variant);
+                }
+                for source in &source_variants {
+                    variants.push(prepare_child_inputs_for_test(source, stage)?);
+                }
+                Ok((root, variants))
             },
-            |(operation, base, inputs, hidden, collectives, scales, guide, hues),
-             assigned,
-             round| {
-                let registered = &base.plots[0];
-                let data = registered.data(operation)?;
+            |(root, variants), assigned, round| {
+                let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                let factory =
+                    root.plot_assignment_factory(&measurement, &root.plots[0].scope.id)?;
                 let panel = PixelRect::new(10.0, 200.0, 30.0, 400.0);
-                let context = PlotRenderContext::new(data, panel, &theme)
-                    .with_registration(registered, base.intrinsic(registered));
+                let entry = factory.assign(
+                    child_allocation_for_test(measurement.measurement_size, panel, &owner, round),
+                    round,
+                    None,
+                )?;
+                let scope = FitScope::root();
+                let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
                 assert!(PlotEntryInputs::new(
-                    &source,
-                    context,
-                    data.plot_id(),
+                    &context,
                     &owner.child(AddressRole::CanvasCell, 1)?,
-                    round
+                    round,
+                    None,
                 )
                 .is_err());
-                let key = PlotEntryInputs::new(&source, context, data.plot_id(), &owner, round)?;
-                assert!(key.matches(&source, context, &owner, round)?);
-                let registered = &inputs.plots[0];
-                let composed = PlotRenderContext::new(registered.data(operation)?, panel, &theme)
-                    .with_registration(registered, inputs.intrinsic(registered));
-                assert!(!key.matches(&source, composed, &owner, round)?);
-                let registered = &hidden.plots[0];
-                let suppressed = PlotRenderContext::new(registered.data(operation)?, panel, &theme)
-                    .with_registration(registered, hidden.intrinsic(registered));
-                assert!(!key.matches(&source, suppressed, &owner, round)?);
-                let registered = &collectives.plots[0];
-                let coordinated =
-                    PlotRenderContext::new(registered.data(operation)?, panel, &theme)
-                        .with_registration(registered, collectives.intrinsic(registered));
-                assert!(!key.matches(&source, coordinated, &owner, round)?);
-                let registered = &hues.plots[0];
-                let parent_hues =
-                    PlotRenderContext::new(registered.data(operation)?, panel, &theme)
-                        .with_registration(registered, hues.intrinsic(registered));
-                assert!(!key.matches(&source, parent_hues, &owner, round)?);
-                let registered = &guide.plots[0];
-                let hidden_guide =
-                    PlotRenderContext::new(registered.data(operation)?, panel, &theme)
-                        .with_registration(registered, guide.intrinsic(registered));
-                assert!(!key.matches(&source, hidden_guide, &owner, round)?);
+                let key = PlotEntryInputs::new(&context, &owner, round, None)?;
+                assert!(key.matches(&context, &owner, round, None)?);
+                for variant in variants {
+                    let factory = variant
+                        .plot_assignment_factory(&measurement, &variant.plots[0].scope.id)?;
+                    let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                    assert!(!key.matches(&context, &owner, round, None)?);
+                }
+                let mut changed = entry.clone();
+                changed.axis_label_width += 1.0;
                 assert!(!key.matches(
-                    &source,
-                    context.with_axis_label_width(context.axis_label_width + 1.0),
+                    &factory.context(&changed, SUPPRESSED_GUIDES, &scope)?,
                     &owner,
-                    round
+                    round,
+                    None,
                 )?);
                 for moved in [
                     PixelRect::new(11.0, 201.0, 30.0, 400.0),
                     PixelRect::new(10.0, 200.0, 31.0, 401.0),
                     PixelRect::new(10.0 + 1.0 / 4096.0, 200.0, 30.0, 400.0),
                 ] {
-                    assert!(!key.matches(&source, context.with_panel(moved), &owner, round)?);
-                }
-                for plot in [
-                    source.clone().with_planned_x_limits((-1.0, 2.0)),
-                    source.clone().with_planned_y_limits((-1.0, 2.0)),
-                    source.clone().with_resolved_facet_ranges(
-                        crate::PlotKind::Forest,
-                        Some((-1.0, 2.0)),
+                    let mut changed = entry.clone();
+                    changed.body = moved;
+                    assert!(!key.matches(
+                        &factory.context(&changed, SUPPRESSED_GUIDES, &scope)?,
+                        &owner,
+                        round,
                         None,
-                    ),
-                    source.clone().title_alignment(crate::TextAlignment::End),
-                    source
-                        .clone()
-                        .x_label(crate::Text::new("x").layout(crate::TextLayout::default())),
-                ] {
-                    assert!(!key.matches(&plot, context, &owner, round)?);
+                    )?);
                 }
-                let mut appearance = theme.theme.clone();
-                appearance.typography.axes.tick_label.font_size += 1.0;
-                let appearance = crate::text::TextRequestContext {
-                    theme: &appearance,
-                    ..theme
-                };
-                assert!(!key.matches(&source, context.with_theme(&appearance), &owner, round)?);
-                assert!(!key.matches(
-                    &source,
-                    PlotRenderContext::new(scales.plots[0].data(operation)?, panel, &theme)
-                        .with_registration(&scales.plots[0], scales.intrinsic(&scales.plots[0])),
-                    &owner,
-                    round
-                )?);
-                assert!(!key.matches(&source, context, &neighbor, round)?);
+                assert!(!key.matches(&context, &neighbor, round, None)?);
                 round.request_insets(
                     &neighbor,
                     &neighbor,
                     crate::layout::kernel::FeedbackKind::OwnedInk,
                     [1.0; 4],
                 )?;
-                assert!(key.matches(&source, context, &owner, round)?);
+                assert!(key.matches(&context, &owner, round, None)?);
                 for kind in [
                     crate::layout::kernel::FeedbackKind::AxisGutter,
                     crate::layout::kernel::FeedbackKind::SharedAlignment,
@@ -1074,7 +984,7 @@ mod tests {
                 ] {
                     let checkpoint = round.begin_trial()?;
                     round.request_insets(&owner, &owner, kind, [1.0; 4])?;
-                    assert!(!key.matches(&source, context, &owner, round)?);
+                    assert!(!key.matches(&context, &owner, round, None)?);
                     round.miss(
                         &owner,
                         crate::layout::kernel::FitKind::Tick,
@@ -1087,6 +997,192 @@ mod tests {
                     ));
                 }
                 Ok(crate::layout::MeasuredLayout::new(
+                    measurement.measurement_size,
+                    (),
+                ))
+            },
+            |_, _, (), _| Ok(()),
+        )
+        .unwrap();
+
+        let canvas = crate::Canvas::grid(1, 1)
+            .unwrap()
+            .size(800, 600)
+            .legend_policy(crate::CanvasLegendPolicy::Shared)
+            .panel(
+                0,
+                0,
+                Plot::scatter(
+                    crate::NumericValues::new("x", [0.0, 1.0]),
+                    crate::NumericValues::new("y", [0.0, 1.0]),
+                ),
+            )
+            .unwrap();
+        let mut rounds = 0;
+        crate::layout::plan_root(
+            canvas.sizing_request(),
+            |stage| {
+                let root = crate::orchestrator::root::Root::prepare(
+                    crate::orchestrator::root::RootSource::Canvas(&canvas),
+                    stage,
+                )?;
+                let mut invalid = crate::orchestrator::root::Root::prepare(
+                    crate::orchestrator::root::RootSource::Canvas(&canvas),
+                    stage,
+                )?;
+                invalid.plots[0]
+                    .appearance
+                    .axes
+                    .ticks
+                    .as_mut()
+                    .expect("publication ticks")
+                    .length = 0;
+                Ok((root, invalid))
+            },
+            |(root, invalid), assigned, round| {
+                use crate::layout::kernel::FeedbackKind;
+                rounds += 1;
+                let registered = &root.plots[0];
+                let owner = &registered.scope.address;
+                let base = registered.axes.ranges();
+                assert!(registered.raw_windows().iter().all(Option::is_none));
+                let crate::orchestrator::root::PreparedComposition::Canvas(topology) =
+                    &root.composition
+                else {
+                    panic!("Canvas topology")
+                };
+                assert!(topology.range_groups.is_empty());
+                assert!(topology.shared_guide.is_none());
+
+                // A protocol-level publisher makes consumed F exactly base.
+                // This does not claim an automatic mark producer emits it.
+                for (kind, limits) in [
+                    (FeedbackKind::AutomaticDomainX, base[0]),
+                    (FeedbackKind::AutomaticDomainY, base[1]),
+                ] {
+                    round.request_domain(owner, owner, kind, limits)?;
+                }
+                if rounds > 1 {
+                    assert_eq!(
+                        round.feedback_domain(owner, FeedbackKind::AutomaticDomainX),
+                        Some(base[0])
+                    );
+                    assert_eq!(
+                        round.feedback_domain(owner, FeedbackKind::AutomaticDomainY),
+                        Some(base[1])
+                    );
+                    let measurement = root.assignment_factory().assign(assigned.assigned_size()?);
+                    let factory =
+                        root.plot_assignment_factory(&measurement, &registered.scope.id)?;
+                    let invalid_factory = invalid
+                        .plot_assignment_factory(&measurement, &invalid.plots[0].scope.id)?;
+                    assert_eq!(registered.scope.id, invalid.plots[0].scope.id);
+                    let allocation = |phase| {
+                        let mut inputs = child_allocation_for_test(
+                            measurement.measurement_size,
+                            PixelRect::new(20.0, 700.0, 20.0, 500.0),
+                            owner,
+                            round,
+                        );
+                        inputs.dimensions.output_override = Some(measurement.measurement_size);
+                        factory.assign(inputs, round, phase)
+                    };
+                    let initial = allocation(Some(MeasurementPhase::Legend))?;
+                    let scope = FitScope::root();
+                    let initial_context = factory.context(&initial, SUPPRESSED_GUIDES, &scope)?;
+                    let mut children = ChildPlans::canvas();
+                    let produced = std::cell::Cell::new(0);
+                    for phase in [MeasurementPhase::Legend, MeasurementPhase::Probe] {
+                        let entry = allocation(Some(phase))?;
+                        assert_eq!(entry.ranges(), initial.ranges());
+                        assert_eq!(entry.body, initial.body);
+                        let context = factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                        let result = crate::layout::fit::measured(children.measure(
+                            &context,
+                            owner,
+                            phase,
+                            round,
+                            || {
+                                produced.set(produced.get() + 1);
+                                crate::layout::fit::outcome(
+                                    crate::orchestrator::measure_probe(
+                                        &factory,
+                                        entry.clone(),
+                                        context.guides,
+                                        context.fit_scope,
+                                    )
+                                    .map(|(_, result)| result),
+                                )
+                            },
+                        ))
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
+                        let hit = crate::layout::fit::measured(children.measure(
+                            &context,
+                            owner,
+                            phase,
+                            round,
+                            || panic!("unchanged child input must hit"),
+                        ))
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
+                        assert!(Arc::ptr_eq(&result, &hit));
+
+                        let inputs = &children
+                            .measurements
+                            .iter()
+                            .find(|entry| entry.phase == phase)
+                            .expect("successful phase retention")
+                            .inputs;
+                        let (windows, provenance, resolved_x) =
+                            inputs.plot.axis_snapshot_for_test();
+                        assert_eq!(
+                            windows,
+                            if phase == MeasurementPhase::Legend {
+                                [None; 2]
+                            } else {
+                                base.map(Some)
+                            }
+                        );
+                        assert_eq!(provenance, [crate::layout::RangeProvenance::Automatic; 2]);
+                        assert!(resolved_x.is_none());
+                        assert!(inputs.matches(&initial_context, owner, round, Some(phase))?);
+                        let other = if phase == MeasurementPhase::Legend {
+                            MeasurementPhase::Probe
+                        } else {
+                            MeasurementPhase::Legend
+                        };
+                        assert!(!inputs.matches(&initial_context, owner, round, Some(other))?);
+
+                        // Raw mismatch must still short-circuit before the
+                        // original fallible theme comparison. Equal raw inputs
+                        // must reach that comparison, not a retained phase tag.
+                        let invalid_context =
+                            invalid_factory.context(&entry, SUPPRESSED_GUIDES, &scope)?;
+                        assert!(inputs
+                            .matches(&invalid_context, owner, round, Some(phase))
+                            .is_err());
+                        assert!(!inputs.matches(&invalid_context, owner, round, Some(other))?);
+                        if phase == MeasurementPhase::Probe {
+                            assert!(inputs.matches(&initial_context, owner, round, None)?);
+                            assert!(inputs
+                                .matches(&invalid_context, owner, round, None)
+                                .is_err());
+                        }
+                    }
+                    assert_eq!(produced.get(), 2);
+                    let entry = allocation(None)?;
+                    let full_scope = FitScope::new(owner, 0);
+                    let context = factory.context(&entry, SUPPRESSED_GUIDES, &full_scope)?;
+                    let inputs = PlotEntryInputs::new(&context, owner, round, None)?;
+                    assert_eq!(inputs.plot.axis_snapshot_for_test().0, base.map(Some));
+                    assert!(inputs.matches(&context, owner, round, None)?);
+                    assert!(inputs.matches(
+                        &initial_context,
+                        owner,
+                        round,
+                        Some(MeasurementPhase::Probe)
+                    )?);
+                }
+                Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     (),
                 ))
@@ -1094,5 +1190,6 @@ mod tests {
             |_, _, (), _| Ok(()),
         )
         .unwrap();
+        assert_eq!(rounds, 2);
     }
 }

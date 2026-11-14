@@ -10,10 +10,10 @@ fn prepare(
     theme: &crate::text::TextRequestContext<'_, '_>,
     composition: LegendComposition,
     parent: Option<&[&str]>,
-    inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
+    inspect: impl FnOnce(&[crate::orchestrator::registration::PlotRegistration<'_>]),
 ) -> Option<Arc<PreparedGuide>> {
     let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs =
+    let (mut inputs, _composition) =
         crate::plots::shared_x::prepare_plot(plot.description(), &operation, theme).unwrap();
     for registered in &mut inputs.panels {
         registered.policy.guide_composition = composition;
@@ -37,12 +37,7 @@ fn prepare(
         false,
     )
     .unwrap();
-    let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
-        inputs,
-        crate::layout::interior::InteriorRoute::classify(plot.kind()),
-        root.clone(),
-    )
-    .unwrap();
+    let inputs = inputs.finish().unwrap();
     inspect(&inputs);
     root
 }
@@ -95,7 +90,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         Some(&["absent", "seen"]),
         |inputs| {
             let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
-                &inputs.plots[0].family
+                &inputs[0].family
             else {
                 panic!("prepared Bars")
             };

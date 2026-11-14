@@ -613,6 +613,7 @@ impl RootRequest {
     pub(crate) const fn automatic_height(self) -> bool {
         !matches!(self, Self::ExactSize { .. })
     }
+    #[cfg(test)]
     pub(crate) fn assigned_size(self) -> Result<RootSize, Error> {
         match self {
             Self::ExactSize { width, height } => {
@@ -625,6 +626,7 @@ impl RootRequest {
             )),
         }
     }
+    #[cfg(test)]
     pub(crate) fn dimensions(self) -> Result<(u32, u32), Error> {
         self.assigned_size()?.dimensions()
     }

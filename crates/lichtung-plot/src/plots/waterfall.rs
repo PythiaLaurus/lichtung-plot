@@ -11,12 +11,14 @@ use crate::alpha::{
     marks::{fill_style, ObservationAlpha},
     AlphaTarget, AlphaUnitKind,
 };
+use crate::builder::PlotDescription;
 use crate::layout::{AxisTick, PhysicalTextAlignment, PixelRect, ResolvedTextPlan};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, PlannedTextPlacement, Point2D, TextAnchor,
 };
-use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotMeasureContext, PlotRenderResult};
 use crate::Error;
+#[cfg(test)]
 use crate::Plot;
 
 #[derive(Debug)]
@@ -95,6 +97,118 @@ struct BodyGeometry {
 mod geometry_tests {
     use super::*;
 
+    thread_local! {
+        pub(super) static ANNOTATION_PLAN_CALLS: std::cell::Cell<usize> =
+            const { std::cell::Cell::new(0) };
+    }
+
+    #[test]
+    fn natural_height_rejects_a_foreign_request_operation_before_annotations_with_cached_intrinsics(
+    ) {
+        use crate::orchestrator::root::{Root, RootSource};
+        use std::cell::Cell;
+
+        let source = Plot::waterfall(
+            crate::CategoryValues::new("step", ["one"]).unwrap(),
+            crate::NumericValues::new("delta", [2.0]),
+            10.0,
+        )
+        .x_limits(0.0, 20.0)
+        .size(800, 600);
+        let mut witnessed = false;
+        crate::layout::plan_root(
+            source.description().sizing_request(),
+            |stage| Root::prepare(RootSource::Plot(source.description()), stage),
+            |root_a, assigned_a, _| {
+                let registered = &root_a.plots[0];
+                let intrinsic = root_a.plot_intrinsic(&registered.scope.id)?;
+                let request_a =
+                    crate::text::TextRequestContext::new(&registered.appearance, &root_a.text);
+                let cached = crate::orchestrator::root::coordinate_intrinsic(
+                    intrinsic,
+                    &crate::orchestrator::root::intrinsic_inputs(
+                        Some(registered),
+                        &request_a,
+                        &root_a.operation,
+                    )?,
+                )?;
+                let crate::orchestrator::root::PlotIntrinsics::Coordinate { value } = intrinsic
+                else {
+                    unreachable!("Waterfall coordinate intrinsic slot")
+                };
+                assert!(std::ptr::eq(value.get().unwrap(), cached));
+                crate::layout::plan_root(
+                    source.description().sizing_request(),
+                    |stage| Root::prepare(RootSource::Plot(source.description()), stage),
+                    |root_b, assigned_b, _| {
+                        assert!(std::ptr::eq(registered.source, root_b.plots[0].source));
+                        let request_b = crate::text::TextRequestContext::new(
+                            &registered.appearance,
+                            &root_b.text,
+                        );
+                        let resources_b = request_b.text.prepared_font_environment()?.operation();
+                        assert!(root_b.operation.same_operation(&resources_b));
+                        assert!(!root_a.operation.same_operation(&resources_b));
+                        assert!(registered.data(&root_a.operation).is_ok());
+                        // The initialized intrinsic accepts the identical theme
+                        // despite the other request's real font operation.
+                        let mixed_cached = crate::orchestrator::root::coordinate_intrinsic(
+                            intrinsic,
+                            &crate::orchestrator::root::intrinsic_inputs(
+                                Some(registered),
+                                &request_b,
+                                &root_a.operation,
+                            )?,
+                        )?;
+                        assert!(std::ptr::eq(mixed_cached, cached));
+                        let before = ANNOTATION_PLAN_CALLS.with(Cell::get);
+                        let height = natural_body_height(
+                            registered.source,
+                            Some(registered),
+                            intrinsic,
+                            &root_a.operation,
+                            &request_a,
+                            800.0,
+                            None,
+                        )?;
+                        assert!(height.is_finite() && height > 0.0);
+                        assert_eq!(ANNOTATION_PLAN_CALLS.with(Cell::get), before + 1);
+                        let error = natural_body_height(
+                            registered.source,
+                            Some(registered),
+                            intrinsic,
+                            &root_a.operation,
+                            &request_b,
+                            800.0,
+                            None,
+                        )
+                        .unwrap_err();
+                        assert!(matches!(
+                            error,
+                            Error::Render(message)
+                                if message == "row source belongs to a different source or operation"
+                        ));
+                        assert_eq!(ANNOTATION_PLAN_CALLS.with(Cell::get), before + 1);
+                        assert!(std::ptr::eq(value.get().unwrap(), cached));
+                        witnessed = true;
+                        Ok(crate::layout::MeasuredLayout::new(
+                            assigned_b.assigned_size()?,
+                            (),
+                        ))
+                    },
+                    |_, _, (), _| Ok(()),
+                )?;
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned_a.assigned_size()?,
+                    (),
+                ))
+            },
+            |_, _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert!(witnessed);
+    }
+
     #[test]
     fn authored_totals_keep_independent_styles_at_equal_sources_and_size_the_shared_shelf() {
         use crate::{FontFamily, FontStack, Text, TextAlignment, WaterfallLabels};
@@ -140,12 +254,7 @@ mod geometry_tests {
             &source.erase(),
             &resolved,
             |_| Ok(()),
-            |_, inputs, resolved, _operation| {
-                let operation = resolved
-                    .text
-                    .prepared_font_environment()
-                    .unwrap()
-                    .operation();
+            |_, inputs, resolved, _operation, _round| {
                 let marks = retained(inputs.plots.first()).unwrap();
                 let panel = PixelRect::new(0.0, 800.0, 0.0, 400.0);
                 let projection =
@@ -160,12 +269,8 @@ mod geometry_tests {
                     panel,
                     1.0,
                     &totals.totals,
-                    PlotRenderContext::new(
-                        inputs.plots[0].data(&operation).unwrap(),
-                        panel,
-                        resolved,
-                    )
-                    .with_registration(&inputs.plots[0], inputs.intrinsic(&inputs.plots[0])),
+                    resolved,
+                    &crate::layout::fit::FitScope::root(),
                 )
                 .unwrap();
                 assert_eq!(shelf.items.len(), 2);
@@ -213,14 +318,9 @@ mod geometry_tests {
             &source,
             &crate::text::TextRequestContext::new(&theme, &text_service),
             |_| Ok(()),
-            |chart, inputs, request, _operation| {
+            |chart, inputs, request, _operation, round| {
                 let mut theme = request.theme.clone();
                 let text_service = request.text;
-                let operation = request
-                    .text
-                    .prepared_font_environment()
-                    .unwrap()
-                    .operation();
                 let default =
                     BodyGeometry::new(&crate::text::TextRequestContext::new(&theme, text_service));
                 assert_eq!(
@@ -234,21 +334,41 @@ mod geometry_tests {
                     [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
                 );
                 let panel = crate::layout::PixelRect::new(10.0, 810.0, 20.0, 620.0);
-                let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
+                let measurement = inputs.assignment_factory().assign(
                     chart
-                        .measure_selected_interior(
-                            crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                            PlotRenderContext::new(
-                                inputs.plots[0].data(&operation).unwrap(),
-                                panel,
-                                theme,
-                            )
-                            .with_registration(
-                                &inputs.plots[0],
-                                inputs.intrinsic(&inputs.plots[0]),
-                            ),
-                        )
-                        .unwrap()
+                        .sizing_request()
+                        .assigned_size()
+                        .unwrap_or(crate::layout::RootSize::new(1, 1)),
+                );
+                let registered = &inputs.plots[0];
+                let factory = inputs
+                    .plot_assignment_factory(&measurement, &registered.scope.id)
+                    .unwrap();
+                let entry = factory
+                    .assign(
+                        crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                            measurement.measurement_size,
+                            panel,
+                            round,
+                            &registered.scope.address,
+                        ),
+                        round,
+                        None,
+                    )
+                    .unwrap();
+                let scope = crate::layout::fit::FitScope::root();
+                let context = factory
+                    .context(
+                        &entry,
+                        crate::decorations::legend::discrete::scoped::GuideConsumption {
+                            use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                            ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                        },
+                        &scope,
+                    )
+                    .unwrap();
+                let measure = |theme: &crate::text::TextRequestContext<'_, '_>| {
+                    crate::plots::waterfall::measure(&context, theme).unwrap()
                 };
                 let original = measure(&crate::text::TextRequestContext::new(&theme, text_service));
                 let crate::layout::interior::MarkPayload::Waterfall(original_payload) =
@@ -507,11 +627,12 @@ fn mark_intrinsic_body_minimum(
 }
 
 pub(crate) fn intrinsic_body_minimum(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
+    selected_ranges: Option<[(f64, f64); 2]>,
 ) -> Result<(f64, f64), Error> {
     let marks = mark_intrinsic_body_minimum(registered, theme)?;
     let axes = crate::orchestrator::root::coordinate_intrinsic(
@@ -528,16 +649,24 @@ pub(crate) fn intrinsic_body_minimum(
         .and_then(|registered| registered.axes.coordinate())
         .ok_or_else(|| Error::Render("Waterfall total axes missing".into()))?;
     let projection = crate::layout::Projection::new(
-        chart
-            .description()
-            .x_axis_spec()
-            .window
-            .map_or(input.ranges()[0], crate::layout::RawWindow::pair),
-        chart
-            .description()
-            .y_axis_spec()
-            .window
-            .map_or(input.ranges()[1], crate::layout::RawWindow::pair),
+        selected_ranges.map_or_else(
+            || {
+                chart
+                    .x_axis_spec()
+                    .window
+                    .map_or(input.ranges()[0], crate::layout::RawWindow::pair)
+            },
+            |ranges| ranges[0],
+        ),
+        selected_ranges.map_or_else(
+            || {
+                chart
+                    .y_axis_spec()
+                    .window
+                    .map_or(input.ranges()[1], crate::layout::RawWindow::pair)
+            },
+            |ranges| ranges[1],
+        ),
         (0.0, 1.0, 0.0, 1.0),
     );
     let totals = &prepared.selected_totals(&projection)?.totals;
@@ -584,12 +713,13 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 pub(crate) fn natural_body_height(
-    chart: &Plot,
+    chart: &PlotDescription,
     registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
     intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     operation: &crate::font::canonical::OperationContext,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
+    selected_ranges: Option<[(f64, f64); 2]>,
 ) -> Result<f64, Error> {
     let resources = theme.text.prepared_font_environment()?.operation();
     if registered.is_none() {
@@ -607,29 +737,38 @@ pub(crate) fn natural_body_height(
         .categories(1)
         .expect("prepared Waterfall categories")
         .raw;
-    let range = chart
-        .description()
-        .x_axis_spec()
-        .window
-        .map_or(axes.ranges()[0], crate::layout::RawWindow::pair);
+    let range = selected_ranges.map_or_else(
+        || {
+            chart
+                .x_axis_spec()
+                .window
+                .map_or(axes.ranges()[0], crate::layout::RawWindow::pair)
+        },
+        |ranges| ranges[0],
+    );
     let panel = PixelRect::new(0.0, width, 0.0, 1.0);
     let projection = crate::layout::Projection::new(
         range,
-        chart
-            .description()
-            .y_axis_spec()
-            .window
-            .map_or(axes.ranges()[1], crate::layout::RawWindow::pair),
+        selected_ranges.map_or_else(
+            || {
+                chart
+                    .y_axis_spec()
+                    .window
+                    .map_or(axes.ranges()[1], crate::layout::RawWindow::pair)
+            },
+            |ranges| ranges[1],
+        ),
         panel.as_tuple(),
     );
     let registered_owner = registered.expect("prepared Waterfall occurrence");
-    let data = registered_owner.data(&resources)?;
+    registered_owner.data(&resources)?;
     let plan = plan_annotations(
         &projection,
         panel,
         labels.len() as f64,
         &marks.selected_totals(&projection)?.totals,
-        PlotRenderContext::new(data, panel, theme).with_registration(registered_owner, intrinsic),
+        theme,
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let hard = mark_intrinsic_body_minimum(registered, theme)?.1.max(
@@ -735,41 +874,24 @@ fn prepare_spans(
 }
 
 pub(crate) fn measure(
-    chart: &Plot,
-    context: PlotRenderContext<'_, '_>,
+    context: &PlotMeasureContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = retained(context.registered)?;
-    let theme = context.theme;
+    let prepared = retained(Some(context.registered))?;
+    let theme = request;
 
     let labels = &context
         .registered
-        .expect("prepared Waterfall occurrence")
         .axes
         .categories(1)
         .expect("prepared Waterfall categories")
         .raw;
     let spans = &prepared.spans;
-    let range = prepared.range;
     let base = prepared.total_candidates[0].0;
     let terminal = prepared.total_candidates[1].0;
-    let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        crate::layout::continuous_auto_range(
-            range,
-            chart
-                .description()
-                .x_axis_spec()
-                .window
-                .map(crate::layout::RawWindow::pair),
-        )
-    })?;
-    let panel = context.panel;
-    let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Ok(chart
-            .description()
-            .y_axis_spec()
-            .window
-            .map_or((0.0, labels.len() as f64), crate::layout::RawWindow::pair))
-    })?;
+    let x_range = context.axis_range(crate::layout::AxisSide::Bottom)?;
+    let panel = context.assignment.local.body;
+    let y_range = context.axis_range(crate::layout::AxisSide::Left)?;
     let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple())
         .with_categories([None, Some(labels.len())]);
     let selected_totals = prepared.selected_totals(&annotation_projection)?;
@@ -778,19 +900,20 @@ pub(crate) fn measure(
         panel,
         labels.len() as f64,
         &selected_totals.totals,
-        context,
+        request,
+        context.fit_scope,
     )?;
-    let mark_minimum = mark_intrinsic_body_minimum(context.registered, theme)?;
+    let mark_minimum = mark_intrinsic_body_minimum(Some(context.registered), theme)?;
     let axes_minimum = crate::orchestrator::root::coordinate_intrinsic(
         context.intrinsic(),
         &crate::orchestrator::root::intrinsic_inputs(
-            context.registered,
+            Some(context.registered),
             theme,
-            context.data.source_resources(),
+            context.operation,
         )?,
     )?
     .minimum(crate::orchestrator::registration::axis_tick_labels_visible(
-        context.registered,
+        Some(context.registered),
         1,
     ));
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
@@ -803,21 +926,19 @@ pub(crate) fn measure(
     mark_panel.y1 -= annotations.height;
     let axes = context
         .registered
-        .and_then(|registered| registered.axes.coordinate())
+        .axes
+        .coordinate()
         .ok_or_else(|| Error::Render("Waterfall native axes missing".into()))?;
-    let source = context
-        .registered
-        .expect("prepared Waterfall occurrence")
-        .source;
+    let source = context.registered.source;
     let pair = [axes.axis(source, 0), axes.axis(source, 1)];
     let display = &axes
         .categories(1)
         .ok_or_else(|| Error::Render("Waterfall category display missing".into()))?;
     let display = &display.ticks;
     let mut pitch = mark_minimum.1 / labels.len() as f64;
-    let width = context.axis_label_width.max(1.0 / 1024.0);
+    let width = context.assignment.local.axis_label_width.max(1.0 / 1024.0);
     let tick_appearance = theme.tick_text_appearance(crate::layout::AxisSide::Left);
-    if crate::orchestrator::registration::axis_tick_labels_visible(context.registered, 1)
+    if crate::orchestrator::registration::axis_tick_labels_visible(Some(context.registered), 1)
         && !tick_appearance.hidden()
         && !tick_appearance.layout.is_some_and(|request| {
             request
@@ -878,27 +999,16 @@ pub(crate) fn measure(
     )?;
     let projection =
         crate::layout::Projection::new(x_range, (0.0, labels.len() as f64), mark_panel.as_tuple());
-    let domain = crate::orchestrator::assignment::AxisDomainAssignment {
-        extent: crate::orchestrator::registration::DisplayExtent {
-            lower: x_range.0,
-            upper: x_range.1,
-        },
-        provenance: chart.description().x_axis_spec().provenance,
-    };
-    let x = crate::orchestrator::assignment::AssignedAxisRef {
-        base: pair[0],
-        domain: &domain,
-    }
-    .layout_ticks(
+    let assigned = context
+        .axis_pair(crate::orchestrator::assignment::AxisPairScope::Pair)?
+        .axes;
+    let x = assigned[0].layout_ticks(
         Vec::new(),
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
         context.fit_scope(),
-        context
-            .registered
-            .expect("prepared Waterfall occurrence")
-            .axis_numeric_binding(context.data.source_resources())?,
+        context.registered.axis_numeric_binding(context.operation)?,
     )?;
     let ticks =
         crate::data::source::collect_source(display.iter().zip(&bands).map(|(label, band)| {
@@ -911,10 +1021,7 @@ pub(crate) fn measure(
     let layout = crate::layout::Layout {
         projection,
         x_axis: crate::layout::Axis {
-            label: axes.copy_label(
-                context.registered.expect("prepared Waterfall occurrence"),
-                0,
-            )?,
+            label: axes.copy_label(context.registered, 0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
             category_labels: pair[0]
@@ -929,13 +1036,10 @@ pub(crate) fn measure(
             assigned_cells: None,
         },
         y_axis: crate::layout::Axis {
-            label: axes.copy_label(
-                context.registered.expect("prepared Waterfall occurrence"),
-                1,
-            )?,
+            label: axes.copy_label(context.registered, 1)?,
             ticks,
             tick_labels_visible: crate::orchestrator::registration::axis_tick_labels_visible(
-                context.registered,
+                Some(context.registered),
                 1,
             ),
             category_labels: pair[1]
@@ -1077,10 +1181,7 @@ pub(crate) fn measure(
     }
     let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
 
-    let raw_windows = context
-        .registered
-        .expect("prepared occurrence")
-        .raw_windows();
+    let raw_windows = context.registered.raw_windows();
     for (index, text) in payload.text.iter_mut().enumerate() {
         let bounds = crate::layout::text::placement::footprint(text.placement, &text.plan)?;
         let region = PixelRect::new(
@@ -1191,7 +1292,7 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(
         layout,
-        crate::orchestrator::registration::guide_descriptor(context.registered)?,
+        crate::orchestrator::registration::guide_descriptor(Some(context.registered))?,
     );
     result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
@@ -1202,7 +1303,7 @@ pub(crate) fn measure(
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
-        chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
+        context.semantic_inputs(crate::orchestrator::assignment::AxisPairScope::Pair)?,
         || crate::layout::CoordinateLayoutInputs::new(theme),
     )?);
     result.producer_text =
@@ -1300,20 +1401,22 @@ fn plan_annotations(
     panel: PixelRect,
     source_y: f64,
     candidates: &[(f64, Option<crate::Text>); 2],
-    context: PlotRenderContext<'_, '_>,
+    request: &crate::text::TextRequestContext<'_, '_>,
+    scope: &crate::layout::fit::FitScope,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    geometry_tests::ANNOTATION_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
     let frame = crate::layout::Layout {
         projection: projection.clone(),
         ..crate::layout::Layout::envelope(panel)
     };
-    let appearance = context.theme.theme.clone();
+    let appearance = request.theme.clone();
     let request = crate::text::TextRequestContext {
         theme: &appearance,
-        ..*context.theme
+        ..*request
     };
     let directional = request.reproject_text(&frame);
     let theme = &directional;
-    let scope = context.fit_scope();
     let mut rows: Vec<ShelfRow> = Vec::new();
     let mut items = Vec::new();
     let mut miss = None;
