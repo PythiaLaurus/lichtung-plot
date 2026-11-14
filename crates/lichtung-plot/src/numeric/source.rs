@@ -206,7 +206,14 @@ impl<'v> AxisRequest<'v> {
             domain: DomainInfo::axis(
                 range,
                 scale,
-                axis.domain.provenance,
+                // The central Marginal reader used the working provenance;
+                // coordinate, Beeswarm and Waterfall callbacks used the base.
+                match axis.base.witness().slot {
+                    crate::orchestrator::registration::AxisSlot::MarginalCentral(_) => {
+                        axis.domain.provenance
+                    }
+                    _ => axis.base.provenance(),
+                },
                 if scale == crate::AxisScale::Log10 {
                     axis.base.raw_window().map(|window| window.pair())
                 } else {

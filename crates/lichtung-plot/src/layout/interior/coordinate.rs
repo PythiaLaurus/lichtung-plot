@@ -410,6 +410,24 @@ impl InteriorRoute {
                 AxisDomain::Continuous
             }
         });
+        let assigned_domains = std::array::from_fn::<_, 2, _>(|side| {
+            let range = if side == 0 {
+                projection.x_range()
+            } else {
+                projection.y_range()
+            };
+            crate::orchestrator::assignment::AxisDomainAssignment {
+                extent: crate::orchestrator::registration::DisplayExtent {
+                    lower: range.0,
+                    upper: range.1,
+                },
+                provenance: if side == 0 {
+                    plot.description().x_axis_spec().provenance
+                } else {
+                    plot.description().y_axis_spec().provenance
+                },
+            }
+        });
         let mut axes = fit::collect(
             "native coordinate axes",
             (0..2).map(|side| {
@@ -443,21 +461,9 @@ impl InteriorRoute {
                 } else {
                     Vec::new()
                 };
-                let range = if side == 0 {
-                    projection.x_range()
-                } else {
-                    projection.y_range()
-                };
-                let domain = crate::orchestrator::assignment::AxisDomainAssignment {
-                    extent: crate::orchestrator::registration::DisplayExtent {
-                        lower: range.0,
-                        upper: range.1,
-                    },
-                    provenance: base.provenance(),
-                };
                 let assigned = crate::orchestrator::assignment::AssignedAxisRef {
                     base,
-                    domain: &domain,
+                    domain: &assigned_domains[side],
                 };
                 let ticks = if side == 0 && inputs.logarithmic() && base.exact_ticks()?.is_none() {
                     crate::plots::interval_estimate::log_tick_plan(
@@ -523,7 +529,17 @@ impl InteriorRoute {
             context.theme,
             context.fit_scope(),
             std::array::from_fn(|side| {
-                let mut input = inputs.axis(plot.description(), side).semantic_inputs();
+                let mut input = crate::orchestrator::assignment::AssignedAxisRef {
+                    base: inputs.axis(
+                        context
+                            .registered
+                            .expect("prepared coordinate occurrence")
+                            .source,
+                        side,
+                    ),
+                    domain: &assigned_domains[side],
+                }
+                .semantic_inputs();
                 input
                     .text_layout
                     .clone_from(&plot.description().text_layouts().ticks[side]);

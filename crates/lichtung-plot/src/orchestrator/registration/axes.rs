@@ -355,24 +355,21 @@ impl<'a> BaseAxisRef<'a> {
             projected: self.source.projected_exact_positions.as_deref(),
         }))
     }
-
-    pub(crate) fn semantic_inputs(self) -> crate::layout::AxisSemanticInputs {
-        crate::layout::AxisSemanticInputs::new(
-            self.intent,
-            match self.intent {
-                AxisIntentRef::Authored(spec) => spec.provenance,
-                AxisIntentRef::MatrixVariable | AxisIntentRef::NativeAmplitude => self.provenance(),
-            },
-            match self.source.witness.space {
-                AxisSpace::Categorical => AxisScale::Linear,
-                AxisSpace::Continuous(scale) => scale,
-            },
-            self.source.range_policy,
-        )
-    }
 }
 
 impl<'a> crate::orchestrator::assignment::AssignedAxisRef<'a> {
+    pub(crate) fn semantic_inputs(self) -> crate::layout::AxisSemanticInputs {
+        crate::layout::AxisSemanticInputs::new(
+            self.base.intent,
+            self.domain.provenance,
+            match self.base.source.witness.space {
+                AxisSpace::Categorical => AxisScale::Linear,
+                AxisSpace::Continuous(scale) => scale,
+            },
+            self.base.source.range_policy,
+        )
+    }
+
     pub(crate) fn layout_ticks(
         self,
         supplied: Vec<AxisTick>,

@@ -442,7 +442,7 @@ pub(crate) fn measure(
             lower: range.0,
             upper: range.1,
         },
-        provenance: pair[0].provenance(),
+        provenance: chart.description().x_axis_spec().provenance,
     };
     let x = crate::orchestrator::assignment::AssignedAxisRef {
         base: pair[0],

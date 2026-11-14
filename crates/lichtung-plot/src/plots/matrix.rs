@@ -815,10 +815,21 @@ pub(crate) fn measure(
                 y_axis,
             };
             let mut semantics = [col, row].map(|index| {
-                registered
+                let base = registered
                     .axes
-                    .axis_at(registered.source, AxisSlot::MatrixVariable(index))
-                    .semantic_inputs()
+                    .axis_at(registered.source, AxisSlot::MatrixVariable(index));
+                let domain = crate::orchestrator::assignment::AxisDomainAssignment {
+                    extent: DisplayExtent {
+                        lower: variable_ranges[index].0,
+                        upper: variable_ranges[index].1,
+                    },
+                    provenance: base.provenance(),
+                };
+                crate::orchestrator::assignment::AssignedAxisRef {
+                    base,
+                    domain: &domain,
+                }
+                .semantic_inputs()
             });
             for (semantic, tick_layout) in semantics
                 .iter_mut()

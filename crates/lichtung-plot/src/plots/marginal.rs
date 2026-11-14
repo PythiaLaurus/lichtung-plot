@@ -995,7 +995,17 @@ pub(crate) fn measure(
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
-        chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
+        std::array::from_fn(|side| {
+            let mut input = crate::orchestrator::assignment::AssignedAxisRef {
+                base: axes.axis(registered.source, side),
+                domain: &domains[side],
+            }
+            .semantic_inputs();
+            input
+                .text_layout
+                .clone_from(&chart.description().text_layouts().ticks[side]);
+            input
+        }),
         || layout::CoordinateLayoutInputs::new(theme),
     )?);
     result.marks = Some(crate::data::source::source_arc(

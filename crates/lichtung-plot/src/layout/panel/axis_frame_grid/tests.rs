@@ -121,6 +121,105 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
         layout.projection.x_range()
     );
 }
+
+#[test]
+fn assigned_axis_semantics_keep_the_original_numeric_provenance_projection() {
+    use crate::{CategoryValues, NumericRangeOrigin, NumericValues, Plot, PlotKind};
+    use std::sync::{Arc, Mutex};
+
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
+    let y = NumericValues::new("y", [2.0, 4.0, 3.0]);
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = crate::text::TextRequestContext::new(&theme, &text);
+    let actual = Arc::new(Mutex::new(Vec::new()));
+    let calls = Arc::clone(&actual);
+    let format = crate::NumericFormat::default().set_function(move |context| {
+        if context.purpose() == crate::NumericPurpose::ActualSet {
+            calls.lock().unwrap().push((
+                context.domain().unwrap().origin(),
+                context.domain().unwrap().scale_limits(),
+            ));
+        }
+        context.format_builtin()
+    });
+    for source in [
+        Plot::scatter(x.clone(), y.clone())
+            .x_tick_format(format.clone())
+            .erase(),
+        Plot::beeswarm(
+            CategoryValues::new("category", ["a"; 3]).unwrap(),
+            x.clone(),
+            y.clone(),
+        )
+        .x_tick_format(format.clone())
+        .erase(),
+        Plot::waterfall(
+            CategoryValues::new("step", ["a", "b", "c"]).unwrap(),
+            x.clone(),
+            0.0,
+        )
+        .x_tick_format(format.clone())
+        .erase(),
+        Plot::marginal(x.clone(), y.clone())
+            .x_tick_format(format.clone())
+            .erase(),
+    ] {
+        crate::orchestrator::with_prepared_plot_for_test(
+            &source,
+            &request,
+            |_| Ok(()),
+            |plot, inputs, request, operation| {
+                let registered = &inputs.plots[0];
+                assert_eq!(
+                    registered.axes.sources()[0].base_provenance,
+                    super::super::RangeProvenance::Automatic
+                );
+                let range = (-10.0, 20.0);
+                let plot = plot
+                    .clone()
+                    .with_resolved_facet_ranges(plot.kind(), Some(range), None);
+                actual.lock().unwrap().clear();
+                let selected = plot
+                    .measure_selected_interior(
+                        crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                        crate::spec::PlotRenderContext::new(
+                            registered.data(operation).unwrap(),
+                            PixelRect::new(20.0, 900.0, 20.0, 720.0),
+                            request,
+                        )
+                        .with_registration(registered, inputs.intrinsic(registered)),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    selected.axes.as_ref().unwrap().semantics[0].provenance,
+                    super::super::RangeProvenance::Shared
+                );
+                assert_eq!(
+                    *actual.lock().unwrap(),
+                    vec![
+                        (
+                            if source.kind() == PlotKind::Marginal {
+                                NumericRangeOrigin::ParentResolved
+                            } else {
+                                NumericRangeOrigin::Automatic
+                            },
+                            range
+                        );
+                        if source.kind() == PlotKind::Beeswarm {
+                            2
+                        } else {
+                            3
+                        }
+                    ],
+                    "{:?}",
+                    source.kind()
+                );
+            },
+        )
+        .unwrap();
+    }
+}
 use crate::layout::PixelRect;
 
 fn layout(panel: PixelRect, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSource) -> Layout {
