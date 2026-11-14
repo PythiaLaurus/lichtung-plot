@@ -1,11 +1,11 @@
 //! Typed guide sections from one selected prepared semantic owner, without a panel
 //! assignment, font environment, or backend measurement.
 
-use crate::data::PlotData;
 use crate::decorations::legend::discrete::PreparedGuide;
 use crate::decorations::legend::GuideSourceKey;
 use crate::orchestrator::registration::{
-    GuideContribution, PlotRegistrationBuild, PlotRegistryBuilder, PreparedFamily as F,
+    CategoricalBinding, FamilyRef as F, GuideContribution, ParentOrders, PlotRegistrationBuild,
+    PlotScopePolicy, PreparedAxesOwner, Scope,
 };
 use crate::{Error, Plot, PlotKind};
 
@@ -123,253 +123,253 @@ pub(crate) fn native_right(
     ))
 }
 
-fn family<'a, T>(
-    registered: &'a PlotRegistrationBuild<'_>,
+fn family_marks<'a, T>(
+    family: F<'a>,
+    scope: &Scope,
     kind: PlotKind,
-    select: impl FnOnce(&'a crate::orchestrator::registration::PreparedFamily) -> Option<&'a T>,
+    select: impl FnOnce(F<'a>) -> Option<&'a T>,
 ) -> Result<&'a T, Error> {
-    registered.family.as_ref().and_then(select).ok_or_else(|| {
-        let scope = registered.scope.render_name.as_deref();
+    select(family).ok_or_else(|| {
+        let scope = scope.render_name.as_deref();
         Error::Render(format!(
             "{kind:?} guide is missing prepared semantics for {scope:?}"
         ))
     })
 }
 
-impl PlotRegistryBuilder<'_> {
-    /// Scientific color membership is independent of guide visibility, display
-    /// aliases and eventual section projection. No body probe participates.
-    pub(crate) fn observed_color_levels(
-        &self,
-        chart: &crate::builder::PlotDescription,
-    ) -> Result<Vec<String>, Error> {
-        if chart.categorical_color_field().is_none() {
-            return Ok(Vec::new());
-        }
-        let mut levels = Vec::new();
-        let mut include = |value: &str| -> Result<(), Error> {
-            if !levels.iter().any(|existing| existing == value) {
-                crate::data::source::reserve_source(&mut levels, 1)?;
-                levels.push(crate::data::source::copy_source_string(value)?);
-            }
-            Ok(())
-        };
-        for registered in &self.panels {
-            match registered.family.as_ref().expect("prepared family") {
-                F::Scatter(marks) => {
-                    for value in marks.hue_levels() {
-                        include(value)?;
-                    }
-                }
-                F::Line { .. } | F::Matrix(_) => {
-                    for value in registered
-                        .categorical
-                        .as_ref()
-                        .expect("prepared color binding")
-                        .local_values()
-                    {
-                        include(value)?;
-                    }
-                }
-                F::Bars { marks, .. } => {
-                    for value in marks.observed_hue_levels(
-                        registered
-                            .categorical
-                            .as_ref()
-                            .expect("prepared color binding")
-                            .local_values(),
-                    ) {
-                        include(value)?;
-                    }
-                }
-                F::Distribution { marks, .. } => {
-                    for value in marks.observed_hue_levels(
-                        registered
-                            .categorical
-                            .as_ref()
-                            .expect("prepared color binding")
-                            .local_values(),
-                    ) {
-                        include(value)?;
-                    }
-                }
-                F::Density(marks) => {
-                    for value in marks.hue_levels() {
-                        include(value)?;
-                    }
-                }
-                F::Interaction(marks) => {
-                    for value in marks.color_keys() {
-                        include(value)?;
-                    }
-                }
-                F::Marginal(marks) => {
-                    for value in marks.hue_levels() {
-                        include(value)?;
-                    }
-                }
-                _ => {}
-            }
-        }
-        if levels.is_empty() {
-            return Err(Error::Render(
-                "categorical color domain has no prepared observed source".into(),
-            ));
-        }
-        Ok(levels)
+/// Scientific color membership is independent of guide visibility, display
+/// aliases and eventual section projection. No body probe participates.
+pub(crate) fn observed_color_levels(
+    chart: &crate::builder::PlotDescription,
+    panels: &[PlotRegistrationBuild<'_>],
+) -> Result<Vec<String>, Error> {
+    if chart.categorical_color_field().is_none() {
+        return Ok(Vec::new());
     }
-
-    /// Capacity is a semantic requirement even when no legend will be shown.
-    /// Facets share the union of their prepared raw identities, not a per-cell
-    /// supply that would silently recolor or fail after fonts have been prepared.
-    pub(crate) fn validate_categorical_scale(
-        &self,
-        chart: &crate::builder::PlotDescription,
-        theme: &crate::theme::Theme,
-        global_hues: Option<&crate::data::category::CategoryDomain>,
-    ) -> Result<(), Error> {
-        let global_hues = global_hues.or_else(|| {
-            self.panels
-                .first()
-                .and_then(|panel| panel.parent_orders.hues.as_deref())
-        });
-        let palette = if let Some(scale) = chart.categorical_color_scale_spec() {
-            let Some(palette) = scale.palette() else {
-                if !chart.colors_by_sign() {
-                    for key in global_hues
-                        .into_iter()
-                        .flat_map(crate::data::category::CategoryDomain::values)
-                    {
-                        if scale
-                            .map()
-                            .expect("validated map selection")
-                            .color(key)
-                            .is_none()
-                        {
-                            return Err(Error::Data(format!(
-                                "categorical color map has no color for used raw key {key:?}"
-                            )));
-                        }
-                    }
+    let mut levels = Vec::new();
+    let mut include = |value: &str| -> Result<(), Error> {
+        if !levels.iter().any(|existing| existing == value) {
+            crate::data::source::reserve_source(&mut levels, 1)?;
+            levels.push(crate::data::source::copy_source_string(value)?);
+        }
+        Ok(())
+    };
+    for registered in panels {
+        match registered
+            .family
+            .as_ref()
+            .expect("prepared family")
+            .as_ref()
+        {
+            F::Scatter(marks) => {
+                for value in marks.hue_levels() {
+                    include(value)?;
                 }
-                return Ok(());
-            };
-            palette
-        } else {
-            theme.color_scales().get_qualitative()
-        };
-        if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
-            return Ok(());
-        }
-        let mut keys = Vec::new();
-        if let Some(global) = global_hues {
-            include_keys(&mut keys, global.values())?;
-        }
-        for registered in &self.panels {
-            let axes = registered.axes.as_ref().expect("prepared axes");
-            match registered.family.as_ref().expect("prepared family") {
-                F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Line { .. } | F::Matrix(_) => include_keys(
-                    &mut keys,
+            }
+            F::Line { .. } | F::Matrix(_) => {
+                for value in registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding")
+                    .local_values()
+                {
+                    include(value)?;
+                }
+            }
+            F::Bars { marks, .. } => {
+                for value in marks.observed_hue_levels(
                     registered
                         .categorical
                         .as_ref()
                         .expect("prepared color binding")
                         .local_values(),
-                )?,
-                F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Bars { .. } => {
-                    let categories = &axes
-                        .categories(usize::from(matches!(
-                            chart.kind(),
-                            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
-                        )))
-                        .expect("prepared Bar categories")
-                        .raw;
-                    let binding = registered
-                        .categorical
-                        .as_ref()
-                        .expect("prepared color binding");
-                    if binding.local_len() == 0 {
-                        include_keys(&mut keys, categories.iter().map(String::as_str))?;
-                    } else {
-                        include_keys(&mut keys, binding.local_values())?;
-                    }
+                ) {
+                    include(value)?;
                 }
-                F::Distribution { .. } => {
-                    let binding = registered
-                        .categorical
-                        .as_ref()
-                        .expect("prepared color binding");
-                    if binding.local_len() == 0 {
-                        let domain = &axes
-                            .categories(0)
-                            .expect("prepared distribution categories")
-                            .raw;
-                        include_keys(&mut keys, domain.iter().map(String::as_str))?;
-                    } else {
-                        include_keys(&mut keys, binding.local_values())?;
-                    }
-                }
-                F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
-                F::Marginal(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                _ => {}
             }
+            F::Distribution { marks, .. } => {
+                for value in marks.observed_hue_levels(
+                    registered
+                        .categorical
+                        .as_ref()
+                        .expect("prepared color binding")
+                        .local_values(),
+                ) {
+                    include(value)?;
+                }
+            }
+            F::Density(marks) => {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+            F::Interaction(marks) => {
+                for value in marks.color_keys() {
+                    include(value)?;
+                }
+            }
+            F::Marginal(marks) => {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+            _ => {}
         }
-        palette.validate_capacity(keys.len())
     }
+    if levels.is_empty() {
+        return Err(Error::Render(
+            "categorical color domain has no prepared observed source".into(),
+        ));
+    }
+    Ok(levels)
+}
+
+/// Capacity is a semantic requirement even when no legend will be shown.
+/// Facets share the union of their prepared raw identities, not a per-cell
+/// supply that would silently recolor or fail after fonts have been prepared.
+pub(crate) fn validate_categorical_scale(
+    chart: &crate::builder::PlotDescription,
+    panels: &[PlotRegistrationBuild<'_>],
+    appearance: &crate::theme::ResolvedTheme,
+    global_hues: Option<&crate::data::category::CategoryDomain>,
+) -> Result<(), Error> {
+    let global_hues = global_hues.or_else(|| {
+        panels
+            .first()
+            .and_then(|panel| panel.parent_orders.hues.as_deref())
+    });
+    let palette = if let Some(scale) = chart.categorical_color_scale_spec() {
+        let Some(palette) = scale.palette() else {
+            if !chart.colors_by_sign() {
+                for key in global_hues
+                    .into_iter()
+                    .flat_map(crate::data::category::CategoryDomain::values)
+                {
+                    if scale
+                        .map()
+                        .expect("validated map selection")
+                        .color(key)
+                        .is_none()
+                    {
+                        return Err(Error::Data(format!(
+                            "categorical color map has no color for used raw key {key:?}"
+                        )));
+                    }
+                }
+            }
+            return Ok(());
+        };
+        palette
+    } else {
+        appearance.color_scales().get_qualitative()
+    };
+    if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
+        return Ok(());
+    }
+    let mut keys = Vec::new();
+    if let Some(global) = global_hues {
+        include_keys(&mut keys, global.values())?;
+    }
+    for registered in panels {
+        let axes = registered.axes.as_ref().expect("prepared axes");
+        match registered
+            .family
+            .as_ref()
+            .expect("prepared family")
+            .as_ref()
+        {
+            F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
+            F::Line { .. } | F::Matrix(_) => include_keys(
+                &mut keys,
+                registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding")
+                    .local_values(),
+            )?,
+            F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
+            F::Bars { .. } => {
+                let categories = &axes
+                    .categories(usize::from(matches!(
+                        chart.kind(),
+                        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                    )))
+                    .expect("prepared Bar categories")
+                    .raw;
+                let binding = registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding");
+                if binding.local_len() == 0 {
+                    include_keys(&mut keys, categories.iter().map(String::as_str))?;
+                } else {
+                    include_keys(&mut keys, binding.local_values())?;
+                }
+            }
+            F::Distribution { .. } => {
+                let binding = registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding");
+                if binding.local_len() == 0 {
+                    let domain = &axes
+                        .categories(0)
+                        .expect("prepared distribution categories")
+                        .raw;
+                    include_keys(&mut keys, domain.iter().map(String::as_str))?;
+                } else {
+                    include_keys(&mut keys, binding.local_values())?;
+                }
+            }
+            F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
+            F::Marginal(marks) => include_keys(&mut keys, marks.hue_levels())?,
+            _ => {}
+        }
+    }
+    palette.validate_capacity(keys.len())
 }
 
 #[expect(
     clippy::too_many_lines,
+    clippy::too_many_arguments,
     reason = "the closed guide dispatch borrows each family's actual scientific and axis owners"
 )]
 pub(crate) fn guide_sources(
     chart: &crate::builder::PlotDescription,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_, '_>,
-    registered: &PlotRegistrationBuild<'_>,
+    scope: &Scope,
+    family: F<'_>,
+    axes: &PreparedAxesOwner,
+    categorical: Option<&CategoricalBinding>,
+    parent_orders: &ParentOrders,
+    theme: &crate::theme::ResolvedTheme,
+    operation: &crate::font::canonical::OperationContext,
 ) -> Result<Vec<GuideSourceKey>, Error> {
     let kind = chart.kind();
     match kind {
         PlotKind::Scatter => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Scatter(marks) => Some(marks),
                 _ => None,
             })?;
-            let binding = registered
-                .categorical
-                .as_ref()
-                .expect("prepared color binding");
+            let binding = categorical.expect("prepared color binding");
             let order = marks.group_order(binding)?;
-            marks.guide_entries_in_order(chart, binding, theme, data, &order)
+            marks.guide_entries_in_order(chart, binding, theme, operation, &order)
         }
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Line { marks, .. } => Some(marks),
                 _ => None,
             })?;
             let order = marks.group_order(
                 chart,
-                registered
-                    .parent_orders
-                    .collectives
-                    .as_deref()
-                    .map(Vec::as_slice),
-                registered
-                    .parent_orders
-                    .groups
-                    .as_deref()
-                    .map(Vec::as_slice),
+                parent_orders.collectives.as_deref().map(Vec::as_slice),
+                parent_orders.groups.as_deref().map(Vec::as_slice),
             )?;
             marks.guide_entries_in_order(
                 chart,
-                registered
-                    .categorical
-                    .as_ref()
-                    .expect("prepared color binding"),
+                categorical.expect("prepared color binding"),
                 theme,
-                data,
+                operation,
                 &order,
             )
         }
@@ -377,92 +377,68 @@ pub(crate) fn guide_sources(
         | PlotKind::HorizontalBar
         | PlotKind::StackedBar
         | PlotKind::StackedHorizontalBar => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Bars { marks, .. } => Some(marks),
                 _ => None,
             })?;
-            let axes = registered.axes.as_ref().expect("prepared axes");
-            let binding = registered
-                .categorical
-                .as_ref()
-                .expect("prepared color binding");
+            let binding = categorical.expect("prepared color binding");
             let (colors, accents) =
-                crate::plots::bar_data::resolved_colors(chart, axes, binding, theme, data)?;
+                crate::plots::bar_data::resolved_colors(chart, axes, binding, theme, operation)?;
             crate::plots::bar_data::guide_sources(marks, chart, binding, theme, &colors, &accents)
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Distribution { marks, .. } => Some(marks),
                 _ => None,
             })?;
             marks.guide_entries(
                 chart,
-                registered.axes.as_ref().expect("prepared axes"),
-                registered
-                    .categorical
-                    .as_ref()
-                    .expect("prepared color binding"),
+                axes,
+                categorical.expect("prepared color binding"),
                 theme,
-                data,
+                operation,
             )
         }
         PlotKind::Density => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Density(marks) => Some(marks),
                 _ => None,
             })?;
-            let order = marks.group_order(
-                registered
-                    .parent_orders
-                    .collectives
-                    .as_deref()
-                    .map(Vec::as_slice),
-            )?;
+            let order =
+                marks.group_order(parent_orders.collectives.as_deref().map(Vec::as_slice))?;
             marks.guide_entries_in_order(
                 chart,
-                registered
-                    .categorical
-                    .as_ref()
-                    .expect("prepared color binding"),
+                categorical.expect("prepared color binding"),
                 theme,
-                data,
+                operation,
                 &order,
             )
         }
         PlotKind::Interaction => {
-            let marks = family(registered, kind, |family| match family {
+            let marks = family_marks(family, scope, kind, |family| match family {
                 F::Interaction(marks) => Some(marks),
                 _ => None,
             })?;
             marks.guide_entries(
                 chart,
                 theme,
-                data,
-                registered
-                    .categorical
-                    .as_ref()
-                    .expect("prepared color binding"),
+                operation,
+                categorical.expect("prepared color binding"),
             )
         }
-        PlotKind::Marginal => registered
-            .family
-            .as_ref()
-            .and_then(|family| match family {
-                F::Marginal(marks) => Some(marks),
-                _ => None,
-            })
-            .ok_or_else(|| Error::Render("Marginal guide is missing prepared semantics".into()))?
-            .guide_entries(
-                chart,
-                registered
-                    .categorical
-                    .as_ref()
-                    .expect("prepared color binding"),
-                theme,
-                data,
-            ),
+        PlotKind::Marginal => match family {
+            F::Marginal(marks) => Some(marks),
+            _ => None,
+        }
+        .ok_or_else(|| Error::Render("Marginal guide is missing prepared semantics".into()))?
+        .guide_entries(
+            chart,
+            categorical.expect("prepared color binding"),
+            theme,
+            operation,
+        ),
         PlotKind::Regression => {
-            family(registered, kind, |family| match family {
+            family_marks(family, scope, kind, |family| match family {
                 F::Regression(marks) => Some(marks),
                 _ => None,
             })?;
@@ -471,7 +447,7 @@ pub(crate) fn guide_sources(
             crate::plots::regression::PreparedRegression::guide_entries(chart, theme, color)
         }
         PlotKind::Dumbbell => {
-            family(registered, kind, |family| match family {
+            family_marks(family, scope, kind, |family| match family {
                 F::Dumbbell(marks) => Some(marks),
                 _ => None,
             })?;
@@ -491,128 +467,146 @@ pub(crate) fn guide_sources(
     }
 }
 
-impl PlotRegistryBuilder<'_> {
-    pub(crate) fn prepare_discrete_guides(
-        &mut self,
-        chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        resources: &crate::font::canonical::OperationContext,
-        owner: &crate::layout::ComponentAddress,
-        facet_cells: bool,
-    ) -> Result<Option<std::sync::Arc<PreparedGuide>>, Error> {
-        let mut panels = Vec::new();
-        crate::data::source::reserve_source(&mut panels, self.panels.len())?;
-        for (index, registered) in self.panels.iter().enumerate() {
-            let data = registered.data(resources)?;
-            let contributor = if facet_cells {
-                owner.child(
-                    crate::layout::AddressRole::FacetCell,
-                    u32::try_from(index)
-                        .map_err(|_| Error::Render("facet guide source address overflow".into()))?,
-                )?
-            } else {
-                owner.clone()
-            };
-            let alpha = alpha_sources(chart, theme, registered, &contributor)?;
-            let descriptor = if registered.policy.discrete_guide_use
-                == crate::decorations::legend::discrete::scoped::GuideUse::Hidden
-            {
-                None
-            } else {
-                let keys = if chart.kind() == PlotKind::Matrix {
-                    registered
-                        .family
-                        .as_ref()
-                        .and_then(|family| match family {
-                            F::Matrix(marks) => Some(marks),
-                            _ => None,
-                        })
-                        .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
-                        .guide_sources(
-                            chart,
-                            registered
-                                .categorical
-                                .as_ref()
-                                .expect("prepared color binding"),
-                            theme,
-                            data,
-                        )?
-                } else {
-                    guide_sources(chart, theme, data, registered)?
-                };
-                let continuous = continuous_source(chart, theme, registered)?;
-                PreparedGuide::prepare(
-                    chart,
-                    &registered.policy,
-                    theme,
-                    &contributor,
-                    keys,
-                    continuous,
-                    alpha.sections(&registered.policy.labels)?,
-                )?
-            };
-            panels.push(GuideContribution { descriptor, alpha });
-        }
-        let order = parent_guide_order(
-            chart,
-            self.panels.first().map_or_else(
-                || chart.legend_composition_spec(),
-                |registered| registered.policy.guide_composition,
-            ),
-            self.panels
-                .first()
-                .and_then(|registered| registered.parent_orders.collectives.as_deref())
-                .map(Vec::as_slice),
-            self.panels.first().and_then(|registered| {
-                registered
-                    .parent_orders
-                    .groups
-                    .as_deref()
-                    .map(Vec::as_slice)
-            }),
-            self.panels
-                .first()
-                .and_then(|registered| registered.parent_orders.hues.as_deref()),
-            &panels,
-            facet_cells,
-        )?;
-        let root = if facet_cells && matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
-        {
-            // Native color bodies belong to each actual facet. Their domains,
-            // missing blocks and alpha members are not a parent-wide union.
-            None
-        } else if panels.len() == 1 && order.is_empty() {
-            panels[0].descriptor.clone()
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one guide contribution borrows the occurrence's actual owners before publication"
+)]
+pub(crate) fn prepare_guide_contribution(
+    source: &crate::builder::PlotDescription,
+    scope: &Scope,
+    policy: &PlotScopePolicy,
+    family: F<'_>,
+    axes: &PreparedAxesOwner,
+    categorical: Option<&CategoricalBinding>,
+    parent_orders: &ParentOrders,
+    appearance: &crate::theme::ResolvedTheme,
+    operation: &crate::font::canonical::OperationContext,
+) -> Result<GuideContribution, Error> {
+    let alpha = alpha_sources(source, scope, family, axes, appearance)?;
+    let descriptor = if policy.discrete_guide_use
+        == crate::decorations::legend::discrete::scoped::GuideUse::Hidden
+    {
+        None
+    } else {
+        let keys = if source.kind() == PlotKind::Matrix {
+            match family {
+                F::Matrix(marks) => Some(marks),
+                _ => None,
+            }
+            .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
+            .guide_sources(
+                source,
+                categorical.expect("prepared color binding"),
+                appearance,
+                operation,
+            )?
         } else {
-            PreparedGuide::merge(
-                panels.iter().filter_map(|panel| panel.descriptor.as_ref()),
-                &order,
-                "prepared discrete guide",
+            guide_sources(
+                source,
+                scope,
+                family,
+                axes,
+                categorical,
+                parent_orders,
+                appearance,
+                operation,
             )?
         };
-        for (registered, guide) in self.panels.iter_mut().zip(panels) {
-            registered.guide = Some(guide);
-        }
-        Ok(root)
+        let continuous = continuous_source(source, scope, family, appearance)?;
+        PreparedGuide::prepare(
+            source,
+            policy,
+            appearance,
+            &scope.address,
+            keys,
+            continuous,
+            alpha.sections(&policy.labels)?,
+        )?
+    };
+    Ok(GuideContribution { descriptor, alpha })
+}
+
+pub(crate) fn prepare_discrete_guides(
+    chart: &crate::builder::PlotDescription,
+    registered: &mut [PlotRegistrationBuild<'_>],
+    resources: &crate::font::canonical::OperationContext,
+    facet_cells: bool,
+) -> Result<Option<std::sync::Arc<PreparedGuide>>, Error> {
+    let mut panels = Vec::new();
+    crate::data::source::reserve_source(&mut panels, registered.len())?;
+    for panel in registered.iter() {
+        panel.data(resources)?;
+        panels.push(prepare_guide_contribution(
+            chart,
+            &panel.scope,
+            &panel.policy,
+            panel.family.as_ref().expect("prepared family").as_ref(),
+            panel.axes.as_ref().expect("prepared axes"),
+            panel.categorical.as_ref(),
+            &panel.parent_orders,
+            &panel.appearance,
+            resources,
+        )?);
     }
+    let order = parent_guide_order(
+        chart,
+        registered.first().map_or_else(
+            || chart.legend_composition_spec(),
+            |registered| registered.policy.guide_composition,
+        ),
+        registered
+            .first()
+            .and_then(|registered| registered.parent_orders.collectives.as_deref())
+            .map(Vec::as_slice),
+        registered.first().and_then(|registered| {
+            registered
+                .parent_orders
+                .groups
+                .as_deref()
+                .map(Vec::as_slice)
+        }),
+        registered
+            .first()
+            .and_then(|registered| registered.parent_orders.hues.as_deref()),
+        &panels,
+        facet_cells,
+    )?;
+    let root = if facet_cells && matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
+        // Native color bodies belong to each actual facet. Their domains,
+        // missing blocks and alpha members are not a parent-wide union.
+        None
+    } else if panels.len() == 1 && order.is_empty() {
+        panels[0].descriptor.clone()
+    } else {
+        PreparedGuide::merge(
+            panels.iter().filter_map(|panel| panel.descriptor.as_ref()),
+            &order,
+            "prepared discrete guide",
+        )?
+    };
+    for (registered, guide) in registered.iter_mut().zip(panels) {
+        registered.guide = Some(guide);
+    }
+    Ok(root)
 }
 
 pub(crate) fn continuous_source(
     chart: &crate::builder::PlotDescription,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    registered: &PlotRegistrationBuild<'_>,
+    scope: &Scope,
+    family: F<'_>,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<
     Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
     Error,
 > {
     let field = chart.color_dimension_key().unwrap_or("");
     let descriptor = match chart.kind() {
-        PlotKind::Heatmap => family(registered, chart.kind(), |family| match family {
+        PlotKind::Heatmap => family_marks(family, scope, chart.kind(), |family| match family {
             F::Heatmap(marks) => Some(marks),
             _ => None,
         })?
         .guide_descriptor(field, theme)?,
-        PlotKind::Beeswarm => family(registered, chart.kind(), |family| match family {
+        PlotKind::Beeswarm => family_marks(family, scope, chart.kind(), |family| match family {
             F::Beeswarm(marks) => Some(marks),
             _ => None,
         })?
@@ -624,22 +618,23 @@ pub(crate) fn continuous_source(
 
 pub(crate) fn alpha_sources(
     chart: &crate::builder::PlotDescription,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    registered: &PlotRegistrationBuild<'_>,
-    owner: &crate::layout::ComponentAddress,
+    scope: &Scope,
+    family: F<'_>,
+    axes: &PreparedAxesOwner,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>, Error> {
     let mut guide = crate::decorations::legend::alpha::AlphaGuideBuilder::new(
         chart,
-        registered.scope.render_name.as_deref(),
+        scope.render_name.as_deref(),
         theme,
-        owner,
+        &scope.address,
     );
     if !guide.any_enabled() {
         return guide.finish();
     }
     macro_rules! standard {
         ($pattern:pat => $marks:ident) => {
-            family(registered, chart.kind(), |family| {
+            family_marks(family, scope, chart.kind(), |family| {
                 if let $pattern = family {
                     Some($marks)
                 } else {
@@ -667,17 +662,14 @@ pub(crate) fn alpha_sources(
         | PlotKind::HorizontalBar
         | PlotKind::StackedBar
         | PlotKind::StackedHorizontalBar => {
-            let marks = family(registered, chart.kind(), |family| {
+            let marks = family_marks(family, scope, chart.kind(), |family| {
                 if let F::Bars { marks, .. } = family {
                     Some(marks)
                 } else {
                     None
                 }
             })?;
-            let categories = &registered
-                .axes
-                .as_ref()
-                .expect("prepared axes")
+            let categories = &axes
                 .categories(usize::from(matches!(
                     chart.kind(),
                     PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
@@ -692,29 +684,18 @@ pub(crate) fn alpha_sources(
         PlotKind::Beeswarm => standard!(F::Beeswarm(marks) => marks),
         PlotKind::Heatmap => standard!(F::Heatmap(marks) => marks),
         PlotKind::Waterfall => standard!(F::Waterfall(marks) => marks),
-        PlotKind::Marginal => registered
-            .family
-            .as_ref()
-            .and_then(|family| match family {
-                F::Marginal(marks) => Some(marks),
-                _ => None,
-            })
-            .ok_or_else(|| Error::Render("Marginal alpha guide is missing actual groups".into()))?
-            .alpha_guide(chart, theme, &mut guide)?,
-        PlotKind::Matrix => registered
-            .family
-            .as_ref()
-            .and_then(|family| match family {
-                F::Matrix(marks) => Some(marks),
-                _ => None,
-            })
-            .ok_or_else(|| Error::Render("Matrix alpha guide is missing actual groups".into()))?
-            .alpha_guide(
-                chart,
-                registered.axes.as_ref().expect("prepared axes"),
-                theme,
-                &mut guide,
-            )?,
+        PlotKind::Marginal => match family {
+            F::Marginal(marks) => Some(marks),
+            _ => None,
+        }
+        .ok_or_else(|| Error::Render("Marginal alpha guide is missing actual groups".into()))?
+        .alpha_guide(chart, theme, &mut guide)?,
+        PlotKind::Matrix => match family {
+            F::Matrix(marks) => Some(marks),
+            _ => None,
+        }
+        .ok_or_else(|| Error::Render("Matrix alpha guide is missing actual groups".into()))?
+        .alpha_guide(chart, axes, theme, &mut guide)?,
     }
     guide.finish()
 }

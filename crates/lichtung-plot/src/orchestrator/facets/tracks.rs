@@ -222,7 +222,10 @@ fn measure(
                 plot.kind(),
                 crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
             ) {
-                crate::layout::interior::sizing::guided_preference(&plot, content.inputs, theme)?
+                crate::layout::interior::sizing::guided_preference(
+                    &plot,
+                    content.inputs.plots.first(),
+                )?
             } else {
                 None
             };
@@ -381,7 +384,10 @@ fn measure(
                 plot.kind(),
                 crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
             ) {
-                crate::layout::interior::sizing::guided_preference(&plot, content.inputs, theme)?
+                crate::layout::interior::sizing::guided_preference(
+                    &plot,
+                    content.inputs.plots.first(),
+                )?
             } else {
                 None
             };
@@ -550,13 +556,15 @@ mod tests {
                 },
                 |stage| {
                     let operation = stage.operation();
-                    let mut inputs =
-                        crate::plots::shared_x::prepare_plot(plot.description(), &operation, None)?;
-                    let guide = inputs.prepare_discrete_guides(
+                    let mut inputs = crate::plots::shared_x::prepare_plot(
                         plot.description(),
-                        &theme,
                         &operation,
-                        &ComponentAddress::root(),
+                        &theme,
+                    )?;
+                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                        plot.description(),
+                        &mut inputs.panels,
+                        &operation,
                         false,
                     )?;
                     let inputs = PreparedInteriorInputs::from_registry(

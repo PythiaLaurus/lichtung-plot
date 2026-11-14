@@ -69,7 +69,7 @@ impl PreparedMarginal {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -113,10 +113,9 @@ impl PreparedMarginal {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources();
         let colors = binding.resolve(binding.values(), theme, resources)?;
         let accents = AccentColors::resolve(
             theme.marks.get_accents(),
@@ -147,17 +146,17 @@ impl PreparedMarginal {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(binding, theme, data)?;
+        let (colors, accents) = self.resolved_colors(binding, theme, operation)?;
         self.guide_entries_with_colors(chart, theme, &colors, &accents)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         colors: &CategoryColors,
         accents: &AccentColors,
@@ -805,7 +804,7 @@ pub(crate) fn measure(
             .as_ref()
             .expect("prepared color binding"),
         theme,
-        data,
+        data.source_resources(),
     )?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;

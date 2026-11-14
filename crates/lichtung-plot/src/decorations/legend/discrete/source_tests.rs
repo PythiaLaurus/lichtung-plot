@@ -14,7 +14,7 @@ fn prepare(
 ) -> Option<Arc<PreparedGuide>> {
     let operation = crate::font::canonical::OperationContext::new();
     let mut inputs =
-        crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(theme)).unwrap();
+        crate::plots::shared_x::prepare_plot(plot.description(), &operation, theme).unwrap();
     for registered in &mut inputs.panels {
         registered.policy.guide_composition = composition;
         if let Some(parent) = parent {
@@ -30,17 +30,13 @@ fn prepare(
             );
         }
     }
-    let root = inputs
-        .prepare_discrete_guides(
-            plot.description(),
-            theme,
-            &operation,
-            &ComponentAddress::root()
-                .child(AddressRole::PlotBody, 0)
-                .unwrap(),
-            false,
-        )
-        .unwrap();
+    let root = crate::layout::interior::guide::prepare_discrete_guides(
+        plot.description(),
+        &mut inputs.panels,
+        &operation,
+        false,
+    )
+    .unwrap();
     let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
         inputs,
         crate::layout::interior::InteriorRoute::classify(plot.kind()),

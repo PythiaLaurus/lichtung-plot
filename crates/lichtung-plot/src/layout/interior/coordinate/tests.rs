@@ -313,7 +313,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             |stage| {
                 let operation = stage.operation();
                 let mut inputs =
-                    crate::plots::shared_x::prepare_plot(source.description(), &operation, None)?;
+                    crate::plots::shared_x::prepare_plot(source.description(), &operation, &theme)?;
                 // Exact text now belongs to authored intent. Rebind this real
                 // occurrence at the original post-science injection point.
                 let fault = source.clone().with_test_axis_ticks(
@@ -341,11 +341,10 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
                     &registered.scope,
                     &operation,
                 );
-                let guide = inputs.prepare_discrete_guides(
+                let guide = crate::layout::interior::guide::prepare_discrete_guides(
                     fault.description(),
-                    &theme,
+                    &mut inputs.panels,
                     &operation,
-                    &crate::layout::ComponentAddress::root(),
                     false,
                 )?;
                 let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(

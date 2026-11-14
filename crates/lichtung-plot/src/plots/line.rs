@@ -159,7 +159,7 @@ impl PreparedLine {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -211,10 +211,9 @@ impl PreparedLine {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources();
         let map = binding.resolve(binding.values(), theme, resources)?;
         let slots = self
             .primary_accent_slots
@@ -227,7 +226,7 @@ impl PreparedLine {
     fn group_color(
         chart: &crate::builder::PlotDescription,
         group: &LineGroup,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         map: &CategoryColors,
         accent: &AccentColors,
     ) -> Result<(u8, u8, u8), Error> {
@@ -304,11 +303,11 @@ impl PreparedLine {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (map, accent) = self.resolved_colors(binding, theme, data)?;
+        let (map, accent) = self.resolved_colors(binding, theme, operation)?;
         self.guide_entries_with_colors(chart, binding, theme, order, &map, &accent)
     }
 
@@ -316,7 +315,7 @@ impl PreparedLine {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         order: &[usize],
         map: &CategoryColors,
@@ -877,7 +876,7 @@ fn project(
             .as_ref()
             .expect("prepared color binding"),
         theme,
-        data,
+        data.source_resources(),
     )?;
 
     for &index in &order {

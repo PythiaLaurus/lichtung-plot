@@ -151,7 +151,7 @@ impl PreparedInteraction {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -220,8 +220,8 @@ impl PreparedInteraction {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<CategoryColors, Error> {
         let keys = if let Some(levels) = binding.parent.as_deref() {
             crate::data::source::collect_source(
@@ -236,11 +236,7 @@ impl PreparedInteraction {
             }
             crate::data::source::source_levels(&observed)?
         };
-        binding.resolve(
-            keys.iter().map(String::as_str),
-            theme,
-            data.source_resources(),
-        )
+        binding.resolve(keys.iter().map(String::as_str), theme, operation)
     }
 
     pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
@@ -254,18 +250,18 @@ impl PreparedInteraction {
     pub(crate) fn guide_entries(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
         binding: &crate::orchestrator::registration::CategoricalBinding,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(binding, theme, data)?;
+        let colors = self.resolved_colors(binding, theme, operation)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -600,7 +596,7 @@ pub(crate) fn measure_marks(
             .as_ref()
             .expect("prepared color binding"),
         context.theme,
-        data,
+        data.source_resources(),
     )?;
     crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();

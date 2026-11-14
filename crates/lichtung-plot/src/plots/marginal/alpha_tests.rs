@@ -41,7 +41,20 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
             None,
         )?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
-        let id = registry.reserve(source.description(), scope, &operation)?;
+        let id = registry.reserve(
+            source.description(),
+            scope.address,
+            scope.numeric_owner,
+            scope.axis_numeric_owner,
+            scope.rows,
+            scope.render_name,
+            crate::orchestrator::registration::PlotScopePolicy::for_source(
+                source.description(),
+                None,
+            ),
+            source.description().resolve_theme()?,
+            &operation,
+        )?;
         let (marks, mut axes, _) =
             prepare(source.description(), registry.data(&id, &operation)?, &id)?;
         Ok::<_, Error>((finish(marks, &mut axes, None)?, axes))

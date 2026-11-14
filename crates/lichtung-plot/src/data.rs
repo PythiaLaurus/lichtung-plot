@@ -221,7 +221,21 @@ pub(crate) fn with_source_data_for_test<'src, T>(
     )?;
     let mut registry =
         crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
-    let id = registry.reserve(source.description(), scope, operation)?;
+    let policy = crate::orchestrator::registration::PlotScopePolicy::for_source(
+        source.description(),
+        scope.numeric_owner.facet.as_ref(),
+    );
+    let id = registry.reserve(
+        source.description(),
+        scope.address,
+        scope.numeric_owner,
+        scope.axis_numeric_owner,
+        scope.rows,
+        scope.render_name,
+        policy,
+        source.description().resolve_theme()?,
+        operation,
+    )?;
     Ok(visit(registry.data(&id, operation)?))
 }
 

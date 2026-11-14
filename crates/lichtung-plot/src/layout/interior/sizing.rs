@@ -55,8 +55,7 @@ impl GuidedPreference {
 /// while this intrinsic input is retained.
 pub(crate) fn guided_preference(
     plot: &Plot,
-    inputs: &super::PreparedInteriorInputs,
-    _theme: &crate::text::TextRequestContext<'_, '_>,
+    registered: Option<&crate::orchestrator::registration::PlotRegistration<'_>>,
 ) -> Result<Option<GuidedPreference>, Error> {
     let native = matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm);
     let position = if native {
@@ -64,19 +63,16 @@ pub(crate) fn guided_preference(
     } else {
         plot.description().legend_position_spec()
     };
-    if crate::orchestrator::registration::legend_policy(plot.description(), inputs.plots.first())
+    if crate::orchestrator::registration::legend_policy(plot.description(), registered)
         == crate::LegendPolicy::Hidden
         || (position != crate::LegendPosition::Auto
             && !crate::decorations::plan::is_outside(position))
         || plot.kind() == PlotKind::Matrix
-        || (native
-            && crate::orchestrator::registration::continuous_guide_suppressed(inputs.plots.first()))
+        || (native && crate::orchestrator::registration::continuous_guide_suppressed(registered))
     {
         return Ok(None);
     }
-    let Some(descriptor) =
-        crate::orchestrator::registration::guide_descriptor(inputs.plots.first())?
-    else {
+    let Some(descriptor) = crate::orchestrator::registration::guide_descriptor(registered)? else {
         return Ok(None);
     };
     Ok(Some(GuidedPreference {
@@ -425,7 +421,7 @@ pub(crate) fn plot_size(
     let bottom_outward = common_chrome.outward(crate::layout::AxisSide::Bottom, true)?;
     let (initial_left, initial_right) =
         horizontal_gutter_preference(plot, registered, operation, theme)?;
-    let guide = guided_preference(plot, inputs, theme)?;
+    let guide = guided_preference(plot, registered)?;
     let (guide_width, guide_height) = if plot.kind() == PlotKind::Matrix {
         crate::plots::matrix::natural_guide_preference(registered, theme)?
     } else if let Some(guide) = &guide {

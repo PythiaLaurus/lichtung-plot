@@ -194,12 +194,9 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 )
                 .unwrap(),
             );
-            let same_paint_inputs = crate::plots::shared_x::prepare_plot(
-                same_paint.description(),
-                &operation,
-                Some(&crate::Theme::publication()),
-            )
-            .unwrap();
+            let same_paint_inputs =
+                crate::plots::shared_x::prepare_plot(same_paint.description(), &operation, theme)
+                    .unwrap();
             let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(same_paint_marks)) =
                 &same_paint_inputs.panels[0].family
             else {
@@ -228,7 +225,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             let changed_inputs = crate::plots::shared_x::prepare_plot(
                 changed_source.description(),
                 &operation,
-                Some(&crate::Theme::publication()),
+                theme,
             )
             .unwrap();
             let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(changed_marks)) =

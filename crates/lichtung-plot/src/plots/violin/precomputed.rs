@@ -145,7 +145,7 @@ impl PreparedRaincloud {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -199,7 +199,7 @@ impl PreparedRaincloud {
 pub(crate) fn guide_entries(
     chart: &crate::builder::PlotDescription,
     binding: &crate::orchestrator::registration::CategoricalBinding,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
 
     colors: &CategoryColors,
 ) -> Result<Vec<GuideSourceKey>, Error> {
@@ -350,7 +350,7 @@ pub(super) fn measure_marks(
                 .as_ref()
                 .expect("prepared color binding"),
             theme,
-            data,
+            data.source_resources(),
         )?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box());

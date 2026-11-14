@@ -133,15 +133,14 @@ impl PreparedGuide {
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
         let mut inputs =
-            crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(theme))?;
+            crate::plots::shared_x::prepare_plot(plot.description(), &operation, theme)?;
         for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;
         }
-        inputs.prepare_discrete_guides(
+        crate::layout::interior::guide::prepare_discrete_guides(
             plot.description(),
-            theme,
+            &mut inputs.panels,
             &operation,
-            &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
             false,
         )
     }

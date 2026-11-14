@@ -361,7 +361,7 @@ impl PreparedBars {
         chart: &crate::builder::PlotDescription,
         categories: &[String],
         series: &[String],
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -427,10 +427,9 @@ pub(crate) fn resolved_colors(
     chart: &crate::builder::PlotDescription,
     axes: &crate::orchestrator::registration::PreparedAxesOwner,
     binding: &CategoricalBinding,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-    data: PlotData<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
+    resources: &crate::font::canonical::OperationContext,
 ) -> Result<(CategoryColors, AccentColors), Error> {
-    let resources = data.source_resources();
     let colors = if chart.colors_by_sign() {
         binding.resolve(std::iter::empty(), theme, resources)?
     } else if let Some(categories) = binding.axis_categories(axes) {
@@ -1547,7 +1546,7 @@ pub(crate) fn guide_sources(
     prepared: &PreparedBars,
     chart: &crate::builder::PlotDescription,
     binding: &CategoricalBinding,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
 
     colors: &CategoryColors,
     accents: &AccentColors,

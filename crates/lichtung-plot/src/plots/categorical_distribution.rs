@@ -53,7 +53,7 @@ impl PreparedDistribution {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         match self {
@@ -68,10 +68,9 @@ impl PreparedDistribution {
         chart: &crate::builder::PlotDescription,
         axes: &crate::orchestrator::registration::PreparedAxesOwner,
         binding: &CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<CategoryColors, Error> {
-        let resources = data.source_resources();
         if binding.local_len() != 0 {
             return binding.resolve(binding.values(), theme, resources);
         }
@@ -122,10 +121,10 @@ impl PreparedDistribution {
         chart: &crate::builder::PlotDescription,
         axes: &crate::orchestrator::registration::PreparedAxesOwner,
         binding: &CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, axes, binding, theme, data)?;
+        let colors = self.resolved_colors(chart, axes, binding, theme, operation)?;
         self.guide_entries_with_colors(chart, binding, theme, &colors)
     }
 
@@ -133,7 +132,7 @@ impl PreparedDistribution {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {

@@ -1,9 +1,7 @@
 //! Canvas Grid tracks use the same quantized allocator as facet and TextPanel
 //! owners while keeping each Plot's theme and declared sparse coordinates.
 
-use super::{
-    text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan, ResolvedCanvasThemes,
-};
+use super::{text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan};
 use crate::decorations::legend::discrete::scoped::GuideAllocation;
 use crate::layout::canvas::EdgeSpaceRequirements;
 use crate::layout::fit::{self, FitOutcome, FitScope};
@@ -123,11 +121,11 @@ fn plot_minimum(
 pub(super) fn minimum(
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
-    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    inputs: &super::PreparedCanvasInputs<'_>,
     operation: &crate::font::canonical::OperationContext,
     text: &[Option<TextPanelIntrinsics>],
     titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
-    themes: &ResolvedCanvasThemes,
+    request: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
 ) -> Result<FitOutcome<(f64, f64)>, Error> {
     let (rows, columns) = placements.shape();
@@ -144,14 +142,14 @@ pub(super) fn minimum(
             continue;
         };
         let hard = if let Some(plot) = &plots[index] {
-            let inputs = interiors[index].as_ref().expect("prepared Canvas plot");
+            let registered = inputs.plot(index).expect("prepared Canvas plot");
             plot_minimum(
                 plot,
-                inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
+                Some(registered),
+                inputs.intrinsic(registered),
                 operation,
                 titles[index].expect("Plot title intrinsics"),
-                &themes.plot_request(index).expect("Plot theme"),
+                &crate::text::TextRequestContext::new(&registered.appearance, request.text),
             )?
         } else if let Some(text) = text[index] {
             text.minimum
@@ -191,7 +189,7 @@ pub(super) fn minimum(
             &requirements[axis],
             None,
             [0, 0],
-            required(themes.root().composition_grid_gap()?)?,
+            required(request.composition_grid_gap()?)?,
             None,
             true,
             scope,
@@ -202,7 +200,7 @@ pub(super) fn minimum(
                     .iter()
                     .map(|&value| i128::from(value))
                     .sum::<i128>()
-                    + i128::from(required(themes.root().composition_grid_gap()?)?)
+                    + i128::from(required(request.composition_grid_gap()?)?)
                         * i128::try_from(count.saturating_sub(1))
                             .map_err(|_| Error::Render("Canvas minimum gap overflow".into()))?;
                 result[axis] = pixels(checked(sum)?);
@@ -250,7 +248,7 @@ impl DeclaredTracks {
 pub(super) struct ContentSizing<'a> {
     pub operation: &'a crate::font::canonical::OperationContext,
     pub source: &'a super::Canvas,
-    pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
+    pub inputs: &'a super::PreparedCanvasInputs<'a>,
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub measurements: Option<&'a super::sizing::HeightMeasurements>,
     pub shared_allocation: Option<GuideAllocation>,
@@ -266,7 +264,7 @@ pub(super) fn allocate(
     outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
-    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    inputs: &super::PreparedCanvasInputs<'_>,
     operation: &crate::font::canonical::OperationContext,
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
@@ -274,7 +272,7 @@ pub(super) fn allocate(
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
-    themes: &ResolvedCanvasThemes,
+    request: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<CanvasGridAssignment>, Error> {
@@ -283,7 +281,7 @@ pub(super) fn allocate(
             outer,
             placements,
             plots,
-            interiors,
+            inputs,
             operation,
             text_panels,
             plot_titles,
@@ -291,7 +289,7 @@ pub(super) fn allocate(
             row_headers,
             row_titles,
             gutters,
-            themes,
+            request,
             scope,
             content,
             Phase::Complete,
@@ -317,7 +315,7 @@ pub(super) fn natural_width(
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
-    themes: &ResolvedCanvasThemes,
+    request: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: &ContentSizing<'_>,
 ) -> Result<FitOutcome<f64>, Error> {
@@ -331,7 +329,7 @@ pub(super) fn natural_width(
             PixelRect::new(0.0, 0.0, 0.0, 0.0),
             placements,
             plots,
-            content.interiors,
+            content.inputs,
             content.operation,
             text_panels,
             plot_titles,
@@ -339,7 +337,7 @@ pub(super) fn natural_width(
             row_headers,
             row_titles,
             &[],
-            themes,
+            request,
             scope,
             Some(content),
             Phase::Columns,
@@ -372,7 +370,7 @@ fn measure(
     outer: PixelRect,
     placements: &super::placement::Placements,
     plots: &[Option<Plot>],
-    interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+    inputs: &super::PreparedCanvasInputs<'_>,
     operation: &crate::font::canonical::OperationContext,
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
@@ -380,7 +378,7 @@ fn measure(
     row_headers: &[CanvasHeader],
     row_titles: &[CanvasHeader],
     gutters: &[(usize, usize, EdgeSpaceRequirements)],
-    themes: &ResolvedCanvasThemes,
+    request: &crate::text::TextRequestContext<'_, '_>,
     scope: &FitScope,
     content: Option<&ContentSizing<'_>>,
     phase: Phase,
@@ -399,7 +397,7 @@ fn measure(
             "Canvas Grid has mismatched declared slots".into(),
         ));
     }
-    let theme = &themes.root_request();
+    let theme = request;
 
     let gap = required(theme.composition_grid_gap()?)?;
     let em = required(
@@ -465,12 +463,13 @@ fn measure(
         // layout. Header/body requirements remain inner-track requirements.
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let theme = &themes.plot_request(index).expect("prepared Plot theme");
+            let theme = &crate::text::TextRequestContext::new(
+                &inputs.plot(index).expect("prepared Plot theme").appearance,
+                request.text,
+            );
             let (left, right) = crate::layout::interior::sizing::horizontal_gutter_preference(
                 plot,
-                interiors[index]
-                    .as_ref()
-                    .and_then(|input| input.plots.first()),
+                inputs.plot(index),
                 content.operation,
                 theme,
             )?;
@@ -537,12 +536,14 @@ fn measure(
     crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
-            let inputs = interiors[index].as_ref().expect("prepared Canvas plot");
-            let registered = inputs.plots.first();
+            let registered = inputs.plot(index);
             let intrinsic = inputs.intrinsic(registered.expect("prepared Canvas plot"));
-            let child_theme = &themes
-                .plot_request(index)
-                .expect("configured Plot retains its theme");
+            let child_theme = &crate::text::TextRequestContext::new(
+                &registered
+                    .expect("configured Plot retains its theme")
+                    .appearance,
+                request.text,
+            );
             let hard = plot_minimum(
                 plot,
                 registered,
@@ -566,16 +567,12 @@ fn measure(
                     plot.intrinsic_body_minimum(registered, intrinsic, operation, child_theme)?,
                 )?;
                 let mut width = body.0;
-                if let Some(content) = content.filter(|content| {
+                if content.is_some_and(|content| {
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot
                 }) {
-                    if let Some(guide) = crate::layout::interior::sizing::guided_preference(
-                        plot,
-                        content.interiors[index]
-                            .as_ref()
-                            .expect("prepared Canvas guide scope"),
-                        child_theme,
-                    )? {
+                    if let Some(guide) =
+                        crate::layout::interior::sizing::guided_preference(plot, registered)?
+                    {
                         let size = guide.preference(child_theme)?;
                         width = if guide.horizontal() {
                             width.max(size.0)
@@ -942,11 +939,13 @@ fn measure(
                     plot,
                     content.operation,
                     content.source,
-                    &themes.plot_request(index).expect("prepared Plot theme"),
+                    &crate::text::TextRequestContext::new(
+                        &inputs.plot(index).expect("prepared Plot theme").appearance,
+                        request.text,
+                    ),
                     width,
-                    content.interiors[index]
-                        .as_ref()
-                        .expect("prepared Canvas interior"),
+                    inputs.plot(index).expect("prepared Canvas interior"),
+                    inputs.intrinsic(inputs.plot(index).expect("prepared Canvas interior")),
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot,
                     content.round,
                     child.address,

@@ -129,7 +129,7 @@ impl DumbbellData {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -172,7 +172,7 @@ impl DumbbellData {
 
     pub(crate) fn guide_entries(
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<GuideSourceKey>, Error> {
         let endpoints = chart
             .dumbbell_endpoints_spec()
@@ -494,7 +494,7 @@ pub(crate) fn prepare(
 
 fn endpoint_style(
     chart: &crate::builder::PlotDescription,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
     color: crate::Color,
 ) -> crate::render::backend::PointStyle {
     let mut point = chart.point_style(

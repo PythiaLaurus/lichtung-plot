@@ -98,7 +98,7 @@ impl PreparedDensity {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -133,10 +133,9 @@ impl PreparedDensity {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources();
         let keys = if let Some(global) = binding.parent.as_deref() {
             crate::data::source::collect_source(
                 global.values().map(crate::data::source::copy_source_string),
@@ -204,18 +203,18 @@ impl PreparedDensity {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
         order: &[(usize, usize)],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accent) = self.resolved_colors(binding, theme, data)?;
+        let (colors, accent) = self.resolved_colors(binding, theme, operation)?;
         self.guide_entries_with_colors(chart, theme, order, &colors, &accent)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         order: &[(usize, usize)],
         colors: &CategoryColors,
@@ -433,7 +432,7 @@ pub(crate) fn project(
             .as_ref()
             .expect("prepared color binding"),
         theme,
-        data,
+        data.source_resources(),
     )?;
 
     for &(_, index) in &order {

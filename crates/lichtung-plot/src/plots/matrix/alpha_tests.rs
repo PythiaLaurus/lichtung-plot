@@ -37,7 +37,20 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
             None,
         )?;
         let mut registry = PlotRegistryBuilder::new(operation.root_identity());
-        let id = registry.reserve(source.description(), scope, &operation)?;
+        let id = registry.reserve(
+            source.description(),
+            scope.address,
+            scope.numeric_owner,
+            scope.axis_numeric_owner,
+            scope.rows,
+            scope.render_name,
+            crate::orchestrator::registration::PlotScopePolicy::for_source(
+                source.description(),
+                None,
+            ),
+            source.description().resolve_theme()?,
+            &operation,
+        )?;
         prepare_axes(
             source.description(),
             registry.data(&id, &operation)?,

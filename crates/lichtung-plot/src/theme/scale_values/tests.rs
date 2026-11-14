@@ -265,8 +265,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs =
-        crate::plots::shared_x::prepare_plot(source.description(), &resources, Some(&theme))
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(source.description(), &resources, &theme).unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(prepared)) =
@@ -287,7 +286,6 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
-    assert!(crate::plots::shared_x::prepare_plot(source.description(), &resources, None).is_err());
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,

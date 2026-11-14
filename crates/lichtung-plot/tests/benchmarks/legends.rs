@@ -431,13 +431,12 @@ fn shared_legend_child_cache_replay_contract() {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
                     plot.description(),
                     &stage.operation(),
-                    None,
-                )?;
-                let guide = inputs.prepare_discrete_guides(
-                    plot.description(),
                     &theme,
+                )?;
+                let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                    plot.description(),
+                    &mut inputs.panels,
                     &stage.operation(),
-                    &owner,
                     false,
                 )?;
                 let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
@@ -948,13 +947,15 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             height: 400,
         },
         |stage| {
-            let mut inputs =
-                crate::plots::shared_x::prepare_plot(plot.description(), &stage.operation(), None)?;
-            let guide = inputs.prepare_discrete_guides(
+            let mut inputs = crate::plots::shared_x::prepare_plot(
                 plot.description(),
-                &theme,
                 &stage.operation(),
-                &address,
+                &theme,
+            )?;
+            let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                plot.description(),
+                &mut inputs.panels,
+                &stage.operation(),
                 false,
             )?;
             let inputs = PreparedInteriorInputs::from_registry(

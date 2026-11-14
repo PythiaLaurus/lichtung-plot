@@ -82,7 +82,6 @@ impl Eq for ContinuousDescriptor {}
 impl<'v> ContinuousContributor<'v> {
     pub(crate) fn for_plot(
         input: &'v crate::orchestrator::registration::PlotRegistrationBuild<'_>,
-        theme: &crate::text::TextRequestContext<'_, '_>,
         numeric: crate::numeric::source::NumericBinding<'v>,
     ) -> Result<Option<Self>, Error> {
         let plot = input.source;
@@ -104,7 +103,7 @@ impl<'v> ContinuousContributor<'v> {
                     .ok_or_else(|| {
                         Error::Render("shared Heatmap guide has no prepared input".into())
                     })?;
-                let semantics = marks.guide_semantics(theme)?;
+                let semantics = marks.guide_semantics(&input.appearance)?;
                 (
                     marks.color_label.try_copy()?,
                     semantics,

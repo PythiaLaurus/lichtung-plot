@@ -27,16 +27,14 @@ fn significance_case(count: usize) -> [Duration; 2] {
     theme.text.prepare_font_environment().unwrap();
     let operation = crate::font::canonical::OperationContext::new();
     let mut registry =
-        crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme)).unwrap();
-    let guide = registry
-        .prepare_discrete_guides(
-            plot.description(),
-            &theme,
-            &operation,
-            &crate::layout::ComponentAddress::root(),
-            false,
-        )
-        .unwrap();
+        crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme).unwrap();
+    let guide = crate::layout::interior::guide::prepare_discrete_guides(
+        plot.description(),
+        &mut registry.panels,
+        &operation,
+        false,
+    )
+    .unwrap();
     let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
         registry,
         crate::layout::interior::InteriorRoute::classify(plot.kind()),

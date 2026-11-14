@@ -31,7 +31,20 @@ fn with_source<T>(visit: impl FnOnce(NumericBinding<'_>) -> T) -> T {
     let mut registry =
         crate::orchestrator::registration::PlotRegistryBuilder::new(operation.root_identity());
     let id = registry
-        .reserve(plot.description(), scope, &operation)
+        .reserve(
+            plot.description(),
+            scope.address,
+            scope.numeric_owner,
+            scope.axis_numeric_owner,
+            scope.rows,
+            scope.render_name,
+            crate::orchestrator::registration::PlotScopePolicy::for_source(
+                plot.description(),
+                None,
+            ),
+            plot.description().resolve_theme().unwrap(),
+            &operation,
+        )
         .unwrap();
     let panel = &registry.panels[id.slot];
     visit(

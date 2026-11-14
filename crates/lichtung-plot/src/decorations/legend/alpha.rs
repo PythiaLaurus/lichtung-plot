@@ -267,7 +267,7 @@ impl<'a> AlphaGuideBuilder<'a> {
     pub(crate) fn new(
         plot: &'a PlotDescription,
         scope: Option<&'a str>,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         owner: &'a ComponentAddress,
     ) -> Self {
         let paint = theme.typography.guides.legend_label.get_color();

@@ -46,7 +46,7 @@ pub(crate) fn measure_marks(
         &context.registered.expect("prepared Bar occurrence").axes,
         binding,
         theme,
-        data,
+        data.source_resources(),
     )?;
     let y_count = categories.len() as f64;
     let panel_box = context.panel;

@@ -184,9 +184,22 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
                 None,
             )?;
             let mut registry = PlotRegistryBuilder::new(operation.root_identity());
-            let id = registry.reserve(source.description(), scope, &operation)?;
+            let id = registry.reserve(
+                source.description(),
+                scope.address,
+                scope.numeric_owner,
+                scope.axis_numeric_owner,
+                scope.rows,
+                scope.render_name,
+                crate::orchestrator::registration::PlotScopePolicy::for_source(
+                    source.description(),
+                    None,
+                ),
+                source.description().resolve_theme()?,
+                &operation,
+            )?;
             let panel = &mut registry.panels[id.slot];
-            crate::plots::shared_x::prepare_plot_registration(panel, None, &operation)?;
+            crate::plots::shared_x::prepare_plot_registration(panel, &operation)?;
             let axes = panel.axes.as_ref().unwrap();
             let initial_y = axes.ranges()[1];
             assert!(axes

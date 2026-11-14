@@ -53,7 +53,7 @@ impl HeatmapData {
     pub(crate) fn alpha_guide(
         &self,
         _chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -102,7 +102,7 @@ impl HeatmapData {
 
     pub(crate) fn guide_semantics(
         &self,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain();
         let missing = self
@@ -178,7 +178,7 @@ impl HeatmapData {
     pub(crate) fn guide_descriptor(
         &self,
         field: &str,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
         let Some(values) = &self.colorbar_values else {
             return Ok(None);

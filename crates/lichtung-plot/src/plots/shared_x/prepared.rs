@@ -58,15 +58,9 @@ pub(crate) fn prepare_pair_axes(
 
 fn continuous_selection(
     source: &PlotDescription,
-    owner: Option<&crate::theme::Theme>,
+    appearance: &crate::theme::ResolvedTheme,
 ) -> Result<crate::theme::ContinuousColorScale, Error> {
-    source.continuous_selection_in(
-        owner
-            .ok_or_else(|| {
-                Error::Render("continuous preparation requires its owning color scales".into())
-            })?
-            .color_scales(),
-    )
+    source.continuous_selection_in(appearance.color_scales())
 }
 
 impl crate::orchestrator::registration::BaseAxisRef<'_> {
@@ -126,7 +120,6 @@ impl crate::orchestrator::registration::BaseAxisRef<'_> {
 )]
 pub(crate) fn prepare_plot_registration(
     panel: &mut PlotRegistrationBuild<'_>,
-    owner: Option<&crate::theme::Theme>,
     operation: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
     let source = panel.source;
@@ -153,7 +146,7 @@ pub(crate) fn prepare_plot_registration(
             let (marks, levels) = crate::plots::beeswarm::prepare(
                 source,
                 data,
-                continuous_selection(source, owner)?,
+                continuous_selection(source, &panel.appearance)?,
                 numeric,
                 panel.policy.continuous_materialization,
             )?;
@@ -184,7 +177,7 @@ pub(crate) fn prepare_plot_registration(
             let (marks, levels) = crate::plots::heatmap::prepare(
                 source,
                 data,
-                continuous_selection(source, owner)?,
+                continuous_selection(source, &panel.appearance)?,
                 numeric,
                 panel.policy.continuous_materialization,
             )?;
@@ -320,8 +313,11 @@ pub(crate) fn prepare_plot_registration(
             Ok(PreparedFamily::Dumbbell(marks))
         }
         PlotKind::Histogram => {
-            let (marks, ranges) =
-                crate::plots::histogram::HistogramSemantics::new(source, data, owner)?;
+            let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
+                source,
+                data,
+                Some(&panel.appearance),
+            )?;
             panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
             Ok(PreparedFamily::Histogram(marks))
         }
@@ -534,7 +530,7 @@ pub(crate) fn prepare_reference_plot(
 pub(crate) fn prepare_plot<'src>(
     source: &'src PlotDescription,
     resources: &crate::font::canonical::OperationContext,
-    owner: Option<&crate::theme::Theme>,
+    appearance: &crate::theme::ResolvedTheme,
 ) -> Result<PlotRegistryBuilder<'src>, Error> {
     let mut registry = PlotRegistryBuilder::new(resources.root_identity());
     let source_rows = source.configured_source_rows()?;
@@ -550,7 +546,19 @@ pub(crate) fn prepare_plot<'src>(
                 None,
                 None,
             )?;
-            registry.reserve(source, scope, resources)
+            let policy =
+                crate::orchestrator::registration::PlotScopePolicy::for_source(source, None);
+            registry.reserve(
+                source,
+                scope.address,
+                scope.numeric_owner,
+                scope.axis_numeric_owner,
+                scope.rows,
+                scope.render_name,
+                policy,
+                appearance.clone(),
+                resources,
+            )
         })
         .transpose()?;
     if matches!(
@@ -577,7 +585,7 @@ pub(crate) fn prepare_plot<'src>(
             | PlotKind::Interaction
     ) && !source.has_facets()
     {
-        prepare_plot_registration(&mut registry.panels[0], owner, resources)?;
+        prepare_plot_registration(&mut registry.panels[0], resources)?;
         prepare_reference_plot(source, &mut registry.panels[0], None, false, resources)?;
         return Ok(registry);
     }
@@ -632,7 +640,7 @@ pub(crate) fn prepare_plot<'src>(
         return Ok(registry);
     }
     if source.has_facets() {
-        crate::orchestrator::prepare_facet_scopes(source, &mut registry, resources)?;
+        crate::orchestrator::prepare_facet_scopes(source, &mut registry, appearance, resources)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| crate::data::observed_source_collectives(source, "interaction"))
             .transpose()?;
@@ -802,8 +810,11 @@ pub(crate) fn prepare_plot<'src>(
                     }
                 }
                 PlotKind::Histogram => {
-                    let (marks, ranges) =
-                        crate::plots::histogram::HistogramSemantics::new(source, data, owner)?;
+                    let (marks, ranges) = crate::plots::histogram::HistogramSemantics::new(
+                        source,
+                        data,
+                        Some(&panel.appearance),
+                    )?;
                     panel.axes = Some(prepare_pair_axes(panel, ranges.map(Some), [None, None])?);
                     PreparedFamily::Histogram(marks)
                 }
@@ -848,7 +859,7 @@ pub(crate) fn prepare_plot<'src>(
                     let (marks, levels) = crate::plots::heatmap::prepare(
                         source,
                         data,
-                        continuous_selection(source, owner)?,
+                        continuous_selection(source, &panel.appearance)?,
                         panel
                             .scope
                             .numeric_binding(source, &panel.row_source, resources)?,
@@ -870,7 +881,7 @@ pub(crate) fn prepare_plot<'src>(
                     let (marks, levels) = crate::plots::beeswarm::prepare(
                         source,
                         data,
-                        continuous_selection(source, owner)?,
+                        continuous_selection(source, &panel.appearance)?,
                         panel
                             .scope
                             .numeric_binding(source, &panel.row_source, resources)?,

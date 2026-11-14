@@ -706,7 +706,8 @@ pub(crate) fn foundational_plot_requirements(
 ) -> Result<Vec<PreparedTextRequirement>, Error> {
     let mut requirements = Vec::new();
     PreparedTextRequirement::append_plot(
-        interiors,
+        interiors.map(|inputs| inputs.plots.as_slice()),
+        interiors.and_then(|inputs| inputs.root_guide.as_ref()),
         &mut requirements,
         plot,
         kind,
@@ -728,7 +729,8 @@ impl PreparedTextRequirement {
         reason = "the closed producer traversal preserves axis policies and visible source identities"
     )]
     pub(crate) fn append_plot(
-        interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
+        plots: Option<&[crate::orchestrator::registration::PlotRegistration<'_>]>,
+        root_guide: Option<&std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
         requirements: &mut Vec<Self>,
         plot: &PlotDescription,
         kind: PlotKind,
@@ -778,12 +780,12 @@ impl PreparedTextRequirement {
         )?;
         if kind != PlotKind::Matrix {
             let [x_title, y_title] = plot.prepare_axis_labels(
-                interiors
-                    .and_then(|inputs| inputs.plots.first())
+                plots
+                    .and_then(|plots| plots.first())
                     .map(|registered| &registered.policy.labels),
             )?;
-            if let Some(interiors) = interiors {
-                for registered in &interiors.plots {
+            if let Some(plots) = plots {
+                for registered in plots {
                     registered
                         .axes
                         .retain_axis_labels([x_title.as_ref(), y_title.as_ref()])?;
@@ -813,7 +815,7 @@ impl PreparedTextRequirement {
                 )?;
             }
             push_plot_axis_ticks(
-                interiors,
+                plots,
                 requirements,
                 plot,
                 kind,
@@ -901,12 +903,12 @@ impl PreparedTextRequirement {
         }
         if crate::orchestrator::registration::discrete_guide_use(
             plot,
-            interiors.and_then(|inputs| inputs.plots.first()),
+            plots.and_then(|plots| plots.first()),
         ) == crate::decorations::legend::discrete::scoped::GuideUse::Local
         {
-            if let Some(interiors) = interiors {
+            if let Some(plots) = plots {
                 if plot.has_facets() && matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
-                    for (index, panel) in interiors.plots.iter().enumerate() {
+                    for (index, panel) in plots.iter().enumerate() {
                         if let Some(guide) = &panel.guide.descriptor {
                             let index = u32::try_from(index).map_err(|_| {
                                 Error::Render("native guide facet index overflow".into())
@@ -922,7 +924,7 @@ impl PreparedTextRequirement {
                             )?;
                         }
                     }
-                } else if let Some(guide) = &interiors.root_guide {
+                } else if let Some(guide) = root_guide {
                     let guide_parent =
                         if plot.has_facets() || base.leaf_role() == AddressRole::CanvasCell {
                             base.clone()
@@ -946,7 +948,7 @@ impl PreparedTextRequirement {
             }
         }
         push_deferred_plot_requirements(
-            interiors,
+            plots,
             requirements,
             plot,
             kind,
@@ -984,7 +986,7 @@ impl PreparedTextRequirement {
     reason = "one closed plot-kind match keeps both range filters and every deferred T5b/T5e census source auditable"
 )]
 fn push_deferred_plot_requirements(
-    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
+    plots: Option<&[crate::orchestrator::registration::PlotRegistration<'_>]>,
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &PlotDescription,
     kind: PlotKind,
@@ -1123,9 +1125,8 @@ fn push_deferred_plot_requirements(
             prepared_stage,
         )?;
     } else if kind == PlotKind::Waterfall {
-        let waterfall = interiors
-            .filter(|inputs| inputs.route.kind() == PlotKind::Waterfall)
-            .map(|inputs| inputs.plots.as_slice())
+        let waterfall = plots
+            .filter(|_| plot.kind() == PlotKind::Waterfall)
             .ok_or_else(|| {
                 Error::Render("waterfall census requires root-prepared semantics".into())
             })?;
@@ -1153,9 +1154,8 @@ fn push_deferred_plot_requirements(
             }
         }
     } else if kind == PlotKind::Heatmap {
-        let heatmap = interiors
-            .filter(|inputs| inputs.route.kind() == PlotKind::Heatmap)
-            .map(|inputs| inputs.plots.as_slice())
+        let heatmap = plots
+            .filter(|_| plot.kind() == PlotKind::Heatmap)
             .ok_or_else(|| {
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
@@ -1237,14 +1237,13 @@ fn push_deferred_plot_requirements(
         kind,
         PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
     ) {
-        let estimates = interiors
-            .filter(|inputs| {
+        let estimates = plots
+            .filter(|_| {
                 matches!(
-                    inputs.route.kind(),
+                    plot.kind(),
                     PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
                 )
             })
-            .map(|inputs| inputs.plots.as_slice())
             .ok_or_else(|| {
                 Error::Render("estimate detail census requires root-prepared semantics".into())
             })?;
@@ -1409,7 +1408,7 @@ impl PreparedTextRequirement {
 }
 
 fn push_plot_axis_ticks(
-    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
+    plots: Option<&[crate::orchestrator::registration::PlotRegistration<'_>]>,
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &PlotDescription,
     kind: PlotKind,
@@ -1418,8 +1417,8 @@ fn push_plot_axis_ticks(
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     let alphabet = None;
-    if let Some(interiors) = interiors {
-        for (index, registered) in interiors.plots.iter().enumerate() {
+    if let Some(plots) = plots {
+        for (index, registered) in plots.iter().enumerate() {
             let Some(axes) = registered.axes.coordinate() else {
                 continue;
             };
@@ -2487,6 +2486,70 @@ mod tests {
     }
 
     #[test]
+    fn native_census_distinguishes_absent_from_present_empty_registrations() {
+        let categories = || crate::CategoryValues::new("category", ["one"]).unwrap();
+        let values = || crate::NumericValues::new("value", [1.0]);
+        let sources = [
+            (
+                crate::Plot::waterfall(categories(), values(), 0.0).erase(),
+                "render error: waterfall census requires root-prepared semantics",
+            ),
+            (
+                crate::Plot::heatmap(
+                    categories(),
+                    crate::CategoryValues::new("row", ["one"]).unwrap(),
+                    values(),
+                )
+                .erase(),
+                "render error: heatmap census requires root-prepared semantics",
+            ),
+            (
+                crate::Plot::coefficient(
+                    categories(),
+                    crate::CoefficientInput::estimates(values()),
+                )
+                .erase(),
+                "render error: estimate detail census requires root-prepared semantics",
+            ),
+        ];
+        with_prepared_stage(|stage| {
+            let appearance = crate::Theme::publication().resolve()?;
+            let text = crate::text::TextService::default();
+            let request = crate::text::TextRequestContext::new(&appearance, &text);
+            for (source, message) in &sources {
+                let mut requirements = Vec::new();
+                push_deferred_plot_requirements(
+                    Some(&[]),
+                    &mut requirements,
+                    source.description(),
+                    source.kind(),
+                    &request,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                assert!(requirements.is_empty());
+                let error = push_deferred_plot_requirements(
+                    None,
+                    &mut requirements,
+                    source.description(),
+                    source.kind(),
+                    &request,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    Some(stage),
+                )
+                .unwrap_err();
+                assert_eq!(error.to_string(), *message);
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn transparent_missing_row_census_uses_the_final_fill_and_planning_backdrop() {
         use crate::theme::{Color, OpaqueColor};
 
@@ -2506,56 +2569,48 @@ mod tests {
             crate::HeatmapNullRowAnnotation::new("absent", "Unavailable").unwrap(),
         )
         .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let mut inputs = crate::plots::shared_x::prepare_plot(
-            plot.description(),
-            &resources,
-            Some(&crate::theme::Theme::publication()),
-        )
-        .unwrap();
-        let mut theme = crate::Theme::publication().resolve().unwrap();
-        theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
-        theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
-        let cells = theme
-            .marks
-            .get_cells()
-            .clone()
-            .missing_fill(Color::rgba(20, 40, 60, 0))
-            .unwrap();
-        theme.marks = theme.marks.clone().cells(cells).unwrap();
-        theme.typography.annotations.contrast.light.stack =
-            canonical::named_stack(&["Light missing row"]);
-        theme.typography.annotations.contrast.dark.stack =
-            canonical::named_stack(&["Dark missing row"]);
-        theme.typography.annotations.contrast.light.font_size = 39.0;
-        theme.typography.annotations.contrast.dark.font_size = 9.0;
-        let text_service = crate::text::TextService::default();
-        let guide = inputs
-            .prepare_discrete_guides(
-                plot.description(),
-                &crate::text::TextRequestContext::new(&theme, &text_service),
-                &resources,
-                &ComponentAddress::root(),
-                false,
-            )
-            .unwrap();
-        let inputs = PreparedInteriorInputs::from_registry(
-            inputs,
-            InteriorRoute::classify(plot.kind()),
-            guide,
-        )
-        .unwrap();
-        for (backdrop, expected) in [
-            (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
-            (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
-        ] {
-            theme.annotations = theme
-                .annotations
+        with_prepared_stage(|stage| {
+            let resources = stage.operation();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
+            theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
+            theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
+            let cells = theme
+                .marks
+                .get_cells()
                 .clone()
-                .planning_backdrop(backdrop)
+                .missing_fill(Color::rgba(20, 40, 60, 0))
                 .unwrap();
-            let requirements = with_prepared_stage(|stage| {
-                foundational_plot_requirements(
+            theme.marks = theme.marks.clone().cells(cells).unwrap();
+            theme.typography.annotations.contrast.light.stack =
+                canonical::named_stack(&["Light missing row"]);
+            theme.typography.annotations.contrast.dark.stack =
+                canonical::named_stack(&["Dark missing row"]);
+            theme.typography.annotations.contrast.light.font_size = 39.0;
+            theme.typography.annotations.contrast.dark.font_size = 9.0;
+            let mut inputs =
+                crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
+            let text_service = crate::text::TextService::default();
+            let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                plot.description(),
+                &mut inputs.panels,
+                &resources,
+                false,
+            )?;
+            let inputs = PreparedInteriorInputs::from_registry(
+                inputs,
+                InteriorRoute::classify(plot.kind()),
+                guide,
+            )?;
+            for (backdrop, expected) in [
+                (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
+                (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
+            ] {
+                theme.annotations = theme
+                    .annotations
+                    .clone()
+                    .planning_backdrop(backdrop)
+                    .unwrap();
+                let requirements = foundational_plot_requirements(
                     Some(&inputs),
                     plot.description(),
                     PlotKind::Heatmap,
@@ -2565,28 +2620,29 @@ mod tests {
                     true,
                     true,
                     Some(stage),
-                )
-            })
-            .unwrap();
-            let selected = requirements
-                .iter()
-                .filter(|requirement| requirement.source == "Unavailable")
-                .collect::<Vec<_>>();
-            assert_eq!(selected.len(), 1);
-            assert_eq!(selected[0].stack, canonical::named_stack(&[expected]));
-            assert_eq!(
-                theme
-                    .contrasting_text(theme.marks.get_cells().get_missing_fill())
-                    .unwrap()
-                    .font_size
-                    .to_bits(),
-                if expected == "Light missing row" {
-                    39.0_f64.to_bits()
-                } else {
-                    9.0_f64.to_bits()
-                }
-            );
-        }
+                )?;
+                let selected = requirements
+                    .iter()
+                    .filter(|requirement| requirement.source == "Unavailable")
+                    .collect::<Vec<_>>();
+                assert_eq!(selected.len(), 1);
+                assert_eq!(selected[0].stack, canonical::named_stack(&[expected]));
+                assert_eq!(
+                    theme
+                        .contrasting_text(theme.marks.get_cells().get_missing_fill())
+                        .unwrap()
+                        .font_size
+                        .to_bits(),
+                    if expected == "Light missing row" {
+                        39.0_f64.to_bits()
+                    } else {
+                        9.0_f64.to_bits()
+                    }
+                );
+            }
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -2606,102 +2662,98 @@ mod tests {
                 .unwrap(),
         ))
         .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let mut inputs = crate::plots::shared_x::prepare_plot(
-            plot.description(),
-            &resources,
-            Some(&crate::theme::Theme::publication()),
-        )
-        .unwrap();
-        let mut theme = crate::Theme::publication().resolve().unwrap();
-        theme.typography.annotations.contrast.light.stack =
-            canonical::named_stack(&["Selected light contrast"]);
-        theme.typography.annotations.contrast.dark.stack =
-            canonical::named_stack(&["Selected dark contrast"]);
-        theme.typography.annotations.contrast.light.font_size = 39.0;
-        theme.typography.annotations.contrast.dark.font_size = 9.0;
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let guide = inputs
-            .prepare_discrete_guides(
+        with_prepared_stage(|stage| {
+            let resources = stage.operation();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
+            theme.typography.annotations.contrast.light.stack =
+                canonical::named_stack(&["Selected light contrast"]);
+            theme.typography.annotations.contrast.dark.stack =
+                canonical::named_stack(&["Selected dark contrast"]);
+            theme.typography.annotations.contrast.light.font_size = 39.0;
+            theme.typography.annotations.contrast.dark.font_size = 9.0;
+            let mut inputs =
+                crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
+            let guide = crate::layout::interior::guide::prepare_discrete_guides(
                 plot.description(),
-                &theme,
+                &mut inputs.panels,
                 &resources,
-                &ComponentAddress::root(),
                 false,
-            )
-            .unwrap();
-        let mut inputs = PreparedInteriorInputs::from_registry(
-            inputs,
-            InteriorRoute::classify(plot.kind()),
-            guide,
-        )
-        .unwrap();
-        let selected_stack = |inputs: &PreparedInteriorInputs| {
-            let requirements = with_prepared_stage(|stage| {
-                foundational_plot_requirements(
-                    Some(inputs),
-                    plot.description(),
-                    PlotKind::Heatmap,
-                    &theme,
-                    &ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
+            )?;
+            let mut inputs = PreparedInteriorInputs::from_registry(
+                inputs,
+                InteriorRoute::classify(plot.kind()),
+                guide,
+            )?;
+            let selected_stack =
+                |inputs: &PreparedInteriorInputs,
+                 stage: &mut crate::layout::kernel::PreparedStage<'_>| {
+                    let requirements = foundational_plot_requirements(
+                        Some(inputs),
+                        plot.description(),
+                        PlotKind::Heatmap,
+                        &theme,
+                        &ComponentAddress::root(),
+                        true,
+                        true,
+                        true,
+                        Some(stage),
+                    )?;
+                    Ok::<_, Error>(
+                        requirements
+                            .iter()
+                            .find(|requirement| requirement.source == "1.00")
+                            .unwrap()
+                            .stack
+                            .clone(),
+                    )
+                };
+            assert_eq!(
+                selected_stack(&inputs, stage)?,
+                canonical::named_stack(&["Selected light contrast"])
+            );
+            let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
+                selection: crate::theme::ContinuousColorScale::sequential(
+                    Some(
+                        crate::theme::scale_values::test_defaults()
+                            .get_sequential()
+                            .clone(),
+                    ),
+                    None,
                 )
-            })?;
-            Ok::<_, Error>(
-                requirements
-                    .iter()
-                    .find(|requirement| requirement.source == "1.00")
-                    .unwrap()
-                    .stack
-                    .clone(),
-            )
-        };
-        assert_eq!(
-            selected_stack(&inputs).unwrap(),
-            canonical::named_stack(&["Selected light contrast"])
-        );
-        let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
-            selection: crate::theme::ContinuousColorScale::sequential(
-                Some(
-                    crate::theme::scale_values::test_defaults()
-                        .get_sequential()
-                        .clone(),
-                ),
-                None,
-            )
-            .unwrap(),
-            field: "fill".into(),
-            title: std::sync::Arc::new("Fill".into()),
-            stops: vec![
-                crate::render::backend::GradientStop::new(0.0, (247, 251, 255)),
-                crate::render::backend::GradientStop::new(1.0, (8, 48, 107)),
-            ],
-            center: None,
-            missing: None,
-            domain: (0.0, 20.0),
-            exact: false,
-            format: None,
-            numeric: crate::decorations::legend::descriptor::domain_presentation(
-                (0.0, 20.0),
-                None,
-                None,
-            )
-            .unwrap(),
-        };
-        let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
-            &mut inputs.plots[0].family
-        else {
-            panic!("prepared Heatmap")
-        };
-        marks.install_shared_domain(&descriptor).unwrap();
-        assert_eq!(
-            selected_stack(&inputs).unwrap(),
-            canonical::named_stack(&["Selected dark contrast"])
-        );
+                .unwrap(),
+                field: "fill".into(),
+                title: std::sync::Arc::new("Fill".into()),
+                stops: vec![
+                    crate::render::backend::GradientStop::new(0.0, (247, 251, 255)),
+                    crate::render::backend::GradientStop::new(1.0, (8, 48, 107)),
+                ],
+                center: None,
+                missing: None,
+                domain: (0.0, 20.0),
+                exact: false,
+                format: None,
+                numeric: crate::decorations::legend::descriptor::domain_presentation(
+                    (0.0, 20.0),
+                    None,
+                    None,
+                )
+                .unwrap(),
+            };
+            let crate::orchestrator::registration::PreparedFamily::Heatmap(marks) =
+                &mut inputs.plots[0].family
+            else {
+                panic!("prepared Heatmap")
+            };
+            marks.install_shared_domain(&descriptor).unwrap();
+            assert_eq!(
+                selected_stack(&inputs, stage)?,
+                canonical::named_stack(&["Selected dark contrast"])
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -2727,37 +2779,29 @@ mod tests {
         ])
         .x_limits(1.0, 1.015)
         .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let mut inputs = crate::plots::shared_x::prepare_plot(
-            plot.description(),
-            &resources,
-            Some(&crate::theme::Theme::publication()),
-        )
-        .unwrap();
-        let mut theme = crate::Theme::publication().resolve().unwrap();
-        theme.typography.annotations.estimate_detail.stack =
-            canonical::named_stack(&["Estimate detail only"]);
-        theme.typography.annotations.estimate_detail.font_size = 20.0;
-        theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let guide = inputs
-            .prepare_discrete_guides(
+        with_prepared_stage(|stage| {
+            let resources = stage.operation();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
+            theme.typography.annotations.estimate_detail.stack =
+                canonical::named_stack(&["Estimate detail only"]);
+            theme.typography.annotations.estimate_detail.font_size = 20.0;
+            theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
+            let mut inputs =
+                crate::plots::shared_x::prepare_plot(plot.description(), &resources, &theme)?;
+            let text = crate::text::TextService::default();
+            let theme = crate::text::TextRequestContext::new(&theme, &text);
+            let guide = crate::layout::interior::guide::prepare_discrete_guides(
                 plot.description(),
-                &theme,
+                &mut inputs.panels,
                 &resources,
-                &ComponentAddress::root(),
                 false,
-            )
-            .unwrap();
-        let inputs = PreparedInteriorInputs::from_registry(
-            inputs,
-            InteriorRoute::classify(plot.kind()),
-            guide,
-        )
-        .unwrap();
-        let requirements = with_prepared_stage(|stage| {
-            foundational_plot_requirements(
+            )?;
+            let inputs = PreparedInteriorInputs::from_registry(
+                inputs,
+                InteriorRoute::classify(plot.kind()),
+                guide,
+            )?;
+            let requirements = foundational_plot_requirements(
                 Some(&inputs),
                 plot.description(),
                 PlotKind::Coefficient,
@@ -2767,33 +2811,34 @@ mod tests {
                 true,
                 true,
                 Some(stage),
-            )
+            )?;
+            let crate::orchestrator::registration::PreparedFamily::Estimate {
+                marks: prepared, ..
+            } = &inputs.plots[0].family
+            else {
+                panic!("prepared Estimate")
+            };
+            assert_eq!(
+                prepared
+                    .text_occurrences()
+                    .map(|(_, source, _)| source)
+                    .collect::<Vec<_>>(),
+                ["1.01\u{0301} units", "1.02\u{0301} units", "Not estimable"]
+            );
+            for (_, source, _) in prepared.text_occurrences() {
+                let selected: Vec<_> = requirements
+                    .iter()
+                    .filter(|requirement| requirement.source == source)
+                    .collect();
+                assert_eq!(selected.len(), 1);
+                assert_eq!(
+                    selected[0].stack,
+                    canonical::named_stack(&["Estimate detail only"])
+                );
+            }
+            Ok(())
         })
         .unwrap();
-        let crate::orchestrator::registration::PreparedFamily::Estimate {
-            marks: prepared, ..
-        } = &inputs.plots[0].family
-        else {
-            panic!("prepared Estimate")
-        };
-        assert_eq!(
-            prepared
-                .text_occurrences()
-                .map(|(_, source, _)| source)
-                .collect::<Vec<_>>(),
-            ["1.01\u{0301} units", "1.02\u{0301} units", "Not estimable"]
-        );
-        for (_, source, _) in prepared.text_occurrences() {
-            let selected: Vec<_> = requirements
-                .iter()
-                .filter(|requirement| requirement.source == source)
-                .collect();
-            assert_eq!(selected.len(), 1);
-            assert_eq!(
-                selected[0].stack,
-                canonical::named_stack(&["Estimate detail only"])
-            );
-        }
     }
 
     #[test]
@@ -2834,24 +2879,23 @@ mod tests {
                 if light_selected { 64.0 } else { 7.0 };
             theme.typography.annotations.contrast.dark.font_size =
                 if light_selected { 7.0 } else { 64.0 };
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
             crate::layout::plan_root(
                 crate::layout::RootRequest::ExactSize {
                     width: 800,
                     height: 600,
                 },
                 |stage| {
+                    let text = crate::text::TextService::default();
+                    let theme = crate::text::TextRequestContext::new(&theme, &text);
                     let mut inputs = crate::plots::shared_x::prepare_plot(
                         plot.description(),
                         &stage.operation(),
-                        Some(&crate::theme::Theme::publication()),
-                    )?;
-                    let guide = inputs.prepare_discrete_guides(
-                        plot.description(),
                         &theme,
+                    )?;
+                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                        plot.description(),
+                        &mut inputs.panels,
                         &stage.operation(),
-                        &ComponentAddress::root(),
                         false,
                     )?;
                     let inputs = PreparedInteriorInputs::from_registry(

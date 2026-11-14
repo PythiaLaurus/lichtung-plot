@@ -773,24 +773,17 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         }
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let resources = crate::font::canonical::OperationContext::new();
-        let mut prepared = crate::plots::shared_x::prepare_plot(
-            plot.description(),
-            &resources,
-            Some(&crate::theme::Theme::publication()),
-        )
-        .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
         let appearance = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let request = crate::text::TextRequestContext::new(&appearance, &text);
-        let guide = prepared
-            .prepare_discrete_guides(
-                plot.description(),
-                &request,
-                &resources,
-                &crate::layout::ComponentAddress::root(),
-                false,
-            )
-            .unwrap();
+        let mut prepared =
+            crate::plots::shared_x::prepare_plot(plot.description(), &resources, &appearance)
+                .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+        let guide = crate::layout::interior::guide::prepare_discrete_guides(
+            plot.description(),
+            &mut prepared.panels,
+            &resources,
+            false,
+        )
+        .unwrap();
         assert_actual_alpha_sections(kind, guide.as_ref().unwrap());
         let prepared = crate::layout::interior::PreparedInteriorInputs::from_registry(
             prepared,
@@ -1090,20 +1083,17 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     for composition in [Combined, Separate] {
         let operation = crate::font::canonical::OperationContext::new();
         let mut inputs =
-            crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme))
-                .unwrap();
+            crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme).unwrap();
         for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;
         }
-        let descriptor = inputs
-            .prepare_discrete_guides(
-                plot.description(),
-                &theme,
-                &operation,
-                &crate::layout::ComponentAddress::root(),
-                false,
-            )
-            .unwrap_or_else(|error| panic!("{kind:?}, {composition:?}: {error}"));
+        let descriptor = crate::layout::interior::guide::prepare_discrete_guides(
+            plot.description(),
+            &mut inputs.panels,
+            &operation,
+            false,
+        )
+        .unwrap_or_else(|error| panic!("{kind:?}, {composition:?}: {error}"));
         match (components, descriptor.as_ref()) {
             (Some((points, lines, fills)), Some(descriptor)) => {
                 assert_eq!(descriptor.composition, composition);
@@ -1137,8 +1127,9 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
                 let color = descriptor.continuous().expect("actual native color body");
                 let source = crate::layout::interior::guide::continuous_source(
                     plot.description(),
-                    &theme,
-                    &inputs.panels[0],
+                    &inputs.panels[0].scope,
+                    inputs.panels[0].family.as_ref().unwrap().as_ref(),
+                    &inputs.panels[0].appearance,
                 )
                 .unwrap()
                 .unwrap();

@@ -60,97 +60,94 @@ pub(crate) struct OwnedCanvasPlan {
 struct PreparedCanvasInputs<'src> {
     operation: crate::font::canonical::OperationContext,
     caches: std::cell::RefCell<crate::orchestrator::root::RootLayoutCaches>,
-    themes: Arc<ResolvedCanvasThemes>,
+    root_appearance: ResolvedTheme,
+    text: crate::text::TextService,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
     shared_guide: Option<Arc<PreparedGuide>>,
-    interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs<'src>>>,
+    plots: Vec<crate::orchestrator::registration::PlotRegistration<'src>>,
+    slots: Vec<Option<crate::orchestrator::root::CanvasAnchor>>,
+    plot_intrinsics: Vec<(
+        crate::orchestrator::registration::PlotOccurrenceId,
+        crate::orchestrator::root::PlotIntrinsics,
+    )>,
     text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
-    plot_intrinsics: Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
+    plot_titles: Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
 }
 
 struct PreparedCanvasRound<'a> {
     operation: &'a crate::font::canonical::OperationContext,
     content_sizing: bool,
-    interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs<'a>>],
-    themes: Arc<ResolvedCanvasThemes>,
+    inputs: &'a PreparedCanvasInputs<'a>,
+    root_request: crate::text::TextRequestContext<'a, 'a>,
     canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
     shared_legend: Option<Arc<PreparedGuide>>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
     shared_x: &'a [Option<(f64, f64)>],
     text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
-    plot_intrinsics:
-        &'a [Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+    plot_titles: &'a [Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
 }
 
-struct ResolvedCanvasThemes {
-    root: Box<ResolvedTheme>,
-    plots: Vec<Option<Box<ResolvedTheme>>>,
-    text: crate::text::TextService,
-}
-
-impl ResolvedCanvasThemes {
-    fn new(
-        root: &crate::theme::Theme,
-        placements: &placement::Placements,
-        guide_layouts: &[Option<crate::TextLayout>; 3],
-    ) -> Result<Self, Error> {
-        let mut root = Box::new(root.resolve()?);
-        root.text_layouts.guide.clone_from(guide_layouts);
-        let plots = placements
-            .plots()
-            .map(|plot| {
-                plot.map(|plot| {
-                    let mut theme = match plot.description().theme_spec() {
-                        None => root.clone(),
-                        Some(theme) => {
-                            let mut theme = Box::new(theme.resolve()?);
-                            theme.canvas_surface_override = Some(root.surfaces.canvas_root);
-                            theme
-                        }
-                    };
-                    theme.text_layouts = plot.description().text_layouts().clone();
-                    theme.apply_text_defaults(plot.kind());
-                    Ok(theme)
-                })
-                .transpose()
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        Ok(Self {
-            root,
-            plots,
-            text: crate::text::TextService::default(),
-        })
-    }
-
-    fn prepare_font_environment(
+impl PreparedCanvasInputs<'_> {
+    fn plot(
         &self,
-        census: &mut crate::layout::PreparedTextCensus,
-        presence: Vec<u64>,
-        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
-    ) -> Result<(), Error> {
-        self.text
-            .prepare_font_environment_from_census(census, presence, prepared_stage)
+        index: usize,
+    ) -> Option<&crate::orchestrator::registration::PlotRegistration<'_>> {
+        plot_at(&self.plots, &self.slots, index)
     }
 
-    fn root(&self) -> &ResolvedTheme {
-        self.root.as_ref()
-    }
-
-    fn plot(&self, index: usize) -> Option<&ResolvedTheme> {
-        self.plots.get(index)?.as_deref()
+    fn intrinsic(
+        &self,
+        registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    ) -> &crate::orchestrator::root::PlotIntrinsics {
+        &self.plot_intrinsics[registered.scope.id.slot].1
     }
 
     fn root_request(&self) -> crate::text::TextRequestContext<'_, '_> {
-        crate::text::TextRequestContext::new(self.root(), &self.text)
+        crate::text::TextRequestContext::new(&self.root_appearance, &self.text)
     }
+}
 
-    fn plot_request(&self, index: usize) -> Option<crate::text::TextRequestContext<'_, '_>> {
-        self.plot(index)
-            .map(|theme| crate::text::TextRequestContext::new(theme, &self.text))
+fn plot_at<'v, 'src>(
+    plots: &'v [crate::orchestrator::registration::PlotRegistration<'src>],
+    slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
+    index: usize,
+) -> Option<&'v crate::orchestrator::registration::PlotRegistration<'src>> {
+    match slots[index].as_ref()? {
+        crate::orchestrator::root::CanvasAnchor::Plot(id) => Some(&plots[id.slot]),
+        crate::orchestrator::root::CanvasAnchor::Text => None,
     }
+}
+
+fn resolve_appearances(
+    root: &crate::theme::Theme,
+    placements: &placement::Placements,
+    guide_layouts: &[Option<crate::TextLayout>; 3],
+) -> Result<(ResolvedTheme, Vec<Option<ResolvedTheme>>), Error> {
+    let mut root = root.resolve()?;
+    root.text_layouts.guide.clone_from(guide_layouts);
+    let plots = placements
+        .plots()
+        .map(|plot| {
+            plot.map(|plot| {
+                let mut theme = match plot.description().theme_spec() {
+                    None => root.clone(),
+                    Some(theme) => {
+                        let mut theme = theme.resolve()?;
+                        theme.canvas_surface_override = Some(root.surfaces.canvas_root);
+                        theme
+                    }
+                };
+                theme.text_layouts = plot.description().text_layouts().clone();
+                theme.apply_text_defaults(plot.kind());
+                Ok(theme)
+            })
+            .transpose()
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    Ok((root, plots))
 }
 
 struct CanvasHeaderPlan {
@@ -958,8 +955,8 @@ impl Canvas {
 
     fn prepare_continuous_shared_guide(
         &self,
-        themes: &ResolvedCanvasThemes,
-        interiors: &[Option<crate::orchestrator::registration::PlotRegistryBuilder>],
+        registry: &crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
@@ -976,23 +973,15 @@ impl Canvas {
             if !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
                 continue;
             }
-            let inputs = interiors
-                .get(index)
-                .and_then(Option::as_ref)
-                .ok_or_else(|| {
-                    Error::Render("shared continuous guide has no prepared interior".into())
-                })?;
-
-            let theme = &themes.plot_request(index).ok_or_else(|| {
-                Error::Render("shared continuous guide has no owning Plot theme".into())
-            })?;
-            let registered = inputs.panels.first().ok_or_else(|| {
-                Error::Render("continuous guide lacks its operation-bound owner".into())
-            })?;
+            let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
+                return Err(Error::Render(
+                    "shared continuous guide has no prepared interior".into(),
+                ));
+            };
+            let registered = &registry.panels[id.slot];
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
                     registered,
-                    theme,
                     registered.scope.axis_numeric_binding(
                         registered.source,
                         &registered.row_source,
@@ -1013,43 +1002,30 @@ impl Canvas {
 
     fn install_shared_continuous_domain(
         &self,
-        interiors: &mut [Option<crate::orchestrator::registration::PlotRegistryBuilder>],
+        registry: &mut crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
         for (index, plot) in self.placements.plots().enumerate() {
             let Some(plot) = plot else { continue };
-            let Some(input) = interiors.get_mut(index).and_then(Option::as_mut) else {
+            let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
                 continue;
             };
+            let registered = &mut registry.panels[id.slot];
             match plot.kind() {
                 PlotKind::Heatmap => {
-                    if input.panels.is_empty() {
-                        return Err(Error::Render(
-                            "shared Heatmap has no prepared inputs".into(),
-                        ));
-                    }
-                    for registered in &mut input.panels {
-                        if let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(
-                            marks,
-                        )) = &mut registered.family
-                        {
-                            marks.install_shared_domain(descriptor)?;
-                        }
+                    if let Some(crate::orchestrator::registration::PreparedFamily::Heatmap(marks)) =
+                        &mut registered.family
+                    {
+                        marks.install_shared_domain(descriptor)?;
                     }
                 }
                 PlotKind::Beeswarm => {
-                    if input.panels.is_empty() {
-                        return Err(Error::Render(
-                            "shared Beeswarm has no prepared inputs".into(),
-                        ));
-                    }
-                    for registered in &mut input.panels {
-                        if let Some(crate::orchestrator::registration::PreparedFamily::Beeswarm(
-                            marks,
-                        )) = &mut registered.family
-                        {
-                            marks.install_shared_domain(descriptor)?;
-                        }
+                    if let Some(crate::orchestrator::registration::PreparedFamily::Beeswarm(
+                        marks,
+                    )) = &mut registered.family
+                    {
+                        marks.install_shared_domain(descriptor)?;
                     }
                 }
                 _ => {}
@@ -1062,7 +1038,8 @@ impl Canvas {
     /// independently of guide visibility and section contribution.
     fn prepare_color_domains(
         &self,
-        interiors: &[Option<crate::orchestrator::registration::PlotRegistryBuilder>],
+        registry: &crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
     ) -> Result<Vec<(String, Arc<crate::data::category::CategoryDomain>)>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(Vec::new());
@@ -1075,12 +1052,11 @@ impl Canvas {
                 continue;
             };
 
-            let inputs = interiors
-                .get(index)
-                .and_then(Option::as_ref)
-                .ok_or_else(|| {
-                    Error::Render("Canvas color domain is missing prepared semantics".into())
-                })?;
+            let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
+                return Err(Error::Render(
+                    "Canvas color domain is missing prepared semantics".into(),
+                ));
+            };
             let group_index =
                 crate::data::source::source_position(&groups, |(field, _)| field == dimension);
             let levels = if let Some(group_index) = group_index {
@@ -1092,7 +1068,10 @@ impl Canvas {
                 ));
                 &mut groups.last_mut().expect("new guide field").1
             };
-            for level in inputs.observed_color_levels(plot.description())? {
+            for level in crate::layout::interior::guide::observed_color_levels(
+                plot.description(),
+                std::slice::from_ref(&registry.panels[id.slot]),
+            )? {
                 if crate::data::source::source_position(levels, |existing| existing == &level)
                     .is_none()
                 {
@@ -1112,56 +1091,34 @@ impl Canvas {
 
     /// Prepare every local contribution or explicit absence, then retain the
     /// one Shared union when selected. No body or font work determines presence.
-    #[expect(
-        clippy::type_complexity,
-        reason = "original guide completion publishes the same per-anchor occurrences and the Shared union together"
-    )]
-    fn prepare_discrete_guides<'src>(
-        &'src self,
-        themes: &ResolvedCanvasThemes,
-        interiors: Vec<Option<crate::orchestrator::registration::PlotRegistryBuilder<'src>>>,
+    fn prepare_discrete_guides(
+        &self,
+        registry: &mut crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
         hue_groups: &[(String, Arc<crate::data::category::CategoryDomain>)],
         resources: &crate::font::canonical::OperationContext,
-    ) -> Result<
-        (
-            Vec<Option<crate::layout::interior::PreparedInteriorInputs<'src>>>,
-            Option<Arc<PreparedGuide>>,
-        ),
-        Error,
-    > {
+    ) -> Result<Option<Arc<PreparedGuide>>, Error> {
         let mut contributions = Vec::new();
         crate::data::source::reserve_source(&mut contributions, self.placements.len())?;
-        let mut completed = Vec::new();
-        crate::data::source::reserve_source(&mut completed, interiors.len())?;
-        for (index, (plot, input)) in self.placements.plots().zip(interiors).enumerate() {
+        for (index, plot) in self.placements.plots().enumerate() {
             let Some(source) = plot else {
-                completed.push(None);
                 continue;
             };
-            let theme = &themes
-                .plot_request(index)
-                .expect("configured Canvas panel has a resolved theme");
-            let mut inputs = input.ok_or_else(|| {
-                Error::Render("Canvas point/path guide is missing prepared semantics".into())
-            })?;
+            let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
+                return Err(Error::Render(
+                    "Canvas point/path guide is missing prepared semantics".into(),
+                ));
+            };
+            let registered = &mut registry.panels[id.slot];
             if let Some((_, domain)) = hue_groups.iter().find(|(field, _)| {
                 Some(field.as_str()) == source.description().categorical_color_field()
             }) {
-                for registered in &mut inputs.panels {
-                    registered.set_parent_colors(Arc::clone(domain));
-                }
+                registered.set_parent_colors(Arc::clone(domain));
             }
-            let owner = crate::layout::ComponentAddress::root().child(
-                crate::layout::AddressRole::CanvasCell,
-                u32::try_from(index).map_err(|_| {
-                    Error::Render("Canvas guide contributor address overflow".into())
-                })?,
-            )?;
-            let root_guide = inputs.prepare_discrete_guides(
+            let root_guide = crate::layout::interior::guide::prepare_discrete_guides(
                 source.description(),
-                theme,
+                std::slice::from_mut(registered),
                 resources,
-                &owner,
                 false,
             )?;
             if self.legend_policy == CanvasLegendPolicy::Shared {
@@ -1169,16 +1126,8 @@ impl Canvas {
                     contributions.push(Arc::clone(descriptor));
                 }
             }
-            completed.push(Some(
-                crate::layout::interior::PreparedInteriorInputs::from_registry(
-                    inputs,
-                    crate::layout::interior::InteriorRoute::classify(source.kind()),
-                    root_guide,
-                )?,
-            ));
         }
-        let shared = PreparedGuide::merge(&contributions, &[], "shared canvas legend")?;
-        Ok((completed, shared))
+        PreparedGuide::merge(&contributions, &[], "shared canvas legend")
     }
 
     #[expect(
@@ -1189,7 +1138,7 @@ impl Canvas {
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
         registry: &crate::orchestrator::registration::PlotRegistryBuilder<'_>,
-        slots: &[Option<crate::orchestrator::registration::PlotOccurrenceId>],
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
     ) -> Result<Vec<Option<(f64, f64)>>, Error> {
         let mut ranges = Vec::new();
         if self.x_range_groups.is_empty() {
@@ -1205,7 +1154,12 @@ impl Canvas {
                     .placements
                     .plot(index)
                     .expect("validated shared x member");
-                let registered = slots[index].as_ref().map(|id| &registry.panels[id.slot]);
+                let registered = slots[index].as_ref().and_then(|anchor| match anchor {
+                    crate::orchestrator::root::CanvasAnchor::Plot(id) => {
+                        Some(&registry.panels[id.slot])
+                    }
+                    crate::orchestrator::root::CanvasAnchor::Text => None,
+                });
                 let family = registered.and_then(|panel| panel.family.as_ref());
                 let range = if let Some(marks) = family.filter(|family| {
                     !matches!(
@@ -1308,28 +1262,32 @@ impl Canvas {
     fn prepare_interiors(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
-        themes: Option<&ResolvedCanvasThemes>,
+        appearances: Vec<Option<ResolvedTheme>>,
     ) -> Result<
         (
-            Vec<Option<crate::orchestrator::registration::PlotRegistryBuilder<'_>>>,
+            crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+            Vec<Option<crate::orchestrator::root::CanvasAnchor>>,
             Vec<Option<(f64, f64)>>,
         ),
         Error,
     > {
-        let mut interiors = Vec::new();
-        stage.reserve_prepared(
-            &mut interiors,
-            self.placements.len(),
-            "Canvas interior inputs",
-        )?;
         let resources = stage.operation();
         let mut registry =
             crate::orchestrator::registration::PlotRegistryBuilder::new(resources.root_identity());
+        stage.reserve_prepared(
+            &mut registry.panels,
+            self.placements.len(),
+            "Canvas interior inputs",
+        )?;
         let mut slots = Vec::new();
         stage.reserve_prepared(&mut slots, self.placements.len(), "Canvas plot occurrences")?;
-        for (index, plot) in self.placements.plots().enumerate() {
+        for (index, (plot, appearance)) in self.placements.plots().zip(appearances).enumerate() {
             let Some(source) = plot else {
-                slots.push(None);
+                slots.push(
+                    self.placements
+                        .text(index)
+                        .map(|_| crate::orchestrator::root::CanvasAnchor::Text),
+                );
                 continue;
             };
             let plot = plot.expect("configured Canvas source");
@@ -1352,7 +1310,21 @@ impl Canvas {
                 slots.push(None);
                 continue;
             }
-            let id = registry.reserve(source.description(), scope, &resources)?;
+            let policy = crate::orchestrator::registration::PlotScopePolicy::for_source(
+                source.description(),
+                None,
+            );
+            let id = registry.reserve(
+                source.description(),
+                scope.address,
+                scope.numeric_owner,
+                scope.axis_numeric_owner,
+                scope.rows,
+                scope.render_name,
+                policy,
+                appearance.expect("configured Canvas panel has a resolved theme"),
+                &resources,
+            )?;
             let panel = &mut registry.panels[id.slot];
             if let Some(labels) = &self.labels {
                 panel.policy.labels.clone_from(labels);
@@ -1435,22 +1407,18 @@ impl Canvas {
                 }
                 _ => {
                     plot.description().configured_source_rows()?;
-                    crate::plots::shared_x::prepare_plot_registration(
-                        panel,
-                        themes
-                            .and_then(|themes| themes.plot(index))
-                            .map(|theme| &**theme),
-                        &resources,
-                    )?;
+                    crate::plots::shared_x::prepare_plot_registration(panel, &resources)?;
                     panel.family.take().expect("prepared reference family")
                 }
             };
             panel.family = Some(family);
-            slots.push(Some(id));
+            slots.push(Some(crate::orchestrator::root::CanvasAnchor::Plot(id)));
         }
         let shared_x = self.prepare_shared_x(stage, &registry, &slots)?;
         for (index, plot) in self.placements.plots().enumerate() {
-            let Some(id) = &slots[index] else { continue };
+            let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
+                continue;
+            };
             let plot = plot.expect("Canvas producer source");
             let panel = &mut registry.panels[id.slot];
             if let Some(
@@ -1506,7 +1474,9 @@ impl Canvas {
                 continue;
             }
             for &index in group {
-                let Some(id) = &slots[index] else { continue };
+                let Some(crate::orchestrator::root::CanvasAnchor::Plot(id)) = &slots[index] else {
+                    continue;
+                };
                 let registered = &mut registry.panels[id.slot];
                 if let Some(crate::orchestrator::registration::PreparedFamily::Waterfall(marks)) =
                     &mut registered.family
@@ -1531,21 +1501,7 @@ impl Canvas {
                 }
             }
         }
-        let mut completed = registry.panels.into_iter();
-        for slot in slots {
-            interiors.push(if slot.is_some() {
-                let registered = completed.next().expect("prepared Canvas occurrence");
-                let mut registry = crate::orchestrator::registration::PlotRegistryBuilder::new(
-                    resources.root_identity(),
-                );
-                registry.panels =
-                    crate::data::source::collect_source(std::iter::once(Ok(registered)))?;
-                Some(registry)
-            } else {
-                None
-            });
-        }
-        Ok((interiors, shared_x))
+        Ok((registry, slots, shared_x))
     }
 
     fn preflight_plan(
@@ -1572,64 +1528,83 @@ impl Canvas {
         let root = crate::layout::plan_root(
             sizing_request,
             |prepared_stage| {
-                let themes = Arc::new(ResolvedCanvasThemes::new(
-                    &self.theme,
-                    &self.placements,
-                    &self.guide_text_layouts,
-                )?);
+                let (root_appearance, appearances) =
+                    resolve_appearances(&self.theme, &self.placements, &self.guide_text_layouts)?;
+                let text = crate::text::TextService::default();
+                let root_request = crate::text::TextRequestContext::new(&root_appearance, &text);
                 self.validate_structure()?;
-                let (mut interiors, shared_x) =
-                    self.prepare_interiors(prepared_stage, Some(&themes))?;
-                let color_domains = self.prepare_color_domains(&interiors)?;
+                let (mut registry, slots, shared_x) =
+                    self.prepare_interiors(prepared_stage, appearances)?;
+                let color_domains = self.prepare_color_domains(&registry, &slots)?;
                 for (index, plot) in self.placements.plots().enumerate() {
-                    if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
+                    if let (Some(plot), Some(crate::orchestrator::root::CanvasAnchor::Plot(id))) =
+                        (plot, slots[index].as_ref())
+                    {
+                        let panel = &registry.panels[id.slot];
                         let global_hues = color_domains
                             .iter()
                             .find(|(field, _)| {
                                 Some(field.as_str()) == plot.description().categorical_color_field()
                             })
                             .map(|(_, domain)| domain.as_ref());
-                        inputs.validate_categorical_scale(
+                        crate::layout::interior::guide::validate_categorical_scale(
                             plot.description(),
-                            themes.plot(index).expect("configured Canvas theme"),
+                            std::slice::from_ref(panel),
+                            &panel.appearance,
                             global_hues,
                         )?;
                     }
                 }
                 let continuous_shared_guide = self.prepare_continuous_shared_guide(
-                    &themes,
-                    &interiors,
+                    &registry,
+                    &slots,
                     &prepared_stage.operation(),
                 )?;
                 if let Some(descriptor) = &continuous_shared_guide {
-                    self.install_shared_continuous_domain(&mut interiors, descriptor)?;
+                    self.install_shared_continuous_domain(&mut registry, &slots, descriptor)?;
                 }
-                let (interiors, shared_guide) = self.prepare_discrete_guides(
-                    &themes,
-                    interiors,
+                let shared_guide = self.prepare_discrete_guides(
+                    &mut registry,
+                    &slots,
                     &color_domains,
                     &prepared_stage.operation(),
                 )?;
+                let plots = registry.finish()?;
+                let plot_intrinsics =
+                    crate::layout::interior::PreparedInteriorInputs::intrinsic_slots(&plots)?;
                 let (mut census, scalar_presence) = self.foundational_text_census(
-                    &themes,
-                    &interiors,
+                    &root_request,
+                    &plots,
+                    &slots,
                     shared_guide.as_ref(),
                     prepared_stage,
                 )?;
-                themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
-                let (root_text, text_panel_intrinsics, plot_intrinsics) =
-                    self.prepare_intrinsics(&themes, &interiors, &prepared_stage.operation())?;
+                text.prepare_font_environment_from_census(
+                    &mut census,
+                    scalar_presence,
+                    prepared_stage,
+                )?;
+                let (root_text, text_panel_intrinsics, plot_titles) = self.prepare_intrinsics(
+                    &root_request,
+                    &plots,
+                    &slots,
+                    &plot_intrinsics,
+                    &prepared_stage.operation(),
+                )?;
                 Ok(PreparedCanvasInputs {
                     operation: prepared_stage.operation(),
                     caches,
-                    themes,
+                    root_appearance,
+                    text,
                     text_census: census,
                     root_text,
                     shared_x,
                     shared_guide,
-                    interiors,
+                    plots,
+                    slots,
                     text_panel_intrinsics,
                     plot_intrinsics,
+                    plot_titles,
                 })
             },
             |prepared, assigned, round| {
@@ -1652,7 +1627,7 @@ impl Canvas {
                 let backend_begins =
                     crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
                 let plan = self.build_canvas_plan(
-                    Arc::clone(&prepared.themes),
+                    &prepared.root_request(),
                     &prepared.operation,
                     assigned,
                     round,
@@ -1660,8 +1635,8 @@ impl Canvas {
                     &prepared.shared_x,
                     prepared.shared_guide.as_ref(),
                     &prepared.text_panel_intrinsics,
-                    &prepared.plot_intrinsics,
-                    &prepared.interiors,
+                    &prepared.plot_titles,
+                    prepared,
                     sizing_request.automatic_height(),
                     Some(heights),
                 )?;
@@ -1687,7 +1662,7 @@ impl Canvas {
                     width,
                     height,
                     "prepared canvas scene capture",
-                    &prepared.themes.root_request(),
+                    &prepared.root_request(),
                     final_stage,
                     |backend| self.render_planned_canvas(&plan, width, height, backend),
                 )?;
@@ -1724,8 +1699,13 @@ impl Canvas {
     )]
     fn prepare_intrinsics(
         &self,
-        themes: &ResolvedCanvasThemes,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        request: &crate::text::TextRequestContext<'_, '_>,
+        plots: &[crate::orchestrator::registration::PlotRegistration<'_>],
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
+        intrinsics: &[(
+            crate::orchestrator::registration::PlotOccurrenceId,
+            crate::orchestrator::root::PlotIntrinsics,
+        )],
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<
         (
@@ -1737,16 +1717,27 @@ impl Canvas {
     > {
         // All summaries use the prepared labels and the actual owner theme,
         // after the font census and before any parent allocation or child probe.
-        for (index, inputs) in interiors.iter().enumerate() {
-            if let Some(inputs) = inputs {
+        for index in 0..slots.len() {
+            if let Some(registered) = plot_at(plots, slots, index) {
                 let source = self.placements.plot(index).expect("prepared Canvas panel");
                 let plot = source.clone();
-                inputs.prepare_intrinsics(
-                    &plot,
-                    &themes
-                        .plot_request(index)
-                        .expect("prepared Canvas panel theme"),
-                    operation,
+                crate::layout::interior::InteriorRoute::classify(registered.source.kind())
+                    .validate(plot.description())?;
+                if registered.axes.coordinate().is_none() {
+                    continue;
+                }
+                crate::orchestrator::root::prepare_plot_intrinsics(
+                    &intrinsics[registered.scope.id.slot].1,
+                    &crate::orchestrator::root::PlotIntrinsicInputs {
+                        registered,
+                        request: crate::text::TextRequestContext::new(
+                            &registered.appearance,
+                            request.text,
+                        ),
+                        operation,
+                        diagnostic_scope: registered.scope.render_name.as_deref(),
+                        y_visible: registered.policy.axis_text.tick_labels[1],
+                    },
                 )?;
             }
         }
@@ -1760,9 +1751,7 @@ impl Canvas {
             text_panels.push(
                 panel
                     .as_ref()
-                    .map(|panel| {
-                        text_panel::TextPanelIntrinsics::prepare(panel, &themes.root_request())
-                    })
+                    .map(|panel| text_panel::TextPanelIntrinsics::prepare(panel, request))
                     .transpose()?,
             );
         }
@@ -1781,9 +1770,12 @@ impl Canvas {
                     crate::data::source::reserve_source_string(&mut scope, 32)?;
                     write!(scope, "panel-{index}").expect("reserved Canvas scope");
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-                        &themes
-                            .plot_request(index)
-                            .expect("configured Canvas Plot theme"),
+                        &crate::text::TextRequestContext::new(
+                            &plot_at(plots, slots, index)
+                                .expect("configured Canvas Plot theme")
+                                .appearance,
+                            request.text,
+                        ),
                         plot.description().prose(),
                         Some(&scope),
                     )
@@ -1792,7 +1784,7 @@ impl Canvas {
             plot_titles.push(summary);
         }
         let root = crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
-            &themes.root_request(),
+            request,
             self.prose(),
             None,
         )?;
@@ -1805,8 +1797,9 @@ impl Canvas {
     )]
     fn foundational_text_census(
         &self,
-        themes: &ResolvedCanvasThemes,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        request: &crate::text::TextRequestContext<'_, '_>,
+        plots: &[crate::orchestrator::registration::PlotRegistration<'_>],
+        slots: &[Option<crate::orchestrator::root::CanvasAnchor>],
         shared_guide: Option<&Arc<PreparedGuide>>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(crate::layout::PreparedTextCensus, Vec<u64>), Error> {
@@ -1817,19 +1810,19 @@ impl Canvas {
                 self.title.provided(),
                 crate::layout::PreparedTextRole::Title,
                 crate::layout::AddressRole::RootTitle,
-                &themes.root().typography.root.title,
+                &request.typography.root.title,
             ),
             (
                 self.subtitle.provided(),
                 crate::layout::PreparedTextRole::Subtitle,
                 crate::layout::AddressRole::RootSubtitle,
-                &themes.root().typography.root.subtitle,
+                &request.typography.root.subtitle,
             ),
             (
                 self.caption.provided(),
                 crate::layout::PreparedTextRole::Caption,
                 crate::layout::AddressRole::RootCaption,
-                &themes.root().typography.root.caption,
+                &request.typography.root.caption,
             ),
         ] {
             if let Some(source) = source {
@@ -1849,12 +1842,12 @@ impl Canvas {
         if let Some(guide) = shared_guide {
             guide.append_requirements(
                 &mut requirements,
-                &themes.root_request(),
+                request,
                 &root.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?,
                 Some(prepared_stage),
             )?;
         }
-        let composition_title = &themes.root().typography.composition.composition_header;
+        let composition_title = &request.typography.composition.composition_header;
         for (index, header) in self.column_headers.iter().enumerate() {
             let address = root.child(
                 crate::layout::AddressRole::CanvasHeader,
@@ -1913,8 +1906,7 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("text-panel census index overflowed".into()))?,
             )?;
-            let request = themes.root_request();
-            let [title_style, body_style] = panel.appearances(&request);
+            let [title_style, body_style] = panel.appearances(request);
             for (slot, role, source, appearance) in [
                 (
                     0,
@@ -1955,9 +1947,9 @@ impl Canvas {
             let Some(plot) = plot else { continue };
 
             let plot = plot.clone();
-            let theme = &themes
-                .plot_request(index)
-                .expect("configured canvas panel has a resolved theme");
+            let registered =
+                plot_at(plots, slots, index).expect("configured canvas panel has a resolved theme");
+            let theme = &crate::text::TextRequestContext::new(&registered.appearance, request.text);
             let cell = root.child(
                 crate::layout::AddressRole::CanvasCell,
                 u32::try_from(index)
@@ -1968,7 +1960,8 @@ impl Canvas {
                 .iter()
                 .any(|group| group.contains(&index));
             crate::layout::PreparedTextRequirement::append_plot(
-                interiors.get(index).and_then(Option::as_ref),
+                Some(std::slice::from_ref(registered)),
+                registered.guide.descriptor.as_ref(),
                 &mut requirements,
                 plot.description(),
                 plot.kind(),
@@ -1982,7 +1975,7 @@ impl Canvas {
         }
         crate::layout::PreparedTextRequirement::append_preference_metrics(
             &mut requirements,
-            &themes.root_request(),
+            request,
             &root,
             prepared_stage,
         )?;
@@ -1996,9 +1989,12 @@ impl Canvas {
                 )?;
                 crate::layout::PreparedTextRequirement::append_preference_metrics(
                     &mut requirements,
-                    &themes
-                        .plot_request(index)
-                        .expect("configured Canvas Plot retains theme"),
+                    &crate::text::TextRequestContext::new(
+                        &plot_at(plots, slots, index)
+                            .expect("configured Canvas Plot retains theme")
+                            .appearance,
+                        request.text,
+                    ),
                     &owner,
                     prepared_stage,
                 )?;
@@ -2030,7 +2026,7 @@ impl Canvas {
     )]
     fn build_canvas_plan(
         &self,
-        themes: Arc<ResolvedCanvasThemes>,
+        request: &crate::text::TextRequestContext<'_, '_>,
         operation: &crate::font::canonical::OperationContext,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
@@ -2038,17 +2034,15 @@ impl Canvas {
         shared_x: &[Option<(f64, f64)>],
         prepared_guide: Option<&Arc<PreparedGuide>>,
         text_panel_intrinsics: &[Option<text_panel::TextPanelIntrinsics>],
-        plot_intrinsics: &[Option<
-            crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
-        >],
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
+        inputs: &PreparedCanvasInputs<'_>,
         content_sizing: bool,
         mut measurements: Option<&mut sizing::HeightMeasurements>,
     ) -> Result<MeasuredOwnedPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
         let prepared = self.prepare_canvas_round(
-            themes,
+            request,
             operation,
             assigned,
             round,
@@ -2056,8 +2050,8 @@ impl Canvas {
             shared_x,
             prepared_guide,
             text_panel_intrinsics,
-            plot_intrinsics,
-            interiors,
+            plot_titles,
+            inputs,
             content_sizing,
         )?;
         let mut compact_changes = true;
@@ -2164,7 +2158,7 @@ impl Canvas {
     )]
     fn prepare_canvas_round<'a>(
         &self,
-        themes: Arc<ResolvedCanvasThemes>,
+        request: &crate::text::TextRequestContext<'a, 'a>,
         operation: &'a crate::font::canonical::OperationContext,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
@@ -2172,20 +2166,20 @@ impl Canvas {
         shared_x: &'a [Option<(f64, f64)>],
         prepared_guide: Option<&'a Arc<PreparedGuide>>,
         text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
-        plot_intrinsics: &'a [Option<
+        plot_titles: &'a [Option<
             crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
         >],
-        interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
+        inputs: &'a PreparedCanvasInputs<'a>,
         content_sizing: bool,
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions()?;
 
         let canvas_layout = RootFramePlan::measure(
             (width, height),
-            &themes.root_request(),
+            request,
             self.prose(),
             crate::decorations::title_block::plan::RootAlignments::resolve(
-                &themes.root_request(),
+                request,
                 self.prose_alignments(),
                 [None; 2],
             ),
@@ -2211,8 +2205,9 @@ impl Canvas {
             };
 
             let mut plot = source.clone();
-            if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
-                inputs.route.validate(plot.description())?;
+            if let Some(registered) = inputs.plot(index) {
+                crate::layout::interior::InteriorRoute::classify(registered.source.kind())
+                    .validate(plot.description())?;
             }
             if let Some(Some(range)) = shared_x.get(index) {
                 let kind = plot.kind();
@@ -2231,8 +2226,8 @@ impl Canvas {
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
             self.preflight_shared_legend(
                 &plots,
-                interiors,
-                &themes,
+                inputs,
+                request,
                 full_outer,
                 children,
                 round,
@@ -2245,15 +2240,15 @@ impl Canvas {
         Ok(PreparedCanvasRound {
             operation,
             content_sizing,
-            interiors,
-            themes,
+            inputs,
+            root_request: *request,
             canvas_layout,
             plots,
             shared_legend,
             body_probes,
             shared_x,
             text_panel_intrinsics,
-            plot_intrinsics,
+            plot_titles,
         })
     }
 
@@ -2336,9 +2331,9 @@ impl Canvas {
     fn complete_cell_gutters(
         &self,
         plots: &[Option<Plot>],
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
+        inputs: &PreparedCanvasInputs<'_>,
         cells: &[Option<PixelRect>],
-        themes: &ResolvedCanvasThemes,
+        request: &crate::text::TextRequestContext<'_, '_>,
         children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
         requirements: &mut [(usize, usize, EdgeSpaceRequirements)],
@@ -2348,9 +2343,13 @@ impl Canvas {
             let Some(plot) = plot else {
                 continue;
             };
-            let theme = &themes
-                .plot_request(index)
-                .expect("configured Canvas plot theme");
+            let theme = &crate::text::TextRequestContext::new(
+                &inputs
+                    .plot(index)
+                    .expect("configured Canvas plot theme")
+                    .appearance,
+                request.text,
+            );
             let dependencies = self.consumed_guide_dependencies(
                 index,
                 cells[index].expect("configured owner assignment").width(),
@@ -2361,10 +2360,7 @@ impl Canvas {
                 dependencies: &dependencies,
                 ..SUPPRESSED_GUIDES
             };
-            let registered = &interiors[index]
-                .as_ref()
-                .expect("prepared Canvas plot")
-                .plots[0];
+            let registered = inputs.plot(index).expect("prepared Canvas plot");
             let operation = theme.text.prepared_font_environment()?.operation();
             let probe = match children.canvas_probe(
                 plot,
@@ -2373,13 +2369,7 @@ impl Canvas {
                     cells[index].expect("configured owner assignment"),
                     theme,
                 )
-                .with_registration(
-                    registered,
-                    interiors[index]
-                        .as_ref()
-                        .expect("prepared Canvas plot")
-                        .intrinsic(registered),
-                )
+                .with_registration(registered, inputs.intrinsic(registered))
                 .with_canvas(self)
                 .with_guides(&guides),
                 index,
@@ -2426,7 +2416,7 @@ impl Canvas {
         let guide_owner = root_address.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
         let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner));
         let guide_scope = FitScope::new(&guide_owner, scope.ordinal);
-        let themes = Arc::clone(&prepared.themes);
+        let request = &prepared.root_request;
         let mut canvas_layout = prepared.canvas_layout.clone();
         let mut full_outer = canvas_layout.panel_box;
 
@@ -2452,20 +2442,20 @@ impl Canvas {
                 PixelRect::new(0.0, width, 0.0, 0.0),
                 &self.placements,
                 &plots,
-                prepared.interiors,
+                prepared.inputs,
                 prepared.operation,
                 prepared.text_panel_intrinsics,
-                prepared.plot_intrinsics,
+                prepared.plot_titles,
                 &self.column_headers,
                 &self.row_headers,
                 &self.row_titles,
                 &gutters,
-                &themes,
+                request,
                 &scope,
                 Some(&tracks::ContentSizing {
                     operation: prepared.operation,
                     source: self,
-                    interiors: prepared.interiors,
+                    inputs: prepared.inputs,
                     round,
                     measurements: measurements.as_deref(),
                     shared_allocation: shared.then(|| GuideAllocation::width(width)).transpose()?,
@@ -2485,15 +2475,15 @@ impl Canvas {
                 edge,
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
-            let gap = themes.root().legend_shared_gap()?;
+            let gap = request.legend_shared_gap()?;
             let minimum = match tracks::minimum(
                 &self.placements,
                 &plots,
-                prepared.interiors,
+                prepared.inputs,
                 prepared.operation,
                 prepared.text_panel_intrinsics,
-                prepared.plot_intrinsics,
-                &themes,
+                prepared.plot_titles,
+                request,
                 &scope,
             )? {
                 FitOutcome::Measured(minimum) => minimum,
@@ -2509,7 +2499,7 @@ impl Canvas {
                 ),
                 horizontal,
                 compact,
-                &themes.root_request(),
+                request,
                 compact_changes,
                 &guide_scope,
             )? {
@@ -2528,12 +2518,8 @@ impl Canvas {
                 } else {
                     height.max(h)
                 };
-                canvas_layout = sizing::content_frame(
-                    self,
-                    &themes.root_request(),
-                    assigned.dimensions()?.0,
-                    height,
-                )?;
+                canvas_layout =
+                    sizing::content_frame(self, request, assigned.dimensions()?.0, height)?;
                 full_outer = canvas_layout.panel_box;
             }
             #[cfg(test)]
@@ -2554,12 +2540,8 @@ impl Canvas {
                     FitOutcome::Measured(height) => height,
                     FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
                 };
-                canvas_layout = sizing::content_frame(
-                    self,
-                    &themes.root_request(),
-                    assigned.dimensions()?.0,
-                    height,
-                )?;
+                canvas_layout =
+                    sizing::content_frame(self, request, assigned.dimensions()?.0, height)?;
                 full_outer = canvas_layout.panel_box;
                 outer = full_outer;
             }
@@ -2585,22 +2567,22 @@ impl Canvas {
             outer,
             &self.placements,
             &plots,
-            prepared.interiors,
+            prepared.inputs,
             prepared.operation,
             prepared.text_panel_intrinsics,
-            prepared.plot_intrinsics,
+            prepared.plot_titles,
             &self.column_headers,
             &self.row_headers,
             &self.row_titles,
             &[],
-            &themes,
+            request,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
             prepared
                 .content_sizing
                 .then_some(tracks::ContentSizing {
                     operation: prepared.operation,
                     source: self,
-                    interiors: prepared.interiors,
+                    inputs: prepared.inputs,
                     round,
                     measurements: measurements.as_deref(),
                     shared_allocation: shared_width,
@@ -2621,9 +2603,14 @@ impl Canvas {
                         "canvas row {row} requires a configured first-column panel for shared category labels"
                     ))
                 })?;
-                let expected_theme = &themes
-                    .plot_request(first_index)
-                    .expect("configured canvas panel has a resolved theme");
+                let expected_theme = &crate::text::TextRequestContext::new(
+                    &prepared
+                        .inputs
+                        .plot(first_index)
+                        .expect("configured canvas panel has a resolved theme")
+                        .appearance,
+                    request.text,
+                );
                 let dependencies = self.consumed_guide_dependencies(
                     first_index,
                     provisional[first_index]
@@ -2636,10 +2623,10 @@ impl Canvas {
                     dependencies: &dependencies,
                     ..SUPPRESSED_GUIDES
                 };
-                let registered = &prepared.interiors[first_index]
-                    .as_ref()
-                    .expect("prepared Canvas plot")
-                    .plots[0];
+                let registered = prepared
+                    .inputs
+                    .plot(first_index)
+                    .expect("prepared Canvas plot");
                 let operation = expected_theme.text.prepared_font_environment()?.operation();
                 let expected = plot_category_domain(
                     first,
@@ -2648,13 +2635,7 @@ impl Canvas {
                         provisional[first_index].expect("configured owner assignment"),
                         expected_theme,
                     )
-                    .with_registration(
-                        registered,
-                        prepared.interiors[first_index]
-                            .as_ref()
-                            .expect("prepared Canvas plot")
-                            .intrinsic(registered),
-                    )
+                    .with_registration(registered, prepared.inputs.intrinsic(registered))
                     .with_canvas(self)
                     .with_guides(&guides),
                     children,
@@ -2675,9 +2656,14 @@ impl Canvas {
                                 .into(),
                         ));
                     }
-                    let theme = &themes
-                        .plot_request(index)
-                        .expect("configured canvas panel has a resolved theme");
+                    let theme = &crate::text::TextRequestContext::new(
+                        &prepared
+                            .inputs
+                            .plot(index)
+                            .expect("configured canvas panel has a resolved theme")
+                            .appearance,
+                        request.text,
+                    );
                     let dependencies = self.consumed_guide_dependencies(
                         index,
                         provisional[index]
@@ -2690,10 +2676,7 @@ impl Canvas {
                         dependencies: &dependencies,
                         ..SUPPRESSED_GUIDES
                     };
-                    let registered = &prepared.interiors[index]
-                        .as_ref()
-                        .expect("prepared Canvas plot")
-                        .plots[0];
+                    let registered = prepared.inputs.plot(index).expect("prepared Canvas plot");
                     let operation = theme.text.prepared_font_environment()?.operation();
                     if plot_category_domain(
                         plot,
@@ -2702,13 +2685,7 @@ impl Canvas {
                             provisional[index].expect("configured owner assignment"),
                             theme,
                         )
-                        .with_registration(
-                            registered,
-                            prepared.interiors[index]
-                                .as_ref()
-                                .expect("prepared Canvas plot")
-                                .intrinsic(registered),
-                        )
+                        .with_registration(registered, prepared.inputs.intrinsic(registered))
                         .with_canvas(self)
                         .with_guides(&guides),
                         children,
@@ -2768,9 +2745,9 @@ impl Canvas {
         if !prepared.content_sizing {
             if let FitOutcome::Miss(failure) = self.complete_cell_gutters(
                 &plots,
-                prepared.interiors,
+                prepared.inputs,
                 &provisional,
-                &themes,
+                request,
                 children,
                 round,
                 &mut requirements,
@@ -2783,22 +2760,22 @@ impl Canvas {
             outer,
             &self.placements,
             &plots,
-            prepared.interiors,
+            prepared.inputs,
             prepared.operation,
             prepared.text_panel_intrinsics,
-            prepared.plot_intrinsics,
+            prepared.plot_titles,
             &self.column_headers,
             &self.row_headers,
             &self.row_titles,
             &requirements,
-            &themes,
+            request,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
             prepared
                 .content_sizing
                 .then_some(tracks::ContentSizing {
                     operation: prepared.operation,
                     source: self,
-                    interiors: prepared.interiors,
+                    inputs: prepared.inputs,
                     round,
                     measurements: measurements.as_deref(),
                     shared_allocation: shared_width,
@@ -2826,17 +2803,12 @@ impl Canvas {
         let mut child_miss = None;
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let inputs = prepared.interiors[index]
-                .as_ref()
-                .expect("prepared Canvas plot");
-            let registered = &inputs.plots[0];
-            let intrinsic = inputs.intrinsic(registered);
+            let registered = prepared.inputs.plot(index).expect("prepared Canvas plot");
+            let intrinsic = prepared.inputs.intrinsic(registered);
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = plot.kind();
-            let theme = &themes
-                .plot_request(index)
-                .expect("configured canvas panel has a resolved theme");
+            let theme = &crate::text::TextRequestContext::new(&registered.appearance, request.text);
             let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
             let cell = cells[index].expect("configured owner assignment");
             for value in self.owner_topology(index).expect("Plot topology") {
@@ -2850,7 +2822,7 @@ impl Canvas {
                 cell,
                 theme,
                 [self.panel_title_alignment, self.panel_subtitle_alignment],
-                prepared.plot_intrinsics[index].expect("configured Canvas Plot text intrinsics"),
+                prepared.plot_titles[index].expect("configured Canvas Plot text intrinsics"),
                 &child_scope,
             )? {
                 FitOutcome::Measured(local) => local,
@@ -3070,7 +3042,7 @@ impl Canvas {
                 text_panel,
                 index,
                 cells[index].expect("configured TextPanel assignment"),
-                &themes.root_request(),
+                request,
                 intrinsic,
                 &scope,
             )? {
@@ -3143,7 +3115,7 @@ impl Canvas {
         let plan = MeasuredOwnedPlan {
             size,
             frame: canvas_layout.into_shared(),
-            root_paint: themes.root().surfaces.canvas_root,
+            root_paint: request.surfaces.canvas_root,
             content: MeasuredRootContent::Canvas(content),
         };
         let MeasuredRootContent::Canvas(content) = &plan.content else {
@@ -3282,8 +3254,8 @@ impl Canvas {
     fn preflight_shared_legend(
         &self,
         plots: &[Option<Plot>],
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs<'_>>],
-        themes: &ResolvedCanvasThemes,
+        inputs: &PreparedCanvasInputs<'_>,
+        request: &crate::text::TextRequestContext<'_, '_>,
         panel: PixelRect,
         children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
@@ -3301,25 +3273,20 @@ impl Canvas {
         probes.resize_with(plots.len(), || None);
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let theme = &themes
-                .plot_request(index)
-                .expect("configured canvas panel has a resolved theme");
-            let registered = &interiors[index]
-                .as_ref()
-                .expect("prepared Canvas plot")
-                .plots[0];
+            let theme = &crate::text::TextRequestContext::new(
+                &inputs
+                    .plot(index)
+                    .expect("configured canvas panel has a resolved theme")
+                    .appearance,
+                request.text,
+            );
+            let registered = inputs.plot(index).expect("prepared Canvas plot");
             let operation = theme.text.prepared_font_environment()?.operation();
             let result = crate::layout::fit::measured(
                 children.canvas_probe(
                     plot,
                     crate::spec::PlotRenderContext::new(registered.data(&operation)?, panel, theme)
-                        .with_registration(
-                            registered,
-                            interiors[index]
-                                .as_ref()
-                                .expect("prepared Canvas plot")
-                                .intrinsic(registered),
-                        )
+                        .with_registration(registered, inputs.intrinsic(registered))
                         .with_canvas(self),
                     index,
                     MeasurementPhase::Legend,

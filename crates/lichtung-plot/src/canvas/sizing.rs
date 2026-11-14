@@ -323,7 +323,8 @@ pub(super) fn cell_height(
     canvas: &Canvas,
     theme: &crate::text::TextRequestContext<'_, '_>,
     width: f64,
-    inputs: &crate::layout::interior::PreparedInteriorInputs,
+    registered: &crate::orchestrator::registration::PlotRegistration<'_>,
+    intrinsic: &crate::orchestrator::root::PlotIntrinsics,
     per_plot: bool,
     round: &FeedbackRound,
     owner: &ComponentAddress,
@@ -331,8 +332,7 @@ pub(super) fn cell_height(
     measurements: Option<&HeightMeasurements>,
     dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
-    let registered = inputs.plots.first();
-    let intrinsic = inputs.intrinsic(&inputs.plots[0]);
+    let registered = Some(registered);
     let hard = plot.intrinsic_body_minimum(registered, intrinsic, operation, theme)?;
     let preference = body_preference(plot, registered, intrinsic, operation, theme, hard)?;
     let sources = plot.description().prose();
@@ -380,7 +380,7 @@ pub(super) fn cell_height(
     }
     let body_width = width - local[0] - local[1];
     let guide = if per_plot {
-        crate::layout::interior::sizing::guided_preference(plot, inputs, theme)?
+        crate::layout::interior::sizing::guided_preference(plot, registered)?
     } else {
         None
     };
@@ -505,7 +505,7 @@ pub(super) fn measure(
     if let crate::layout::RootRequest::ExactSize { width, height } = requested {
         return Ok(RootSize::new(width, height));
     }
-    let theme = &prepared.themes.root_request();
+    let theme = &prepared.root_request();
 
     let mut plots = Vec::new();
     fit::reserve(
@@ -518,22 +518,17 @@ pub(super) fn measure(
             plots.push(None);
             continue;
         };
-        let input = prepared.interiors[index]
-            .as_ref()
-            .expect("prepared Canvas plot");
+        let registered = prepared.plot(index).expect("prepared Canvas plot");
 
         let mut plot = panel.clone();
         if let Some(labels) = &source.labels {
             plot = plot.labels(labels.clone());
         }
-        input
-            .plots
-            .first()
-            .and_then(|registered| registered.scope.render_name.as_deref())
-            .ok_or_else(|| {
-                Error::Render("Canvas content child requires its prepared scope".into())
-            })?;
-        input.route.validate(plot.description())?;
+        registered.scope.render_name.as_deref().ok_or_else(|| {
+            Error::Render("Canvas content child requires its prepared scope".into())
+        })?;
+        crate::layout::interior::InteriorRoute::classify(registered.source.kind())
+            .validate(plot.description())?;
         if let Some(limits) = prepared.shared_x.get(index).copied().flatten() {
             plot = plot.with_planned_x_limits(limits);
         }
@@ -588,19 +583,19 @@ pub(super) fn measure(
             PixelRect::new(0.0, width.unwrap_or(0.0), 0.0, 0.0),
             &source.placements,
             &plots,
-            &prepared.interiors,
+            prepared,
             &prepared.operation,
             &prepared.text_panel_intrinsics,
-            &prepared.plot_intrinsics,
+            &prepared.plot_titles,
             &source.column_headers,
             &source.row_headers,
             &source.row_titles,
             gutters,
-            &prepared.themes,
+            theme,
             &FitScope::root(),
             Some(&super::tracks::ContentSizing {
                 source,
-                interiors: &prepared.interiors,
+                inputs: prepared,
                 operation: &prepared.operation,
                 round,
                 measurements: Some(measurements),
@@ -618,15 +613,15 @@ pub(super) fn measure(
             &source.placements,
             &plots,
             &prepared.text_panel_intrinsics,
-            &prepared.plot_intrinsics,
+            &prepared.plot_titles,
             &source.column_headers,
             &source.row_headers,
             &source.row_titles,
-            &prepared.themes,
+            theme,
             &FitScope::root(),
             &super::tracks::ContentSizing {
                 source,
-                interiors: &prepared.interiors,
+                inputs: prepared,
                 operation: &prepared.operation,
                 round,
                 measurements: Some(measurements),

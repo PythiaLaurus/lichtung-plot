@@ -68,7 +68,7 @@ impl PreparedMatrixAxes {
         &self,
         chart: &crate::builder::PlotDescription,
         axes: &PreparedAxesOwner,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
@@ -134,10 +134,9 @@ impl PreparedMatrixAxes {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<(CategoryColors, AccentColors), Error> {
-        let resources = data.source_resources();
         let colors = binding.resolve(binding.values(), theme, resources)?;
         let accents = AccentColors::resolve(
             theme.marks.get_accents(),
@@ -285,10 +284,10 @@ impl PreparedMatrixAxes {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(binding, theme, data)?;
+        let (colors, accents) = self.resolved_colors(binding, theme, operation)?;
         let mapped = crate::data::source::collect_source(
             self.groups
                 .iter()
@@ -542,7 +541,7 @@ pub(crate) fn measure(
             .as_ref()
             .expect("prepared color binding"),
         theme,
-        data,
+        data.source_resources(),
     )?;
     let group_colors = crate::data::source::collect_source(
         groups
@@ -1115,7 +1114,7 @@ fn matrix_guide_entries(
     chart: &crate::builder::PlotDescription,
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<Vec<GuideSourceKey>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden

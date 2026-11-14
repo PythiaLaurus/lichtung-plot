@@ -109,7 +109,7 @@ impl PreparedGuide {
     pub(crate) fn prepare(
         plot: &PlotDescription,
         policy: &crate::orchestrator::registration::PlotScopePolicy,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         owner: &ComponentAddress,
         keys: Vec<GuideSourceKey>,
         continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
@@ -398,7 +398,7 @@ fn insert(
 fn separate_source(
     sections: &mut Vec<Section>,
     labels: &crate::Labels,
-    theme: &crate::text::TextRequestContext<'_, '_>,
+    theme: &crate::theme::ResolvedTheme,
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
     mut source: GuideKeySource,

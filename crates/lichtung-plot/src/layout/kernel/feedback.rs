@@ -1308,19 +1308,17 @@ mod tests {
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
             let mut inputs =
-                crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme))
+                crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme)
                     .unwrap();
             let discoveries =
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-            let descriptor = inputs
-                .prepare_discrete_guides(
-                    plot.description(),
-                    &theme,
-                    &operation,
-                    &ComponentAddress::root(),
-                    false,
-                )
-                .unwrap();
+            let descriptor = crate::layout::interior::guide::prepare_discrete_guides(
+                plot.description(),
+                &mut inputs.panels,
+                &operation,
+                false,
+            )
+            .unwrap();
             assert!(descriptor.is_none());
             assert_eq!(
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),

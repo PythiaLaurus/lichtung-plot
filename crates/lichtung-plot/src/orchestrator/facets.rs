@@ -85,6 +85,7 @@ pub(crate) fn text_census_labels(
 pub(crate) fn prepare_facet_scopes<'src>(
     source: &'src crate::builder::PlotDescription,
     builder: &mut super::registration::PlotRegistryBuilder<'src>,
+    appearance: &crate::theme::ResolvedTheme,
     operation: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
     if !source.significance_annotations().is_empty()
@@ -128,7 +129,18 @@ pub(crate) fn prepare_facet_scopes<'src>(
             cell.as_ref(),
             Some(render_name),
         )?;
-        builder.reserve(source, scope, operation)?;
+        let policy = super::registration::PlotScopePolicy::for_source(source, cell.as_ref());
+        builder.reserve(
+            source,
+            scope.address,
+            scope.numeric_owner,
+            scope.axis_numeric_owner,
+            scope.rows,
+            scope.render_name,
+            policy,
+            appearance.clone(),
+            operation,
+        )?;
     }
     Ok(())
 }
@@ -141,11 +153,10 @@ pub(crate) struct PreparedFacetGuide {
 pub(crate) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
-    theme: &TextRequestContext<'_, '_>,
     inputs: &mut super::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedFacetGuide, Error> {
-    legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
+    legend::prepare_discrete_guide(source, kind, inputs, resources)
 }
 
 pub(crate) struct OwnedFacetPlan {
@@ -885,12 +896,11 @@ mod feedback_tests {
                         let mut inputs = crate::plots::shared_x::prepare_plot(
                             source.description(),
                             &stage.operation(),
-                            Some(&crate::theme::Theme::publication()),
+                            &theme,
                         )?;
                         let guide = prepare_discrete_guide(
                             &source,
                             PlotKind::Scatter,
-                            &theme,
                             &mut inputs,
                             &stage.operation(),
                         )?;
@@ -1122,7 +1132,7 @@ mod feedback_tests {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
                     source.description(),
                     &stage.operation(),
-                    Some(&crate::theme::Theme::publication()),
+                    &theme,
                 )?;
                 assert!(inputs.panels.iter().all(|registered| registered
                     .axes
@@ -1134,7 +1144,6 @@ mod feedback_tests {
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
-                    &theme,
                     &mut inputs,
                     &stage.operation(),
                 )?;
@@ -1302,12 +1311,11 @@ mod feedback_tests {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
                     source.description(),
                     &stage.operation(),
-                    Some(&crate::theme::Theme::publication()),
+                    &theme,
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
-                    &theme,
                     &mut inputs,
                     &stage.operation(),
                 )?;
@@ -1408,7 +1416,7 @@ mod feedback_tests {
                 crate::plots::shared_x::prepare_plot(
                     source.description(),
                     &stage.operation(),
-                    Some(&crate::theme::Theme::publication()),
+                    &source.description().resolve_theme()?,
                 )
             },
             |_, _, _| -> Result<crate::layout::MeasuredLayout<()>, Error> {

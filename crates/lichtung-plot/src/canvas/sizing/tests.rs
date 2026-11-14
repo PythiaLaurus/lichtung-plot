@@ -7,19 +7,17 @@ fn prepare_height_inputs<'src>(
     canvas: &'src Canvas,
     stage: &mut crate::layout::kernel::PreparedStage<'_>,
 ) -> Result<crate::layout::interior::PreparedInteriorInputs<'src>, Error> {
-    let themes = super::super::ResolvedCanvasThemes::new(
+    let (_, appearances) = super::super::resolve_appearances(
         &canvas.theme,
         &canvas.placements,
         &canvas.guide_text_layouts,
     )?;
-    let (mut interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
-    let mut inputs = interiors[0].take().expect("prepared Canvas occurrence");
+    let (mut inputs, _, _) = canvas.prepare_interiors(stage, appearances)?;
     let source = canvas.placements.plot(0).expect("configured Canvas plot");
-    let guide = inputs.prepare_discrete_guides(
+    let guide = crate::layout::interior::guide::prepare_discrete_guides(
         source.description(),
-        &themes.plot_request(0).expect("configured appearance"),
+        &mut inputs.panels,
         &stage.operation(),
-        &ComponentAddress::root(),
         false,
     )?;
     crate::layout::interior::PreparedInteriorInputs::from_registry(
@@ -30,6 +28,10 @@ fn prepare_height_inputs<'src>(
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the real prepared Canvas inventory is retained across the same natural-width and rejected full-height stages"
+)]
 fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
     let source = Canvas::grid(1, 1)
         .unwrap()
@@ -46,13 +48,12 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
             .unwrap(),
         )
         .unwrap();
-    let themes = super::super::ResolvedCanvasThemes::new(
+    let (appearance, appearances) = super::super::resolve_appearances(
         &source.theme,
         &source.placements,
         &source.guide_text_layouts,
     )
     .unwrap();
-    let interiors = vec![None];
     let plots = vec![None];
     crate::layout::plan_root(
         crate::layout::RootRequest::ExactSize {
@@ -61,14 +62,46 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
         },
         |stage| {
             let operation = stage.operation();
-            let (_, text, prose) = source.prepare_intrinsics(&themes, &interiors, &operation)?;
-            Ok((text, prose, operation))
-        },
-        |(text, prose, operation), assigned, round| {
-            let content = super::super::tracks::ContentSizing {
+            let text = crate::text::TextService::default();
+            let request = crate::text::TextRequestContext::new(&appearance, &text);
+            let (registry, slots, shared_x) = source.prepare_interiors(stage, appearances)?;
+            let plots = registry.finish()?;
+            let plot_intrinsics =
+                crate::layout::interior::PreparedInteriorInputs::intrinsic_slots(&plots)?;
+            let (mut text_census, scalar_presence) =
+                source.foundational_text_census(&request, &plots, &slots, None, stage)?;
+            text.prepare_font_environment_from_census(&mut text_census, scalar_presence, stage)?;
+            let (root_text, text_panel_intrinsics, plot_titles) = source.prepare_intrinsics(
+                &request,
+                &plots,
+                &slots,
+                &plot_intrinsics,
+                &operation,
+            )?;
+            Ok(super::super::PreparedCanvasInputs {
                 operation,
+                caches: std::cell::RefCell::new(crate::orchestrator::root::RootLayoutCaches::new(
+                    crate::decorations::plan::children::ChildPlans::canvas(),
+                )),
+                root_appearance: appearance,
+                text,
+                text_census,
+                root_text,
+                shared_x,
+                shared_guide: None,
+                plots,
+                slots,
+                plot_intrinsics,
+                text_panel_intrinsics,
+                plot_titles,
+            })
+        },
+        |prepared, assigned, round| {
+            let request = prepared.root_request();
+            let content = super::super::tracks::ContentSizing {
+                operation: &prepared.operation,
                 source: &source,
-                interiors: &interiors,
+                inputs: prepared,
                 round,
                 measurements: None,
                 shared_allocation: None,
@@ -78,12 +111,12 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
             let width = fit::measured(super::super::tracks::natural_width(
                 &source.placements,
                 &plots,
-                text,
-                prose,
+                &prepared.text_panel_intrinsics,
+                &prepared.plot_titles,
                 &[],
                 &[],
                 &[],
-                &themes,
+                &request,
                 &FitScope::root(),
                 &content,
             ))
@@ -93,15 +126,15 @@ fn natural_columns_do_not_require_a_successful_uncapped_text_height_layout() {
                 PixelRect::new(0.0, 0.0, 0.0, 0.0),
                 &source.placements,
                 &plots,
-                &interiors,
-                operation,
-                text,
-                prose,
+                prepared,
+                &prepared.operation,
+                &prepared.text_panel_intrinsics,
+                &prepared.plot_titles,
                 &[],
                 &[],
                 &[],
                 &[],
-                &themes,
+                &request,
                 &FitScope::root(),
                 Some(&content),
             );

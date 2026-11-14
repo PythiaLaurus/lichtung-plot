@@ -178,7 +178,20 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             let mut registry = crate::orchestrator::registration::PlotRegistryBuilder::new(
                 operation.root_identity(),
             );
-            let id = registry.reserve(source.description(), scope, &operation)?;
+            let id = registry.reserve(
+                source.description(),
+                scope.address,
+                scope.numeric_owner,
+                scope.axis_numeric_owner,
+                scope.rows,
+                scope.render_name,
+                crate::orchestrator::registration::PlotScopePolicy::for_source(
+                    source.description(),
+                    None,
+                ),
+                appearance.clone(),
+                &operation,
+            )?;
             let panel = &registry.panels[id.slot];
             let scope = &panel.scope;
             let row_source = &panel.row_source;
@@ -284,11 +297,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 &operation,
             )
             .unwrap();
-            let root_guide = registry.prepare_discrete_guides(
+            let root_guide = crate::layout::interior::guide::prepare_discrete_guides(
                 source.description(),
-                &theme,
+                &mut registry.panels,
                 &operation,
-                &crate::layout::ComponentAddress::root(),
                 false,
             )?;
             let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(

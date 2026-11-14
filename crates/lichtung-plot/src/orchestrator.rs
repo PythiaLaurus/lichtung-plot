@@ -47,18 +47,16 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                     let mut registry = crate::plots::shared_x::prepare_plot(
                         source.description(),
                         &operation,
-                        None,
+                        &theme,
                     )
                     .unwrap();
-                    let guide = registry
-                        .prepare_discrete_guides(
-                            source.description(),
-                            &theme,
-                            &operation,
-                            &crate::layout::ComponentAddress::root(),
-                            false,
-                        )
-                        .unwrap();
+                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                        source.description(),
+                        &mut registry.panels,
+                        &operation,
+                        false,
+                    )
+                    .unwrap();
                     crate::layout::interior::PreparedInteriorInputs::from_registry(
                         registry,
                         crate::layout::interior::InteriorRoute::classify(source.kind()),

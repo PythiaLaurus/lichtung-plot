@@ -255,7 +255,7 @@ impl PreparedBoxplot {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::alpha::AlphaUnitKind;
@@ -377,7 +377,7 @@ pub(crate) fn measure_marks(
                 .as_ref()
                 .expect("prepared color binding"),
             theme,
-            data,
+            data.source_resources(),
         )?
     };
     let significance = if group_levels.is_empty() {

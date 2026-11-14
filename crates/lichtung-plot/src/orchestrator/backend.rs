@@ -1100,8 +1100,10 @@ null_backend_methods! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::kernel::PreparedStage;
     use crate::render::backend::{BracketOrientation, SurfaceRole};
     use crate::render::svg_backend::{SvgBackend, SVG_PLANNED_TEXT_CALLS, SVG_RAW_TEXT_CALLS};
+    use crate::text::{TextRequestContext, TextService};
     use crate::theme::Color;
 
     fn paired_draw_result(
@@ -1196,32 +1198,54 @@ mod tests {
         }
     }
 
+    fn prepare_capture_text(stage: &mut PreparedStage<'_>) -> Result<TextService, Error> {
+        let text = TextService::default();
+        // These primitive fixtures admit their reached sources in measurement.
+        let mut presence = stage.reserve_scalar_presence_map()?;
+        let mut census = crate::layout::PreparedTextCensus::materialize(
+            Vec::new(),
+            Some(stage),
+            Some(&mut presence),
+        )
+        .map_err(|error| Error::Render(error.to_string()))?;
+        text.prepare_font_environment_from_census(&mut census, presence, stage)?;
+        assert!(text
+            .prepared_font_environment()?
+            .operation()
+            .same_operation(&stage.operation()));
+        Ok(text)
+    }
+
     fn capture_test_plan(
-        theme: &crate::text::TextRequestContext<'_, '_>,
         capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
     ) -> crate::layout::FrozenRoot<TextReplayPlan> {
-        theme
-            .text
-            .prepared_font_environment()
-            .unwrap()
-            .operation()
-            .seal_fonts()
-            .unwrap();
         crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 100,
                 height: 100,
             },
-            |_| Ok(()),
-            |(), assigned, _| {
+            |stage| {
+                Ok((
+                    crate::Theme::publication().resolve()?,
+                    prepare_capture_text(stage)?,
+                ))
+            },
+            |_, assigned, _| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
                     (),
                 ))
             },
-            |(), assigned, (), final_stage| {
+            |(theme, text), assigned, (), final_stage| {
                 let (width, height) = assigned.dimensions()?;
-                capture_text_replay_plan(width, height, "test capture", theme, final_stage, capture)
+                capture_text_replay_plan(
+                    width,
+                    height,
+                    "test capture",
+                    &TextRequestContext::new(theme, text),
+                    final_stage,
+                    capture,
+                )
             },
         )
         .unwrap()
@@ -1246,10 +1270,7 @@ mod tests {
                 count.set(0);
             });
         };
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let root = capture_test_plan(&theme, |backend| {
+        let root = capture_test_plan(|backend| {
             COORDINATE_CONVERSIONS.with(|count| count.set(0));
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
             Y_CONVERSIONS.with(|count| count.set(0));
@@ -1322,93 +1343,124 @@ mod tests {
             FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
         };
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let source = " A & B\n\nC \u{5d0}\u{5d1}  D";
-        let plans = [
-            PhysicalTextAlignment::Start,
-            PhysicalTextAlignment::Center,
-            PhysicalTextAlignment::End,
-        ]
-        .map(|alignment| {
-            theme
-                .measure_text(
-                    source,
-                    &theme.typography.root.title,
-                    alignment,
-                    "canonical text",
-                    false,
-                )
-                .unwrap()
-        });
-        let label_role = theme
-            .typography
-            .annotations
-            .significance_label
-            .clone()
-            .font_size(12.0)
-            .unwrap()
-            .weight(crate::TextWeight::Normal)
-            .unwrap()
-            .color(Color::rgb(4, 5, 6))
-            .unwrap()
-            .line_height(1.2)
-            .unwrap();
-        let labels =
-            [PhysicalTextAlignment::Center, PhysicalTextAlignment::Start].map(|alignment| {
-                DeferredAnnotationTextPlan::from_resolved(
-                    theme
-                        .measure_text("**", &label_role, alignment, "canonical bracket", false)
-                        .unwrap(),
-                )
-            });
-        let root = capture_test_plan(&theme, |backend| {
-            for (anchor, plan) in [TextAnchor::Start, TextAnchor::Middle, TextAnchor::End]
-                .into_iter()
-                .zip(&plans)
-            {
-                for angle in [-0.0, -0.04, 0.06, -89.96] {
-                    let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
-                    backend.draw_planned_text(
-                        PlannedTextPlacement::middle(position, anchor, angle),
-                        plan,
-                    )?;
-                    backend.draw_planned_text(
-                        PlannedTextPlacement::baseline(position, anchor, angle),
-                        plan,
-                    )?;
-                }
-            }
-            for (orientation, label) in
-                [BracketOrientation::Vertical, BracketOrientation::Horizontal]
-                    .into_iter()
-                    .zip(&labels)
-            {
-                backend.draw_planned_bracket(PlannedSignificanceCall {
-                    bracket: &SignificanceBracket {
-                        x_left: -0.0,
-                        x_right: 21.125,
-                        y: 31.25,
-                        label: "**".into(),
-                        orientation,
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            prepare_capture_text,
+            |text, assigned, _| {
+                let request = TextRequestContext::new(&theme, text);
+                let plans = [
+                    PhysicalTextAlignment::Start,
+                    PhysicalTextAlignment::Center,
+                    PhysicalTextAlignment::End,
+                ]
+                .map(|alignment| {
+                    request
+                        .measure_text(
+                            source,
+                            &theme.typography.root.title,
+                            alignment,
+                            "canonical text",
+                            false,
+                        )
+                        .unwrap()
+                });
+                let label_role = theme
+                    .typography
+                    .annotations
+                    .significance_label
+                    .clone()
+                    .font_size(12.0)
+                    .unwrap()
+                    .weight(crate::TextWeight::Normal)
+                    .unwrap()
+                    .color(Color::rgb(4, 5, 6))
+                    .unwrap()
+                    .line_height(1.2)
+                    .unwrap();
+                let labels = [PhysicalTextAlignment::Center, PhysicalTextAlignment::Start].map(
+                    |alignment| {
+                        DeferredAnnotationTextPlan::from_resolved(
+                            request
+                                .measure_text(
+                                    "**",
+                                    &label_role,
+                                    alignment,
+                                    "canonical bracket",
+                                    false,
+                                )
+                                .unwrap(),
+                        )
                     },
-                    style: &BracketStyle {
-                        color: Color::rgb(1, 2, 3),
-                        label_color: Color::rgb(4, 5, 6),
-                        width: 0.8,
-                        font_family: label.plan.style.stack.clone(),
-                        font_size: 12.0,
-                        line_height: 14.4,
-                        weight: crate::TextWeight::Normal,
-                        label_gap: 4.125,
-                        tick_height: 7.0,
+                );
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (plans, labels),
+                ))
+            },
+            |text, assigned, (plans, labels), final_stage| {
+                let (width, height) = assigned.dimensions()?;
+                capture_text_replay_plan(
+                    width,
+                    height,
+                    "canonical text capture",
+                    &TextRequestContext::new(&theme, text),
+                    final_stage,
+                    |backend| {
+                        for (anchor, plan) in
+                            [TextAnchor::Start, TextAnchor::Middle, TextAnchor::End]
+                                .into_iter()
+                                .zip(&plans)
+                        {
+                            for angle in [-0.0, -0.04, 0.06, -89.96] {
+                                let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
+                                backend.draw_planned_text(
+                                    PlannedTextPlacement::middle(position, anchor, angle),
+                                    plan,
+                                )?;
+                                backend.draw_planned_text(
+                                    PlannedTextPlacement::baseline(position, anchor, angle),
+                                    plan,
+                                )?;
+                            }
+                        }
+                        for (orientation, label) in
+                            [BracketOrientation::Vertical, BracketOrientation::Horizontal]
+                                .into_iter()
+                                .zip(&labels)
+                        {
+                            backend.draw_planned_bracket(PlannedSignificanceCall {
+                                bracket: &SignificanceBracket {
+                                    x_left: -0.0,
+                                    x_right: 21.125,
+                                    y: 31.25,
+                                    label: "**".into(),
+                                    orientation,
+                                },
+                                style: &BracketStyle {
+                                    color: Color::rgb(1, 2, 3),
+                                    label_color: Color::rgb(4, 5, 6),
+                                    width: 0.8,
+                                    font_family: label.plan.style.stack.clone(),
+                                    font_size: 12.0,
+                                    line_height: 14.4,
+                                    weight: crate::TextWeight::Normal,
+                                    label_gap: 4.125,
+                                    tick_height: 7.0,
+                                },
+                                label,
+                            })?;
+                        }
+                        reset();
+                        Ok(())
                     },
-                    label,
-                })?;
-            }
-            reset();
-            Ok(())
-        });
+                )
+            },
+        )
+        .unwrap();
         unchanged();
         let plan = root.plan();
         let PlannedCall::PlannedText(first) = &plan.calls[0] else {
@@ -1512,10 +1564,7 @@ mod tests {
     #[test]
     fn frozen_rectangles_replay_without_spatial_conversion() {
         use crate::render::coordinates::SPATIAL_CONVERSIONS;
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let root = capture_test_plan(&theme, |backend| {
+        let root = capture_test_plan(|backend| {
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
             let bounds = PixelRect::new(-0.25, 50.125, -2.5, 80.25);
             backend.draw_surface(bounds, Color::rgb(1, 2, 3), SurfaceRole::PlotPanel)?;
@@ -1658,16 +1707,55 @@ mod tests {
     #[test]
     fn prepared_svg_replay_moves_the_actual_reserved_buffers_unchanged() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().clear());
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         NULL_END_CALLS.with(|calls| calls.set(0));
         crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::render::svg_backend::SVG_END_CALLS.with(|calls| calls.set(0));
-        let labels = storage_labels(&theme);
-        let plan = capture_test_plan(&theme, |backend| storage_fixture(backend, &labels));
-        let plan = plan.plan();
+        let mut probes = None;
+        let mut reference = None;
+        let root = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            prepare_capture_text,
+            |text, assigned, _| {
+                let labels = storage_labels(&TextRequestContext::new(&theme, text));
+                let environment = text.prepared_font_environment()?;
+                let core = environment.liveness_probe();
+                let operation = environment.operation().liveness_probe();
+                let text_analysis = labels.0.analysis_liveness_probe();
+                let bracket_analysis = labels.1.plan.analysis_liveness_probe();
+                assert!(core() && operation() && text_analysis() && bracket_analysis());
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    (labels, (core, operation, text_analysis, bracket_analysis)),
+                ))
+            },
+            |text, assigned, (labels, witnesses), stage| {
+                let (core, operation, text_analysis, bracket_analysis) = witnesses;
+                let (width, height) = assigned.dimensions()?;
+                let environment = text.prepared_font_environment()?;
+                assert!(environment.prepared_pairs_are_sealed().unwrap());
+                let plan = capture_text_replay_plan(
+                    width,
+                    height,
+                    "reserved buffers capture",
+                    &TextRequestContext::new(&theme, text),
+                    stage,
+                    |backend| storage_fixture(backend, &labels),
+                )?;
+                reference = Some(SvgBackend::in_memory_with_fonts(width, height, environment));
+                assert!(core() && operation() && text_analysis() && bracket_analysis());
+                probes = Some((core, operation, text_analysis, bracket_analysis));
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        let (core, operation, text_analysis, bracket_analysis) = probes.unwrap();
+        assert!(!core() && !operation() && !text_analysis() && !bracket_analysis());
+        let plan = root.plan();
         let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         NULL_END_CALLS.with(|calls| assert_eq!(calls.get(), 0));
@@ -1691,11 +1779,7 @@ mod tests {
         crate::render::svg_backend::SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         assert_eq!(addresses, output.storage_addresses());
         SVG_RAW_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-        let mut reference = SvgBackend::in_memory_with_fonts(
-            100,
-            100,
-            theme.text.prepared_font_environment().unwrap(),
-        );
+        let mut reference = reference.unwrap();
         plan.replay(100, 100, &mut reference, "reference SVG")
             .unwrap();
         let reference = reference.into_output().unwrap();
@@ -1715,10 +1799,7 @@ mod tests {
     #[test]
     fn prepared_storage_uses_quantum_primitive_svg_and_matching_png_bytes() {
         use sha2::{Digest as _, Sha256};
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let root = capture_test_plan(&theme, |backend| {
+        let root = capture_test_plan(|backend| {
             backend.draw_surface(
                 PixelRect::new(0.0, 100.0, 0.0, 100.0),
                 Color::rgb(255, 255, 255),
@@ -1771,17 +1852,8 @@ mod tests {
     #[test]
     fn capture_rejects_unplanned_text_and_brackets_without_font_work() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        theme
-            .text
-            .prepared_font_environment()
-            .unwrap()
-            .operation()
-            .seal_fonts()
-            .unwrap();
-        let fonts = crate::font::canonical::planning_counts();
         for bracket in [false, true] {
+            let mut fonts = None;
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
             let result = crate::layout::plan_root(
@@ -1789,19 +1861,21 @@ mod tests {
                     width: 100,
                     height: 100,
                 },
-                |_| Ok(()),
-                |(), assigned, _| {
+                prepare_capture_text,
+                |_, assigned, _| {
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned.assigned_size()?,
                         (),
                     ))
                 },
-                |(), _, (), stage| {
+                |text, _, (), stage| {
+                    let request = TextRequestContext::new(&theme, text);
+                    fonts = Some(crate::font::canonical::planning_counts());
                     capture_text_replay_plan(
                         100,
                         100,
                         "invalid raw font",
-                        &theme,
+                        &request,
                         stage,
                         |backend| {
                             if bracket {
@@ -1828,7 +1902,7 @@ mod tests {
                                     },
                                 )
                             } else {
-                                let mut style = replay_text_style(&theme);
+                                let mut style = replay_text_style(&request);
                                 style.font_family = crate::font::canonical::named_stack(&[
                                     "Unavailable capture family",
                                 ]);
@@ -1844,23 +1918,13 @@ mod tests {
             assert!(error.to_string().contains("capture"), "{error}");
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            assert_eq!(crate::font::canonical::planning_counts(), fonts.unwrap());
         }
-        assert_eq!(crate::font::canonical::planning_counts(), fonts);
     }
 
     #[test]
     fn every_nonempty_canonical_storage_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let labels = storage_labels(&theme);
-        theme
-            .text
-            .prepared_font_environment()
-            .unwrap()
-            .operation()
-            .seal_fonts()
-            .unwrap();
         for payload in [
             "canonical SVG scopes",
             "canonical SVG replacements",
@@ -1880,19 +1944,20 @@ mod tests {
                     width: 100,
                     height: 100,
                 },
-                |_| Ok(()),
-                |(), assigned, _| {
+                prepare_capture_text,
+                |text, assigned, _| {
+                    let labels = storage_labels(&TextRequestContext::new(&theme, text));
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned.assigned_size()?,
-                        (),
+                        labels,
                     ))
                 },
-                |(), _, (), stage| {
+                |text, _, labels, stage| {
                     capture_text_replay_plan(
                         100,
                         100,
                         "storage refusal",
-                        &theme,
+                        &TextRequestContext::new(&theme, text),
                         stage,
                         |backend| storage_fixture(backend, &labels),
                     )
@@ -1961,45 +2026,34 @@ mod tests {
     #[test]
     fn capture_append_refusal_precedes_frozen_text_materialization() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let text = theme
-            .measure_text(
-                "retained text",
-                &theme.typography.root.title,
-                PhysicalTextAlignment::Start,
-                "refused capture",
-                false,
-            )
-            .unwrap();
-        theme
-            .text
-            .prepared_font_environment()
-            .unwrap()
-            .operation()
-            .seal_fonts()
-            .unwrap();
         let mut pass = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_root(
             crate::layout::RootRequest::ExactSize {
                 width: 100,
                 height: 100,
             },
-            |_| Ok(()),
-            |(), assigned, _| {
+            prepare_capture_text,
+            |text, assigned, _| {
+                let measured = TextRequestContext::new(&theme, text).measure_text(
+                    "retained text",
+                    &theme.typography.root.title,
+                    PhysicalTextAlignment::Start,
+                    "refused capture",
+                    false,
+                )?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned.assigned_size()?,
-                    (),
+                    measured,
                 ))
             },
-            |(), _, (), final_stage| {
+            |text, _, measured, final_stage| {
+                crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
                 capture_text_replay_plan(
                     100,
                     100,
                     "append refusal test",
-                    &theme,
+                    &TextRequestContext::new(&theme, text),
                     final_stage,
                     |backend| {
                         pass += 1;
@@ -2012,7 +2066,7 @@ mod tests {
                                 TextAnchor::Start,
                                 0.0,
                             ),
-                            &text,
+                            &measured,
                         )
                     },
                 )
@@ -2033,8 +2087,6 @@ mod tests {
     #[test]
     fn retained_capture_payload_refusal_precedes_null() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         for payload in [
             "prepared layer name",
             "prepared scatter points",
@@ -2050,19 +2102,19 @@ mod tests {
                     width: 100,
                     height: 100,
                 },
-                |_| Ok(()),
-                |(), assigned, _| {
+                prepare_capture_text,
+                |_, assigned, _| {
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned.assigned_size()?,
                         (),
                     ))
                 },
-                |(), _, (), final_stage| {
+                |text, _, (), final_stage| {
                     capture_text_replay_plan(
                         100,
                         100,
                         "payload refusal",
-                        &theme,
+                        &TextRequestContext::new(&theme, text),
                         final_stage,
                         |backend| {
                             pass += 1;
@@ -2134,25 +2186,48 @@ mod tests {
     #[test]
     fn frozen_scene_replay_consumes_exactly_the_captured_calls() {
         let theme = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
         let position = Point2D::new(40.0, 60.0);
         let placement = PlannedTextPlacement::middle(position, TextAnchor::Middle, 0.0);
-        let labels = ["first", "second"].map(|source| {
-            theme
-                .measure_text(
-                    source,
-                    &theme.typography.root.title,
-                    PhysicalTextAlignment::Center,
-                    "retained call",
-                    false,
+        let plan = crate::layout::plan_root(
+            crate::layout::RootRequest::ExactSize {
+                width: 100,
+                height: 100,
+            },
+            prepare_capture_text,
+            |text, assigned, _| {
+                let request = TextRequestContext::new(&theme, text);
+                let labels = ["first", "second"].map(|source| {
+                    request
+                        .measure_text(
+                            source,
+                            &theme.typography.root.title,
+                            PhysicalTextAlignment::Center,
+                            "retained call",
+                            false,
+                        )
+                        .unwrap()
+                });
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned.assigned_size()?,
+                    labels,
+                ))
+            },
+            |text, assigned, labels, stage| {
+                let (width, height) = assigned.dimensions()?;
+                capture_text_replay_plan(
+                    width,
+                    height,
+                    "retained calls capture",
+                    &TextRequestContext::new(&theme, text),
+                    stage,
+                    |backend| {
+                        backend.draw_planned_text(placement, &labels[0])?;
+                        backend.draw_planned_text(placement, &labels[1])
+                    },
                 )
-                .unwrap()
-        });
-        let plan = capture_test_plan(&theme, |backend| {
-            backend.draw_planned_text(placement, &labels[0])?;
-            backend.draw_planned_text(placement, &labels[1])
-        });
+            },
+        )
+        .unwrap();
         let plan = plan.plan();
 
         assert_eq!(plan.call_count(), 2);

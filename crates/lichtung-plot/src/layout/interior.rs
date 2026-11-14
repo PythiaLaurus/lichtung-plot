@@ -189,7 +189,10 @@ impl<'src> PreparedInteriorInputs<'src> {
                 intrinsic,
                 &crate::orchestrator::root::PlotIntrinsicInputs {
                     registered,
-                    request: *theme,
+                    request: crate::text::TextRequestContext {
+                        theme: &registered.appearance,
+                        ..*theme
+                    },
                     operation,
                     diagnostic_scope: scope.as_deref(),
                     y_visible: registered.policy.axis_text.tick_labels[1],

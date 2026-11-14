@@ -12,7 +12,6 @@ use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
 pub(super) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
-    theme: &crate::text::TextRequestContext<'_, '_>,
     inputs: &mut crate::orchestrator::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
@@ -31,7 +30,10 @@ pub(super) fn prepare_discrete_guide(
             .clone_from(&collectives);
     }
     if let Some(column) = source.description().hue_col() {
-        let observed = inputs.observed_color_levels(base.description())?;
+        let observed = crate::layout::interior::guide::observed_color_levels(
+            base.description(),
+            &inputs.panels,
+        )?;
         let raw = source
             .description()
             .data_column(column)
@@ -94,11 +96,10 @@ pub(super) fn prepare_discrete_guide(
             );
         }
     }
-    let descriptor = inputs.prepare_discrete_guides(
+    let descriptor = crate::layout::interior::guide::prepare_discrete_guides(
         base.description(),
-        theme,
+        &mut inputs.panels,
         resources,
-        &crate::layout::ComponentAddress::root(),
         true,
     )?;
     Ok(super::PreparedFacetGuide { descriptor })

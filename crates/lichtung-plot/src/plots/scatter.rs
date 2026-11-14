@@ -115,7 +115,7 @@ impl PreparedScatter {
     pub(crate) fn alpha_guide(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         let style = chart.point_style(
@@ -234,10 +234,9 @@ impl PreparedScatter {
     fn resolved_colors(
         &self,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
     ) -> Result<CategoryColors, Error> {
-        let resources = data.source_resources();
         let keys = if let Some(global) = binding.parent.as_deref() {
             crate::data::source::collect_source(
                 global.values().map(crate::data::source::copy_source_string),
@@ -260,18 +259,18 @@ impl PreparedScatter {
         &self,
         chart: &crate::builder::PlotDescription,
         binding: &crate::orchestrator::registration::CategoricalBinding,
-        theme: &crate::text::TextRequestContext<'_, '_>,
-        data: crate::data::PlotData<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
+        operation: &crate::font::canonical::OperationContext,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let map = self.resolved_colors(binding, theme, data)?;
+        let map = self.resolved_colors(binding, theme, operation)?;
         self.guide_entries_with_colors(chart, theme, order, &map)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &crate::builder::PlotDescription,
-        theme: &crate::text::TextRequestContext<'_, '_>,
+        theme: &crate::theme::ResolvedTheme,
 
         order: &[usize],
         map: &CategoryColors,
@@ -346,7 +345,7 @@ impl PreparedScatter {
         let mut groups = Vec::new();
         crate::data::source::reserve_source(&mut groups, self.groups.len())?;
         let order = self.group_order(binding)?;
-        let map = self.resolved_colors(binding, theme, data)?;
+        let map = self.resolved_colors(binding, theme, data.source_resources())?;
 
         let accent = self
             .groups

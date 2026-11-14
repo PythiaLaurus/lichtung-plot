@@ -15,31 +15,24 @@ fn prepare_key_inputs<'src>(
     source: &'src Plot,
     operation: &crate::font::canonical::OperationContext,
 ) -> crate::layout::interior::PreparedInteriorInputs<'src> {
-    let mut registry =
-        crate::plots::shared_x::prepare_plot(source.description(), operation, None).unwrap();
-    let appearance = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&appearance, &text);
+    let mut registry = crate::plots::shared_x::prepare_plot(
+        source.description(),
+        operation,
+        &source.description().resolve_theme().unwrap(),
+    )
+    .unwrap();
     let guide = if source.description().has_facets() {
-        crate::orchestrator::prepare_discrete_guide(
-            source,
-            source.kind(),
-            &theme,
-            &mut registry,
+        crate::orchestrator::prepare_discrete_guide(source, source.kind(), &mut registry, operation)
+            .unwrap()
+            .descriptor
+    } else {
+        crate::layout::interior::guide::prepare_discrete_guides(
+            source.description(),
+            &mut registry.panels,
             operation,
+            false,
         )
         .unwrap()
-        .descriptor
-    } else {
-        registry
-            .prepare_discrete_guides(
-                source.description(),
-                &theme,
-                operation,
-                &crate::layout::ComponentAddress::root(),
-                false,
-            )
-            .unwrap()
     };
     crate::layout::interior::PreparedInteriorInputs::from_registry(
         registry,

@@ -47,7 +47,7 @@ pub(crate) fn measure_marks(
         &context.registered.expect("prepared Bar occurrence").axes,
         binding,
         theme,
-        data,
+        data.source_resources(),
     )?;
     let mut rendered_maxima =
         crate::data::source::collect_source((0..categories.len()).map(|_| Ok(0.0_f64)))?;

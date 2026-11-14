@@ -38,14 +38,18 @@ impl<'src> PreparedPlotInputs<'src> {
     ) -> Result<Self, Error> {
         let theme = resolve_theme()?;
         let text = TextService::default();
-        let request = TextRequestContext::new(&theme, &text);
         source.description().validate_configuration(kind)?;
         let registry = crate::plots::shared_x::prepare_plot(
             source.description(),
             &prepared_stage.operation(),
-            Some(&theme),
+            &theme,
         )?;
-        registry.validate_categorical_scale(source.description(), &request, None)?;
+        crate::layout::interior::guide::validate_categorical_scale(
+            source.description(),
+            &registry.panels,
+            &theme,
+            None,
+        )?;
         Self::complete(source, kind, theme, text, registry, caches, prepared_stage)
     }
 
@@ -66,7 +70,6 @@ impl<'src> PreparedPlotInputs<'src> {
                 super::prepare_discrete_guide(
                     source,
                     kind,
-                    &request,
                     &mut registry,
                     &prepared_stage.operation(),
                 )
@@ -77,12 +80,10 @@ impl<'src> PreparedPlotInputs<'src> {
                 .as_ref()
                 .and_then(|guide| guide.descriptor.clone())
         } else {
-            registry.prepare_discrete_guides(
+            crate::layout::interior::guide::prepare_discrete_guides(
                 source.description(),
-                &request,
+                &mut registry.panels,
                 &prepared_stage.operation(),
-                &crate::layout::ComponentAddress::root()
-                    .child(crate::layout::AddressRole::PlotBody, 0)?,
                 false,
             )?
         };
@@ -181,11 +182,12 @@ pub(crate) fn with_prepared_plot_for_test<T>(
             let mut registry = crate::plots::shared_x::prepare_plot(
                 source.description(),
                 &stage.operation(),
-                Some(&theme),
+                &theme,
             )?;
-            registry.validate_categorical_scale(
+            crate::layout::interior::guide::validate_categorical_scale(
                 source.description(),
-                &TextRequestContext::new(&theme, &text),
+                &registry.panels,
+                &theme,
                 None,
             )?;
             configure(&mut registry)?;
@@ -1435,13 +1437,12 @@ mod root_title_tests {
                     let mut inputs = crate::plots::shared_x::prepare_plot(
                         source.description(),
                         &stage.operation(),
-                        Some(&theme),
-                    )?;
-                    let guide = inputs.prepare_discrete_guides(
-                        source.description(),
                         &theme,
+                    )?;
+                    let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                        source.description(),
+                        &mut inputs.panels,
                         &stage.operation(),
-                        &crate::layout::ComponentAddress::root(),
                         false,
                     )?;
                     let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(
@@ -1637,14 +1638,12 @@ mod retained_legend_tests {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
                     source.description(),
                     &stage.operation(),
-                    None,
-                )?;
-                let guide = inputs.prepare_discrete_guides(
-                    source.description(),
                     &theme,
+                )?;
+                let guide = crate::layout::interior::guide::prepare_discrete_guides(
+                    source.description(),
+                    &mut inputs.panels,
                     &stage.operation(),
-                    &crate::layout::ComponentAddress::root()
-                        .child(crate::layout::AddressRole::PlotBody, 0)?,
                     false,
                 )?;
                 let inputs = crate::layout::interior::PreparedInteriorInputs::from_registry(

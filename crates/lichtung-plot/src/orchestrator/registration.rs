@@ -115,6 +115,7 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
     pub(crate) policy: PlotScopePolicy,
+    pub(crate) appearance: crate::theme::ResolvedTheme,
     pub(crate) parent_orders: ParentOrders,
     pub(crate) categorical: Option<CategoricalBinding>,
     pub(crate) axes: PreparedAxesOwner,
@@ -346,6 +347,7 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
     pub(crate) policy: PlotScopePolicy,
+    pub(crate) appearance: crate::theme::ResolvedTheme,
     pub(crate) parent_orders: ParentOrders,
     pub(crate) categorical: Option<CategoricalBinding>,
     pub(crate) family: Option<PreparedFamily>,
@@ -399,28 +401,43 @@ impl<'src> PlotRegistryBuilder<'src> {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each occurrence moves its original scope, policy and resolved appearance into one build"
+    )]
     pub(crate) fn reserve(
         &mut self,
         source: &'src PlotDescription,
-        mut scope: Scope,
+        address: crate::layout::ComponentAddress,
+        numeric_owner: crate::numeric::context::OwnerInfo,
+        axis_numeric_owner: crate::numeric::context::OwnerInfo,
+        rows: RowSelection,
+        render_name: Option<String>,
+        policy: PlotScopePolicy,
+        appearance: crate::theme::ResolvedTheme,
         operation: &crate::font::canonical::OperationContext,
     ) -> Result<PlotOccurrenceId, Error> {
-        if scope.id.root != self.identity {
-            return Err(Error::Render(
-                "row source belongs to a different source or operation".into(),
-            ));
-        }
-        scope.id.slot = self.panels.len();
+        let scope = Scope {
+            id: PlotOccurrenceId {
+                root: self.identity.clone(),
+                slot: self.panels.len(),
+            },
+            address,
+            numeric_owner,
+            axis_numeric_owner,
+            rows,
+            render_name,
+        };
         let row_source = crate::data::source::RowSourceContext::new(source, &scope, operation);
         row_source.check(source, &scope, operation)?;
         let id = scope.id.clone();
         crate::data::source::reserve_source(&mut self.panels, 1)?;
-        let policy = PlotScopePolicy::for_source(source, scope.numeric_owner.facet.as_ref());
         self.panels.push(PlotRegistrationBuild {
             source,
             scope,
             row_source,
             policy,
+            appearance,
             parent_orders: ParentOrders::default(),
             categorical: CategoricalBinding::for_source(source),
             family: None,
@@ -455,6 +472,7 @@ impl<'src> PlotRegistryBuilder<'src> {
                 scope: panel.scope,
                 row_source: panel.row_source,
                 policy: panel.policy,
+                appearance: panel.appearance,
                 parent_orders: panel.parent_orders,
                 categorical: panel.categorical,
                 axes: panel.axes.expect("completed occurrence axes"),
