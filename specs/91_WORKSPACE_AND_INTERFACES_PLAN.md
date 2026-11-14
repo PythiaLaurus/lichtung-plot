@@ -1464,6 +1464,67 @@ surface:
    native configuration version and release the PyO3 borrow before callbacks;
    reentry may edit a later version. Verify the Python mapping through that same
    native path, without a new core-storage task or compatibility alternative.
+
+   Two consumer-required read-only public seams are planned, not delivered. Ship
+   each with its actual Python consumer in the same logical product commit, not as
+   unused native API. Source/design inspection is not runtime verification.
+
+   - **Canvas callback roots.** Add public
+     `Canvas::contains_plot_anchor(&self, row: usize, column: usize) -> bool` in
+     `crates/lichtung-plot/src/canvas.rs`, reading the canonical placements in
+     `crates/lichtung-plot/src/canvas/placement.rs`. Only an actual Plot owner's
+     anchor returns true; covered non-anchor cells, TextPanel, empty and out-of-range
+     coordinates, including `usize::MAX`, return false. The query allocates nothing
+     and introduces no Result, validator or layout-time work. The Python consumer
+     retains only an anchor-to-callback-Python-reference map: after successful
+     placement, remove roots at anchors no longer present and explicitly replace
+     old roots at the incoming anchor even when membership remains true. Failed
+     placement leaves roots unchanged. Do not mirror spans/occupancy or maintain
+     another native Plot inventory.
+   - **Immutable layout derivation.** Add the following TextLayout readers in
+     `crates/lichtung-plot/src/text.rs`. Each is a public method taking only `&self`:
+
+     | Reader | Return type |
+     | --- | --- |
+     | `get_alignment` | `Option<TextAlignment>` |
+     | `get_fit` | `Option<TextFit>` |
+     | `get_fit_priority` | `Option<TextFitPriority>` |
+     | `get_direction` | `Option<TextDirection>` |
+     | `get_orientation` | `Option<&TextOrientation>` |
+     | `get_rotation_mode` | `Option<TextRotationMode>` |
+     | `get_anchor` | `Option<TextAnchor>` |
+     | `get_offset` | `Option<TextOffset>` |
+     | `get_bounds` | `Option<TextBounds>` |
+     | `get_wrapping` | `Option<TextWrapping>` |
+     | `get_overflow` | `Option<&TextOverflow>` |
+     | `get_overlap` | `Option<TextOverlap>` |
+     | `get_visibility` | `Option<&TextVisibility>` |
+
+     Python `copy_with` reads all thirteen fields and rebuilds the complete layout
+     through `TextLayout::default()` and existing setters, cloning borrowed values
+     where needed. Omitted fields retain their source values; explicit None fields
+     stay absent rather than being refilled. Preserve all other fields and the
+     original value. `rotation` is only the fixed-orientation convenience, not an
+     additional stored field.
+
+     For Python TextOffset/TextBounds read-only attributes and `copy_with`, add only
+     these public `&self` readers in `crates/lichtung-plot/src/text/layout.rs`:
+
+     | Owner | Reader | Return type |
+     | --- | --- | --- |
+     | TextOffset | `get_dx`, `get_dy` | `f64` |
+     | TextOffset | `get_frame` | `TextOffsetFrame` |
+     | TextBounds | `get_max_width`, `get_max_height` | `Option<f64>` |
+     | TextBounds | `get_max_lines` | `Option<usize>` |
+
+     Reconstruct derived TextOffset/TextBounds values through their existing
+     `new()` constructors with the same checks. Do not expose an instructions dump,
+     introduce a general clear/getter framework or retain shadow Python state.
+     This does not admit an inner-field inventory for TextAnchor, TextFit or other
+     opaque values; NumericFormat still requires its own demonstrated consumer.
+     These read-only seams add no core storage representation or validation/layout
+     timing change.
+
 4. Complete bounded real-PyO3 checks for aliases/copies, insertion followed by
    external edits, retained branches, temporary insertions, fallible Canvas edits,
    render/I/O failure and callback ownership/reentry. Representative input checks
