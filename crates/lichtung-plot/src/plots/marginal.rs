@@ -112,19 +112,12 @@ impl PreparedMarginal {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
-        hues: &[String],
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
-        let keys = chart.global_hue_levels().unwrap_or(hues);
-        let colors = CategoryColors::resolve(
-            keys.iter().map(String::as_str),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
-            resources,
-        )?;
+        let colors = binding.resolve(binding.values(), theme, resources)?;
         let accents = AccentColors::resolve(
             theme.marks.get_accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
@@ -153,11 +146,11 @@ impl PreparedMarginal {
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
-        hues: &[String],
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(chart, hues, theme, data)?;
+        let (colors, accents) = self.resolved_colors(binding, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors, &accents)
     }
 
@@ -809,13 +802,10 @@ pub(crate) fn measure(
     let mut selected = Vec::new();
     crate::data::source::reserve_source(&mut selected, groups.len())?;
     let (colors, accents) = prepared.resolved_colors(
-        chart,
         registered
-            .policy
-            .coordinated
-            .colors
-            .as_deref()
-            .expect("prepared Marginal color domain"),
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
         theme,
         data,
     )?;
@@ -1260,9 +1250,8 @@ fn build_groups(
         "marginal",
     )?;
     let hue_levels = crate::data::source::collect_source(
-        chart
-            .global_hue_levels()
-            .unwrap_or(&channels.hue_levels)
+        channels
+            .hue_levels
             .iter()
             .map(|level| crate::data::source::copy_source_string(level)),
     )?;

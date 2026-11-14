@@ -139,6 +139,7 @@ mod geometry_tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source.erase(),
             &resolved,
+            |_| Ok(()),
             |_, inputs, resolved, _operation| {
                 let operation = resolved
                     .text
@@ -211,6 +212,7 @@ mod geometry_tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &crate::text::TextRequestContext::new(&theme, &text_service),
+            |_| Ok(()),
             |chart, inputs, request, _operation| {
                 let mut theme = request.theme.clone();
                 let text_service = request.text;

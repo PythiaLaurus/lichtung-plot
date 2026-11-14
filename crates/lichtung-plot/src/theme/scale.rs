@@ -146,12 +146,13 @@ impl QualitativePalette {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CategoryColors {
-    identities: Vec<String>,
+    identities: Vec<crate::data::category::CategoryKey>,
     colors: Vec<OpaqueColor>,
 }
 
 impl CategoryColors {
     pub(crate) fn resolve<'a>(
+        field: Option<&crate::data::category::RawField>,
         identities: impl Iterator<Item = &'a str> + Clone,
         palette: &QualitativePalette,
         exact: Option<&CategoricalColorScale>,
@@ -193,13 +194,19 @@ impl CategoryColors {
         let mut retained = Vec::new();
         reserve(&mut retained, count)?;
         for identity in identities {
-            if retained.iter().any(|seen| seen == identity) {
+            if retained
+                .iter()
+                .any(|seen: &crate::data::category::CategoryKey| seen.as_ref().value == identity)
+            {
                 return Err(Error::Data(format!(
                     "resolved categorical domain repeats raw key {identity:?}"
                 )));
             }
 
-            retained.push(identity.to_owned());
+            retained.push(crate::data::category::CategoryKey::new(
+                field.expect("prepared categorical field").clone(),
+                identity.to_owned(),
+            ));
         }
         Ok(Self {
             identities: retained,
@@ -209,7 +216,7 @@ impl CategoryColors {
 
     pub(crate) fn color(&self, raw_identity: &str) -> Result<Rgb, Error> {
         for (index, identity) in self.identities.iter().enumerate() {
-            if identity == raw_identity {
+            if identity.as_ref().value == raw_identity {
                 return Ok(self.colors[index].as_rgb());
             }
         }

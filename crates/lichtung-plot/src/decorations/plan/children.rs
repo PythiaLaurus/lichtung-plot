@@ -893,8 +893,16 @@ mod tests {
                 hidden.panels[0].policy.axis_text.tick_labels[1] = false;
                 let mut collectives =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
-                collectives.panels[0].policy.coordinated.collectives =
+                collectives.panels[0].parent_orders.collectives =
                     Some(crate::data::source::source_arc(Vec::new())?);
+                let mut hues =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                hues.panels[0].parent_orders.hues = Some(crate::data::source::source_arc(
+                    crate::data::category::CategoryDomain::from_values(
+                        Some(&crate::data::category::RawField::new("cohort")?),
+                        Vec::new(),
+                    )?,
+                )?);
                 let mut scales =
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 scales.panels[0].policy.facet_scales = Some(FacetScales::Free);
@@ -902,8 +910,8 @@ mod tests {
                     crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
                 guide.panels[0].policy.discrete_guide_use = GuideUse::Hidden;
                 guide.panels[0].policy.continuous_guide_use = GuideUse::Hidden;
-                let [inputs, hidden, collectives, scales, guide] =
-                    [inputs, hidden, collectives, scales, guide].map(|mut registry| {
+                let [inputs, hidden, collectives, scales, guide, hues] =
+                    [inputs, hidden, collectives, scales, guide, hues].map(|mut registry| {
                         let guide = registry
                             .prepare_discrete_guides(&source, &theme, &operation, &owner, false)?;
                         crate::layout::interior::PreparedInteriorInputs::from_registry(
@@ -912,9 +920,17 @@ mod tests {
                             guide,
                         )
                     });
-                Ok((operation, inputs?, hidden?, collectives?, scales?, guide?))
+                Ok((
+                    operation,
+                    inputs?,
+                    hidden?,
+                    collectives?,
+                    scales?,
+                    guide?,
+                    hues?,
+                ))
             },
-            |(operation, inputs, hidden, collectives, scales, guide), assigned, round| {
+            |(operation, inputs, hidden, collectives, scales, guide, hues), assigned, round| {
                 crate::data::with_source_data_for_test(
                     &source,
                     operation,
@@ -948,6 +964,11 @@ mod tests {
                             PlotRenderContext::new(registered.data(operation)?, panel, &theme)
                                 .with_registration(registered, collectives.intrinsic(registered));
                         assert!(!key.matches(&source, coordinated, &owner, round)?);
+                        let registered = &hues.plots[0];
+                        let parent_hues =
+                            PlotRenderContext::new(registered.data(operation)?, panel, &theme)
+                                .with_registration(registered, hues.intrinsic(registered));
+                        assert!(!key.matches(&source, parent_hues, &owner, round)?);
                         let registered = &guide.plots[0];
                         let hidden_guide =
                             PlotRenderContext::new(registered.data(operation)?, panel, &theme)
@@ -979,9 +1000,6 @@ mod tests {
                                 Some((-1.0, 2.0)),
                                 None,
                             ),
-                            source
-                                .clone()
-                                .with_global_hue_levels(vec!["new hue".into()]),
                             source.clone().title_alignment(crate::TextAlignment::End),
                             source.clone().x_label(
                                 crate::Text::new("x").layout(crate::TextLayout::default()),

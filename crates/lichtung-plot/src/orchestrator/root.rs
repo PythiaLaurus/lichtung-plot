@@ -125,7 +125,7 @@ mod tests {
         let text = crate::text::TextService::default();
         let request = crate::text::TextRequestContext::new(&appearance, &text);
         for source in sources {
-            crate::orchestrator::with_prepared_plot_for_test(&source, &request, |plot, inputs, request, operation| {
+            crate::orchestrator::with_prepared_plot_for_test(&source, &request, |_| Ok(()), |plot, inputs, request, operation| {
                 let registered = &inputs.plots[0];
                 let intrinsic = inputs.intrinsic(registered);
                 let PlotIntrinsics::Coordinate { value } = intrinsic else {
@@ -163,6 +163,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &request,
+            |_| Ok(()),
             |_, inputs, request, operation| {
                 let intrinsic = inputs.intrinsic(&inputs.plots[0]);
                 let PlotIntrinsics::Coordinate { value } = intrinsic else {

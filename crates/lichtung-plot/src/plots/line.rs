@@ -21,7 +21,6 @@ mod tests;
 pub(crate) struct PreparedLine {
     mark_ranges: [(f64, f64); 2],
     groups: Vec<LineGroup>,
-    hues: Vec<CategoryKey>,
     layers: Vec<PointLayer>,
     primary_accent_slots: usize,
 }
@@ -210,17 +209,12 @@ impl PreparedLine {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
-        let map = CategoryColors::resolve(
-            self.color_levels(chart),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
-            resources,
-        )?;
+        let map = binding.resolve(binding.values(), theme, resources)?;
         let slots = self
             .primary_accent_slots
             .checked_add(self.layers.len())
@@ -269,20 +263,6 @@ impl PreparedLine {
         })
     }
 
-    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.hues.iter().map(|key| key.as_ref().value)
-    }
-
-    fn color_levels<'a>(&'a self, chart: &'a Plot) -> impl Iterator<Item = &'a str> + Clone {
-        let parent = chart.global_hue_levels();
-        parent.into_iter().flatten().map(String::as_str).chain(
-            self.hues
-                .iter()
-                .filter(move |_| parent.is_none())
-                .map(|key| key.as_ref().value),
-        )
-    }
-
     pub(crate) fn group_order(
         &self,
         chart: &Plot,
@@ -322,17 +302,19 @@ impl PreparedLine {
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (map, accent) = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, order, &map, &accent)
+        let (map, accent) = self.resolved_colors(binding, theme, data)?;
+        self.guide_entries_with_colors(chart, binding, theme, order, &map, &accent)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
 
         order: &[usize],
@@ -397,10 +379,9 @@ impl PreparedLine {
             && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
             && !hue_paths
         {
-            let levels = self.color_levels(chart);
+            let levels = binding.values();
             crate::data::source::reserve_source(&mut entries, levels.clone().count())?;
-            for label in
-                levels.filter(|label| self.hues.iter().any(|key| key.as_ref().value == *label))
+            for label in levels.filter(|label| binding.local_values().any(|value| value == *label))
             {
                 entries.push(
                     GuideSourceKey::row_hue(chart.description().point_legend_identity(label)?)?
@@ -444,8 +425,8 @@ impl PreparedLine {
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
         collectives: Option<&[crate::data::CollectivePair]>,
-    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
-        let (mut prepared, ranges, conditions) =
+    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>, Vec<CategoryKey>), Error> {
+        let (mut prepared, ranges, conditions, hues) =
             Self::prepare_scientific(chart, data, conditions, collectives)?;
         let include_hue = chart.kind() == PlotKind::Line
             || (chart.kind() == PlotKind::LinePath
@@ -478,7 +459,7 @@ impl PreparedLine {
                 group.fill_alpha = alpha.collective(chart.description(), identity)?;
             }
         }
-        Ok((prepared, ranges, conditions))
+        Ok((prepared, ranges, conditions, hues))
     }
 
     #[expect(
@@ -492,7 +473,7 @@ impl PreparedLine {
         data: PlotData<'_, '_>,
         conditions: Option<&[String]>,
         collectives: Option<&[crate::data::CollectivePair]>,
-    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>), Error> {
+    ) -> Result<(Self, [(f64, f64); 2], Option<Vec<String>>, Vec<CategoryKey>), Error> {
         data.validate_row_source()?;
         let alpha = chart.description().prepare_alpha(
             AlphaTarget::Point,
@@ -816,12 +797,12 @@ impl PreparedLine {
             Self {
                 mark_ranges,
                 groups,
-                hues,
                 layers,
                 primary_accent_slots,
             },
             ranges,
             conditions,
+            hues,
         ))
     }
 }
@@ -895,9 +876,18 @@ fn project(
     let order = prepared.group_order(
         chart,
         crate::orchestrator::registration::collective_pairs(context.registered),
-        crate::orchestrator::registration::composed_group_levels(context.registered),
+        crate::orchestrator::registration::group_order_levels(context.registered),
     )?;
-    let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
+    let (map, accent) = prepared.resolved_colors(
+        context
+            .registered
+            .expect("prepared Line occurrence")
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
+        theme,
+        data,
+    )?;
 
     for &index in &order {
         let group = &prepared.groups[index];

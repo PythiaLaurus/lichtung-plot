@@ -40,17 +40,30 @@ impl<'src> PreparedPlotInputs<'src> {
         let text = TextService::default();
         let request = TextRequestContext::new(&theme, &text);
         source.description().validate_configuration(kind)?;
-        let mut registry = crate::plots::shared_x::prepare_plot(
+        let registry = crate::plots::shared_x::prepare_plot(
             source,
             &prepared_stage.operation(),
             Some(&theme),
         )?;
         registry.validate_categorical_scale(source, &request, None)?;
+        Self::complete(source, kind, theme, text, registry, caches, prepared_stage)
+    }
+
+    fn complete(
+        source: &'src Plot,
+        kind: PlotKind,
+        theme: Box<ResolvedTheme>,
+        text: TextService,
+        mut registry: crate::orchestrator::registration::PlotRegistryBuilder<'src>,
+        caches: std::cell::RefCell<RootLayoutCaches>,
+        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<Self, Error> {
+        let request = TextRequestContext::new(&theme, &text);
         let facet_guide = source
             .description()
             .has_facets()
             .then(|| {
-                super::facets::prepare_discrete_guide(
+                super::prepare_discrete_guide(
                     source,
                     kind,
                     &request,
@@ -140,6 +153,9 @@ impl<'src> PreparedPlotInputs<'src> {
 pub(crate) fn with_prepared_plot_for_test<T>(
     source: &Plot,
     appearance: &TextRequestContext<'_, '_>,
+    configure: impl FnOnce(
+        &mut crate::orchestrator::registration::PlotRegistryBuilder<'_>,
+    ) -> Result<(), Error>,
     visit: impl FnOnce(
         &Plot,
         &crate::layout::interior::PreparedInteriorInputs<'_>,
@@ -159,10 +175,23 @@ pub(crate) fn with_prepared_plot_for_test<T>(
     crate::layout::plan_root(
         sizing,
         |stage| {
-            PreparedPlotInputs::prepare(
+            let theme = Box::new(appearance.theme.clone());
+            let text = TextService::default();
+            source.description().validate_configuration(source.kind())?;
+            let mut registry =
+                crate::plots::shared_x::prepare_plot(source, &stage.operation(), Some(&theme))?;
+            registry.validate_categorical_scale(
+                source,
+                &TextRequestContext::new(&theme, &text),
+                None,
+            )?;
+            configure(&mut registry)?;
+            PreparedPlotInputs::complete(
                 source,
                 source.kind(),
-                || Ok(Box::new(appearance.theme.clone())),
+                theme,
+                text,
+                registry,
                 std::cell::RefCell::new(RootLayoutCaches::new(
                     crate::decorations::plan::children::ChildPlans::facets(),
                 )),
@@ -1284,14 +1313,19 @@ impl Plot {
         &self,
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<(f64, f64), Error> {
-        with_prepared_plot_for_test(self, theme, |plot, inputs, request, operation| {
-            plot.intrinsic_body_minimum(
-                inputs.plots.first(),
-                inputs.intrinsic(&inputs.plots[0]),
-                operation,
-                request,
-            )
-        })?
+        with_prepared_plot_for_test(
+            self,
+            theme,
+            |_| Ok(()),
+            |plot, inputs, request, operation| {
+                plot.intrinsic_body_minimum(
+                    inputs.plots.first(),
+                    inputs.intrinsic(&inputs.plots[0]),
+                    operation,
+                    request,
+                )
+            },
+        )?
     }
 
     #[cfg(test)]
@@ -1310,18 +1344,23 @@ impl Plot {
         panel: crate::layout::PixelRect,
         theme: &TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, Error> {
-        with_prepared_plot_for_test(self, theme, |plot, inputs, request, _operation| {
-            crate::layout::fit::measured(plot.preflight_measurement(
-                inputs.plots.first(),
-                Some(inputs.intrinsic(&inputs.plots[0])),
-                None,
-                kind,
-                panel,
-                request,
-                &crate::layout::fit::ROOT_SCOPE,
-            ))
-            .map_err(crate::layout::fit::PlanError::into_error)
-        })?
+        with_prepared_plot_for_test(
+            self,
+            theme,
+            |_| Ok(()),
+            |plot, inputs, request, _operation| {
+                crate::layout::fit::measured(plot.preflight_measurement(
+                    inputs.plots.first(),
+                    Some(inputs.intrinsic(&inputs.plots[0])),
+                    None,
+                    kind,
+                    panel,
+                    request,
+                    &crate::layout::fit::ROOT_SCOPE,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)
+            },
+        )?
     }
 
     #[expect(

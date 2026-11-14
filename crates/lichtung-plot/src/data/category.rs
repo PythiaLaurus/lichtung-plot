@@ -68,6 +68,52 @@ impl CategoryKey {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct CategoryDomain {
+    pub(crate) ordered: Vec<CategoryKey>,
+}
+
+impl CategoryDomain {
+    pub(crate) fn from_values(field: Option<&RawField>, values: Vec<String>) -> Result<Self> {
+        Ok(Self {
+            ordered: super::source::collect_source(values.into_iter().map(|value| {
+                Ok(CategoryKey::new(
+                    field.expect("prepared categorical field").clone(),
+                    value,
+                ))
+            }))?,
+        })
+    }
+
+    pub(crate) fn values(&self) -> impl ExactSizeIterator<Item = &str> + Clone {
+        self.ordered.iter().map(|key| key.as_ref().value)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum CategoryOrderRef<'a> {
+    Raw(&'a [String]),
+    Keys(&'a CategoryDomain),
+}
+
+impl CategoryOrderRef<'_> {
+    pub(crate) fn len(self) -> usize {
+        match self {
+            Self::Raw(values) => values.len(),
+            Self::Keys(domain) => domain.ordered.len(),
+        }
+    }
+}
+
+impl<'a> CategoryOrderRef<'a> {
+    pub(crate) fn values(self) -> impl ExactSizeIterator<Item = &'a str> + Clone {
+        (0..self.len()).map(move |index| match self {
+            Self::Raw(values) => values[index].as_str(),
+            Self::Keys(domain) => domain.ordered[index].as_ref().value,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

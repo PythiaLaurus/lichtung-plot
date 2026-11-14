@@ -140,13 +140,12 @@ pub(crate) fn prepare_facet_scopes<'src>(
     Ok(())
 }
 
-pub(super) struct PreparedFacetGuide {
-    pub(super) descriptor:
+pub(crate) struct PreparedFacetGuide {
+    pub(crate) descriptor:
         Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
-    pub(super) hue_levels: Option<Vec<String>>,
 }
 
-pub(super) fn prepare_discrete_guide(
+pub(crate) fn prepare_discrete_guide(
     source: &Plot,
     kind: PlotKind,
     theme: &TextRequestContext<'_, '_>,
@@ -219,14 +218,7 @@ impl OwnedFacetPlan {
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
         theme.text.prepared_font_environment()?;
-        let (mut base_plot, _, _) = data::base_plot(source, kind)?;
-        if let Some(levels) = &prepared_guide.hue_levels {
-            base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
-                levels
-                    .iter()
-                    .map(|level| crate::data::source::copy_source_string(level)),
-            )?);
-        }
+        let (base_plot, _, _, _) = data::base_plot(source, kind)?;
         let mut panels = data::extract_panels(source.description(), &selectors, None)?;
         data::validate_significance_facet_anchors(source.description(), &panels)?;
         let mut minima = Vec::new();

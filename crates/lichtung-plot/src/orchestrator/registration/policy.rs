@@ -10,7 +10,6 @@ pub(crate) struct PlotScopePolicy {
     pub(crate) guide_composition: crate::LegendComposition,
     pub(crate) continuous_materialization: ContinuousMaterialization,
     pub(crate) facet_scales: Option<crate::FacetScales>,
-    pub(crate) coordinated: CoordinatedDomains,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,35 +23,6 @@ pub(crate) enum ContinuousMaterialization {
     Local,
     SharedFinal,
     Suppressed,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct CoordinatedDomains {
-    pub(crate) colors: Option<std::sync::Arc<Vec<String>>>,
-    pub(crate) groups: Option<std::sync::Arc<Vec<String>>>,
-    pub(crate) collectives: Option<std::sync::Arc<Vec<crate::data::CollectivePair>>>,
-}
-
-impl CoordinatedDomains {
-    pub(crate) fn composed_groups(
-        &self,
-        source: &crate::builder::PlotDescription,
-    ) -> Option<&[String]> {
-        if matches!(
-            source.kind(),
-            crate::PlotKind::Bar
-                | crate::PlotKind::HorizontalBar
-                | crate::PlotKind::StackedBar
-                | crate::PlotKind::StackedHorizontalBar
-                | crate::PlotKind::Boxplot
-                | crate::PlotKind::Violin
-                | crate::PlotKind::Raincloud
-        ) && (!source.has_facets() || source.group_col().is_none())
-        {
-            return None;
-        }
-        self.groups.as_deref().map(Vec::as_slice)
-    }
 }
 
 pub(crate) struct AxisTextVisibility {
@@ -96,7 +66,6 @@ impl PlotScopePolicy {
             guide_composition: source.legend_composition_spec(),
             continuous_materialization: ContinuousMaterialization::Local,
             facet_scales: source.has_facets().then(|| source.facet_scales_spec()),
-            coordinated: CoordinatedDomains::default(),
         }
     }
 }

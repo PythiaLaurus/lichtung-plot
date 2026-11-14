@@ -3,15 +3,15 @@
 use crate::{builder::PlotDescription, Error};
 
 mod axes;
+mod colors;
 mod policy;
 pub(crate) use axes::{
     axis_label, prepare_axis_source, AxisIntentRef, AxisSlot, AxisSourceWitness, AxisSpace,
     BaseAxisRef, DisplayExtent, ExactTicksRef, MarginalStrip, PreparedAxes, PreparedAxesOwner,
     PreparedAxisSource, PreparedCategorySource,
 };
-pub(crate) use policy::{
-    ContinuousMaterialization, CoordinatedDomains, GutterOwner, PlotScopePolicy,
-};
+pub(crate) use colors::{CategoricalBinding, CategoricalDomainSource};
+pub(crate) use policy::{ContinuousMaterialization, GutterOwner, PlotScopePolicy};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RootIdentity(pub(crate) std::sync::Arc<()>);
@@ -115,6 +115,8 @@ pub(crate) struct PlotRegistration<'src> {
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
     pub(crate) policy: PlotScopePolicy,
+    pub(crate) parent_orders: ParentOrders,
+    pub(crate) categorical: Option<CategoricalBinding>,
     pub(crate) axes: PreparedAxesOwner,
     pub(crate) family: PreparedFamily,
     pub(crate) guide: GuideContribution,
@@ -125,6 +127,13 @@ pub(crate) struct GuideContribution {
     pub(crate) descriptor:
         Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     pub(crate) alpha: std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ParentOrders {
+    pub(crate) groups: Option<std::sync::Arc<Vec<String>>>,
+    pub(crate) hues: Option<std::sync::Arc<crate::data::category::CategoryDomain>>,
+    pub(crate) collectives: Option<std::sync::Arc<Vec<crate::data::CollectivePair>>>,
 }
 
 pub(crate) fn render_name<'v>(registered: Option<&'v PlotRegistration<'_>>) -> Option<&'v str> {
@@ -210,8 +219,7 @@ pub(crate) fn collective_pairs<'v>(
     registered: Option<&'v PlotRegistration<'_>>,
 ) -> Option<&'v [crate::data::CollectivePair]> {
     registered?
-        .policy
-        .coordinated
+        .parent_orders
         .collectives
         .as_deref()
         .map(Vec::as_slice)
@@ -234,12 +242,59 @@ pub(crate) fn line_condition_levels<'v>(
 /// The original optional global operand, not a family's mandatory local order.
 pub(crate) fn composed_group_levels<'v>(
     registered: Option<&'v PlotRegistration<'_>>,
-) -> Option<&'v [String]> {
+) -> Option<crate::data::category::CategoryOrderRef<'v>> {
     let registered = registered?;
-    registered
-        .policy
-        .coordinated
-        .composed_groups(registered.source)
+    composed_groups(
+        registered.source,
+        &registered.parent_orders,
+        registered.categorical.as_ref(),
+    )
+}
+
+fn composed_groups<'v>(
+    source: &PlotDescription,
+    orders: &'v ParentOrders,
+    binding: Option<&'v CategoricalBinding>,
+) -> Option<crate::data::category::CategoryOrderRef<'v>> {
+    use crate::data::category::CategoryOrderRef;
+    if matches!(
+        source.kind(),
+        crate::PlotKind::Bar
+            | crate::PlotKind::HorizontalBar
+            | crate::PlotKind::StackedBar
+            | crate::PlotKind::StackedHorizontalBar
+            | crate::PlotKind::Boxplot
+            | crate::PlotKind::Violin
+            | crate::PlotKind::Raincloud
+    ) && (!source.has_facets() || source.group_col().is_none())
+    {
+        return None;
+    }
+    if source.kind() == crate::PlotKind::Interaction && source.hue_dimension_key().is_none() {
+        if let Some(parent) = binding.and_then(|binding| binding.parent.as_deref()) {
+            return Some(CategoryOrderRef::Keys(parent));
+        }
+    }
+    orders
+        .groups
+        .as_deref()
+        .map(|values| CategoryOrderRef::Raw(values.as_slice()))
+}
+
+pub(crate) fn group_order_levels<'v>(
+    registered: Option<&'v PlotRegistration<'_>>,
+) -> Option<&'v [String]> {
+    registered?
+        .parent_orders
+        .groups
+        .as_deref()
+        .map(Vec::as_slice)
+}
+
+pub(crate) fn parent_hues<'v>(
+    registered: Option<&'v PlotRegistration<'_>>,
+) -> Option<&'v crate::data::category::CategoryDomain> {
+    registered?.parent_orders.hues.as_deref()
 }
 
 impl std::fmt::Debug for PlotRegistration<'_> {
@@ -291,12 +346,29 @@ pub(crate) struct PlotRegistrationBuild<'src> {
     pub(crate) scope: Scope,
     pub(crate) row_source: crate::data::source::RowSourceContext<'src>,
     pub(crate) policy: PlotScopePolicy,
+    pub(crate) parent_orders: ParentOrders,
+    pub(crate) categorical: Option<CategoricalBinding>,
     pub(crate) family: Option<PreparedFamily>,
     pub(crate) axes: Option<PreparedAxesOwner>,
     pub(crate) guide: Option<GuideContribution>,
 }
 
 impl<'src> PlotRegistrationBuild<'src> {
+    pub(crate) fn set_parent_colors(
+        &mut self,
+        domain: std::sync::Arc<crate::data::category::CategoryDomain>,
+    ) {
+        if !(self.source.kind() == crate::PlotKind::Interaction
+            && self.source.hue_dimension_key().is_none())
+        {
+            self.parent_orders.hues = Some(std::sync::Arc::clone(&domain));
+        }
+        self.categorical
+            .as_mut()
+            .expect("prepared color binding")
+            .parent = Some(domain);
+    }
+
     pub(crate) fn data<'v>(
         &'v self,
         operation: &'v crate::font::canonical::OperationContext,
@@ -349,6 +421,8 @@ impl<'src> PlotRegistryBuilder<'src> {
             scope,
             row_source,
             policy,
+            parent_orders: ParentOrders::default(),
+            categorical: CategoricalBinding::for_source(source),
             family: None,
             axes: None,
             guide: None,
@@ -381,6 +455,8 @@ impl<'src> PlotRegistryBuilder<'src> {
                 scope: panel.scope,
                 row_source: panel.row_source,
                 policy: panel.policy,
+                parent_orders: panel.parent_orders,
+                categorical: panel.categorical,
                 axes: panel.axes.expect("completed occurrence axes"),
                 family,
                 guide: panel
@@ -488,7 +564,14 @@ pub(crate) enum FamilyRef<'v> {
     Matrix(&'v crate::plots::matrix::PreparedMatrixAxes),
 }
 
-impl FamilyRef<'_> {
+impl<'v> FamilyRef<'v> {
+    pub(crate) fn positioned_groups(self) -> Option<&'v [String]> {
+        match self {
+            Self::Bars { marks, .. } => Some(&marks.series),
+            Self::Distribution { marks, .. } => marks.positioned_groups(),
+            _ => None,
+        }
+    }
     pub(crate) const fn kind(self) -> crate::PlotKind {
         match self {
             Self::Scatter(_) => crate::PlotKind::Scatter,

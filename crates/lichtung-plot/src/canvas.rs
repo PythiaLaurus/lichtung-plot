@@ -48,7 +48,6 @@ struct OwnedCanvasPlot {
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
 }
 
-type PreparedColorDomains = Vec<(String, Vec<String>)>;
 use crate::decorations::legend::discrete::PreparedGuide;
 
 pub(crate) struct OwnedCanvasPlan {
@@ -65,7 +64,6 @@ struct PreparedCanvasInputs<'src> {
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
-    color_domains: Option<Arc<PreparedColorDomains>>,
     shared_guide: Option<Arc<PreparedGuide>>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs<'src>>>,
     text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
@@ -1064,9 +1062,9 @@ impl Canvas {
     fn prepare_color_domains(
         &self,
         interiors: &[Option<crate::orchestrator::registration::PlotRegistryBuilder>],
-    ) -> Result<Option<Arc<PreparedColorDomains>>, Error> {
+    ) -> Result<Vec<(String, Arc<crate::data::category::CategoryDomain>)>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         let mut groups = Vec::new();
         crate::data::source::reserve_source(&mut groups, self.placements.len())?;
@@ -1102,7 +1100,13 @@ impl Canvas {
                 }
             }
         }
-        crate::data::source::source_arc(groups).map(Some)
+        crate::data::source::collect_source(groups.into_iter().map(|(field, values)| {
+            let domain = crate::data::category::CategoryDomain::from_values(
+                Some(&crate::data::category::RawField::new(&field)?),
+                values,
+            )?;
+            Ok((field, crate::data::source::source_arc(domain)?))
+        }))
     }
 
     /// Prepare every local contribution or explicit absence, then retain the
@@ -1115,7 +1119,7 @@ impl Canvas {
         &'src self,
         themes: &ResolvedCanvasThemes,
         interiors: Vec<Option<crate::orchestrator::registration::PlotRegistryBuilder<'src>>>,
-        hue_groups: Option<&[(String, Vec<String>)]>,
+        hue_groups: &[(String, Arc<crate::data::category::CategoryDomain>)],
         resources: &crate::font::canonical::OperationContext,
     ) -> Result<
         (
@@ -1133,36 +1137,17 @@ impl Canvas {
                 completed.push(None);
                 continue;
             };
-            let mut plot = source.clone();
-            let mut groups = None;
-            if let Some((_, levels)) = hue_groups.and_then(|groups| {
-                groups.iter().find(|(field, _)| {
-                    Some(field.as_str()) == plot.description().categorical_color_field()
-                })
-            }) {
-                let levels = crate::data::source::collect_source(
-                    levels
-                        .iter()
-                        .map(|level| crate::data::source::copy_source_string(level)),
-                )?;
-                if plot.kind() == PlotKind::Interaction
-                    && plot.description().hue_dimension_key().is_none()
-                {
-                    groups = Some(levels);
-                } else {
-                    plot = plot.with_global_hue_levels(levels);
-                }
-            }
             let theme = &themes
                 .plot_request(index)
                 .expect("configured Canvas panel has a resolved theme");
             let mut inputs = input.ok_or_else(|| {
                 Error::Render("Canvas point/path guide is missing prepared semantics".into())
             })?;
-            if let Some(groups) = groups {
-                let groups = crate::data::source::source_arc(groups)?;
+            if let Some((_, domain)) = hue_groups.iter().find(|(field, _)| {
+                Some(field.as_str()) == source.description().categorical_color_field()
+            }) {
                 for registered in &mut inputs.panels {
-                    registered.policy.coordinated.groups = Some(Arc::clone(&groups));
+                    registered.set_parent_colors(Arc::clone(domain));
                 }
             }
             let owner = crate::layout::ComponentAddress::root().child(
@@ -1172,7 +1157,7 @@ impl Canvas {
                 })?,
             )?;
             let root_guide =
-                inputs.prepare_discrete_guides(&plot, theme, resources, &owner, false)?;
+                inputs.prepare_discrete_guides(source, theme, resources, &owner, false)?;
             if self.legend_policy == CanvasLegendPolicy::Shared {
                 if let Some(descriptor) = &root_guide {
                     contributions.push(Arc::clone(descriptor));
@@ -1401,17 +1386,21 @@ impl Canvas {
             let family = match plot.kind() {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     plot.description().configured_source_rows()?;
-                    let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
+                    let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
                         plot,
                         panel.data(&resources)?,
                         None,
                         panel
-                            .policy
-                            .coordinated
+                            .parent_orders
                             .collectives
                             .as_deref()
                             .map(Vec::as_slice),
                     )?;
+                    panel
+                        .categorical
+                        .as_mut()
+                        .expect("prepared color binding")
+                        .set_local_keys(hues)?;
                     panel.axes = Some(crate::plots::shared_x::prepare_pair_axes(
                         panel,
                         ranges.map(Some),
@@ -1581,15 +1570,12 @@ impl Canvas {
                 let color_domains = self.prepare_color_domains(&interiors)?;
                 for (index, plot) in self.placements.plots().enumerate() {
                     if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
-                        let global_hues = color_domains.as_ref().and_then(|groups| {
-                            groups
-                                .iter()
-                                .find(|(field, _)| {
-                                    Some(field.as_str())
-                                        == plot.description().categorical_color_field()
-                                })
-                                .map(|(_, levels)| levels.as_slice())
-                        });
+                        let global_hues = color_domains
+                            .iter()
+                            .find(|(field, _)| {
+                                Some(field.as_str()) == plot.description().categorical_color_field()
+                            })
+                            .map(|(_, domain)| domain.as_ref());
                         inputs.validate_categorical_scale(
                             plot,
                             themes.plot(index).expect("configured Canvas theme"),
@@ -1608,7 +1594,7 @@ impl Canvas {
                 let (interiors, shared_guide) = self.prepare_discrete_guides(
                     &themes,
                     interiors,
-                    color_domains.as_deref().map(Vec::as_slice),
+                    &color_domains,
                     &prepared_stage.operation(),
                 )?;
                 let (mut census, scalar_presence) = self.foundational_text_census(
@@ -1627,7 +1613,6 @@ impl Canvas {
                     text_census: census,
                     root_text,
                     shared_x,
-                    color_domains,
                     shared_guide,
                     interiors,
                     text_panel_intrinsics,
@@ -1660,7 +1645,6 @@ impl Canvas {
                     round,
                     children,
                     &prepared.shared_x,
-                    prepared.color_domains.as_deref().map(Vec::as_slice),
                     prepared.shared_guide.as_ref(),
                     &prepared.text_panel_intrinsics,
                     &prepared.plot_intrinsics,
@@ -2039,7 +2023,6 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
-        color_domains: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&Arc<PreparedGuide>>,
         text_panel_intrinsics: &[Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &[Option<
@@ -2058,7 +2041,6 @@ impl Canvas {
             round,
             children,
             shared_x,
-            color_domains,
             prepared_guide,
             text_panel_intrinsics,
             plot_intrinsics,
@@ -2165,7 +2147,6 @@ impl Canvas {
 
     #[expect(
         clippy::too_many_arguments,
-        clippy::too_many_lines,
         reason = "admitted scoped configuration and shared-guide preparation form one parent round"
     )]
     fn prepare_canvas_round<'a>(
@@ -2176,7 +2157,6 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &'a [Option<(f64, f64)>],
-        color_domains: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&'a Arc<PreparedGuide>>,
         text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &'a [Option<
@@ -2227,37 +2207,8 @@ impl Canvas {
             }
             plots.push(Some(plot));
         }
-        let hue_groups: &[(String, Vec<String>)] =
-            if self.legend_policy != CanvasLegendPolicy::Shared {
-                &[]
-            } else if let Some(hues) = color_domains {
-                hues
-            } else {
-                return Err(Error::Render(
-                    "Canvas shared color domains were not prepared".into(),
-                ));
-            };
         for slot in &mut plots {
             if let Some(plot) = slot.take() {
-                let levels = hue_groups.iter().find(|(dimension, _)| {
-                    Some(dimension.as_str()) == plot.description().categorical_color_field()
-                });
-                let plot = if let Some((_, levels)) = levels {
-                    let levels = crate::data::source::collect_source(
-                        levels
-                            .iter()
-                            .map(|level| crate::data::source::copy_source_string(level)),
-                    )?;
-                    if plot.kind() == PlotKind::Interaction
-                        && plot.description().hue_dimension_key().is_none()
-                    {
-                        plot
-                    } else {
-                        plot.with_global_hue_levels(levels)
-                    }
-                } else {
-                    plot
-                };
                 *slot = Some(
                     plot.with_canvas_size(width, height)
                         .with_output_dimensions(width, height),

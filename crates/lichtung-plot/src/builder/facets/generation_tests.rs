@@ -19,15 +19,27 @@ fn prepare_key_inputs<'src>(
     let appearance = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&appearance, &text);
-    let guide = registry
-        .prepare_discrete_guides(
+    let guide = if source.description().has_facets() {
+        crate::orchestrator::prepare_discrete_guide(
             source,
+            source.kind(),
             &theme,
+            &mut registry,
             operation,
-            &crate::layout::ComponentAddress::root(),
-            source.description().has_facets(),
         )
-        .unwrap();
+        .unwrap()
+        .descriptor
+    } else {
+        registry
+            .prepare_discrete_guides(
+                source,
+                &theme,
+                operation,
+                &crate::layout::ComponentAddress::root(),
+                false,
+            )
+            .unwrap()
+    };
     crate::layout::interior::PreparedInteriorInputs::from_registry(
         registry,
         crate::layout::interior::InteriorRoute::classify(source.kind()),
@@ -134,7 +146,33 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
         ["absent", "seen"]
     );
     assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(registered), None));
-    inputs.plots[1].policy.coordinated.groups =
+    assert_eq!(
+        retained.global_hue_levels.as_deref().unwrap(),
+        ["absent", "seen"]
+    );
+    let original = std::sync::Arc::clone(registered.parent_orders.hues.as_ref().unwrap());
+    let replacement = |values| {
+        crate::data::source::source_arc(
+            crate::data::category::CategoryDomain::from_values(
+                source.description().hue_field().as_ref(),
+                values,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let equal = replacement(vec!["absent".into(), "seen".into()]);
+    assert!(!std::sync::Arc::ptr_eq(&original, &equal));
+    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&equal));
+    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(equal);
+    assert!(plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+    let reversed = replacement(vec!["seen".into(), "absent".into()]);
+    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&reversed));
+    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(reversed);
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
+    inputs.plots[1].parent_orders.hues = Some(std::sync::Arc::clone(&original));
+    inputs.plots[1].categorical.as_mut().unwrap().parent = Some(original);
+    inputs.plots[1].parent_orders.groups =
         Some(crate::data::source::source_arc(vec!["seen".into(), "absent".into()]).unwrap());
     assert!(!plot.same_composed_inputs(&retained, &retained.guides, Some(&inputs.plots[1]), None));
 
@@ -145,10 +183,9 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
     .erase();
     let inputs = prepare_key_inputs(&single, &operation);
     assert!(inputs.plots[0]
-        .policy
-        .coordinated
-        .groups
+        .family
         .as_ref()
+        .positioned_groups()
         .unwrap()
         .is_empty());
     let retained = single

@@ -27,19 +27,13 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let domains = &context
+    let series = &prepared.series;
+    let binding = context
         .registered
         .expect("prepared Bar occurrence")
-        .policy
-        .coordinated;
-    let series = domains
-        .groups
-        .as_deref()
-        .expect("prepared Bar group domain");
-    let hues = domains
-        .colors
-        .as_deref()
-        .expect("prepared Bar color domain");
+        .categorical
+        .as_ref()
+        .expect("prepared color binding");
     let categories = &context
         .registered
         .expect("prepared Bar occurrence")
@@ -47,7 +41,13 @@ pub(crate) fn measure_marks(
         .categories(1)
         .expect("prepared Bar categories")
         .raw;
-    let (colors, accents) = bar_data::resolved_colors(chart, categories, hues, theme, data)?;
+    let (colors, accents) = bar_data::resolved_colors(
+        chart,
+        &context.registered.expect("prepared Bar occurrence").axes,
+        binding,
+        theme,
+        data,
+    )?;
     let y_count = categories.len() as f64;
     let panel_box = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;

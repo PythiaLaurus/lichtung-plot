@@ -37,6 +37,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
         crate::orchestrator::with_prepared_plot_for_test(
             source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, theme, _operation| {
                 let chart = chart.clone();
                 let operation = theme.text.prepared_font_environment().unwrap().operation();

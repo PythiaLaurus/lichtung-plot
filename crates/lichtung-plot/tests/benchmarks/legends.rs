@@ -850,6 +850,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
         let minimums = crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, theme, operation| {
                 inputs
                     .plots

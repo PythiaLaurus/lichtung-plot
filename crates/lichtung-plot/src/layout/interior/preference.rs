@@ -392,6 +392,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             plot,
             theme,
+            |_| Ok(()),
             |plot, inputs, request, operation| {
                 super::super::coordinate::canvas_layout(
                     plot,

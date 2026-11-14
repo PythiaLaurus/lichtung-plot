@@ -158,19 +158,23 @@ impl PlotRegistryBuilder<'_> {
                         include(value)?;
                     }
                 }
-                F::Line { marks, .. } => {
-                    for value in marks.hue_levels() {
+                F::Line { .. } | F::Matrix(_) => {
+                    for value in registered
+                        .categorical
+                        .as_ref()
+                        .expect("prepared color binding")
+                        .local_values()
+                    {
                         include(value)?;
                     }
                 }
                 F::Bars { marks, .. } => {
                     for value in marks.observed_hue_levels(
                         registered
-                            .policy
-                            .coordinated
-                            .colors
-                            .as_deref()
-                            .expect("prepared Bar color domain"),
+                            .categorical
+                            .as_ref()
+                            .expect("prepared color binding")
+                            .local_values(),
                     ) {
                         include(value)?;
                     }
@@ -178,11 +182,10 @@ impl PlotRegistryBuilder<'_> {
                 F::Distribution { marks, .. } => {
                     for value in marks.observed_hue_levels(
                         registered
-                            .policy
-                            .coordinated
-                            .colors
-                            .as_deref()
-                            .expect("prepared distribution color domain"),
+                            .categorical
+                            .as_ref()
+                            .expect("prepared color binding")
+                            .local_values(),
                     ) {
                         include(value)?;
                     }
@@ -199,17 +202,6 @@ impl PlotRegistryBuilder<'_> {
                 }
                 F::Marginal(marks) => {
                     for value in marks.hue_levels() {
-                        include(value)?;
-                    }
-                }
-                F::Matrix(_) => {
-                    for value in registered
-                        .policy
-                        .coordinated
-                        .colors
-                        .as_deref()
-                        .expect("prepared Matrix color domain")
-                    {
                         include(value)?;
                     }
                 }
@@ -231,13 +223,20 @@ impl PlotRegistryBuilder<'_> {
         &self,
         chart: &Plot,
         theme: &crate::theme::Theme,
-        global_hues: Option<&[String]>,
+        global_hues: Option<&crate::data::category::CategoryDomain>,
     ) -> Result<(), Error> {
-        let global_hues = global_hues.or_else(|| chart.global_hue_levels());
+        let global_hues = global_hues.or_else(|| {
+            self.panels
+                .first()
+                .and_then(|panel| panel.parent_orders.hues.as_deref())
+        });
         let palette = if let Some(scale) = chart.description().categorical_color_scale_spec() {
             let Some(palette) = scale.palette() else {
                 if !chart.description().colors_by_sign() {
-                    for key in global_hues.into_iter().flatten() {
+                    for key in global_hues
+                        .into_iter()
+                        .flat_map(crate::data::category::CategoryDomain::values)
+                    {
                         if scale
                             .map()
                             .expect("validated map selection")
@@ -263,13 +262,20 @@ impl PlotRegistryBuilder<'_> {
         }
         let mut keys = Vec::new();
         if let Some(global) = global_hues {
-            include_keys(&mut keys, global.iter().map(String::as_str))?;
+            include_keys(&mut keys, global.values())?;
         }
         for registered in &self.panels {
             let axes = registered.axes.as_ref().expect("prepared axes");
             match registered.family.as_ref().expect("prepared family") {
                 F::Scatter(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Line { marks, .. } => include_keys(&mut keys, marks.hue_levels())?,
+                F::Line { .. } | F::Matrix(_) => include_keys(
+                    &mut keys,
+                    registered
+                        .categorical
+                        .as_ref()
+                        .expect("prepared color binding")
+                        .local_values(),
+                )?,
                 F::Density(marks) => include_keys(&mut keys, marks.hue_levels())?,
                 F::Bars { .. } => {
                     let categories = &axes
@@ -279,53 +285,33 @@ impl PlotRegistryBuilder<'_> {
                         )))
                         .expect("prepared Bar categories")
                         .raw;
-                    include_keys(
-                        &mut keys,
-                        crate::plots::bar_data::color_keys(
-                            categories,
-                            registered
-                                .policy
-                                .coordinated
-                                .colors
-                                .as_deref()
-                                .expect("prepared Bar color domain"),
-                        )
-                        .iter()
-                        .map(String::as_str),
-                    )?;
+                    let binding = registered
+                        .categorical
+                        .as_ref()
+                        .expect("prepared color binding");
+                    if binding.local_len() == 0 {
+                        include_keys(&mut keys, categories.iter().map(String::as_str))?;
+                    } else {
+                        include_keys(&mut keys, binding.local_values())?;
+                    }
                 }
                 F::Distribution { .. } => {
-                    let hues = registered
-                        .policy
-                        .coordinated
-                        .colors
-                        .as_deref()
-                        .expect("prepared distribution color domain");
-                    let domain = if hues.is_empty() {
-                        &axes
+                    let binding = registered
+                        .categorical
+                        .as_ref()
+                        .expect("prepared color binding");
+                    if binding.local_len() == 0 {
+                        let domain = &axes
                             .categories(0)
                             .expect("prepared distribution categories")
-                            .raw
+                            .raw;
+                        include_keys(&mut keys, domain.iter().map(String::as_str))?;
                     } else {
-                        hues
-                    };
-                    include_keys(&mut keys, domain.iter().map(String::as_str))?;
+                        include_keys(&mut keys, binding.local_values())?;
+                    }
                 }
                 F::Interaction(marks) => include_keys(&mut keys, marks.color_keys())?,
                 F::Marginal(marks) => include_keys(&mut keys, marks.hue_levels())?,
-                F::Matrix(_) => {
-                    include_keys(
-                        &mut keys,
-                        registered
-                            .policy
-                            .coordinated
-                            .colors
-                            .as_deref()
-                            .expect("prepared Matrix color domain")
-                            .iter()
-                            .map(String::as_str),
-                    )?;
-                }
                 _ => {}
             }
         }
@@ -350,8 +336,12 @@ pub(crate) fn guide_sources(
                 F::Scatter(marks) => Some(marks),
                 _ => None,
             })?;
-            let order = marks.group_order(chart)?;
-            marks.guide_entries_in_order(chart, theme, data, &order)
+            let binding = registered
+                .categorical
+                .as_ref()
+                .expect("prepared color binding");
+            let order = marks.group_order(binding)?;
+            marks.guide_entries_in_order(chart, binding, theme, data, &order)
         }
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
             let marks = family(registered, kind, |family| match family {
@@ -361,17 +351,26 @@ pub(crate) fn guide_sources(
             let order = marks.group_order(
                 chart,
                 registered
-                    .policy
-                    .coordinated
+                    .parent_orders
                     .collectives
                     .as_deref()
                     .map(Vec::as_slice),
                 registered
-                    .policy
-                    .coordinated
-                    .composed_groups(registered.source),
+                    .parent_orders
+                    .groups
+                    .as_deref()
+                    .map(Vec::as_slice),
             )?;
-            marks.guide_entries_in_order(chart, theme, data, &order)
+            marks.guide_entries_in_order(
+                chart,
+                registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding"),
+                theme,
+                data,
+                &order,
+            )
         }
         PlotKind::Bar
         | PlotKind::HorizontalBar
@@ -381,25 +380,14 @@ pub(crate) fn guide_sources(
                 F::Bars { marks, .. } => Some(marks),
                 _ => None,
             })?;
-            let categories = &registered
-                .axes
+            let axes = registered.axes.as_ref().expect("prepared axes");
+            let binding = registered
+                .categorical
                 .as_ref()
-                .expect("prepared axes")
-                .categories(usize::from(matches!(
-                    kind,
-                    PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
-                )))
-                .expect("prepared Bar categories")
-                .raw;
-            let hues = registered
-                .policy
-                .coordinated
-                .colors
-                .as_deref()
-                .expect("prepared Bar color domain");
+                .expect("prepared color binding");
             let (colors, accents) =
-                crate::plots::bar_data::resolved_colors(chart, categories, hues, theme, data)?;
-            crate::plots::bar_data::guide_sources(marks, chart, hues, theme, &colors, &accents)
+                crate::plots::bar_data::resolved_colors(chart, axes, binding, theme, data)?;
+            crate::plots::bar_data::guide_sources(marks, chart, binding, theme, &colors, &accents)
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             let marks = family(registered, kind, |family| match family {
@@ -408,19 +396,11 @@ pub(crate) fn guide_sources(
             })?;
             marks.guide_entries(
                 chart,
-                &registered
-                    .axes
-                    .as_ref()
-                    .expect("prepared axes")
-                    .categories(0)
-                    .expect("prepared distribution categories")
-                    .raw,
+                registered.axes.as_ref().expect("prepared axes"),
                 registered
-                    .policy
-                    .coordinated
-                    .colors
-                    .as_deref()
-                    .expect("prepared distribution color domain"),
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding"),
                 theme,
                 data,
             )
@@ -432,13 +412,21 @@ pub(crate) fn guide_sources(
             })?;
             let order = marks.group_order(
                 registered
-                    .policy
-                    .coordinated
+                    .parent_orders
                     .collectives
                     .as_deref()
                     .map(Vec::as_slice),
             )?;
-            marks.guide_entries_in_order(chart, theme, data, &order)
+            marks.guide_entries_in_order(
+                chart,
+                registered
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding"),
+                theme,
+                data,
+                &order,
+            )
         }
         PlotKind::Interaction => {
             let marks = family(registered, kind, |family| match family {
@@ -450,9 +438,9 @@ pub(crate) fn guide_sources(
                 theme,
                 data,
                 registered
-                    .policy
-                    .coordinated
-                    .composed_groups(registered.source),
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding"),
             )
         }
         PlotKind::Marginal => registered
@@ -466,11 +454,9 @@ pub(crate) fn guide_sources(
             .guide_entries(
                 chart,
                 registered
-                    .policy
-                    .coordinated
-                    .colors
-                    .as_deref()
-                    .expect("prepared Marginal color domain"),
+                    .categorical
+                    .as_ref()
+                    .expect("prepared color binding"),
                 theme,
                 data,
             ),
@@ -544,11 +530,9 @@ impl PlotRegistryBuilder<'_> {
                         .guide_sources(
                             chart,
                             registered
-                                .policy
-                                .coordinated
-                                .colors
-                                .as_deref()
-                                .expect("prepared Matrix color domain"),
+                                .categorical
+                                .as_ref()
+                                .expect("prepared color binding"),
                             theme,
                             data,
                         )?
@@ -576,14 +560,18 @@ impl PlotRegistryBuilder<'_> {
             ),
             self.panels
                 .first()
-                .and_then(|registered| registered.policy.coordinated.collectives.as_deref())
+                .and_then(|registered| registered.parent_orders.collectives.as_deref())
                 .map(Vec::as_slice),
             self.panels.first().and_then(|registered| {
                 registered
-                    .policy
-                    .coordinated
-                    .composed_groups(registered.source)
+                    .parent_orders
+                    .groups
+                    .as_deref()
+                    .map(Vec::as_slice)
             }),
+            self.panels
+                .first()
+                .and_then(|registered| registered.parent_orders.hues.as_deref()),
             &panels,
             facet_cells,
         )?;
@@ -695,18 +683,7 @@ pub(crate) fn alpha_sources(
                 )))
                 .expect("prepared Bar categories")
                 .raw;
-            marks.alpha_guide(
-                chart,
-                categories,
-                registered
-                    .policy
-                    .coordinated
-                    .groups
-                    .as_deref()
-                    .expect("prepared Bar group domain"),
-                theme,
-                &mut guide,
-            )?;
+            marks.alpha_guide(chart, categories, &marks.series, theme, &mut guide)?;
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
             standard!(F::Distribution { marks, .. } => marks);
@@ -745,6 +722,7 @@ fn parent_guide_order(
     composition: crate::LegendComposition,
     collectives: Option<&[crate::data::CollectivePair]>,
     groups: Option<&[String]>,
+    hues: Option<&crate::data::category::CategoryDomain>,
     panels: &[GuideContribution],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
@@ -758,10 +736,13 @@ fn parent_guide_order(
         // include Hidden marks and cannot order visible guide contributions.
         if facet_cells {
             for (field, levels) in [
-                (chart.description().group_name(), groups),
+                (
+                    chart.description().group_name(),
+                    groups.map(crate::data::category::CategoryOrderRef::Raw),
+                ),
                 (
                     chart.description().hue_dimension_key(),
-                    chart.global_hue_levels(),
+                    hues.map(crate::data::category::CategoryOrderRef::Keys),
                 ),
             ] {
                 if let (Some(field), Some(levels)) = (field, levels) {
@@ -779,7 +760,7 @@ fn parent_guide_order(
                         continue;
                     }
                     crate::data::source::reserve_source(&mut order, levels.len())?;
-                    for value in levels {
+                    for value in levels.values() {
                         let identity = GuideEntryIdentity::category(field, value)?;
                         if !order.contains(&identity) {
                             order.push(identity);
@@ -796,9 +777,9 @@ fn parent_guide_order(
         {
             order.push(chart.description().collective_legend_identity(pair)?);
         }
-    } else if let Some(hues) = chart.global_hue_levels() {
-        crate::data::source::reserve_source(&mut order, hues.len())?;
-        for hue in hues {
+    } else if let Some(hues) = hues {
+        crate::data::source::reserve_source(&mut order, hues.ordered.len())?;
+        for hue in hues.values() {
             order.push(chart.description().point_legend_identity(hue)?);
         }
     }

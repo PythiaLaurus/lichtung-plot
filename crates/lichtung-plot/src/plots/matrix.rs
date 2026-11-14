@@ -133,22 +133,12 @@ impl PreparedMatrixAxes {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
-        hues: &[String],
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
-        let colors = CategoryColors::resolve(
-            chart
-                .global_hue_levels()
-                .unwrap_or(hues)
-                .iter()
-                .map(String::as_str),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
-            resources,
-        )?;
+        let colors = binding.resolve(binding.values(), theme, resources)?;
         let accents = AccentColors::resolve(
             theme.marks.get_accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
@@ -294,11 +284,11 @@ impl PreparedMatrixAxes {
     pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
-        hues: &[String],
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accents) = self.resolved_colors(chart, hues, theme, data)?;
+        let (colors, accents) = self.resolved_colors(binding, theme, data)?;
         let mapped = crate::data::source::collect_source(
             self.groups
                 .iter()
@@ -547,15 +537,12 @@ pub(crate) fn measure(
 
     let groups = &prepared.groups;
     let (colors, accents) = prepared.resolved_colors(
-        chart,
         context
             .registered
             .expect("prepared Matrix occurrence")
-            .policy
-            .coordinated
-            .colors
-            .as_deref()
-            .expect("prepared Matrix color domain"),
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
         theme,
         data,
     )?;
@@ -1323,9 +1310,8 @@ fn build_groups(
         "matrix",
     )?;
     let hue_levels = crate::data::source::collect_source(
-        chart
-            .global_hue_levels()
-            .unwrap_or(&channels.hue_levels)
+        channels
+            .hue_levels
             .iter()
             .map(|level| crate::data::source::copy_source_string(level)),
     )?;
@@ -1501,3 +1487,6 @@ fn extract_columns_f64(
 
 #[cfg(test)]
 mod alpha_tests;
+
+#[cfg(test)]
+mod tests;

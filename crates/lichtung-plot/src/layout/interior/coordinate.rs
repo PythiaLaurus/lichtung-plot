@@ -663,6 +663,7 @@ mod intrinsic_tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &source,
                 &theme,
+                |_| Ok(()),
                 |chart, inputs, theme, operation| {
                     let minimum = crate::orchestrator::root::coordinate_intrinsic(
                         inputs.intrinsic(&inputs.plots[0]),
@@ -742,6 +743,7 @@ mod intrinsic_tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &source,
                 &theme,
+                |_| Ok(()),
                 |chart, inputs, theme, operation| {
                     let measured = theme
                         .measure_text(

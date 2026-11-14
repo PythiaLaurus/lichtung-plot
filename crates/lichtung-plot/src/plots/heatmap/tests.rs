@@ -63,6 +63,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
     crate::orchestrator::with_prepared_plot_for_test(
         &source.erase(),
         &resolved,
+        |_| Ok(()),
         |chart, inputs, resolved, _operation| {
             let operation = resolved
                 .text
@@ -155,6 +156,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     crate::orchestrator::with_prepared_plot_for_test(
         &mapped,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let transparent = chart

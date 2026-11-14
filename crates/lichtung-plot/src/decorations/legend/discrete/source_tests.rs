@@ -9,12 +9,25 @@ fn prepare(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
     composition: LegendComposition,
+    parent: Option<&[&str]>,
     inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
 ) -> Option<Arc<PreparedGuide>> {
     let operation = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
     for registered in &mut inputs.panels {
         registered.policy.guide_composition = composition;
+        if let Some(parent) = parent {
+            registered.set_parent_colors(
+                crate::data::source::source_arc(
+                    crate::data::category::CategoryDomain::from_values(
+                        plot.description().hue_field().as_ref(),
+                        parent.iter().map(|value| (*value).to_owned()).collect(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            );
+        }
     }
     let root = inputs
         .prepare_discrete_guides(
@@ -40,8 +53,9 @@ fn prepare(
 fn separate_inputs(
     plot: &Plot,
     theme: &crate::text::TextRequestContext<'_, '_>,
+    parent: Option<&[&str]>,
 ) -> Option<Arc<PreparedGuide>> {
-    prepare(plot, theme, LegendComposition::Separate, |_| ())
+    prepare(plot, theme, LegendComposition::Separate, parent, |_| ())
 }
 
 fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme) {
@@ -67,8 +81,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
     )
     .series(CategoryValues::new("cohort", ["seen", "seen"]).unwrap())
-    .erase()
-    .with_global_hue_levels(vec!["absent".into(), "seen".into()]);
+    .erase();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let fill = crate::DataFillTheme::new(
         17,
@@ -82,22 +95,14 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
         LegendComposition::Combined,
+        Some(&["absent", "seen"]),
         |inputs| {
             let crate::orchestrator::registration::PreparedFamily::Bars { marks: bars, .. } =
                 &inputs.plots[0].family
             else {
                 panic!("prepared Bars")
             };
-            assert_eq!(
-                inputs.plots[0]
-                    .policy
-                    .coordinated
-                    .groups
-                    .as_deref()
-                    .unwrap()
-                    .as_slice(),
-                ["seen"]
-            );
+            assert_eq!(bars.series, ["seen"]);
             assert!(bars.bars.iter().all(|bar| bar.series_index == Some(0)
                 && bar.hue_key.as_ref().is_some_and(|key| {
                     let raw = key.as_ref();
@@ -105,15 +110,19 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
                 })));
         },
     );
-    let projected_mapped = PreparedGuide::prepare_for_test(
+    let projected_mapped = prepare(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
         LegendComposition::Separate,
+        Some(&["absent", "seen"]),
+        |_| (),
     )
-    .unwrap()
     .unwrap();
-    let projected_inputs =
-        separate_inputs(&plot, &crate::text::TextRequestContext::new(&theme, &text));
+    let projected_inputs = separate_inputs(
+        &plot,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        Some(&["absent", "seen"]),
+    );
     assert_eq!(projected_inputs.as_ref().unwrap(), &projected_mapped);
     let guide = inputs.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 1);
@@ -155,14 +164,16 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
         LegendComposition::Combined,
+        Some(&["absent", "seen"]),
         |_| (),
     );
-    let projected_fixed = PreparedGuide::prepare_for_test(
+    let projected_fixed = prepare(
         &plot,
         &crate::text::TextRequestContext::new(&theme, &text),
         LegendComposition::Separate,
+        Some(&["absent", "seen"]),
+        |_| (),
     )
-    .unwrap()
     .unwrap();
     let fixed_guide = fixed_inputs.as_ref().unwrap();
     let fixed_entry = &fixed_guide.sections[0].entries()[0];
@@ -576,12 +587,12 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &theme, LegendComposition::Combined, |_| ());
+    let inputs = prepare(&plot, &theme, LegendComposition::Combined, None, |_| ());
     assert_complete_interaction(inputs.as_ref().unwrap(), &ratio, outline_paint);
     let projected = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
         .unwrap()
         .unwrap();
-    let projected_inputs = separate_inputs(&plot, &theme);
+    let projected_inputs = separate_inputs(&plot, &theme, None);
     assert_eq!(projected_inputs.as_ref().unwrap(), &projected);
     assert_projected_interaction(&projected, outline_paint);
     assert_interaction_alpha_context(&plot, &theme, outline_paint);

@@ -461,8 +461,7 @@ mod tests {
         ))
         .series(CategoryValues::new("hue", ["series"; 4]).unwrap())
         .hide_point_outline()
-        .erase()
-        .with_global_hue_levels(vec!["\u{10FFFF}".into(), "series".into()]);
+        .erase();
         let supplied = crate::plots::categorical_distribution::extraction::supplied();
         for (source, count, outlined) in [(sampled, 4, false), (supplied, 2, true)] {
             let source = source
@@ -514,8 +513,36 @@ mod tests {
             let panel = crate::layout::PixelRect::new(10.0, 610.0, 20.0, 420.0);
             let measure = |theme: &super::super::ResolvedTheme| {
                 let request = crate::text::TextRequestContext::new(theme, &text);
-                let theme = &request;
-                chart.preflight_panel(chart.kind(), panel, theme).unwrap()
+                crate::orchestrator::with_prepared_plot_for_test(
+                    &chart,
+                    &request,
+                    |registry| {
+                        if !outlined {
+                            let parent = crate::data::source::source_arc(
+                                crate::data::category::CategoryDomain::from_values(
+                                    chart.description().hue_field().as_ref(),
+                                    vec!["\u{10FFFF}".into(), "series".into()],
+                                )?,
+                            )?;
+                            registry.panels[0].set_parent_colors(parent);
+                        }
+                        Ok(())
+                    },
+                    |plot, inputs, request, _| {
+                        let registered = &inputs.plots[0];
+                        crate::layout::fit::measured(plot.preflight_measurement(
+                            Some(registered),
+                            Some(inputs.intrinsic(registered)),
+                            None,
+                            plot.kind(),
+                            panel,
+                            request,
+                            &crate::layout::fit::ROOT_SCOPE,
+                        ))
+                        .unwrap()
+                    },
+                )
+                .unwrap()
             };
             let before = measure(&theme);
             let raw = theme

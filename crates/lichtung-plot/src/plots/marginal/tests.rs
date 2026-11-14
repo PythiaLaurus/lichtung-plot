@@ -1,4 +1,86 @@
 use super::*;
+
+#[test]
+fn marginal_hue_colors_follow_source_order_not_group_major_pairs() {
+    let source = Plot::marginal(
+        crate::NumericValues::new("x", [1.0, 10.0, 4.0, 2.0, 11.0, 5.0, 3.0, 12.0, 6.0]),
+        crate::NumericValues::new("y", [2.0, 20.0, 8.0, 4.0, 22.0, 10.0, 6.0, 24.0, 12.0]),
+    )
+    .group(
+        crate::CategoryValues::new(
+            "group",
+            ["g1", "g2", "g1", "g1", "g2", "g1", "g1", "g2", "g1"],
+        )
+        .unwrap(),
+    )
+    .hue(
+        crate::CategoryValues::new(
+            "cohort",
+            [
+                "first", "second", "third", "first", "second", "third", "first", "second", "third",
+            ],
+        )
+        .unwrap(),
+    )
+    .erase();
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    crate::orchestrator::with_prepared_plot_for_test(
+        &source,
+        &crate::text::TextRequestContext::new(&theme, &text),
+        |_| Ok(()),
+        |chart, inputs, request, operation| {
+            let registered = &inputs.plots[0];
+            assert_eq!(
+                registered
+                    .categorical
+                    .as_ref()
+                    .unwrap()
+                    .local_values()
+                    .collect::<Vec<_>>(),
+                ["first", "second", "third"]
+            );
+            let selected = chart
+                .measure_selected_interior(
+                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                    PlotRenderContext::new(
+                        registered.data(operation).unwrap(),
+                        PixelRect::new(20.0, 800.0, 20.0, 620.0),
+                        request,
+                    )
+                    .with_registration(registered, inputs.intrinsic(registered)),
+                )
+                .unwrap();
+            let layout::interior::MarkPayload::Marginal(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Marginal payload")
+            };
+            let palette = theme.color_scales.get_qualitative().colors();
+            let colors = payload
+                .groups
+                .iter()
+                .map(|group| {
+                    let color = group.point_batches[0].1.color;
+                    (color.red(), color.green(), color.blue())
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                colors,
+                [
+                    palette[0].as_rgb(),
+                    palette[2].as_rgb(),
+                    palette[1].as_rgb()
+                ]
+            );
+            assert_eq!(
+                registered.guide.descriptor.as_ref().unwrap().counts.entries,
+                3
+            );
+        },
+    )
+    .unwrap();
+}
 use crate::orchestrator::registration::{PlotRegistryBuilder, PreparedFamily, RowSelection, Scope};
 
 #[test]
@@ -47,6 +129,7 @@ fn central_axes_keep_actual_occurrence_context_and_later_fatal_over_an_earlier_f
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &request,
+        |_| Ok(()),
         |plot, inputs, request, operation| {
             let registered = &inputs.plots[0];
             let error = plot

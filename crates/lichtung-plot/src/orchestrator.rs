@@ -11,7 +11,7 @@ mod artifacts;
 pub(crate) mod assignment;
 mod backend;
 mod facets;
-pub(crate) use facets::prepare_facet_scopes;
+pub(crate) use facets::{prepare_discrete_guide, prepare_facet_scopes};
 pub(crate) mod layers;
 mod lifecycle;
 #[cfg(test)]

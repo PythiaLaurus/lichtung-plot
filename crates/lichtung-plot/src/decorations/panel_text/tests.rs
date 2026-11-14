@@ -25,6 +25,7 @@ fn typed_numeric_and_mixed_figure_references_keep_one_anchor_as_content_changes(
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |plot, inputs, theme, _operation| {
             let dimensions = plot.measure_dimensions().unwrap();
             let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
@@ -111,6 +112,7 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |_, inputs, theme, _operation| {
             let panel = PixelRect::new(20.0, 420.0, 30.0, 230.0);
             let mut layout = Layout::envelope(panel);
@@ -155,6 +157,7 @@ fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles(
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |_, inputs, theme, _operation| {
             let data = |x, y| {
                 DataPosition::new(
@@ -264,6 +267,7 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let panel = PixelRect::new(10.0, 410.0, 20.0, 320.0);

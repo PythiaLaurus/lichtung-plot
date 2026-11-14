@@ -691,6 +691,7 @@ mod tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &mapped,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
+                |_| Ok(()),
                 |mapped, inputs, request, _operation| {
                     intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
                 }

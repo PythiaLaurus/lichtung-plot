@@ -131,16 +131,14 @@ impl PreparedDensity {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
-        let keys = if let Some(global) = chart.global_hue_levels() {
+        let keys = if let Some(global) = binding.parent.as_deref() {
             crate::data::source::collect_source(
-                global
-                    .iter()
-                    .map(|key| crate::data::source::copy_source_string(key)),
+                global.values().map(crate::data::source::copy_source_string),
             )?
         } else {
             let mut observed = Vec::new();
@@ -153,12 +151,7 @@ impl PreparedDensity {
             }
             crate::data::source::source_levels(&observed)?
         };
-        let map = CategoryColors::resolve(
-            keys.iter().map(String::as_str),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
-            resources,
-        )?;
+        let map = binding.resolve(keys.iter().map(String::as_str), theme, resources)?;
         let accent = AccentColors::resolve(
             theme.marks.get_accents(),
             usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
@@ -209,11 +202,12 @@ impl PreparedDensity {
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
         order: &[(usize, usize)],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let (colors, accent) = self.resolved_colors(chart, theme, data)?;
+        let (colors, accent) = self.resolved_colors(binding, theme, data)?;
         self.guide_entries_with_colors(chart, theme, order, &colors, &accent)
     }
 
@@ -370,7 +364,7 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, context)?;
+    let mut result = project(prepared, layout, context)?;
     let automatic = [
         chart.user_x_limits().is_none(),
         chart.user_y_limits().is_none(),
@@ -418,7 +412,6 @@ pub(crate) fn measure_marks(
 }
 
 pub(crate) fn project(
-    chart: &Plot,
     prepared: &PreparedDensity,
     layout: Layout,
     context: PlotRenderContext<'_, '_>,
@@ -434,7 +427,16 @@ pub(crate) fn project(
     let order = prepared.group_order(crate::orchestrator::registration::collective_pairs(
         context.registered,
     ))?;
-    let (colors, accent) = prepared.resolved_colors(chart, theme, data)?;
+    let (colors, accent) = prepared.resolved_colors(
+        context
+            .registered
+            .expect("prepared Density occurrence")
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
+        theme,
+        data,
+    )?;
 
     for &(_, index) in &order {
         let curve = &prepared.curves[index];
@@ -990,12 +992,12 @@ mod tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &source,
                 &crate::text::TextRequestContext::new(theme, &text_service),
+                |_| Ok(()),
                 |chart, inputs, request, operation| {
                     let registered = &inputs.plots[1];
                     assert_eq!(
                         registered
-                            .policy
-                            .coordinated
+                            .parent_orders
                             .collectives
                             .as_ref()
                             .unwrap()
@@ -1004,10 +1006,7 @@ mod tests {
                             .collect::<Vec<_>>(),
                         [Some("b"), Some("a")]
                     );
-                    let chart = chart
-                        .clone()
-                        .without_facets()
-                        .with_global_hue_levels(vec!["b".into(), "a".into()]);
+                    let chart = chart.clone().without_facets();
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                     let selected = chart
                         .measure_selected_interior(
@@ -1158,6 +1157,7 @@ mod tests {
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let panels = &inputs.plots;

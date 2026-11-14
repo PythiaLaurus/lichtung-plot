@@ -191,13 +191,7 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let raincloud = chart.kind() == crate::PlotKind::Raincloud;
-    let group_levels = registered
-        .expect("prepared sampled distribution occurrence")
-        .policy
-        .coordinated
-        .groups
-        .as_deref()
-        .expect("prepared distribution group domain");
+    let group_levels = &sample.group_levels;
     let grouped = !group_levels.is_empty();
     let width = if grouped {
         (0.72 / group_levels.len() as f64).min(0.34)
@@ -349,21 +343,17 @@ pub(crate) fn intrinsic_body_minimum(
     ))
 }
 
-#[expect(
-    clippy::type_complexity,
-    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
-)]
 pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(PreparedViolin, Vec<String>, Vec<String>, Vec<String>), Error> {
+) -> Result<(PreparedViolin, Vec<String>, Vec<String>), Error> {
     let family = if chart.kind() == crate::PlotKind::Violin {
         "violin"
     } else {
         "raincloud"
     };
-    let (sample, categories, group_levels, hue_levels) =
+    let (sample, categories, hue_levels) =
         crate::plots::distribution_sample::prepare_scoped(chart, data, family, facet)?;
     if chart.kind() == crate::PlotKind::Raincloud {
         let mut source_rows = Vec::new();
@@ -448,7 +438,6 @@ pub(crate) fn prepare(
             densities,
         },
         categories,
-        group_levels,
         hue_levels,
     ))
 }
@@ -481,15 +470,7 @@ pub(crate) fn measure_marks(
         .categories(0)
         .expect("prepared distribution categories")
         .raw;
-    let domains = &context
-        .registered
-        .expect("prepared sampled distribution occurrence")
-        .policy
-        .coordinated;
-    let group_levels = domains
-        .groups
-        .as_deref()
-        .expect("prepared distribution group domain");
+    let group_levels = &sample.group_levels;
     let support_range = prepared.support_range;
     let base_display_range = layout.projection.y_range();
     let rendered_maxima =
@@ -498,11 +479,16 @@ pub(crate) fn measure_marks(
     let panel = context.panel;
     let colors = retained.resolved_colors(
         chart,
-        x_levels,
-        domains
-            .colors
-            .as_deref()
-            .expect("prepared distribution color domain"),
+        &context
+            .registered
+            .expect("prepared sampled distribution occurrence")
+            .axes,
+        context
+            .registered
+            .expect("prepared sampled distribution occurrence")
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
         theme,
         data,
     )?;

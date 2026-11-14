@@ -51,6 +51,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();

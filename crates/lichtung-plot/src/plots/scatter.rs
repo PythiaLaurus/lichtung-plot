@@ -236,16 +236,14 @@ impl PreparedScatter {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources();
-        let keys = if let Some(global) = chart.global_hue_levels() {
+        let keys = if let Some(global) = binding.parent.as_deref() {
             crate::data::source::collect_source(
-                global
-                    .iter()
-                    .map(|key| crate::data::source::copy_source_string(key)),
+                global.values().map(crate::data::source::copy_source_string),
             )?
         } else {
             let mut keys = Vec::new();
@@ -258,22 +256,18 @@ impl PreparedScatter {
             }
             keys
         };
-        CategoryColors::resolve(
-            keys.iter().map(String::as_str),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
-            resources,
-        )
+        binding.resolve(keys.iter().map(String::as_str), theme, resources)
     }
 
     pub(crate) fn guide_entries_in_order(
         &self,
         chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
         order: &[usize],
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let map = self.resolved_colors(chart, theme, data)?;
+        let map = self.resolved_colors(binding, theme, data)?;
         self.guide_entries_with_colors(chart, theme, order, &map)
     }
 
@@ -314,18 +308,20 @@ impl PreparedScatter {
     }
 
     /// Semantic order is independent of panel assignment and font discovery.
-    pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<usize>, Error> {
+    pub(crate) fn group_order(
+        &self,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
+    ) -> Result<Vec<usize>, Error> {
         let mut order = crate::data::source::collect_source((0..self.groups.len()).map(Ok))?;
         let ranks = crate::data::source::collect_source(self.groups.iter().enumerate().map(
             |(index, group)| {
                 if let Some(label) = &group.label {
-                    if let Some(parent) = chart.global_hue_levels() {
-                        return crate::data::source::source_position(parent, |key| key == label)
-                            .ok_or_else(|| {
-                                Error::Data(format!(
+                    if let Some(parent) = binding.parent.as_deref() {
+                        return parent.values().position(|key| key == label).ok_or_else(|| {
+                            Error::Data(format!(
                                 "scatter hue {label:?} is missing from the prepared parent domain"
                             ))
-                            });
+                        });
                     }
                 }
                 Ok(index)
@@ -340,6 +336,7 @@ impl PreparedScatter {
     fn project(
         &self,
         chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         projection: &crate::layout::Projection,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: crate::data::PlotData<'_, '_>,
@@ -352,8 +349,8 @@ impl PreparedScatter {
         });
         let mut groups = Vec::new();
         crate::data::source::reserve_source(&mut groups, self.groups.len())?;
-        let order = self.group_order(chart)?;
-        let map = self.resolved_colors(chart, theme, data)?;
+        let order = self.group_order(binding)?;
+        let map = self.resolved_colors(binding, theme, data)?;
 
         let accent = self
             .groups
@@ -437,7 +434,18 @@ pub(crate) fn measure_marks(
         })?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
+    let mut payload = prepared.project(
+        chart,
+        context
+            .registered
+            .expect("prepared Scatter occurrence")
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
+        &layout.projection,
+        theme,
+        data,
+    )?;
     let point_style = chart.description().point_style(
         theme,
         (0, 0, 0),

@@ -38,6 +38,7 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |plot, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 for panel in [
@@ -107,6 +108,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |plot, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let registered = inputs.plots.first();
@@ -193,6 +195,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |plot, inputs, theme, _operation| {
             let operation = theme.text.prepared_font_environment().unwrap().operation();
             let panel = PixelRect::new(30.0, 810.0, 50.0, 600.0);

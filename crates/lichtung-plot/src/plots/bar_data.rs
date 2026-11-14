@@ -15,7 +15,7 @@ use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, LiteralDomain};
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey};
-use crate::orchestrator::registration::CoordinatedDomains;
+use crate::orchestrator::registration::CategoricalBinding;
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
@@ -137,13 +137,7 @@ pub(crate) fn intrinsic_body_minimum(
     theme: &crate::text::TextRequestContext<'_, '_>,
 ) -> Result<(f64, f64), Error> {
     let prepared = retained(registered.map(|registered| registered.family.as_ref()))?;
-    let series = registered
-        .expect("prepared Bar occurrence")
-        .policy
-        .coordinated
-        .groups
-        .as_deref()
-        .expect("prepared Bar group domain");
+    let series = &prepared.series;
     let horizontal = matches!(
         chart.kind(),
         crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
@@ -350,6 +344,7 @@ pub(crate) struct PreparedBarPoint {
 /// Prepared bar data and metadata shared by both orientations.
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedBars {
+    pub(crate) series: Vec<String>,
     /// Prepared bars/segments.
     pub(crate) bars: Vec<PreparedBar>,
     /// Numeric value range including zero and CI/stack extents.
@@ -412,17 +407,14 @@ impl PreparedBars {
 
     pub(crate) fn observed_hue_levels<'a>(
         &'a self,
-        hues: &'a [String],
+        hues: impl Iterator<Item = &'a str> + 'a,
     ) -> impl Iterator<Item = &'a str> {
-        hues.iter().filter_map(|hue| {
-            self.bars
-                .iter()
-                .any(|bar| {
-                    bar.hue_key
-                        .as_ref()
-                        .is_some_and(|key| key.as_ref().value == hue)
-                })
-                .then_some(hue.as_str())
+        hues.filter(|hue| {
+            self.bars.iter().any(|bar| {
+                bar.hue_key
+                    .as_ref()
+                    .is_some_and(|key| key.as_ref().value == *hue)
+            })
         })
     }
 
@@ -431,43 +423,30 @@ impl PreparedBars {
     }
 }
 
-pub(crate) fn color_keys<'a>(categories: &'a [String], hues: &'a [String]) -> &'a [String] {
-    if hues.is_empty() {
-        categories
-    } else {
-        hues
-    }
-}
-
 pub(crate) fn resolved_colors(
     chart: &Plot,
-    categories: &[String],
-    hues: &[String],
+    axes: &crate::orchestrator::registration::PreparedAxesOwner,
+    binding: &CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
     data: PlotData<'_, '_>,
 ) -> Result<(CategoryColors, AccentColors), Error> {
     let resources = data.source_resources();
-    let keys = if hues.is_empty() {
-        categories
+    let colors = if chart.description().colors_by_sign() {
+        binding.resolve(std::iter::empty(), theme, resources)?
+    } else if let Some(categories) = binding.axis_categories(axes) {
+        binding.resolve(categories.iter().map(String::as_str), theme, resources)?
+    } else if binding.local_len() == 0 {
+        let categories = &axes
+            .categories(usize::from(matches!(
+                chart.kind(),
+                crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
+            )))
+            .expect("prepared Bar categories")
+            .raw;
+        binding.resolve(categories.iter().map(String::as_str), theme, resources)?
     } else {
-        chart.global_hue_levels().unwrap_or(hues)
+        binding.resolve(binding.values(), theme, resources)?
     };
-    let colors = CategoryColors::resolve(
-        (if chart.description().colors_by_sign() {
-            &[]
-        } else {
-            keys
-        })
-        .iter()
-        .map(String::as_str),
-        theme.color_scales.get_qualitative(),
-        if chart.description().colors_by_sign() {
-            None
-        } else {
-            chart.description().categorical_color_scale_spec()
-        },
-        resources,
-    )?;
     let accents = AccentColors::resolve(
         theme.marks.get_accents(),
         if chart.description().colors_by_sign() {
@@ -917,7 +896,7 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_, '_>,
     mode: BarMode,
-) -> Result<(PreparedBars, Vec<String>, CoordinatedDomains), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>), Error> {
     prepare_scoped(
         chart,
         data,
@@ -933,7 +912,7 @@ pub(crate) fn prepare_scoped<'a>(
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
-) -> Result<(PreparedBars, Vec<String>, CoordinatedDomains), Error> {
+) -> Result<(PreparedBars, Vec<String>, Vec<String>), Error> {
     let (mut prepared, categories, series, hues) = prepare_core(chart, data, mode, facet)?;
     let category = data
         .column(
@@ -986,7 +965,8 @@ pub(crate) fn prepare_scoped<'a>(
         .categorical_map_spec()
         .filter(|_| !chart.description().colors_by_sign())
     {
-        for key in color_keys(&categories, &hues) {
+        let keys = if hues.is_empty() { &categories } else { &hues };
+        for key in keys {
             if exact.color_in(key).is_none() {
                 return Err(Error::Data(format!(
                     "bar: category {key:?} has no caller-owned color"
@@ -994,15 +974,8 @@ pub(crate) fn prepare_scoped<'a>(
             }
         }
     }
-    Ok((
-        prepared,
-        categories,
-        CoordinatedDomains {
-            colors: Some(crate::data::source::source_arc(hues)?),
-            groups: Some(crate::data::source::source_arc(series)?),
-            collectives: None,
-        },
-    ))
+    prepared.series = series;
+    Ok((prepared, categories, hues))
 }
 
 #[expect(
@@ -1044,7 +1017,7 @@ fn prepare_core(
     )?;
     let hue_order = crate::data::source::collect_source(
         facet
-            .map_or_else(|| chart.global_hue_levels(), |sources| sources.hues)
+            .and_then(|sources| sources.hues)
             .unwrap_or(&channels.hue_levels)
             .iter()
             .map(|s| crate::data::source::copy_source_string(s)),
@@ -1593,7 +1566,7 @@ fn sort_single_values(
 pub(crate) fn guide_sources(
     prepared: &PreparedBars,
     chart: &Plot,
-    hues: &[String],
+    binding: &CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
 
     colors: &CategoryColors,
@@ -1625,8 +1598,8 @@ pub(crate) fn guide_sources(
     }
 
     let mut entries = Vec::new();
-    crate::data::source::reserve_source(&mut entries, hues.len())?;
-    for label in prepared.observed_hue_levels(hues) {
+    crate::data::source::reserve_source(&mut entries, binding.local_len())?;
+    for label in prepared.observed_hue_levels(binding.local_values()) {
         entries.push(
             GuideSourceKey::hue_only(chart.description().point_legend_identity(label)?)?.with_fill(
                 theme.marks.get_fills().get_bodies().get_bar_body(),
@@ -1720,6 +1693,7 @@ fn prepare_single(
     let value_range = value_range(&bars)?;
     Ok((
         PreparedBars {
+            series: Vec::new(),
             value_range,
             bars,
             points: Vec::new(),
@@ -1833,6 +1807,7 @@ fn prepare_grouped(
 
     Ok((
         PreparedBars {
+            series: Vec::new(),
             value_range,
             bars,
             points: Vec::new(),
@@ -1969,6 +1944,7 @@ fn prepare_stacked(
     let value_range = value_range(&bars)?;
     Ok((
         PreparedBars {
+            series: Vec::new(),
             value_range,
             bars,
             points: Vec::new(),

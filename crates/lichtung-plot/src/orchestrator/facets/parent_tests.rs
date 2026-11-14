@@ -30,6 +30,7 @@ fn scoped_annotation_indices_locate_sources_without_renumbering_filtered_occurre
     super::super::with_prepared_plot_for_test(
         &source,
         &request,
+        |_| Ok(()),
         |plot, inputs, request, operation| {
             let registered = &inputs.plots[1];
             assert_eq!(registered.policy.significance_indices, [1, 3]);

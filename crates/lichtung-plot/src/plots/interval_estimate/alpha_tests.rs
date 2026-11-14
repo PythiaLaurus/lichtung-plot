@@ -111,6 +111,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();

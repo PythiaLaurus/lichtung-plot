@@ -202,12 +202,12 @@ impl PreparedRaincloud {
 
 pub(crate) fn guide_entries(
     chart: &Plot,
-    hues: &[String],
+    binding: &crate::orchestrator::registration::CategoricalBinding,
     theme: &crate::text::TextRequestContext<'_, '_>,
 
     colors: &CategoryColors,
 ) -> Result<Vec<GuideSourceKey>, Error> {
-    crate::data::source::collect_source(hues.iter().map(|hue| {
+    crate::data::source::collect_source(binding.local_values().map(|hue| {
         let color = colors.color(hue)?;
         Ok(
             GuideSourceKey::hue_only(chart.description().point_legend_identity(hue)?)?
@@ -342,25 +342,19 @@ pub(super) fn measure_marks(
     let theme = context.theme;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let categories = &context
-        .registered
-        .expect("prepared supplied Raincloud occurrence")
-        .axes
-        .categories(0)
-        .expect("prepared distribution categories")
-        .raw;
     let colors = crate::plots::categorical_distribution::retained(context.prepared_family())?
         .resolved_colors(
             chart,
-            categories,
+            &context
+                .registered
+                .expect("prepared supplied Raincloud occurrence")
+                .axes,
             context
                 .registered
                 .expect("prepared supplied Raincloud occurrence")
-                .policy
-                .coordinated
-                .colors
-                .as_deref()
-                .expect("prepared distribution color domain"),
+                .categorical
+                .as_ref()
+                .expect("prepared color binding"),
             theme,
             data,
         )?;

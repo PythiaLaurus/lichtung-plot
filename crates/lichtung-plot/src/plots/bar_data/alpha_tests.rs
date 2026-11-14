@@ -103,6 +103,7 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let panels = &inputs.plots;
@@ -284,6 +285,7 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
         crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, theme, _operation| {
                 let operation = theme.text.prepared_font_environment().unwrap().operation();
                 let registered = &inputs.plots[0];

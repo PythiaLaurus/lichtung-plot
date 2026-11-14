@@ -165,16 +165,7 @@ pub(crate) fn data(
                         _ => None,
                     })
                     .ok_or_else(|| Error::Data("annotation distribution scope is absent".into()))?;
-                return marks.series_center(
-                    category,
-                    series,
-                    registered
-                        .policy
-                        .coordinated
-                        .groups
-                        .as_deref()
-                        .map(Vec::as_slice),
-                );
+                return marks.series_center(category, series);
             }
             let mode = Some(registered.family.as_ref()).and_then(|family| match family { crate::orchestrator::registration::FamilyRef::Bars { mode, .. } => Some(mode), _ => None })
                 .ok_or_else(||Error::Data("category-series text reference requires positioned series on the actual axis".into()))?;
@@ -185,10 +176,9 @@ pub(crate) fn data(
                 .position(|raw| raw == category)
                 .ok_or_else(|| Error::Data("annotation category is absent".into()))?;
             let groups = registered
-                .policy
-                .coordinated
-                .groups
-                .as_deref()
+                .family
+                .as_ref()
+                .positioned_groups()
                 .expect("prepared Bar group domain");
             let series = groups
                 .iter()

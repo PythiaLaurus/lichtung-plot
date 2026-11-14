@@ -1086,6 +1086,46 @@ impl PlotDescription {
         }
     }
 
+    pub(crate) fn categorical_field(&self) -> Option<crate::data::category::RawField> {
+        self.hue_field()
+            .or_else(|| {
+                self.raincloud_geometry_input()
+                    .and_then(|input| input.hue_dimension.as_deref())
+                    .map(|field| {
+                        crate::data::category::RawField::from_shared(std::sync::Arc::from(field))
+                    })
+            })
+            .or_else(|| {
+                if self.kind() == crate::PlotKind::Interaction {
+                    self.group_values().map(crate::CategoryValues::raw_field)
+                } else if matches!(
+                    self.kind(),
+                    crate::PlotKind::Bar
+                        | crate::PlotKind::HorizontalBar
+                        | crate::PlotKind::StackedBar
+                        | crate::PlotKind::StackedHorizontalBar
+                        | crate::PlotKind::Boxplot
+                        | crate::PlotKind::Violin
+                        | crate::PlotKind::Raincloud
+                ) {
+                    self.x_data_column()
+                        .and_then(|column| match column {
+                            DataColumn::Category(values) => Some(values.raw_field()),
+                            _ => None,
+                        })
+                        .or_else(|| {
+                            self.raincloud_geometry_input().map(|input| {
+                                crate::data::category::RawField::from_shared(std::sync::Arc::from(
+                                    input.category_dimension.as_str(),
+                                ))
+                            })
+                        })
+                } else {
+                    None
+                }
+            })
+    }
+
     /// Borrow x-axis scale configuration.
     #[must_use]
     pub(crate) fn x_axis_spec(&self) -> &AxisSpec {

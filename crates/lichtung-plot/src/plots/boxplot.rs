@@ -76,14 +76,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Boxplot summary and populated groups differ".into(),
         ));
     }
-    let group_count = registered
-        .expect("prepared Boxplot occurrence")
-        .policy
-        .coordinated
-        .groups
-        .as_deref()
-        .expect("prepared distribution group domain")
-        .len();
+    let group_count = sample.group_levels.len();
     let thickness = if group_count > 0 {
         (0.72 / group_count as f64).min(0.32)
     } else {
@@ -194,16 +187,12 @@ pub(crate) fn intrinsic_body_minimum(
     ))
 }
 
-#[expect(
-    clippy::type_complexity,
-    reason = "original build outputs move directly into their axis and policy owners without a retained wrapper"
-)]
 pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_, '_>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(PreparedBoxplot, Vec<String>, Vec<String>, Vec<String>), Error> {
-    let (sample, categories, group_levels, hue_levels) =
+) -> Result<(PreparedBoxplot, Vec<String>, Vec<String>), Error> {
+    let (sample, categories, hue_levels) =
         crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;
 
     // Display stats per group: Q1, median, Q3, lower whisker, upper whisker.
@@ -258,7 +247,6 @@ pub(crate) fn prepare(
             range: (y_min, y_max),
         },
         categories,
-        group_levels,
         hue_levels,
     ))
 }
@@ -353,15 +341,7 @@ pub(crate) fn measure_marks(
         .categories(0)
         .expect("prepared distribution categories")
         .raw;
-    let domains = &context
-        .registered
-        .expect("prepared Boxplot occurrence")
-        .policy
-        .coordinated;
-    let group_levels = domains
-        .groups
-        .as_deref()
-        .expect("prepared distribution group domain");
+    let group_levels = &sample.group_levels;
     let group_active = !group_levels.is_empty();
     let base_y_range = layout.projection.y_range();
     let mut rendered_maxima =
@@ -386,11 +366,16 @@ pub(crate) fn measure_marks(
         let retained = categorical_distribution::retained(context.prepared_family())?;
         retained.resolved_colors(
             chart,
-            x_levels,
-            domains
-                .colors
-                .as_deref()
-                .expect("prepared distribution color domain"),
+            &context
+                .registered
+                .expect("prepared Boxplot occurrence")
+                .axes,
+            context
+                .registered
+                .expect("prepared Boxplot occurrence")
+                .categorical
+                .as_ref()
+                .expect("prepared color binding"),
             theme,
             data,
         )?

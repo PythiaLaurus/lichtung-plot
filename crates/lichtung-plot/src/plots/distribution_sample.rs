@@ -26,6 +26,7 @@ pub(crate) struct DistributionGroup {
 
 #[derive(Debug)]
 pub(crate) struct DistributionSample {
+    pub(crate) group_levels: Vec<String>,
     pub(crate) groups: Vec<DistributionGroup>,
 }
 
@@ -38,16 +39,14 @@ impl DistributionSample {
 
     pub(crate) fn observed_hue_levels<'a>(
         &'a self,
-        hues: &'a [String],
+        hues: impl Iterator<Item = &'a str> + 'a,
     ) -> impl Iterator<Item = &'a str> {
-        hues.iter()
-            .filter_map(|hue| self.observes_hue(hue).then_some(hue.as_str()))
+        hues.filter(|hue| self.observes_hue(hue))
     }
 }
 
 #[expect(
     clippy::too_many_lines,
-    clippy::type_complexity,
     reason = "ordered grouping admits nested source buffers"
 )]
 pub(crate) fn prepare_scoped(
@@ -55,7 +54,7 @@ pub(crate) fn prepare_scoped(
     data: PlotData<'_, '_>,
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(DistributionSample, Vec<String>, Vec<String>, Vec<String>), Error> {
+) -> Result<(DistributionSample, Vec<String>, Vec<String>), Error> {
     let alpha =
         chart
             .description()
@@ -91,7 +90,6 @@ pub(crate) fn prepare_scoped(
     let hue_levels = crate::data::source::collect_source(
         facet
             .and_then(|scope| scope.hues)
-            .or_else(|| chart.global_hue_levels())
             .unwrap_or(&channels.hue_levels)
             .iter()
             .map(|level| crate::data::source::copy_source_string(level)),
@@ -188,9 +186,11 @@ pub(crate) fn prepare_scoped(
         group.fill_alpha = fill_alpha.aggregate(key, series)?;
     }
     Ok((
-        DistributionSample { groups },
+        DistributionSample {
+            group_levels,
+            groups,
+        },
         x_levels,
-        group_levels,
         hue_levels,
     ))
 }

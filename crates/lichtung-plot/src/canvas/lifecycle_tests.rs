@@ -173,7 +173,11 @@ fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
                     let groups =
                         crate::orchestrator::registration::composed_group_levels(Some(registered));
                     if policy == CanvasLegendPolicy::Shared {
-                        assert_eq!(groups.unwrap(), ["first", "second"]);
+                        assert_eq!(
+                            groups.unwrap().values().collect::<Vec<_>>(),
+                            ["first", "second"]
+                        );
+                        assert!(registered.parent_orders.groups.is_none());
                     } else {
                         assert!(groups.is_none());
                     }
@@ -219,13 +223,23 @@ fn shared_bar_palette_preserves_raw_color_identity_without_guide_contributions()
     let root = canvas
         .build_preflight_plan(|prepared, _| {
             assert!(prepared.shared_guide.is_none());
-            let domains = prepared.color_domains.as_ref().unwrap();
-            assert_eq!(domains.len(), 1);
-            assert_eq!(domains[0].1, ["first", "second"]);
+            let first = prepared.interiors[0].as_ref().unwrap().plots[0]
+                .categorical
+                .as_ref()
+                .unwrap()
+                .parent
+                .as_ref()
+                .unwrap();
+            assert_eq!(first.values().collect::<Vec<_>>(), ["first", "second"]);
             for (index, raw) in ["first", "second"].into_iter().enumerate() {
                 let registered = &prepared.interiors[index].as_ref().unwrap().plots[0];
-                let local = registered.policy.coordinated.colors.as_deref().unwrap();
-                assert_eq!(local.as_slice(), [raw]);
+                let binding = registered.categorical.as_ref().unwrap();
+                assert_eq!(binding.local_values().collect::<Vec<_>>(), [raw]);
+                assert!(Arc::ptr_eq(first, binding.parent.as_ref().unwrap()));
+                assert!(Arc::ptr_eq(
+                    binding.parent.as_ref().unwrap(),
+                    registered.parent_orders.hues.as_ref().unwrap()
+                ));
                 let crate::orchestrator::registration::PreparedFamily::Bars { marks, .. } =
                     &registered.family
                 else {

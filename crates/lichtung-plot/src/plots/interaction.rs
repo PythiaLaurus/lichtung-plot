@@ -220,22 +220,13 @@ impl PreparedInteraction {
 
     fn resolved_colors(
         &self,
-        chart: &Plot,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
-        groups: Option<&[String]>,
     ) -> Result<CategoryColors, Error> {
-        let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
-        let parent = if has_hue {
-            chart.global_hue_levels()
-        } else {
-            groups
-        };
-        let keys = if let Some(levels) = parent {
+        let keys = if let Some(levels) = binding.parent.as_deref() {
             crate::data::source::collect_source(
-                levels
-                    .iter()
-                    .map(|level| crate::data::source::copy_source_string(level)),
+                levels.values().map(crate::data::source::copy_source_string),
             )?
         } else {
             let mut observed = Vec::new();
@@ -246,10 +237,9 @@ impl PreparedInteraction {
             }
             crate::data::source::source_levels(&observed)?
         };
-        CategoryColors::resolve(
+        binding.resolve(
             keys.iter().map(String::as_str),
-            theme.color_scales.get_qualitative(),
-            chart.description().categorical_color_scale_spec(),
+            theme,
             data.source_resources(),
         )
     }
@@ -267,9 +257,9 @@ impl PreparedInteraction {
         chart: &Plot,
         theme: &crate::text::TextRequestContext<'_, '_>,
         data: PlotData<'_, '_>,
-        groups: Option<&[String]>,
+        binding: &crate::orchestrator::registration::CategoricalBinding,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        let colors = self.resolved_colors(chart, theme, data, groups)?;
+        let colors = self.resolved_colors(binding, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
 
@@ -389,7 +379,7 @@ pub(crate) fn prepare(
     let conditions = crate::data::source::source_levels(&x)?;
     let domain = parent.unwrap_or(&channels);
     let groups = &domain.group_levels;
-    let hues = chart.global_hue_levels().unwrap_or(&domain.hue_levels);
+    let hues = &domain.hue_levels;
     let identities = collectives.unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
     let line_alpha = chart.description().prepare_collective_alpha(
@@ -611,10 +601,14 @@ pub(crate) fn measure_marks(
         domain_expansions: [None; 2],
     };
     let colors = marks.resolved_colors(
-        chart,
+        context
+            .registered
+            .expect("prepared Interaction occurrence")
+            .categorical
+            .as_ref()
+            .expect("prepared color binding"),
         context.theme,
         data,
-        crate::orchestrator::registration::composed_group_levels(context.registered),
     )?;
     crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();

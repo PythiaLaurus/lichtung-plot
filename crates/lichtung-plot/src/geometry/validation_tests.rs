@@ -97,6 +97,7 @@ fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
     crate::orchestrator::with_prepared_plot_for_test(
         &supplied.erase(),
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();

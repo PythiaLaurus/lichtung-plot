@@ -28,19 +28,13 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;
-    let domains = &context
+    let series = &prepared.series;
+    let binding = context
         .registered
         .expect("prepared Bar occurrence")
-        .policy
-        .coordinated;
-    let series = domains
-        .groups
-        .as_deref()
-        .expect("prepared Bar group domain");
-    let hues = domains
-        .colors
-        .as_deref()
-        .expect("prepared Bar color domain");
+        .categorical
+        .as_ref()
+        .expect("prepared color binding");
     let categories = &context
         .registered
         .expect("prepared Bar occurrence")
@@ -48,7 +42,13 @@ pub(crate) fn measure_marks(
         .categories(0)
         .expect("prepared Bar categories")
         .raw;
-    let (colors, accents) = bar_data::resolved_colors(chart, categories, hues, theme, data)?;
+    let (colors, accents) = bar_data::resolved_colors(
+        chart,
+        &context.registered.expect("prepared Bar occurrence").axes,
+        binding,
+        theme,
+        data,
+    )?;
     let mut rendered_maxima =
         crate::data::source::collect_source((0..categories.len()).map(|_| Ok(0.0_f64)))?;
     let anchor_count = series.len().max(1);

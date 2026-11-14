@@ -590,6 +590,7 @@ mod style_tests {
         let (minimum, selected) = crate::orchestrator::with_prepared_plot_for_test(
             &source,
             &theme,
+            |_| Ok(()),
             |chart, inputs, request, _operation| {
                 let registered = &inputs.plots[0];
                 let operation = request
@@ -616,6 +617,7 @@ mod style_tests {
         let baseline = crate::orchestrator::with_prepared_plot_for_test(
             &base,
             &theme,
+            |_| Ok(()),
             |chart, inputs, request, _operation| {
                 intrinsic_body_minimum(chart, inputs.plots.first(), request).unwrap()
             },
@@ -738,6 +740,7 @@ mod style_tests {
             crate::orchestrator::with_prepared_plot_for_test(
                 &mapped,
                 &crate::text::TextRequestContext::new(&theme, &text_service),
+                |_| Ok(()),
                 |mapped, inputs, request, _operation| {
                     intrinsic_body_minimum(mapped, inputs.plots.first(), request).unwrap()
                 }

@@ -82,6 +82,7 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     crate::orchestrator::with_prepared_plot_for_test(
         &chart,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();

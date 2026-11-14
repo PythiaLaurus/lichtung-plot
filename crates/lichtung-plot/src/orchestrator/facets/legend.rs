@@ -16,18 +16,17 @@ pub(super) fn prepare_discrete_guide(
     inputs: &mut crate::orchestrator::registration::PlotRegistryBuilder,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let (mut base, groups, collectives) = super::data::base_plot(source, kind)?;
+    let (base, groups, collectives, mut hues) = super::data::base_plot(source, kind)?;
     let groups = groups.map(crate::data::source::source_arc).transpose()?;
     let collectives = collectives
         .map(crate::data::source::source_arc)
         .transpose()?;
     for registered in &mut inputs.panels {
         if groups.is_some() {
-            registered.policy.coordinated.groups.clone_from(&groups);
+            registered.parent_orders.groups.clone_from(&groups);
         }
         registered
-            .policy
-            .coordinated
+            .parent_orders
             .collectives
             .clone_from(&collectives);
     }
@@ -53,7 +52,46 @@ pub(super) fn prepare_discrete_guide(
             }
         }
         if !present.is_empty() {
-            base = base.with_global_hue_levels(present);
+            hues = Some(present);
+        }
+    }
+    let hues = hues
+        .map(|values| {
+            crate::data::source::source_arc(crate::data::category::CategoryDomain::from_values(
+                source.description().hue_field().as_ref(),
+                values,
+            )?)
+        })
+        .transpose()?;
+    let group_colors = if kind == PlotKind::Interaction && source.description().hue_col().is_none()
+    {
+        groups
+            .as_deref()
+            .map(|values| {
+                let values = crate::data::source::collect_source(
+                    values
+                        .iter()
+                        .map(|value| crate::data::source::copy_source_string(value)),
+                )?;
+                crate::data::source::source_arc(crate::data::category::CategoryDomain::from_values(
+                    source.description().categorical_field().as_ref(),
+                    values,
+                )?)
+            })
+            .transpose()?
+    } else {
+        None
+    };
+    for registered in &mut inputs.panels {
+        registered.parent_orders.hues.clone_from(&hues);
+        if let Some(binding) = &mut registered.categorical {
+            binding.parent.clone_from(
+                if kind == PlotKind::Interaction && source.description().hue_col().is_none() {
+                    &group_colors
+                } else {
+                    &hues
+                },
+            );
         }
     }
     let descriptor = inputs.prepare_discrete_guides(
@@ -63,21 +101,7 @@ pub(super) fn prepare_discrete_guide(
         &crate::layout::ComponentAddress::root(),
         true,
     )?;
-    let hue_levels = base
-        .global_hue_levels()
-        .map(|levels| {
-            crate::data::source::collect_source(
-                levels
-                    .iter()
-                    .map(|level| crate::data::source::copy_source_string(level)),
-            )
-        })
-        .transpose()?;
-
-    Ok(super::PreparedFacetGuide {
-        descriptor,
-        hue_levels,
-    })
+    Ok(super::PreparedFacetGuide { descriptor })
 }
 
 #[expect(

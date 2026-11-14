@@ -214,13 +214,15 @@ pub(super) fn base_plot(
         Plot,
         Option<Vec<String>>,
         Option<Vec<crate::data::CollectivePair>>,
+        Option<Vec<String>>,
     ),
     Error,
 > {
     let source_rows = source.description().configured_source_rows()?;
-    let mut base_plot = source.clone().without_facets();
+    let base_plot = source.clone().without_facets();
     let mut collectives = None;
     let mut groups = None;
+    let mut hues = None;
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
@@ -232,7 +234,7 @@ pub(super) fn base_plot(
             "facet collective channels",
         )?;
         groups = Some(channels.group_levels);
-        base_plot = base_plot.with_global_hue_levels(channels.hue_levels);
+        hues = Some(channels.hue_levels);
         collectives = Some(channels.identities);
     } else if let Some(group_column) = source.description().group_col() {
         let column = source
@@ -277,7 +279,7 @@ pub(super) fn base_plot(
             }
         }
     }
-    Ok((base_plot, groups, collectives))
+    Ok((base_plot, groups, collectives, hues))
 }
 
 #[expect(

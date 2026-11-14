@@ -1,4 +1,5 @@
 use super::{ComposedInputs, Plot, PlotDescription};
+use crate::data::category::CategoryOrderRef;
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::orchestrator::registration::{legend_policy, render_name};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
@@ -132,6 +133,15 @@ impl<K: crate::kind::Marker> Plot<K> {
                 _ => false,
             }
         }
+        let same_order = |order: Option<CategoryOrderRef<'_>>, values: Option<&[String]>| match (
+            order, values,
+        ) {
+            (None, None) => true,
+            (Some(order), Some(values)) if order.len() == values.len() => {
+                order.values().zip(values).all(|(a, b)| a == b)
+            }
+            _ => false,
+        };
         for (axis, other) in [
             (&self.description.payload.axes[0], &other.x_axis_spec),
             (&self.description.payload.axes[1], &other.y_axis_spec),
@@ -158,11 +168,12 @@ impl<K: crate::kind::Marker> Plot<K> {
                     .map(crate::layout::RawWindow::pair),
             ) == range(other.y_axis_spec.0)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
-            && same_values(
-                self.global_hue_levels.as_deref(),
+            && same_order(
+                crate::orchestrator::registration::parent_hues(registered)
+                    .map(CategoryOrderRef::Keys),
                 other.global_hue_levels.as_deref(),
             )
-            && same_values(
+            && same_order(
                 crate::orchestrator::registration::composed_group_levels(registered),
                 other.global_group_levels.as_deref(),
             )
@@ -193,6 +204,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             && *guides == other.guides
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "retain only the original narrow comparison values at their original fallible copy boundary"
+    )]
     pub(crate) fn retain_composed_inputs(
         &self,
         guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
@@ -242,14 +257,15 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
         let mut levels = [None, None, None];
         for (target, source) in levels.iter_mut().zip([
-            self.global_hue_levels.as_deref(),
+            crate::orchestrator::registration::parent_hues(registered).map(CategoryOrderRef::Keys),
             crate::orchestrator::registration::composed_group_levels(registered),
-            crate::orchestrator::registration::line_condition_levels(registered),
+            crate::orchestrator::registration::line_condition_levels(registered)
+                .map(CategoryOrderRef::Raw),
         ]) {
             if let Some(source) = source {
                 let mut retained = Vec::new();
                 crate::render::backend::reserve_text_records(&mut retained, source.len())?;
-                for value in source {
+                for value in source.values() {
                     retained.push(copy(value)?);
                 }
                 *target = Some(retained);
@@ -299,15 +315,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             alpha: self.description.payload.alpha.clone(),
             guides,
         })
-    }
-
-    pub(crate) fn with_global_hue_levels(mut self, levels: Vec<String>) -> Self {
-        self.global_hue_levels = Some(levels);
-        self
-    }
-
-    pub(crate) fn global_hue_levels(&self) -> Option<&[String]> {
-        self.global_hue_levels.as_deref()
     }
 
     pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {

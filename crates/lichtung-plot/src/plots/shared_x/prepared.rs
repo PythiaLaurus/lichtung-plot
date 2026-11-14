@@ -172,7 +172,11 @@ pub(crate) fn prepare_plot_registration(
             let (marks, axes, hues) =
                 crate::plots::marginal::prepare(source, data, &panel.scope.id)?;
             panel.axes = Some(axes);
-            panel.policy.coordinated.colors = Some(crate::data::source::source_arc(hues)?);
+            panel
+                .categorical
+                .as_mut()
+                .expect("prepared color binding")
+                .set_local_hues(hues)?;
             Ok(PreparedFamily::Marginal(marks))
         }
         PlotKind::Heatmap => {
@@ -201,8 +205,7 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 None,
                 panel
-                    .policy
-                    .coordinated
+                    .parent_orders
                     .collectives
                     .as_deref()
                     .map(Vec::as_slice),
@@ -224,7 +227,11 @@ pub(crate) fn prepare_plot_registration(
                 crate::plots::categorical_distribution::PreparedDistribution::new(
                     source, data, None,
                 )?;
-            panel.policy.coordinated = domains;
+            panel
+                .categorical
+                .as_mut()
+                .expect("prepared color binding")
+                .set_local_hues(domains)?;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -249,7 +256,11 @@ pub(crate) fn prepare_plot_registration(
                 data,
                 crate::plots::bar_data::mode(source),
             )?;
-            panel.policy.coordinated = domains;
+            panel
+                .categorical
+                .as_mut()
+                .expect("prepared color binding")
+                .set_local_hues(domains)?;
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "category lengths are admitted source rows"
@@ -321,8 +332,7 @@ pub(crate) fn prepare_plot_registration(
                 source,
                 data,
                 panel
-                    .policy
-                    .coordinated
+                    .parent_orders
                     .collectives
                     .as_deref()
                     .map(Vec::as_slice),
@@ -607,17 +617,21 @@ pub(crate) fn prepare_plot<'src>(
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
     ) && !source.description().has_facets()
     {
-        let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
+        let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
             source,
             source_data.expect("single plot data"),
             None,
             registry.panels[0]
-                .policy
-                .coordinated
+                .parent_orders
                 .collectives
                 .as_deref()
                 .map(Vec::as_slice),
         )?;
+        registry.panels[0]
+            .categorical
+            .as_mut()
+            .expect("prepared color binding")
+            .set_local_keys(hues)?;
         registry.panels[0].axes = Some(prepare_pair_axes(
             &registry.panels[0],
             ranges.map(Some),
@@ -781,17 +795,21 @@ pub(crate) fn prepare_plot<'src>(
                     PreparedFamily::Scatter(marks)
                 }
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                    let (marks, ranges, conditions) = crate::plots::line::PreparedLine::new(
+                    let (marks, ranges, conditions, hues) = crate::plots::line::PreparedLine::new(
                         source,
                         data,
                         facet.conditions,
                         panel
-                            .policy
-                            .coordinated
+                            .parent_orders
                             .collectives
                             .as_deref()
                             .map(Vec::as_slice),
                     )?;
+                    panel
+                        .categorical
+                        .as_mut()
+                        .expect("prepared color binding")
+                        .set_local_keys(hues)?;
                     panel.axes = Some(prepare_pair_axes(
                         panel,
                         ranges.map(Some),
@@ -816,8 +834,7 @@ pub(crate) fn prepare_plot<'src>(
                         source,
                         data,
                         panel
-                            .policy
-                            .coordinated
+                            .parent_orders
                             .collectives
                             .as_deref()
                             .map(Vec::as_slice),
@@ -921,8 +938,7 @@ pub(crate) fn prepare_plot<'src>(
                         data,
                         interaction_parent.as_ref(),
                         panel
-                            .policy
-                            .coordinated
+                            .parent_orders
                             .collectives
                             .as_deref()
                             .map(Vec::as_slice),
@@ -946,7 +962,11 @@ pub(crate) fn prepare_plot<'src>(
                             data,
                             Some(facet),
                         )?;
-                    panel.policy.coordinated = domains;
+                    panel
+                        .categorical
+                        .as_mut()
+                        .expect("prepared color binding")
+                        .set_local_hues(domains)?;
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "category lengths are admitted source rows"
@@ -973,7 +993,11 @@ pub(crate) fn prepare_plot<'src>(
                         Some(facet),
                         panel.significance_annotations(),
                     )?;
-                    panel.policy.coordinated = domains;
+                    panel
+                        .categorical
+                        .as_mut()
+                        .expect("prepared color binding")
+                        .set_local_hues(domains)?;
                     #[expect(
                         clippy::cast_precision_loss,
                         reason = "category lengths are admitted source rows"
@@ -1106,15 +1130,18 @@ pub(crate) fn prepare_plot<'src>(
             source_data.expect("single plot data"),
             &registry.panels[0].scope.id,
             registry.panels[0]
-                .policy
-                .coordinated
+                .parent_orders
                 .collectives
                 .as_deref()
                 .map(Vec::as_slice),
         )?;
         registry.panels[0].family = Some(PreparedFamily::Matrix(marks));
         registry.panels[0].axes = Some(axes);
-        registry.panels[0].policy.coordinated.colors = Some(crate::data::source::source_arc(hues)?);
+        registry.panels[0]
+            .categorical
+            .as_mut()
+            .expect("prepared color binding")
+            .set_local_hues(hues)?;
     } else {
         let axes = prepare(source, &registry.panels[0].scope.id, None, None, None, None)?;
         registry.panels[0].axes = Some(axes);

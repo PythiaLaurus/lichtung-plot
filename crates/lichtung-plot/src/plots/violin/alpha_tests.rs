@@ -39,7 +39,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     .y_limits(-5.0, 10.0)
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
-    let (prepared, _, _, _) = crate::data::with_source_data_for_test(
+    let (prepared, _, _) = crate::data::with_source_data_for_test(
         &source,
         &operation,
         crate::orchestrator::registration::RowSelection::Selected {
@@ -68,6 +68,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     crate::orchestrator::with_prepared_plot_for_test(
         &source,
         &theme,
+        |_| Ok(()),
         |chart, inputs, theme, _operation| {
             let chart = chart.clone();
             let operation = theme.text.prepared_font_environment().unwrap().operation();
