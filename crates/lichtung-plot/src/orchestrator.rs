@@ -44,8 +44,12 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
                 let text = crate::text::TextService::default();
                 let theme = crate::text::TextRequestContext::new(&theme, &text);
                 let inputs = prepared.then(|| {
-                    let mut registry =
-                        crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+                    let mut registry = crate::plots::shared_x::prepare_plot(
+                        source.description(),
+                        &operation,
+                        None,
+                    )
+                    .unwrap();
                     let guide = registry
                         .prepare_discrete_guides(
                             &source,

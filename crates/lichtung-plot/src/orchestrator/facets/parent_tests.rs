@@ -120,7 +120,8 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&theme, &text);
     let mut inputs =
-        crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme)).unwrap();
+        crate::plots::shared_x::prepare_plot(source.description(), &operation, Some(&theme))
+            .unwrap();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let prepared = prepare_discrete_guide(
         &source,
@@ -247,8 +248,11 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
             },
             |stage| {
                 let operation = stage.operation();
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut inputs = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
@@ -257,7 +261,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                     &operation,
                 )?;
                 let mut changed_inputs = crate::plots::shared_x::prepare_plot(
-                    &changed_source,
+                    changed_source.description(),
                     &operation,
                     Some(&theme),
                 )?;
@@ -276,7 +280,7 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &source,
+                    source.description(),
                     PlotKind::Scatter,
                     &theme,
                     &ComponentAddress::root(),

@@ -55,7 +55,7 @@ impl BarSignificance {
         Ok(Self {
             appearance: theme
                 .effective_significance(chart.description().significance_mark_style_override())?,
-            mode: mode(chart),
+            mode: mode(chart.description()),
             group_span: theme
                 .marks
                 .get_extents()
@@ -153,7 +153,7 @@ pub(crate) fn intrinsic_body_minimum(
             "bar intrinsic has no prepared category or segment".into(),
         ));
     }
-    let mode = mode(chart);
+    let mode = mode(chart.description());
 
     let body = theme
         .marks
@@ -753,13 +753,13 @@ impl BarPayload {
     }
 }
 
-pub(crate) fn mode(chart: &Plot) -> BarMode {
+pub(crate) fn mode(chart: &crate::builder::PlotDescription) -> BarMode {
     if matches!(
         chart.kind(),
         crate::PlotKind::StackedBar | crate::PlotKind::StackedHorizontalBar
     ) {
         BarMode::Stacked
-    } else if chart.description().group_col().is_some() {
+    } else if chart.group_col().is_some() {
         BarMode::Grouped
     } else {
         BarMode::Single

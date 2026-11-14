@@ -216,7 +216,7 @@ mod tests {
         .erase();
         let operation = OperationContext::new();
         let first = Scope::new(
-            &source,
+            source.description(),
             &operation,
             0,
             crate::layout::ComponentAddress::root()
@@ -228,7 +228,7 @@ mod tests {
         )
         .unwrap();
         let second = Scope::new(
-            &source,
+            source.description(),
             &operation,
             1,
             crate::layout::ComponentAddress::root()
@@ -286,7 +286,7 @@ mod tests {
         let (column, binding, alive) = {
             let operation = OperationContext::new();
             let scope = Scope::new(
-                &source,
+                source.description(),
                 &operation,
                 0,
                 crate::layout::ComponentAddress::root()
@@ -321,7 +321,7 @@ mod tests {
         );
         let foreign = OperationContext::new();
         let scope = Scope::new(
-            &source,
+            source.description(),
             &foreign,
             0,
             crate::layout::ComponentAddress::root()
@@ -351,7 +351,7 @@ mod tests {
         .erase();
         let operation = OperationContext::new();
         let scope = Scope::new(
-            &source,
+            source.description(),
             &operation,
             0,
             crate::layout::ComponentAddress::root()

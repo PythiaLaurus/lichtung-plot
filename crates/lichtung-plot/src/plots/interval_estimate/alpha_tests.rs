@@ -36,7 +36,7 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let scope = crate::orchestrator::registration::Scope::new(
-        &source,
+        source.description(),
         &operation,
         0,
         crate::layout::ComponentAddress::root()

@@ -24,7 +24,7 @@ pub(crate) fn measure_marks(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
-    let mode = bar_data::mode(chart);
+    let mode = bar_data::mode(chart.description());
     let prepared = bar_data::retained(context.prepared_family())?;
     theme.text.prepared_font_environment()?;
     let data = context.data;

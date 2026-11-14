@@ -174,7 +174,7 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
         |stage| {
             let operation = stage.operation();
             let scope = Scope::new(
-                &source,
+                source.description(),
                 &operation,
                 0,
                 crate::layout::ComponentAddress::root()
@@ -186,7 +186,7 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
             let mut registry = PlotRegistryBuilder::new(operation.root_identity());
             let id = registry.reserve(source.description(), scope, &operation)?;
             let panel = &mut registry.panels[id.slot];
-            crate::plots::shared_x::prepare_plot_registration(panel, &source, None, &operation)?;
+            crate::plots::shared_x::prepare_plot_registration(panel, None, &operation)?;
             let axes = panel.axes.as_ref().unwrap();
             let initial_y = axes.ranges()[1];
             assert!(axes
@@ -200,7 +200,7 @@ fn shared_initial_axis_seed_drives_the_original_curve_finish_before_fonts() {
 
             let shared = (-10.0, 10.0);
             crate::plots::shared_x::prepare_reference_plot(
-                &source,
+                source.description(),
                 panel,
                 Some(shared),
                 false,

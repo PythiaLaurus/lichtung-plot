@@ -428,8 +428,11 @@ fn shared_legend_child_cache_replay_contract() {
                 height: 720,
             },
             |stage| {
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+                let mut inputs = crate::plots::shared_x::prepare_plot(
+                    plot.description(),
+                    &stage.operation(),
+                    None,
+                )?;
                 let guide = inputs.prepare_discrete_guides(
                     &plot,
                     &theme,
@@ -444,7 +447,7 @@ fn shared_legend_child_cache_replay_contract() {
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &plot,
+                    plot.description(),
                     plot.kind(),
                     &theme,
                     &ComponentAddress::root(),
@@ -945,7 +948,8 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             height: 400,
         },
         |stage| {
-            let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+            let mut inputs =
+                crate::plots::shared_x::prepare_plot(plot.description(), &stage.operation(), None)?;
             let guide = inputs.prepare_discrete_guides(
                 &plot,
                 &theme,
@@ -960,7 +964,7 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
             )?;
             let requirements = crate::layout::foundational_plot_requirements(
                 Some(&inputs),
-                &plot,
+                plot.description(),
                 plot.kind(),
                 &theme,
                 &ComponentAddress::root(),

@@ -132,7 +132,8 @@ impl PreparedGuide {
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
         let operation = crate::font::canonical::OperationContext::new();
-        let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
+        let mut inputs =
+            crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(theme))?;
         for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;
         }

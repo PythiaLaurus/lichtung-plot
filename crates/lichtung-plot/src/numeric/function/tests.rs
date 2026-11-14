@@ -17,7 +17,7 @@ fn with_source<T>(visit: impl FnOnce(NumericBinding<'_>) -> T) -> T {
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let scope = crate::orchestrator::registration::Scope::new(
-        &plot,
+        plot.description(),
         &operation,
         0,
         crate::layout::ComponentAddress::root()

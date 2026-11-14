@@ -774,7 +774,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let resources = crate::font::canonical::OperationContext::new();
         let mut prepared = crate::plots::shared_x::prepare_plot(
-            &plot,
+            plot.description(),
             &resources,
             Some(&crate::theme::Theme::publication()),
         )
@@ -1090,7 +1090,8 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     for composition in [Combined, Separate] {
         let operation = crate::font::canonical::OperationContext::new();
         let mut inputs =
-            crate::plots::shared_x::prepare_plot(plot, &operation, Some(&theme)).unwrap();
+            crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme))
+                .unwrap();
         for registered in &mut inputs.panels {
             registered.policy.guide_composition = composition;
         }

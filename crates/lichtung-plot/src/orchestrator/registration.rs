@@ -48,7 +48,7 @@ impl Scope {
     }
 
     pub(crate) fn new(
-        plot: &crate::Plot,
+        source: &PlotDescription,
         operation: &crate::font::canonical::OperationContext,
         slot: usize,
         address: crate::layout::ComponentAddress,
@@ -56,7 +56,7 @@ impl Scope {
         facet: Option<&crate::FacetCell>,
         render_name: Option<String>,
     ) -> Result<Self, Error> {
-        let numeric_owner = crate::numeric::context::OwnerInfo::for_plot(plot, facet)?;
+        let numeric_owner = crate::numeric::context::OwnerInfo::for_source(source, facet)?;
         let mut axis_numeric_owner = numeric_owner.try_copy()?;
         axis_numeric_owner.scope = render_name
             .as_deref()

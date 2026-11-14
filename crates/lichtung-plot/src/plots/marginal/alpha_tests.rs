@@ -31,7 +31,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     let prepare_source = |source: &Plot| {
         use crate::orchestrator::registration::{PlotRegistryBuilder, RowSelection, Scope};
         let scope = Scope::new(
-            source,
+            source.description(),
             &operation,
             0,
             crate::layout::ComponentAddress::root()

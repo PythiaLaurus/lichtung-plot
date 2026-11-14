@@ -418,7 +418,7 @@ mod tests {
             let resources = OperationContext::new();
 
             let scope = crate::orchestrator::registration::Scope::new(
-                &plot,
+                plot.description(),
                 &resources,
                 0,
                 crate::layout::ComponentAddress::root()

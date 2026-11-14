@@ -165,7 +165,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         |stage| {
             let operation = stage.operation();
             let scope = crate::orchestrator::registration::Scope::new(
-                &source,
+                source.description(),
                 &operation,
                 0,
                 crate::layout::ComponentAddress::root()
@@ -277,7 +277,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
                 crate::orchestrator::registration::PreparedFamily::Beeswarm(prepared),
             );
             crate::plots::shared_x::prepare_reference_plot(
-                &source,
+                source.description(),
                 &mut registry.panels[id.slot],
                 None,
                 false,
@@ -298,7 +298,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             )?;
             let requirements = crate::layout::foundational_plot_requirements(
                 Some(&inputs),
-                &source,
+                source.description(),
                 source.kind(),
                 &theme,
                 &crate::layout::ComponentAddress::root(),

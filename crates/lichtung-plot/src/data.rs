@@ -211,7 +211,7 @@ pub(crate) fn with_source_data_for_test<'src, T>(
     visit: impl FnOnce(PlotData<'src, '_>) -> T,
 ) -> Result<T, Error> {
     let scope = crate::orchestrator::registration::Scope::new(
-        source,
+        source.description(),
         operation,
         0,
         crate::layout::ComponentAddress::root().child(crate::layout::AddressRole::PlotBody, 0)?,

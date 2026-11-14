@@ -13,7 +13,8 @@ fn prepare(
     inspect: impl FnOnce(&crate::layout::interior::PreparedInteriorInputs<'_>),
 ) -> Option<Arc<PreparedGuide>> {
     let operation = crate::font::canonical::OperationContext::new();
-    let mut inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme)).unwrap();
+    let mut inputs =
+        crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(theme)).unwrap();
     for registered in &mut inputs.panels {
         registered.policy.guide_composition = composition;
         if let Some(parent) = parent {

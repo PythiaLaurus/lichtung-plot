@@ -4,7 +4,7 @@ use super::context::{
     ContextInfo, ContextValue, CoordinateAxis, DomainInfo, Identity, NumericPurpose,
     NumericRangeOrigin, NumericRole, OwnerInfo,
 };
-use crate::{Error, Plot, Result};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct NumericBinding<'v> {
@@ -108,9 +108,12 @@ impl OwnerInfo {
                 .transpose()?,
         })
     }
-    pub(crate) fn for_plot(plot: &Plot, facet: Option<&crate::FacetCell>) -> Result<Self> {
+    pub(crate) fn for_source(
+        source: &crate::builder::PlotDescription,
+        facet: Option<&crate::FacetCell>,
+    ) -> Result<Self> {
         Ok(Self {
-            kind: Some(plot.kind()),
+            kind: Some(source.kind()),
             canvas: None,
             facet: facet.map(crate::FacetCell::try_copy).transpose()?,
             shared: false,

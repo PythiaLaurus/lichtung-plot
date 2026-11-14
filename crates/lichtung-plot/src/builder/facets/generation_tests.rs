@@ -15,7 +15,8 @@ fn prepare_key_inputs<'src>(
     source: &'src Plot,
     operation: &crate::font::canonical::OperationContext,
 ) -> crate::layout::interior::PreparedInteriorInputs<'src> {
-    let mut registry = crate::plots::shared_x::prepare_plot(source, operation, None).unwrap();
+    let mut registry =
+        crate::plots::shared_x::prepare_plot(source.description(), operation, None).unwrap();
     let appearance = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();
     let theme = crate::text::TextRequestContext::new(&appearance, &text);

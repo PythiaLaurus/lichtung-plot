@@ -1308,7 +1308,8 @@ mod tests {
             let text = crate::text::TextService::default();
             let theme = crate::text::TextRequestContext::new(&theme, &text);
             let mut inputs =
-                crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
+                crate::plots::shared_x::prepare_plot(plot.description(), &operation, Some(&theme))
+                    .unwrap();
             let discoveries =
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
             let descriptor = inputs

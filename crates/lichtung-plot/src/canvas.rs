@@ -1208,7 +1208,10 @@ impl Canvas {
                             | crate::orchestrator::registration::PreparedFamily::Line { .. }
                     )
                 }) {
-                    marks.x_range(plot, registered.and_then(|panel| panel.axes.as_ref()))?
+                    marks.x_range(
+                        plot.description(),
+                        registered.and_then(|panel| panel.axes.as_ref()),
+                    )?
                 } else if plot.kind() == PlotKind::Scatter {
                     family
                         .and_then(|family| match family {
@@ -1325,7 +1328,7 @@ impl Canvas {
             };
             let plot = plot.expect("configured Canvas source");
             let mut scope = crate::orchestrator::registration::Scope::new(
-                plot,
+                plot.description(),
                 &resources,
                 index,
                 crate::layout::ComponentAddress::root().child(
@@ -1428,7 +1431,6 @@ impl Canvas {
                     plot.description().configured_source_rows()?;
                     crate::plots::shared_x::prepare_plot_registration(
                         panel,
-                        plot,
                         themes
                             .and_then(|themes| themes.plot(index))
                             .map(|theme| &**theme),
@@ -1456,15 +1458,19 @@ impl Canvas {
                 panel
                     .scope
                     .set_render_name(crate::data::source::copy_source_string(&scope)?)?;
-                let mut plot = plot.clone();
-                if let Some(Some(range)) = shared_x.get(index) {
-                    let kind = plot.kind();
-                    plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
-                }
+                let shared_x_window = shared_x.get(index).copied().flatten();
                 if plot.kind() == PlotKind::Scatter {
-                    crate::plots::shared_x::prepare_scatter_plot(&plot, panel)?;
+                    crate::plots::shared_x::prepare_scatter_plot(
+                        plot.description(),
+                        panel,
+                        shared_x_window,
+                    )?;
                 } else {
-                    crate::plots::shared_x::prepare_line_plot(&plot, panel)?;
+                    crate::plots::shared_x::prepare_line_plot(
+                        plot.description(),
+                        panel,
+                        shared_x_window,
+                    )?;
                 }
             } else {
                 let scope_bytes = 6 + index
@@ -1476,7 +1482,7 @@ impl Canvas {
                     .map_err(|error| Error::Render(format!("Canvas scope: {error}")))?;
                 panel.scope.set_render_name(scope)?;
                 crate::plots::shared_x::prepare_reference_plot(
-                    plot,
+                    plot.description(),
                     panel,
                     shared_x.get(index).copied().flatten(),
                     self.labels.is_some(),
@@ -1957,7 +1963,7 @@ impl Canvas {
             crate::layout::PreparedTextRequirement::append_plot(
                 interiors.get(index).and_then(Option::as_ref),
                 &mut requirements,
-                &plot,
+                plot.description(),
                 plot.kind(),
                 theme,
                 &cell,

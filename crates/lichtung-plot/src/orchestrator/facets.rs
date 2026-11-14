@@ -23,25 +23,19 @@ mod tracks;
 pub(super) use sizing::natural_size;
 
 pub(crate) fn text_census_labels(
-    source: &Plot,
+    source: &crate::builder::PlotDescription,
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
 ) -> Result<(), Error> {
-    let selectors = data::facet_selectors(source.description())?;
-    for panel in data::extract_panels(source.description(), &selectors, None)? {
-        if source
-            .description()
-            .text_layouts()
-            .facet
-            .iter()
-            .any(Option::is_some)
-        {
+    let selectors = data::facet_selectors(source)?;
+    for panel in data::extract_panels(source, &selectors, None)? {
+        if source.text_layouts().facet.iter().any(Option::is_some) {
             for (index, selector) in panel.cell.iter().enumerate() {
                 let role = if panel.cell.as_slice().len() == 1 {
                     1
                 } else {
                     index
                 };
-                if source.description().text_layouts().facet[role]
+                if source.text_layouts().facet[role]
                     .as_ref()
                     .is_some_and(crate::TextLayout::hidden)
                 {
@@ -50,8 +44,8 @@ pub(crate) fn text_census_labels(
                 visit(
                     format_args!(
                         "{} = {}",
-                        source.description().resolve_label(&selector.variable)?,
-                        source.description().resolve_label(&selector.level)?
+                        source.resolve_label(&selector.variable)?,
+                        source.resolve_label(&selector.level)?
                     )
                     .into(),
                 )?;
@@ -63,18 +57,18 @@ pub(crate) fn text_census_labels(
             [selector] => visit(
                 format_args!(
                     "{} = {}",
-                    source.description().resolve_label(&selector.variable)?,
-                    source.description().resolve_label(&selector.level)?
+                    source.resolve_label(&selector.variable)?,
+                    source.resolve_label(&selector.level)?
                 )
                 .into(),
             )?,
             [row, column] => visit(
                 format_args!(
                     "{} = {} | {} = {}",
-                    source.description().resolve_label(&row.variable)?,
-                    source.description().resolve_label(&row.level)?,
-                    source.description().resolve_label(&column.variable)?,
-                    source.description().resolve_label(&column.level)?
+                    source.resolve_label(&row.variable)?,
+                    source.resolve_label(&row.level)?,
+                    source.resolve_label(&column.variable)?,
+                    source.resolve_label(&column.level)?
                 )
                 .into(),
             )?,
@@ -89,11 +83,10 @@ pub(crate) fn text_census_labels(
 }
 
 pub(crate) fn prepare_facet_scopes<'src>(
-    plot: &'src Plot,
+    source: &'src crate::builder::PlotDescription,
     builder: &mut super::registration::PlotRegistryBuilder<'src>,
     operation: &crate::font::canonical::OperationContext,
 ) -> Result<(), Error> {
-    let source = plot.description();
     if !source.significance_annotations().is_empty()
         && !source.kind().supports_significance_annotations()
     {
@@ -123,7 +116,7 @@ pub(crate) fn prepare_facet_scopes<'src>(
         };
         let render_name = panel.render_scope()?;
         let scope = super::registration::Scope::new(
-            plot,
+            source,
             operation,
             slot,
             crate::layout::ComponentAddress::root().child(
@@ -890,7 +883,7 @@ mod feedback_tests {
                     source.description().sizing_request(),
                     |stage| {
                         let mut inputs = crate::plots::shared_x::prepare_plot(
-                            &source,
+                            source.description(),
                             &stage.operation(),
                             Some(&crate::theme::Theme::publication()),
                         )?;
@@ -909,7 +902,7 @@ mod feedback_tests {
                             )?;
                         let requirements = crate::layout::foundational_plot_requirements(
                             Some(&inputs),
-                            &source,
+                            source.description(),
                             PlotKind::Scatter,
                             &theme,
                             &ComponentAddress::root(),
@@ -1127,7 +1120,7 @@ mod feedback_tests {
             source.description().sizing_request(),
             |stage| {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
+                    source.description(),
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
                 )?;
@@ -1152,7 +1145,7 @@ mod feedback_tests {
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &source,
+                    source.description(),
                     PlotKind::Scatter,
                     &theme,
                     &crate::layout::ComponentAddress::root(),
@@ -1307,7 +1300,7 @@ mod feedback_tests {
             source.description().sizing_request(),
             |stage| {
                 let mut inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
+                    source.description(),
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
                 )?;
@@ -1325,7 +1318,7 @@ mod feedback_tests {
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &source,
+                    source.description(),
                     PlotKind::Scatter,
                     &theme,
                     &crate::layout::ComponentAddress::root(),
@@ -1413,7 +1406,7 @@ mod feedback_tests {
             source.description().sizing_request(),
             |stage| {
                 crate::plots::shared_x::prepare_plot(
-                    &source,
+                    source.description(),
                     &stage.operation(),
                     Some(&crate::theme::Theme::publication()),
                 )

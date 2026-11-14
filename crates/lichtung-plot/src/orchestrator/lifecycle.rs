@@ -41,7 +41,7 @@ impl<'src> PreparedPlotInputs<'src> {
         let request = TextRequestContext::new(&theme, &text);
         source.description().validate_configuration(kind)?;
         let registry = crate::plots::shared_x::prepare_plot(
-            source,
+            source.description(),
             &prepared_stage.operation(),
             Some(&theme),
         )?;
@@ -93,7 +93,7 @@ impl<'src> PreparedPlotInputs<'src> {
         )?;
         let mut requirements = crate::layout::foundational_plot_requirements(
             Some(&axes),
-            source,
+            source.description(),
             kind,
             &request,
             &crate::layout::ComponentAddress::root(),
@@ -178,8 +178,11 @@ pub(crate) fn with_prepared_plot_for_test<T>(
             let theme = Box::new(appearance.theme.clone());
             let text = TextService::default();
             source.description().validate_configuration(source.kind())?;
-            let mut registry =
-                crate::plots::shared_x::prepare_plot(source, &stage.operation(), Some(&theme))?;
+            let mut registry = crate::plots::shared_x::prepare_plot(
+                source.description(),
+                &stage.operation(),
+                Some(&theme),
+            )?;
             registry.validate_categorical_scale(
                 source,
                 &TextRequestContext::new(&theme, &text),
@@ -1430,7 +1433,7 @@ mod root_title_tests {
                 },
                 |stage| {
                     let mut inputs = crate::plots::shared_x::prepare_plot(
-                        &source,
+                        source.description(),
                         &stage.operation(),
                         Some(&theme),
                     )?;
@@ -1448,7 +1451,7 @@ mod root_title_tests {
                     )?;
                     let requirements = crate::layout::foundational_plot_requirements(
                         Some(&inputs),
-                        &source,
+                        source.description(),
                         source.kind(),
                         &theme,
                         &crate::layout::ComponentAddress::root(),
@@ -1631,8 +1634,11 @@ mod retained_legend_tests {
                 height: 600,
             },
             |stage| {
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
+                let mut inputs = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &stage.operation(),
+                    None,
+                )?;
                 let guide = inputs.prepare_discrete_guides(
                     &source,
                     &theme,
@@ -1648,7 +1654,7 @@ mod retained_legend_tests {
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
-                    &source,
+                    source.description(),
                     source.kind(),
                     &theme,
                     &crate::layout::ComponentAddress::root(),

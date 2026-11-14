@@ -27,7 +27,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     let prepare = |source: &Plot, rows| {
         use crate::orchestrator::registration::{PlotRegistryBuilder, Scope};
         let scope = Scope::new(
-            source,
+            source.description(),
             &operation,
             0,
             crate::layout::ComponentAddress::root()

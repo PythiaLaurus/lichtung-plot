@@ -550,7 +550,8 @@ mod tests {
                 },
                 |stage| {
                     let operation = stage.operation();
-                    let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, None)?;
+                    let mut inputs =
+                        crate::plots::shared_x::prepare_plot(plot.description(), &operation, None)?;
                     let guide = inputs.prepare_discrete_guides(
                         &plot,
                         &theme,
@@ -633,7 +634,7 @@ mod tests {
 
             let operation = OperationContext::new();
             let scope = crate::orchestrator::registration::Scope::new(
-                &plot,
+                plot.description(),
                 &operation,
                 0,
                 crate::layout::ComponentAddress::root()

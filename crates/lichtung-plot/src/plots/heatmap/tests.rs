@@ -195,7 +195,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 .unwrap(),
             );
             let same_paint_inputs = crate::plots::shared_x::prepare_plot(
-                &same_paint,
+                same_paint.description(),
                 &operation,
                 Some(&crate::Theme::publication()),
             )
@@ -226,7 +226,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
                 ),
             );
             let changed_inputs = crate::plots::shared_x::prepare_plot(
-                &changed_source,
+                changed_source.description(),
                 &operation,
                 Some(&crate::Theme::publication()),
             )
@@ -338,7 +338,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let scope = crate::orchestrator::registration::Scope::new(
-        &source,
+        source.description(),
         &operation,
         0,
         crate::layout::ComponentAddress::root()

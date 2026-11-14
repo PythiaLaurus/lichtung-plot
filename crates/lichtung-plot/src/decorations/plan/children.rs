@@ -388,7 +388,8 @@ fn prepare_child_inputs_for_test<'src>(
     theme: &crate::text::TextRequestContext<'_, '_>,
     operation: &crate::font::canonical::OperationContext,
 ) -> Result<crate::layout::interior::PreparedInteriorInputs<'src>, Error> {
-    let mut registry = crate::plots::shared_x::prepare_plot(source, operation, Some(theme))?;
+    let mut registry =
+        crate::plots::shared_x::prepare_plot(source.description(), operation, Some(theme))?;
     let guide = registry.prepare_discrete_guides(
         source,
         theme,
@@ -925,30 +926,48 @@ mod tests {
             |stage| {
                 let operation = stage.operation();
                 let base = prepare_child_inputs_for_test(&source, &theme, &operation)?;
-                let mut inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut inputs = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 inputs.panels[0].policy.gutter_owner =
                     crate::orchestrator::registration::GutterOwner::Composition;
-                let mut hidden =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut hidden = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 hidden.panels[0].policy.axis_text.tick_labels[1] = false;
-                let mut collectives =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut collectives = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 collectives.panels[0].parent_orders.collectives =
                     Some(crate::data::source::source_arc(Vec::new())?);
-                let mut hues =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut hues = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 hues.panels[0].parent_orders.hues = Some(crate::data::source::source_arc(
                     crate::data::category::CategoryDomain::from_values(
                         Some(&crate::data::category::RawField::new("cohort")?),
                         Vec::new(),
                     )?,
                 )?);
-                let mut scales =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut scales = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 scales.panels[0].policy.facet_scales = Some(FacetScales::Free);
-                let mut guide =
-                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let mut guide = crate::plots::shared_x::prepare_plot(
+                    source.description(),
+                    &operation,
+                    Some(&theme),
+                )?;
                 guide.panels[0].policy.discrete_guide_use = GuideUse::Hidden;
                 guide.panels[0].policy.continuous_guide_use = GuideUse::Hidden;
                 let [inputs, hidden, collectives, scales, guide, hues] =
