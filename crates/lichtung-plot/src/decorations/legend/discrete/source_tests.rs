@@ -98,10 +98,11 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
                     .as_slice(),
                 ["seen"]
             );
-            assert!(bars
-                .bars
-                .iter()
-                .all(|bar| bar.series_index == Some(0) && bar.hue_index == Some(1)));
+            assert!(bars.bars.iter().all(|bar| bar.series_index == Some(0)
+                && bar.hue_key.as_ref().is_some_and(|key| {
+                    let raw = key.as_ref();
+                    raw.field == "cohort" && raw.value == "seen"
+                })));
         },
     );
     let projected_mapped = PreparedGuide::prepare_for_test(

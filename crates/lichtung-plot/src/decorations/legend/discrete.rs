@@ -9,9 +9,10 @@ mod source_tests;
 
 use std::sync::Arc;
 
-use super::identity::{PrimaryTitleIdentity, RawField};
+use super::identity::PrimaryTitleIdentity;
 use super::source::{LiteralDomain, Projection, SourceMapping};
 use super::{GuideEntryIdentity, ResolvedGuideKey};
+use crate::data::category::RawField;
 use crate::layout::{AddressRole, ComponentAddress, PreparedTextRequirement, PreparedTextRole};
 use crate::{Error, LegendComposition, Result};
 

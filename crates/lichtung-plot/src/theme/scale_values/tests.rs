@@ -234,9 +234,9 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         .sequential(gradient.clone())
         .unwrap();
     assert_eq!(theme.marks.get_accents(), original.marks.get_accents());
-    let keys = ["one".into(), "two".into()];
+    let keys = ["one", "two"];
     let mapped = super::super::CategoryColors::resolve(
-        &keys,
+        keys.into_iter(),
         theme.color_scales.get_qualitative(),
         None,
         &resources,
@@ -244,7 +244,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     .unwrap();
     assert_eq!(mapped.colors(), palette.colors());
     assert!(super::super::CategoryColors::resolve(
-        &["one".into(), "two".into(), "three".into()],
+        ["one", "two", "three"].into_iter(),
         theme.color_scales.get_qualitative(),
         None,
         &resources

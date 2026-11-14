@@ -94,14 +94,14 @@ impl PreparedDistribution {
                 crate::data::strict_source_strings(values, None, "distribution color domain")?;
             let parent = crate::data::source::source_levels(&raw)?;
             return CategoryColors::resolve(
-                &parent,
+                parent.iter().map(String::as_str),
                 theme.color_scales.get_qualitative(),
                 chart.description().categorical_color_scale_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
-            keys,
+            keys.iter().map(String::as_str),
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
             resources,

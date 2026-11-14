@@ -251,6 +251,10 @@ impl CategoryValues {
     pub(crate) fn levels(&self) -> &[String] {
         &self.levels
     }
+
+    pub(crate) fn raw_field(&self) -> crate::data::category::RawField {
+        crate::data::category::RawField::from_shared(Arc::clone(&self.name))
+    }
 }
 
 /// Named nullable Boolean values.

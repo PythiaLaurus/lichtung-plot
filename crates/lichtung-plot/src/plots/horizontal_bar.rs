@@ -185,7 +185,7 @@ pub(crate) fn measure_marks(
             true,
             theme.marks.get_extents().get_categories(),
         );
-        let color = bar_data::bar_color(chart, categories, hues, bar, &colors, &accents)?;
+        let color = bar_data::bar_color(chart, categories, bar, &colors, &accents)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,

@@ -198,7 +198,7 @@ fn shared_interaction_group_colors_do_not_become_local_scientific_orders() {
 }
 
 #[test]
-fn shared_bar_palette_keeps_local_hue_indices_even_without_guide_contributions() {
+fn shared_bar_palette_preserves_raw_color_identity_without_guide_contributions() {
     let source = |series| {
         Plot::bar(
             crate::CategoryValues::new("category", ["one"]).unwrap(),
@@ -231,8 +231,9 @@ fn shared_bar_palette_keeps_local_hue_indices_even_without_guide_contributions()
                 else {
                     panic!("prepared Bars")
                 };
-                assert_eq!(marks.bars[0].hue_index, Some(0));
-                assert_eq!(local[marks.bars[0].hue_index.unwrap()], raw);
+                let identity = marks.bars[0].hue_key.as_ref().unwrap().as_ref();
+                assert_eq!(identity.field, "cohort");
+                assert_eq!(identity.value, raw);
                 assert!(registered.guide.descriptor.is_none());
                 assert!(registered.guide.alpha.sources.is_empty());
             }

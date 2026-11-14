@@ -1,9 +1,10 @@
 //! Producer-owned mapping provenance. Bindings describe actual selected inputs;
 //! they are never inferred from equal RGB, glyphs or displayed labels.
 
-use super::identity::{GuideEntryIdentity, RawCategory, RawField};
+use super::identity::GuideEntryIdentity;
 use super::ResolvedGuideKey;
 use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaUnitKind};
+use crate::data::category::{RawCategory, RawField};
 use crate::render::backend::{LineStyle, PointStyle};
 use crate::{Error, Plot, Result};
 

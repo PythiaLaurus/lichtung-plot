@@ -17,12 +17,12 @@ use crate::{Error, Plot, PlotKind, Result};
 use super::discrete::{
     shared_slice, GuideSectionBody, GuideSectionIdentity, PreparedGuideEntry, PreparedGuideSection,
 };
-use super::identity::{shared_text, RawField};
 use super::source::{
     AlphaExplanation, AlphaExplanationMask, GuideExplanation, GuideExplanationMask, RgbExplanation,
     StyleExplanation,
 };
 use super::{GuideEntryIdentity, ResolvedGuideKey};
+use crate::data::category::{shared_text, RawField};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlphaSectionIdentity {

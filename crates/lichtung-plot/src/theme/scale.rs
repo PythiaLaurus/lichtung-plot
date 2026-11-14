@@ -151,21 +151,22 @@ pub(crate) struct CategoryColors {
 }
 
 impl CategoryColors {
-    pub(crate) fn resolve(
-        identities: &[String],
+    pub(crate) fn resolve<'a>(
+        identities: impl Iterator<Item = &'a str> + Clone,
         palette: &QualitativePalette,
         exact: Option<&CategoricalColorScale>,
         resources: &OperationContext,
     ) -> Result<Self, Error> {
         // Selection retains the current immutable map/palette, never another key table.
 
+        let count = identities.clone().count();
         let selected = exact
             .cloned()
             .unwrap_or_else(|| CategoricalColorScale::from_palette(palette.clone()));
         let colors = if let Some(exact) = selected.map() {
             let mut colors = Vec::new();
-            reserve(&mut colors, identities.len())?;
-            for identity in identities {
+            reserve(&mut colors, count)?;
+            for identity in identities.clone() {
                 colors.push(exact.color_in(identity).ok_or_else(|| {
                     Error::Data(format!(
                         "categorical color map has no color for used raw key {identity:?}"
@@ -178,27 +179,27 @@ impl CategoryColors {
             match palette.capacity() {
                 PaletteCapacity::Fixed => {
                     let seeds = palette.colors();
-                    palette.validate_capacity(identities.len())?;
+                    palette.validate_capacity(count)?;
                     let mut colors = Vec::new();
-                    reserve(&mut colors, identities.len())?;
-                    colors.extend_from_slice(&seeds[..identities.len()]);
+                    reserve(&mut colors, count)?;
+                    colors.extend_from_slice(&seeds[..count]);
                     colors
                 }
                 PaletteCapacity::Extendable => {
-                    palette.extend_categorical_palette(identities.len(), resources)?
+                    palette.extend_categorical_palette(count, resources)?
                 }
             }
         };
         let mut retained = Vec::new();
-        reserve(&mut retained, identities.len())?;
-        for (index, identity) in identities.iter().enumerate() {
-            if identities[..index].contains(identity) {
+        reserve(&mut retained, count)?;
+        for identity in identities {
+            if retained.iter().any(|seen| seen == identity) {
                 return Err(Error::Data(format!(
                     "resolved categorical domain repeats raw key {identity:?}"
                 )));
             }
 
-            retained.push(identity.clone());
+            retained.push(identity.to_owned());
         }
         Ok(Self {
             identities: retained,

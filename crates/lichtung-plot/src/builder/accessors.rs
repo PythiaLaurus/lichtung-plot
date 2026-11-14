@@ -101,6 +101,17 @@ impl PlotDescription {
         }
     }
 
+    pub(crate) fn hue_field(&self) -> Option<crate::data::category::RawField> {
+        if self.kind.uses_unified_series() {
+            self.series_values().map(crate::CategoryValues::raw_field)
+        } else {
+            self.payload
+                .hue
+                .as_ref()
+                .map(crate::CategoryValues::raw_field)
+        }
+    }
+
     pub(crate) fn group_col(&self) -> Option<&'static str> {
         if self.kind.uses_unified_series() {
             self.series_values().map(|_| SERIES)

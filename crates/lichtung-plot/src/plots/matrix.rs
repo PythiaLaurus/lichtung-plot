@@ -140,7 +140,11 @@ impl PreparedMatrixAxes {
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
         let colors = CategoryColors::resolve(
-            chart.global_hue_levels().unwrap_or(hues),
+            chart
+                .global_hue_levels()
+                .unwrap_or(hues)
+                .iter()
+                .map(String::as_str),
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
             resources,

@@ -259,7 +259,7 @@ impl PreparedScatter {
             keys
         };
         CategoryColors::resolve(
-            &keys,
+            keys.iter().map(String::as_str),
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
             resources,

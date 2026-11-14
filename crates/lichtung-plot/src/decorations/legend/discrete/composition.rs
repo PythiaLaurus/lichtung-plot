@@ -494,7 +494,7 @@ fn finish(
             )));
         }
         retained.push(PreparedGuideSection {
-            identity: GuideSectionIdentity::ContinuousColor(super::super::identity::RawField::new(
+            identity: GuideSectionIdentity::ContinuousColor(crate::data::category::RawField::new(
                 &color.field,
             )?),
             display_title,

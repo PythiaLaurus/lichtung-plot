@@ -217,7 +217,7 @@ pub(crate) fn measure_marks(
                     .get_bodies()
                     .get_bar_body()
                     .backend_style(bar_data::bar_color(
-                        chart, categories, hues, bar, &colors, &accents,
+                        chart, categories, bar, &colors, &accents,
                     )?),
             ),
             interval: bar

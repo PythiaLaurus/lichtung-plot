@@ -305,6 +305,144 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
 }
 
 #[test]
+fn trajectory_row_hue_identity_survives_parent_palette_order_and_condition_sort() {
+    let source = Plot::trajectory(
+        crate::NumericValues::new("condition", [3.0, 1.0, 2.0, 0.0]),
+        crate::NumericValues::new("value", [3.0, 1.0, 2.0, 0.0]),
+        crate::CategoryValues::new("path", ["A"; 4]).unwrap(),
+    )
+    .hue(crate::CategoryValues::new("cohort", ["second", "first", "first", "second"]).unwrap())
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [11, 23, 37, 41]).unwrap(),
+        ),
+    )
+    .erase()
+    .with_global_hue_levels(vec!["first".into(), "second".into()]);
+    let operation = crate::font::canonical::OperationContext::new();
+    crate::data::with_source_data_for_test(
+        &source,
+        &operation,
+        crate::orchestrator::registration::RowSelection::Full,
+        |data| {
+            let (prepared, _, _) = PreparedLine::new(&source, data, None, None).unwrap();
+            assert_eq!(
+                prepared.hue_levels().collect::<Vec<_>>(),
+                ["second", "first"]
+            );
+            let points = &prepared.groups[0].points;
+            assert_eq!(
+                points
+                    .iter()
+                    .map(|point| point.alpha.slot)
+                    .collect::<Vec<_>>(),
+                [3, 1, 2, 0]
+            );
+            assert_eq!(
+                points
+                    .iter()
+                    .map(|point| point.hue_key.as_ref().unwrap().as_ref())
+                    .collect::<Vec<_>>(),
+                ["second", "first", "first", "second"].map(|value| {
+                    crate::data::category::CategoryRef {
+                        field: "cohort",
+                        value,
+                    }
+                })
+            );
+        },
+    )
+    .unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let request = crate::text::TextRequestContext::new(&theme, &text);
+    let selected = source
+        .preflight_panel(
+            source.kind(),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+            &request,
+        )
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Trajectory payload")
+    };
+    let palette = theme.color_scales.get_qualitative().colors();
+    let first = palette[0].as_rgb();
+    let second = palette[1].as_rgb();
+    let paint = |rgb: (u8, u8, u8), alpha| crate::Color::rgba(rgb.0, rgb.1, rgb.2, alpha);
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| match mark {
+                LineMark::Points(_, style) => Some(style.color),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [
+            paint(second, 41),
+            paint(first, 23),
+            paint(first, 37),
+            paint(second, 11)
+        ]
+    );
+}
+
+#[test]
+fn hue_path_uses_scientific_pair_identity_instead_of_local_palette_position() {
+    let source = Plot::line_path(
+        crate::NumericValues::new("x", [2.0, 0.0, 2.0, 0.0]),
+        crate::NumericValues::new("y", [2.0, 0.0, 3.0, 1.0]),
+        crate::CategoryValues::new("path", ["A", "A", "B", "B"]).unwrap(),
+    )
+    .hue(crate::CategoryValues::new("cohort", ["second", "second", "first", "first"]).unwrap())
+    .style(crate::LinePathStyle::Hue)
+    .markers(true)
+    .erase()
+    .with_global_hue_levels(vec!["first".into(), "second".into()]);
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let text = crate::text::TextService::default();
+    let selected = source
+        .preflight_panel(
+            source.kind(),
+            crate::layout::PixelRect::new(20.0, 600.0, 20.0, 420.0),
+            &crate::text::TextRequestContext::new(&theme, &text),
+        )
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("LinePath payload")
+    };
+    let palette = theme.color_scales.get_qualitative().colors();
+    let colors = payload
+        .marks
+        .iter()
+        .filter_map(|mark| match mark {
+            LineMark::Line(_, style) => {
+                Some((style.color.red(), style.color.green(), style.color.blue()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(colors, [palette[1].as_rgb(), palette[0].as_rgb()]);
+    let points = payload
+        .marks
+        .iter()
+        .filter_map(|mark| match mark {
+            LineMark::Points(_, style) => {
+                Some((style.color.red(), style.color.green(), style.color.blue()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(points, [colors[0], colors[0], colors[1], colors[1]]);
+}
+
+#[test]
 fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let text = crate::text::TextService::default();

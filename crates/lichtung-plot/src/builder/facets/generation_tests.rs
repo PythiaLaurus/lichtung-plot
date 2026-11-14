@@ -110,10 +110,11 @@ fn composed_groups_preserve_parent_order_without_exposing_local_empty_orders() {
     else {
         panic!("prepared Bars")
     };
-    assert!(marks
-        .bars
-        .iter()
-        .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
+    assert!(marks.bars.iter().all(|bar| bar.series_index == Some(1)
+        && bar.hue_key.as_ref().is_some_and(|key| {
+            let raw = key.as_ref();
+            raw.field == "cohort" && raw.value == "seen"
+        })));
     let retained = plot
         .retain_composed_inputs(
             ScopedGuideInputs::new(

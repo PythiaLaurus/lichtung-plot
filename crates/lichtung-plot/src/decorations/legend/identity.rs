@@ -3,37 +3,21 @@
 
 use std::sync::Arc;
 
+use crate::data::category::{shared_text, RawCategory, RawField};
 use crate::{Error, RegressionBand, Result};
 
-pub(super) fn shared_text(source: &str) -> Result<Arc<str>> {
-    let bytes = std::alloc::Layout::array::<u8>(source.len())
-        .map_err(|_| Error::Render("guide identity text layout overflow".into()))?;
-    std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
-        .extend(bytes)
-        .map_err(|_| Error::Render("guide identity Arc layout overflow".into()))?;
-    Ok(Arc::from(crate::data::source::copy_source_string(source)?))
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RawLayerLabel(Arc<str>);
+
+impl RawLayerLabel {
+    pub(super) fn new(value: &str) -> Result<Self> {
+        shared_text(value).map(Self)
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
 }
-
-macro_rules! raw_identity {
-    ($name:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub(crate) struct $name(Arc<str>);
-
-        impl $name {
-            pub(super) fn new(value: &str) -> Result<Self> {
-                shared_text(value).map(Self)
-            }
-
-            pub(crate) fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-    };
-}
-
-raw_identity!(RawField);
-raw_identity!(RawCategory);
-raw_identity!(RawLayerLabel);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PrimaryTitleIdentity {

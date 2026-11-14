@@ -7,6 +7,7 @@ use crate::alpha::{
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::{
+    category::{CategoryKey, RawField},
     source::{sort_numeric_source, sort_source_by},
     PlotData,
 };
@@ -312,8 +313,8 @@ pub(crate) struct PreparedBar {
     pub(crate) category_index: usize,
     /// Optional index into the owning policy's positioned group domain.
     pub(crate) series_index: Option<usize>,
-    /// Optional index into the owning policy's color domain.
-    pub(crate) hue_index: Option<usize>,
+    /// Raw color identity, independent of local or parent palette order.
+    pub(crate) hue_key: Option<CategoryKey>,
     /// Start value on the numeric axis.
     pub(crate) start: f64,
     /// End value on the numeric axis.
@@ -413,10 +414,14 @@ impl PreparedBars {
         &'a self,
         hues: &'a [String],
     ) -> impl Iterator<Item = &'a str> {
-        hues.iter().enumerate().filter_map(|(index, hue)| {
+        hues.iter().filter_map(|hue| {
             self.bars
                 .iter()
-                .any(|bar| bar.hue_index == Some(index))
+                .any(|bar| {
+                    bar.hue_key
+                        .as_ref()
+                        .is_some_and(|key| key.as_ref().value == hue)
+                })
                 .then_some(hue.as_str())
         })
     }
@@ -448,11 +453,13 @@ pub(crate) fn resolved_colors(
         chart.global_hue_levels().unwrap_or(hues)
     };
     let colors = CategoryColors::resolve(
-        if chart.description().colors_by_sign() {
+        (if chart.description().colors_by_sign() {
             &[]
         } else {
             keys
-        },
+        })
+        .iter()
+        .map(String::as_str),
         theme.color_scales.get_qualitative(),
         if chart.description().colors_by_sign() {
             None
@@ -475,15 +482,14 @@ pub(crate) fn resolved_colors(
 pub(crate) fn bar_color(
     chart: &Plot,
     categories: &[String],
-    hues: &[String],
     bar: &PreparedBar,
     colors: &CategoryColors,
     accents: &AccentColors,
 ) -> Result<(u8, u8, u8), Error> {
     if chart.description().colors_by_sign() {
         accents.color(usize::from(bar.end < bar.start))
-    } else if let Some(hue) = bar.hue_index {
-        colors.color(&hues[hue])
+    } else if let Some(hue) = &bar.hue_key {
+        colors.color(hue.as_ref().value)
     } else {
         colors.color(&categories[bar.category_index])
     }
@@ -893,7 +899,7 @@ struct FacetIdentity(Vec<(String, String)>);
 
 struct SingleBarCell {
     category_index: usize,
-    hue_index: Option<usize>,
+    hue_key: Option<CategoryKey>,
     values: Vec<f64>,
     units: Vec<String>,
 }
@@ -901,7 +907,7 @@ struct SingleBarCell {
 struct GroupedBarCell {
     category_index: usize,
     series_index: usize,
-    hue_index: Option<usize>,
+    hue_key: Option<CategoryKey>,
     values: Vec<f64>,
     units: Vec<String>,
 }
@@ -1043,6 +1049,8 @@ fn prepare_core(
             .iter()
             .map(|s| crate::data::source::copy_source_string(s)),
     )?;
+    let hue_field = chart.description().hue_field();
+    let hues = hue_field.as_ref().zip(channels.hues.as_deref());
     let units = chart
         .description()
         .bar_units_col()
@@ -1060,13 +1068,7 @@ fn prepare_core(
         })
     };
     let (mut prepared, mut categories, series, hues) = match mode {
-        BarMode::Single => prepare_single(
-            categories,
-            channels.hues.as_deref(),
-            values,
-            hue_order,
-            summary()?,
-        ),
+        BarMode::Single => prepare_single(categories, hues, values, hue_order, summary()?),
         BarMode::Grouped => {
             let groups = channels
                 .groups
@@ -1074,7 +1076,7 @@ fn prepare_core(
             prepare_grouped(
                 categories,
                 groups,
-                channels.hues.as_deref(),
+                hues,
                 values,
                 group_order,
                 hue_order,
@@ -1085,14 +1087,7 @@ fn prepare_core(
             let groups = channels
                 .groups
                 .ok_or_else(|| Error::Data("stacked bar requires a series column".into()))?;
-            prepare_stacked(
-                categories,
-                groups,
-                channels.hues.as_deref(),
-                values,
-                group_order,
-                hue_order,
-            )
+            prepare_stacked(categories, groups, hues, values, group_order, hue_order)
         }
     }?;
     apply_category_order(
@@ -1649,7 +1644,7 @@ pub(crate) fn guide_sources(
 )]
 fn prepare_single(
     categories: Vec<String>,
-    hues: Option<&[String]>,
+    hues: Option<(&RawField, &[String])>,
     values: Vec<f64>,
     mut hue_levels: Vec<String>,
     summary: BarSummaryInput<'_>,
@@ -1658,14 +1653,12 @@ fn prepare_single(
     let mut groups: Vec<SingleBarCell> = Vec::new();
     for (row, (category, value)) in categories.into_iter().zip(values).enumerate() {
         let category_index = level_index(&mut category_levels, category)?;
-        let hue_index = hues
-            .map(|hues| {
-                level_index(
-                    &mut hue_levels,
-                    crate::data::source::copy_source_string(&hues[row])?,
-                )
-            })
-            .transpose()?;
+        let hue_key = prepare_hue_key(
+            hues,
+            row,
+            &mut hue_levels,
+            groups.iter().filter_map(|cell| cell.hue_key.as_ref()),
+        )?;
         if let Some(index) = crate::data::source::source_position(&groups, |cell| {
             cell.category_index == category_index
         }) {
@@ -1681,7 +1674,7 @@ fn prepare_single(
             crate::data::source::reserve_source(&mut groups, 1)?;
             groups.push(SingleBarCell {
                 category_index,
-                hue_index,
+                hue_key,
                 values: crate::data::source::collect_source(std::iter::once(Ok(value)))?,
                 units: summary
                     .units
@@ -1714,7 +1707,7 @@ fn prepare_single(
         bars.push(PreparedBar {
             category_index: cell.category_index,
             series_index: None,
-            hue_index: cell.hue_index,
+            hue_key: cell.hue_key.clone(),
             start: 0.0,
             end: value,
             nonzero: value != 0.0,
@@ -1745,7 +1738,7 @@ fn prepare_single(
 fn prepare_grouped(
     categories: Vec<String>,
     series: Vec<String>,
-    hues: Option<&[String]>,
+    hues: Option<(&RawField, &[String])>,
     values: Vec<f64>,
     series_order: Vec<String>,
     hue_order: Vec<String>,
@@ -1766,15 +1759,12 @@ fn prepare_grouped(
     {
         let category_index = level_index(&mut category_levels, category)?;
         let series_index = level_index(&mut series_levels, series_label)?;
-        let hue_index = hues
-            .as_ref()
-            .map(|hues| {
-                level_index(
-                    &mut hue_levels,
-                    crate::data::source::copy_source_string(&hues[row])?,
-                )
-            })
-            .transpose()?;
+        let hue_key = prepare_hue_key(
+            hues,
+            row,
+            &mut hue_levels,
+            groups.iter().filter_map(|cell| cell.hue_key.as_ref()),
+        )?;
         if let Some(index) = crate::data::source::source_position(&groups, |cell| {
             cell.category_index == category_index && cell.series_index == series_index
         }) {
@@ -1791,7 +1781,7 @@ fn prepare_grouped(
             groups.push(GroupedBarCell {
                 category_index,
                 series_index,
-                hue_index,
+                hue_key,
                 values: crate::data::source::collect_source(std::iter::once(Ok(value)))?,
                 units: summary
                     .units
@@ -1829,7 +1819,7 @@ fn prepare_grouped(
         bars.push(PreparedBar {
             category_index: cell.category_index,
             series_index: Some(cell.series_index),
-            hue_index: cell.hue_index,
+            hue_key: cell.hue_key,
             start: 0.0,
             end: value,
             nonzero: value != 0.0,
@@ -1865,7 +1855,7 @@ fn prepare_grouped(
 fn prepare_stacked(
     categories: Vec<String>,
     series: Vec<String>,
-    hues: Option<&[String]>,
+    hues: Option<(&RawField, &[String])>,
     values: Vec<f64>,
     series_order: Vec<String>,
     hue_order: Vec<String>,
@@ -1878,22 +1868,19 @@ fn prepare_stacked(
     let mut category_levels = Vec::new();
     let mut series_levels = series_order;
     let mut hue_levels = hue_order;
-    let mut groups: Vec<(usize, usize, Option<usize>, Vec<f64>)> = Vec::new();
+    let mut groups: Vec<(usize, usize, Option<CategoryKey>, Vec<f64>)> = Vec::new();
 
     for (row, ((category, series_label), value)) in
         categories.into_iter().zip(series).zip(values).enumerate()
     {
         let category_index = level_index(&mut category_levels, category)?;
         let series_index = level_index(&mut series_levels, series_label)?;
-        let hue_index = hues
-            .as_ref()
-            .map(|hues| {
-                level_index(
-                    &mut hue_levels,
-                    crate::data::source::copy_source_string(&hues[row])?,
-                )
-            })
-            .transpose()?;
+        let hue_key = prepare_hue_key(
+            hues,
+            row,
+            &mut hue_levels,
+            groups.iter().filter_map(|(_, _, key, _)| key.as_ref()),
+        )?;
         if let Some(index) = crate::data::source::source_position(&groups, |(c, s, _, _)| {
             *c == category_index && *s == series_index
         }) {
@@ -1905,7 +1892,7 @@ fn prepare_stacked(
             groups.push((
                 category_index,
                 series_index,
-                hue_index,
+                hue_key,
                 crate::data::source::collect_source(std::iter::once(Ok(value)))?,
             ));
         }
@@ -1914,7 +1901,7 @@ fn prepare_stacked(
         return Err(Error::Data("bar: no groups".into()));
     }
     let sums = crate::data::source::collect_source(groups.into_iter().map(
-        |(category_index, series_index, hue_index, values)| {
+        |(category_index, series_index, hue_key, values)| {
             stable_sum(&values).map_or_else(
                 |error| {
                     Err(match error {
@@ -1925,7 +1912,7 @@ fn prepare_stacked(
                         error => error,
                     })
                 },
-                |sum| Ok((category_index, series_index, hue_index, sum)),
+                |sum| Ok((category_index, series_index, hue_key, sum)),
             )
         },
     ))?;
@@ -1943,7 +1930,7 @@ fn prepare_stacked(
             }) else {
                 continue;
             };
-            let (_, _, hue_index, value) = &sums[index];
+            let (_, _, hue_key, value) = &sums[index];
             let (start, end) = if *value >= 0.0 {
                 let start = positive_offsets[category_index];
                 positive_offsets[category_index] += value;
@@ -1968,7 +1955,7 @@ fn prepare_stacked(
             bars.push(PreparedBar {
                 category_index,
                 series_index: Some(series_index),
-                hue_index: *hue_index,
+                hue_key: hue_key.clone(),
                 start,
                 end,
                 nonzero: *value != 0.0,
@@ -1991,6 +1978,23 @@ fn prepare_stacked(
         series_levels,
         hue_levels,
     ))
+}
+
+fn prepare_hue_key<'a>(
+    hues: Option<(&RawField, &[String])>,
+    row: usize,
+    levels: &mut Vec<String>,
+    mut existing: impl Iterator<Item = &'a CategoryKey>,
+) -> Result<Option<CategoryKey>, Error> {
+    hues.map(|(field, hues)| {
+        let index = level_index(levels, crate::data::source::copy_source_string(&hues[row])?)?;
+        let value = levels[index].as_str();
+        Ok(existing
+            .find(|key| key.as_ref().value == value)
+            .cloned()
+            .unwrap_or_else(|| CategoryKey::new(field.clone(), value)))
+    })
+    .transpose()
 }
 
 fn level_index(levels: &mut Vec<String>, label: String) -> Result<usize, Error> {

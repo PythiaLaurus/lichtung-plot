@@ -2,6 +2,7 @@
 
 use crate::{BooleanValues, CategoryValues, Error, NumericValues};
 
+pub(crate) mod category;
 pub(crate) mod source;
 
 pub(crate) const X: &str = "__x";

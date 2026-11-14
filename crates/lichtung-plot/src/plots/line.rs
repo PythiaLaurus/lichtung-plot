@@ -4,7 +4,7 @@ use crate::alpha::{
     marks::{fill_style, line_style, point_ink, push_point, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
-use crate::data::{CollectivePair, PlotData};
+use crate::data::{category::CategoryKey, CollectivePair, PlotData};
 use crate::decorations::legend::source::{FillRole, LayerLabelContext, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{
@@ -21,7 +21,7 @@ mod tests;
 pub(crate) struct PreparedLine {
     mark_ranges: [(f64, f64); 2],
     groups: Vec<LineGroup>,
-    hues: Vec<String>,
+    hues: Vec<CategoryKey>,
     layers: Vec<PointLayer>,
     primary_accent_slots: usize,
 }
@@ -29,7 +29,6 @@ pub(crate) struct PreparedLine {
 #[derive(Debug)]
 struct LineGroup {
     identity: Option<CollectivePair>,
-    hue_index: Option<usize>,
     points: Vec<LinePoint>,
     line_alpha: Option<ResolvedAlpha>,
     fill_alpha: Option<ResolvedAlpha>,
@@ -40,7 +39,7 @@ struct LinePoint {
     x: f64,
     y: f64,
     interval: Option<(f64, f64)>,
-    hue_index: Option<usize>,
+    hue_key: Option<CategoryKey>,
     alpha: ObservationAlpha,
 }
 
@@ -217,7 +216,7 @@ impl PreparedLine {
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources();
         let map = CategoryColors::resolve(
-            chart.global_hue_levels().unwrap_or(&self.hues),
+            self.color_levels(chart),
             theme.color_scales.get_qualitative(),
             chart.description().categorical_color_scale_spec(),
             resources,
@@ -231,7 +230,6 @@ impl PreparedLine {
     }
 
     fn group_color(
-        &self,
         chart: &Plot,
         group: &LineGroup,
         theme: &crate::text::TextRequestContext<'_, '_>,
@@ -251,10 +249,14 @@ impl PreparedLine {
                 accent.color(0)
             }
         } else if hue_paths {
-            let hue = group.hue_index.ok_or_else(|| {
-                Error::Render("line path: hue-styled path has no resolved hue index".into())
-            })?;
-            map.color(&self.hues[hue])
+            let hue = group
+                .identity
+                .as_ref()
+                .and_then(|identity| identity.hue.as_deref())
+                .ok_or_else(|| {
+                    Error::Render("line path: hue-styled path has no resolved hue index".into())
+                })?;
+            map.color(hue)
         } else {
             Ok(theme.marks.get_neutral_paints().get_path().as_rgb())
         }
@@ -268,7 +270,17 @@ impl PreparedLine {
     }
 
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.hues.iter().map(String::as_str)
+        self.hues.iter().map(|key| key.as_ref().value)
+    }
+
+    fn color_levels<'a>(&'a self, chart: &'a Plot) -> impl Iterator<Item = &'a str> + Clone {
+        let parent = chart.global_hue_levels();
+        parent.into_iter().flatten().map(String::as_str).chain(
+            self.hues
+                .iter()
+                .filter(move |_| parent.is_none())
+                .map(|key| key.as_ref().value),
+        )
     }
 
     pub(crate) fn group_order(
@@ -332,7 +344,7 @@ impl PreparedLine {
             && chart.description().line_path_style_spec() == LinePathStyle::Hue;
         for &index in order {
             let group = &self.groups[index];
-            let color = self.group_color(chart, group, theme, map, accent)?;
+            let color = Self::group_color(chart, group, theme, map, accent)?;
             let Some(identity) = group
                 .identity
                 .as_ref()
@@ -385,9 +397,11 @@ impl PreparedLine {
             && (chart.kind() == PlotKind::Trajectory || chart.description().markers_visible())
             && !hue_paths
         {
-            let levels = chart.global_hue_levels().unwrap_or(&self.hues);
-            crate::data::source::reserve_source(&mut entries, levels.len())?;
-            for label in levels.iter().filter(|label| self.hues.contains(label)) {
+            let levels = self.color_levels(chart);
+            crate::data::source::reserve_source(&mut entries, levels.clone().count())?;
+            for label in
+                levels.filter(|label| self.hues.iter().any(|key| key.as_ref().value == *label))
+            {
                 entries.push(
                     GuideSourceKey::row_hue(chart.description().point_legend_identity(label)?)?
                         .with_point(
@@ -518,16 +532,18 @@ impl PreparedLine {
             None,
             family,
         )?;
-        // Indices and membership belong to observed scientific rows. The
-        // owning chart supplies a separate coordinated palette order later.
-        let hues = crate::data::source::collect_source(
-            channels
-                .hue_levels
-                .iter()
-                .map(|label| crate::data::source::copy_source_string(label)),
-        )?;
+        // Membership retains raw identity independently of the later palette order.
+        let hue_field = chart.description().hue_field();
+        let hues = crate::data::source::collect_source(channels.hue_levels.iter().map(|label| {
+            let value = crate::data::source::copy_source_string(label)?;
+            Ok(CategoryKey::new(
+                hue_field.as_ref().expect("prepared hue field").clone(),
+                value,
+            ))
+        }))?;
         if let Some(exact) = chart.description().categorical_map_spec() {
             for hue in &hues {
+                let hue = hue.as_ref().value;
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
                         "line: category {hue:?} has no caller-owned color"
@@ -664,11 +680,11 @@ impl PreparedLine {
                     hue: None,
                 }
             });
-            let hue_index = identity
+            let hue_present = identity
                 .as_ref()
                 .and_then(|identity| identity.hue.as_ref())
-                .and_then(|hue| crate::data::source::source_position(&hues, |level| level == hue));
-            if hue_paths && hue_index.is_none() {
+                .is_some_and(|hue| hues.iter().any(|key| key.as_ref().value == hue));
+            if hue_paths && !hue_present {
                 return Err(Error::Data(
                     "line path: hue is absent from the resolved hue order".into(),
                 ));
@@ -692,9 +708,10 @@ impl PreparedLine {
                     y: y[row],
                     alpha: ObservationAlpha::resolve(data, &alpha, row)?,
                     interval,
-                    hue_index: channels.rows[row].hue.as_ref().and_then(|hue| {
-                        crate::data::source::source_position(&hues, |level| level == hue)
-                    }),
+                    hue_key: channels.rows[row]
+                        .hue
+                        .as_ref()
+                        .and_then(|hue| hues.iter().find(|key| key.as_ref().value == hue).cloned()),
                 })
             }))?;
             if kind != PlotKind::LinePath {
@@ -709,7 +726,6 @@ impl PreparedLine {
             }
             groups.push(LineGroup {
                 identity,
-                hue_index,
                 points,
                 line_alpha: None,
                 fill_alpha: None,
@@ -885,7 +901,7 @@ fn project(
 
     for &index in &order {
         let group = &prepared.groups[index];
-        let color = prepared.group_color(chart, group, theme, &map, &accent)?;
+        let color = PreparedLine::group_color(chart, group, theme, &map, &accent)?;
         let fill = fill_style(
             group.fill_alpha,
             theme
@@ -1029,12 +1045,14 @@ fn project(
             let group = &prepared.groups[index];
             for point in &group.points {
                 let color = if hue_paths {
-                    let index = group
-                        .hue_index
+                    let hue = group
+                        .identity
+                        .as_ref()
+                        .and_then(|identity| identity.hue.as_deref())
                         .ok_or_else(|| Error::Render("line path: missing hue index".into()))?;
-                    map.color(&prepared.hues[index])?
-                } else if let Some(index) = point.hue_index {
-                    map.color(&prepared.hues[index])?
+                    map.color(hue)?
+                } else if let Some(key) = &point.hue_key {
+                    map.color(key.as_ref().value)?
                 } else {
                     accent.color(0)?
                 };
