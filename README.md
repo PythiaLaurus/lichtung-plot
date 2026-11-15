@@ -41,8 +41,9 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 - [`crates/lichtung-plot-polars/`](crates/lichtung-plot-polars/): eager Polars
   field/direct-column plotting frontends and unchanged native renderer exports;
   wide/grid roles, independent layers and scientific result bindings.
-- `bindings/python/`: four-input-route Scatter and reusable Plot/Canvas/Output;
-  other families and configuration values remain in progress. See
+- `bindings/python/`: all 25 exact-family interfaces across four input routes,
+  reusable Plot/Canvas/Output, immutable configuration values, alpha, independent
+  layers and supplied results. See
   `bindings/python/README.md` and `specs/91_WORKSPACE_AND_INTERFACES_PLAN.md` for
   bounded verification and remaining delivery gates.
 - [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
@@ -53,7 +54,9 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 
 The workspace pins Rust 1.96.0 and tracks one lockfile. Use focused tests and
 `just lint` for code changes. `just book-check` checks both editions without rendering;
-`just book` generates fresh gallery outputs and invokes installed mdBook 0.5.4,
-writing `target/book/site/index.html`. `just verify` is the broad source-verification
+`just book` generates fresh gallery outputs and invokes installed mdBook 0.5.4;
+set `LICHTUNG_PYTHON` to an absolute interpreter with the Python wheel installed
+for its Python examples. The build writes
+`target/book/site/index.html`. `just verify` is the broad source-verification
 gate; it includes structural Book checks but does not regenerate the gallery/site.
 See [development](specs/90_DEVELOPMENT.md) for verification scope and test limits.

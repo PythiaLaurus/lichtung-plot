@@ -4,11 +4,12 @@
 [English](../en/index.html#build-docs)
 
 [图库](#gallery)运行公开示例并展示真实产物，不维护另一套绘图实现，也不复用旧图。
-缩略图直接跳到本页六个科学绘图讲解：[散点](#first-plot)、[分布](#distributions)、
-[热图](#expression-heatmap)、[效应区间](#effect-intervals)、[时间响应](#time-response)及
-[校准](#calibration)。[数值策略](#numeric-policies)和[文本布局](#text-layout)图仍作为
-正文中的技术参考，不再充当首页缩略图。页面展示轮廓 SVG；保留文字的下载复用同一个
-冻结输出对象。目前尚未完成全部 25 个图族的图像目录，完整列表见[图族选择](#families)。
+缩略图直接跳到本页十二个科学绘图讲解，涵盖[全部 25 个图族](#families)。
+[数值策略](#numeric-policies)、[文本布局](#text-layout)、[ndarray](#ndarray)、
+[Polars](#polars)及四个 [Python 示例](#python)组成八个技术参考，共二十个可执行程序。
+多面板程序仍有各自的图族消费者；六个新增 Rust 程序不代表只有六个独立场景。
+首个展示产物是轮廓 SVG；提供保留文字 SVG 或 PNG 时，它们复用同一冻结 Output，
+不会再次渲染。
 
 每张展示图都有明确的变量、单位或参照，采用统一的示例局部主题及可读的画幅比例。
 合成数据和给定的示意区间均明确标注。应同时检查原尺寸图和图库尺度下的图像；编译
@@ -16,21 +17,29 @@
 
 ### 本地构建
 
-使用 `cargo install mdbook --version 0.5.4 --locked` 安装一次命令行开发工具，
-然后从工作区根目录运行：
+使用已预装的官方 `mdbook` 0.5.4 CLI、Rust 工具链与缓存依赖。Python 参考还要求环境中
+已装好构建所得的项目 wheel，详见[安装](#installation)。用显式绝对路径选定该环境的
+解释器，再从工作区根目录运行：
 
 ```sh
+export LICHTUNG_PYTHON=/absolute/path/to/environment/bin/python
 just book-check
 just book
 ```
 
 第一条命令只检查两套内容的教程锚点、图像到代码的链接、语言跳转及语义源码引用，
-不渲染。第二条命令将每份图库程序运行一次，写入全新隔离目录，组装两套单页指南，
-再调用官方 `mdbook build`。站点入口为 `target/book/site/index.html`，直接展示共用的
+不渲染。第二条命令将二十个图库程序各运行一次，写入全新隔离目录，两语言共享这些
+产物，再组装两套单页指南并调用官方 `mdbook build`。
+站点入口为 `target/book/site/index.html`，直接展示共用的
 真实图库，并等权链接到两种语言的讲解。Rust 组装辅助工具位于 `docs/book-helper/`。
-`just gallery` 只组装新的图库源码和产物，不构建 HTML。
+辅助工具不会安装 mdBook、Python、wheel、数据提供库或字体。Python 示例使用选定环境中
+已安装的包，不拿源码目录中的包替代该安装。
+
+`just gallery` 是只执行和组装、不构建 HTML 的替代入口。不要先运行它准备图片再运行
+`just book`：后者已经执行全新的图库生成流程，串联两条命令会把清单渲染两遍。
 
 生成页面、图片及暂存源码均位于 `target/book/`，只维护指南片段、目录清单和可执行示例。
 每次生成会在新工作目录记录操作系统、架构、编译器、锁文件和字体策略；绘图器不暴露
 精确解析到的字体文件。请使用已说明、预先安装的字体，不将生成结果视为跨环境字节基准。
+产物缺失时构建必须失败，不能回退到旧图；活动站点不得保留过期的章节／案例 HTML。
 机械检查证明的是结构及源码对应关系，不证明文字语义等价。

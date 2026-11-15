@@ -5,13 +5,30 @@
 
 This development checkout uses Rust 1.96.0. The renderer is the default workspace
 member at `crates/lichtung-plot`; [ndarray](#ndarray) and [Polars](#polars) adapters
-are separate packages, while language bindings remain unimplemented. Until a
-release is published, a neighboring Rust application can use the actual member path:
+are separate packages. The [Python binding](#python) is implemented, but has not
+been published to PyPI. Until a release is published, a neighboring Rust application
+can use the actual member path:
 
 ```toml
 [dependencies]
 lichtung-plot = { path = "../lichtung-plot/crates/lichtung-plot" }
 ```
+
+For Python, use ordinary CPython 3.10 or newer and an already-built wheel matching
+your operating system and architecture. The extension uses `abi3-py310`; that is not
+a claim of support for PyPy or free-threaded Python. For example, replace this path
+with the compatible wheel you have built or received:
+
+```sh
+python -m pip install --no-index --no-deps /absolute/path/to/lichtung_plot-0.1.0-cp310-abi3-linux_x86_64.whl
+```
+
+This installs a local artifact, not a package fetched from PyPI. Native Python
+lists/tuples need no data provider. Install optional NumPy, pandas or eager Polars
+separately in that environment when using them. The current Polars bridge requires
+`polars==1.41.2` and `polars-runtime-32==1.41.2`, not PyArrow. Build recipes and
+sampled provider versions are recorded in `bindings/python/README.md` and the shared
+workspace specifications; neither the renderer nor the gallery installs dependencies.
 
 No renderer initialization is needed. Install suitable system fonts before
 rendering; the library never downloads them. The default ordered stack is Noto

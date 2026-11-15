@@ -21,7 +21,7 @@ From the workspace root:
 
 ```sh
 just book-check
-just book
+LICHTUNG_PYTHON=/absolute/path/to/installed-wheel-environment/bin/python just book
 ```
 
 Runnable examples need no directory argument and write to the working directory
@@ -40,11 +40,10 @@ alongside each guide. Excerpts use semantic source anchors, not another plotting
 `just gallery` executes and assembles without building HTML. `docs/gallery.tsv`
 owns case identities, owning packages, source names, required output files,
 tutorial anchors/API references, showcase/reference placement and peer-language titles/descriptions;
-it contains no plotting configuration. Six scientific scenes are featured: scatter,
-raincloud, heatmap, forest, line with bounds and a calibration composition. Two
-additional numeric/text reference workflows and both adapter examples are executed
-for the guide, without appearing as showcase cards. This is not complete image
-coverage of all 25 families.
+it contains no plotting configuration. Twelve scientific workflows make all 25
+families discoverable through actual figures and code. Numeric/text workflows,
+both adapter examples and four Python workflows use the same execution path as
+guide references without appearing as showcase cards.
 All generated material stays under `target/book/`, never beside maintained source.
 Generation records platform/toolchain, the lockfile and font policy. Fonts must be
 preinstalled; tools never download data or fonts. A missing output fails the build
@@ -53,6 +52,11 @@ instead of reusing an earlier image. Structural checks do not prove prose equiva
 Source downloads use `examples/<package>/...`; includes, API links and executions
 use the same explicit allowlist of implemented packages. The TSV has eleven
 columns, including the owning package; there is no core-only catalog fallback.
+Python sources remain owned by `bindings/python/examples/`. Their examples run
+with `-I -B` against an already-installed wheel selected by `LICHTUNG_PYTHON`,
+not a source checkout import. Building the guide does not install that wheel or
+its optional data providers. Python 3.10 or newer is required. Preserve-text SVG
+and PNG downloads come from the same frozen Output as the outlined display SVG.
 
 The scientific showcase uses synthetic or supplied illustrative data, clearly
 marked in each figure and walkthrough. Its public-API theme lives beside the

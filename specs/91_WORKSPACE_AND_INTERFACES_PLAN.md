@@ -29,8 +29,8 @@ selection, exact pandas column keys, MaskedArray validity, immutable configurati
 values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
-surface recorded below with bounded installed verification; this is not final
-distribution/content/cost certification.
+surface recorded below with bounded installed verification; final acceptance
+still requires the remaining cost, source-refresh and test-budget gates.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
@@ -43,8 +43,9 @@ delivered. All 25 Python constructors, their alternatives and exact-family typin
 base data/facet/configuration methods, complete Theme/Text and numeric policies,
 13 scientific/appearance/position values, eight callback slots and all 75 alpha
 entries, independent point layers and significance results are implemented.
-The current Linux source-distribution gate is verified below; complete content/
-gallery, same-source costs and final test-budget certification remain open.
+The recorded Linux source-distribution gate and complete peer content/gallery
+are verified below. Same-source costs, a final-source distribution refresh and
+last-stage test deduplication/unchanged-budget certification remain open.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -52,7 +53,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Objective | Current status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
-| Peer-language Book/example/gallery foundation | Delivered: one gallery-first tutorial page per language, six scientific showcase workflows, two numeric/text reference workflows, same-page image-to-code walkthroughs, shared runnable-source includes and zero-argument examples with optional output redirection. The helper lives under docs/; full per-family gallery coverage remains for integrated content closure. |
+| Peer-language Book/example/gallery | Delivered: two equal-status gallery-first single-page tutorials, 12 scientific showcases covering all 25 families and eight references, including four installed-wheel Python workflows. All 20 programs ran once; one caption repair received a focused rerun and static peer-site rebuild. Source/prose and actual full/card images have independent review below. |
 | ndarray and Polars adapters | Delivered: all 25 families, source/direct views and fields, wide/grid origins, native configuration, independent layers, statuses, alpha and significance results. Cross-adapter native handoffs, focused/workspace checks, joint offline archives and peer guides passed; the [current contract](09_DATA_ADAPTERS.md) owns the API. |
 | Columnar distribution geometry prerequisite | Delivered: flat core Histogram/Raincloud geometry and sample-owned external KDE, direct/multiple-source adapter column extraction, raw-key membership/original-point-row alpha and primary-only retained lookup. Focused core/adapter checks, the cross-adapter consumer, strict Clippy, API/Book checks and all three independently unpacked archives passed. The [refactor plan](93_COLUMNAR_GEOMETRY_PLAN.md) owns fields and evidence. |
 | Native Text/slot clearing | Delivered: independent style/layout removal on Text, Plot/Canvas retained slots, PointLayer legend labels and NumericExplanation; both adapters forward applicable operations. Presence/default-reset/omission semantics, value independence and current Theme/Canvas inheritance passed focused tests and strict Clippy; peer guides are synchronized. |
@@ -61,13 +62,13 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. The current full scientific sdist also passed independent build/install/runtime; content/cost and final test-budget checks remain open. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. The scientific-source sdist passed independent build/install/runtime and peer content/gallery is complete; same-source costs, final-source distribution refresh and test-budget checks remain open. |
 | Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix/independent-sdist evidence; current all-family constructors, geometry and edits have separate focused wheel evidence below, not a repeated transport matrix or current sdist certification. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
-| Integrated content/package/site closure | Current renderer/ndarray/Polars archives passed Cargo's independent verification. A new full-interface Python sdist passed independent build/install and all 188 archived runtime cases on the recorded Linux/CPython3.10 provider. Complete per-family content/gallery, same-source costs and final test-budget certification remain open. No publication or deployment was performed. |
+| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. The earlier scientific-source Python sdist passed independent build/install and 188 archived runtime cases; it does not include later content changes. Same-source costs, a final-source sdist refresh and test-budget certification remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
 
@@ -387,9 +388,69 @@ every third-party pin remained exact (NumPy 1.26.4, pandas 2.3.3 and Polars/runt
 This is the recorded Linux/CPython3.10 source-distribution gate, not an additional
 platform/provider matrix, new installed typing run, zero-copy/performance claim
 or test-budget certificate. Earlier focused 3.13 typing/runtime receipts retain
-their own wheel identities. No package was published or pushed. Complete peer
-content/gallery, same-source cost observations and last-stage test deduplication/
-unchanged-budget certification still remain.
+their own wheel identities. No package was published or pushed. The subsequent
+content work below is separate: this 569-file archive does not contain the six
+new core examples or the revised four-input Python presentation/publication.
+A final-source archive must be produced, independently unpacked, built, installed
+and exercised; this earlier archive cannot certify those later bytes.
+
+### Complete Peer Content And Gallery Verification
+
+One eleven-column inventory now owns 20 executables: 12 scientific showcases
+and eight references, including four Python examples. Every one of the 25
+families links to a real scientific figure and its owned runnable source in both
+equal-status single-page guides. Six new core programs supply the remaining
+18 family-level views (4+5+4+3+1+1); Matrix's internal 16 cells and Marginal's
+two strips are not hidden by calling these merely six independent scenarios.
+The family walkthroughs distinguish the single-group Qq input, absolute titer,
+additive contrasts and before/after changes. Independent review covered peer
+meaning, API/lifecycle rules, navigation and actual source correspondence, not
+just matching anchors.
+
+The shared helper retains fixed Rust/Python source owners, semantic `//`/`#`
+anchors, closed SVG/PNG artifact names, SVG-first outlined display and exact
+fresh-output inventories. Python examples use explicit absolute
+`LICHTUNG_PYTHON` with `-I -B` and an already-installed wheel; no package, provider,
+font or tool installation is hidden in Book assembly. The four-input example
+retains its original scientific values, selectors and CLI, adds units and
+synthetic-data context, and publishes outlined SVG, text SVG and PNG from one
+frozen Output. The other three Python examples only gained source anchors.
+
+The first formatting check passed; strict Clippy found one filename-extension
+lint. Its original failure receipt remains. A one-line `Path::extension` repair
+received independent review, without weakening warnings or API-page validation.
+The next frozen-source run passed formatting, strict workspace/all-target
+Clippy, all five focused helper guards, 37 shared tutorial anchors, installed
+wheel identity, the actual 20-program gallery and both mdBooks, followed by
+independent verification of the three distributable native archives. The five
+test drivers contain 40 distinct behavior/input checkpoints plus a fixture CRC
+check (45 assertions), not merely five semantic tests or 40 E2E scenarios.
+
+All 20 full figures and the 12-card overview were actually inspected. One
+Waterfall caption overlapped its tick labels. The complete sentence moved from
+that Plot's caption to the existing Canvas caption; data, units, marks, 140-to-146
+mg accounting and scientific caveats were preserved. The repair passed
+formatting, strict Clippy and a focused execution of only that example.
+Two static mdBook builds then rebuilt all maintained documents, examples,
+support and downloads from the current freeze. The other 19 successful,
+source-identical scenes were reused against their prior artifact hashes;
+generated gallery fragments were bound to the prior successful HTML.
+This was one original 20-program run plus one focused rerun, not two full runs.
+All 32 artifacts match the new stage and root/English/Chinese site copies;
+only the repaired SVG changed. Rename failure restores the prior site, while
+a receipt-write failure after a successful switch does not automatically roll
+it back; the previous site remains preserved.
+
+Independent actual-image review closed the 19 unchanged figures and then the
+repaired full/card view and updated 12-card overview. No remaining presentation
+finding was identified. SVG raster views are read-only inspection copies,
+not another scientific renderer, pixel goldens or native PNG certification;
+the four Python previews are native PNG from their respective frozen Outputs.
+Current native archives were independently reverified after the repair:
+384/31/32 files for core/ndarray/Polars, including every new core example and
+support file with exact frozen-source bytes. No native scientific behavior,
+font/Unicode asset, dependency pin or golden was changed. No full Rust suite
+was repeated, no old tests were removed, and no package/site was published.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -397,13 +458,13 @@ Repository-wide test-budget review identified excess module-integration coverage
 the limits have not been certified. Test deduplication remains a final closure
 task after the complete planned interface is implemented, rather than blocking
 the remaining implementation stages. Overall plan acceptance is not complete;
-overall content/cost and test-budget acceptance is not yet certified.
+overall cost, final-source distribution and test-budget acceptance is not yet certified.
 
 The selected scientific API, exact typing and real layer/result consumers are
-implemented. The independent source-distribution gate above is verified. Complete
-content/gallery and same-source cost observations remain, followed by last-stage
-test deduplication and unchanged-budget certification. Functional and bounded
-distribution closure are not overall plan closure.
+implemented. The scientific-source distribution and complete peer content/gallery
+gates above are verified. Same-source cost observations and final-source
+distribution refresh remain, followed by last-stage test deduplication and
+unchanged-budget certification. These bounded closures are not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints

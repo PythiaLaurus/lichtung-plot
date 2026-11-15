@@ -10,12 +10,30 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const LANGUAGES: [&str; 2] = ["en", "zh-CN"];
+const PYTHON_PACKAGE: &str = "lichtung-plot-python";
 const PACKAGES: &[&str] = &[
     "lichtung-plot",
     "lichtung-plot-ndarray",
     "lichtung-plot-polars",
+    PYTHON_PACKAGE,
 ];
 const MDBOOK_VERSION: &str = "mdbook v0.5.4";
+
+fn examples_path(package: &str) -> PathBuf {
+    if package == PYTHON_PACKAGE {
+        PathBuf::from("bindings/python/examples")
+    } else {
+        Path::new("crates").join(package).join("examples")
+    }
+}
+
+fn example_extension(package: &str) -> &'static str {
+    if package == PYTHON_PACKAGE {
+        "py"
+    } else {
+        "rs"
+    }
+}
 
 fn fail(message: impl Into<String>) -> Box<dyn std::error::Error> {
     std::io::Error::other(message.into()).into()
@@ -29,16 +47,20 @@ fn run(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
+fn copy_tree(source: &Path, destination: &Path, extension: Option<&str>) -> Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let target = destination.join(entry.file_name());
         let kind = entry.file_type()?;
         if kind.is_dir() {
-            copy_tree(&entry.path(), &target)?;
+            copy_tree(&entry.path(), &target, extension)?;
         } else if kind.is_file() {
-            fs::copy(entry.path(), target)?;
+            if extension
+                .is_none_or(|ext| entry.path().extension().is_some_and(|value| value == ext))
+            {
+                fs::copy(entry.path(), target)?;
+            }
         } else {
             return Err(fail(format!(
                 "unsupported source entry: {}",
@@ -54,17 +76,22 @@ fn stage(root: &Path) -> Result<PathBuf> {
     let stage = root.join(format!("target/book/work/{}-{nonce}", std::process::id()));
     fs::create_dir_all(&stage)?;
     for package in PACKAGES {
-        let examples = format!("crates/{package}/examples");
-        copy_tree(&root.join(&examples), &stage.join(&examples))?;
+        let examples = examples_path(package);
+        copy_tree(
+            &root.join(&examples),
+            &stage.join(&examples),
+            Some(example_extension(package)),
+        )?;
     }
-    copy_tree(&root.join("docs/theme"), &stage.join("docs/theme"))?;
+    copy_tree(&root.join("docs/theme"), &stage.join("docs/theme"), None)?;
     for language in LANGUAGES {
         let book = stage.join("docs").join(language);
-        copy_tree(&root.join("docs").join(language), &book)?;
+        copy_tree(&root.join("docs").join(language), &book, None)?;
         for package in PACKAGES {
             copy_tree(
-                &root.join(format!("crates/{package}/examples")),
+                &root.join(examples_path(package)),
                 &book.join("src/examples").join(package),
+                Some(example_extension(package)),
             )?;
         }
     }

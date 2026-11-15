@@ -1,5 +1,6 @@
 """Synthetic scientific views with native snapshots and illustrative supplied bounds."""
 
+# ANCHOR: example
 from pathlib import Path
 import sys
 
@@ -85,3 +86,4 @@ def main(directory: Path) -> None:
 
 if __name__ == "__main__":
     main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd())
+# ANCHOR_END: example

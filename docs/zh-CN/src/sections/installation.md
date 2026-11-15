@@ -4,13 +4,28 @@
 [English](../en/index.html#installation)
 
 当前开发仓库使用 Rust 1.96.0。绘图核心位于 `crates/lichtung-plot`，是工作区的默认
-成员。[ndarray 适配器](#ndarray)与 [Polars 适配器](#polars)位于独立包中，语言绑定尚未实现。
-在正式版本发布之前，相邻的 Rust 应用可以引用实际成员路径：
+成员。[ndarray 适配器](#ndarray)与 [Polars 适配器](#polars)位于独立包中。
+[Python 绑定](#python)已经实现，但尚未发布到 PyPI。在正式版本发布之前，相邻的 Rust
+应用可以引用实际成员路径：
 
 ```toml
 [dependencies]
 lichtung-plot = { path = "../lichtung-plot/crates/lichtung-plot" }
 ```
+
+Python 使用普通 CPython 3.10 或更新版本，并安装与操作系统、架构匹配的已构建 wheel。
+扩展采用 `abi3-py310`，这不代表支持 PyPy 或自由线程 Python。例如，将下面的路径替换为
+自己构建或取得的兼容 wheel：
+
+```sh
+python -m pip install --no-index --no-deps /absolute/path/to/lichtung_plot-0.1.0-cp310-abi3-linux_x86_64.whl
+```
+
+这条命令安装本地产物，不从 PyPI 获取包。原生 Python list／tuple 无需数据提供库；
+使用 NumPy、pandas 或 eager Polars 时，再在同一环境中单独安装相应的可选依赖。
+当前 Polars 桥要求 `polars==1.41.2` 和 `polars-runtime-32==1.41.2`，不要求 PyArrow。
+构建配方与已抽样验证的提供库版本见 `bindings/python/README.md` 及工作区共享规范；
+渲染器和图库都不会安装依赖。
 
 绘图器无需初始化。生成图形前，请自行安装合适的系统字体；库不会下载字体。
 默认有序字体栈为 Noto Sans、Noto Sans CJK SC、DejaVu Sans、Liberation Sans、Arial、

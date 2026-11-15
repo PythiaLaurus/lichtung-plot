@@ -1,10 +1,10 @@
 use std::fmt::Write;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::content::Case;
-use crate::{fail, run, Result, LANGUAGES};
+use crate::{example_extension, examples_path, fail, run, Result, LANGUAGES, PYTHON_PACKAGE};
 
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
@@ -17,8 +17,18 @@ pub fn cards(cases: &[Case], language: usize) -> Result<String> {
     let mut html = "<div class=\"gallery-grid\">\n".to_owned();
     for case in cases.iter().filter(|case| case.featured) {
         let title = escape(&case.titles[language]);
-        writeln!(html, "<article class=\"gallery-card\"><a class=\"gallery-walkthrough\" href=\"#{}\"><img src=\"gallery/{}/{}\" alt=\"{title}\" loading=\"lazy\"><h3>{title}</h3><p>{}</p></a><p class=\"gallery-resources\"><a href=\"https://docs.rs/{}/latest/{}/{}\">API</a> · <a href=\"examples/{}/{}.rs\">{}</a></p></article>",
-            case.target, case.id, case.artifacts[0], escape(&case.purposes[language]), case.package, case.package.replace('-', "_"), case.api, case.package, case.example,
+        let api = if case.package == PYTHON_PACKAGE {
+            "#python".to_owned()
+        } else {
+            format!(
+                "https://docs.rs/{}/latest/{}/{}",
+                case.package,
+                case.package.replace('-', "_"),
+                case.api
+            )
+        };
+        writeln!(html, "<article class=\"gallery-card\"><a class=\"gallery-walkthrough\" href=\"#{}\"><img src=\"gallery/{}/{}\" alt=\"{title}\" loading=\"lazy\"><h3>{title}</h3><p>{}</p></a><p class=\"gallery-resources\"><a href=\"{api}\">API</a> · <a href=\"examples/{}/{}.{}\">{}</a></p></article>",
+            case.target, case.id, case.artifacts[0], escape(&case.purposes[language]), case.package, case.example, example_extension(&case.package),
             if language == 0 { "Complete source" } else { "完整源码" })?;
     }
     html.push_str("</div>\n");
@@ -32,8 +42,72 @@ pub fn landing(cases: &[Case]) -> Result<String> {
             case.id, case.artifacts[0], escape(&case.titles[0]), escape(&case.titles[1]), escape(&case.titles[0]), escape(&case.titles[1]), case.target, case.target)?;
     }
     let featured = cases.iter().filter(|case| case.featured).count();
-    writeln!(html, "</div><p>{featured} selected scientific workflows; not yet an image catalog for all 25 plot families. Numeric, text and data-conversion demonstrations live in the guide, not this showcase.<br><span lang=\"zh-CN\">当前精选 {featured} 个科学绘图场景，尚未完成全部 25 个图族的图像目录。数值、文本与数据转换示例保留在指南正文，不作为首页展示图。</span></p></section></main></body></html>")?;
+    let references = cases.iter().filter(|case| !case.featured).count();
+    writeln!(html, "</div><p>{featured} scientific composition showcases. The guides include {references} reference workflows with runnable source and declared outputs.<br><span lang=\"zh-CN\">这里展示 {featured} 个科学合成绘图场景；指南另含 {references} 个参考流程，均提供可运行源码与声明的输出。</span></p></section></main></body></html>")?;
     Ok(html)
+}
+
+fn png_crc(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ if crc & 1 == 0 { 0 } else { 0xedb8_8320 };
+        }
+    }
+    !crc
+}
+
+pub(crate) fn png(bytes: &[u8]) -> bool {
+    // Validate the header and chunk container, not decoded pixels or a golden image.
+    let Some(header) = bytes.get(..33) else {
+        return false;
+    };
+    let width = u32::from_be_bytes(header[16..20].try_into().expect("four-byte PNG width"));
+    let height = u32::from_be_bytes(header[20..24].try_into().expect("four-byte PNG height"));
+    if &header[..8] != b"\x89PNG\r\n\x1a\n"
+        || &header[8..16] != b"\0\0\0\rIHDR"
+        || !(1..=0x7fff_ffff).contains(&width)
+        || !(1..=0x7fff_ffff).contains(&height)
+        || !matches!(
+            (header[25], header[24]),
+            (0, 1 | 2 | 4 | 8 | 16) | (2 | 4 | 6, 8 | 16) | (3, 1 | 2 | 4 | 8)
+        )
+        || header[26] != 0
+        || header[27] != 0
+        || header[28] > 1
+    {
+        return false;
+    }
+    let mut offset = 8_usize;
+    let mut image_data = false;
+    while let Some(prefix) = bytes.get(offset..).and_then(|tail| tail.get(..8)) {
+        let Ok(length) = usize::try_from(u32::from_be_bytes(
+            prefix[..4].try_into().expect("four-byte PNG chunk length"),
+        )) else {
+            return false;
+        };
+        let Some(end) = offset
+            .checked_add(12)
+            .and_then(|base| base.checked_add(length))
+        else {
+            return false;
+        };
+        let Some(chunk) = bytes.get(offset..end) else {
+            return false;
+        };
+        if png_crc(&chunk[4..chunk.len() - 4]).to_be_bytes() != chunk[chunk.len() - 4..] {
+            return false;
+        }
+        match &prefix[4..8] {
+            b"IHDR" if offset != 8 => return false,
+            b"IDAT" => image_data |= length > 0,
+            b"IEND" => return image_data && length == 0 && end == bytes.len(),
+            _ => {}
+        }
+        offset = end;
+    }
+    false
 }
 
 fn artifacts(directory: &Path, case: &Case) -> Result<()> {
@@ -50,36 +124,89 @@ fn artifacts(directory: &Path, case: &Case) -> Result<()> {
         )));
     }
     for (index, artifact) in case.artifacts.iter().enumerate() {
-        let svg = fs::read_to_string(directory.join(artifact))?;
-        if !svg.contains("<svg") || !svg.contains("</svg>") || (index == 0 && svg.contains("<text"))
-        {
-            return Err(fail(format!(
-                "{} must publish a complete outlined SVG for gallery display",
-                case.id
-            )));
+        let file = directory.join(artifact);
+        if !fs::symlink_metadata(&file)?.is_file() {
+            return Err(fail(format!("artifact must be a regular file: {artifact}")));
+        }
+        let bytes = fs::read(&file)?;
+        match file.extension().and_then(|ext| ext.to_str()) {
+            Some("svg") => {
+                let svg = std::str::from_utf8(&bytes)?;
+                if !svg.contains("<svg")
+                    || !svg.contains("</svg>")
+                    || (index == 0 && svg.contains("<text"))
+                {
+                    return Err(fail(format!(
+                        "{} must publish a complete outlined SVG for gallery display",
+                        case.id
+                    )));
+                }
+            }
+            Some("png") if index > 0 && png(&bytes) => {}
+            _ => {
+                return Err(fail(format!(
+                    "{} must publish complete SVG/PNG artifacts with an outlined SVG first",
+                    case.id
+                )));
+            }
         }
     }
     Ok(())
 }
 
+fn selected_python(cases: &[Case]) -> Result<Option<PathBuf>> {
+    if !cases.iter().any(|case| case.package == PYTHON_PACKAGE) {
+        return Ok(None);
+    }
+    let selected = std::env::var_os("LICHTUNG_PYTHON").ok_or_else(|| {
+        fail("Python gallery cases require LICHTUNG_PYTHON to select an absolute interpreter with an already-installed lichtung-plot wheel; book assembly never installs it")
+    })?;
+    let interpreter = PathBuf::from(selected);
+    if !interpreter.is_absolute() || !interpreter.is_file() {
+        return Err(fail(
+            "LICHTUNG_PYTHON must be an absolute existing interpreter with an already-installed lichtung-plot wheel",
+        ));
+    }
+    // Preserve the virtual environment's path, not its executable symlink target.
+    // Package/prefix identity is verified separately by the calling workflow.
+    Ok(Some(interpreter))
+}
+
 pub fn assemble(root: &Path, stage: &Path, cases: &[Case]) -> Result<()> {
+    let python = selected_python(cases)?;
     fs::create_dir(stage.join("artifacts"))?;
     for case in cases {
         let output = stage.join("artifacts").join(&case.id);
         fs::create_dir(&output)?;
-        run(Command::new("cargo")
-            .current_dir(root)
-            .args([
-                "run",
-                "--locked",
-                "--offline",
-                "-p",
-                &case.package,
-                "--example",
-                &case.example,
-                "--",
-            ])
-            .arg(&output))?;
+        if case.package == PYTHON_PACKAGE {
+            let interpreter = python
+                .as_ref()
+                .ok_or_else(|| fail("Python gallery cases require LICHTUNG_PYTHON"))?;
+            let script = root.join(examples_path(&case.package)).join(format!(
+                "{}.{}",
+                case.example,
+                example_extension(&case.package)
+            ));
+            run(Command::new(interpreter)
+                .args(["-I", "-B"])
+                .arg(script)
+                .arg(&output)
+                .current_dir(&output))?;
+        } else {
+            run(Command::new("cargo")
+                .current_dir(root)
+                .args([
+                    "run",
+                    "--locked",
+                    "--offline",
+                    "-p",
+                    &case.package,
+                    "--example",
+                    &case.example,
+                    "--",
+                ])
+                .arg(&output))?;
+        }
         artifacts(&output, case)?;
         let shared = stage.join("site/gallery").join(&case.id);
         fs::create_dir_all(&shared)?;
@@ -104,7 +231,14 @@ pub fn assemble(root: &Path, stage: &Path, cases: &[Case]) -> Result<()> {
     if !compiler.status.success() {
         return Err(fail("failed to record Rust toolchain"));
     }
-    let environment = format!("OS: {}\nArchitecture: {}\nRust: {}\nFonts: installed system fonts; Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif. Exact resolved files are not exposed by the renderer; output is not a cross-environment byte baseline.\n", std::env::consts::OS, std::env::consts::ARCH, String::from_utf8_lossy(&compiler.stdout).trim());
+    let mut environment = format!("OS: {}\nArchitecture: {}\nRust: {}\nFonts: installed system fonts; Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif. Exact resolved files are not exposed by the renderer; output is not a cross-environment byte baseline.\n", std::env::consts::OS, std::env::consts::ARCH, String::from_utf8_lossy(&compiler.stdout).trim());
+    if let Some(interpreter) = python {
+        writeln!(
+            environment,
+            "Python interpreter: {} (-I -B; installed-package identity is a separate preflight)",
+            interpreter.display()
+        )?;
+    }
     fs::write(stage.join("generation-environment.txt"), environment)?;
     fs::copy(root.join("Cargo.lock"), stage.join("generation-Cargo.lock"))?;
     Ok(())

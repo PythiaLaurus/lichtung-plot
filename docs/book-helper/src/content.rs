@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
-use crate::{fail, Result, LANGUAGES, PACKAGES};
+use crate::{example_extension, examples_path, fail, Result, LANGUAGES, PACKAGES, PYTHON_PACKAGE};
 
 pub struct Case {
     pub id: String,
@@ -58,18 +58,32 @@ pub fn catalog(text: &str) -> Result<Vec<Case>> {
             || !identifier(target)
             || !PACKAGES.contains(package)
             || !filename(example)
-            || !filename(api)
+            || if *package == PYTHON_PACKAGE {
+                *api != "python"
+            } else {
+                !filename(api) || Path::new(api).extension().is_none_or(|ext| ext != "html")
+            }
             || !ids.insert(*id)
             || !examples.insert((*package, *example))
         {
             return Err(fail(format!("invalid or duplicate gallery case: {id}")));
         }
         let artifacts = artifacts.split(',').map(str::to_owned).collect::<Vec<_>>();
-        if artifacts.iter().any(|name| {
-            !filename(name) || Path::new(name).extension().is_none_or(|ext| ext != "svg")
-        }) || artifacts.iter().collect::<BTreeSet<_>>().len() != artifacts.len()
+        if artifacts
+            .first()
+            .is_none_or(|name| Path::new(name).extension().is_none_or(|ext| ext != "svg"))
+            || artifacts.iter().any(|name| {
+                !filename(name)
+                    || !matches!(
+                        Path::new(name).extension().and_then(|ext| ext.to_str()),
+                        Some("svg" | "png")
+                    )
+            })
+            || artifacts.iter().collect::<BTreeSet<_>>().len() != artifacts.len()
         {
-            return Err(fail(format!("invalid SVG artifact paths: {id}")));
+            return Err(fail(format!(
+                "invalid SVG/PNG artifact paths or non-SVG first artifact: {id}"
+            )));
         }
         cases.push(Case {
             id: (*id).into(),
@@ -114,21 +128,28 @@ fn includes(text: &str) -> Result<Vec<&str>> {
 }
 
 pub fn anchor(source: &str, name: &str) -> Result<()> {
-    let begin = format!("// ANCHOR: {name}");
-    let end = format!("// ANCHOR_END: {name}");
-    let starts = source
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.trim() == begin)
-        .map(|(i, _)| i)
-        .collect::<Vec<_>>();
-    let ends = source
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.trim() == end)
-        .map(|(i, _)| i)
-        .collect::<Vec<_>>();
-    if !matches!((starts.as_slice(), ends.as_slice()), ([start], [end]) if start + 1 < *end) {
+    let begin = format!("ANCHOR: {name}");
+    let end = format!("ANCHOR_END: {name}");
+    let mut starts = Vec::new();
+    let mut ends = Vec::new();
+    for (index, line) in source.lines().enumerate() {
+        for prefix in ["// ", "# "] {
+            if let Some(marker) = line.trim().strip_prefix(prefix) {
+                if marker == begin {
+                    starts.push((index, prefix));
+                } else if marker == end {
+                    ends.push((index, prefix));
+                }
+            }
+        }
+    }
+    if !matches!(
+        (starts.as_slice(), ends.as_slice()),
+        ([(start, prefix)], [(end, end_prefix)])
+            if prefix == end_prefix && *start + 1 < *end
+                && source.lines().skip(*start + 1).take(*end - *start - 1)
+                    .any(|line| !line.trim().is_empty())
+    ) {
         return Err(fail(format!(
             "missing, duplicate or empty source anchor: {name}"
         )));
@@ -191,11 +212,15 @@ fn source(root: &Path, directory: &Path, reference: &str) -> Result<String> {
         return Err(fail(format!("invalid semantic anchor: {reference}")));
     }
     let file = directory.join(file).canonicalize()?;
-    if file.extension().is_some_and(|ext| ext == "rs") {
+    if file.is_file() {
         for package in PACKAGES {
-            let examples = root
-                .join(format!("crates/{package}/examples"))
-                .canonicalize()?;
+            if file
+                .extension()
+                .is_none_or(|ext| ext != example_extension(package))
+            {
+                continue;
+            }
+            let examples = root.join(examples_path(package)).canonicalize()?;
             if let Ok(relative) = file.strip_prefix(examples) {
                 anchor(&fs::read_to_string(&file)?, name)?;
                 return Ok(format!("{package}/{}:{name}", relative.display()));
@@ -266,14 +291,23 @@ fn local_links(root: &Path, text: &str, outline: &Outline, cases: &[Case]) -> Re
             }
         } else if let Some(file) = link.strip_prefix("examples/") {
             if let Some((package, file)) = file.split_once('/') {
+                let relative = Path::new(file);
                 if PACKAGES.contains(&package)
-                    && !file.contains("..")
-                    && root
-                        .join(format!("crates/{package}/examples"))
-                        .join(file)
-                        .is_file()
+                    && relative
+                        .components()
+                        .all(|part| matches!(part, Component::Normal(_)))
+                    && relative
+                        .extension()
+                        .is_some_and(|ext| ext == example_extension(package))
                 {
-                    continue;
+                    let examples = root.join(examples_path(package)).canonicalize()?;
+                    if examples
+                        .join(relative)
+                        .canonicalize()
+                        .is_ok_and(|file| file.is_file() && file.starts_with(&examples))
+                    {
+                        continue;
+                    }
                 }
             }
         } else if cases.iter().any(|case| {
@@ -342,10 +376,20 @@ fn edition(root: &Path, language: usize, cases: &[Case]) -> Result<Outline> {
         local_links(root, text, &outline, cases)?;
     }
     for case in cases {
+        if case.package == PYTHON_PACKAGE && !outline.sources.contains_key("python") {
+            return Err(fail(
+                "Python API references require the #python guide section",
+            ));
+        }
         let uses_example = outline.sources.get(&case.target).is_some_and(|sources| {
-            sources
-                .iter()
-                .any(|source| source.starts_with(&format!("{}/{}.rs:", case.package, case.example)))
+            sources.iter().any(|source| {
+                source.starts_with(&format!(
+                    "{}/{}.{}:",
+                    case.package,
+                    case.example,
+                    example_extension(&case.package)
+                ))
+            })
         });
         let shows_figure = outline.assets.get(&case.target).is_some_and(|assets| {
             assets.contains(&format!("gallery/{}/{}", case.id, case.artifacts[0]))

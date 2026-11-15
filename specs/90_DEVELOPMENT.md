@@ -133,11 +133,16 @@ docs/book-helper/src/gallery.rs runs each listed executable once into a fresh
 isolated directory, requires its declared outputs, and assembles both editions
 from the same artifact bytes.
 The eleven-column inventory includes an owning package selected from implemented
-members. Source downloads use examples/<package>/ paths;
+members, including `lichtung-plot-python`. Rust sources use their member examples;
+Python sources remain under `bindings/python/examples/`. The latter execute with
+`-I -B` using an explicitly selected `LICHTUNG_PYTHON` whose wheel is already
+installed; Book assembly never installs a binding or substitutes checkout imports.
+Source downloads use examples/<package>/ paths;
 source includes, API links and execution share that same owner, not core-only
 fallback paths. Do not introduce arbitrary commands or duplicate catalogs.
-Its first artifact is complete outlined SVG; preserve-text downloads, where
-supplied, come from the same frozen Output. Do not substitute stale images on
+Its first artifact is complete outlined SVG; preserve-text and PNG downloads, where
+supplied, come from the same frozen Output. Source includes use semantic anchors
+in the owning Rust or Python example. Do not substitute stale images on
 failure, maintain scene hashes/coordinates, or generate artifacts in build.rs.
 
 Showcase selection spans distinct scientific questions and visual grammars, not

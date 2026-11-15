@@ -1,5 +1,6 @@
 """Synthetic observations through four routes and one native publication path."""
 
+# ANCHOR: example
 from __future__ import annotations
 
 import argparse
@@ -46,18 +47,27 @@ def main(destination: Path) -> None:
             polars_frame, x=col["Time"], y=col["Response"], hue=col["Hue"]
         ),
     ]
-    canvas = Canvas.grid(2, 2).size(1400, 1000)
+    canvas = (
+        Canvas.grid(2, 2).size(1400, 1100)
+        .title("One synthetic assay through four input routes")
+        .caption(
+            "Synthetic observations; all four panels use the same supplied values. "
+            "Unbound unsupported columns are not converted."
+        )
+    )
     for index, (name, plot) in enumerate(
         zip(("Native Python", "NumPy", "pandas", "Eager Polars"), plots)
     ):
-        plot.title(name).x_label("Time (h)").y_label("Response")
+        plot.title(name).x_label("Time (h)").y_label("Response (arbitrary units)")
         canvas.panel(index // 2, index % 2, plot)
     destination.mkdir(parents=True, exist_ok=True)
-    canvas.svg_preserve_text(destination / "four_inputs.svg")
-    canvas.png_preview(destination / "four_inputs.png")
+    output = canvas.svg(destination / "four_inputs.svg")
+    output.svg_preserve_text(destination / "four_inputs_text.svg")
+    output.png_preview(destination / "four_inputs.png")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", type=Path, nargs="?", default=Path.cwd())
     main(parser.parse_args().destination)
+# ANCHOR_END: example
