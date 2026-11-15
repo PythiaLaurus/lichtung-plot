@@ -2,27 +2,29 @@
 
 ## Status And Scope
 
-This is the full constructor inventory and API draft, not the current package's
-shipped stubs or evidence of complete implementation. The selected architecture,
+This is the shared constructor contract, not a substitute for shipped declarations
+or verification. All 25 constructors and their alternatives are implemented with
+bounded installed evidence in the workspace/interface plan. The selected architecture,
 selectors, binding snapshots and object lifecycle remain in the
 [workspace/interface plan](91_WORKSPACE_AND_INTERFACES_PLAN.md). Current scientific
 behavior remains defined by the [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). The selected
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) owns the prerequisite
 core/adapter migration and its native delivery status. Scatter now has bounded
-installed verification across all four input routes, including selectors,
+installed transport verification across all four input routes, including selectors,
 MaskedArray, many-y, explicit row-position/numeric-discovery modes and fresh
-retained-source lookup. The other 24 families and their scientific/configuration
-methods remain planned; this is not complete constructor delivery.
+retained-source lookup. The other 24 families, flat geometry and base configuration
+now have focused installed verification; alpha/layers/results and final complete
+interface verification remain open.
 The workspace/interface plan records the current scope and remaining delivery gate.
 
 The inventory covers all 25 existing families, their primary input alternatives
 and a bounded set of optional categorical bindings. Row-position/column-name modes,
 explicit numeric discovery and flat named geometry inputs are selected below.
 Signed positional selection, complete hashable pandas column keys and MaskedArray
-support are selected too. Full-surface annotated overloads, native label mappings
-and method signatures remain implementation work; recording these decisions does
-not deliver a binding.
+support are selected too. Constructor overloads, native label mappings and base
+method signatures are implemented; the remaining scientific surface is tracked
+in `94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
 
 ## Shared Public Surface
 
@@ -139,10 +141,10 @@ make them replaceable on families that do not admit replacement.
 
 ### Samples, Estimates And Supplied Intervals
 
-The Bar/HorizontalBar draft uses the already discussed named alternatives:
+Bar/HorizontalBar use the selected named alternatives:
 
 ```python
-# Planned calls, not executable examples of a delivered binding.
+# Call shapes assuming an existing df and policy; not a standalone example.
 bar(df, category="group", samples="value")
 bar(df, category="group", samples="value", error_bar=policy)
 bar(df, category="group", estimate="mean")
@@ -401,6 +403,25 @@ keys do not introduce a sample `.hue(...)` setter. The display keywords are
   source IDs and supplied-Raincloud series/significance at its existing boundary.
   Adapters do not duplicate this scientific validation.
 
+The geometry adapter entries require explicit native scientific dimensions. The
+Python binding selects their identities from the coordinate-bearing roles below;
+this is a binding choice, not an inference performed by the core or adapter:
+
+| Geometry | Native dimension | Bound field supplying its raw identity | Anonymous direct fallback |
+| --- | --- | --- | --- |
+| Histogram | value | `rug_x` | `value` |
+| Histogram | density | `bin_density` | `density` |
+| Raincloud | category | summary `category` | `category` |
+| Raincloud | value | `point_y` | `value` |
+| Raincloud | hue, when supplied | summary `hue` | `hue` |
+
+Use the existing field/key identity codec for selected columns and named Series;
+do not use a display alias, a companion column's name or a guessed common name.
+Anonymous direct values use the literal role fallback in the table. These
+identities feed the original axis/guide and aggregate-alpha consumers; `*_label`
+edits do not replace them. Component lookup contexts and auxiliary-source release
+remain as specified above. No public dimension/name parameter is introduced.
+
 Sample-owned Histogram with a supplied KDE remains a distinct composite option,
 not this complete-geometry mode. The native prerequisite now uses named x/y
 columns, with direct/independent-source adapter helpers. Final Python method signatures must
@@ -409,23 +430,20 @@ Rust point class or a hidden lookup against the samples source.
 
 ## Remaining Work Outside This Constructor Inventory
 
-Implement and verify the selected selector bounds, pandas key identities and
-MaskedArray validity under the parent plan; these are no longer open admission
-choices. Callback adapters/ownership, exception translation, full policy/method
-signatures and distribution verification also remain implementation work there.
-In particular, Bootstrap sampling-unit data, independent layers,
-status mappings, alpha mappings and supplied-KDE data must also accept ordinary
-inputs rather than require Rust payload objects. Do not silently make an unbound
-selector inside a policy read the main Plot source; specify its binding context
-and snapshot call when that method inventory is completed. Per-API mapping connects
-Python calls to the existing Rust behavior; it is not another round of scientific
-API decisions or a request to reimplement that behavior in Python.
+The selected selector bounds, pandas key identities, MaskedArray validity,
+callback ownership and exception translation are implemented with bounded
+verification recorded in the parent plan. Bootstrap units, status mappings and
+supplied KDE use ordinary inputs and explicit independent contexts. Alpha mappings,
+independent layers/results and their exact method signatures remain work under
+`94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`, followed by final distribution verification.
+They must use ordinary inputs, not require Rust payload objects or silently
+borrow a parent source. Per-API mapping connects Python calls to existing Rust
+behavior; it is not a new scientific model.
 
-Do not treat the table as a completed installed-stub or native-ownership gate.
-Verify representative valid/invalid overload calls against actual runtime
-combination checks when bindings exist, without a family/container cross-product.
-This document-only inventory needs source/link consistency and whitespace checks,
-not a Rust build or renderer test suite.
+The table alone is not an installed-stub or native-ownership gate. Representative
+runtime/typing evidence belongs to the parent plan, not a family/container
+cross-product inferred from this inventory. Documentation-only edits need
+source/link consistency and whitespace checks, not renderer tests.
 
 ## Inventory Sources
 

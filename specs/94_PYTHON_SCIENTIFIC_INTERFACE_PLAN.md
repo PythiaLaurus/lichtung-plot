@@ -3,9 +3,11 @@
 ## Status And Authority
 
 This plan specifies the complete remaining scientific/numeric Python interface.
-Four-route Scatter, complete Theme/Text values and the owning numeric/locator
-policies are implemented; exact-family expansion and related attachments below
-remain targets, not delivered functionality. Current evidence and remaining gates
+All 25 constructors/alternatives, exact-family base data/facet/configuration
+methods, complete Canvas configuration, Theme/Text and numeric/locator policies,
+13 scientific/appearance/position values and all eight callback slots are
+implemented. Alpha scopes/mappers and independent layers/results below remain
+targets, not delivered functionality. Current evidence and remaining gates
 are recorded in `91_WORKSPACE_AND_INTERFACES_PLAN.md`. Constructor fields, modes,
 presence and flat geometry are defined once in `92_PYTHON_CONSTRUCTORS_PLAN.md`.
 Do not replace that inventory with a smaller family subset.
@@ -93,7 +95,7 @@ native LegendPosition variants as one-to-one snake_case literals, with no invent
 center. Legend composition is combined/separate. Canvas retains per_plot/shared/
 hidden policy and composition independently of captured Plot policies.
 
-Complete the six remaining native-only immutable appearance values:
+The six native-only immutable appearance values have been delivered:
 
 | Value | Selected Python shape |
 | --- | --- |
@@ -131,6 +133,33 @@ for symmetry. Retained text slots, role-layout attachments and clears remain
 capability-gated; new append-only annotations clear incoming Text instructions,
 not earlier entries.
 
+### Complete Canvas Configuration
+
+Canvas also retains the native non-legend composition capabilities, not just
+Plot placement. Expose `panel_title_alignment` / `panel_subtitle_alignment` with
+start/center/end literals; these are embedded-Plot defaults, not edits of captured
+Plot instructions or Canvas-owned prose.
+
+Use `column_header(start_column, span, text, *, style=omitted, layout=omitted)`,
+`row_header(start_row, span, text, *, style=omitted, layout=omitted)` and
+`row_title(row, text, *, style=omitted, layout=omitted)`. Each appends one native
+entry; the shared TextIntent path edits the incoming text, not earlier entries.
+Native span, overlap and source validation stay fallible and failure-safe.
+
+`text_panel(row, column, *, title: str | Text, body: str | Text)` constructs the
+existing native TextPanel and uses strict single-cell placement. Each complete
+Text independently carries its instructions. Do not add a TextPanel facade,
+fake full-Text readers or spans/overwrite that the native text-panel API does not
+provide. Existing Plot-panel overwrite may still replace whole intersecting
+TextPanel owners through the native placement authority.
+
+`category_labels` accepts every_plot/first_column_per_row. `x_range_group` accepts
+an ordered sequence of literal `(row, column)` cells, not observation selectors.
+Forward both to the original native methods, preserving range-group constraints
+and placement/preflight timing. Keep canonical callback-root captures and native
+topology as the only authorities; do not mirror headers, ranges or occupancy in
+Python. These mappings need no new core API.
+
 ## Statistical Policy Values And Necessary Readers
 
 Five frozen classes hold only their corresponding native values:
@@ -165,8 +194,8 @@ scales edits and attached-facet/grid significance helpers.
 
 ## Supplied Raincloud Hue Title
 
-Add only exact Raincloud native `hue_label(impl Into<Text>) -> Self`,
-`clear_hue_label_style() -> Self` and `clear_hue_label_layout() -> Self`, delivered
+The exact Raincloud native methods `hue_label(impl Into<Text>) -> Self`,
+`clear_hue_label_style() -> Self` and `clear_hue_label_layout() -> Self` are delivered
 with the real Python Raincloud consumer. No new capability trait, scientific hue
 setter, public title reader or other-family categorical-title API is selected.
 
@@ -257,10 +286,10 @@ already-existing attached-facet/grid native helpers.
 
 ## Complete Numeric Values And Callback Slots
 
-The owning policy values and the existing Scatter x/y consumers are implemented
-within the bounded checks recorded in the workspace/interface plan. The four
-additional formatter attachments and full-family forwarding remain planned;
-neither complete eight-slot wiring nor overall interface delivery follows.
+The owning policy values, full-family forwarding and all eight physical slots
+are implemented within the bounded checks recorded in the workspace/interface
+plan. This does not imply alpha mapper/layer/result delivery or final
+distribution/content/cost and budget acceptance.
 
 No new core numeric reader is required. Owning policies and existing scoped
 callback views have distinct lifetimes; do not replace a scoped view by a detached

@@ -223,6 +223,83 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
 }
 
 #[test]
+fn supplied_raincloud_hue_title_uses_full_text_and_preserves_known_string_fallback() {
+    use lichtung_plot::{
+        AlphaEncoding, AlphaValues, Color, LegendComposition, Text, TextLayout, TextRotation, Theme,
+    };
+
+    let colors = CategoricalColorMap::new([
+        ("control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("active".to_owned(), OpaqueColor::rgb(0, 114, 178)),
+    ])
+    .unwrap();
+    let plot = Plot::raincloud(RaincloudInput::geometry(hued_raincloud_geometry(&[
+        "control", "active",
+    ])))
+    .categorical_color_scale(CategoricalColorScale::from_map(colors))
+    .fill_alpha(
+        AlphaEncoding::keyed(
+            [
+                CategoryValues::new("condition", ["control", "active"]).unwrap(),
+                CategoryValues::new("treatment", ["control", "active"]).unwrap(),
+            ],
+            AlphaValues::new("opacity", [64, 192]).unwrap(),
+        )
+        .unwrap(),
+    )
+    .labels(
+        Labels::humanized()
+            .alias("treatment", "Study arm")
+            .alias("Clinical arm", "not a raw dimension")
+            .alias("control", "Reference cohort")
+            .alias("active", "Active cohort"),
+    );
+    let style = Theme::publication()
+        .typography()
+        .get_guides()
+        .get_legend_title()
+        .clone()
+        .font_size(19.0)
+        .unwrap()
+        .color(Color::rgb(173, 37, 83))
+        .unwrap();
+    let authored = render(
+        plot.clone()
+            .hue_label(
+                Text::new("Clinical arm")
+                    .style(style)
+                    .layout(TextLayout::default().rotation(TextRotation::degrees(12.0).unwrap())),
+            )
+            .legend_composition(LegendComposition::Combined),
+        "raincloud-authored-hue-title",
+    )
+    .unwrap();
+    let title = authored
+        .lines()
+        .find(|line| line.contains(">Clinical arm</text>"))
+        .expect("authored hue title is published verbatim");
+    assert!(title.contains("font-size=\"19\""));
+    assert!(title.contains("fill=\"#AD2553\""));
+    assert!(title.contains("transform=\"rotate(12,"));
+    assert!(!authored.contains(">Study arm</text>"));
+    assert!(!authored.contains(">not a raw dimension</text>"));
+    assert!(authored.contains(">Reference cohort</text>"));
+    assert!(authored.contains(">Active cohort</text>"));
+    assert!(authored.contains("#333333") && authored.contains("#0072B2"));
+
+    let fallback = render(
+        plot.legend_composition(LegendComposition::Separate),
+        "raincloud-string-hue-title",
+    )
+    .unwrap();
+    assert!(fallback.contains(">Study arm</text>"));
+    assert!(!fallback.contains(">Clinical arm</text>"));
+    assert!(fallback.contains(">Reference cohort</text>"));
+    assert!(fallback.contains(">Active cohort</text>"));
+    assert!(fallback.contains("#333333") && fallback.contains("#0072B2"));
+}
+
+#[test]
 fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backend_begin() {
     let mut input = hued_raincloud_geometry(&["control", "active"]);
     input.category = CategoryValues::new("condition", ["control", "control"]).unwrap();

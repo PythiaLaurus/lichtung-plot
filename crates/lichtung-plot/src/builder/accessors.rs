@@ -520,6 +520,22 @@ impl PlotDescription {
         self.payload.color_label == *title
     }
 
+    pub(crate) fn authored_raincloud_hue_title(&self) -> Option<(&str, &crate::Text)> {
+        let raw_hue = self.raincloud_geometry_input()?.hue_dimension.as_deref()?;
+        self.payload
+            .raincloud_hue_label
+            .provided()
+            .map(|title| (raw_hue, title))
+    }
+
+    pub(crate) fn copy_raincloud_hue_title(&self) -> Result<crate::Text, Error> {
+        self.payload.raincloud_hue_label.try_copy()
+    }
+
+    pub(crate) fn same_raincloud_hue_title(&self, title: &crate::Text) -> bool {
+        self.payload.raincloud_hue_label == *title
+    }
+
     /// Requested heatmap coordinate layout.
     #[must_use]
     pub(crate) fn heatmap_layout_spec(&self) -> HeatmapLayout {
@@ -848,6 +864,13 @@ impl PlotDescription {
                 "y-axis title",
             ),
             (self.color_label_text(), "color guide title"),
+            (
+                self.payload
+                    .raincloud_hue_label
+                    .provided()
+                    .map(crate::Text::as_str),
+                "raincloud hue guide title",
+            ),
         ] {
             if let Some(source) = source {
                 crate::text::validate_for(source, role)?;
@@ -1214,6 +1237,14 @@ impl PlotDescription {
 
     pub(crate) const fn kind(&self) -> PlotKind {
         self.kind
+    }
+}
+
+impl<K: crate::kind::Facet> Plot<K> {
+    /// Borrow the currently bound facet without validating or rebinding its data.
+    #[must_use]
+    pub fn get_facet(&self) -> Option<&crate::FacetSpec> {
+        self.description.payload.facet.as_ref()
     }
 }
 

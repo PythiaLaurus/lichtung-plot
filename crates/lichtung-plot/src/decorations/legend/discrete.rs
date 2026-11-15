@@ -3,6 +3,8 @@
 
 mod composition;
 mod projection;
+#[cfg(test)]
+mod raincloud_title_tests;
 pub(crate) mod scoped;
 #[cfg(test)]
 mod source_tests;

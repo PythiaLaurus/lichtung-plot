@@ -155,6 +155,7 @@ mod scales;
 use chrome::{PyAxisTheme, PyCompositionTheme, PyLegendTheme};
 use marks::{PyAnnotationTheme, PyMarkTheme};
 use scales::PyColorScales;
+pub(super) use scales::{PyDivergingGradient, PyQualitativePalette, PySequentialGradient};
 
 #[pyclass(
     name = "Color",
@@ -513,7 +514,7 @@ impl PyRelativeSpacing {
     }
 }
 
-fn text_weight(value: &str) -> PyResult<core::TextWeight> {
+pub(super) fn text_weight(value: &str) -> PyResult<core::TextWeight> {
     match value {
         "normal" => Ok(core::TextWeight::Normal),
         "semibold" => Ok(core::TextWeight::Semibold),

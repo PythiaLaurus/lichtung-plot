@@ -8,10 +8,10 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use pyo3::{PyTraverseError, PyVisit};
 
-use super::{cleared_owner, native_snapshot, NativePlot, PyPlotOwner};
+use super::{cleared_owner, native_snapshot, policy, NativePlot, PyPlotOwner};
 use crate::callbacks::{self, clone_roots, CallbackRoots};
 use crate::output::{PyOutput, Terminal};
-use crate::values::{self, PyLabels, PyPngOptions, PyTheme, TextIntent};
+use crate::values::{self, PyLabels, PyPngOptions, PyTextLayout, PyTheme, TextIntent};
 
 struct PanelRoots {
     anchor: (usize, usize),
@@ -192,16 +192,14 @@ impl PyCanvasOwner {
                 .try_reserve(roots.len())
                 .map_err(|error| PyMemoryError::new_err(error.to_string()))?;
             let canvas = Arc::make_mut(native);
-            match plot.as_ref() {
-                NativePlot::Scatter(config) => canvas.place_panel(
-                    row,
-                    column,
-                    row_span,
-                    column_span,
-                    config.native.clone(),
-                    overwrite,
-                ),
-            }
+            all_families!(call_configs, plot.as_ref(), config => canvas.place_panel(
+                row,
+                column,
+                row_span,
+                column_span,
+                config.native.clone(),
+                overwrite,
+            ))
             .map_err(crate::native_error)?;
 
             let mut index = 0;
@@ -225,6 +223,23 @@ impl PyCanvasOwner {
         drop(retired);
         drop(incoming_roots);
         result
+    }
+
+    fn text_panel(
+        slf: &Bound<'_, Self>,
+        row: usize,
+        column: usize,
+        title: &Bound<'_, PyAny>,
+        body: &Bound<'_, PyAny>,
+        unset: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let title = values::text_intent(title, unset, unset, unset)?.native;
+        let body = values::text_intent(body, unset, unset, unset)?.native;
+        let panel = lichtung_plot::TextPanel::new(title, body).map_err(crate::native_error)?;
+        Self::update(slf, |mut canvas| {
+            canvas.place_text_panel(row, column, panel)?;
+            Ok(canvas)
+        })
     }
 
     fn title(
@@ -317,6 +332,72 @@ impl PyCanvasOwner {
 
     fn size(slf: &Bound<'_, Self>, width: u32, height: u32) -> PyResult<()> {
         Self::update(slf, |canvas| Ok(canvas.size(width, height)))
+    }
+
+    fn legend_policy(slf: &Bound<'_, Self>, policy: &str) -> PyResult<()> {
+        let policy = policy::canvas_legend(policy)?;
+        Self::update(slf, |canvas| Ok(canvas.legend_policy(policy)))
+    }
+
+    fn legend_composition(slf: &Bound<'_, Self>, composition: &str) -> PyResult<()> {
+        let composition = policy::composition(composition)?;
+        Self::update(slf, |canvas| Ok(canvas.legend_composition(composition)))
+    }
+
+    fn guide_text_layout(
+        slf: &Bound<'_, Self>,
+        role: &str,
+        layout: PyRef<'_, PyTextLayout>,
+    ) -> PyResult<()> {
+        let layout_native = layout.native.clone();
+        drop(layout);
+        let role = policy::guide_role(role)?;
+        Self::update(slf, |canvas| {
+            Ok(canvas.guide_text_layout(role, layout_native))
+        })
+    }
+
+    fn panel_title_alignment(slf: &Bound<'_, Self>, alignment: &str) -> PyResult<()> {
+        let alignment = policy::alignment(alignment)?;
+        Self::update(slf, |canvas| Ok(canvas.panel_title_alignment(alignment)))
+    }
+
+    fn panel_subtitle_alignment(slf: &Bound<'_, Self>, alignment: &str) -> PyResult<()> {
+        let alignment = policy::alignment(alignment)?;
+        Self::update(slf, |canvas| Ok(canvas.panel_subtitle_alignment(alignment)))
+    }
+
+    fn category_labels(slf: &Bound<'_, Self>, policy: &str) -> PyResult<()> {
+        let policy = policy::canvas_categories(policy)?;
+        Self::update(slf, |canvas| Ok(canvas.category_labels(policy)))
+    }
+
+    fn x_range_group(slf: &Bound<'_, Self>, cells: Vec<(usize, usize)>) -> PyResult<()> {
+        Self::update(slf, |canvas| canvas.x_range_group(cells))
+    }
+
+    fn clear_title_style(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_title_style()))
+    }
+
+    fn clear_title_layout(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_title_layout()))
+    }
+
+    fn clear_subtitle_style(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_subtitle_style()))
+    }
+
+    fn clear_subtitle_layout(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_subtitle_layout()))
+    }
+
+    fn clear_caption_style(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_caption_style()))
+    }
+
+    fn clear_caption_layout(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |canvas| Ok(canvas.clear_caption_layout()))
     }
 
     fn svg(slf: &Bound<'_, Self>, path: &Bound<'_, PyAny>) -> PyResult<PyOutput> {

@@ -22,14 +22,14 @@ type ScatterConfig = Config<kind::Scatter>;
 // A copy can independently bind different new keys without reusing a raw ID.
 static NEXT_KEY: AtomicU64 = AtomicU64::new(0);
 
-struct Selected {
-    indices: Vec<usize>,
-    collection: bool,
+pub(super) struct Selected {
+    pub(super) indices: Vec<usize>,
+    pub(super) collection: bool,
     discovered: Vec<(usize, DataType)>,
 }
 
 /// This finite enum is call-local container dispatch, not a retained source model.
-enum Source<'py> {
+pub(super) enum Source<'py> {
     Numpy {
         object: Bound<'py, PyAny>,
         shape: (usize, usize),
@@ -43,7 +43,7 @@ enum Source<'py> {
 }
 
 impl<'py> Source<'py> {
-    fn new(object: &Bound<'py, PyAny>) -> PyResult<Self> {
+    pub(super) fn new(object: &Bound<'py, PyAny>) -> PyResult<Self> {
         if super::instance(object, "numpy", "ndarray")? {
             let (rows, columns, rank) = array::shape(object)?;
             if rank != 2 {
@@ -75,14 +75,14 @@ impl<'py> Source<'py> {
         }
     }
 
-    fn shape(&self) -> (usize, usize) {
+    pub(super) fn shape(&self) -> (usize, usize) {
         match self {
             Self::Numpy { shape, .. } | Self::Polars { shape, .. } => *shape,
             Self::Pandas(table) => table.shape,
         }
     }
 
-    fn verify(&self) -> PyResult<()> {
+    pub(super) fn verify(&self) -> PyResult<()> {
         match self {
             Self::Numpy { object, shape } => {
                 if array::shape(object)? != (shape.0, shape.1, 2) {
@@ -125,7 +125,7 @@ impl<'py> Source<'py> {
         }
     }
 
-    fn resolve(&self, value: &Bound<'_, PyAny>) -> PyResult<Option<Selected>> {
+    pub(super) fn resolve(&self, value: &Bound<'_, PyAny>) -> PyResult<Option<Selected>> {
         let description = selectors::description(value)?;
         let description = if let Some(description) = description {
             description
@@ -172,7 +172,7 @@ impl<'py> Source<'py> {
         }))
     }
 
-    fn numpy_column(&self, index: usize, role: Role) -> PyResult<Scratch> {
+    pub(super) fn numpy_column(&self, index: usize, role: Role) -> PyResult<Scratch> {
         self.verify()?;
         let column = match self {
             Self::Numpy { object, .. } => array::numpy(&array::single_column(object, index)?)?.0,
@@ -188,7 +188,7 @@ impl<'py> Source<'py> {
         Ok(column)
     }
 
-    fn polars_column(&self, index: usize, role: Role) -> PyResult<Column> {
+    pub(super) fn polars_column(&self, index: usize, role: Role) -> PyResult<Column> {
         let Self::Polars {
             object,
             shape,
@@ -264,25 +264,25 @@ fn direct_container(value: &Bound<'_, PyAny>) -> PyResult<bool> {
         || super::instance(value, "polars", "DataFrame")?)
 }
 
-enum Data {
+pub(super) enum Data {
     Nd(Scratch),
     NdColumns(Vec<Scratch>),
     Polars(Vec<Column>),
 }
 
-struct Direct {
-    data: Data,
-    rank: usize,
-    names: Vec<String>,
+pub(super) struct Direct {
+    pub(super) data: Data,
+    pub(super) rank: usize,
+    pub(super) names: Vec<String>,
     // Call-local original key only; published edges belong to InputRoots.keys.
-    pandas_name: Option<Py<PyAny>>,
+    pub(super) pandas_name: Option<Py<PyAny>>,
     // Only an actual independent Polars DataFrame has named collection origin.
     // Other direct representations stay local after conversion to PL columns.
     polars_frame_rows: Option<usize>,
 }
 
 impl Direct {
-    fn new(value: &Bound<'_, PyAny>, role: Role, name: &str) -> PyResult<Self> {
+    pub(super) fn new(value: &Bound<'_, PyAny>, role: Role, name: &str) -> PyResult<Self> {
         let (data, rank, names) = if super::native_sequence(value) {
             let (data, rank) = Scratch::native(value, role)?;
             let names = local_names(data.shape().1, rank, name);
@@ -384,7 +384,7 @@ impl Direct {
         })
     }
 
-    fn bind_name(
+    pub(super) fn bind_name(
         &mut self,
         py: Python<'_>,
         roots: &mut InputRoots,
@@ -472,7 +472,7 @@ fn combine<T: Clone>(columns: &[Array2<T>], rows: usize) -> PyResult<Array2<T>> 
         .map_err(|error| crate::DataError::new_err(error.to_string()))
 }
 
-fn key_identity(
+pub(super) fn key_identity(
     table: &pandas::Table<'_>,
     index: usize,
     roots: &mut InputRoots,
@@ -520,14 +520,26 @@ fn registered_key(
     Ok(raw)
 }
 
-struct NdColumns {
+pub(super) struct NdColumns {
     shape: (usize, usize),
     columns: Vec<(usize, Scratch)>,
     identities: Vec<(usize, String)>,
 }
 
 impl NdColumns {
-    fn prepare(
+    pub(super) fn names(&self, indices: &[usize]) -> Vec<String> {
+        indices
+            .iter()
+            .map(|index| {
+                self.identities
+                    .iter()
+                    .find(|(known, _)| known == index)
+                    .map_or_else(|| format!("Column {}", index + 1), |(_, name)| name.clone())
+            })
+            .collect()
+    }
+
+    pub(super) fn prepare(
         source: &Source<'_>,
         indices: &[usize],
         role: Role,
@@ -553,7 +565,7 @@ impl NdColumns {
         })
     }
 
-    fn with_projection<R>(
+    pub(super) fn with_projection<R>(
         &self,
         apply: impl FnOnce(nd::ColumnProjection<'_>) -> PyResult<R>,
     ) -> PyResult<R> {
@@ -585,7 +597,7 @@ impl NdColumns {
 }
 
 /// Owned call-local y transport, retaining its actual selected/direct origin.
-enum Y {
+pub(super) enum Y {
     NdSelected {
         selected: Selected,
         columns: NdColumns,
@@ -611,7 +623,7 @@ enum Y {
 }
 
 impl Y {
-    fn collection(&self) -> bool {
+    pub(super) fn collection(&self) -> bool {
         match self {
             Self::NdSelected { selected, .. } | Self::PlSelected { selected, .. } => {
                 selected.collection
@@ -625,25 +637,33 @@ impl Y {
     /// rebinding that immutable Rust scratch later incurs another payload copy,
     /// but never another foreign read or Python call.
     fn copies(&mut self) -> PyResult<usize> {
+        self.copies_for("y")
+    }
+
+    pub(super) fn copies_for(&mut self, role: &'static str) -> PyResult<usize> {
         match self {
             Self::NdSelected { selected, columns } => columns.with_projection(|projection| {
                 let (_, shape) = if selected.collection {
                     nd::NumericSeriesInput::bind_series(
                         selected.indices.as_slice(),
                         Some(&projection),
-                        "y",
+                        role,
                     )
                 } else {
-                    nd::NumericSeriesInput::bind_series(selected.indices[0], Some(&projection), "y")
+                    nd::NumericSeriesInput::bind_series(
+                        selected.indices[0],
+                        Some(&projection),
+                        role,
+                    )
                 }
                 .map_err(super::nd_error)?;
                 Ok(shape.map_or(1, |(_, columns, _)| columns.len()))
             }),
             Self::NdDirect { values, rank, .. } => {
                 let (_, shape) = if *rank == 1 {
-                    nd::NumericSeriesInput::bind_series(array::column_values(values), None, "y")
+                    nd::NumericSeriesInput::bind_series(array::column_values(values), None, role)
                 } else {
-                    nd::NumericSeriesInput::bind_series(values.view(), None, "y")
+                    nd::NumericSeriesInput::bind_series(values.view(), None, role)
                 }
                 .map_err(super::nd_error)?;
                 Ok(shape.map_or(1, |(_, columns, _)| columns.len()))
@@ -658,9 +678,9 @@ impl Y {
                 let projection =
                     pl::ColumnProjection::new(*rows, &names, columns).map_err(super::pl_error)?;
                 let (_, shape) = if selected.collection {
-                    pl::NumericSeriesInput::bind_series(&projection, None, "y")
+                    pl::NumericSeriesInput::bind_series(&projection, None, role)
                 } else {
-                    pl::NumericSeriesInput::bind_series(&columns[0], None, "y")
+                    pl::NumericSeriesInput::bind_series(&columns[0], None, role)
                 }
                 .map_err(super::pl_error)?;
                 own_numeric_columns(columns)?;
@@ -673,11 +693,11 @@ impl Y {
                 polars_frame_rows,
             } => {
                 let (_, shape) = if *rank == 1 {
-                    pl::NumericSeriesInput::bind_series(&columns[0], None, "y")
+                    pl::NumericSeriesInput::bind_series(&columns[0], None, role)
                 } else {
                     let names = names.iter().map(String::as_str).collect::<Vec<_>>();
                     let projection = pl_direct_projection(*polars_frame_rows, &names, columns)?;
-                    pl::NumericSeriesInput::bind_series(&projection, None, "y")
+                    pl::NumericSeriesInput::bind_series(&projection, None, role)
                 }
                 .map_err(super::pl_error)?;
                 own_numeric_columns(columns)?;
@@ -764,9 +784,46 @@ impl Y {
             }
         }
     }
+
+    pub(super) fn numeric_matrix(&self) -> PyResult<Array2<Option<f64>>> {
+        match self {
+            Self::NdDirect { values, .. } => Ok(values.clone()),
+            Self::NdSelected { selected, columns } => {
+                let values = selected
+                    .indices
+                    .iter()
+                    .map(|index| {
+                        columns
+                            .columns
+                            .iter()
+                            .find(|(known, _)| known == index)
+                            .expect("selected column was prepared")
+                            .1
+                            .numeric()
+                    })
+                    .collect::<PyResult<Vec<_>>>()?;
+                combine(&values, columns.shape.0)
+            }
+            Self::PlSelected { columns, rows, .. } => {
+                let values = columns
+                    .iter()
+                    .map(|column| array::from_polars(column, Role::Numeric)?.numeric())
+                    .collect::<PyResult<Vec<_>>>()?;
+                combine(&values, *rows)
+            }
+            Self::PlDirect { columns, .. } => {
+                let rows = columns.first().map_or(0, Column::len);
+                let values = columns
+                    .iter()
+                    .map(|column| array::from_polars(column, Role::Numeric)?.numeric())
+                    .collect::<PyResult<Vec<_>>>()?;
+                combine(&values, rows)
+            }
+        }
+    }
 }
 
-fn with_nd_identity<R>(
+pub(super) fn with_nd_identity<R>(
     values: &dyn nd::ArraySource,
     name: &str,
     apply: impl FnOnce(nd::ColumnProjection<'_>) -> PyResult<R>,
@@ -824,7 +881,7 @@ fn nd_direct_construct(
     })
 }
 
-fn pl_direct_projection<'columns>(
+pub(super) fn pl_direct_projection<'columns>(
     polars_frame_rows: Option<usize>,
     names: &'columns [&'columns str],
     columns: &'columns [Column],
@@ -861,6 +918,18 @@ fn prepare_y(
     roots: &mut InputRoots,
     aliases: &mut Vec<(String, String)>,
 ) -> PyResult<Y> {
+    prepare_series(source, value, discovery, polars, roots, aliases, "y")
+}
+
+pub(super) fn prepare_series(
+    source: Option<&Source<'_>>,
+    value: &Bound<'_, PyAny>,
+    discovery: bool,
+    polars: bool,
+    roots: &mut InputRoots,
+    aliases: &mut Vec<(String, String)>,
+    role: &'static str,
+) -> PyResult<Y> {
     let selected = if discovery {
         Some(source.expect("discovery requires data").discover()?)
     } else {
@@ -871,47 +940,9 @@ fn prepare_y(
     };
     if let Some(selected) = selected {
         let source = source.expect("a selection was resolved against data");
-        if let Source::Polars { names, shape, .. } = source {
-            let columns =
-                selected
-                    .indices
-                    .iter()
-                    .map(|index| {
-                        let column = source.polars_column(*index, Role::Numeric)?;
-                        if selected.discovered.iter().any(|(candidate, dtype)| {
-                            *candidate == *index && dtype != column.dtype()
-                        }) {
-                            return Err(crate::DataError::new_err(
-                                "Polars discovery logical dtype changed during import",
-                            ));
-                        }
-                        Ok(column)
-                    })
-                    .collect::<PyResult<Vec<_>>>()?;
-            if discovery {
-                let frame = DataFrame::new(shape.0, columns.clone())
-                    .map_err(|error| crate::DataError::new_err(error.to_string()))?;
-                let expected = columns
-                    .iter()
-                    .map(|column| column.name().as_str())
-                    .collect::<Vec<_>>();
-                if pl::ColumnProjection::numeric_names(&frame) != expected {
-                    return Err(crate::DataError::new_err(
-                        "Polars discovery dtype changed during import",
-                    ));
-                }
-            }
-            return Ok(Y::PlSelected {
-                selected,
-                columns,
-                rows: shape.0,
-                names: names.clone(),
-            });
-        }
-        let columns = NdColumns::prepare(source, &selected.indices, Role::Numeric, roots, aliases)?;
-        return Ok(Y::NdSelected { selected, columns });
+        return selected_series(source, selected, discovery, roots, aliases);
     }
-    let mut direct = Direct::new(value, Role::Numeric, "y")?;
+    let mut direct = Direct::new(value, Role::Numeric, role)?;
     direct.bind_name(value.py(), roots, aliases)?;
     if polars {
         // Namespace metadata only; unrelated main-source values stay unbound.
@@ -933,8 +964,8 @@ fn prepare_y(
             polars_frame_rows: direct.polars_frame_rows,
         })
     } else {
-        if direct.pandas_name.is_none() && direct.rank == 1 && direct.names[0] != "y" {
-            aliases.push(("y".to_owned(), direct.names[0].clone()));
+        if direct.pandas_name.is_none() && direct.rank == 1 && direct.names[0] != role {
+            aliases.push((role.to_owned(), direct.names[0].clone()));
         }
         Ok(Y::NdDirect {
             values: direct.numeric()?,
@@ -942,6 +973,69 @@ fn prepare_y(
             identity: direct.pandas_name.as_ref().map(|_| direct.names[0].clone()),
             names: direct.names,
         })
+    }
+}
+
+fn selected_series(
+    source: &Source<'_>,
+    selected: Selected,
+    discovery: bool,
+    roots: &mut InputRoots,
+    aliases: &mut Vec<(String, String)>,
+) -> PyResult<Y> {
+    if let Source::Polars { names, shape, .. } = source {
+        let columns = selected
+            .indices
+            .iter()
+            .map(|index| {
+                let column = source.polars_column(*index, Role::Numeric)?;
+                if selected
+                    .discovered
+                    .iter()
+                    .any(|(candidate, dtype)| *candidate == *index && dtype != column.dtype())
+                {
+                    return Err(crate::DataError::new_err(
+                        "Polars discovery logical dtype changed during import",
+                    ));
+                }
+                Ok(column)
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        if discovery {
+            let frame = DataFrame::new(shape.0, columns.clone())
+                .map_err(|error| crate::DataError::new_err(error.to_string()))?;
+            let expected = columns
+                .iter()
+                .map(|column| column.name().as_str())
+                .collect::<Vec<_>>();
+            if pl::ColumnProjection::numeric_names(&frame) != expected {
+                return Err(crate::DataError::new_err(
+                    "Polars discovery dtype changed during import",
+                ));
+            }
+        }
+        return Ok(Y::PlSelected {
+            selected,
+            columns,
+            rows: shape.0,
+            names: names.clone(),
+        });
+    }
+    let columns = NdColumns::prepare(source, &selected.indices, Role::Numeric, roots, aliases)?;
+    Ok(Y::NdSelected { selected, columns })
+}
+
+pub(super) fn fresh_series(
+    roots: &mut InputRoots,
+    value: &Bound<'_, PyAny>,
+    polars: bool,
+    aliases: &mut Vec<(String, String)>,
+    role: &'static str,
+) -> PyResult<Y> {
+    if let Some((source, selected)) = fresh(roots, value)? {
+        selected_series(&source, selected, false, roots, aliases)
+    } else {
+        prepare_series(None, value, false, polars, roots, aliases, role)
     }
 }
 
@@ -1008,7 +1102,10 @@ fn prepare_x(
     }
 }
 
-fn defaults<K: kind::Marker>(config: Config<K>, aliases: Vec<(String, String)>) -> Config<K> {
+pub(super) fn defaults<K: kind::Marker>(
+    config: Config<K>,
+    aliases: Vec<(String, String)>,
+) -> Config<K> {
     if aliases.is_empty() {
         return config;
     }
@@ -1024,7 +1121,7 @@ fn defaults<K: kind::Marker>(config: Config<K>, aliases: Vec<(String, String)>) 
     config.labels(labels)
 }
 
-fn flat_native(value: &Bound<'_, PyAny>) -> PyResult<bool> {
+pub(super) fn flat_native(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     if !super::native_sequence(value) {
         return Ok(false);
     }
@@ -1157,7 +1254,7 @@ fn core_category(
     CategoryValues::nullable(&direct.names[0], values).map_err(crate::native_error)
 }
 
-fn fresh<'py>(
+pub(super) fn fresh<'py>(
     roots: &InputRoots,
     value: &Bound<'py, PyAny>,
 ) -> PyResult<Option<(Source<'py>, Selected)>> {
@@ -1182,11 +1279,11 @@ fn fresh<'py>(
         )
 }
 
-pub(crate) fn hue(
-    config: &ScatterConfig,
+pub(crate) fn hue<K: kind::Hue>(
+    config: &Config<K>,
     roots: &InputRoots,
     value: &Bound<'_, PyAny>,
-) -> PyResult<Prepared<kind::Scatter>> {
+) -> PyResult<Prepared<K>> {
     let mut roots = roots.stage(value.py())?;
     let selected = fresh(&roots, value)?;
     let mut aliases = Vec::new();
@@ -1209,7 +1306,7 @@ pub(crate) fn hue(
                 &mut aliases,
             )?;
             columns.with_projection(|projection| {
-                let adapter = nd::Scatter::from_parts_with_data(
+                let adapter = nd::PlotAdapter::from_parts_with_data(
                     config.native.clone(),
                     metadata.clone(),
                     projection,
@@ -1231,7 +1328,7 @@ pub(crate) fn hue(
                 ));
             }
             let column = source.polars_column(selected.indices[0], Role::Category)?;
-            let adapter = pl::Scatter::from_parts(config.native.clone(), metadata.clone())
+            let adapter = pl::PlotAdapter::from_parts(config.native.clone(), metadata.clone())
                 .hue(&column)
                 .map_err(super::pl_error)?;
             let (native, metadata) = adapter.into_parts();
@@ -1249,7 +1346,7 @@ pub(crate) fn hue(
             let mut direct = Direct::new(value, Role::Category, "hue")?;
             direct.bind_name(value.py(), &mut roots, &mut aliases)?;
             let columns = direct.columns();
-            let adapter = pl::Scatter::from_parts(config.native.clone(), metadata.clone())
+            let adapter = pl::PlotAdapter::from_parts(config.native.clone(), metadata.clone())
                 .hue(&columns[0])
                 .map_err(super::pl_error)?;
             let (native, metadata) = adapter.into_parts();
@@ -1265,11 +1362,11 @@ pub(crate) fn hue(
     })
 }
 
-fn nd_direct_category(
-    native: Plot<kind::Scatter>,
-    metadata: nd::BindingMetadata<kind::Scatter>,
+fn nd_direct_category<K: kind::Hue>(
+    native: Plot<K>,
+    metadata: nd::BindingMetadata<K>,
     direct: &Direct,
-) -> PyResult<ScatterConfig> {
+) -> PyResult<Config<K>> {
     let values = direct.category()?;
     let values = Array2::from_shape_vec((values.len(), 1), values)
         .map_err(|error| crate::DataError::new_err(error.to_string()))?;
@@ -1282,7 +1379,7 @@ fn nd_direct_category(
         .map_err(super::nd_error)?
         .with_identities(&identities)
         .map_err(super::nd_error)?;
-    let adapter = nd::Scatter::from_parts_with_data(native, metadata, projection)
+    let adapter = nd::PlotAdapter::from_parts_with_data(native, metadata, projection)
         .map_err(super::nd_error)?
         .hue(0usize)
         .map_err(super::nd_error)?;
@@ -1313,11 +1410,28 @@ fn id_values(data: &Scratch) -> PyResult<Array2<u64>> {
         .map_err(|error| crate::DataError::new_err(error.to_string()))
 }
 
-pub(crate) fn source_rows(
-    config: &ScatterConfig,
+pub(crate) fn source_rows<K: kind::SourceRows>(
+    config: &Config<K>,
     roots: &InputRoots,
     value: &Bound<'_, PyAny>,
-) -> PyResult<Prepared<kind::Scatter>> {
+) -> PyResult<Prepared<K>> {
+    rows(config, roots, value, false)
+}
+
+pub(crate) fn source_rows_cells<K: kind::SourceRows>(
+    config: &Config<K>,
+    roots: &InputRoots,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<Prepared<K>> {
+    rows(config, roots, value, true)
+}
+
+fn rows<K: kind::SourceRows>(
+    config: &Config<K>,
+    roots: &InputRoots,
+    value: &Bound<'_, PyAny>,
+    cells: bool,
+) -> PyResult<Prepared<K>> {
     let mut roots = roots.stage(value.py())?;
     let selected = fresh(&roots, value)?;
     let mut aliases = Vec::new();
@@ -1331,13 +1445,17 @@ pub(crate) fn source_rows(
                 &mut aliases,
             )?;
             columns.with_projection(|projection| {
-                let adapter = nd::Scatter::from_parts_with_data(
+                let adapter = nd::PlotAdapter::from_parts_with_data(
                     config.native.clone(),
                     metadata.clone(),
                     projection,
                 )
                 .map_err(super::nd_error)?;
-                let adapter = if selected.collection {
+                let adapter = if cells && selected.collection {
+                    adapter.source_rows_cells(selected.indices.as_slice())
+                } else if cells {
+                    adapter.source_rows_cells(selected.indices[0])
+                } else if selected.collection {
                     adapter.source_rows(selected.indices.as_slice())
                 } else {
                     adapter.source_rows(selected.indices[0])
@@ -1359,14 +1477,24 @@ pub(crate) fn source_rows(
                 .iter()
                 .map(|index| source.polars_column(*index, Role::Ids))
                 .collect::<PyResult<Vec<_>>>()?;
-            let adapter = pl::Scatter::from_parts(config.native.clone(), metadata.clone());
+            let adapter = pl::PlotAdapter::from_parts(config.native.clone(), metadata.clone());
             let adapter = if selected.collection {
                 let names = names.iter().map(String::as_str).collect::<Vec<_>>();
                 let projection = pl::ColumnProjection::new(shape.0, &names, &columns)
                     .map_err(super::pl_error)?;
-                adapter.source_rows(&projection).map_err(super::pl_error)?
+                if cells {
+                    adapter.source_rows_cells(&projection)
+                } else {
+                    adapter.source_rows(&projection)
+                }
+                .map_err(super::pl_error)?
             } else {
-                adapter.source_rows(&columns[0]).map_err(super::pl_error)?
+                if cells {
+                    adapter.source_rows_cells(&columns[0])
+                } else {
+                    adapter.source_rows(&columns[0])
+                }
+                .map_err(super::pl_error)?
             };
             let (native, metadata) = adapter.into_parts();
             Config {
@@ -1374,7 +1502,11 @@ pub(crate) fn source_rows(
                 origin: Origin::Polars(metadata),
             }
         }
-        (_, None) => attach_ids(config, &Direct::new(value, Role::Ids, "source rows")?)?,
+        (_, None) => attach_ids(
+            config,
+            &Direct::new(value, Role::Ids, "source rows")?,
+            cells,
+        )?,
         (Origin::Core, Some(_)) => {
             return Err(PyTypeError::new_err(
                 "this core-origin plot has no lookup source",
@@ -1387,15 +1519,25 @@ pub(crate) fn source_rows(
     })
 }
 
-fn attach_ids(config: &ScatterConfig, direct: &Direct) -> PyResult<ScatterConfig> {
+fn attach_ids<K: kind::SourceRows>(
+    config: &Config<K>,
+    direct: &Direct,
+    cells: bool,
+) -> PyResult<Config<K>> {
     if let Origin::Polars(metadata) = &config.origin {
         let columns = direct.columns();
-        let adapter = pl::Scatter::from_parts(config.native.clone(), metadata.clone());
-        let adapter = if direct.rank == 1 {
+        let adapter = pl::PlotAdapter::from_parts(config.native.clone(), metadata.clone());
+        let adapter = if cells && direct.rank == 1 {
+            adapter.source_rows_cells(&columns[0])
+        } else if direct.rank == 1 {
             adapter.source_rows(&columns[0])
         } else {
             let columns = columns.iter().collect::<Vec<_>>();
-            adapter.source_rows(columns.as_slice())
+            if cells {
+                adapter.source_rows_cells(columns.as_slice())
+            } else {
+                adapter.source_rows(columns.as_slice())
+            }
         }
         .map_err(super::pl_error)?;
         let (native, metadata) = adapter.into_parts();
@@ -1432,14 +1574,19 @@ fn attach_ids(config: &ScatterConfig, direct: &Direct) -> PyResult<ScatterConfig
             Ok(config.clone().map_native(|native| native.source_rows(rows)))
         }
         Origin::Nd(metadata) => match &direct.data {
-            Data::Nd(values) => {
-                nd_direct_ids(config.native.clone(), metadata.clone(), values, direct.rank)
-            }
+            Data::Nd(values) => nd_direct_ids(
+                config.native.clone(),
+                metadata.clone(),
+                values,
+                direct.rank,
+                cells,
+            ),
             Data::NdColumns(columns) => nd_column_ids(
                 config.native.clone(),
                 metadata.clone(),
                 columns,
                 direct.rank,
+                cells,
             ),
             Data::Polars(columns) => {
                 let values = columns
@@ -1451,6 +1598,7 @@ fn attach_ids(config: &ScatterConfig, direct: &Direct) -> PyResult<ScatterConfig
                     metadata.clone(),
                     &values,
                     direct.rank,
+                    cells,
                 )
             }
         },
@@ -1458,16 +1606,21 @@ fn attach_ids(config: &ScatterConfig, direct: &Direct) -> PyResult<ScatterConfig
     }
 }
 
-fn nd_direct_ids(
-    native: Plot<kind::Scatter>,
-    metadata: nd::BindingMetadata<kind::Scatter>,
+fn nd_direct_ids<K: kind::SourceRows>(
+    native: Plot<K>,
+    metadata: nd::BindingMetadata<K>,
     values: &Scratch,
     rank: usize,
-) -> PyResult<ScatterConfig> {
+    cells: bool,
+) -> PyResult<Config<K>> {
     macro_rules! bind {
         ($values:expr) => {{
-            let adapter = nd::Scatter::from_parts(native, metadata);
-            let adapter = if rank == 1 {
+            let adapter = nd::PlotAdapter::from_parts(native, metadata);
+            let adapter = if cells && rank == 1 {
+                adapter.source_rows_cells($values.column(0))
+            } else if cells {
+                adapter.source_rows_cells($values.view())
+            } else if rank == 1 {
                 adapter.source_rows($values.column(0))
             } else {
                 adapter.source_rows($values.view())
@@ -1500,17 +1653,18 @@ fn nd_direct_ids(
     }
 }
 
-fn nd_column_ids(
-    native: Plot<kind::Scatter>,
-    metadata: nd::BindingMetadata<kind::Scatter>,
+fn nd_column_ids<K: kind::SourceRows>(
+    native: Plot<K>,
+    metadata: nd::BindingMetadata<K>,
     values: &[Scratch],
     rank: usize,
-) -> PyResult<ScatterConfig> {
+    cells: bool,
+) -> PyResult<Config<K>> {
     let Some(first) = values.first() else {
         return Err(crate::DataError::new_err("select at least one ID column"));
     };
     if rank == 1 {
-        return nd_direct_ids(native, metadata, first, rank);
+        return nd_direct_ids(native, metadata, first, rank, cells);
     }
     let views = values.iter().map(Scratch::view).collect::<Vec<_>>();
     let entries = views
@@ -1521,10 +1675,14 @@ fn nd_column_ids(
     let projection = nd::ColumnProjection::new((first.shape().0, values.len()), &entries)
         .map_err(super::nd_error)?;
     let indices = (0..values.len()).collect::<Vec<_>>();
-    let adapter = nd::Scatter::from_parts_with_data(native, metadata, projection)
-        .map_err(super::nd_error)?
-        .source_rows(indices.as_slice())
+    let adapter = nd::PlotAdapter::from_parts_with_data(native, metadata, projection)
         .map_err(super::nd_error)?;
+    let adapter = if cells {
+        adapter.source_rows_cells(indices.as_slice())
+    } else {
+        adapter.source_rows(indices.as_slice())
+    }
+    .map_err(super::nd_error)?;
     let (native, metadata) = adapter.into_parts();
     Ok(Config {
         native,

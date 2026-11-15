@@ -58,3 +58,25 @@ clear_slot!(
     [description.payload_mut().color_label],
     ContinuousColor
 );
+
+impl Plot<crate::kind::Raincloud> {
+    /// Remove local hue-title appearance; retain content/layout and inherit the guide role.
+    #[must_use]
+    pub fn clear_hue_label_style(mut self) -> Self {
+        self.description
+            .payload_mut()
+            .raincloud_hue_label
+            .edit_clear_style();
+        self
+    }
+
+    /// Remove the local hue-title layout request; retain content/style and inherit the guide role.
+    #[must_use]
+    pub fn clear_hue_label_layout(mut self) -> Self {
+        self.description
+            .payload_mut()
+            .raincloud_hue_label
+            .edit_clear_layout();
+        self
+    }
+}

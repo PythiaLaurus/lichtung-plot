@@ -2,12 +2,41 @@
 
 mod array;
 mod binding;
+mod channels;
+mod columns;
+mod facets;
+mod families;
+mod geometry;
 mod pandas;
 pub(crate) mod polars;
 mod selectors;
+mod wide;
 
-pub(crate) use binding::{hue, scatter, source_rows};
+pub(crate) use binding::{hue, scatter, source_rows, source_rows_cells};
+pub(crate) use channels::{
+    column_labels, estimate_status, estimate_status_boolean, estimate_status_categorical, group,
+    group_cells, group_columns, heatmap_highlight, heatmap_highlight_cells, hue_cells, hue_columns,
+    row_labels, series, series_cells, series_columns, x_labels, y_labels,
+};
+pub(crate) use columns::bootstrap_units;
+pub(crate) use facets::{
+    facet_column, facet_column_cells, facet_columns_column, facet_columns_row, facet_columns_wrap,
+    facet_grid, facet_grid_cells, facet_grid_column_cells, facet_grid_columns_column,
+    facet_grid_columns_column_cells, facet_grid_columns_row, facet_grid_columns_row_cells,
+    facet_grid_row_cells, facet_row, facet_row_cells, facet_scales, facet_wrap, facet_wrap_cells,
+};
+pub(crate) use families::{
+    bar, beeswarm, coefficient, density, dumbbell, forest, horizontal_bar, interaction, line_path,
+    marginal, point_interval, qq, regression, stacked_bar, stacked_horizontal_bar, trajectory,
+    waterfall, BarArgs, BeeswarmArgs, BoxplotArgs, CoefficientArgs, DensityArgs, DumbbellArgs,
+    ForestArgs, HeatmapArgs, HistogramArgs, HorizontalBarArgs, InteractionArgs, LineArgs,
+    LinePathArgs, MarginalArgs, MatrixArgs, PointIntervalArgs, QqArgs, RaincloudArgs,
+    RegressionArgs, StackedBarArgs, StackedHorizontalBarArgs, TrajectoryArgs, ViolinArgs,
+    WaterfallArgs,
+};
+pub(crate) use geometry::{composite_precomputed_kde, histogram, raincloud};
 pub(crate) use selectors::register;
+pub(crate) use wide::{boxplot, heatmap, line, line_band, matrix, violin};
 
 use lichtung_plot::{kind, Labels, Plot};
 use lichtung_plot::{AxisTick, CategoryValues, NumericValues};

@@ -182,6 +182,12 @@ pub struct StandardDeviation {
 }
 
 impl StandardDeviation {
+    /// Read the configured standard-deviation multiplier.
+    #[must_use]
+    pub const fn get_scale(&self) -> f64 {
+        self.scale
+    }
+
     /// Set the positive finite standard-deviation multiplier.
     pub fn scale(mut self, scale: f64) -> Result<Self, Error> {
         validate_positive_finite(scale, "standard-deviation scale")?;
@@ -203,6 +209,12 @@ pub struct PercentileInterval {
 }
 
 impl PercentileInterval {
+    /// Read the configured central coverage fraction.
+    #[must_use]
+    pub const fn get_level(&self) -> f64 {
+        self.level
+    }
+
     /// Set coverage as a fraction strictly between zero and one.
     pub fn level(mut self, level: f64) -> Result<Self, Error> {
         validate_level(level)?;
@@ -224,6 +236,12 @@ pub struct StandardError {
 }
 
 impl StandardError {
+    /// Read the configured standard-error multiplier.
+    #[must_use]
+    pub const fn get_scale(&self) -> f64 {
+        self.scale
+    }
+
     /// Set the positive finite standard-error multiplier.
     pub fn scale(mut self, scale: f64) -> Result<Self, Error> {
         validate_positive_finite(scale, "standard-error scale")?;
@@ -253,6 +271,21 @@ pub struct ConfidenceInterval {
 }
 
 impl ConfidenceInterval {
+    /// Read the configured two-sided coverage fraction.
+    #[must_use]
+    pub const fn get_level(&self) -> f64 {
+        self.level
+    }
+
+    /// Borrow the current bootstrap, or return `None` for a Student-t interval.
+    #[must_use]
+    pub const fn get_bootstrap(&self) -> Option<&Bootstrap> {
+        match &self.algorithm {
+            ConfidenceIntervalAlgorithm::Bootstrap(bootstrap) => Some(bootstrap),
+            ConfidenceIntervalAlgorithm::StudentT => None,
+        }
+    }
+
     /// Set coverage as a fraction strictly between zero and one.
     pub fn level(mut self, level: f64) -> Result<Self, Error> {
         validate_level(level)?;
@@ -313,6 +346,18 @@ impl Bootstrap {
             seed: 0,
             units: None,
         }
+    }
+
+    /// Read the configured number of resamples.
+    #[must_use]
+    pub const fn get_resamples(&self) -> usize {
+        self.resamples
+    }
+
+    /// Read the configured deterministic root seed.
+    #[must_use]
+    pub const fn get_seed(&self) -> u64 {
+        self.seed
     }
 
     /// Set the positive resample count, up to one million.

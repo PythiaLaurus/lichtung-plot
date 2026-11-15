@@ -1,8 +1,9 @@
 # Lichtung Plot for Python
 
-This package provides Scatter from native Python, NumPy, pandas and eager Polars
-inputs, with the reusable Plot/Canvas/Output lifecycle. Other plot families and
-the remaining configuration surface are still being implemented.
+This package provides all 25 plot families from native Python, NumPy, pandas and
+eager Polars inputs, with exact-family configuration and the reusable
+Plot/Canvas/Output lifecycle. Alpha bindings, independent point layers and
+significance results are still being implemented.
 
 ```python
 from lichtung_plot import Canvas, Text, Theme, scatter
@@ -61,6 +62,13 @@ public Arrow C stream without PyArrow. The sampled NumPy/pandas compatibility
 matrix and remaining distribution scope are recorded in the shared plan.
 `examples/four_inputs.py` demonstrates all four routes.
 
+All constructor forms, including supplied estimates, flat Histogram/Raincloud
+geometry, wide/grid inputs and explicit discovery, follow
+`specs/92_PYTHON_CONSTRUCTORS_PLAN.md`. Applicable families expose data-channel and
+facet edits without refreshing earlier snapshots. Display labels do not change
+scientific keys. Matrix and generic faceted plots require standalone publication;
+they cannot be nested inside Canvas.
+
 Configuration methods mutate and return the same owner. Use `.copy()` for an
 independent configuration. Canvas captures the Plot's native configuration at
 insertion, without keeping the external Python Plot alive. `panel` takes
@@ -83,9 +91,9 @@ information, not by the full planned inventory.
 Theme exposes all eight native components and their nested paint, geometry,
 spacing, typography and palette values. TextLayout exposes all thirteen authored
 instructions. These appearance, text and PNG values comprise 84 immutable classes;
-Labels and numeric policies are separate. Complete owning numeric policies and
-locators are available; additional family-specific policies and formatter
-attachments are still being implemented.
+Labels and numeric policies are separate. Complete owning numeric policies,
+locators, five statistical policies, six family appearance policies and two
+opaque text-position values are available.
 
 | Value | Read-only fields |
 | --- | --- |
@@ -129,10 +137,14 @@ pairs, not a mapping.
 Aliases address native raw identities, not pandas lookup keys; use explicit axis
 labels when authoring a display title for a pandas-bound variable.
 
-Scatter accepts `NumericFormat.value_function(...)`, `NumericFormat.set_function(...)`
-and `TickGeneration.function(...)` through its x/y tick methods. Their context
-objects and nested views are valid only during that callback. New terminal
-operations may invoke the callable again; frozen Output publication does not.
+Applicable families accept `NumericFormat.value_function(...)` and
+`NumericFormat.set_function(...)` through x/y tick formats, continuous-color labels,
+Heatmap values, Coefficient estimate labels and Waterfall totals.
+`TickGeneration.function(...)` supplies x/y tick generation. These are eight
+independent attachment slots; Heatmap `annotations("hidden")` retires only values,
+not color labels. Callback contexts and nested views are valid only during that
+callback. New terminal operations may invoke it again; frozen Output publication
+does not.
 
 `NumericFormat` accepts the native notation/precision, rounding, scaling, locale,
 grouping, sign, field, prefix, unit and explanation policies, including
@@ -153,6 +165,15 @@ multiplicative lattices, target/maximum counts and exact counts with singleton
 selection. Native domain/scale validation still applies, and exact authored ticks
 take precedence. `examples/complete_numeric.py` demonstrates native display
 policies without changing the bound observations.
+
+Family configuration includes native category order, scales, bins, guides, statuses,
+color policies and complete Text attachments. Canvas also supports headers,
+single-cell text panels, panel-title alignment and native range groups.
+`examples/scientific_composition.py` combines wide Line data, supplied Bar intervals,
+explicitly unavailable Forest estimates and annotated/highlighted Heatmap cells.
+Its synthetic values and supplied bounds are illustrative, not inferential results.
+The complete remaining interface and verification gates are tracked in
+`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
 
 ## Local development
 

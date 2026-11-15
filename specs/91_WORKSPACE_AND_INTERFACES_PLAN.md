@@ -34,15 +34,16 @@ installed verification, not complete interface delivery.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
-the remaining exact-family owner methods, policy values, callback slots and
-consumer-required native gaps, not their delivery. The
+the complete scientific interface contract and its remaining alpha/layer/result
+work. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
-delivered. Scatter's four input routes and their input typing are implemented;
-complete Theme/Text values are implemented too. Full-family stubs, the remaining
-scientific/configuration methods and final cost/content closure still need
-implementation and verification.
+delivered. All 25 Python constructors, their alternatives and exact-family typing,
+base data/facet/configuration methods, complete Theme/Text and numeric policies,
+13 scientific/appearance/position values and eight callback slots are implemented.
+Alpha scopes/mappers, independent layers/results and final distribution/content/
+cost closure still need implementation and verification.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -59,10 +60,10 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and independent archives passed; Python Scatter now preserves the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native naming/shape/order checks, external consumers and installed Scatter input checks passed. |
-| Python lifecycle decision and complete binding | Four-route Scatter/lifecycle/Labels and accurate subset typing are installed-verified below. The other 24 families, full scientific/configuration surface, all callback slots and final cost/content checks remain open; this is not complete binding delivery. |
-| Python input boundaries | Implemented for Scatter: strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits. Sampled runtime/typing checks and expanded-closure independent sdist build/install/runtime verification passed. |
-| Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Focused installed runtime, strict typing, recursive stubtest and an external example passed within the scope below. Family-specific appearance policies remain open; owning numeric values have their separate closure below. |
-| Python owning numeric values | Implemented: twelve additional native-only policy values, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, with shared TextIntent results and existing x/y consumers. Focused installed checks passed below; four additional formatter attachments and full-family forwarding remain open. |
+| Python lifecycle decision and complete binding | All 25 constructors, exact-family base configuration, complete Canvas configuration and eight callback slots have bounded installed verification below. Alpha, layers/results and final distribution/content/cost checks remain open; this is not complete binding delivery. |
+| Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix/independent-sdist evidence; current all-family constructors, geometry and edits have separate focused wheel evidence below, not a repeated transport matrix or current sdist certification. |
+| Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
+| Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
@@ -70,11 +71,12 @@ The three input-boundary choices below are settled, not outstanding product deci
 `bindings/python/` is the sole binding package. The following implemented subset
 has the bounded installed verification described below:
 
-- Scatter accepts native lists/tuples, NumPy ndarray/MaskedArray, pandas and eager
-  Polars inputs. Selectors, exact pandas keys, direct Series names, many-y,
-  by_row_position/numeric_only, source_rows and optional constructor/setter hue use
-  owned binding-time snapshots. Retained main sources supply fresh role lookup
-  without refreshing previously bound coordinates.
+- All 25 exact families accept their selected native/NumPy/pandas/eager-Polars
+  forms. Constructors include supplied estimates, wide/grid and discovery modes,
+  and complete flat Histogram/Raincloud geometry. Shared selectors, exact pandas
+  keys, direct Series names and validity use owned binding-time snapshots.
+  Retained main sources supply fresh role lookup without refreshing old bindings;
+  auxiliary geometry contexts remain independent and call-local.
   Mutable Plot/Canvas owners support aliases, independent copies, insertion-time
   captures, keyword-only spans/overwrite and failure-safe configuration edits.
 - All five native terminal exports and frozen Output reuse use the same core path.
@@ -97,8 +99,15 @@ has the bounded installed verification described below:
   TickGeneration includes interval, multiplicative and log-decade factories,
   singleton/cap derivation and existing native parameter readers. Old
   fractional_digits/field_width shorthand is removed and callers migrated, not
-  retained as a second API. Only the four existing x/y owner slots are connected;
-  the other four formatter attachments still need their actual family consumers.
+  retained as a second API. All eight physical slots are connected: x/y formats,
+  continuous color, Heatmap values, Coefficient estimate labels, Waterfall totals
+  and x/y tick generation. Hidden Heatmap values retire only their own roots.
+- Base data edits, all 18 facet entries, native pure configuration, guides,
+  annotations and complete Canvas configuration forward through exact
+  capabilities. Thirteen additional frozen values hold five statistical policies,
+  six appearance policies and two opaque text-position values. Eight pure native
+  readers and exact Raincloud hue-title methods are delivered with these consumers.
+  Matrix and generic facets keep the native standalone-publication restriction.
 - The mixed package uses PyO3 =0.29.2 with abi3-py310, rust-numpy =0.29.0 and the
   existing ndarray/Polars adapters. The core remains the independent default
   workspace member. Eager Python Polars/runtime-32 =1.41.2 exports public Arrow
@@ -106,7 +115,7 @@ has the bounded installed verification described below:
   One actual native stub, `bindings/python/python/lichtung_plot/_native.pyi`, public
   owner annotations and `bindings/python/python/lichtung_plot/py.typed` describe
   the implemented surface, including nominal four-route input roles and
-  constructor-mode overloads, not all 25 families.
+  constructor-mode overloads and exact capability-gated methods for all 25 families.
 
 Source owners are `bindings/python/src/input.rs`, `bindings/python/src/owner/`,
 `bindings/python/src/output.rs`, `bindings/python/src/values/` and
@@ -194,8 +203,46 @@ allowlist. No full Rust suite or input runtime matrix was repeated.
 The numeric example ran outside the checkout and its actual PNG was inspected;
 dependency checks preserved the original provider pins. Initial Clippy warnings
 and the separate prelaunch selection-count assertion remain recorded, not
-reclassified as successful invocations. Final eight-slot, full-family,
-distribution/content/cost and budget closure remain open.
+reclassified as successful invocations. That evidence predates the family/eight-slot
+closure below; it does not certify later distribution/content/cost or budget work.
+
+For the exact-family closure, strict locked/offline workspace all-target Clippy
+passed. Four new private Raincloud title/cache/census/error cases, one new public
+case containing two publications and one affected existing shared-guide case
+passed. No full Rust suite was repeated. The release cp310-abi3 family wheel3
+selected 36 runtime cases on each of CPython 3.10.19 (NumPy 1.26.4/pandas 2.3.3)
+and 3.13.11 (NumPy 2.2.6/pandas 3.1.1), both with Polars/runtime-32 1.41.2:
+each had 34 passes and two failures. The two new fixtures incorrectly required
+unabridged default Heatmap labels and combined Interaction styles with hidden
+connectors; native rendering and error classification were not changed.
+
+After those fixture repairs, a new family wheel4 passed exactly the two affected
+cases on both interpreters. The earlier 34 passes remain wheel3 evidence, not a
+wheel4 full-36 rerun. The only intervening Rust production edit changed a scalar
+macro's default-token capture, fixing three constructor signature defaults;
+the Python production edit represented six equivalent Literal aliases as unions.
+Core, adapters, owner, input and callback Rust sources were byte-identical.
+Strict Clippy and release build passed again; the unchanged six native cases
+were not repeated. Both installed prefixes matched wheel4/native identities:
+SHA-256 `70eff2a55c9c6d066f2fc96bbbe9b182929d1f8b7e9819d4dc513f04935cd6b3`
+and `42a77df443a7a48ffad4177c39a920e65df5282fba9f59c4d194ea73ac1f57c2`.
+
+Installed strict mypy passed eight explicit roots (three shipped modules and five
+fixtures) with all 152 negative guards, targeting the 3.10 provider/language.
+Recursive single-root stubtest passed all three shipped modules without an
+allowlist. Actual default signatures and values passed on both interpreters.
+Dependency checks passed and explicit before/after comparisons preserved all 17
+third-party pins in each prefix. The four-panel scientific example ran outside
+the checkout; its actual PNG was inspected for complete titles, axes/units,
+unavailable status, Heatmap values/highlights and the synthetic-data caveat.
+The initial compiler/lint, typing, metadata and fixture failures remain recorded.
+
+These are focused family/owner checks, not a new all-container matrix. The third
+3.10/NumPy-2 prefix remains on the earlier input wheel. There is no independently
+unpacked/built/installed family sdist evidence yet; earlier input archives and the
+numeric archive inventory do not certify this source closure. Alpha scopes and
+foreign-loan-safe mappers, independent layers/results, final distribution/content/
+cost and budget certification remain open.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -205,12 +252,10 @@ task after the complete planned interface is implemented, rather than blocking
 the remaining implementation stages. Overall plan acceptance is not complete;
 the complete Python binding is not delivered.
 
-The other 24 constructor families, full scientific/policy methods and flat
-geometry, family-specific appearance/statistical values, completion of the eight
-callback slots, alpha/status/layers/results, full-surface typing and final cost
-observations remain planned.
-They are not permanently reduced to Scatter. The 2026-11-06 prototypes below are
-not runs of this package.
+Alpha scopes/mappers and independent layers/results still need implementation,
+their exact typing and real consumers, followed by final distribution/content/cost
+observations. Constructor closure is not complete-interface closure.
+The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints
 
@@ -224,7 +269,7 @@ not runs of this package.
 | Python input | Exactly four data-source families: Python native data, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series. Convert internally to core values; do not expose NumericValues/CategoryValues/AxisValues, Bounds, closed source inputs or geometry payload classes as another public data-input route. |
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
 | Python overloads | One runtime callable per family checks explicit scientific keyword combinations and selects native paths. Shipped typing.overload signatures describe distinct legal call forms for editors/type checkers; they do not perform runtime dispatch or validation. |
-| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. The inventory covers all 25 families, including selected explicit modes, discovery and named geometry; exact stubs remain to be completed. |
+| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. All 25 constructor/base-owner declarations, including explicit modes, discovery and named geometry, are delivered; exact alpha/layer/result declarations remain to be completed. |
 | Python explicit modes and discovery | by_row_position=True on Scatter/Line generates zero-based row x and excludes explicit x; by_column_name=True on Boxplot/Violin/sample Raincloud makes each column a category and excludes explicit category. numeric_only=True explicitly discovers supported numeric columns in source order for those modes and Matrix, including numeric IDs; it excludes manual y/value/variables. No omission/schema/value-based inference. |
 | Supplied distribution geometry | Flat named Histogram bins/KDE/rug and Raincloud summary/density/point columns, not nested payloads, geometry maps/TypedDict protocols or required wrappers. Keep native sample/geometry exclusivity and complete-geometry restrictions. Bind independent component sources and preserve raw-key membership/original point rows; labels are display text, not scientific keys. |
 | Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or signed-step positional slice. Slices address logical column positions on NumPy, pandas and eager Polars tables; explicit out-of-bounds endpoints fail rather than clip. NumPy positional keys support negative indices, while pandas integer keys remain literal labels. Bare list/tuple inputs remain direct data; retain native projections, without parallel selector aliases or schema guessing. |
@@ -664,9 +709,9 @@ inconsistency in imported bound dtypes must fail visibly rather than silently
 disappear through filtering. Explicit selections bypass discovery entirely.
 Test explicit [a,b] versus discovered [b,a], unused Decimal/Struct Variable* name
 avoidance, namespace union, empty selected names, zero rows and one-column
-collections. Scatter's real bound-only Arrow importer has the bounded installed
-evidence recorded above; other family bindings remain planned. These Rust
-descriptor APIs and checks alone are not FFI evidence.
+collections. The shared bound-only Arrow importer has the earlier Scatter
+transport evidence and subsequent focused all-family binding evidence recorded
+above. These Rust descriptor APIs and checks alone are not FFI evidence.
 
 ##### Direct-Local Namespace Transport
 
@@ -1042,8 +1087,9 @@ containers; actual dtype/shape/validity validation remains at runtime.
 
 The selected Python syntax uses shared, project-owned `col` and `cols` subscription
 entry objects, not separate plotting namespaces or a source/container wrapper.
-They are implemented for Scatter with the bounded installed evidence above;
-other family wiring remains planned. These are not Seaborn/Plotly functions.
+They are wired to applicable families, with the earlier Scatter transport evidence
+and separate focused family-wheel evidence above, not a family/container matrix.
+These are not Seaborn/Plotly functions.
 Keep ordinary direct inputs and the container's own indexing available;
 do not add parallel `x_cols`/`y_cols` keywords or a `columns(...)` call-form alias.
 
@@ -1312,7 +1358,7 @@ renderers or scientific semantics:
 | Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Supplied geometry uses explicit named columns from the constructor plan, not a geometry map or nested input tree. |
 | NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter; recognize MaskedArray first and carry its mask into native validity. Release foreign borrows after binding owned values. |
 | pandas DataFrame/Series | Resolve exact unique original column keys, preserve identity separately from display, and extract only bound columns by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
-| Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. Scatter's concrete bridge has the bounded installed verification above; other family consumers remain to be wired and verified. |
+| Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The shared bridge has the earlier Scatter transport evidence and separate focused family-wheel evidence above; applicable family consumers are wired, without claiming a family/container verification matrix. |
 
 Preserve the [adapter value contracts](09_DATA_ADAPTERS.md): ordinary numeric f64
 rounding, null distinct from present NaN, exact integer IDs, actual string category

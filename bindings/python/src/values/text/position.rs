@@ -13,8 +13,8 @@ use super::{core, is_omitted, native_error, omitted};
     skip_from_py_object
 )]
 #[derive(Clone, PartialEq, Eq)]
-pub(super) struct PyDataCoordinate {
-    pub(super) native: core::DataCoordinate,
+pub(in crate::values) struct PyDataCoordinate {
+    pub(in crate::values) native: core::DataCoordinate,
 }
 
 #[pymethods]

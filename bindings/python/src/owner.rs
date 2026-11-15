@@ -10,21 +10,51 @@ use pyo3::PyVisit;
 
 use crate::callbacks::{clone_roots, CallbackRoots};
 
+// The single exact-family inventory drives compile-time dispatch. Scientific
+// owners never cross an erased Plot<Any> boundary.
+macro_rules! all_families {
+    ($consumer:ident, $($args:tt)*) => {
+        $consumer! {
+            [Scatter, Histogram, Density, Qq, PointInterval, Line, Trajectory,
+             LinePath, Interaction, Coefficient, Forest, Dumbbell, Heatmap, Bar,
+             HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin,
+             Raincloud, Regression, Marginal, Matrix, Beeswarm, Waterfall]
+            $($args)*
+        }
+    };
+}
+
+macro_rules! declare_families {
+    ([$($kind:ident),+]) => {
+        /// Family erasure is private; each variant preserves its exact native
+        /// capability type and matching binding origin in the same Config.
+        #[derive(Clone)]
+        pub(crate) enum NativePlot {
+            $($kind(crate::input::Config<kind::$kind>)),+
+        }
+    };
+}
+
+all_families!(declare_families,);
+
+#[macro_use]
+mod dispatch;
+#[macro_use]
+mod methods;
 mod canvas;
 mod plot;
+mod policy;
 
 pub(crate) use plot::PyPlotOwner;
-
-/// Family erasure is private; each variant preserves the native capability type.
-#[derive(Clone)]
-pub(crate) enum NativePlot {
-    Scatter(crate::input::Config<kind::Scatter>),
-}
 
 #[derive(Clone, Copy)]
 enum CallbackSlot {
     XFormat,
     YFormat,
+    ColorFormat,
+    HeatmapValues,
+    EstimateLabels,
+    TotalFormat,
     XTick,
     YTick,
 }
@@ -34,15 +64,19 @@ impl CallbackSlot {
         match self {
             Self::XFormat => 0,
             Self::YFormat => 1,
-            Self::XTick => 2,
-            Self::YTick => 3,
+            Self::ColorFormat => 2,
+            Self::HeatmapValues => 3,
+            Self::EstimateLabels => 4,
+            Self::TotalFormat => 5,
+            Self::XTick => 6,
+            Self::YTick => 7,
         }
     }
 }
 
 #[derive(Default)]
 struct PlotRoots {
-    slots: [CallbackRoots; 4],
+    slots: [CallbackRoots; 8],
 }
 
 impl PlotRoots {

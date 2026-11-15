@@ -216,7 +216,8 @@ mod position;
 use fit::PyTextFit;
 use layout::{PyTextAnchor, PyTextEllipsis, PyTextOverflow, PyTextVisibility};
 use orientation::{PyTextOrientation, PyTextRotation};
-use position::{PyDataCoordinate, PyDataPosition};
+pub(super) use position::PyDataCoordinate;
+use position::PyDataPosition;
 
 fn optional_choice<T>(
     value: &Bound<'_, PyAny>,

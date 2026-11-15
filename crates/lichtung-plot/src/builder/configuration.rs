@@ -823,6 +823,23 @@ impl Plot<crate::kind::Histogram> {
     }
 }
 
+impl Plot<crate::kind::Raincloud> {
+    /// Set the discrete hue-guide title for supplied Raincloud geometry.
+    ///
+    /// Content is verbatim; plain strings retain earlier Text instructions.
+    /// Empty text remains present. Samples, geometry without hue, and hidden
+    /// legends retain but do not consume this title.
+    #[must_use]
+    pub fn hue_label(mut self, label: impl Into<crate::Text>) -> Self {
+        self.description
+            .payload_mut()
+            .raincloud_hue_label
+            .replace_from(label.into())
+            .expect("public Text always has a source");
+        self
+    }
+}
+
 impl Plot<crate::kind::Qq> {
     /// Set the normal Q-Q reference-line policy.
     #[must_use]

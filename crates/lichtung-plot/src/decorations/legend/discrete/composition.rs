@@ -23,7 +23,17 @@ struct Section {
 }
 
 impl GuideSectionIdentity {
-    fn title(&self, labels: &crate::Labels) -> Result<Arc<crate::Text>> {
+    fn title(&self, plot: &PlotDescription, labels: &crate::Labels) -> Result<Arc<crate::Text>> {
+        if let Some((_, title)) = plot.authored_raincloud_hue_title().filter(|(raw_hue, _)| {
+            matches!(
+                self,
+                Self::Combined(PrimaryTitleIdentity::Field(field)) | Self::HueColor(field)
+                    if field.as_str() == *raw_hue
+            )
+        }) {
+            title.required_source("raincloud hue guide title")?;
+            return crate::data::source::source_arc(title.try_copy()?);
+        }
         let source = match self {
             Self::Combined(primary) => primary.resolved_text(labels),
             Self::GroupStyle(field) | Self::Joint(field) | Self::HueColor(field) => {
@@ -164,6 +174,7 @@ impl PreparedGuide {
             if let Some(primary) = &primary {
                 insert_source(
                     &mut sections,
+                    plot,
                     labels,
                     primary.clone(),
                     source.identity,
@@ -174,6 +185,7 @@ impl PreparedGuide {
             } else {
                 separate_source(
                     &mut sections,
+                    plot,
                     labels,
                     theme,
                     source.identity,
@@ -312,8 +324,13 @@ fn merge_combined(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "first section-title selection borrows the original plot alongside its effective labels and source occurrence"
+)]
 fn insert_source(
     sections: &mut Vec<Section>,
+    plot: &PlotDescription,
     labels: &crate::Labels,
     section: GuideSectionIdentity,
     identity: GuideEntryIdentity,
@@ -323,7 +340,7 @@ fn insert_source(
 ) -> Result<()> {
     let existing = sections.iter().find(|current| current.identity == section);
     let title = existing.map_or_else(
-        || section.title(labels),
+        || section.title(plot, labels),
         |current| Ok(Arc::clone(&current.title)),
     )?;
     let label = if let Some(text) = authored {
@@ -395,8 +412,13 @@ fn insert(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "factorized source projection retains the original plot for first section-title selection"
+)]
 fn separate_source(
     sections: &mut Vec<Section>,
+    plot: &PlotDescription,
     labels: &crate::Labels,
     theme: &crate::theme::ResolvedTheme,
     identity: GuideEntryIdentity,
@@ -419,23 +441,25 @@ fn separate_source(
             let mut group_source = source.clone();
             group_source.projection = Projection::GroupStyle;
             group_source.group_neutral_rgb = Some(neutral);
-            insert_source(sections, labels, GuideSectionIdentity::GroupStyle(group.clone()),
+            insert_source(sections, plot, labels, GuideSectionIdentity::GroupStyle(group.clone()),
                 GuideEntryIdentity::Category { field: group, value: group_value }, group_key, group_source, None)?;
             let hue_key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
-            return insert_source(sections, labels, GuideSectionIdentity::HueColor(hue.clone()),
+            return insert_source(sections, plot, labels, GuideSectionIdentity::HueColor(hue.clone()),
                 GuideEntryIdentity::Category { field: hue, value: hue_value }, hue_key, source, None);
         }
         GuideEncoding::HueOnly { field } | GuideEncoding::RowHue { field } => {
             let key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
-            return insert_source(sections, labels, GuideSectionIdentity::HueColor(field), identity, key, source, None);
+            return insert_source(sections, plot, labels, GuideSectionIdentity::HueColor(field), identity, key, source, None);
         }
         GuideEncoding::Joint { field } => GuideSectionIdentity::Joint(field),
         GuideEncoding::Literal(domain) => GuideSectionIdentity::Literal(domain),
         GuideEncoding::SupplementalLayer => GuideSectionIdentity::SupplementalSeries,
     };
-    insert_source(sections, labels, section, identity, key, source, authored)
+    insert_source(
+        sections, plot, labels, section, identity, key, source, authored,
+    )
 }
 
 fn finish(

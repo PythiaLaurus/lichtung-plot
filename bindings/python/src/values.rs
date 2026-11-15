@@ -3,13 +3,25 @@
 mod labels;
 pub(crate) mod numeric;
 mod output;
+mod policy;
+mod position;
+mod scientific;
 mod text;
 mod theme;
 
 pub(crate) use labels::PyLabels;
 pub(crate) use output::PyPngOptions;
+pub(crate) use policy::{
+    PyCategoricalColorMap, PyCategoricalColorScale, PyColorDomain, PyContinuousColorScale,
+    PyInteractionStyle, PySignificanceMarkStyle,
+};
+pub(crate) use position::{PyTextCoordinate, PyTextPosition};
+pub(crate) use scientific::{
+    error_bar, PyBootstrap, PyConfidenceInterval, PyPercentileInterval, PyStandardDeviation,
+    PyStandardError,
+};
 pub(crate) use text::{text_intent, PyText, PyTextLayout, TextIntent};
-pub(crate) use theme::{PyTextTheme, PyTheme};
+pub(crate) use theme::{PyColor, PyTextTheme, PyTheme};
 
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
@@ -47,5 +59,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text::register_components(m)?;
     m.add_class::<output::PyPngSizing>()?;
     m.add_class::<PyPngOptions>()?;
-    numeric::register(m)
+    numeric::register(m)?;
+    scientific::register(m)?;
+    policy::register(m)?;
+    position::register(m)
 }

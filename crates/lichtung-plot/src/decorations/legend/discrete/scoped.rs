@@ -121,6 +121,7 @@ impl ConsumedGuideDependency {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopedGuideInputs {
     color_title: crate::Text,
+    raincloud_hue_title: crate::Text,
     composition: LegendComposition,
     use_kind: GuideUse,
     contribution_prepared: bool,
@@ -164,6 +165,7 @@ impl ScopedGuideInputs {
         retained.extend_from_slice(guides.dependencies);
         Ok(Self {
             color_title: registered.source.copy_color_title()?,
+            raincloud_hue_title: registered.source.copy_raincloud_hue_title()?,
             composition: registered.policy.guide_composition,
             use_kind: guides.use_kind,
             contribution_prepared: true,
@@ -177,6 +179,9 @@ impl ScopedGuideInputs {
     pub(crate) fn matches_source(&self, registered: &PlotRegistration<'_>) -> bool {
         self.composition == registered.policy.guide_composition
             && registered.source.same_color_title(&self.color_title)
+            && registered
+                .source
+                .same_raincloud_hue_title(&self.raincloud_hue_title)
             && self.contribution_prepared
             && registered.guide.descriptor == self.contribution
             && Some(&registered.guide.alpha) == self.alpha.as_ref()
