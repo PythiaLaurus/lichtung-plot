@@ -33,6 +33,9 @@ below; native configuration sharing is delivered and the Python subset has bound
 installed verification, not complete interface delivery.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
+[scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
+the remaining exact-family owner methods, policy values, callback slots and
+consumer-required native gaps, not their delivery. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
