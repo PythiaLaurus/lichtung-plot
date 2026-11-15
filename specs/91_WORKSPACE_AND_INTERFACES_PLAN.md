@@ -52,6 +52,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
 | Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Plot Clone shares the authored description's payload; Plot exports borrow that description directly, Canvas placement moves it, and one operation-local Root/occurrence registry supplies measurement factories without temporary working Plots. Recorded native placement, render/replay/failure, composed/shared-guide and cross-adapter checks passed. This is not a zero-copy/constant-cost guarantee or Python lifecycle evidence. |
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
+| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Focused ownership/cache/alignment/grid/geometry checks, the external cross-adapter consumer, public examples/compile-fail boundaries, strict Clippy, API docs and independent native archives passed. Constructor projections and Python data bridges remain separate pending work. |
 | Python lifecycle decision and complete binding | Bounded native-data lifecycle/value/callback behavior and accurate subset typing are installed-verified in the environments below; independently unpacked sdist build/install also passed. The remaining product gate is recorded below. The complete four-route/25-family interface and remaining values/input typing are not delivered; selected semantics are unchanged. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
@@ -328,10 +329,10 @@ extension of accepted Rust foreign-container types or evidence of a Python bridg
 
 ### Source-Free Metadata And Constructor Projections
 
-The following are reviewed implementation targets, not delivered adapter APIs.
-Metadata round-trip and constructor projection are separate acceptance boundaries.
-They support the selected Python input routes without retaining borrowed Rust
-adapters or duplicating their origin/shape algorithms. The core and the Python
+Source-free metadata round-trip below is delivered; constructor projections remain
+reviewed implementation targets, not delivered APIs. These are separate acceptance
+boundaries supporting the selected Python input routes without retaining borrowed
+Rust adapters or duplicating their origin/shape algorithms. The core and the Python
 public data-input surface do not change.
 
 #### Source-Free Exact-Family Metadata
@@ -345,7 +346,7 @@ Metadata contains no Plot, source, foreign reference, schema or callback registr
 Actual family instances must naturally support Clone + Send + Sync + 'static,
 without unsafe auto-trait implementations or new bounds on ordinary sources.
 
-Both adapters add:
+Both adapters provide:
 
 ```rust
 impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
@@ -396,12 +397,13 @@ an ndarray adapter containing Rc merely because its source currently equals None
 Later label/facet edits still go through the restored adapter so their existing
 caches and native configuration remain synchronized.
 
-Bounded acceptance must cover the seven existing metadata responsibilities:
+Bounded acceptance covered the seven existing metadata responsibilities:
 labels/facet replacement, expanded Line roles/bands, grid shape/origins, Matrix
-keys and original geometry-point alpha alignment. Verify source release,
-source-free/restored lookup, actual-family auto-traits and a cross-family
-compile-fail boundary. Do not create per-field getter inventories or rerender all
-families; restoration must not advance scientific validation.
+keys and original geometry-point alpha alignment, plus source release,
+source-free/restored lookup, actual-family auto-traits and cross-family
+compile-fail boundaries. The external consumer restores both adapters before
+native Canvas publication. These checks do not establish Python input support
+or a new scientific-validation boundary.
 
 #### ndarray Original-Coordinate Projection
 

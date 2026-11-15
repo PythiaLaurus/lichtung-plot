@@ -4,6 +4,9 @@
 //! constructors bind foreign inputs eagerly; only `from_data` retains a read-only
 //! source context for later logical-column lookup. `.into()` hands off an owned
 //! native plot and releases that context. Validity pairs use **true = present**.
+//! [`PlotAdapter::into_parts`] preserves source-free [`BindingMetadata`] alongside
+//! the native Plot; restore the matching pair with [`PlotAdapter::from_parts`] or
+//! [`PlotAdapter::from_parts_with_data`] without reconstructing its configuration.
 //!
 //! Strided, transposed, reversed, Fortran and broadcast views follow logical index
 //! order. Nulls and present NaNs stay distinct; numeric primitives round to f64.

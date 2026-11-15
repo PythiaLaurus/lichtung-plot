@@ -134,10 +134,15 @@ fn provenance_uses_exact_ids_and_reports_logical_slots() {
             .unwrap(),
         [102, 101, 104, 103]
     );
-    assert!(crate::Heatmap::from_data(source.view(), [0, 1])
+    let (plot, metadata) = crate::Heatmap::from_data(source.view(), [0, 1])
         .unwrap()
-        .source_rows([3, 2])
-        .is_ok());
+        .into_parts();
+    assert!(
+        crate::Heatmap::from_parts_with_data(plot, metadata, source.view())
+            .unwrap()
+            .source_rows([3, 2])
+            .is_ok()
+    );
     assert!(crate::Heatmap::from_data(source.view(), [0, 1])
         .unwrap()
         .source_rows([2])
@@ -169,14 +174,17 @@ fn validity_requires_each_logical_dimension_not_just_length() {
         ),
         Err(AdapterError::Shape { .. })
     ));
-    assert!(crate::Heatmap::new(values.view())
-        .unwrap()
+    let (plot, metadata) = crate::Heatmap::new(values.view()).unwrap().into_parts();
+    assert!(crate::Heatmap::from_parts(plot, metadata)
         .heatmap_highlight(wrong.view())
         .is_err());
     assert!(crate::Matrix::from_data(values.view(), [1, 1]).is_err());
     assert!(crate::Matrix::from_data(values.view(), []).is_err());
     let no_rows = Array2::<f64>::zeros((0, 2));
-    assert!(crate::Matrix::new(no_rows.view()).is_ok());
+    let (plot, metadata) = crate::Matrix::new(no_rows.view()).unwrap().into_parts();
+    assert!(crate::Matrix::from_parts(plot, metadata)
+        .column_labels(["First", "Second"])
+        .is_ok());
     assert!(crate::Heatmap::new(Array2::<f64>::zeros((2, 0)).view()).is_err());
 }
 
@@ -198,7 +206,11 @@ fn wide_views_preserve_actual_coordinates_selected_order_bounds_and_mapping_call
     let calls = Cell::new(0);
     let lower = array![[3.5, 0.5], [4.5, 1.5], [5.5, 2.5]];
     let upper = &lower + 1.;
-    let adapted = crate::Line::from_data((source.view(), present.view()), 0, [2, 1])
+    let (plot, metadata) = crate::Line::from_data((source.view(), present.view()), 0, [2, 1])
+        .unwrap()
+        .into_parts();
+    let adapted = crate::Line::from_parts(plot, metadata)
+        .group_columns()
         .unwrap()
         .band(lower.view(), upper.view())
         .unwrap()

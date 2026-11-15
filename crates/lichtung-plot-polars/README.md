@@ -25,6 +25,12 @@ with `.into()` releases the source context for native Canvas/application consume
 Output methods return native `Result<Output>`; `AdapterError` preserves native
 errors when a combined workflow uses `?`. No public adapter result alias is added.
 
+`into_parts()` releases lookup and returns the native Plot plus opaque,
+source-free `BindingMetadata<K>`. Restore the pair with `from_parts`, or
+`from_parts_with_data` to borrow a fresh DataFrame for later setters. Restoration
+does not refresh values or validate matching versions; callers must keep each
+same-family Plot/metadata candidate pair together.
+
 Constructors are available for all 25 native families,
 including supplied bounds, bar sample/estimate modes and flat supplied geometry.
 `Heatmap::new(&numeric_frame)` binds a rectangle; `Heatmap::from_data(frame, ["a",

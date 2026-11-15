@@ -6,6 +6,8 @@
 //! unchanged, including [`Plot`], [`Error`] and [`Result`]. An explicit `.into()`
 //! moves a configured [`PlotAdapter`] into its exact-family native Plot and ends
 //! source-bound chaining. Single-image output needs no explicit conversion.
+//! [`PlotAdapter::into_parts`] instead preserves source-free [`BindingMetadata`]
+//! for restoring the paired configuration with or without a fresh lookup source.
 //!
 //! Null, present NaN, logical slot order, chunks and scalar-column lengths remain
 //! distinct. There are no implicit joins, query execution or new estimators.
@@ -26,10 +28,10 @@ mod snapshot;
 pub use alpha::{AlphaInput, AlphaValuesInput};
 pub use error::AdapterError;
 pub use frontend::{
-    Bar, Beeswarm, Boxplot, Coefficient, Density, Dumbbell, Forest, Heatmap, Histogram,
-    HorizontalBar, Interaction, Line, LinePath, Marginal, Matrix, PlotAdapter, PointInterval, Qq,
-    Raincloud, Regression, Scatter, StackedBar, StackedHorizontalBar, Trajectory, Violin,
-    Waterfall,
+    Bar, Beeswarm, BindingMetadata, Boxplot, Coefficient, Density, Dumbbell, Forest, Heatmap,
+    Histogram, HorizontalBar, Interaction, Line, LinePath, Marginal, Matrix, PlotAdapter,
+    PointInterval, Qq, Raincloud, Regression, Scatter, StackedBar, StackedHorizontalBar,
+    Trajectory, Violin, Waterfall,
 };
 pub use input::{
     AxisInput, BooleanInput, CategoryInput, ColumnInput, ColumnsInput, NumericInput,

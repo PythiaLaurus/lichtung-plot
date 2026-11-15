@@ -280,14 +280,19 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
     fn install_expansion(&mut self, expansion: Option<Expansion>) {
         if let Some(expansion) = &expansion {
             if !expansion.aliases.is_empty() {
-                self.labels = self.labels.clone().aliases(expansion.aliases.clone());
-                self.plot = self.plot.clone().labels(self.labels.clone());
+                self.bindings.labels = self
+                    .bindings
+                    .labels
+                    .clone()
+                    .aliases(expansion.aliases.clone());
+                self.plot = self.plot.clone().labels(self.bindings.labels.clone());
             }
         }
-        self.expansion = expansion;
+        self.bindings.expansion = expansion;
     }
     fn generated(&self) -> BindingResult<CategoryValues> {
-        self.expansion
+        self.bindings
+            .expansion
             .as_ref()
             .map(|expansion| expansion.categories.clone())
             .ok_or_else(|| {
@@ -303,9 +308,9 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        let keys = if let Some(expansion) = &self.expansion {
+        let keys = if let Some(expansion) = &self.bindings.expansion {
             expansion.keys.clone()
-        } else if let Some(keys) = &self.matrix_keys {
+        } else if let Some(keys) = &self.bindings.matrix_keys {
             keys.clone()
         } else {
             return Err(binding(
@@ -320,8 +325,8 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
             keys.len(),
             labels.len(),
         )?;
-        self.labels = self.labels.aliases(keys.into_iter().zip(labels));
-        self.plot = self.plot.labels(self.labels.clone());
+        self.bindings.labels = self.bindings.labels.aliases(keys.into_iter().zip(labels));
+        self.plot = self.plot.labels(self.bindings.labels.clone());
         Ok(self)
     }
     /// Bind unique already-expanded IDs, never repeating a source-row identity.

@@ -44,6 +44,24 @@ its family and ends lookup without rendering or scientific preparation. Direct
 inputs may expire after binding; retained sources may be edited/dropped after
 handoff, subject to other live borrows. Frozen Output never reopens a source.
 
+Each adapter also exports its own opaque `BindingMetadata<K>`.
+`into_parts()` moves out the exact-family `(Plot<K>, BindingMetadata<K>)` pair
+and releases lookup while preserving existing alignment, expansion/grid origins
+and label/facet policy caches. Metadata has no source, Plot, schema or foreign
+borrow; actual family values naturally support Clone + Send + Sync + 'static.
+This does not make an ndarray adapter containing an Rc context Send.
+
+`PlotAdapter::from_parts(plot, metadata)` restores a source-free adapter.
+`from_parts_with_data(plot, metadata, source)` installs that adapter's ordinary
+lookup source without refreshing old bindings: ndarray retains its existing
+fallible source-structure validation; Polars restoration is infallible. Neither
+restoration preflights scientific data, requires the new source height to equal
+old plot slots, or validates same-family version identity. Later bindings retain
+their existing alignment/domain/shape checks. The family marker rejects
+cross-family pairing; callers must keep matching Plot/metadata versions together.
+Complete labels/facet replacement still uses the ordinary adapter methods.
+Existing `.into()` and `erase()` intentionally discard metadata as well as lookup.
+
 There is no public conversion-function catalog, source wrapper, data-role wrapper,
 `data(source)` factory, `build`, `into_native`, Deref escape or adapter Canvas.
 Sealed input protocols exist only for well-formed public signatures; callers pass

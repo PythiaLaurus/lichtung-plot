@@ -87,7 +87,7 @@ impl PlotAdapter<'_, kind::Line> {
         let (lower, lower_shape) = lower.bind_series(self.source.as_deref(), "lower")?;
         let (upper, upper_shape) = upper.bind_series(self.source.as_deref(), "upper")?;
         for (shape, native) in [(&lower_shape, native_lower), (&upper_shape, native_upper)] {
-            match (&self.expansion, shape) {
+            match (&self.bindings.expansion, shape) {
                 (_, None) if native => {}
                 (None, None) => {}
                 (Some(expansion), Some((rows, columns, _)))
@@ -147,7 +147,7 @@ impl<'source> PlotAdapter<'source, kind::Matrix> {
             .map(|((_, values), key)| NumericValues::nullable(key, values))
             .collect();
         let mut adapter = Self::bound(Plot::matrix(values), source, Some(rows));
-        adapter.matrix_keys = Some(keys);
+        adapter.bindings.matrix_keys = Some(keys);
         if local {
             adapter.column_labels(labels)
         } else {

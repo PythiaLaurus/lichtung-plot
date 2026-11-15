@@ -264,14 +264,19 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
     fn install_expansion(&mut self, expansion: Option<Expansion>) {
         if let Some(expansion) = &expansion {
             if !expansion.aliases.is_empty() {
-                self.labels = self.labels.clone().aliases(expansion.aliases.clone());
-                self.plot = self.plot.clone().labels(self.labels.clone());
+                self.bindings.labels = self
+                    .bindings
+                    .labels
+                    .clone()
+                    .aliases(expansion.aliases.clone());
+                self.plot = self.plot.clone().labels(self.bindings.labels.clone());
             }
         }
-        self.expansion = expansion;
+        self.bindings.expansion = expansion;
     }
     fn generated(&self) -> BindingResult<CategoryValues> {
-        self.expansion
+        self.bindings
+            .expansion
             .as_ref()
             .map(|wide| wide.categories.clone())
             .ok_or_else(|| {
@@ -288,10 +293,11 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
         S: Into<String>,
     {
         let keys = self
+            .bindings
             .expansion
             .as_ref()
             .map(|wide| &wide.keys)
-            .or(self.matrix_keys.as_ref())
+            .or(self.bindings.matrix_keys.as_ref())
             .ok_or_else(|| binding("column labels", "no generated column dimension"))?;
         let labels = labels.into_iter().map(Into::into).collect::<Vec<_>>();
         length(
@@ -300,8 +306,11 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
             keys.len(),
             labels.len(),
         )?;
-        self.labels = self.labels.aliases(keys.iter().cloned().zip(labels));
-        self.plot = self.plot.labels(self.labels.clone());
+        self.bindings.labels = self
+            .bindings
+            .labels
+            .aliases(keys.iter().cloned().zip(labels));
+        self.plot = self.plot.labels(self.bindings.labels.clone());
         Ok(self)
     }
     /// Bind already-expanded unique IDs without repeating any source row identity.

@@ -8,6 +8,19 @@ fn same_plot<K: pp::kind::Marker>(plot: pp::Plot<K>) -> nd::Plot<K> {
     plot
 }
 
+fn source_free_metadata<T: Clone + Send + Sync + 'static>(_: &T) {}
+
+fn native_banded_line() -> nd::Plot<nd::kind::Line> {
+    pp::Plot::line(
+        pp::NumericValues::new("x_value", [0., 5., 20.]),
+        pp::NumericValues::new("y_value", [1., 2., 3.]),
+    )
+    .band(nd::Bounds::new(
+        nd::NumericValues::new("lower", [0.5, 1.5, 2.5]),
+        nd::NumericValues::new("upper", [1.5, 2.5, 3.5]),
+    ))
+}
+
 fn native_error_and_stats_paths() {
     let result: pp::Result<()> = Err(nd::Error::Data("native".into()));
     assert!(matches!(result, Err(pp::Error::Data(_))));
@@ -29,6 +42,9 @@ fn native_paths_and_source_handoffs_preserve_canvas_label_inheritance() {
         .hue("condition")
         .unwrap();
     drop(temporary);
+    let (plot, metadata) = left.into_parts();
+    source_free_metadata(&metadata);
+    let left = pp::Scatter::from_parts(plot, metadata);
     let left: nd::Plot<nd::kind::Scatter> = same_plot(left.into());
     let shared = pp::Matrix::from_data(&frame, ["y_value", "x_value"]).unwrap();
     let _: nd::Plot<nd::kind::Matrix> = shared.into();
@@ -53,6 +69,9 @@ fn native_paths_and_source_handoffs_preserve_canvas_label_inheritance() {
     let transient = array![1., 2., 3.];
     let right = nd::Scatter::from_data(table.view(), 0, transient.view()).unwrap();
     drop(transient);
+    let (plot, metadata) = right.into_parts();
+    source_free_metadata(&metadata);
+    let right = nd::Scatter::from_parts(plot, metadata);
     let right: pp::Plot<pp::kind::Scatter> = right.into();
     let matrix = nd::Matrix::from_data(table.view(), [1, 0]).unwrap();
     let _: pp::Plot<pp::kind::Matrix> = matrix.into();
@@ -94,14 +113,7 @@ fn native_paths_and_source_handoffs_preserve_canvas_label_inheritance() {
     ) -> pp::Result<pp::Canvas> = pp::Canvas::panel::<pp::kind::Scatter>;
 
     // Only the crate prefix differs from an ordinary standalone native consumer.
-    let native: nd::Plot<nd::kind::Line> = pp::Plot::line(
-        pp::NumericValues::new("x_value", [0., 5., 20.]),
-        pp::NumericValues::new("y_value", [1., 2., 3.]),
-    )
-    .band(nd::Bounds::new(
-        nd::NumericValues::new("lower", [0.5, 1.5, 2.5]),
-        nd::NumericValues::new("upper", [1.5, 2.5, 3.5]),
-    ));
+    let native = native_banded_line();
     let theme: nd::Theme = pp::Theme::science();
     let canvas: nd::Canvas = pp::Canvas::grid(1, 3)
         .unwrap()

@@ -33,18 +33,20 @@ impl<K: kind::Marker> PlotAdapter<'_, K> {
         };
         if let Some(shape) = shape {
             let expected = self
+                .bindings
                 .grid
                 .as_ref()
                 .map(|grid| (grid.y.len(), grid.x.len()))
                 .or_else(|| {
-                    self.expansion
+                    self.bindings
+                        .expansion
                         .as_ref()
                         .map(|wide| (wide.rows, wide.keys.len()))
                 });
             if expected != Some(shape) {
                 return Err(binding(
                     role,
-                    format!("expected cell shape {expected:?}, got {shape:?}; selected source columns {:?}", self.grid.as_ref().map(|grid| &grid.origins)),
+                    format!("expected cell shape {expected:?}, got {shape:?}; selected source columns {:?}", self.bindings.grid.as_ref().map(|grid| &grid.origins)),
                 ));
             }
         }
@@ -90,7 +92,7 @@ impl<'source> PlotAdapter<'source, kind::Heatmap> {
             NumericValues::nullable("Value", fill),
         );
         let mut adapter = Self::bound(plot, source, Some(cells));
-        adapter.grid = Some(Grid {
+        adapter.bindings.grid = Some(Grid {
             x: xkeys,
             y: ykeys,
             origins: columns.iter().map(|(index, _)| *index).collect(),
@@ -105,6 +107,7 @@ impl<'source> PlotAdapter<'source, kind::Heatmap> {
         S: Into<String>,
     {
         let grid = self
+            .bindings
             .grid
             .as_ref()
             .ok_or_else(|| binding(axis, "axis metadata requires a rectangular heatmap"))?;
@@ -117,8 +120,11 @@ impl<'source> PlotAdapter<'source, kind::Heatmap> {
             aliases.push(value.into());
         }
         length(axis, axis, keys.len(), aliases.len())?;
-        self.labels = self.labels.aliases(keys.iter().cloned().zip(aliases));
-        self.plot = self.plot.labels(self.labels.clone());
+        self.bindings.labels = self
+            .bindings
+            .labels
+            .aliases(keys.iter().cloned().zip(aliases));
+        self.plot = self.plot.labels(self.bindings.labels.clone());
         Ok(self)
     }
     /// Assign literal column display labels without merging positional identities.

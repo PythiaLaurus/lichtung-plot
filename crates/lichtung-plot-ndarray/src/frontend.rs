@@ -1,4 +1,5 @@
 //! Exact-family ownership and source-aware data binding.
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::error::{binding, length, BindingResult};
@@ -12,6 +13,8 @@ mod constructors;
 mod forwarding;
 mod geometry;
 mod grid;
+#[cfg(test)]
+mod metadata_tests;
 mod status;
 mod wide;
 
@@ -23,13 +26,17 @@ pub(crate) fn context<'source>(
     Ok(Some(Rc::new(source)))
 }
 
-/// A native exact-family plot and an optional safely borrowed array lookup context.
-/// Direct views are snapshotted and released at each binding; `.into()` releases
-/// the retained source and moves the owned native plot without rendering.
+/// Source-free binding state paired with one native exact-family [`Plot`].
+///
+/// [`PlotAdapter::into_parts`] moves this state out without retaining the array
+/// lookup context. It preserves alignment, generated origins and the adapter's
+/// current native label/facet policies for later restoration.
+///
+/// Keep this metadata paired with the Plot configuration that produced it.
+/// The family marker prevents cross-family pairing, not mismatched versions of
+/// the same family. Metadata contains neither a Plot nor a lookup source.
 #[derive(Clone)]
-pub struct PlotAdapter<'source, K: kind::Marker> {
-    plot: Plot<K>,
-    pub(crate) source: Context<'source>,
+pub struct BindingMetadata<K: kind::Marker> {
     len: Option<usize>,
     geometry_points: Option<usize>,
     labels: Labels,
@@ -37,6 +44,18 @@ pub struct PlotAdapter<'source, K: kind::Marker> {
     grid: Option<grid::Grid>,
     expansion: Option<wide::Expansion>,
     matrix_keys: Option<Vec<String>>,
+    marker: PhantomData<K>,
+}
+
+/// A native exact-family plot and an optional safely borrowed array lookup context.
+/// Direct views are snapshotted and released at each binding; `.into()` releases
+/// the retained source and moves the owned native plot without rendering.
+/// [`Self::into_parts`] also preserves the source-free binding metadata.
+#[derive(Clone)]
+pub struct PlotAdapter<'source, K: kind::Marker> {
+    plot: Plot<K>,
+    pub(crate) source: Context<'source>,
+    bindings: BindingMetadata<K>,
 }
 
 macro_rules! families {
@@ -78,29 +97,53 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
         Self {
             plot,
             source,
-            len,
-            geometry_points: None,
-            labels: Labels::default(),
-            facet: None,
-            grid: None,
-            expansion: None,
-            matrix_keys: None,
+            bindings: BindingMetadata {
+                len,
+                geometry_points: None,
+                labels: Labels::default(),
+                facet: None,
+                grid: None,
+                expansion: None,
+                matrix_keys: None,
+                marker: PhantomData,
+            },
         }
     }
+    /// End source lookup and move out the native Plot with its binding metadata.
+    ///
+    /// This does not render, prepare scientific data or retain the source borrow.
+    /// Keep both returned values from the same configuration together.
+    ///
+    /// ```
+    /// use lichtung_plot_ndarray::{Scatter, PlotKind};
+    /// use ndarray::array;
+    ///
+    /// let (plot, metadata) = {
+    ///     let source = array![[0., 1.], [1., 0.]];
+    ///     let adapted = Scatter::from_data(source.view(), 0, 1)?;
+    ///     adapted.into_parts()
+    /// };
+    /// let restored = Scatter::from_parts(plot, metadata);
+    /// assert_eq!(restored.kind(), PlotKind::Scatter);
+    /// # Ok::<(), lichtung_plot_ndarray::AdapterError>(())
+    /// ```
+    pub fn into_parts(self) -> (Plot<K>, BindingMetadata<K>) {
+        (self.plot, self.bindings)
+    }
     fn aligned(&self, role: &'static str, name: &str, actual: usize) -> BindingResult<()> {
-        if let Some(expected) = self.len {
+        if let Some(expected) = self.bindings.len {
             length(role, name, expected, actual)?;
         }
         Ok(())
     }
     fn row_copies(&self) -> usize {
-        self.expansion.as_ref().map_or_else(
-            || self.grid.as_ref().map_or(1, grid::Grid::columns),
+        self.bindings.expansion.as_ref().map_or_else(
+            || self.bindings.grid.as_ref().map_or(1, grid::Grid::columns),
             |wide| wide.keys.len(),
         )
     }
     fn alpha_len(&self) -> Option<usize> {
-        self.geometry_points.or(self.len)
+        self.bindings.geometry_points.or(self.bindings.len)
     }
     fn category_rows(
         &self,
@@ -119,7 +162,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     /// Replace the entire native label policy, including generated aliases.
     #[must_use]
     pub fn labels(mut self, labels: Labels) -> Self {
-        self.labels = labels.clone();
+        self.bindings.labels = labels.clone();
         self.plot = self.plot.labels(labels);
         self
     }
@@ -147,7 +190,7 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
     where
         K: kind::Facet,
     {
-        self.facet = Some(facet.clone());
+        self.bindings.facet = Some(facet.clone());
         self.plot = self.plot.facet(facet);
         self
     }
@@ -198,10 +241,58 @@ impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
         K: kind::Facet,
     {
         let facet = self
+            .bindings
             .facet
             .clone()
             .ok_or_else(|| binding("facet scales", "select a facet first"))?;
         Ok(self.facet(facet.scales(scales)))
+    }
+}
+impl<K: kind::Marker> PlotAdapter<'static, K> {
+    /// Restore a native Plot and its metadata without a lookup source.
+    ///
+    /// No scientific validation or version check runs here. The caller must
+    /// supply the matching Plot/metadata configuration; the family marker alone
+    /// does not establish that they came from the same version.
+    /// Direct variable bindings remain available; selectors need an explicit
+    /// source through [`Self::from_parts_with_data`].
+    ///
+    /// Metadata from another family cannot be paired with this Plot:
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot_ndarray::{kind, BindingMetadata, Plot, Scatter};
+    ///
+    /// fn wrong_family(plot: Plot<kind::Scatter>, metadata: BindingMetadata<kind::Line>) {
+    ///     let _ = Scatter::from_parts(plot, metadata);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn from_parts(plot: Plot<K>, metadata: BindingMetadata<K>) -> Self {
+        Self {
+            plot,
+            source: None,
+            bindings: metadata,
+        }
+    }
+
+    /// Restore a matching Plot/metadata pair with a new array lookup context.
+    ///
+    /// Validates the source's structural validity shape exactly as `from_data`
+    /// does, without rebinding existing values, rendering or scientific preflight.
+    /// The source height need not equal the old Plot's slots; subsequent bindings
+    /// retain their existing domain-specific alignment checks.
+    ///
+    /// The caller must keep the Plot and metadata from the same configuration.
+    pub fn from_parts_with_data<'source>(
+        plot: Plot<K>,
+        metadata: BindingMetadata<K>,
+        source: impl ArraySource + 'source,
+    ) -> std::result::Result<PlotAdapter<'source, K>, AdapterError> {
+        Ok(PlotAdapter {
+            plot,
+            source: context(source)?,
+            bindings: metadata,
+        })
     }
 }
 macro_rules! category_binding {

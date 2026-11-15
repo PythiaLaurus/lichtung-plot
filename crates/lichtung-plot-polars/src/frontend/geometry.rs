@@ -59,7 +59,7 @@ macro_rules! columnar_geometry {
                 length(stringify!($tail), $tail.name(), len, $tail.len())?;)*)+
                 let points = $points;
                 let mut adapter = Self::bound($plot, source, None);
-                adapter.geometry_points = points;
+                adapter.bindings.geometry_points = points;
                 Ok(adapter)
             }
         }

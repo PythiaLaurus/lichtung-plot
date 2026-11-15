@@ -276,10 +276,10 @@ macro_rules! alpha_target {
                 S: AsRef<str>,
                 B: ColumnInput,
             {
-                let expansion = self
-                    .expansion
-                    .as_ref()
-                    .ok_or_else(|| binding("column alpha", "no generated variable dimension"))?;
+                let expansion =
+                    self.bindings.expansion.as_ref().ok_or_else(|| {
+                        binding("column alpha", "no generated variable dimension")
+                    })?;
                 let mut keys = crate::alpha::keys(self.source, other_keys)?;
                 keys.push(expansion.column_key(self.source, column_key)?);
                 self.plot = self.plot.$base(AlphaEncoding::keyed(
@@ -301,10 +301,10 @@ macro_rules! alpha_target {
                 S: AsRef<str>,
                 B: ColumnInput,
             {
-                let expansion = self
-                    .expansion
-                    .as_ref()
-                    .ok_or_else(|| binding("column alpha", "no generated variable dimension"))?;
+                let expansion =
+                    self.bindings.expansion.as_ref().ok_or_else(|| {
+                        binding("column alpha", "no generated variable dimension")
+                    })?;
                 let mut keys = crate::alpha::keys(Some(source), other_keys)?;
                 keys.push(expansion.column_key(Some(source), column_key)?);
                 self.plot = self.plot.$base(AlphaEncoding::keyed(
