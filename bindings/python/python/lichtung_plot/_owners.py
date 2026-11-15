@@ -128,6 +128,10 @@ if TYPE_CHECKING:
         list[int] | list[float] | tuple[float, ...], list[int] | tuple[int, ...]
     ]
     _AlphaContinuous: TypeAlias = tuple[tuple[float, float], Callable[[float], int]]
+    _ResultTarget: TypeAlias = str | tuple[str, str]
+    _ResultMark: TypeAlias = float | Literal["ns", "*", "**", "***", "****"]
+    _M = TypeVar("_M", bound=tuple[str, _ResultMark])
+    _ResultMapping: TypeAlias = Mapping[str, _ResultMark] | list[_M] | tuple[_M, ...]
 
 ExactTicks: TypeAlias = list[tuple[float, str]] | tuple[tuple[float, str], ...]
 PathInput: TypeAlias = str | bytes | PathLike[str] | PathLike[bytes]
@@ -1837,6 +1841,1548 @@ class _FillAlpha(_Handle):
         return self
 
 
+class _BarPointLayer(_Handle):
+    __slots__ = ()
+
+    def point_layer(
+        self: _H, data: _DataSource | None = None, *,
+        category: _CategoryInput, value: _NumericInput, color: Color, radius: int,
+        series: _CategoryInput | None = None,
+    ) -> _H:
+        self._owner.bar_point_layer(data, category, value, color, radius, series)
+        return self
+
+
+class _AttachedSignificance(_Handle):
+    __slots__ = ()
+
+    @overload
+    def significance_attached(
+        self: _H, *, target: _CategoryInput, marks: _NumericInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached(
+        self: _H, *, target: _CategoryInput, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached(
+        self: _H, *, target: _CategoryInput, mark: _ResultMark,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached(
+        self: _H, *, target_value: _ResultTarget, marks: _NumericInput,
+        target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached(
+        self: _H, *, target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached(
+        self: _H, *, target_value: _ResultTarget, mark: _ResultMark,
+        target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached(
+        self: _H, *, target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+    ) -> _H:
+        self._owner.significance_attached(
+            target, target_value, target_series, marks, mapping, mark, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _NumericInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, mark: _ResultMark,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _NumericInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, mark: _ResultMark, target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+    ) -> _H:
+        self._owner.significance_attached_from_data(
+            data, target, target_value, target_series, marks, mapping, mark, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, marks: _NumericInput,
+        facet: _CategoryInput, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, mark: _ResultMark,
+        facet: _CategoryInput, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, marks: _NumericInput,
+        facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, mark: _ResultMark,
+        facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, marks: _NumericInput,
+        facet_value: str, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_value: str,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput, mark: _ResultMark,
+        facet_value: str, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, marks: _NumericInput,
+        facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet(
+        self: _H, *, target_value: _ResultTarget, mark: _ResultMark,
+        facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached_in_facet(
+        self: _H, *, target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: str = cast(str, _UNSET),
+    ) -> _H:
+        self._owner.significance_attached_in_facet(
+            target, target_value, target_series, marks, mapping, mark,
+            facet, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _NumericInput, facet: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet: _CategoryInput, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, mark: _ResultMark, facet: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _NumericInput,
+        facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, mark: _ResultMark,
+        facet: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _NumericInput, facet_value: str,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_value: str, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, mark: _ResultMark, facet_value: str,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _NumericInput,
+        facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, mark: _ResultMark,
+        facet_value: str, target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: str = cast(str, _UNSET),
+    ) -> _H:
+        self._owner.significance_attached_in_facet_from_data(
+            data, target, target_value, target_series, marks, mapping, mark,
+            facet, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_row: _CategoryInput,
+        facet_column: _CategoryInput, target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_row: _CategoryInput,
+        facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, marks: _NumericInput,
+        facet_value: tuple[str, str], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput, mark: _ResultMark,
+        facet_value: tuple[str, str], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, marks: _NumericInput,
+        facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, marks: _CategoryInput,
+        mapping: _ResultMapping[_M], facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid(
+        self: _H, *, target_value: _ResultTarget, mark: _ResultMark,
+        facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached_in_grid(
+        self: _H, *, target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet_row: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_column: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: tuple[str, str] = cast("tuple[str, str]", _UNSET),
+    ) -> _H:
+        self._owner.significance_attached_in_grid(
+            target, target_value, target_series, marks, mapping, mark,
+            facet_row, facet_column, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput, target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _NumericInput,
+        facet_value: tuple[str, str], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_value: tuple[str, str], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput, mark: _ResultMark,
+        facet_value: tuple[str, str], target_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _NumericInput,
+        facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target_value: _ResultTarget, mark: _ResultMark,
+        facet_value: tuple[str, str], target_series: None = None,
+    ) -> _H: ...
+
+    def significance_attached_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        target: _CategoryInput = cast("_CategoryInput", _UNSET),
+        target_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        target_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet_row: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_column: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: tuple[str, str] = cast("tuple[str, str]", _UNSET),
+    ) -> _H:
+        self._owner.significance_attached_in_grid_from_data(
+            data, target, target_value, target_series, marks, mapping, mark,
+            facet_row, facet_column, facet_value, _UNSET,
+        )
+        return self
+
+
+class _PairwiseSignificance(_Handle):
+    __slots__ = ()
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _NumericInput, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        mark: _ResultMark, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _NumericInput, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        mark: _ResultMark, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _NumericInput, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        mark: _ResultMark, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise(
+        self: _H, *, left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise(
+            left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, marks: _NumericInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, mark: _ResultMark,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, marks: _NumericInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, mark: _ResultMark,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, marks: _NumericInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, mark: _ResultMark,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise_from_data(
+            data, left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _NumericInput, facet: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        mark: _ResultMark, facet: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _NumericInput, facet: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        mark: _ResultMark, facet: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _NumericInput, facet: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        mark: _ResultMark, facet: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _NumericInput, facet: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        mark: _ResultMark, facet: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _NumericInput, facet_value: str,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        mark: _ResultMark, facet_value: str,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _NumericInput, facet_value: str,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        mark: _ResultMark, facet_value: str,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _NumericInput, facet_value: str,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        mark: _ResultMark, facet_value: str,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _NumericInput, facet_value: str,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        mark: _ResultMark, facet_value: str,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise_in_facet(
+        self: _H, *, left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: str = cast(str, _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise_in_facet(
+            left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, facet, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        facet: _CategoryInput, left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        facet: _CategoryInput, left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, marks: _NumericInput,
+        facet: _CategoryInput, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, mark: _ResultMark,
+        facet: _CategoryInput, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, marks: _NumericInput,
+        facet: _CategoryInput, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, mark: _ResultMark,
+        facet: _CategoryInput, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, marks: _NumericInput,
+        facet: _CategoryInput, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, mark: _ResultMark,
+        facet: _CategoryInput, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        facet_value: str, left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        facet_value: str, left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, marks: _NumericInput,
+        facet_value: str, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, mark: _ResultMark,
+        facet_value: str, left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, marks: _NumericInput,
+        facet_value: str, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, mark: _ResultMark,
+        facet_value: str, left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, marks: _NumericInput,
+        facet_value: str, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: str,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, mark: _ResultMark,
+        facet_value: str, left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise_in_facet_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: str = cast(str, _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise_in_facet_from_data(
+            data, left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, facet, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _NumericInput, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        mark: _ResultMark, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _NumericInput, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        mark: _ResultMark, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _NumericInput, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        mark: _ResultMark, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _NumericInput, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        mark: _ResultMark, facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _NumericInput, facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right: _CategoryInput,
+        mark: _ResultMark, facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _NumericInput, facet_value: tuple[str, str],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right: _CategoryInput,
+        mark: _ResultMark, facet_value: tuple[str, str],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _NumericInput, facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput, right_value: _ResultTarget,
+        mark: _ResultMark, facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _NumericInput, facet_value: tuple[str, str],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid(
+        self: _H, *, left_value: _ResultTarget, right_value: _ResultTarget,
+        mark: _ResultMark, facet_value: tuple[str, str],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise_in_grid(
+        self: _H, *, left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet_row: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_column: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: tuple[str, str] = cast("tuple[str, str]", _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise_in_grid(
+            left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, facet_row, facet_column, facet_value, _UNSET,
+        )
+        return self
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, marks: _NumericInput,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M],
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, mark: _ResultMark,
+        facet_row: _CategoryInput, facet_column: _CategoryInput,
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, marks: _NumericInput,
+        facet_value: tuple[str, str], left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right: _CategoryInput, mark: _ResultMark,
+        facet_value: tuple[str, str], left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, marks: _NumericInput,
+        facet_value: tuple[str, str], left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: None = None, right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right: _CategoryInput, mark: _ResultMark,
+        facet_value: tuple[str, str], left_series: None = None,
+        right_series: _CategoryInput | None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, marks: _NumericInput,
+        facet_value: tuple[str, str], left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: _CategoryInput | None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput, right_value: _ResultTarget, mark: _ResultMark,
+        facet_value: tuple[str, str], left_series: _CategoryInput | None = None,
+        right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, marks: _NumericInput,
+        facet_value: tuple[str, str], left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget,
+        marks: _CategoryInput, mapping: _ResultMapping[_M], facet_value: tuple[str, str],
+        left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    @overload
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left_value: _ResultTarget, right_value: _ResultTarget, mark: _ResultMark,
+        facet_value: tuple[str, str], left_series: None = None, right_series: None = None,
+    ) -> _H: ...
+
+    def significance_pairwise_in_grid_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        left: _CategoryInput = cast("_CategoryInput", _UNSET),
+        right: _CategoryInput = cast("_CategoryInput", _UNSET),
+        left_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        right_value: _ResultTarget = cast("_ResultTarget", _UNSET),
+        left_series: _CategoryInput | None = None,
+        right_series: _CategoryInput | None = None,
+        marks: _NumericInput | _CategoryInput = cast("_NumericInput | _CategoryInput", _UNSET),
+        mapping: _ResultMapping[_M] = cast("Mapping[str, _ResultMark]", _UNSET),
+        mark: _ResultMark = cast("_ResultMark", _UNSET),
+        facet_row: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_column: _CategoryInput = cast("_CategoryInput", _UNSET),
+        facet_value: tuple[str, str] = cast("tuple[str, str]", _UNSET),
+    ) -> _H:
+        self._owner.significance_pairwise_in_grid_from_data(
+            data, left, right, left_value, right_value, left_series, right_series,
+            marks, mapping, mark, facet_row, facet_column, facet_value, _UNSET,
+        )
+        return self
+
+
 class Scatter(
     _NumericX, _NumericY, _Hue, _Facet, _Guides, _Annotations, _Outline,
     _CategoricalScale, _PointAlpha, Plot,
@@ -2038,6 +3584,40 @@ class Line(
         self._owner.line_band(lower, upper)
         return self
 
+    @overload
+    def point_layer(
+        self, data: _DataSource | None = None, *, x: _NumericInput, y: _NumericInput,
+        labels: _CategoryInput | None = None, color: Color | None = None,
+        radius: int | None = None, alpha: int | None = None,
+        legend_label: None = None, label_text_layout: TextLayout | None = None,
+    ) -> Line: ...
+
+    @overload
+    def point_layer(
+        self, data: _DataSource | None = None, *, x: _NumericInput, y: _NumericInput,
+        labels: _CategoryInput | None = None, color: Color | None = None,
+        radius: int | None = None, alpha: int | None = None,
+        legend_label: TextInput,
+        legend_label_style: TextTheme | None = ...,
+        legend_label_layout: TextLayout | None = ...,
+        label_text_layout: TextLayout | None = None,
+    ) -> Line: ...
+
+    def point_layer(
+        self, data: _DataSource | None = None, *, x: _NumericInput, y: _NumericInput,
+        labels: _CategoryInput | None = None, color: Color | None = None,
+        radius: int | None = None, alpha: int | None = None,
+        legend_label: TextInput | None = None,
+        legend_label_style: TextTheme | None = cast(TextTheme | None, _UNSET),
+        legend_label_layout: TextLayout | None = cast(TextLayout | None, _UNSET),
+        label_text_layout: TextLayout | None = None,
+    ) -> Line:
+        self._owner.line_point_layer(
+            data, x, y, labels, color, radius, alpha, legend_label,
+            legend_label_style, legend_label_layout, label_text_layout, _UNSET,
+        )
+        return self
+
 
 class Trajectory(
     _NumericX, _NumericY, _CategoricalX, _Hue, _Facet, _Guides, _Annotations,
@@ -2074,7 +3654,7 @@ class Interaction(
 
 class Coefficient(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _Outline,
-    _EstimateDetails, _EstimateStatusMethods, _SignificanceStyle,
+    _EstimateDetails, _EstimateStatusMethods, _SignificanceStyle, _AttachedSignificance,
     _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
@@ -2177,7 +3757,8 @@ class Heatmap(
 
 class Bar(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoryOrder, _CategoricalScale, _SignificanceStyle, _LineAlpha, _FillAlpha, Plot,
+    _CategoryOrder, _CategoricalScale, _SignificanceStyle, _LineAlpha, _FillAlpha,
+    _BarPointLayer, _AttachedSignificance, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
@@ -2189,7 +3770,7 @@ class Bar(
 class HorizontalBar(
     _NumericX, _CategoricalY, _SeriesRole, _Facet, _Guides, _Annotations,
     _CategoryOrder, _CategoricalScale, _SignificanceStyle, _ZeroLine,
-    _LineAlpha, _FillAlpha, Plot,
+    _LineAlpha, _FillAlpha, _BarPointLayer, _AttachedSignificance, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
@@ -2204,14 +3785,14 @@ class HorizontalBar(
 
 class StackedBar(
     _NumericY, _CategoricalX, _Facet, _Guides, _Annotations, _CategoryOrder,
-    _CategoricalScale, _SignificanceStyle, _FillAlpha, Plot,
+    _CategoricalScale, _SignificanceStyle, _FillAlpha, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
 
 class StackedHorizontalBar(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _CategoryOrder,
-    _CategoricalScale, _SignificanceStyle, _ZeroLine, _FillAlpha, Plot,
+    _CategoricalScale, _SignificanceStyle, _ZeroLine, _FillAlpha, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
@@ -2219,7 +3800,7 @@ class StackedHorizontalBar(
 class Boxplot(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
     _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay,
-    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
+    _PointAlpha, _LineAlpha, _FillAlpha, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
@@ -2227,7 +3808,7 @@ class Boxplot(
 class Violin(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
     _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay,
-    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
+    _PointAlpha, _LineAlpha, _FillAlpha, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 
@@ -2235,7 +3816,7 @@ class Violin(
 class Raincloud(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
     _CategoricalScale, _SignificanceStyle, _Outline,
-    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
+    _PointAlpha, _LineAlpha, _FillAlpha, _PairwiseSignificance, Plot,
 ):
     __slots__ = ()
 

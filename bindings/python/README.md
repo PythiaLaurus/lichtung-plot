@@ -2,8 +2,9 @@
 
 This package provides all 25 plot families from native Python, NumPy, pandas and
 eager Polars inputs, with exact-family configuration and the reusable
-Plot/Canvas/Output lifecycle and complete native alpha scopes. Independent point
-layers and significance results are still being implemented.
+Plot/Canvas/Output lifecycle, complete native alpha scopes, independent point
+layers and caller-supplied significance results. Remaining distribution, content
+and cost verification is tracked in the shared workspace plan.
 
 ```python
 from lichtung_plot import Canvas, Text, Theme, scatter
@@ -195,6 +196,27 @@ bound pandas identity, never display labels.
 alpha using supplied synthetic coverage, explicitly not statistical confidence.
 Exact call forms and source namespaces are defined in
 `specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
+
+## Independent observations and supplied results
+
+Line `point_layer(...)` accepts independent x/y, optional labels and native paint,
+radius, alpha and legend Text instructions. Bar/HorizontalBar layers accept
+category/value, optional positioned series and required complete Color/radius;
+they create no legend and have no separate alpha parameter. Each call appends one
+owned layer. Its `data=None` is direct-only, never parent lookup.
+
+Applicable families expose attached/pairwise significance methods and their
+facet/grid and independent-source forms. They consume caller-supplied p-values,
+literal marks or explicitly mapped categories; the renderer performs no tests or
+p-value adjustments. Ordinary result columns can use the retained main source.
+`_from_data(None, ...)` is direct-only. Explicit `target_value`/`left_value`/
+`right_value`, `mark` and `facet_value` select native scalar broadcasting;
+ordinary length-one variables stay vectors. Targets and facets use raw levels,
+not display aliases.
+
+`examples/supplied_results.py` combines independent observations, supplied trends/
+intervals and illustrative display p-values. Exact capability-gated call forms
+remain defined once in `specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
 
 ## Local development
 

@@ -14,8 +14,8 @@ core/adapter migration and its native delivery status. Scatter now has bounded
 installed transport verification across all four input routes, including selectors,
 MaskedArray, many-y, explicit row-position/numeric-discovery modes and fresh
 retained-source lookup. The other 24 families, flat geometry and base configuration
-now have focused installed verification; layers/results and final complete
-interface verification remain open.
+now have focused installed verification. The selected scientific surface is
+implemented; final independent distribution/content/cost verification remains open.
 The workspace/interface plan records the current scope and remaining delivery gate.
 
 The inventory covers all 25 existing families, their primary input alternatives
@@ -434,12 +434,11 @@ The selected selector bounds, pandas key identities, MaskedArray validity,
 callback ownership and exception translation are implemented with bounded
 verification recorded in the parent plan. Bootstrap units, status mappings and
 supplied KDE use ordinary inputs and explicit independent contexts. Alpha mappings
-also have their separate delivered closure. Independent layers/results and their
-exact method signatures remain work under
-`94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`, followed by final distribution verification.
-They must use ordinary inputs, not require Rust payload objects or silently
-borrow a parent source. Per-API mapping connects Python calls to existing Rust
-behavior; it is not a new scientific model.
+and independent layers/results also have their separate delivered closures under
+`94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`; final distribution/content/cost checks
+remain open. Their ordinary inputs do not require Rust payload objects or make an
+independent None borrow the main source. Per-API mapping connects Python calls to existing
+Rust behavior; it is not a new scientific model.
 
 The table alone is not an installed-stub or native-ownership gate. Representative
 runtime/typing evidence belongs to the parent plan, not a family/container

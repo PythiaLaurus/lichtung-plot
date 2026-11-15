@@ -6,8 +6,9 @@ This plan specifies the complete remaining scientific/numeric Python interface.
 All 25 constructors/alternatives, exact-family base data/facet/configuration
 methods, complete Canvas configuration, Theme/Text and numeric/locator policies,
 13 scientific/appearance/position values, all eight callback slots and all 75 alpha
-entries are implemented. Independent layers/results below remain targets, not
-delivered functionality. Current evidence and remaining gates
+entries, independent layers and significance results are implemented. This closes
+the selected scientific call surface, not final distribution/content/cost or
+test-budget acceptance. Current bounded evidence and remaining gates
 are recorded in `91_WORKSPACE_AND_INTERFACES_PLAN.md`. Constructor fields, modes,
 presence and flat geometry are defined once in `92_PYTHON_CONSTRUCTORS_PLAN.md`.
 Do not replace that inventory with a smaller family subset.
@@ -343,7 +344,8 @@ class, mode mirror, cache, new core reader or independent-None main-source fallb
 
 ### Independent Layer And Result Call Forms
 
-The following is the remaining implementation target, not delivered Python API.
+These call forms are implemented, with bounded installed verification recorded in
+`91_WORKSPACE_AND_INTERFACES_PLAN.md`.
 Only Line exposes
 `point_layer(data=None, *, x, y, labels=None, color=None, radius=None, alpha=None, legend_label=None, legend_label_style=omitted, legend_label_layout=omitted, label_text_layout=None)`.
 Only Bar/HorizontalBar expose
@@ -432,8 +434,8 @@ already-existing attached-facet/grid native helpers.
 
 The owning policy values, full-family forwarding and all eight physical slots
 are implemented within the bounded checks recorded in the workspace/interface
-plan. This does not imply layer/result delivery or final
-distribution/content/cost and budget acceptance.
+plan. That evidence alone does not certify the separate scientific closures or
+final distribution/content/cost and budget acceptance.
 
 No new core numeric reader is required. Owning policies and existing scoped
 callback views have distinct lifetimes; do not replace a scoped view by a detached

@@ -13,6 +13,8 @@ use super::{native_snapshot, policy, CallbackSlot, NativePlot, PlotRoots};
 use crate::callbacks::{self, CallbackRoots};
 use crate::input::{
     self, AlphaBinsArgs, AlphaInputArgs, AlphaMapArgs, AlphaRequestArgs, AlphaSourceArgs,
+    AttachedArgs, BarPointLayerArgs, LinePointLayerArgs, PairwiseArgs, ResultMarksArgs,
+    ResultScopeArgs, ResultSourceArgs, ResultTargetArgs,
 };
 use crate::output::{PyOutput, Terminal};
 use crate::values::numeric::{PyNumericFormat, PyTickGeneration};
@@ -66,6 +68,13 @@ macro_rules! prepare_capability {
     };
     (EstimateStatus, $native:expr, $config:ident => $body:expr) => {
         prepare_kinds!($native, [PointInterval, Coefficient, Forest], $config => $body)
+    };
+    (AttachedSignificance, $native:expr, $config:ident => $body:expr) => {
+        prepare_kinds!($native, [Bar, HorizontalBar, Coefficient], $config => $body)
+    };
+    (PairwiseSignificance, $native:expr, $config:ident => $body:expr) => {
+        prepare_kinds!($native, [Bar, HorizontalBar, StackedBar, StackedHorizontalBar,
+            Boxplot, Violin, Raincloud], $config => $body)
     };
     (PointAlpha, $native:expr, $config:ident => $body:expr) => {
         prepare_kinds!($native, [Scatter, Qq, PointInterval, Line, Trajectory, LinePath,
@@ -490,6 +499,179 @@ owner_api! {
         fn facet_grid_columns_column(row: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_column(config, roots, row);
         fn facet_grid_columns_row_cells(column: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_row_cells(config, roots, column);
         fn facet_grid_columns_column_cells(row: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_column_cells(config, roots, row);
+
+        // Keep every presence-sensitive result/layer value as Bound. Only an
+        // independent source's None becomes absence, never main-source lookup.
+        #[allow(clippy::too_many_arguments, reason = "complete independent Line layer fields and legend presence markers")]
+        fn line_point_layer(
+            data: &Bound<'_, PyAny>, x: &Bound<'_, PyAny>, y: &Bound<'_, PyAny>,
+            labels: &Bound<'_, PyAny>, color: &Bound<'_, PyAny>, radius: &Bound<'_, PyAny>,
+            alpha: &Bound<'_, PyAny>, legend_label: &Bound<'_, PyAny>,
+            legend_label_style: &Bound<'_, PyAny>, legend_label_layout: &Bound<'_, PyAny>,
+            label_text_layout: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): Line => input::line_point_layer(slf.py(), config, roots, LinePointLayerArgs {
+            data: (!data.is_none()).then_some(data), x, y, labels, color, radius, alpha,
+            legend_label, legend_label_style, legend_label_layout, label_text_layout, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "exclusive attached target and mark forms retain all presence markers")]
+        fn significance_attached(
+            target: &Bound<'_, PyAny>, target_value: &Bound<'_, PyAny>,
+            target_series: &Bound<'_, PyAny>, marks: &Bound<'_, PyAny>,
+            mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Main,
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Unfaceted, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent attached source, target and mark presence markers")]
+        fn significance_attached_from_data(
+            data: &Bound<'_, PyAny>, target: &Bound<'_, PyAny>,
+            target_value: &Bound<'_, PyAny>, target_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Unfaceted, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "attached target, marks and exclusive facet presence markers")]
+        fn significance_attached_in_facet(
+            target: &Bound<'_, PyAny>, target_value: &Bound<'_, PyAny>,
+            target_series: &Bound<'_, PyAny>, marks: &Bound<'_, PyAny>,
+            mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet: &Bound<'_, PyAny>, facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Main,
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Facet { facet, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent attached source, target, marks and facet presence markers")]
+        fn significance_attached_in_facet_from_data(
+            data: &Bound<'_, PyAny>, target: &Bound<'_, PyAny>,
+            target_value: &Bound<'_, PyAny>, target_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet: &Bound<'_, PyAny>, facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Facet { facet, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "attached target, marks and exclusive grid presence markers")]
+        fn significance_attached_in_grid(
+            target: &Bound<'_, PyAny>, target_value: &Bound<'_, PyAny>,
+            target_series: &Bound<'_, PyAny>, marks: &Bound<'_, PyAny>,
+            mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet_row: &Bound<'_, PyAny>, facet_column: &Bound<'_, PyAny>,
+            facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Main,
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Grid { facet_row, facet_column, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent attached source, target, marks and grid presence markers")]
+        fn significance_attached_in_grid_from_data(
+            data: &Bound<'_, PyAny>, target: &Bound<'_, PyAny>,
+            target_value: &Bound<'_, PyAny>, target_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet_row: &Bound<'_, PyAny>, facet_column: &Bound<'_, PyAny>,
+            facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): AttachedSignificance => input::significance_attached(slf.py(), config, roots, AttachedArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            target: ResultTargetArgs { input: target, series: target_series, value: target_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Grid { facet_row, facet_column, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "exclusive pairwise targets and marks retain all presence markers")]
+        fn significance_pairwise(
+            left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Main,
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Unfaceted, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent pairwise source, targets and mark presence markers")]
+        fn significance_pairwise_from_data(
+            data: &Bound<'_, PyAny>, left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Unfaceted, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "pairwise targets, marks and exclusive facet presence markers")]
+        fn significance_pairwise_in_facet(
+            left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet: &Bound<'_, PyAny>, facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Main,
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Facet { facet, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent pairwise source, targets, marks and facet presence markers")]
+        fn significance_pairwise_in_facet_from_data(
+            data: &Bound<'_, PyAny>, left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet: &Bound<'_, PyAny>, facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Facet { facet, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "pairwise targets, marks and exclusive grid presence markers")]
+        fn significance_pairwise_in_grid(
+            left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet_row: &Bound<'_, PyAny>, facet_column: &Bound<'_, PyAny>,
+            facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Main,
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Grid { facet_row, facet_column, facet_value }, unset,
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent pairwise source, targets, marks and grid presence markers")]
+        fn significance_pairwise_in_grid_from_data(
+            data: &Bound<'_, PyAny>, left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>,
+            left_value: &Bound<'_, PyAny>, right_value: &Bound<'_, PyAny>,
+            left_series: &Bound<'_, PyAny>, right_series: &Bound<'_, PyAny>,
+            marks: &Bound<'_, PyAny>, mapping: &Bound<'_, PyAny>, mark: &Bound<'_, PyAny>,
+            facet_row: &Bound<'_, PyAny>, facet_column: &Bound<'_, PyAny>,
+            facet_value: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PairwiseSignificance => input::significance_pairwise(slf.py(), config, roots, PairwiseArgs {
+            source: ResultSourceArgs::Independent((!data.is_none()).then_some(data)),
+            left: ResultTargetArgs { input: left, series: left_series, value: left_value },
+            right: ResultTargetArgs { input: right, series: right_series, value: right_value },
+            marks: ResultMarksArgs { marks, mapping, mark },
+            scope: ResultScopeArgs::Grid { facet_row, facet_column, facet_value }, unset,
+        });
 
         // D receives the original values and presence markers, including byte
         // literals and map settings. Collection fields stay Bound -> Some(field):
@@ -1082,6 +1264,32 @@ owner_api! {
     }
     }
     manual {
+    fn bar_point_layer(
+        slf: &Bound<'_, Self>,
+        data: &Bound<'_, PyAny>,
+        category: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        color: &Bound<'_, PyAny>,
+        radius: &Bound<'_, PyAny>,
+        series: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::prepare_input(slf, |native, roots| {
+            let args = BarPointLayerArgs {
+                data: (!data.is_none()).then_some(data), category, value, series, color, radius,
+            };
+            match native {
+                NativePlot::Bar(config) => input::bar_point_layer(slf.py(), config, roots, args)
+                    .map(|prepared| PreparedPlot::new(prepared, NativePlot::Bar)),
+                NativePlot::HorizontalBar(config) =>
+                    input::horizontal_bar_point_layer(slf.py(), config, roots, args)
+                        .map(|prepared| PreparedPlot::new(prepared, NativePlot::HorizontalBar)),
+                _ => Err(PyTypeError::new_err(
+                    "this exact plot family does not support that input operation",
+                )),
+            }
+        })
+    }
+
     fn point_alpha_theme(slf: &Bound<'_, Self>) -> PyResult<()> {
         Self::update(slf, |native| {
             map_capability!(PointAlpha, native, plot =>

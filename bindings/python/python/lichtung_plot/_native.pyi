@@ -3360,6 +3360,76 @@ class _PlotOwner:
     def text_annotation(
         self, position: TextPosition, text: _Text, style: object, layout: object, unset: object,
     ) -> None: ...
+    def line_point_layer(
+        self, data: object, x: object, y: object, labels: object, color: object,
+        radius: object, alpha: object, legend_label: object, legend_label_style: object,
+        legend_label_layout: object, label_text_layout: object, unset: object,
+    ) -> None: ...
+    def bar_point_layer(
+        self, data: object, category: object, value: object, color: object,
+        radius: object, series: object,
+    ) -> None: ...
+    def significance_attached(
+        self, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object, unset: object,
+    ) -> None: ...
+    def significance_attached_from_data(
+        self, data: object, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object, unset: object,
+    ) -> None: ...
+    def significance_attached_in_facet(
+        self, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object,
+        facet: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_attached_in_facet_from_data(
+        self, data: object, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object,
+        facet: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_attached_in_grid(
+        self, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object, facet_row: object,
+        facet_column: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_attached_in_grid_from_data(
+        self, data: object, target: object, target_value: object, target_series: object,
+        marks: object, mapping: object, mark: object, facet_row: object,
+        facet_column: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise(
+        self, left: object, right: object, left_value: object, right_value: object,
+        left_series: object, right_series: object, marks: object,
+        mapping: object, mark: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise_from_data(
+        self, data: object, left: object, right: object, left_value: object,
+        right_value: object, left_series: object, right_series: object,
+        marks: object, mapping: object, mark: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise_in_facet(
+        self, left: object, right: object, left_value: object, right_value: object,
+        left_series: object, right_series: object, marks: object, mapping: object,
+        mark: object, facet: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise_in_facet_from_data(
+        self, data: object, left: object, right: object, left_value: object,
+        right_value: object, left_series: object, right_series: object,
+        marks: object, mapping: object, mark: object,
+        facet: object, facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise_in_grid(
+        self, left: object, right: object, left_value: object, right_value: object,
+        left_series: object, right_series: object, marks: object, mapping: object,
+        mark: object, facet_row: object, facet_column: object,
+        facet_value: object, unset: object,
+    ) -> None: ...
+    def significance_pairwise_in_grid_from_data(
+        self, data: object, left: object, right: object, left_value: object,
+        right_value: object, left_series: object, right_series: object,
+        marks: object, mapping: object, mark: object,
+        facet_row: object, facet_column: object, facet_value: object, unset: object,
+    ) -> None: ...
     def point_alpha(self, input: object) -> None: ...
     def point_alpha_cells(self, input: object) -> None: ...
     def point_alpha_linear(

@@ -8,9 +8,11 @@ mod columns;
 mod facets;
 mod families;
 mod geometry;
+mod layers;
 mod pandas;
 pub(crate) mod polars;
 mod selectors;
+mod significance;
 mod wide;
 
 pub(crate) use alpha::{
@@ -40,7 +42,15 @@ pub(crate) use families::{
     WaterfallArgs,
 };
 pub(crate) use geometry::{composite_precomputed_kde, histogram, raincloud};
+pub(crate) use layers::{
+    bar_point_layer, horizontal_bar_point_layer, line_point_layer, BarPointLayerArgs,
+    LinePointLayerArgs,
+};
 pub(crate) use selectors::register;
+pub(crate) use significance::{
+    significance_attached, significance_pairwise, AttachedArgs, PairwiseArgs, ResultMarksArgs,
+    ResultScopeArgs, ResultSourceArgs, ResultTargetArgs,
+};
 pub(crate) use wide::{boxplot, heatmap, line, line_band, matrix, violin};
 
 use lichtung_plot::{kind, Labels, Plot};

@@ -28,22 +28,22 @@ modes and numeric discovery, flat named geometry arguments, strict signed positi
 selection, exact pandas column keys, MaskedArray validity, immutable configuration
 values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
 below are settled implementation directions, supported by bounded prototypes and
-explicit API discussion. The current package implements only the subset recorded
-below; native configuration sharing is delivered and the Python subset has bounded
-installed verification, not complete interface delivery.
+explicit API discussion. The current package implements the binding/scientific
+surface recorded below with bounded installed verification; this is not final
+distribution/content/cost certification.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
-the complete scientific interface contract and its remaining layer/result
-work. The
+the complete implemented scientific interface contract and remaining verification
+gates. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
 delivered. All 25 Python constructors, their alternatives and exact-family typing,
 base data/facet/configuration methods, complete Theme/Text and numeric policies,
 13 scientific/appearance/position values, eight callback slots and all 75 alpha
-entries are implemented. Independent layers/results and final distribution/content/
-cost closure still need implementation and verification.
+entries, independent point layers and significance results are implemented.
+Final distribution/content/cost closure still needs implementation and verification.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -58,18 +58,19 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
 | Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Plot Clone shares the authored description's payload; Plot exports borrow that description directly, Canvas placement moves it, and one operation-local Root/occurrence registry supplies measurement factories without temporary working Plots. Recorded native placement, render/replay/failure, composed/shared-guide and cross-adapter checks passed. This is not a zero-copy/constant-cost guarantee or Python lifecycle evidence. |
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
-| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and independent archives passed; Python Scatter now preserves the matching native/origin version through copies, policy edits and stale-safe input commits. |
+| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors, exact-family base configuration, complete Canvas configuration, eight callback slots and all 75 alpha entries have bounded installed verification below. Layers/results and final distribution/content/cost checks remain open; this is not complete binding delivery. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Final distribution/content/cost checks remain open; this is not overall plan acceptance. |
 | Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix/independent-sdist evidence; current all-family constructors, geometry and edits have separate focused wheel evidence below, not a repeated transport matrix or current sdist certification. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
-| Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
+| Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
+| Integrated content/package/site closure | Earlier Rust adapter examples, peer guides/site and source archives have their recorded verification. Bounded Python wheel/earlier unpacked-sdist checks passed; a current full-interface sdist, complete per-family content/gallery and cost closure remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
 
-`bindings/python/` is the sole binding package. The following implemented subset
+`bindings/python/` is the sole binding package. The following implemented interface
 has the bounded installed verification described below:
 
 - All 25 exact families accept their selected native/NumPy/pandas/eager-Polars
@@ -117,6 +118,14 @@ has the bounded installed verification described below:
   columns use the actual context's namespace through the existing projection,
   including its new identity-only constructor, without importing unrelated values.
   The eight persistent callback slots and exact construction origins are unchanged.
+- Independent layers and supplied results append through 14 thin owner entries,
+  covering 63 exact-family methods. Line and Bar/HorizontalBar retain distinct
+  native layer capabilities. Attached and pairwise placement remain capability-
+  gated, with all six native context/facet/grid forms each. Explicit literals
+  alone set scalar flags; result rows are independent of primary observations.
+  Native producers retain facet/target/mark/count order and use-time membership/
+  p-value validation. Auxiliary lookup sources/keys/aliases do not enter owner
+  roots, and construction origin/metadata remain unchanged.
 - The mixed package uses PyO3 =0.29.2 with abi3-py310, rust-numpy =0.29.0 and the
   existing ndarray/Polars adapters. The core remains the independent default
   workspace member. Eager Python Polars/runtime-32 =1.41.2 exports public Arrow
@@ -250,8 +259,8 @@ These are focused family/owner checks, not a new all-container matrix. The third
 3.10/NumPy-2 prefix remains on the earlier input wheel. There is no independently
 unpacked/built/installed family sdist evidence yet; earlier input archives and the
 numeric archive inventory do not certify that source closure. Subsequent alpha
-evidence is separate below; layers/results, final distribution/content/cost and
-budget certification remain open.
+and layers/results evidence is separate below; final distribution/content/cost
+and budget certification remain open.
 
 For the alpha closure, strict locked/offline workspace all-target Clippy passed.
 One new private identity-only projection case used the real restored nonlocal
@@ -292,8 +301,48 @@ remain recorded, not reclassified as passing commands.
 
 The third 3.10/NumPy-2 prefix still uses the earlier input wheel. There is no new
 independently unpacked/built/installed alpha sdist evidence; old input archives and
-inventory inclusion do not certify this expanded closure. Independent layers/
-results and final distribution/content/cost/budget certification remain open.
+inventory inclusion do not certify that expanded closure. Subsequent layers/
+results evidence is separate below; final distribution/content/cost/budget
+certification remains open.
+
+For the independent layers/results closure, strict locked/offline workspace
+all-target Clippy and a new release cp310-abi3 wheel passed. Native scientific
+sources/dependencies were unchanged; no native suite or archives were repeated.
+All six focused runtime consumers passed on each of the same two providers above.
+They cover independent Line points/labels/legend Text clears and exact alpha,
+ordinary Bar positioned-series/RGBA layers, Coefficient attached result counts/
+p-value timing, mapped pairwise facet results, explicit grid scalar/vector cells,
+and completeness-before-lookup/stale-safe append. Actual per-panel glyph locations,
+not merely whole-figure counts, are checked.
+
+The initial facet consumer used a pandas auxiliary result table despite a PL
+primary plot, so it exercised the ND result producer. It was refined to use a
+real eager Polars result table with the same two rows and exact panel oracle.
+Only that case was rerun on each provider, passing the PL mapped-pairwise/facet
+producer and the selected-source frame-height branch. The old six passes remain
+separate evidence; they are not relabeled as a new full-six selection.
+
+The first installed typing invocation found twelve generic default-cast scope
+errors plus a Color fixture typo and two fixture error-code mismatches. Only
+twelve default cast strings and those three fixture locations changed. A new
+wheel shipped the corrected declarations; native binary and Rust sources stayed
+byte-identical. Both prefixes matched this wheel/native pair: SHA-256
+`3f0e82ccae2b10bc5e1d4355432f1353e71445eb464ea2e433b8fde965c2c4bf`
+and `41490ca5141985ed040ce21a14b789a0793579c8001f0fffe2f258588092c716`.
+Strict installed mypy passed ten explicit roots (three shipped modules/seven
+fixtures) and all 194 guards, using the 3.13 checker with the 3.10 language/provider
+target. Recursive single-root stubtest passed all three shipped modules without
+an allowlist. Already successful Clippy and other runtime cases were not repeated.
+
+Dependency checks and explicit comparisons preserved all 17 original third-party
+pins in each prefix. The unchanged supplied-results example ran outside the
+checkout on the corrected wheel; its actual PNG was inspected for complete
+independent points, supplied trend/band and Bar intervals/comparison brackets,
+axes/units, legend and synthetic/not-computed caveat. Initial compilation and
+17-error typing failures remain recorded as failures. These are focused scientific
+consumer checks, not a new four-route/family matrix, full Rust gate or current
+independently unpacked source-package certification. The third prefix still has
+the earlier input wheel.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -301,11 +350,12 @@ Repository-wide test-budget review identified excess module-integration coverage
 the limits have not been certified. Test deduplication remains a final closure
 task after the complete planned interface is implemented, rather than blocking
 the remaining implementation stages. Overall plan acceptance is not complete;
-the complete Python binding is not delivered.
+complete-interface release/content/cost delivery is not yet certified.
 
-Independent layers/results still need implementation,
-their exact typing and real consumers, followed by final distribution/content/cost
-observations. Constructor closure is not complete-interface closure.
+The selected scientific API, exact typing and real layer/result consumers are
+implemented. Final independent distribution verification, complete content/gallery
+and same-source cost observations remain, followed by last-stage test deduplication
+and unchanged-budget certification. Functional closure is not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints
@@ -320,7 +370,7 @@ The 2026-11-06 prototypes below are not runs of this package.
 | Python input | Exactly four data-source families: Python native data, NumPy arrays, pandas DataFrame/Series and eager Polars DataFrame/Series. Convert internally to core values; do not expose NumericValues/CategoryValues/AxisValues, Bounds, closed source inputs or geometry payload classes as another public data-input route. |
 | Python construction | For source-plus-variable calls, data is the only positional argument; variables use keywords. Common optional bindings such as Scatter hue also have chainable setters using the same input/native validation path. Support mixed selectors/direct values, not type-dependent positional reinterpretation. |
 | Python overloads | One runtime callable per family checks explicit scientific keyword combinations and selects native paths. Shipped typing.overload signatures describe distinct legal call forms for editors/type checkers; they do not perform runtime dispatch or validation. |
-| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. All 25 constructor/base-owner and alpha declarations, including explicit modes, discovery and named geometry, are delivered; exact layer/result declarations remain to be completed. |
+| Python typing and constructor inventory | Use concise ordinary aliases for supported containers/selectors and meaningful overloads, not exhaustive scalar-width signatures or untyped kwargs. All selected constructor, base-owner, alpha and layer/result declarations are delivered, including explicit modes, discovery and named geometry; installed typing evidence is bounded above. |
 | Python explicit modes and discovery | by_row_position=True on Scatter/Line generates zero-based row x and excludes explicit x; by_column_name=True on Boxplot/Violin/sample Raincloud makes each column a category and excludes explicit category. numeric_only=True explicitly discovers supported numeric columns in source order for those modes and Matrix, including numeric IDs; it excludes manual y/value/variables. No omission/schema/value-based inference. |
 | Supplied distribution geometry | Flat named Histogram bins/KDE/rug and Raincloud summary/density/point columns, not nested payloads, geometry maps/TypedDict protocols or required wrappers. Keep native sample/geometry exclusivity and complete-geometry restrictions. Bind independent component sources and preserve raw-key membership/original point rows; labels are display text, not scientific keys. |
 | Python column selection | Use col[key] for one exact field and cols[...] for an ordered column collection or signed-step positional slice. Slices address logical column positions on NumPy, pandas and eager Polars tables; explicit out-of-bounds endpoints fail rather than clip. NumPy positional keys support negative indices, while pandas integer keys remain literal labels. Bare list/tuple inputs remain direct data; retain native projections, without parallel selector aliases or schema guessing. |
