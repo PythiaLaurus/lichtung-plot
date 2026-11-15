@@ -83,8 +83,9 @@ information, not by the full planned inventory.
 Theme exposes all eight native components and their nested paint, geometry,
 spacing, typography and palette values. TextLayout exposes all thirteen authored
 instructions. These appearance, text and PNG values comprise 84 immutable classes;
-Labels and numeric policies are separate. Other family-specific policies and the
-remaining numeric surface are still being implemented.
+Labels and numeric policies are separate. Complete owning numeric policies and
+locators are available; additional family-specific policies and formatter
+attachments are still being implemented.
 
 | Value | Read-only fields |
 | --- | --- |
@@ -94,7 +95,8 @@ remaining numeric surface are still being implemented.
 | `TextLayout` | Optional `alignment`, `fit_priority`, `direction`, `rotation_mode`, `offset`, `bounds`, `wrapping`, `overlap`, `fit`, `orientation`, `anchor`, `overflow`, `visibility`. |
 | `TextOffset` / `TextBounds` | `dx`, `dy`, `frame` / optional `max_width`, `max_height`, `max_lines`. |
 | `PngOptions` / `PngSizing` | `sizing`, `compression` / `kind`, `value`. |
-| `NumericFormat` / `TickGeneration` | `fractional_digits` / `is_automatic`, `target_count`, `maximum_count`. |
+| `NumericFormat` | `notation`, `precision`, `decimal_scale`, `prefix`, `suffix`, `negative_zero`, `trailing_zeros`. |
+| `TickGeneration` | `is_automatic`, `target_count`, `maximum_count`, `additive_step`, `decade_step`, `interval_parameters`, `multiplicative_parameters`. |
 | `NumericLabels` / `TickPositions` | `labels`, optional `explanation` / `kind`, `positions`. |
 | `Labels` | `mode` (`humanized`/`raw`), optional ordered string-pair `aliases`. |
 | `Output` | Frozen canonical `width`, `height`. |
@@ -131,6 +133,26 @@ Scatter accepts `NumericFormat.value_function(...)`, `NumericFormat.set_function
 and `TickGeneration.function(...)` through its x/y tick methods. Their context
 objects and nested views are valid only during that callback. New terminal
 operations may invoke the callable again; frozen Output publication does not.
+
+`NumericFormat` accepts the native notation/precision, rounding, scaling, locale,
+grouping, sign, field, prefix, unit and explanation policies, including
+`from_specifier(...)`. Use `NumericPrecision` and `NumericField` for precision and
+field requests. Copies retain unedited native policy and callback identity; only
+an explicit callback replacement installs a new callback. A callback key set to
+None selects the built-in formatter on that copy.
+
+Twelve immutable policy values cover precision, opaque fields, locale tokens,
+SI/compact/exact-factor selections, units and generated/authored explanations.
+Opaque values use complete construction or replacement rather than fabricated
+field readers. A unit's text is literal, not an instruction to convert observations.
+`NumericLabels` can replace a callback result's explanation; None removes that
+replacement, not an enclosing configured/generated explanation.
+
+Generated ticks include additive and log-decade requests, explicit intervals,
+multiplicative lattices, target/maximum counts and exact counts with singleton
+selection. Native domain/scale validation still applies, and exact authored ticks
+take precedence. `examples/complete_numeric.py` demonstrates native display
+policies without changing the bound observations.
 
 ## Local development
 

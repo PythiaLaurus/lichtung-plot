@@ -117,6 +117,18 @@ __all__: list[str] = [
     "PngSizing",
     "PngOptions",
     "NumericFormat",
+    "NumericPrecision",
+    "NumericField",
+    "NumericGrouping",
+    "NumericSymbols",
+    "NumericCurrency",
+    "NumericLocale",
+    "SiPrefix",
+    "NumericCompactRule",
+    "NumericFactor",
+    "NumericPrefixes",
+    "NumericUnit",
+    "NumericExplanation",
     "TickGeneration",
     "TickPositions",
     "NumericLabels",
@@ -139,6 +151,27 @@ _FitGrouping = Literal["independent", "uniform"]
 _Elision = Literal["start", "middle", "end", "left", "right"]
 _Failure = Literal["error", "hide", "clip", "visible"]
 _Endpoints = Literal["none", "first", "last", "both"]
+_NumericNotation = Literal[
+    "decimal", "scientific", "engineering", "general", "integer_decimal",
+    "integer_binary", "integer_octal", "integer_hex_lower", "integer_hex_upper",
+]
+_NegativeZero = Literal["preserve", "normalize"]
+_TrailingZeros = Literal["keep", "trim"]
+_NumericRounding = Literal[
+    "nearest_even", "nearest_away", "nearest_toward_zero", "toward_zero",
+    "away_from_zero", "floor", "ceiling",
+]
+_NumericRate = Literal["value", "percent", "per_mille"]
+_NumericSign = Literal["negative_only", "always", "space", "accounting"]
+_NumericSymbol = Literal["none", "currency", "radix_prefix"]
+_NumericAlignment = Literal["left", "right", "center", "after_sign"]
+_NumericGroupRepeat = Literal["cycle", "last", "stop"]
+_NumericSelection = Literal["per_value", "whole_set"]
+_NumericPromotion = Literal["keep_threshold", "promote_on_rounding"]
+_NumericUnitPlacement = Literal["per_label", "shared"]
+_TickSpace = Literal["data", "scale"]
+_TickRequirement = Literal["fixed", "preferred"]
+_TickSingleton = Literal["lower", "midpoint", "upper"] | float
 
 class DataError(ValueError): ...
 class RenderError(RuntimeError): ...
@@ -2093,13 +2126,267 @@ _SetFunction = Callable[[NumericSetContext], NumericLabels | Sequence[str]]
 _TickFunction = Callable[[TickContext], TickPositions | Sequence[float]]
 
 @final
+class NumericPrecision:
+    def __new__(cls, _unavailable: NoReturn, /) -> NumericPrecision: ...
+    @staticmethod
+    def fractional(digits: int) -> NumericPrecision: ...
+    @staticmethod
+    def significant(digits: int) -> NumericPrecision: ...
+    @staticmethod
+    def adaptive_fractional(minimum: int, maximum: int) -> NumericPrecision: ...
+    @staticmethod
+    def adaptive_significant(minimum: int, maximum: int) -> NumericPrecision: ...
+    @property
+    def kind(
+        self,
+    ) -> Literal[
+        "fractional", "significant", "adaptive_fractional", "adaptive_significant"
+    ]: ...
+    @property
+    def digits(self) -> int | None: ...
+    @property
+    def minimum(self) -> int | None: ...
+    @property
+    def maximum(self) -> int | None: ...
+    def copy_with(
+        self, *, digits: int = ..., minimum: int = ..., maximum: int = ...
+    ) -> NumericPrecision: ...
+
+@final
+class NumericField:
+    def __new__(
+        cls, width: int, *, fill: str = " ", alignment: _NumericAlignment = "right"
+    ) -> NumericField: ...
+
+@final
+class NumericGrouping:
+    def __new__(
+        cls, separator: str, sizes: Sequence[int], *, repeat: _NumericGroupRepeat
+    ) -> NumericGrouping: ...
+    @property
+    def separator(self) -> str: ...
+    @property
+    def sizes(self) -> tuple[int, ...]: ...
+    @property
+    def repeat(self) -> _NumericGroupRepeat: ...
+    def copy_with(
+        self,
+        *,
+        separator: str = ...,
+        sizes: Sequence[int] = ...,
+        repeat: _NumericGroupRepeat = ...,
+    ) -> NumericGrouping: ...
+
+@final
+class NumericSymbols:
+    def __new__(
+        cls, positive: str, negative: str, percent: str, per_mille: str
+    ) -> NumericSymbols: ...
+    @property
+    def positive(self) -> str: ...
+    @property
+    def negative(self) -> str: ...
+    @property
+    def percent(self) -> str: ...
+    @property
+    def per_mille(self) -> str: ...
+    def copy_with(
+        self,
+        *,
+        positive: str = ...,
+        negative: str = ...,
+        percent: str = ...,
+        per_mille: str = ...,
+    ) -> NumericSymbols: ...
+
+@final
+class NumericCurrency:
+    def __new__(cls, prefix: str, suffix: str) -> NumericCurrency: ...
+    @property
+    def prefix(self) -> str: ...
+    @property
+    def suffix(self) -> str: ...
+    def copy_with(
+        self, *, prefix: str = ..., suffix: str = ...
+    ) -> NumericCurrency: ...
+
+@final
+class NumericLocale:
+    def __new__(cls, _unavailable: NoReturn, /) -> NumericLocale: ...
+    @staticmethod
+    def invariant() -> NumericLocale: ...
+    @staticmethod
+    def named(id: str) -> NumericLocale: ...
+    @staticmethod
+    def named_ids() -> tuple[str, ...]: ...
+    @staticmethod
+    def custom(
+        decimal: str,
+        digits: Sequence[str],
+        *,
+        grouping: NumericGrouping | None,
+        symbols: NumericSymbols,
+        currency: NumericCurrency,
+    ) -> NumericLocale: ...
+    @property
+    def decimal(self) -> str: ...
+    @property
+    def digits(self) -> tuple[str, ...]: ...
+    @property
+    def grouping(self) -> NumericGrouping | None: ...
+    @property
+    def symbols(self) -> NumericSymbols: ...
+    @property
+    def currency(self) -> NumericCurrency: ...
+    def copy_with(
+        self,
+        *,
+        decimal: str = ...,
+        digits: Sequence[str] = ...,
+        grouping: NumericGrouping | None = ...,
+        symbols: NumericSymbols = ...,
+        currency: NumericCurrency = ...,
+    ) -> NumericLocale: ...
+
+@final
+class SiPrefix:
+    def __new__(cls, _unavailable: NoReturn, /) -> SiPrefix: ...
+    @staticmethod
+    def from_exponent(exponent: int) -> SiPrefix: ...
+    @property
+    def exponent(self) -> int: ...
+    @property
+    def symbol(self) -> str: ...
+
+@final
+class NumericCompactRule:
+    def __new__(
+        cls, threshold: float, divisor: float, *, prefix: str, suffix: str
+    ) -> NumericCompactRule: ...
+    @property
+    def threshold(self) -> float: ...
+    @property
+    def divisor(self) -> float: ...
+    @property
+    def prefix(self) -> str: ...
+    @property
+    def suffix(self) -> str: ...
+    def copy_with(
+        self,
+        *,
+        threshold: float = ...,
+        divisor: float = ...,
+        prefix: str = ...,
+        suffix: str = ...,
+    ) -> NumericCompactRule: ...
+
+@final
+class NumericFactor:
+    def __new__(cls, _unavailable: NoReturn, /) -> NumericFactor: ...
+    @staticmethod
+    def automatic_decimal() -> NumericFactor: ...
+    @staticmethod
+    def from_value(value: float) -> NumericFactor: ...
+    @staticmethod
+    def power_of_ten(exponent: str) -> NumericFactor: ...
+    @property
+    def kind(self) -> Literal["automatic_decimal", "value", "power_of_ten"]: ...
+    @property
+    def value(self) -> float | None: ...
+    @property
+    def exponent(self) -> str | None: ...
+    def copy_with(
+        self, *, value: float = ..., exponent: str = ...
+    ) -> NumericFactor: ...
+
+@final
+class NumericPrefixes:
+    def __new__(cls, _unavailable: NoReturn, /) -> NumericPrefixes: ...
+    @staticmethod
+    def none() -> NumericPrefixes: ...
+    @staticmethod
+    def si(
+        selection: _NumericSelection | SiPrefix, *, promotion: _NumericPromotion
+    ) -> NumericPrefixes: ...
+    @staticmethod
+    def decimal_compact(
+        selection: _NumericSelection | int, *, promotion: _NumericPromotion
+    ) -> NumericPrefixes: ...
+    @staticmethod
+    def compact(
+        rules: Sequence[NumericCompactRule],
+        *,
+        selection: _NumericSelection | int,
+        promotion: _NumericPromotion,
+    ) -> NumericPrefixes: ...
+    @staticmethod
+    def factor(factor: NumericFactor) -> NumericPrefixes: ...
+
+@final
+class NumericUnit:
+    def __new__(
+        cls,
+        text: str,
+        *,
+        placement: _NumericUnitPlacement,
+        separator: str = " ",
+    ) -> NumericUnit: ...
+    @property
+    def text(self) -> str: ...
+    @property
+    def placement(self) -> _NumericUnitPlacement: ...
+    @property
+    def separator(self) -> str: ...
+    def copy_with(
+        self,
+        *,
+        text: str = ...,
+        placement: _NumericUnitPlacement = ...,
+        separator: str = ...,
+    ) -> NumericUnit: ...
+
+@final
+class NumericExplanation:
+    def __new__(cls, _unavailable: NoReturn, /) -> NumericExplanation: ...
+    @staticmethod
+    def automatic(
+        *, style: TextTheme | None = ..., layout: TextLayout | None = ...
+    ) -> NumericExplanation: ...
+    @staticmethod
+    def text(
+        value: str | Text,
+        *,
+        style: TextTheme | None = ...,
+        layout: TextLayout | None = ...,
+    ) -> NumericExplanation: ...
+    def copy_with(
+        self, *, style: TextTheme | None = ..., layout: TextLayout | None = ...
+    ) -> NumericExplanation: ...
+
+@final
 class NumericFormat:
     @overload
     def __new__(
         cls,
         *,
-        fractional_digits: int = 2,
-        field_width: int | None = None,
+        notation: _NumericNotation = "decimal",
+        precision: NumericPrecision = ...,
+        decimal_scale: int = 0,
+        prefix: str | None = None,
+        suffix: str | None = None,
+        negative_zero: _NegativeZero = "preserve",
+        trailing_zeros: _TrailingZeros = "keep",
+        rounding: _NumericRounding = "nearest_even",
+        multiplier: float = 1.0,
+        rate: _NumericRate = "value",
+        locale: NumericLocale = ...,
+        grouping: bool = False,
+        sign: _NumericSign = "negative_only",
+        symbol: _NumericSymbol = "none",
+        field: NumericField | None = None,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = None,
+        explanation: NumericExplanation = ...,
         value_function: _ValueFunction | None = None,
         set_function: None = None,
     ) -> NumericFormat: ...
@@ -2107,39 +2394,158 @@ class NumericFormat:
     def __new__(
         cls,
         *,
-        fractional_digits: int = 2,
-        field_width: int | None = None,
+        notation: _NumericNotation = "decimal",
+        precision: NumericPrecision = ...,
+        decimal_scale: int = 0,
+        prefix: str | None = None,
+        suffix: str | None = None,
+        negative_zero: _NegativeZero = "preserve",
+        trailing_zeros: _TrailingZeros = "keep",
+        rounding: _NumericRounding = "nearest_even",
+        multiplier: float = 1.0,
+        rate: _NumericRate = "value",
+        locale: NumericLocale = ...,
+        grouping: bool = False,
+        sign: _NumericSign = "negative_only",
+        symbol: _NumericSymbol = "none",
+        field: NumericField | None = None,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = None,
+        explanation: NumericExplanation = ...,
         value_function: None = None,
         set_function: _SetFunction,
     ) -> NumericFormat: ...
     @staticmethod
+    def from_specifier(specifier: str) -> NumericFormat: ...
+    @staticmethod
     def value_function(
-        callback: _ValueFunction, *, fractional_digits: int = 2, field_width: int | None = None
+        callback: _ValueFunction,
+        *,
+        notation: _NumericNotation = "decimal",
+        precision: NumericPrecision = ...,
+        decimal_scale: int = 0,
+        prefix: str | None = None,
+        suffix: str | None = None,
+        negative_zero: _NegativeZero = "preserve",
+        trailing_zeros: _TrailingZeros = "keep",
+        rounding: _NumericRounding = "nearest_even",
+        multiplier: float = 1.0,
+        rate: _NumericRate = "value",
+        locale: NumericLocale = ...,
+        grouping: bool = False,
+        sign: _NumericSign = "negative_only",
+        symbol: _NumericSymbol = "none",
+        field: NumericField | None = None,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = None,
+        explanation: NumericExplanation = ...,
     ) -> NumericFormat: ...
     @staticmethod
     def set_function(
-        callback: _SetFunction, *, fractional_digits: int = 2, field_width: int | None = None
+        callback: _SetFunction,
+        *,
+        notation: _NumericNotation = "decimal",
+        precision: NumericPrecision = ...,
+        decimal_scale: int = 0,
+        prefix: str | None = None,
+        suffix: str | None = None,
+        negative_zero: _NegativeZero = "preserve",
+        trailing_zeros: _TrailingZeros = "keep",
+        rounding: _NumericRounding = "nearest_even",
+        multiplier: float = 1.0,
+        rate: _NumericRate = "value",
+        locale: NumericLocale = ...,
+        grouping: bool = False,
+        sign: _NumericSign = "negative_only",
+        symbol: _NumericSymbol = "none",
+        field: NumericField | None = None,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = None,
+        explanation: NumericExplanation = ...,
     ) -> NumericFormat: ...
     @property
-    def fractional_digits(self) -> int | None: ...
+    def notation(self) -> _NumericNotation: ...
+    @property
+    def precision(self) -> NumericPrecision: ...
+    @property
+    def decimal_scale(self) -> int: ...
+    @property
+    def prefix(self) -> str | None: ...
+    @property
+    def suffix(self) -> str | None: ...
+    @property
+    def negative_zero(self) -> _NegativeZero: ...
+    @property
+    def trailing_zeros(self) -> _TrailingZeros: ...
     @overload
     def copy_with(
-        self, *, fractional_digits: int = ..., field_width: int | None = ...
+        self,
+        *,
+        notation: _NumericNotation = ...,
+        precision: NumericPrecision = ...,
+        decimal_scale: int = ...,
+        prefix: str = ...,
+        suffix: str = ...,
+        negative_zero: _NegativeZero = ...,
+        trailing_zeros: _TrailingZeros = ...,
+        rounding: _NumericRounding = ...,
+        multiplier: float = ...,
+        rate: _NumericRate = ...,
+        locale: NumericLocale = ...,
+        grouping: bool = ...,
+        sign: _NumericSign = ...,
+        symbol: _NumericSymbol = ...,
+        field: NumericField | None = ...,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = ...,
+        explanation: NumericExplanation = ...,
     ) -> NumericFormat: ...
     @overload
     def copy_with(
         self,
         *,
-        fractional_digits: int = ...,
-        field_width: int | None = ...,
+        notation: _NumericNotation = ...,
+        precision: NumericPrecision = ...,
+        decimal_scale: int = ...,
+        prefix: str = ...,
+        suffix: str = ...,
+        negative_zero: _NegativeZero = ...,
+        trailing_zeros: _TrailingZeros = ...,
+        rounding: _NumericRounding = ...,
+        multiplier: float = ...,
+        rate: _NumericRate = ...,
+        locale: NumericLocale = ...,
+        grouping: bool = ...,
+        sign: _NumericSign = ...,
+        symbol: _NumericSymbol = ...,
+        field: NumericField | None = ...,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = ...,
+        explanation: NumericExplanation = ...,
         value_function: _ValueFunction | None,
     ) -> NumericFormat: ...
     @overload
     def copy_with(
         self,
         *,
-        fractional_digits: int = ...,
-        field_width: int | None = ...,
+        notation: _NumericNotation = ...,
+        precision: NumericPrecision = ...,
+        decimal_scale: int = ...,
+        prefix: str = ...,
+        suffix: str = ...,
+        negative_zero: _NegativeZero = ...,
+        trailing_zeros: _TrailingZeros = ...,
+        rounding: _NumericRounding = ...,
+        multiplier: float = ...,
+        rate: _NumericRate = ...,
+        locale: NumericLocale = ...,
+        grouping: bool = ...,
+        sign: _NumericSign = ...,
+        symbol: _NumericSymbol = ...,
+        field: NumericField | None = ...,
+        prefixes: NumericPrefixes = ...,
+        unit: NumericUnit | None = ...,
+        explanation: NumericExplanation = ...,
         set_function: _SetFunction | None,
     ) -> NumericFormat: ...
 
@@ -2151,12 +2557,22 @@ class TickGeneration:
     @staticmethod
     def additive(step: float) -> TickGeneration: ...
     @staticmethod
+    def log10_decades(decades: int) -> TickGeneration: ...
+    @staticmethod
+    def interval(
+        step: float, origin: float, *, space: _TickSpace, requirement: _TickRequirement
+    ) -> TickGeneration: ...
+    @staticmethod
+    def multiplicative(
+        anchor: float, ratio: float, *, requirement: _TickRequirement
+    ) -> TickGeneration: ...
+    @staticmethod
     def target(count: int) -> TickGeneration: ...
     @staticmethod
     def maximum(count: int) -> TickGeneration: ...
     @staticmethod
     def exact_count(
-        count: int, *, space: Literal["data", "scale"] = "data"
+        count: int, *, space: _TickSpace = "data", singleton: _TickSingleton = "lower"
     ) -> TickGeneration: ...
     @staticmethod
     def function(callback: _TickFunction) -> TickGeneration: ...
@@ -2166,7 +2582,21 @@ class TickGeneration:
     def target_count(self) -> int | None: ...
     @property
     def maximum_count(self) -> int | None: ...
-    def copy_with(self, *, maximum_count: int | None = ...) -> TickGeneration: ...
+    @property
+    def additive_step(self) -> float | None: ...
+    @property
+    def decade_step(self) -> int | None: ...
+    @property
+    def interval_parameters(
+        self,
+    ) -> tuple[float, float, _TickSpace, _TickRequirement] | None: ...
+    @property
+    def multiplicative_parameters(
+        self,
+    ) -> tuple[float, float, _TickRequirement] | None: ...
+    def copy_with(
+        self, *, singleton: _TickSingleton = ..., maximum_count: int | None = ...
+    ) -> TickGeneration: ...
 
 @final
 class TickPositions:
@@ -2184,14 +2614,24 @@ class TickPositions:
 @final
 class NumericLabels:
     def __new__(
-        cls, labels: Sequence[str], *, explanation: str | Text | None = None
+        cls,
+        labels: Sequence[str],
+        *,
+        explanation: str | Text | None = None,
+        style: TextTheme | None = ...,
+        layout: TextLayout | None = ...,
     ) -> NumericLabels: ...
     @property
     def labels(self) -> tuple[str, ...]: ...
     @property
     def explanation(self) -> Text | None: ...
     def copy_with(
-        self, *, labels: Sequence[str] = ..., explanation: str | Text | None = ...
+        self,
+        *,
+        labels: Sequence[str] = ...,
+        explanation: str | Text | None = ...,
+        style: TextTheme | None = ...,
+        layout: TextLayout | None = ...,
     ) -> NumericLabels: ...
 
 @final

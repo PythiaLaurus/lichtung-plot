@@ -186,7 +186,7 @@ def test_numeric_clear_finalizer_reentry_observes_cleared_value_not_pyborrow() -
     assert isinstance(events[0], RuntimeError) and "cleared" in str(events[0])
     clear_gc_object(format)
     with pytest.raises(RuntimeError, match="cleared"):
-        _ = format.fractional_digits
+        _ = format.precision
 
 
 def test_owner_clear_finalizers_reenter_after_native_and_roots_are_taken() -> None:

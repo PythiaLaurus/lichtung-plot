@@ -2,9 +2,10 @@
 
 ## Status And Authority
 
-This is the selected implementation target for the remaining Python surface,
-not delivered functionality or new verification evidence. Four-route Scatter and
-complete Theme/Text values are implemented; current evidence and remaining gates
+This plan specifies the complete remaining scientific/numeric Python interface.
+Four-route Scatter, complete Theme/Text values and the owning numeric/locator
+policies are implemented; exact-family expansion and related attachments below
+remain targets, not delivered functionality. Current evidence and remaining gates
 are recorded in `91_WORKSPACE_AND_INTERFACES_PLAN.md`. Constructor fields, modes,
 presence and flat geometry are defined once in `92_PYTHON_CONSTRUCTORS_PLAN.md`.
 Do not replace that inventory with a smaller family subset.
@@ -255,6 +256,11 @@ Do not calculate tests or adjustments, expose result payload classes, or add
 already-existing attached-facet/grid native helpers.
 
 ## Complete Numeric Values And Callback Slots
+
+The owning policy values and the existing Scatter x/y consumers are implemented
+within the bounded checks recorded in the workspace/interface plan. The four
+additional formatter attachments and full-family forwarding remain planned;
+neither complete eight-slot wiring nor overall interface delivery follows.
 
 No new core numeric reader is required. Owning policies and existing scoped
 callback views have distinct lifetimes; do not replace a scoped view by a detached

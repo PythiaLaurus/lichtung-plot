@@ -61,7 +61,8 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native naming/shape/order checks, external consumers and installed Scatter input checks passed. |
 | Python lifecycle decision and complete binding | Four-route Scatter/lifecycle/Labels and accurate subset typing are installed-verified below. The other 24 families, full scientific/configuration surface, all callback slots and final cost/content checks remain open; this is not complete binding delivery. |
 | Python input boundaries | Implemented for Scatter: strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits. Sampled runtime/typing checks and expanded-closure independent sdist build/install/runtime verification passed. |
-| Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Focused installed runtime, strict typing, recursive stubtest and an external example passed within the scope below. Family-specific appearance policies and full numeric values remain open. |
+| Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Focused installed runtime, strict typing, recursive stubtest and an external example passed within the scope below. Family-specific appearance policies remain open; owning numeric values have their separate closure below. |
+| Python owning numeric values | Implemented: twelve additional native-only policy values, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, with shared TextIntent results and existing x/y consumers. Focused installed checks passed below; four additional formatter attachments and full-family forwarding remain open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
@@ -90,6 +91,14 @@ has the bounded installed verification described below:
   replacement. It holds the native policy; source/key roots are physical GC edges,
   not a second Labels store. Native `get_labels`/mode/aliases readers serve these
   actual consumers.
+- Twelve owning numeric values complete precision/field, locale, prefix/factor,
+  unit and explanation configuration. NumericFormat exposes all eighteen policy
+  inputs, native specifier compilation and seven existing native readers.
+  TickGeneration includes interval, multiplicative and log-decade factories,
+  singleton/cap derivation and existing native parameter readers. Old
+  fractional_digits/field_width shorthand is removed and callers migrated, not
+  retained as a second API. Only the four existing x/y owner slots are connected;
+  the other four formatter attachments still need their actual family consumers.
 - The mixed package uses PyO3 =0.29.2 with abi3-py310, rust-numpy =0.29.0 and the
   existing ndarray/Polars adapters. The core remains the independent default
   workspace member. Eager Python Polars/runtime-32 =1.41.2 exports public Arrow
@@ -169,6 +178,25 @@ its actual PNG was inspected. Installed dependency checks passed without changin
 third-party pins. Final full-interface source-package build/install/runtime and
 cost/content closure remain open; earlier archives do not certify later additions.
 
+For the owning numeric closure, strict workspace all-target Clippy and one exact
+private compiled-policy/emitter-identity case passed. The new release cp310-abi3
+wheel passed 15 focused runtime cases on both CPython 3.10 and 3.13: nine new
+drivers and six existing affected cases, including both parameterized replacement
+finalizer branches. After review-driven test-only changes, the two affected
+Explanation/singleton cases passed focused retries on both interpreters; the
+successful 15-case selections were not repeated. The only later Rust change was
+inside cfg(test); all preceding production bytes remained identical to the wheel
+source, and strict Clippy/the one native case passed again.
+Installed strict mypy checked seven explicit shipped/fixture
+roots on the 3.10 provider/language target with all 107 targeted negative guards;
+recursive single-root stubtest passed for all three shipped modules without an
+allowlist. No full Rust suite or input runtime matrix was repeated.
+The numeric example ran outside the checkout and its actual PNG was inspected;
+dependency checks preserved the original provider pins. Initial Clippy warnings
+and the separate prelaunch selection-count assertion remain recorded, not
+reclassified as successful invocations. Final eight-slot, full-family,
+distribution/content/cost and budget closure remain open.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Repository-wide test-budget review identified excess module-integration coverage;
@@ -178,8 +206,9 @@ the remaining implementation stages. Overall plan acceptance is not complete;
 the complete Python binding is not delivered.
 
 The other 24 constructor families, full scientific/policy methods and flat
-geometry, remaining configuration values, all eight callback slots, alpha/status/
-layers/results, full-surface typing and final cost observations remain planned.
+geometry, family-specific appearance/statistical values, completion of the eight
+callback slots, alpha/status/layers/results, full-surface typing and final cost
+observations remain planned.
 They are not permanently reduced to Scatter. The 2026-11-06 prototypes below are
 not runs of this package.
 
@@ -727,9 +756,9 @@ The implemented immutable-value closure completes the existing Theme/Text roots,
 not a new owner hierarchy or scientific-data route. It retains the original 21
 appearance/text/PNG classes, adds the 54 Theme descendants and nine Text value
 classes below, and extends the same Theme and TextLayout classes. Labels was
-delivered with the input codec and is not implemented again. Numeric policies and
-six additional appearance-policy roots with family-specific callers belong to
-their subsequent consumer phases.
+delivered with the input codec and is not implemented again. Owning numeric
+policies are delivered separately; six additional appearance-policy roots with
+family-specific callers still belong to their subsequent consumer phases.
 
 Every wrapper holds only its complete native value. Ordinary records expose
 keyword-only typed construction, getter-only named fields and keyword-only

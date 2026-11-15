@@ -12,8 +12,10 @@ import pytest
 
 from lichtung_plot import (
     DataError,
+    NumericField,
     NumericFormat,
     NumericLabels,
+    NumericPrecision,
     RenderError,
     Text,
     TickGeneration,
@@ -281,7 +283,7 @@ def test_native_helper_is_truly_lazy_and_caught_error_is_not_pending(
     # is valid: only explicitly requesting the built-in helper allocates a field.
     enormous_width = sys.maxsize * 2 + 1
     ignored = NumericFormat.value_function(
-        lambda view: str(view.index), field_width=enormous_width
+        lambda view: str(view.index), field=NumericField(enormous_width)
     )
     plot = figure().x_tick_format(ignored)
     plot.svg_preserve_text(tmp_path / "ignored-helper")
@@ -569,12 +571,12 @@ def test_numeric_value_derivation_keeps_native_policy_and_callback_identity(
     tmp_path: Path,
 ) -> None:
     original = NumericFormat.value_function(lambda view: view.format_builtin())
-    derived = original.copy_with(fractional_digits=1)
-    assert original.fractional_digits == 2 and derived.fractional_digits == 1
+    derived = original.copy_with(precision=NumericPrecision.fractional(1))
+    assert original.precision.digits == 2 and derived.precision.digits == 1
     with pytest.raises(AttributeError):
-        derived.fractional_digits = 3
+        derived.precision = NumericPrecision.fractional(3)
     with pytest.raises(DataError):
-        original.copy_with(fractional_digits=255)
+        original.copy_with(precision=NumericPrecision.fractional(255))
     with pytest.raises(TypeError):
         original.copy_with(value_function=None, set_function=None)
     figure().x_tick_format(derived).svg_preserve_text(tmp_path / "derived-format")
