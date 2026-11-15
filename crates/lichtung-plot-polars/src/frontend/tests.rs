@@ -133,6 +133,10 @@ fn expanded_lines_preserve_actual_x_row_maps_native_alpha_declarations_and_repla
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "projected grid dimensions, provenance and restored labels share one native comparison"
+)]
 fn rectangular_bindings_validate_dimensions_and_never_repeat_row_ids() {
     let (plot, metadata) = {
         let grid = df!(
@@ -141,10 +145,14 @@ fn rectangular_bindings_validate_dimensions_and_never_repeat_row_ids() {
             "raw_right" => [Some(5.), Some(6.)],
         )
         .unwrap();
-        crate::Heatmap::new(&grid).unwrap().into_parts()
+        let names = ["raw_left", "raw_middle", "raw_right", "unimported"];
+        let projection = crate::ColumnProjection::new(2, &names, grid.columns()).unwrap();
+        crate::Heatmap::new(&projection).unwrap().into_parts()
     };
     let grid = crate::Heatmap::from_parts(plot, metadata);
     let wrong = df!("a" => [true, false, true], "b" => [false, true, false]).unwrap();
+    let names = ["a", "b", "c", "unimported"];
+    let wrong = crate::ColumnProjection::new(3, &names, wrong.columns()).unwrap();
     match grid.clone().heatmap_highlight(&wrong) {
         Err(crate::AdapterError::Binding {
             role: "heatmap highlights",
@@ -156,12 +164,27 @@ fn rectangular_bindings_validate_dimensions_and_never_repeat_row_ids() {
         }
         _ => panic!("the restored grid must reject a transposed cell shape"),
     }
+    let wrong_ids = df!("a" => [1u32, 3, 5], "b" => [2u32, 4, 6]).unwrap();
+    let wrong_ids = crate::ColumnProjection::new(3, &names, wrong_ids.columns()).unwrap();
+    assert!(matches!(
+        grid.clone().source_rows(&wrong_ids),
+        Err(crate::AdapterError::Binding {
+            role: "source rows",
+            ..
+        })
+    ));
     assert!(grid
         .clone()
         .source_rows(&Series::new("id".into(), [1u32, 2]))
         .is_err());
-    let highlight = df!("a" => [true, false], "b" => [false, false], "c" => [false, true]).unwrap();
+    let highlight = df!("a" => [true, false], "b" => [true, false], "c" => [false, true]).unwrap();
     let ids = df!("a" => [1u32, 4], "b" => [2u32, 5], "c" => [3u32, 6]).unwrap();
+    let highlight = crate::ColumnProjection::new(2, &names, highlight.columns()).unwrap();
+    let ids = crate::ColumnProjection::new(2, &names, ids.columns()).unwrap();
+    assert_eq!(
+        crate::SourceRowsInput::bind_source_rows_repeated(&ids, None, "source rows", 3).unwrap(),
+        crate::SourceRows::new([1, 2, 3, 4, 5, 6]).unwrap()
+    );
     let plot = grid
         .heatmap_highlight(&highlight)
         .unwrap()
@@ -212,7 +235,7 @@ fn rectangular_bindings_validate_dimensions_and_never_repeat_row_ids() {
     )
     .heatmap_highlight(crate::BooleanValues::new(
         "Highlights",
-        [true, false, false, false, false, true],
+        [true, true, false, false, false, true],
     ))
     .source_rows(crate::SourceRows::new([1, 2, 3, 4, 5, 6]).unwrap())
     .labels(

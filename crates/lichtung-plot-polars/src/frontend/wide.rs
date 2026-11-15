@@ -4,6 +4,7 @@ use polars_core::prelude::DataFrame;
 
 use super::PlotAdapter;
 use crate::error::{binding, length, BindingResult};
+use crate::input::sealed::Sealed;
 use crate::{
     kind, AdapterError, CategoryInput, CategoryValues, ColumnsInput, FacetSpec, NumericInput,
     NumericSeriesInput, NumericValues, Plot, RaincloudInput, SourceRowsInput,
@@ -25,10 +26,12 @@ impl Expansion {
         labels: Vec<String>,
         local: bool,
         source: Option<&DataFrame>,
+        source_names: &[String],
         other: &str,
     ) -> BindingResult<Self> {
         let mut field = "Variable".to_owned();
         while field == other
+            || source_names.contains(&field)
             || source.is_some_and(|source| {
                 source
                     .columns()
@@ -85,7 +88,7 @@ impl Expansion {
     }
 }
 
-pub(super) fn numeric_names(source: &DataFrame) -> Vec<&str> {
+pub(crate) fn numeric_names(source: &DataFrame) -> Vec<&str> {
     source
         .columns()
         .iter()
@@ -117,13 +120,21 @@ macro_rules! numeric_family {
                 x: impl NumericInput,
                 y: impl NumericSeriesInput,
             ) -> BindingResult<Self> {
+                let source_names = Sealed::source_names_snapshot(&y);
                 let (y, shape) = y.bind_series(source, "y")?;
                 let copies = shape.as_ref().map_or(1, |(_, columns, _)| columns.len());
                 let x = x.bind_numeric_repeated(source, "x", copies)?;
                 length("y", y.name(), x.len(), y.len())?;
                 let expansion = shape
                     .map(|(rows, labels, local)| {
-                        Expansion::new(rows, labels, local, source, x.name())
+                        Expansion::new(
+                            rows,
+                            labels,
+                            local,
+                            source,
+                            source_names.as_deref().unwrap_or_default(),
+                            x.name(),
+                        )
                     })
                     .transpose()?;
                 let len = y.len();
@@ -159,6 +170,7 @@ macro_rules! numeric_family {
                 source: Option<&'source DataFrame>,
                 columns: impl ColumnsInput,
             ) -> BindingResult<Self> {
+                let source_names = Sealed::source_names_snapshot(&columns);
                 let local = columns.local_identities();
                 let (values, shape) =
                     crate::input::multiple(&columns.bind_columns(source)?, local, "y")?;
@@ -172,7 +184,14 @@ macro_rules! numeric_family {
                     "Row",
                     (0..rows).flat_map(|row| std::iter::repeat_n(row as f64, labels.len())),
                 );
-                let expansion = Expansion::new(rows, labels, local, source, "Row")?;
+                let expansion = Expansion::new(
+                    rows,
+                    labels,
+                    local,
+                    source,
+                    source_names.as_deref().unwrap_or_default(),
+                    "Row",
+                )?;
                 let len = values.len();
                 let plot = Plot::$native(x, values).hue(expansion.categories.clone());
                 let plot = ($group)(plot, expansion.categories.clone());
@@ -214,13 +233,21 @@ macro_rules! distribution_family {
                 category: impl CategoryInput,
                 values: impl NumericSeriesInput,
             ) -> BindingResult<Self> {
+                let source_names = Sealed::source_names_snapshot(&values);
                 let (values, shape) = values.bind_series(source, "value")?;
                 let copies = shape.as_ref().map_or(1, |(_, columns, _)| columns.len());
                 let category = category.bind_category_repeated(source, "category", copies)?;
                 length("samples", values.name(), category.len(), values.len())?;
                 let expansion = shape
                     .map(|(rows, labels, local)| {
-                        Expansion::new(rows, labels, local, source, category.name())
+                        Expansion::new(
+                            rows,
+                            labels,
+                            local,
+                            source,
+                            source_names.as_deref().unwrap_or_default(),
+                            category.name(),
+                        )
                     })
                     .transpose()?;
                 let len = values.len();
@@ -255,12 +282,20 @@ macro_rules! distribution_family {
                 source: Option<&'source DataFrame>,
                 columns: impl ColumnsInput,
             ) -> BindingResult<Self> {
+                let source_names = Sealed::source_names_snapshot(&columns);
                 let local = columns.local_identities();
                 let (values, shape) =
                     crate::input::multiple(&columns.bind_columns(source)?, local, "value")?;
                 let (rows, labels, local) =
                     shape.ok_or_else(|| binding("columns", "expected selected columns"))?;
-                let expansion = Expansion::new(rows, labels, local, source, values.name())?;
+                let expansion = Expansion::new(
+                    rows,
+                    labels,
+                    local,
+                    source,
+                    source_names.as_deref().unwrap_or_default(),
+                    values.name(),
+                )?;
                 let len = values.len();
                 let plot = ($native)(expansion.categories.clone(), values);
                 let mut adapter = Self::bound(plot, source, Some(len));

@@ -7,6 +7,8 @@
 //! [`PlotAdapter::into_parts`] preserves source-free [`BindingMetadata`] alongside
 //! the native Plot; restore the matching pair with [`PlotAdapter::from_parts`] or
 //! [`PlotAdapter::from_parts_with_data`] without reconstructing its configuration.
+//! [`ColumnProjection`] associates borrowed one-column sources with their original
+//! logical coordinates; optional raw identities remain separate from display labels.
 //!
 //! Strided, transposed, reversed, Fortran and broadcast views follow logical index
 //! order. Nulls and present NaNs stay distinct; numeric primitives round to f64.
@@ -32,6 +34,7 @@ mod error;
 mod frontend;
 mod input;
 mod layers;
+mod projection;
 mod significance;
 mod snapshot;
 mod source;
@@ -47,6 +50,7 @@ pub use input::{
     SourceRowsInput,
 };
 pub use layers::{BarPointLayerAdapter, PointLayerAdapter};
+pub use projection::ColumnProjection;
 pub use significance::*;
 pub use source::ArraySource;
 

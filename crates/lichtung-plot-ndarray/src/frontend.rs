@@ -15,6 +15,8 @@ mod geometry;
 mod grid;
 #[cfg(test)]
 mod metadata_tests;
+#[cfg(test)]
+mod projection_tests;
 mod status;
 mod wide;
 

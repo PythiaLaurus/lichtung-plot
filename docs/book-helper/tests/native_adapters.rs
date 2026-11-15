@@ -10,6 +10,35 @@ fn same_plot<K: pp::kind::Marker>(plot: pp::Plot<K>) -> nd::Plot<K> {
 
 fn source_free_metadata<T: Clone + Send + Sync + 'static>(_: &T) {}
 
+fn projected_polars_matrix(source: &DataFrame) -> nd::Plot<nd::kind::Matrix> {
+    let names = source
+        .columns()
+        .iter()
+        .map(|column| column.name().as_str())
+        .collect::<Vec<_>>();
+    let columns = [
+        source.column("y_value").unwrap().clone(),
+        source.column("x_value").unwrap().clone(),
+    ];
+    let projection = pp::ColumnProjection::new(source.height(), &names, &columns).unwrap();
+    pp::Matrix::new(&projection).unwrap().into()
+}
+
+fn projected_ndarray_scatter(
+    table: &ndarray::Array2<f64>,
+) -> (
+    nd::Plot<nd::kind::Scatter>,
+    nd::BindingMetadata<nd::kind::Scatter>,
+) {
+    let x = table.slice(ndarray::s![.., 0..1]);
+    let columns: [(usize, &dyn nd::ArraySource); 1] = [(0, &x)];
+    let projection = nd::ColumnProjection::new(table.dim(), &columns).unwrap();
+    let transient = array![1., 2., 3.];
+    let right = nd::Scatter::from_data(projection, 0, transient.view()).unwrap();
+    drop(transient);
+    right.into_parts()
+}
+
 fn native_banded_line() -> nd::Plot<nd::kind::Line> {
     pp::Plot::line(
         pp::NumericValues::new("x_value", [0., 5., 20.]),
@@ -46,8 +75,7 @@ fn native_paths_and_source_handoffs_preserve_canvas_label_inheritance() {
     source_free_metadata(&metadata);
     let left = pp::Scatter::from_parts(plot, metadata);
     let left: nd::Plot<nd::kind::Scatter> = same_plot(left.into());
-    let shared = pp::Matrix::from_data(&frame, ["y_value", "x_value"]).unwrap();
-    let _: nd::Plot<nd::kind::Matrix> = shared.into();
+    let _: nd::Plot<nd::kind::Matrix> = projected_polars_matrix(&frame);
     assert!(matches!(
         pp::Scatter::from_data(&frame, "x_value", "condition"),
         Err(pp::AdapterError::UnsupportedDtype { channel: "y", .. })
@@ -66,10 +94,7 @@ fn native_paths_and_source_handoffs_preserve_canvas_label_inheritance() {
     drop(frame);
 
     let mut table = array![[0., 1.], [5., 2.], [20., 3.]];
-    let transient = array![1., 2., 3.];
-    let right = nd::Scatter::from_data(table.view(), 0, transient.view()).unwrap();
-    drop(transient);
-    let (plot, metadata) = right.into_parts();
+    let (plot, metadata) = projected_ndarray_scatter(&table);
     source_free_metadata(&metadata);
     let right = nd::Scatter::from_parts(plot, metadata);
     let right: pp::Plot<pp::kind::Scatter> = right.into();

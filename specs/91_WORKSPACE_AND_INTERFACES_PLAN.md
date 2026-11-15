@@ -52,7 +52,8 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
 | Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Plot Clone shares the authored description's payload; Plot exports borrow that description directly, Canvas placement moves it, and one operation-local Root/occurrence registry supplies measurement factories without temporary working Plots. Recorded native placement, render/replay/failure, composed/shared-guide and cross-adapter checks passed. This is not a zero-copy/constant-cost guarantee or Python lifecycle evidence. |
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
-| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Focused ownership/cache/alignment/grid/geometry checks, the external cross-adapter consumer, public examples/compile-fail boundaries, strict Clippy, API docs and independent native archives passed. Constructor projections and Python data bridges remain separate pending work. |
+| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Focused ownership/cache/alignment/grid/geometry checks, the external cross-adapter consumer, public examples/compile-fail boundaries, strict Clippy, API docs and independent native archives passed. Python owner-pair integration and data bridges remain separate pending work. |
+| Bound-only adapter projections | Implemented: ndarray preserves original coordinates and optional stable raw identities; Polars preserves the complete names namespace with selected Columns and shared numeric discovery. Focused native behavior, affected wide/grid callers, the external consumer and the ndarray public example passed. Real Python bridges/importers remain pending. |
 | Python lifecycle decision and complete binding | Bounded native-data lifecycle/value/callback behavior and accurate subset typing are installed-verified in the environments below; independently unpacked sdist build/install also passed. The remaining product gate is recorded below. The complete four-route/25-family interface and remaining values/input typing are not delivered; selected semantics are unchanged. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
@@ -329,10 +330,10 @@ extension of accepted Rust foreign-container types or evidence of a Python bridg
 
 ### Source-Free Metadata And Constructor Projections
 
-Source-free metadata round-trip below is delivered; constructor projections remain
-reviewed implementation targets, not delivered APIs. These are separate acceptance
-boundaries supporting the selected Python input routes without retaining borrowed
-Rust adapters or duplicating their origin/shape algorithms. The core and the Python
+Source-free metadata round-trip and constructor projections below are implemented
+native adapter APIs, with separate acceptance boundaries. They support the selected
+Python input routes without retaining borrowed Rust adapters or duplicating their
+origin/shape algorithms. The core and the Python
 public data-input surface do not change.
 
 #### Source-Free Exact-Family Metadata
@@ -407,7 +408,7 @@ or a new scientific-validation boundary.
 
 #### ndarray Original-Coordinate Projection
 
-Add one root-exported `ColumnProjection` in a private production module:
+ndarray exports one `ColumnProjection` from a private production module:
 
 ```rust
 pub struct ColumnProjection<'columns> { /* private */ }
@@ -510,7 +511,7 @@ their existing private ordinals and positional display defaults.
 
 #### Polars Names-Aware Selected-Column Projection
 
-Add the distinct root-exported Polars descriptor in a private production module:
+Polars exports its distinct descriptor from a private production module:
 
 ```rust
 pub struct ColumnProjection<'columns> { /* private */ }
@@ -574,12 +575,11 @@ disappear through filtering. Explicit selections bypass discovery entirely.
 Test explicit [a,b] versus discovered [b,a], unused Decimal/Struct Variable* name
 avoidance, namespace union, empty selected names, zero rows and one-column
 collections. A real bound-only Arrow importer remains a separate implementation
-and compatibility gate; these Rust targets are not FFI evidence.
+and compatibility gate; these Rust APIs and checks are not FFI evidence.
 
-These two descriptors are precise, reviewed exceptions to the current adapter
-contract's no-source-wrapper rule, solely for preserving original coordinates
-and names while using existing binding algorithms. Update that current contract
-with the working implementations, not in anticipation. They do not create a
+These two descriptors are precise exceptions documented in the current adapter
+contract, solely for preserving original coordinates and names while using
+existing binding algorithms. They do not create a
 general source framework, conversion catalog, selector DSL, Python Rust-payload
 input route, cross-adapter dependency or another renderer.
 

@@ -62,8 +62,11 @@ cross-family pairing; callers must keep matching Plot/metadata versions together
 Complete labels/facet replacement still uses the ordinary adapter methods.
 Existing `.into()` and `erase()` intentionally discard metadata as well as lookup.
 
-There is no public conversion-function catalog, source wrapper, data-role wrapper,
-`data(source)` factory, `build`, `into_native`, Deref escape or adapter Canvas.
+There is no public conversion-function catalog, general source framework, data-role
+wrapper, selector DSL, `data(source)` factory, `build`, `into_native`, Deref escape
+or adapter Canvas. The two borrowed `ColumnProjection` descriptors below are narrow
+exceptions for importing selected columns with their original coordinate/name
+authority; they do not introduce another scientific representation.
 Sealed input protocols exist only for well-formed public signatures; callers pass
 ordinary supported views, tuples, selections and native policies without importing
 or implementing those traits. Production modules remain private.
@@ -177,6 +180,7 @@ native Internal/HistogramOnly policies, with only one native precomputed x/y for
 | Direct many-y | Ordered borrowed Series/Column collection | ArrayView2 or matching validity pair |
 | All columns | Explicit `..` in column-selection modes | Explicit `..` in column-selection modes |
 | Rectangle | Numeric DataFrame/ordered columns | Numeric two-dimensional view/validity pair |
+| Bound-only projection | Borrowed `&ColumnProjection`, for ordered columns, numeric series, Boolean grids and source IDs | `ColumnProjection` as a borrowed original-coordinate `ArraySource` |
 
 Selections are ordered, nonempty and unique; missing/out-of-range selectors fail
 at binding. A one-element collection still expands a column dimension. A name
@@ -190,6 +194,51 @@ roles without re-expansion. Foreign status/result/selector metadata is resolved
 from foreign variables; native typed statuses/annotations/encodings have their
 unchanged direct attachment operations. No composite compatibility-only method
 replaces the native closed-input API.
+
+### Bound-Only Column Projections
+
+Each adapter exports its own `ColumnProjection<'columns>` from a private
+production module. Both borrow call-local descriptors, not observations owned by
+a new table model. Their structural checks do not replace native dtype,
+scientific, display or render validation. These APIs alone are not Python/Arrow
+importers.
+
+ndarray `ColumnProjection::new((rows, logical_columns), columns)` associates
+original indices with borrowed one-column `ArraySource` values. Entries may have
+different admitted element types, strides and present masks. Indices must be
+unique and in bounds; each source has the original row count, one column and
+valid existing validity shape. The descriptor reports the original complete
+shape. Missing value entries fail explicitly; `..` still requests all original
+columns. Role extraction delegates once and remaps physical-column-zero dtype
+and source-row diagnostics to the original index.
+
+Optional `.with_identities(&[(index, raw_identity)])` borrows unique indices and
+unique exact raw strings, covering all value entries. Extra in-bounds
+identity-only entries support generated-column integer targets without reading
+those target columns' values; they do not permit value lookup. Explicit missing
+identities never fall back to positional names. Without this opt-in, ordinary
+views and projections keep their original `Column N` naming. Scalar, axis, alpha,
+wide and Matrix field names use the same identity transport. Generated fields
+avoid the entire supplied identity table; direct-local ordinals, grid positional
+keys and exact SourceRows values remain unchanged. Current-source indices are
+not frozen constructor positions or a codec address space.
+
+Polars `ColumnProjection::new(rows, source_names, columns)` borrows the complete
+ordered raw namespace separately from the selected Columns. It checks nonempty,
+unique selections, unique namespace names, membership and original row counts;
+empty raw names are legal. Unselected unsupported fields need contribute only
+names, not values, placeholder dtypes or a complete Rust schema. The four existing
+wide producers avoid the union of that namespace, any main DataFrame namespace
+and the other bound field. Scratch names do not enter Plot/BindingMetadata or
+become a retained lookup source.
+
+`ColumnProjection::numeric_names(&DataFrame)` shares existing discovery through
+`DataType::is_primitive_numeric()`, preserving source order and typed empty/all-null
+numeric fields. Explicit selections do not invoke discovery. Projected collections
+remain selected/non-native-slot inputs, including one-column collections; Boolean
+and ID grids retain row-major order, per-dimension shape checks and no row-ID
+repetition. Empty selected names keep their raw identities; only direct-local
+empty names receive the existing `Column N` display fallback.
 
 ### Common Value Semantics
 

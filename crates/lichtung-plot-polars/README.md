@@ -31,6 +31,13 @@ source-free `BindingMetadata<K>`. Restore the pair with `from_parts`, or
 does not refresh values or validate matching versions; callers must keep each
 same-family Plot/metadata candidate pair together.
 
+`ColumnProjection::new(source_rows, source_names, columns)` borrows selected
+Columns plus the complete ordered raw names namespace, including unimported
+fields. It remains a collection even with one column and installs no lookup
+source. Existing extractors retain dtype, cell-shape and exact-ID checks.
+`ColumnProjection::numeric_names(&frame)` shares the existing primitive-numeric
+discovery predicate. This Rust facility is not evidence of an Arrow/Python bridge.
+
 Constructors are available for all 25 native families,
 including supplied bounds, bar sample/estimate modes and flat supplied geometry.
 `Heatmap::new(&numeric_frame)` binds a rectangle; `Heatmap::from_data(frame, ["a",

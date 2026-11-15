@@ -10,6 +10,11 @@ use crate::{
 };
 
 pub(crate) mod sealed {
+    pub enum AxisKind {
+        Numeric,
+        Category,
+    }
+
     pub trait Sealed {
         fn native_slots(&self) -> bool {
             false
@@ -20,20 +25,44 @@ pub(crate) mod sealed {
         fn selected_columns(&self) -> Option<&[usize]> {
             None
         }
+        fn column_identities(&self) -> Option<&[(usize, &str)]> {
+            None
+        }
+        fn axis_kind(&self, _: usize, role: &'static str) -> super::BindingResult<AxisKind> {
+            Err(super::binding(
+                role,
+                "this input is not an array axis source",
+            ))
+        }
+    }
+}
+fn axis_kind<T: ArrayElement>(index: usize, role: &'static str) -> BindingResult<sealed::AxisKind> {
+    if T::NUMERIC {
+        Ok(sealed::AxisKind::Numeric)
+    } else if T::CATEGORY {
+        Ok(sealed::AxisKind::Category)
+    } else {
+        Err(crate::error::unsupported_column::<T>(role, index))
     }
 }
 impl sealed::Sealed for usize {}
 impl sealed::Sealed for RangeFull {}
 impl<T> sealed::Sealed for ArrayView1<'_, T> {}
-impl<T> sealed::Sealed for ArrayView2<'_, T> {
+impl<T: ArrayElement> sealed::Sealed for ArrayView2<'_, T> {
     fn cell_shape(&self) -> Option<(usize, usize)> {
         Some(self.dim())
     }
+    fn axis_kind(&self, index: usize, role: &'static str) -> BindingResult<sealed::AxisKind> {
+        axis_kind::<T>(index, role)
+    }
 }
 impl<T> sealed::Sealed for (ArrayView1<'_, T>, ArrayView1<'_, bool>) {}
-impl<T> sealed::Sealed for (ArrayView2<'_, T>, ArrayView2<'_, bool>) {
+impl<T: ArrayElement> sealed::Sealed for (ArrayView2<'_, T>, ArrayView2<'_, bool>) {
     fn cell_shape(&self) -> Option<(usize, usize)> {
         Some(self.0.dim())
+    }
+    fn axis_kind(&self, index: usize, role: &'static str) -> BindingResult<sealed::AxisKind> {
+        axis_kind::<T>(index, role)
     }
 }
 macro_rules! native {
@@ -83,7 +112,9 @@ macro_rules! role_input {
         }
         impl $trait for usize {
             fn $raw(self, source: Option<&dyn ArraySource>, role: &'static str) -> BindingResult<Raw<$ty>> {
-                Ok((crate::source::name(self), crate::source::lookup(source, self, role)?.$column(self, role)?))
+                let source = crate::source::lookup(source, self, role)?;
+                let values = source.$column(self, role)?;
+                Ok((crate::source::identity(Some(source), self, role)?, values))
             }
         }
         impl<T: ArrayElement + $bound> $trait for ArrayView1<'_, T> {

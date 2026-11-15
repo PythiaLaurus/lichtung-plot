@@ -131,12 +131,12 @@ impl<'source> PlotAdapter<'source, kind::Matrix> {
             .iter()
             .map(|(index, _)| {
                 if local {
-                    format!("__lichtung_matrix_{index}")
+                    Ok(format!("__lichtung_matrix_{index}"))
                 } else {
-                    crate::source::name(*index)
+                    crate::source::identity(source.as_deref(), *index, "matrix variables")
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<BindingResult<Vec<_>>>()?;
         let labels = columns
             .iter()
             .map(|(index, _)| crate::source::name(*index))

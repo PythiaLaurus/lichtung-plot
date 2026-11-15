@@ -21,6 +21,7 @@ mod frontend;
 mod input;
 mod layers;
 mod numeric;
+mod projection;
 mod provenance;
 mod significance;
 mod snapshot;
@@ -39,6 +40,7 @@ pub use input::{
 };
 pub use layers::{BarPointLayerAdapter, PointLayerAdapter};
 pub use lichtung_plot::*;
+pub use projection::ColumnProjection;
 pub use significance::*;
 
 #[cfg(test)]

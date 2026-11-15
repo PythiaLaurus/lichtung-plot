@@ -32,9 +32,11 @@ impl AlphaValuesInput for u8 {
 }
 impl AlphaValuesInput for usize {
     fn bind_alpha_values(self, source: Option<&dyn ArraySource>) -> BindingResult<AlphaValues> {
+        let source = crate::source::lookup(source, self, "alpha bytes")?;
+        let values = source.byte_column(self, "alpha bytes")?;
         Ok(AlphaValues::new(
-            crate::source::name(self),
-            crate::source::lookup(source, self, "alpha bytes")?.byte_column(self, "alpha bytes")?,
+            crate::source::identity(Some(source), self, "alpha bytes")?,
+            values,
         )?)
     }
 }

@@ -24,6 +24,10 @@ The latter retains a safe read-only array descriptor for later logical-column
 lookup; `.into()` releases it and moves the owned native plot. Direct vectors and
 matrices are snapshotted immediately and do not become implicit lookup sources.
 
+- `ColumnProjection::new(original_shape, &[(original_index, &one_column_source)])`
+  borrows only supplied columns while preserving original bounds and selections.
+  Optional `.with_identities(...)` transports raw field identities independently
+  of positions and display labels; identity-only entries do not supply values.
 - One-dimensional views bind variables; `usize` selects a logical source column.
 - Explicit many-y matrices/index collections preserve actual x. `indexed` and
   column-distribution methods deliberately choose omitted-coordinate meanings.

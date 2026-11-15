@@ -10,6 +10,9 @@ use crate::{AdapterError, AxisValues, BooleanValues, CategoryValues, NumericValu
 
 pub(crate) mod sealed {
     pub trait Sealed {
+        fn source_names_snapshot(&self) -> Option<Vec<String>> {
+            None
+        }
         fn native_slots(&self) -> bool {
             false
         }
@@ -348,7 +351,7 @@ pub(crate) fn multiple(
         .iter()
         .enumerate()
         .map(|(index, column)| {
-            if column.name().is_empty() {
+            if local && column.name().is_empty() {
                 format!("Column {}", index + 1)
             } else {
                 column.name().to_string()
@@ -403,7 +406,7 @@ macro_rules! many_series {
 many_series!(&Column);
 many_series!(&Series);
 
-fn boolean_cells(columns: &[Column]) -> BindingResult<BooleanValues> {
+pub(crate) fn boolean_cells(columns: &[Column]) -> BindingResult<BooleanValues> {
     let rows = columns[0].len();
     let cells = rows
         .checked_mul(columns.len())
@@ -421,7 +424,7 @@ fn boolean_cells(columns: &[Column]) -> BindingResult<BooleanValues> {
     }
     Ok(BooleanValues::nullable("Highlights", values))
 }
-fn source_cells(columns: &[Column]) -> BindingResult<SourceRows> {
+pub(crate) fn source_cells(columns: &[Column]) -> BindingResult<SourceRows> {
     let rows = columns[0].len();
     let cells = rows
         .checked_mul(columns.len())

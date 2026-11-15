@@ -20,6 +20,8 @@ mod status;
 mod tests;
 mod wide;
 
+pub(crate) use wide::numeric_names;
+
 /// Source-free binding state paired with one exact-family native [`Plot`].
 ///
 /// This opaque value retains the adapter's alignment, display and expansion

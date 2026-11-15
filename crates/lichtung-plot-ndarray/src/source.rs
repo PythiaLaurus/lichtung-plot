@@ -5,7 +5,8 @@ use crate::error::{unsupported_column, BindingResult};
 use crate::input::sealed;
 use crate::{ArrayElement, AxisValues, CategoryValues, NumericValues};
 
-/// Sealed array-table inputs, including `(values, present)` two-dimensional views.
+/// Sealed array-table inputs: two-dimensional views, `(values, present)` pairs
+/// and explicit [`crate::ColumnProjection`] descriptors.
 /// Rows are observations and selectors always address logical columns.
 pub trait ArraySource: sealed::Sealed {
     #[doc(hidden)]
@@ -35,6 +36,26 @@ pub(crate) fn name(index: usize) -> String {
         || format!("Column index {index}"),
         |position| format!("Column {position}"),
     )
+}
+pub(crate) fn identity(
+    source: Option<&dyn ArraySource>,
+    index: usize,
+    role: &'static str,
+) -> BindingResult<String> {
+    let Some(identities) = source.and_then(sealed::Sealed::column_identities) else {
+        return Ok(name(index));
+    };
+    lookup(source, index, role)?;
+    identities
+        .iter()
+        .find(|(column, _)| *column == index)
+        .map(|(_, identity)| (*identity).to_owned())
+        .ok_or_else(|| {
+            crate::error::binding(
+                role,
+                format!("no raw identity supplied for logical column {index}"),
+            )
+        })
 }
 pub(crate) fn lookup<'a>(
     source: Option<&'a dyn ArraySource>,

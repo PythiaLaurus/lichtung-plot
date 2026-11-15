@@ -16,23 +16,31 @@ pub(super) struct Expansion {
     aliases: Vec<(String, String)>,
 }
 impl Expansion {
-    fn new(rows: usize, indices: Vec<usize>, local: bool, other: &str) -> BindingResult<Self> {
-        let field = if other == "Variable" {
-            "Variable_"
-        } else {
-            "Variable"
+    fn new(
+        rows: usize,
+        indices: Vec<usize>,
+        local: bool,
+        source: Option<&dyn ArraySource>,
+        other: &str,
+    ) -> BindingResult<Self> {
+        let identities = source.and_then(crate::input::sealed::Sealed::column_identities);
+        let mut field = "Variable".to_owned();
+        while field == other
+            || identities
+                .is_some_and(|identities| identities.iter().any(|(_, identity)| *identity == field))
+        {
+            field.push('_');
         }
-        .to_owned();
         let keys = indices
             .iter()
             .map(|index| {
                 if local {
-                    format!("__lichtung_variable_{index}")
+                    Ok(format!("__lichtung_variable_{index}"))
                 } else {
-                    crate::source::name(*index)
+                    crate::source::identity(source, *index, "column identity")
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<BindingResult<Vec<_>>>()?;
         let aliases = if local {
             keys.iter()
                 .cloned()
@@ -62,19 +70,18 @@ impl Expansion {
                 "expected one integer variable, not a cell grid",
             ));
         }
-        Ok(CategoryValues::new(
-            &self.field,
-            input
-                .raw_source_rows(source, "column alpha selector")?
-                .into_iter()
-                .map(|index| {
-                    if self.local {
-                        format!("__lichtung_variable_{index}")
-                    } else {
-                        crate::source::name(index)
-                    }
-                }),
-        )?)
+        let keys = input
+            .raw_source_rows(source, "column alpha selector")?
+            .into_iter()
+            .map(|index| {
+                if self.local {
+                    Ok(format!("__lichtung_variable_{index}"))
+                } else {
+                    crate::source::identity(source, index, "column alpha selector")
+                }
+            })
+            .collect::<BindingResult<Vec<_>>>()?;
+        Ok(CategoryValues::new(&self.field, keys)?)
     }
 }
 macro_rules! numeric_family {
@@ -105,7 +112,9 @@ macro_rules! numeric_family {
                 let x = x.bind_numeric_repeated(source.as_deref(), "x", copies)?;
                 length("y", y.name(), x.len(), y.len())?;
                 let expansion = shape
-                    .map(|(rows, indices, local)| Expansion::new(rows, indices, local, x.name()))
+                    .map(|(rows, indices, local)| {
+                        Expansion::new(rows, indices, local, source.as_deref(), x.name())
+                    })
                     .transpose()?;
                 let len = y.len();
                 let mut plot = Plot::$native(x, y);
@@ -153,7 +162,7 @@ macro_rules! numeric_family {
                     "Row",
                     (0..rows).flat_map(|row| std::iter::repeat_n(row as f64, indices.len())),
                 );
-                let expansion = Expansion::new(rows, indices, local, "Row")?;
+                let expansion = Expansion::new(rows, indices, local, source.as_deref(), "Row")?;
                 let len = values.len();
                 let plot = Plot::$native(x, values).hue(expansion.categories.clone());
                 let plot = ($group)(plot, expansion.categories.clone());
@@ -201,7 +210,7 @@ macro_rules! distribution_family {
                 length("samples", values.name(), category.len(), values.len())?;
                 let expansion = shape
                     .map(|(rows, indices, local)| {
-                        Expansion::new(rows, indices, local, category.name())
+                        Expansion::new(rows, indices, local, source.as_deref(), category.name())
                     })
                     .transpose()?;
                 let len = values.len();
@@ -244,7 +253,8 @@ macro_rules! distribution_family {
                 )?;
                 let (rows, indices, local) =
                     shape.ok_or_else(|| binding("columns", "expected selected columns"))?;
-                let expansion = Expansion::new(rows, indices, local, values.name())?;
+                let expansion =
+                    Expansion::new(rows, indices, local, source.as_deref(), values.name())?;
                 let len = values.len();
                 let plot = ($native)(expansion.categories.clone(), values);
                 let mut adapter = Self::bound(plot, source, Some(len));

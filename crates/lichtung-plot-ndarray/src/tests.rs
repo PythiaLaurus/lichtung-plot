@@ -188,7 +188,7 @@ fn validity_requires_each_logical_dimension_not_just_length() {
     assert!(crate::Heatmap::new(Array2::<f64>::zeros((2, 0)).view()).is_err());
 }
 
-fn render<K: crate::kind::Marker>(plot: &crate::Plot<K>, case: &str) -> String {
+pub(crate) fn render<K: crate::kind::Marker>(plot: &crate::Plot<K>, case: &str) -> String {
     let path = std::env::temp_dir().join(format!(
         "lichtung-ndarray-{}-{case}.svg",
         std::process::id()
@@ -206,7 +206,12 @@ fn wide_views_preserve_actual_coordinates_selected_order_bounds_and_mapping_call
     let calls = Cell::new(0);
     let lower = array![[3.5, 0.5], [4.5, 1.5], [5.5, 2.5]];
     let upper = &lower + 1.;
-    let (plot, metadata) = crate::Line::from_data((source.view(), present.view()), 0, [2, 1])
+    let x = (source.slice(s![.., 0..1]), present.slice(s![.., 0..1]));
+    let y1 = (source.slice(s![.., 1..2]), present.slice(s![.., 1..2]));
+    let y2 = (source.slice(s![.., 2..3]), present.slice(s![.., 2..3]));
+    let entries: [(usize, &dyn crate::ArraySource); 3] = [(1, &y1), (0, &x), (2, &y2)];
+    let projected = crate::ColumnProjection::new(source.dim(), &entries).unwrap();
+    let (plot, metadata) = crate::Line::from_data(projected, 0, [2, 1])
         .unwrap()
         .into_parts();
     let adapted = crate::Line::from_parts(plot, metadata)
