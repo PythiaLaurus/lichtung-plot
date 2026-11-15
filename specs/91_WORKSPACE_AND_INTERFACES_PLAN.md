@@ -30,7 +30,7 @@ values, text-entry/omission/clear/precedence rules and object-lifecycle semantic
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
 surface recorded below with bounded installed verification; final acceptance
-still requires the remaining final-source distribution and test-budget gates.
+still requires final test deduplication and unchanged-budget certification.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
@@ -44,8 +44,9 @@ base data/facet/configuration methods, complete Theme/Text and numeric policies,
 13 scientific/appearance/position values, eight callback slots and all 75 alpha
 entries, independent point layers and significance results are implemented.
 The recorded Linux source-distribution gate, complete peer content/gallery
-and same-source cost observations are verified below. A final-source distribution
-refresh and last-stage test deduplication/unchanged-budget certification remain open.
+and same-source cost observations are verified below. The post-content source
+distribution also passed a new independent build/install/runtime gate. Last-stage
+test deduplication/unchanged-budget certification remains open.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -62,13 +63,13 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. The scientific-source sdist passed independent build/install/runtime; peer content/gallery and bounded same-source cost observations are complete. Final-source distribution refresh and test-budget checks remain open. |
-| Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix/independent-sdist evidence; current all-family constructors, geometry and edits have separate focused wheel evidence below, not a repeated transport matrix or current sdist certification. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Peer content/gallery, same-source costs and the post-content source distribution's actual independent build/install/runtime are complete. Final test deduplication and unchanged-budget checks remain open. |
+| Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix evidence; all-family constructors, geometry and edits have focused wheel evidence below. The post-content source archive also passed its own installed runtime tests, without repeating the whole transport/provider matrix. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
-| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. Current production-source costs were observed on CPython3.10/3.13 with separate timing, allocation and independent peak processes. The earlier scientific-source Python sdist passed independent build/install and 188 archived runtime cases but does not include later content changes. Final-source sdist refresh and test-budget certification remain open. No publication or deployment was performed. |
+| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. Current production-source costs were observed on CPython3.10/3.13 with separate timing, allocation and independent peak processes. A newly produced 575-file post-content Python sdist passed actual independent build/install, 188 archived runtime cases and its revised four-input example. Final test deduplication and unchanged-budget certification remain open; later packaged-source changes require another real distribution refresh. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
 
@@ -391,8 +392,8 @@ or test-budget certificate. Earlier focused 3.13 typing/runtime receipts retain
 their own wheel identities. No package was published or pushed. The subsequent
 content work below is separate: this 569-file archive does not contain the six
 new core examples or the revised four-input Python presentation/publication.
-A final-source archive must be produced, independently unpacked, built, installed
-and exercised; this earlier archive cannot certify those later bytes.
+This earlier archive cannot certify those later bytes; the post-content source
+gate below supplies its own new producer, independent build/install and runtime.
 
 ### Complete Peer Content And Gallery Verification
 
@@ -592,19 +593,80 @@ Unicode asset, dependency pin, golden or old test changed. These are bounded
 current-package observations, not the earlier prototype runs, final-source
 distribution certification or an 800/300/80 budget certificate.
 
+### Post-Content Source-Distribution Verification
+
+After content/gallery and cost closure, the actual offline PEP 517 backend
+produced a new archive from `4c7d4aa`, SHA-256
+`59839ccb024beb35437ee95c3b7dec0845fdf52f717abc38894c020acbf5f546`.
+Safe independent unpacking supplied 575 regular files: 571 exact source copies
+and four derived root metadata files. These include all six new core examples
+and support, current Python examples, tests, declarations and legal inputs;
+no project native binaries were shipped. Root backend/path ownership is closed.
+The root pyproject only adds the rebased manifest path; the four-member workspace
+excludes Book. The derived lock only removes Book, retaining 210 packages,
+488 dependency edges, pins and every other retained field.
+
+The first temporary inclusion auditor incorrectly demanded an original-location
+pyproject in addition to its root projection. Its failure and original script
+remain recorded; the tool-result transcription is explicitly not a raw capture.
+Only that audit assumption changed. The successful producer, archive and all
+unpacked bytes were retained unchanged, not repackaged or manually repaired.
+Independent archive/source/layout/lock review closed the corrected evidence.
+The earlier three native archive verifications were reused only after all their
+member source copies matched this freeze; no new Cargo package run was claimed.
+
+The new archive's own root/backend then built a wheel with Rust 1.96.0,
+locked/offline release settings and a genuinely fresh external Cargo target.
+Its SHA-256 is
+`7c88dccba105373b6d9b33bd7a22c7ed8b1b5a1a133c9fe9d178a525cfc4a3c4`.
+The native member remains
+`786c3e22db6a6313450ccec821e2467642ea67f2337bdc83206e738b9dcad3f1`;
+actual compile paths, dep-info and target timestamps establish this fresh build,
+and its library bytes match the wheel. Equal binary hashes do not mean an old
+binary was substituted. All four declarations/marker matched the archive.
+
+A genuinely fresh CPython 3.10.19 prefix installed this wheel and the original
+17 requirements through normal offline dependency validation. Installed identity,
+declarations and the exact project wheel URI matched. One isolated invocation
+ran this archive's own tests outside the checkout, with checkout imports
+forbidden: **188 collected, 188 unique nodeids, 188 passed, zero failed/skipped**.
+These counts come from the new invocation, not the earlier 569-file archive.
+The archive's revised `four_inputs.py` also actually ran, producing outlined SVG,
+text SVG and native PNG from one frozen Output. Both SVGs contain four panels
+with four clipped points each and equal complete point geometry; outlined SVG
+has no text nodes, and text SVG retains all four route titles and units.
+The new 1400×1100 native PNG was actually inspected: all panels, legends,
+observations and the complete synthetic/unsupported-column caption are visible,
+without overlap or clipping. This did not rerun the other 19 gallery programs
+or update any golden. Dependency checks passed and all original 17 pins remained
+exact. All 575 source files remained regular, with the same complete file set
+and bytes after both build and runtime; no source/manifest/lock repair was made.
+
+The actual runtime audit is
+`/tmp/opencode/lichtung-python-offline-TQbAMg/verification-prep/receipts/final-source1-runtime-closure.json`,
+SHA-256 `9b20fc29ea237472e0e3cb07fa1f49e94bc0731e3f281e0f00160f8724f798fe`.
+It links the actual producer/build/install/runtime records and identities.
+This closes the recorded post-content source gate on Linux/CPython3.10, not a
+new typing/stubtest, stdlib-only, platform/provider matrix or budget certificate.
+Final redundant-test cleanup and unchanged-budget certification still remain.
+If cleanup changes packaged sources or tests, this archive cannot certify those
+later bytes: another genuinely new source archive/build/install/runtime is required.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Repository-wide test-budget review identified excess module-integration coverage;
 the limits have not been certified. Test deduplication remains a final closure
-task after the complete planned interface is implemented, rather than blocking
-the remaining implementation stages. Overall plan acceptance is not complete;
-overall final-source distribution and test-budget acceptance is not yet certified.
+task now that the planned interface, content, cost and post-content distribution
+deliveries are complete. Overall plan acceptance remains open until genuine
+redundant-test cleanup and unchanged-budget certification are complete.
 
 The selected scientific API, exact typing and real layer/result consumers are
 implemented. The scientific-source distribution and complete peer content/gallery
 gates and bounded same-source cost observations above are verified. Final-source
-distribution refresh remains, followed by last-stage test deduplication and
-unchanged-budget certification. These bounded closures are not overall plan closure.
+distribution for the recorded post-content source is verified too. The next step
+is last-stage test deduplication and unchanged-budget certification, refreshing
+the distribution again if packaged sources change. These bounded closures are
+not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints
