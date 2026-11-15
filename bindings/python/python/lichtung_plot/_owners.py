@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from os import PathLike
-from typing import TypeAlias, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    TypeAlias,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from . import _native
 from ._native import (
+    ColumnSelector,
+    ColumnsSelector,
+    Labels,
     NumericFormat,
     Output,
     PngOptions,
@@ -17,14 +27,64 @@ from ._native import (
     TickGeneration,
 )
 
-NumericData: TypeAlias = (
-    list[int]
-    | list[float]
-    | list[int | None]
-    | list[float | None]
-    | tuple[float | None, ...]
-)
-CategoryData: TypeAlias = list[str] | list[str | None] | tuple[str | None, ...]
+if TYPE_CHECKING:
+    from typing import Any
+
+    import numpy as _np
+    import pandas as _pd
+    import polars as _pl
+
+    # Annotation-only aliases keep optional input providers out of runtime imports.
+    # Rank, dtype, validity and source-dependent lookup remain native checks.
+    _NativeNumericColumn: TypeAlias = (
+        list[int]
+        | list[float]
+        | list[int | None]
+        | list[float | None]
+        | tuple[float | None, ...]
+    )
+    _NativeNumericRectangle: TypeAlias = (
+        list[list[int]]
+        | list[list[float]]
+        | list[list[int | None]]
+        | list[list[float | None]]
+        | list[tuple[int, ...]]
+        | list[tuple[float, ...]]
+        | list[tuple[int | None, ...]]
+        | list[tuple[float | None, ...]]
+        | list[_NativeNumericColumn]
+        | tuple[_NativeNumericColumn, ...]
+    )
+    _NativeCategoryColumn: TypeAlias = list[str] | list[str | None] | tuple[str | None, ...]
+    _NativeRowIds: TypeAlias = list[int] | tuple[int, ...]
+    _NativeRowIdRectangle: TypeAlias = (
+        list[list[int]]
+        | list[tuple[int, ...]]
+        | list[_NativeRowIds]
+        | tuple[_NativeRowIds, ...]
+    )
+    _Array: TypeAlias = _np.ndarray[tuple[int, ...], _np.dtype[_np.generic]]
+    _Table: TypeAlias = _pd.DataFrame | _pl.DataFrame
+    _Series: TypeAlias = _pd.Series | _pl.Series
+    _DataSource: TypeAlias = _Array | _Table
+    # Bare str/int are shorthand. Complete keys use col[Hashable]; a structural
+    # index protocol would also admit tables with dynamic __getattr__.
+    _SingleColumn: TypeAlias = str | int | _np.integer[Any] | ColumnSelector
+    _NumericInput: TypeAlias = _NativeNumericColumn | _Array | _Series | _SingleColumn
+    _NumericRectangle: TypeAlias = (
+        _NativeNumericRectangle | _Array | _Table | ColumnsSelector
+    )
+    _CategoryInput: TypeAlias = _NativeCategoryColumn | _Array | _Series | _SingleColumn
+    _SourceRowsInput: TypeAlias = (
+        _NativeRowIds
+        | _NativeRowIdRectangle
+        | _Array
+        | _Series
+        | _Table
+        | _SingleColumn
+        | ColumnsSelector
+    )
+
 ExactTicks: TypeAlias = list[tuple[float, str]] | tuple[tuple[float, str], ...]
 PathInput: TypeAlias = str | bytes | PathLike[str] | PathLike[bytes]
 TextInput: TypeAlias = str | Text
@@ -50,6 +110,14 @@ class Plot:
 
     def copy(self: _P) -> _P:
         return type(self)._from_owner(self._owner.copy())
+
+    def source_rows(self: _P, values: _SourceRowsInput) -> _P:
+        self._owner.source_rows(values)
+        return self
+
+    def labels(self: _P, labels: Labels) -> _P:
+        self._owner.labels(labels)
+        return self
 
     def title(
         self: _P,
@@ -138,7 +206,7 @@ class Scatter(Plot):
 
     __slots__ = ()
 
-    def hue(self, values: CategoryData) -> Scatter:
+    def hue(self, values: _CategoryInput) -> Scatter:
         self._owner.hue(values)
         return self
 
@@ -175,15 +243,62 @@ class Scatter(Plot):
         return self
 
 
+@overload
 def scatter(
-    data: None = None,
+    data: _DataSource | None = None,
     *,
-    x: NumericData,
-    y: NumericData,
-    hue: CategoryData | None = None,
+    x: _NumericInput,
+    y: _NumericInput | _NumericRectangle,
+    hue: _CategoryInput | None = None,
+    by_row_position: Literal[False] = False,
+    numeric_only: Literal[False] = False,
+) -> Scatter: ...
+
+
+@overload
+def scatter(
+    data: _DataSource | None = None,
+    *,
+    y: _NumericRectangle,
+    by_row_position: Literal[True],
+    hue: _CategoryInput | None = None,
+    numeric_only: Literal[False] = False,
+) -> Scatter: ...
+
+
+@overload
+def scatter(
+    data: _DataSource,
+    *,
+    by_row_position: Literal[True],
+    numeric_only: Literal[True],
+    hue: _CategoryInput | None = None,
+) -> Scatter: ...
+
+
+def scatter(
+    data: _DataSource | None = None,
+    *,
+    x: _NumericInput = cast("_NumericInput", _UNSET),
+    y: _NumericInput | _NumericRectangle = cast(
+        "_NumericInput | _NumericRectangle", _UNSET
+    ),
+    hue: _CategoryInput | None = None,
+    by_row_position: bool = False,
+    numeric_only: bool = False,
 ) -> Scatter:
-    """Snapshot direct Python numeric lists/tuples into a native Scatter."""
-    return Scatter._from_owner(_native._PlotOwner.scatter(data, x=x, y=y, hue=hue))
+    """Bind direct values or source columns; native code validates the call form."""
+    return Scatter._from_owner(
+        _native._PlotOwner.scatter(
+            data,
+            x=x,
+            y=y,
+            hue=hue,
+            by_row_position=by_row_position,
+            numeric_only=numeric_only,
+            unset=_UNSET,
+        )
+    )
 
 
 class Canvas:
@@ -207,6 +322,10 @@ class Canvas:
 
     def copy(self) -> Canvas:
         return Canvas._from_owner(self._owner.copy())
+
+    def labels(self, labels: Labels) -> Canvas:
+        self._owner.labels(labels)
+        return self
 
     def panel(
         self,

@@ -1,8 +1,8 @@
 use polars_core::prelude::*;
 
 use crate::{
-    kind, AdapterError, AlphaEncoding, AlphaValues, CategoryValues, ColumnProjection, ColumnsInput,
-    Line, NumericValues, Plot,
+    kind, AdapterError, AlphaEncoding, AlphaValues, BooleanInput, CategoryValues, ColumnProjection,
+    ColumnsInput, Line, NumericValues, Plot, SourceRows, SourceRowsInput,
 };
 
 fn render<K: kind::Marker>(plot: &Plot<K>, case: &str) -> String {
@@ -61,6 +61,20 @@ fn descriptor_checks_only_selection_structure() {
         Err(AdapterError::Length {
             expected: 3,
             actual: 2,
+            ..
+        })
+    ));
+    assert!(matches!(
+        ColumnProjection::from_direct(&[], &[]),
+        Err(AdapterError::Binding {
+            role: "column projection",
+            ..
+        })
+    ));
+    assert!(matches!(
+        ColumnProjection::from_direct(&["unused", "unused"], &columns),
+        Err(AdapterError::Binding {
+            role: "column projection",
             ..
         })
     ));
@@ -276,10 +290,23 @@ fn one_column_collection_and_zero_rows_keep_existing_wide_meaning() {
     let projection = ColumnProjection::new(2, &["only"], &columns).unwrap();
     let line = Line::new(&x, &projection).unwrap().group_columns().unwrap();
     assert!(line.band(&columns[0], &columns[0]).is_err());
+    let direct = ColumnProjection::from_direct(&[], &columns).unwrap();
+    let line = Line::new(&x, &direct).unwrap().group_columns().unwrap();
+    assert!(matches!(
+        line.band(&columns[0], &columns[0]),
+        Err(AdapterError::Binding { role: "band", .. })
+    ));
 
-    let empty = [Column::new_empty("only".into(), &DataType::Float64)];
-    let projection = ColumnProjection::new(0, &["only"], &empty).unwrap();
+    let empty_columns = [Column::new_empty("only".into(), &DataType::Float64)];
+    let projection = ColumnProjection::new(0, &["only"], &empty_columns).unwrap();
     let empty: Plot<kind::Line> = Line::indexed(&projection)
+        .unwrap()
+        .group_columns()
+        .unwrap()
+        .into();
+    assert!(matches!(empty.preflight(), Err(crate::Error::Data(_))));
+    let direct = ColumnProjection::from_direct(&[], &empty_columns).unwrap();
+    let empty: Plot<kind::Line> = Line::indexed(&direct)
         .unwrap()
         .group_columns()
         .unwrap()
@@ -304,5 +331,155 @@ fn projected_roles_keep_dtype_admission_and_y_before_x_error_order() {
     assert!(matches!(
         Line::new("absent", &projection),
         Err(AdapterError::MissingSource { role: "x", .. })
+    ));
+
+    // Factory admission must not prescan the later ragged column before the
+    // numeric consumer rejects this first Boolean column, or attempt x lookup.
+    let columns = [
+        Column::new("flag".into(), [true, false]),
+        Column::new("long".into(), [1., 2., 3.]),
+    ];
+    let direct = ColumnProjection::from_direct(&[], &columns).unwrap();
+    assert!(matches!(
+        Line::new("absent", &direct),
+        Err(AdapterError::UnsupportedDtype {
+            name,
+            channel: "y",
+            dtype: DataType::Boolean,
+        }) if name == "flag"
+    ));
+    // Within the next column, its length still precedes its dtype admission.
+    let columns = [
+        Column::new("value".into(), [1., 2.]),
+        Column::new("flag".into(), [true, false, true]),
+    ];
+    let direct = ColumnProjection::from_direct(&[], &columns).unwrap();
+    assert!(matches!(
+        Line::new("absent", &direct),
+        Err(AdapterError::Length {
+            name,
+            role: "y",
+            expected: 2,
+            actual: 3,
+        }) if name == "flag"
+    ));
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one direct projection witnesses namespace/local identity and independent cell authority without another rendering matrix"
+)]
+fn direct_namespace_keeps_local_ordinals_and_cell_authorities() {
+    let names = ["Variable", "Variable_"];
+    let columns = [
+        Column::new("same".into(), [1., 2.]),
+        Column::new("same".into(), [3., 4.]),
+        Column::new("".into(), [5., 6.]),
+    ];
+    let direct = ColumnProjection::from_direct(&names, &columns).unwrap();
+    let keys = [
+        "__lichtung_variable_0",
+        "__lichtung_variable_1",
+        "__lichtung_variable_2",
+    ];
+    let alpha = AlphaEncoding::keyed(
+        [CategoryValues::new("Variable__", keys).unwrap()],
+        AlphaValues::new("opacity", [80, 160, 240]).unwrap(),
+    )
+    .unwrap();
+    let x = Series::new("time".into(), [0., 1.]);
+    for line in [
+        Line::new(&x, &direct).unwrap(),
+        Line::indexed(&direct).unwrap(),
+    ] {
+        let line = line.line_alpha(alpha.clone()).unwrap();
+        let (native, _metadata) = line.clone().into_parts();
+        assert_eq!(
+            native
+                .get_labels()
+                .get_aliases()
+                .unwrap()
+                .collect::<Vec<_>>(),
+            [(keys[0], "same"), (keys[1], "same"), (keys[2], "Column 3")]
+        );
+        assert!(matches!(native.preflight(), Err(crate::Error::Render(_))));
+        let renamed: Plot<kind::Line> = line
+            .column_labels(["First", "Second", "Third"])
+            .unwrap()
+            .into();
+        // Keyed alpha also witnesses the generated field being Variable__.
+        renamed.preflight().unwrap();
+    }
+
+    // Retained lookup height is deliberately three, not the direct grid's two.
+    let lookup = df!("Variable" => [0.; 3], "Variable_" => [0.; 3]).unwrap();
+    let (plot, metadata) = crate::Heatmap::new(&direct)
+        .unwrap()
+        .x_labels(["A", "B", "C"])
+        .unwrap()
+        .into_parts();
+    let grid = crate::Heatmap::from_parts_with_data(plot, metadata, &lookup);
+    let transposed = [
+        Column::new("flag".into(), [true, false, true]),
+        Column::new("flag".into(), [false, true, false]),
+    ];
+    let transposed = ColumnProjection::from_direct(&names, &transposed).unwrap();
+    assert!(matches!(
+        grid.clone().heatmap_highlight(&transposed),
+        Err(AdapterError::Binding {
+            role: "heatmap highlights",
+            ..
+        })
+    ));
+    let transposed_ids = [
+        Column::new("id".into(), [101u32, 103, 105]),
+        Column::new("id".into(), [102u32, 104, 106]),
+    ];
+    let transposed_ids = ColumnProjection::from_direct(&names, &transposed_ids).unwrap();
+    assert!(matches!(
+        grid.clone().source_rows(&transposed_ids),
+        Err(AdapterError::Binding {
+            role: "source rows",
+            ..
+        })
+    ));
+
+    let highlights = [
+        Column::new("flag".into(), [Some(true), Some(false)]),
+        Column::new("flag".into(), [None, Some(true)]),
+        Column::new("".into(), [Some(false), Some(false)]),
+    ];
+    let highlights = ColumnProjection::from_direct(&names, &highlights).unwrap();
+    assert_eq!(
+        (&highlights)
+            .bind_boolean_repeated(Some(&lookup), "heatmap highlights", 3)
+            .unwrap()
+            .len(),
+        6
+    );
+    let ids = [
+        Column::new("id".into(), [101u32, 104]),
+        Column::new("id".into(), [102u32, 105]),
+        Column::new("".into(), [103u32, 106]),
+    ];
+    let ids = ColumnProjection::from_direct(&names, &ids).unwrap();
+    assert_eq!(
+        (&ids)
+            .bind_source_rows_repeated(Some(&lookup), "source rows", 3)
+            .unwrap(),
+        SourceRows::new([101, 102, 103, 104, 105, 106]).unwrap()
+    );
+    let native: Plot<kind::Heatmap> = grid
+        .heatmap_highlight(&highlights)
+        .unwrap()
+        .source_rows(&ids)
+        .unwrap()
+        .into();
+    // The nullable Boolean is row 0 / column 1: row-major ID 102, not 103.
+    assert!(matches!(
+        native.preflight(),
+        Err(crate::Error::Data(detail))
+            if detail.contains("null") && detail.contains("source row 102")
     ));
 }

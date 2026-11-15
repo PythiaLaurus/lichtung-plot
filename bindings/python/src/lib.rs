@@ -28,5 +28,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     callbacks::register(module)?;
     owner::register(module)?;
     output::register(module)?;
+    input::register(module)?;
     values::register(module)
 }

@@ -714,7 +714,7 @@ macro_rules! direct_columns {
 direct_columns!(&Column, |column: &&Column| (*column).clone());
 direct_columns!(&Series, |series: &&Series| (*series).clone().into_column());
 
-fn columns_shape(columns: &[Column]) -> BindingResult<Option<(usize, usize)>> {
+pub(crate) fn columns_shape(columns: &[Column]) -> BindingResult<Option<(usize, usize)>> {
     let rows = columns[0].len();
     for column in columns {
         crate::error::length("cell grid", column.name().as_str(), rows, column.len())?;

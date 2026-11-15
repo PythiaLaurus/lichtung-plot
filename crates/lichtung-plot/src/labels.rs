@@ -47,6 +47,24 @@ impl Labels {
         }
     }
 
+    /// Whether automatically sourced labels use the humanized fallback.
+    #[must_use]
+    pub const fn is_humanized(&self) -> bool {
+        matches!(self.mode, LabelMode::Humanized)
+    }
+
+    /// Authored aliases in raw-key order, without resolving or validating text.
+    ///
+    /// `None` preserves the absence of an aliases collection. Reading this view
+    /// neither normalizes display text nor checks a complete label domain.
+    pub fn get_aliases(&self) -> Option<impl ExactSizeIterator<Item = (&str, &str)> + '_> {
+        self.aliases.as_ref().map(|aliases| {
+            aliases
+                .iter()
+                .map(|(raw, display)| (raw.as_str(), display.as_str()))
+        })
+    }
+
     /// Add one exact raw-identity to display-label mapping.
     #[must_use]
     pub fn alias(mut self, raw: impl Into<String>, display: impl Into<String>) -> Self {

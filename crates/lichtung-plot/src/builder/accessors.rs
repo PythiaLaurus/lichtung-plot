@@ -860,7 +860,7 @@ impl PlotDescription {
         self.payload.labels.resolve(raw)
     }
 
-    pub(crate) fn labels_policy(&self) -> &crate::Labels {
+    pub(crate) fn get_labels(&self) -> &crate::Labels {
         &self.payload.labels
     }
 
@@ -1218,6 +1218,12 @@ impl PlotDescription {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
+    /// Current authored label policy, without resolving or validating labels.
+    #[must_use]
+    pub fn get_labels(&self) -> &crate::Labels {
+        self.description.get_labels()
+    }
+
     pub(crate) const fn description(&self) -> &PlotDescription {
         &self.description
     }

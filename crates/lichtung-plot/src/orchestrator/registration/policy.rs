@@ -41,7 +41,7 @@ impl PlotScopePolicy {
             crate::decorations::legend::discrete::scoped::GuideUse::Local
         };
         Self {
-            labels: source.labels_policy().clone(),
+            labels: source.get_labels().clone(),
             significance_indices: source
                 .significance_annotations()
                 .iter()

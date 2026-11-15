@@ -1,4 +1,4 @@
-//! Selected columns with their complete, borrowed original names namespace.
+//! Selected or direct-local columns with a complete, borrowed naming namespace.
 
 use std::collections::HashSet;
 
@@ -11,15 +11,22 @@ use crate::{
     SourceRowsInput,
 };
 
-/// A short-lived selected-column collection with original raw field identities.
+#[derive(Clone, Copy)]
+enum ProjectionMode {
+    Selected { rows: usize },
+    Direct,
+}
+
+/// A short-lived column collection with a complete borrowed naming namespace.
 ///
-/// `source_names` must contain the complete ordered names of the original source,
-/// including unselected fields whose dtypes or values have not been imported.
-/// Only the selected `columns` are read by the existing role extractors. The
-/// descriptor neither stores a schema nor installs a DataFrame lookup context.
-/// Even one selected column remains a collection, not a scalar variable.
+/// `source_names` must contain the complete ordered raw names of the source
+/// context, including unbound fields whose dtypes or values have not been imported.
+/// [`Self::new`] retains selected raw identities; [`Self::from_direct`] retains
+/// direct-local identities. Only bound `columns` are read by the role extractors.
+/// The descriptor neither stores a schema nor installs a DataFrame lookup context.
+/// Even one column remains a collection, not a scalar variable.
 pub struct ColumnProjection<'columns> {
-    source_rows: usize,
+    mode: ProjectionMode,
     source_names: &'columns [&'columns str],
     columns: &'columns [Column],
 }
@@ -79,7 +86,44 @@ impl<'columns> ColumnProjection<'columns> {
             length("column projection", name, source_rows, column.len())?;
         }
         Ok(Self {
-            source_rows,
+            mode: ProjectionMode::Selected { rows: source_rows },
+            source_names,
+            columns,
+        })
+    }
+
+    /// Carry a complete naming namespace alongside direct-local columns.
+    ///
+    /// Only nonempty columns and unique namespace names are checked here. Empty
+    /// namespaces, zero rows and duplicate/empty column names remain legal.
+    /// Membership is not required; lengths, dtypes and cell shapes are checked
+    /// by existing consumers. Named selections, including independent DataFrame
+    /// collections, should use [`Self::new`] instead.
+    pub fn from_direct(
+        source_names: &'columns [&'columns str],
+        columns: &'columns [Column],
+    ) -> std::result::Result<Self, AdapterError> {
+        if columns.is_empty() {
+            return Err(binding("column projection", "select at least one variable"));
+        }
+        let mut namespace = HashSet::new();
+        namespace
+            .try_reserve(source_names.len())
+            .map_err(|source| AdapterError::Allocation {
+                name: "column projection".into(),
+                channel: "source names",
+                source,
+            })?;
+        for &name in source_names {
+            if !namespace.insert(name) {
+                return Err(binding(
+                    "column projection",
+                    format!("duplicate source field {name:?}"),
+                ));
+            }
+        }
+        Ok(Self {
+            mode: ProjectionMode::Direct,
             source_names,
             columns,
         })
@@ -107,11 +151,18 @@ impl sealed::Sealed for &ColumnProjection<'_> {
     }
 
     fn cell_shape(&self, _: Option<&DataFrame>) -> BindingResult<Option<(usize, usize)>> {
-        Ok(Some((self.source_rows, self.columns.len())))
+        match self.mode {
+            ProjectionMode::Selected { rows } => Ok(Some((rows, self.columns.len()))),
+            ProjectionMode::Direct => input::columns_shape(self.columns),
+        }
     }
 }
 
 impl ColumnsInput for &ColumnProjection<'_> {
+    fn local_identities(&self) -> bool {
+        matches!(self.mode, ProjectionMode::Direct)
+    }
+
     fn bind_columns(self, _: Option<&DataFrame>) -> BindingResult<Vec<Column>> {
         let mut columns = crate::snapshot::allocate(self.columns.len(), "selected columns")?;
         columns.extend_from_slice(self.columns);
@@ -125,7 +176,7 @@ impl NumericSeriesInput for &ColumnProjection<'_> {
         _: Option<&DataFrame>,
         role: &'static str,
     ) -> BindingResult<SeriesBinding> {
-        input::multiple(self.columns, false, role)
+        input::multiple(self.columns, self.local_identities(), role)
     }
 }
 

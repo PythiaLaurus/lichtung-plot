@@ -213,6 +213,10 @@ def test_owner_clear_finalizers_reenter_after_native_and_roots_are_taken() -> No
     assert isinstance(events[0], RuntimeError) and "cleared" in str(events[0])
     with pytest.raises(RuntimeError, match="cleared"):
         plot.copy()
+    with pytest.raises(TypeError):
+        plot.hue([True])
+    with pytest.raises(RuntimeError, match="cleared"):
+        plot.hue(["a", "a", "b"])
 
     canvas = Canvas.grid(1, 1)
     temporary = figure().x_tick_format(NumericFormat.value_function(Finalizer(canvas)))

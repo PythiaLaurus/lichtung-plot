@@ -1,10 +1,17 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from os import PathLike
 from typing import Literal, NoReturn, final, overload
 
 __all__: list[str] = [
     "DataError",
     "RenderError",
+    "ColumnSelector",
+    "ColumnsSelector",
+    "_ColumnEntry",
+    "_ColumnsEntry",
+    "col",
+    "cols",
+    "Labels",
     "_CallbackHolder",
     "NumericValueContext",
     "NumericSetContext",
@@ -65,6 +72,49 @@ _Overlap = Literal["require_non_overlap", "allow"]
 
 class DataError(ValueError): ...
 class RenderError(RuntimeError): ...
+
+@final
+class ColumnSelector:
+    def __new__(cls, _unavailable: NoReturn, /) -> ColumnSelector: ...
+
+@final
+class ColumnsSelector:
+    def __new__(cls, _unavailable: NoReturn, /) -> ColumnsSelector: ...
+
+@final
+class _ColumnEntry:
+    def __new__(cls, _unavailable: NoReturn, /) -> _ColumnEntry: ...
+    def __getitem__(self, key: Hashable, /) -> ColumnSelector: ...
+
+@final
+class _ColumnsEntry:
+    def __new__(cls, _unavailable: NoReturn, /) -> _ColumnsEntry: ...
+    def __getitem__(
+        self, key: Hashable | tuple[Hashable, ...] | slice, /
+    ) -> ColumnsSelector: ...
+
+col: _ColumnEntry
+cols: _ColumnsEntry
+
+@final
+class Labels:
+    def __new__(
+        cls,
+        *,
+        mode: Literal["humanized", "raw"] = "humanized",
+        aliases: Sequence[tuple[str, str]] | None = None,
+    ) -> Labels: ...
+    @property
+    def mode(self) -> Literal["humanized", "raw"]: ...
+    @property
+    def aliases(self) -> tuple[tuple[str, str], ...] | None: ...
+    def copy_with(
+        self,
+        *,
+        mode: Literal["humanized", "raw"] = ...,
+        aliases: Sequence[tuple[str, str]] | None = ...,
+    ) -> Labels: ...
+    def resolve(self, raw: str) -> str: ...
 
 @final
 class _CallbackHolder:
@@ -819,9 +869,18 @@ class _PlotOwner:
     def __new__(cls, _unavailable: NoReturn, /) -> _PlotOwner: ...
     @staticmethod
     def scatter(
-        data: None = None, *, x: object, y: object, hue: object = None
+        data: object = None,
+        *,
+        x: object,
+        y: object,
+        hue: object = None,
+        by_row_position: bool = False,
+        numeric_only: bool = False,
+        unset: object,
     ) -> _PlotOwner: ...
     def copy(self) -> _PlotOwner: ...
+    def source_rows(self, values: object) -> None: ...
+    def labels(self, labels: Labels) -> None: ...
     def title(self, text: _Text, style: object, layout: object, unset: object) -> None: ...
     def subtitle(self, text: _Text, style: object, layout: object, unset: object) -> None: ...
     def caption(self, text: _Text, style: object, layout: object, unset: object) -> None: ...
@@ -852,6 +911,7 @@ class _CanvasOwner:
     @staticmethod
     def grid(rows: int, columns: int) -> _CanvasOwner: ...
     def copy(self) -> _CanvasOwner: ...
+    def labels(self, labels: Labels) -> None: ...
     def panel(
         self,
         row: int,

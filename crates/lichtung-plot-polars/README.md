@@ -38,6 +38,13 @@ source. Existing extractors retain dtype, cell-shape and exact-ID checks.
 `ColumnProjection::numeric_names(&frame)` shares the existing primitive-numeric
 discovery predicate. This Rust facility is not evidence of an Arrow/Python bridge.
 
+`ColumnProjection::from_direct(source_names, columns)` carries that naming
+namespace for direct-local collections, preserving duplicate/empty local names.
+It leaves length/dtype/cell validation to consumption. Independent named
+DataFrame collections instead use `new` with their actual rows and ordered unique
+namespace union; see the Direct-Local Namespace Transport Target in
+`specs/91_WORKSPACE_AND_INTERFACES_PLAN.md`.
+
 Constructors are available for all 25 native families,
 including supplied bounds, bar sample/estimate modes and flat supplied geometry.
 `Heatmap::new(&numeric_frame)` binds a rectangle; `Heatmap::from_data(frame, ["a",

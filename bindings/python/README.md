@@ -1,8 +1,8 @@
 # Lichtung Plot for Python
 
-This package currently provides a native-data Scatter and the reusable
-Plot/Canvas/Output lifecycle. It is a working subset, not the complete 25-family,
-four-input-route interface planned in the workspace specifications.
+This package provides Scatter from native Python, NumPy, pandas and eager Polars
+inputs, with the reusable Plot/Canvas/Output lifecycle. Other plot families and
+the remaining configuration surface are still being implemented.
 
 ```python
 from lichtung_plot import Canvas, Text, Theme, scatter
@@ -15,11 +15,51 @@ output.png_preview("observations-preview")
 plot.title("A later independent edit")
 ```
 
-`x` and `y` accept Python numeric lists or tuples. `None` entries retain native
-validity; booleans are not numeric coordinates. Optional categorical `hue` accepts
-string/None lists or tuples, at construction or through `.hue(...)`. Values are
-snapshotted when bound. Non-None `data` sources, selectors, NumPy, pandas and Polars
-inputs are not implemented in this subset.
+## Inputs
+
+`data` is the only positional argument. Variables are keyword-only and may mix
+direct lists/tuples, arrays and Series with source selectors:
+
+```python
+from lichtung_plot import col, cols, scatter
+
+plot = scatter(frame, x=col["Time"], y=cols["Control", "Treated"])
+plot.x_label("Time (hours)")
+```
+
+`frame` can be a pandas or eager Polars DataFrame; a two-dimensional NumPy source
+uses positional columns, for example `col[0]` and `cols[1, 2]`. `col[...]` selects
+one variable; `cols[...]` selects a nonempty ordered collection, even with one
+column. Positional selectors admit negative indices and signed-step slices, but
+never clip out-of-range bounds. pandas keys are exact complete hashable labels,
+not expressions or stringified identities. Bare lists/tuples always mean data.
+
+Scatter preserves actual `x` for multiple y variables. Use
+`scatter(frame, y=cols["Control", "Treated"], by_row_position=True)` to request row x,
+or `scatter(frame, by_row_position=True, numeric_only=True)` for explicit numeric
+discovery. These modes do not infer x or source IDs from a DataFrame index.
+
+Numeric coordinates admit supported primitive numeric data and nulls, not bools.
+Categorical `hue` accepts strings/nulls at construction or through `.hue(...)`.
+NumPy strided/reversed views and MaskedArray inputs retain logical order and
+validity; a true NumPy mask means missing. pandas nullable columns retain their
+available null/NaN distinction. Temporal/decimal/nested observations and NumPy
+object arrays require an explicit upstream projection. pandas object columns are
+admitted only as string/null categories. Unbound columns are not materialized
+merely because they belong to a source.
+
+Each binding snapshots its observations. A retained main `data` source supplies
+fresh lookup for later `.hue(...)` or `.source_rows(...)`, without refreshing old
+x/y. Direct Series and independent DataFrames do not install an implicit parent
+source. Copies retain their own real source/key references; Canvas captures only
+native configuration and callback roots. The binding cannot make cycles hidden
+inside foreign non-GC-traversed storage collectable.
+
+Input providers are optional and imported only when used. The current eager
+Polars bridge requires `polars==1.41.2` with `polars-runtime-32==1.41.2`, using its
+public Arrow C stream without PyArrow. The sampled NumPy/pandas compatibility
+matrix and remaining distribution scope are recorded in the shared plan.
+`examples/four_inputs.py` demonstrates all four routes.
 
 Configuration methods mutate and return the same owner. Use `.copy()` for an
 independent configuration. Canvas captures the Plot's native configuration at
@@ -50,6 +90,7 @@ The initial immutable value fields are deliberately bounded:
 | `PngOptions` / `PngSizing` | `sizing`, `compression` / `kind`, `value`. |
 | `NumericFormat` / `TickGeneration` | `fractional_digits` / `is_automatic`, `target_count`, `maximum_count`. |
 | `NumericLabels` / `TickPositions` | `labels`, optional `explanation` / `kind`, `positions`. |
+| `Labels` | `mode` (`humanized`/`raw`), optional ordered string-pair `aliases`. |
 | `Output` | Frozen canonical `width`, `height`. |
 
 Typography role groups, colors, font stacks and relative spacing expose their
@@ -57,6 +98,11 @@ typed native fields too; see the shipped stubs. Values derive through keyword-on
 `copy_with`, without mutable nested handles. Text-taking owner methods accept
 `style` and `layout`: omission preserves incoming/retained instructions, explicit
 `None` clears the corresponding local instruction.
+`Plot.labels(...)` and `Canvas.labels(...)` replace the native presentation policy.
+`Labels.copy_with(aliases=None)` clears aliases; aliases require a sequence of
+pairs, not a mapping.
+Aliases address native raw identities, not pandas lookup keys; use explicit axis
+labels when authoring a display title for a pandas-bound variable.
 
 Scatter accepts `NumericFormat.value_function(...)`, `NumericFormat.set_function(...)`
 and `TickGeneration.function(...)` through its x/y tick methods. Their context

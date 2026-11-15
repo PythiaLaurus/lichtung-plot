@@ -36,8 +36,9 @@ families and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
-delivered. Full-surface stubs, complete Python coverage and the remaining
-input-boundary contracts still need implementation and verification.
+delivered. Scatter's four input routes and their input typing are implemented;
+full-family stubs, scientific/configuration methods and final cost/content closure
+still need implementation and verification.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -52,10 +53,10 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
 | Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Plot Clone shares the authored description's payload; Plot exports borrow that description directly, Canvas placement moves it, and one operation-local Root/occurrence registry supplies measurement factories without temporary working Plots. Recorded native placement, render/replay/failure, composed/shared-guide and cross-adapter checks passed. This is not a zero-copy/constant-cost guarantee or Python lifecycle evidence. |
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
-| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Focused ownership/cache/alignment/grid/geometry checks, the external cross-adapter consumer, public examples/compile-fail boundaries, strict Clippy, API docs and independent native archives passed. Python owner-pair integration and data bridges remain separate pending work. |
-| Bound-only adapter projections | Implemented: ndarray preserves original coordinates and optional stable raw identities; Polars preserves the complete names namespace with selected Columns and shared numeric discovery. Focused native behavior, affected wide/grid callers, the external consumer and the ndarray public example passed. Real Python bridges/importers remain pending. |
-| Python lifecycle decision and complete binding | Bounded native-data lifecycle/value/callback behavior and accurate subset typing are installed-verified in the environments below; independently unpacked sdist build/install also passed. The remaining product gate is recorded below. The complete four-route/25-family interface and remaining values/input typing are not delivered; selected semantics are unchanged. |
-| Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
+| Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and independent archives passed; Python Scatter now preserves the matching native/origin version through copies, policy edits and stale-safe input commits. |
+| Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native naming/shape/order checks, external consumers and installed Scatter input checks passed. |
+| Python lifecycle decision and complete binding | Four-route Scatter/lifecycle/Labels and accurate subset typing are installed-verified below. The other 24 families, full scientific/configuration surface, all callback slots and final cost/content checks remain open; this is not complete binding delivery. |
+| Python input boundaries | Implemented for Scatter: strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits. Sampled runtime/typing checks and expanded-closure independent sdist build/install/runtime verification passed. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
@@ -63,8 +64,11 @@ The three input-boundary choices below are settled, not outstanding product deci
 `bindings/python/` is the sole binding package. The following implemented subset
 has the bounded installed verification described below:
 
-- Direct native Python list/tuple Scatter: int/float/None x/y with booleans rejected,
-  optional string/None hue through constructor/setter, and binding-time snapshots.
+- Scatter accepts native lists/tuples, NumPy ndarray/MaskedArray, pandas and eager
+  Polars inputs. Selectors, exact pandas keys, direct Series names, many-y,
+  by_row_position/numeric_only, source_rows and optional constructor/setter hue use
+  owned binding-time snapshots. Retained main sources supply fresh role lookup
+  without refreshing previously bound coordinates.
   Mutable Plot/Canvas owners support aliases, independent copies, insertion-time
   captures, keyword-only spans/overwrite and failure-safe configuration edits.
 - All five native terminal exports and frozen Output reuse use the same core path.
@@ -77,36 +81,62 @@ has the bounded installed verification described below:
   TextLayout exposes alignment, fit_priority, direction, rotation_mode, offset,
   bounds, wrapping and overlap; its five opaque fit/orientation/anchor/overflow/
   visibility instructions are preserved during derivation, not exposed as inputs.
-- The mixed package uses PyO3 =0.29.2 with abi3-py310. The core remains the independent
-  default workspace member; no NumPy or Polars binding dependencies/routes are added.
+- Immutable Labels exposes mode/aliases/copy/resolve and complete Plot/Canvas
+  replacement. It holds the native policy; source/key roots are physical GC edges,
+  not a second Labels store. Native `get_labels`/mode/aliases readers serve these
+  actual consumers.
+- The mixed package uses PyO3 =0.29.2 with abi3-py310, rust-numpy =0.29.0 and the
+  existing ndarray/Polars adapters. The core remains the independent default
+  workspace member. Eager Python Polars/runtime-32 =1.41.2 exports public Arrow
+  C streams into polars-core =0.55.2 without PyArrow or a Rust ABI cast.
   One actual native stub, `bindings/python/python/lichtung_plot/_native.pyi`, public
   owner annotations and `bindings/python/python/lichtung_plot/py.typed` describe
-  only the implemented surface, not complete input typing.
+  the implemented surface, including nominal four-route input roles and
+  constructor-mode overloads, not all 25 families.
 
 Source owners are `bindings/python/src/input.rs`, `bindings/python/src/owner/`,
 `bindings/python/src/output.rs`, `bindings/python/src/values/` and
 `bindings/python/src/callbacks/`; the thin public owners live in
 `bindings/python/python/lichtung_plot/_owners.py`. Installed-wheel runtime/callback/
-GC checks passed on sampled Linux CPython
-3.10 (NumPy 1.26/2.2 installed) and 3.13 (NumPy 2.2 installed) environments. The
-3.10/NumPy 1.26 check was focused, not another full runtime-suite run; these NumPy
-versions describe the environment, not supported plotting inputs.
-Installed mypy checks targeting Python 3.10 and stubtest checks passed in the
-CPython 3.13 environment.
+GC checks used one identical wheel/native binary on sampled Linux x86_64 ordinary
+CPython environments:
+
+| Interpreter | Input providers | Actual runtime checks |
+| --- | --- | --- |
+| 3.10.19 | NumPy 1.26.4, pandas 2.3.3, Polars/runtime-32 1.41.2 | 127 passes plus one focused finalizer-fixture retry; not a fresh full 128-case rerun. |
+| 3.10.19 | NumPy 2.2.6, pandas 2.3.3, Polars/runtime-32 1.41.2 | 128 passes. |
+| 3.13.11 | NumPy 2.2.6, pandas 3.1.1, Polars/runtime-32 1.41.2 | 128 passes. |
+
+Installed strict mypy checked five explicit shipped-module/fixture roots with all
+50 negative guards: Python 3.10 language targets for both 3.10 providers and 3.13
+for the 3.13 provider. The actual pandas source-follow configuration, without
+pandas-stubs or substitute declarations, verifies nominal roles only in those
+providers. Recursive single-root stubtest passed for all three shipped modules
+without an allowlist. Dependency checks passed and original third-party pins
+remained unchanged. The four-route example ran outside the checkout; its actual
+PNG was inspected.
 
 The PEP 517 source producer is `bindings/python/_build_backend.py`; its derived-lock
-policy is defined in `specs/90_DEVELOPMENT.md`. An independently produced sdist was
-freshly unpacked, built through its backend with locked/offline Rust 1.96, and its
-cp310-abi3 Linux wheel installed in a fresh CPython 3.10 environment. All 38 archived
-runtime cases and dependency-consistency/pin-preservation checks passed there.
-The Python example ran outside the checkout and its PNG was inspected;
-representative native example outputs remained byte-identical to their baseline.
-Strict workspace all-target Clippy passed. The recorded full Rust test command
-remains exit 1: 1,036 tests passed and 15 were ignored before Python initialization
-failed. On the same source freeze, an exact binding-test retry passed after only
-the child PATH was corrected; the full command was not rerun or reclassified.
-The 140 doctests, API/Book checks and native archive checks passed on their recorded
-earlier source freeze, not as a final-freeze rerun.
+policy is defined in `specs/90_DEVELOPMENT.md`. A newly produced expanded adapter/
+NumPy/Arrow sdist was independently unpacked and built with the installed Rust
+1.96 toolchain, locked/offline release settings and a separate target directory.
+Its own cp310-abi3 wheel was installed in a fresh fourth CPython 3.10 prefix:
+all 128 archived runtime cases, dependency checks and original third-party pin
+checks passed. All 498 unpacked archived files remained byte-unchanged through
+the build, including manifests and derived lock. The retained lock packages kept
+their pins/fields and dependency-edge subsets; only the development Book member
+was pruned. This is new expanded-closure evidence, not reuse of the earlier
+native-data sdist's 38 passing cases.
+
+For this dependency change, the full Rust gate passed on the repaired product
+source: 1,075 named cases, 15 ignored/not executed, and 144 doctests; strict
+workspace all-target Clippy, API/Book checks and all three native archives passed.
+Only the finalizer fixture changed afterward: it records type/message rather than
+retaining a traceback that keeps its own self alive. Product sources and the wheel
+binary did not change. Historical compiler, loader, cold-import, runtime-fixture
+and invocation failures remain recorded, not reclassified as successful commands.
+In particular, the earlier native-data full-command failure was not rerun or
+retroactively changed; the new dependency-closure gate is separate evidence.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -116,11 +146,11 @@ task after the complete planned interface is implemented, rather than blocking
 the remaining implementation stages. Overall plan acceptance is not complete;
 the complete Python binding is not delivered.
 
-The complete four input routes, all 25 constructor families, retained-source lookup,
-col/cols and signed positional selection, exact pandas keys, MaskedArray, remaining
-configuration values, full input typing and cost observations remain planned. They
-are not permanently reduced to this subset. The 2026-11-06 prototypes below are not
-runs of this package.
+The other 24 constructor families, full scientific/policy methods and flat
+geometry, remaining configuration values, all eight callback slots, alpha/status/
+layers/results, full-surface typing and final cost observations remain planned.
+They are not permanently reduced to Scatter. The 2026-11-06 prototypes below are
+not runs of this package.
 
 ## Confirmed Scope And Constraints
 
@@ -574,15 +604,16 @@ inconsistency in imported bound dtypes must fail visibly rather than silently
 disappear through filtering. Explicit selections bypass discovery entirely.
 Test explicit [a,b] versus discovered [b,a], unused Decimal/Struct Variable* name
 avoidance, namespace union, empty selected names, zero rows and one-column
-collections. A real bound-only Arrow importer remains a separate implementation
-and compatibility gate; these Rust APIs and checks are not FFI evidence.
+collections. Scatter's real bound-only Arrow importer has the bounded installed
+evidence recorded above; other family bindings remain planned. These Rust
+descriptor APIs and checks alone are not FFI evidence.
 
-##### Direct-Local Namespace Transport Target
+##### Direct-Local Namespace Transport
 
-The input bridge exposes one remaining native seam: direct-local collections
-cannot carry complete main-source names through ordinary column references,
-whereas `new(...)` deliberately supplies selected raw identities. The reviewed
-implementation target adds one factory to the same descriptor:
+The input bridge consumes `from_direct` on the same descriptor to retain
+direct-local identity while carrying complete main-source names. Ordinary column
+references cannot supply those names; `new(...)` deliberately supplies selected
+raw identities instead:
 
 ```rust
 pub fn from_direct(
@@ -614,10 +645,11 @@ y_names), y_columns)`; they are not all rewritten as local. This also implements
 the newly admitted ordinary DataFrame collection: there is no existing
 `NumericSeriesInput for &DataFrame` to claim as its old route.
 
-Acceptance must witness unused `Variable*` namespace avoidance with duplicate/
+Focused native checks witness unused `Variable*` namespace avoidance with duplicate/
 empty local display names and private ordinals, one-column collection meaning,
 unchanged delayed dtype/length ordering, real grid shape/ID authority, and named
-independent-frame identity. These are target requirements, not runtime evidence.
+independent-frame identity. Installed Scatter checks exercise the actual callers;
+neither result certifies every future family binding.
 
 These two descriptors are precise exceptions documented in the current adapter
 contract, solely for preserving original coordinates and names while using
@@ -627,19 +659,16 @@ input route, cross-adapter dependency or another renderer.
 
 #### Current Native Label Policy Access
 
-The planned Python key codec must preserve the sole native label policy when
-adding a default display for a genuinely new bound key. The required borrowed
-reader is `Plot<K>::get_labels(&self) -> &Labels`, delegating to the existing
-private PlotDescription policy reader. Rename that private reader and migrate
-its internal callers; do not expose PlotDescription or keep a compatibility name.
-This also covers a core-origin Plot without adapter metadata. Do not add unused
-adapter readers merely for symmetry. The core also needs `Labels::get_aliases(&self) ->
-Option<impl ExactSizeIterator<Item = (&str, &str)> + '_>`. Reuse that iterator to
-test exact alias presence; do not add a parallel point reader or shadow map.
-Deliver these readers with the actual key-codec or immutable PyLabels consumer,
-not as unused APIs in the projection implementation.
+The Python key codec preserves the sole native label policy when adding a default
+display for a genuinely new bound key. Its borrowed
+`Plot<K>::get_labels(&self) -> &Labels` reader delegates to the renamed private
+PlotDescription reader; internal callers are migrated without a compatibility
+name or public PlotDescription. Core-origin Plots need no adapter metadata.
+`Labels::get_aliases(&self) -> Option<impl ExactSizeIterator<Item = (&str, &str)> + '_>`
+serves both exact alias-presence checks and immutable PyLabels. No parallel point
+reader, adapter reader or shadow map is needed.
 
-The selected immutable Python `Labels(*, mode="humanized", aliases=None)` holds
+The implemented immutable Python `Labels(*, mode="humanized", aliases=None)` holds
 only the native policy. Its read-only mode and aliases and complete-replacement
 `copy_with` use `Labels::is_humanized(&self) -> bool` and the same aliases reader;
 omission preserves a field, aliases=None clears it. Modes are the closed
@@ -647,7 +676,7 @@ omission preserves a field, aliases=None clears it. Modes are the closed
 factories without retaining a Python map; preserve native last-write-wins and
 BTreeMap inspection order. Explicit `resolve(raw)` delegates to the existing
 native method; ordinary inspection/copy must not resolve or validate display text.
-Deliver Python `Plot.labels(Labels)` and `Canvas.labels(Labels)` with this consumer.
+Python `Plot.labels(Labels)` and `Canvas.labels(Labels)` consume this native policy.
 Core-origin Plot and Canvas forward natively; ndarray/Polars-origin Plot restores
 its matching adapter before replacement and splitting.
 
@@ -718,8 +747,8 @@ shape is `scatter(data=None, *, x, y, hue=None)`, not its complete eventual
 signature. Do not additionally interpret `scatter(a, b)` as x/y, or guess whether
 the first positional object is a source or x based on its type.
 
-The following examples specify the full selected call grammar; only the native-data
-subset recorded above is currently implemented:
+The following examples specify the selected call grammar and are implemented for
+Scatter; other families retain the delivery scope recorded above:
 
 ```python
 scatter(x=[1, 2], y=[3, 4])
@@ -829,12 +858,13 @@ containers; actual dtype/shape/validity validation remains at runtime.
 
 The selected Python syntax uses shared, project-owned `col` and `cols` subscription
 entry objects, not separate plotting namespaces or a source/container wrapper.
-They are planned interfaces, not implemented bindings or existing Seaborn/Plotly
-functions. Keep ordinary direct inputs and the container's own indexing available;
+They are implemented for Scatter with the bounded installed evidence above;
+other family wiring remains planned. These are not Seaborn/Plotly functions.
+Keep ordinary direct inputs and the container's own indexing available;
 do not add parallel `x_cols`/`y_cols` keywords or a `columns(...)` call-form alias.
 
 ```python
-# Planned call forms; ordinary row-count and family-role checks still apply.
+# Implemented Scatter forms; ordinary row-count and family-role checks still apply.
 scatter(matrix, x=0, y=[10, 20])  # Direct y values.
 scatter(matrix, x=0, y=(10, 20))  # Direct y values too.
 scatter(matrix, x=0, y=cols[1, 3])  # Select two logical columns.
@@ -1081,6 +1111,12 @@ their actual references. Clear/replacement and failed candidates release Python
 references only after PyO3 borrows/locks end. Canvas captures only the native
 configuration and its existing callback roots, not the source owner/key registry.
 Render operation pins and frozen Output retain their existing distinct lifetimes.
+Traversal reports the binding's actual physical edges, not every object reachable
+inside a foreign container. It cannot repair cycles hidden from CPython's GC by
+foreign storage, such as arbitrary keys held in an untracked NumPy object buffer
+inside a pandas Index. Such a cycle can remain alive even without a Plot. Do not
+duplicate traversal visits or add shadow references to compensate, or claim that
+all otherwise legal foreign-container cycles are automatically collectable.
 
 ### Input Bridges And Compatible Dependencies
 

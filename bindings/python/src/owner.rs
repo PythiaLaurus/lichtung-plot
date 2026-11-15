@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use lichtung_plot::{kind, Plot};
+use lichtung_plot::kind;
 use pyo3::exceptions::{PyMemoryError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::PyTraverseError;
@@ -18,7 +18,7 @@ pub(crate) use plot::PyPlotOwner;
 /// Family erasure is private; each variant preserves the native capability type.
 #[derive(Clone)]
 pub(crate) enum NativePlot {
-    Scatter(Plot<kind::Scatter>),
+    Scatter(crate::input::Config<kind::Scatter>),
 }
 
 #[derive(Clone, Copy)]

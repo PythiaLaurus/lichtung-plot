@@ -232,13 +232,33 @@ wide producers avoid the union of that namespace, any main DataFrame namespace
 and the other bound field. Scratch names do not enter Plot/BindingMetadata or
 become a retained lookup source.
 
+Polars `ColumnProjection::from_direct(source_names, columns)` supplies the same
+namespace without changing direct-local identities. It checks only nonempty
+columns and namespace uniqueness; duplicate/empty direct names and zero rows
+remain legal. It does not require membership or scan dtypes/row lengths at
+construction. At consumption, numeric extraction retains its original per-column
+length-then-dtype order, and grid roles use the original per-dimension shape
+checks. Main-source row counts do not constrain independent direct values.
+Independent named DataFrames instead use `new` with their actual rows and the
+ordered unique union of main-source and direct-frame names. Neither form installs
+a lookup context; both remain ordinary non-native-slot inputs.
+
 `ColumnProjection::numeric_names(&DataFrame)` shares existing discovery through
 `DataType::is_primitive_numeric()`, preserving source order and typed empty/all-null
-numeric fields. Explicit selections do not invoke discovery. Projected collections
-remain selected/non-native-slot inputs, including one-column collections; Boolean
-and ID grids retain row-major order, per-dimension shape checks and no row-ID
+numeric fields. Explicit selections do not invoke discovery. Selected projections
+retain raw identities; both forms remain non-native-slot inputs, including
+one-column collections. Boolean and ID grids retain row-major order,
+per-dimension shape checks and no row-ID
 repetition. Empty selected names keep their raw identities; only direct-local
 empty names receive the existing `Column N` display fallback.
+
+The native label policy is readable through borrowed `Plot<K>::get_labels()`;
+`Labels::is_humanized()` and `Labels::get_aliases()` expose mode and stored aliases
+without resolving display text. A key codec adds default aliases only for new
+identities, starting from this current policy rather than a second label store.
+Complete policy replacement must not resurrect prior defaults from key
+bookkeeping. Label/facet edits on a split Plot/metadata pair restore the matching
+adapter before splitting again so its policy caches stay synchronized.
 
 ### Common Value Semantics
 

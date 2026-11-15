@@ -27,5 +27,6 @@ module-name = "lichtung_plot._native"
 include = [
     { path = "_build_backend.py", format = "sdist" },
     { path = "tests/**/*.py", format = "sdist" },
+    { path = "tests/*.ini", format = "sdist" },
     { path = "examples/*.py", format = "sdist" },
 ]

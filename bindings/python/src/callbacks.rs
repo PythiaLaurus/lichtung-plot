@@ -45,13 +45,22 @@ pub(crate) fn ensure_live(py: Python<'_>, roots: &[Py<CallbackHolder>]) -> PyRes
 pub(crate) fn sequence<'py, T: FromPyObjectOwned<'py>>(
     value: &Bound<'py, PyAny>,
 ) -> PyResult<Vec<T>> {
+    sequence_with_messages(
+        value,
+        "numeric callback sequences must not be str",
+        "numeric callback values must be indexable sequences, not mappings or iterator-only inputs",
+    )
+}
+
+/// Reuse the same fallible indexed protocol for immutable configuration inputs.
+pub(crate) fn sequence_with_messages<'py, T: FromPyObjectOwned<'py>>(
+    value: &Bound<'py, PyAny>,
+    string_error: &'static str,
+    sequence_error: &'static str,
+) -> PyResult<Vec<T>> {
     if value.is_instance_of::<PyString>() {
-        return Err(PyTypeError::new_err(
-            "numeric callback sequences must not be str",
-        ));
+        return Err(PyTypeError::new_err(string_error));
     }
-    let sequence_error =
-        "numeric callback values must be indexable sequences, not mappings or iterator-only inputs";
     if value.is_instance_of::<PyDict>() {
         return Err(PyTypeError::new_err(sequence_error));
     }

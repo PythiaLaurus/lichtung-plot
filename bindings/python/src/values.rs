@@ -1,10 +1,12 @@
 //! Immutable Python configuration values backed only by complete native values.
 
+mod labels;
 pub(crate) mod numeric;
 mod output;
 mod text;
 mod theme;
 
+pub(crate) use labels::PyLabels;
 pub(crate) use output::PyPngOptions;
 pub(crate) use text::{text_intent, PyText, PyTextLayout, TextIntent};
 pub(crate) use theme::{PyTextTheme, PyTheme};
@@ -37,6 +39,7 @@ fn is_omitted(value: &Bound<'_, PyAny>) -> bool {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     OMITTED.get_or_try_init(m.py(), || Py::new(m.py(), Omitted))?;
     m.add_class::<PyTheme>()?;
+    m.add_class::<PyLabels>()?;
     m.add_class::<PyTextTheme>()?;
     theme::register_components(m)?;
     m.add_class::<PyText>()?;

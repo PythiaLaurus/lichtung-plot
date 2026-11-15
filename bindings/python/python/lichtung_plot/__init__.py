@@ -1,15 +1,18 @@
-"""Native-data Scatter plots, reusable Canvas owners, and frozen outputs."""
+"""Four-route Scatter inputs, reusable Canvas owners, and frozen outputs."""
 
 from ._native import (
     AnnotationTextRoles,
     AxisTextRoles,
     Color,
+    ColumnSelector,
+    ColumnsSelector,
     CompositionTextRoles,
     ContrastTextRoles,
     DataError,
     FontFamily,
     FontStack,
     GuideTextRoles,
+    Labels,
     NumericDomain,
     NumericFactors,
     NumericFormat,
@@ -38,6 +41,8 @@ from ._native import (
     TickGeneration,
     TickPositions,
     TypographyTheme,
+    col,
+    cols,
 )
 from ._owners import Canvas, Plot, Scatter, scatter
 
@@ -46,12 +51,15 @@ __all__ = [
     "AxisTextRoles",
     "Canvas",
     "Color",
+    "ColumnSelector",
+    "ColumnsSelector",
     "CompositionTextRoles",
     "ContrastTextRoles",
     "DataError",
     "FontFamily",
     "FontStack",
     "GuideTextRoles",
+    "Labels",
     "NumericDomain",
     "NumericFactors",
     "NumericFormat",
@@ -82,5 +90,7 @@ __all__ = [
     "TickGeneration",
     "TickPositions",
     "TypographyTheme",
+    "col",
+    "cols",
     "scatter",
 ]

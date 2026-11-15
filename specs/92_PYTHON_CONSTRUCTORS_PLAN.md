@@ -9,8 +9,11 @@ selectors, binding snapshots and object lifecycle remain in the
 behavior remains defined by the [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). The selected
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) owns the prerequisite
-core/adapter migration and its native delivery status. Native-data direct Scatter
-has bounded installed verification; other constructor call forms remain planned.
+core/adapter migration and its native delivery status. Scatter now has bounded
+installed verification across all four input routes, including selectors,
+MaskedArray, many-y, explicit row-position/numeric-discovery modes and fresh
+retained-source lookup. The other 24 families and their scientific/configuration
+methods remain planned; this is not complete constructor delivery.
 The workspace/interface plan records the current scope and remaining delivery gate.
 
 The inventory covers all 25 existing families, their primary input alternatives

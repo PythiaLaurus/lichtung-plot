@@ -14,6 +14,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 lichtung-plot.workspace = true
+lichtung-plot-ndarray.workspace = true
+lichtung-plot-polars.workspace = true
+ndarray.workspace = true
+numpy.workspace = true
+polars-arrow.workspace = true
+polars-core.workspace = true
 pyo3.workspace = true
 
 [lints]

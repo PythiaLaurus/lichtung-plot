@@ -11,7 +11,7 @@ use pyo3::{PyTraverseError, PyVisit};
 use super::{cleared_owner, native_snapshot, NativePlot, PyPlotOwner};
 use crate::callbacks::{self, clone_roots, CallbackRoots};
 use crate::output::{PyOutput, Terminal};
-use crate::values::{self, PyPngOptions, PyTheme, TextIntent};
+use crate::values::{self, PyLabels, PyPngOptions, PyTheme, TextIntent};
 
 struct PanelRoots {
     anchor: (usize, usize),
@@ -193,9 +193,14 @@ impl PyCanvasOwner {
                 .map_err(|error| PyMemoryError::new_err(error.to_string()))?;
             let canvas = Arc::make_mut(native);
             match plot.as_ref() {
-                NativePlot::Scatter(plot) => {
-                    canvas.place_panel(row, column, row_span, column_span, plot.clone(), overwrite)
-                }
+                NativePlot::Scatter(config) => canvas.place_panel(
+                    row,
+                    column,
+                    row_span,
+                    column_span,
+                    config.native.clone(),
+                    overwrite,
+                ),
             }
             .map_err(crate::native_error)?;
 
@@ -294,6 +299,12 @@ impl PyCanvasOwner {
         let native = theme.native.clone();
         drop(theme);
         Self::update(slf, |canvas| Ok(canvas.theme(native)))
+    }
+
+    fn labels(slf: &Bound<'_, Self>, labels: PyRef<'_, PyLabels>) -> PyResult<()> {
+        let native = labels.native.clone();
+        drop(labels);
+        Self::update(slf, |canvas| Ok(canvas.labels(native)))
     }
 
     fn width(slf: &Bound<'_, Self>, width: u32) -> PyResult<()> {

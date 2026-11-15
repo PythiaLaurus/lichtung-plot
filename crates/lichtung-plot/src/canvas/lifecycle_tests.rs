@@ -315,7 +315,7 @@ fn effective_label_policy_is_borrowed_without_rewriting_authored_child_labels() 
                     "Canvas X"
                 );
                 assert_eq!(
-                    registered.source.labels_policy().resolve("raw_x").unwrap(),
+                    registered.source.get_labels().resolve("raw_x").unwrap(),
                     "Child X"
                 );
             }
