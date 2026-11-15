@@ -417,6 +417,11 @@ impl<'columns> ColumnProjection<'columns> {
         source_shape: (usize, usize),
         columns: &'columns [(usize, &'columns dyn ArraySource)],
     ) -> std::result::Result<Self, AdapterError>;
+
+    pub fn with_identities(
+        self,
+        identities: &'columns [(usize, &'columns str)],
+    ) -> std::result::Result<Self, AdapterError>;
 }
 ```
 
@@ -449,6 +454,59 @@ mask inversion and pandas key/native-identity/display mapping remain binding
 responsibilities. Test heterogeneous/independent-stride columns, original bounds,
 missing projection entries, one-column collection meaning, null versus present
 NaN and original-index diagnostics without a container/family cross-product.
+
+`with_identities` supplies optional call-local raw field identities, needed when
+a pandas key moves to a different logical position. A display alias cannot make
+two positional `Column N` identities equal. Keep the actual source shape and
+indices: the table is not a codec index space, selection list or value store.
+Without this opt-in, ordinary views and projections keep the existing positional
+name algorithm unchanged.
+
+The borrowed table must contain unique in-bounds indices and unique exact raw
+strings, covering every supplied value column. It may additionally cover
+in-bounds unprojected columns: generated-column alpha can read only an integer
+key variable whose values name other columns without reading those target
+columns' observations. Such identity-only entries do not grant value lookup.
+An explicit table completely replaces any prior table; missing identity entries
+never fall back to positional names. Empty/whitespace raw strings are not
+rejected here by a new native-name validator.
+
+Validate table structure when supplied, without scanning observations. Resolve
+integer targets only after the existing exact-integer role extraction; in this
+explicit mode an out-of-bounds target is a column error and an in-bounds missing
+identity is a binding error with its original index. Do not apply those new
+descriptor checks to ordinary positional sources. Value lookup still checks the
+real bounds and supplied value entries, and `..` still covers the original
+logical domain. Preserve original-index diagnostics when delegating physical
+column zero. Error text containing a native raw name may reflect the authored
+identity; it must not pretend to remain a positional name.
+
+Use one private borrowed metadata hook on the existing sealed protocol and one
+source identity helper. Route scalar Numeric/Category/Boolean, both Axis branches,
+alpha-byte names, non-local wide keys, generated-column integer targets and
+Matrix keys through that same mapping. Do not change direct-local private keys,
+grid positional keys, SourceRows values, order/repetition, masks or native-slot
+pass-through. Retain single role extraction and existing native validation
+boundaries, including checks already performed by native value constructors.
+
+The four wide producers continue to choose their generated field names. Avoid
+the existing other field and all supplied raw identities, including identity-only
+entries, by extending the existing `Variable`/underscore algorithm. Without an
+explicit identity table the result stays unchanged. Store only the already-owned
+bound raw names/Expansion keys in metadata, never this borrowed table. Later
+lookups interpret indices in the current source's coordinates, not frozen
+constructor positions; independent-source operations use their explicit source,
+not a hidden fallback to the main source.
+
+Acceptance must additionally witness reordered stable identities, a fresh-role
+binding that does not reread old observations, identity-only generated alpha
+targets with native membership/coverage validation, shared scalar/axis/byte
+naming, Matrix raw keys and unchanged grid/provenance authority. These Rust
+witnesses are not pandas key-codec or FFI execution evidence.
+The generated-field witness must include an unselected identity-only
+`Variable*` entry, proving whole-table avoidance. With an identity-bearing
+context, direct-local matrices and local column-alpha targets must still use
+their existing private ordinals and positional display defaults.
 
 #### Polars Names-Aware Selected-Column Projection
 
@@ -524,6 +582,26 @@ and names while using existing binding algorithms. Update that current contract
 with the working implementations, not in anticipation. They do not create a
 general source framework, conversion catalog, selector DSL, Python Rust-payload
 input route, cross-adapter dependency or another renderer.
+
+#### Current Native Label Policy Access
+
+The planned Python key codec must preserve the sole native label policy when
+adding a default display for a genuinely new bound key. Each adapter therefore
+needs the narrow borrowed reader
+`PlotAdapter::get_labels(&self) -> &Labels` over its existing policy cache.
+The core needs `Labels::get_aliases(&self) ->
+Option<impl ExactSizeIterator<Item = (&str, &str)> + '_>`. Reuse that iterator to
+test exact alias presence; do not add a parallel point reader or shadow map.
+Deliver these readers with the actual key-codec or immutable PyLabels consumer,
+not as unused APIs in the projection implementation.
+
+Clone the current native policy only for the candidate edit and apply it through
+the adapter's existing `.labels(...)` method. Preserve the mode, unrelated aliases
+and explicit aliases even when they equal the fallback text. Add defaults only
+for newly bound identities; source reordering or complete policy replacement
+must not resurrect old defaults from key bookkeeping. Reading aliases does not
+resolve, humanize, validate or disambiguate display text. Native validation keeps
+its existing timing, including empty aliases and display-domain collisions.
 
 ## Complete Python Interface
 
