@@ -263,6 +263,65 @@ only a successful producer without a PyErr proceeds to stale-check/paired commit
 Never commit fallback bytes. Borrow-free cleanup may still invoke finalizers.
 No persistent callback slot or retained mapper is needed.
 
+### Alpha Call Forms
+
+For `T = point_alpha | line_alpha | fill_alpha`, expose the existing adapter
+method families on precisely the corresponding sealed capability sets:
+
+| Scope | Python call shape |
+| --- | --- |
+| Row / expanded cells | `T(input)`, `T_cells(input)` |
+| Native linear convenience | `T_linear(input, domain, range)` |
+| Numeric mapping | `T_map(input, *, mapping)` and `T_cells_map(input, *, mapping)` |
+| Categorical mapping | `T_map_categories(input, *, mapper)` and `T_cells_map_categories(input, *, mapper)` |
+| Explicit broadcast | `T_single(*, value=omitted, input=omitted)`; exactly one is present |
+| Mapped broadcast | `T_single_map(input, *, mapping)`, `T_single_map_categories(input, *, mapper)` |
+| Semantic keys | `T_keyed(input, *, keys)` and corresponding `_map` / `_map_categories` forms |
+| Generated columns | `T_columns(input, *, column_key, other_keys=())` and corresponding mapped forms |
+| Reset | `T_theme()` |
+
+In the table, `mapping` is notation for exactly one of the real keyword
+parameters `linear=(domain, byte_range)`, `log10=(domain, byte_range)`,
+`threshold=(boundaries, alpha_bytes)` or `continuous=(domain, scalar_mapper)`.
+There is no `mapping=` argument or unrestricted keyword bag. Validate this
+complete combination before source lookup. Categorical forms require the
+keyword-only scalar `mapper`. Preserve the adapter's method names, including
+`_cells_map_categories`, rather than adding interchangeable aliases.
+
+Only keyed and generated-column scopes have independent-source variants, named
+as in the adapters: `_keyed_from_data`, `_keyed_map_from_data`,
+`_keyed_map_categories_from_data` and the analogous `_columns` names. Their
+`data=None` is the sole positional argument; `input`, scope fields and mapper
+keywords are keyword-only. None means direct-only, not retained-main-source
+fallback. Ordinary forms use the retained main source when a selector needs it.
+
+Histogram additionally exposes `fill_alpha_bins(input, *, lower, upper, facets=())`,
+`fill_alpha_bins_map` and `fill_alpha_bins_map_categories`. Their `_from_data`
+variants use the same source-first, remaining-keyword-only convention. Bounds and
+facet inputs belong to this selector table, not the sample observations.
+
+`keys`, `other_keys` and `facets` are ordered list/tuple collections of
+`(semantic_field, categorical_input)` pairs; do not collapse duplicates into a
+dict. A semantic field has two nonoverlapping canonical spellings: a plain string
+means the literal native role/raw field; `col[original_key]` means the already-bound
+pandas identity in the owner's existing key registry. The latter does not look
+up observations or install a new identity; an unbound key is an error.
+Do not resolve a plain string through that registry, stringify a key or use a
+display alias. Thus raw `"hue"` and a pandas field addressed as `col["hue"]` can
+coexist without priority rules or guessing from pair order/values. The independent
+table changes where values are read, not which scientific fields they identify.
+Generated `column_key` uses the existing
+origin's logical column IDs/raw identities or local ordinals, not display labels;
+Matrix display metadata does not invent an expansion.
+
+Raw native list/tuple alpha members and explicit `value` are checked byte
+integers (not bool, float opacity or truncating casts); foreign byte variables
+retain the native UInt8/u8 dtype and missing-value checks. `input` remains an
+ordinary variable/selector, including in `T_single`; only `value` selects a
+literal scalar. None is neither a value nor a reset. Numeric/categorical mapped
+inputs retain their existing ordinary role admission. These are call-local
+inputs, not new public alpha payload/configuration classes.
+
 Layers are flat append-only owner calls with an independent `data` context:
 Line point_layer accepts x/y, optional labels/color/radius/alpha/legend_label/
 label_text_layout; Bar/HorizontalBar accept category/value, optional series and
