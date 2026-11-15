@@ -37,8 +37,9 @@ families and records the selected call forms. The
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
 delivered. Scatter's four input routes and their input typing are implemented;
-full-family stubs, scientific/configuration methods and final cost/content closure
-still need implementation and verification.
+complete Theme/Text values are implemented too. Full-family stubs, the remaining
+scientific/configuration methods and final cost/content closure still need
+implementation and verification.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -57,6 +58,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native naming/shape/order checks, external consumers and installed Scatter input checks passed. |
 | Python lifecycle decision and complete binding | Four-route Scatter/lifecycle/Labels and accurate subset typing are installed-verified below. The other 24 families, full scientific/configuration surface, all callback slots and final cost/content checks remain open; this is not complete binding delivery. |
 | Python input boundaries | Implemented for Scatter: strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits. Sampled runtime/typing checks and expanded-closure independent sdist build/install/runtime verification passed. |
+| Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Focused installed runtime, strict typing, recursive stubtest and an external example passed within the scope below. Family-specific appearance policies and full numeric values remain open. |
 | Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
@@ -75,12 +77,12 @@ has the bounded installed verification described below:
   NumericFormat value/set callbacks, TickGeneration function callbacks, scoped
   contexts, reentry/exception ownership and GC hooks are covered by those bounded
   installed checks.
-- Twenty-one immutable appearance/text/output value classes cover colors, fonts,
-  spacing, complete typography roles, surfaces, Theme/Text/layout and PNG options.
-  Theme exposes only typography/surfaces while retaining all eight native components.
-  TextLayout exposes alignment, fit_priority, direction, rotation_mode, offset,
-  bounds, wrapping and overlap; its five opaque fit/orientation/anchor/overflow/
-  visibility instructions are preserved during derivation, not exposed as inputs.
+- Eighty-four immutable appearance/text/PNG classes cover the original 21 plus
+  54 Theme descendants and nine Text values. Theme exposes all eight components;
+  TextLayout exposes all thirteen authored fields, including fit, orientation,
+  anchor, overflow and visibility. Native values remain the sole representation;
+  immutable copies preserve omission, real None and closed-branch presence.
+  The 28 pure Text readers are delivered with their actual Python consumers.
 - Immutable Labels exposes mode/aliases/copy/resolve and complete Plot/Canvas
   replacement. It holds the native policy; source/key roots are physical GC edges,
   not a second Labels store. Native `get_labels`/mode/aliases readers serve these
@@ -97,9 +99,9 @@ has the bounded installed verification described below:
 Source owners are `bindings/python/src/input.rs`, `bindings/python/src/owner/`,
 `bindings/python/src/output.rs`, `bindings/python/src/values/` and
 `bindings/python/src/callbacks/`; the thin public owners live in
-`bindings/python/python/lichtung_plot/_owners.py`. Installed-wheel runtime/callback/
-GC checks used one identical wheel/native binary on sampled Linux x86_64 ordinary
-CPython environments:
+`bindings/python/python/lichtung_plot/_owners.py`. The earlier input-foundation
+installed runtime/callback/GC checks used one identical wheel/native binary on
+sampled Linux x86_64 ordinary CPython environments, before the Theme/Text additions:
 
 | Interpreter | Input providers | Actual runtime checks |
 | --- | --- | --- |
@@ -126,17 +128,43 @@ checks passed. All 498 unpacked archived files remained byte-unchanged through
 the build, including manifests and derived lock. The retained lock packages kept
 their pins/fields and dependency-edge subsets; only the development Book member
 was pruned. This is new expanded-closure evidence, not reuse of the earlier
-native-data sdist's 38 passing cases.
+native-data sdist's 38 passing cases. That archive predates the Theme/Text
+implementation and is not source-package execution evidence for those additions.
 
-For this dependency change, the full Rust gate passed on the repaired product
-source: 1,075 named cases, 15 ignored/not executed, and 144 doctests; strict
+For the earlier input dependency change, the full Rust gate passed on its repaired
+product source: 1,075 named cases, 15 ignored/not executed, and 144 doctests; strict
 workspace all-target Clippy, API/Book checks and all three native archives passed.
 Only the finalizer fixture changed afterward: it records type/message rather than
 retaining a traceback that keeps its own self alive. Product sources and the wheel
 binary did not change. Historical compiler, loader, cold-import, runtime-fixture
 and invocation failures remain recorded, not reclassified as successful commands.
 In particular, the earlier native-data full-command failure was not rerun or
-retroactively changed; the new dependency-closure gate is separate evidence.
+retroactively changed; that dependency-closure gate is separate evidence. These
+full-suite counts are not a rerun on the current Theme/Text source.
+
+For the Theme/Text additions, strict workspace all-target Clippy and the one
+affected private native layout-copy case passed. A release cp310-abi3 wheel passed
+the focused new/affected 17-case selection on CPython 3.13; CPython 3.10 passed
+16 cases plus one exact title-anchor fixture retry, not a new full selection.
+Installed strict mypy checked six explicit shipped/fixture roots against the 3.10
+provider and language target, retaining 50 input, eight lifecycle and 28 new value
+negative guards. This is declaration evidence for that provider, not a repeat of
+the entire input runtime matrix.
+
+Recursive stubtest initially failed because 13 actual None defaults were displayed
+as Ellipsis by macro-generated signature metadata. Only the macro's default-token
+capture changed; a newly built and installed wheel passed recursive single-root
+stubtest without an allowlist. Both 3.10 and 3.13 passed the two affected constructor
+cases, and inspection confirmed all 13 signature defaults are None. The new
+wheel's shipped declarations are byte-identical to those checked by mypy.
+The successful 17-case evidence remains tied to the preceding wheel; it was not
+repeated or relabeled as a new-wheel full selection. The original metadata and
+title-fixture failures remain recorded as failures.
+
+The complete-appearance example ran outside the checkout on the repaired wheel;
+its actual PNG was inspected. Installed dependency checks passed without changing
+third-party pins. Final full-interface source-package build/install/runtime and
+cost/content closure remain open; earlier archives do not certify later additions.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -690,15 +718,15 @@ its existing timing, including empty aliases and display-domain collisions.
 
 ## Complete Python Interface
 
-### Complete Theme And Text Value Target
+### Complete Theme And Text Values
 
-The next immutable-value closure completes the existing Theme/Text roots, not a
-new owner hierarchy or scientific-data route. It is a selected implementation
-target, not delivered behavior. Keep the existing 21 appearance/text/PNG classes,
-add the 54 Theme descendants and nine Text value classes below, and extend the
-same Theme and TextLayout classes. Labels was delivered with the input codec and
-is not implemented again. Numeric policies and six additional appearance-policy
-roots with family-specific callers belong to their subsequent consumer phases.
+The implemented immutable-value closure completes the existing Theme/Text roots,
+not a new owner hierarchy or scientific-data route. It retains the original 21
+appearance/text/PNG classes, adds the 54 Theme descendants and nine Text value
+classes below, and extends the same Theme and TextLayout classes. Labels was
+delivered with the input codec and is not implemented again. Numeric policies and
+six additional appearance-policy roots with family-specific callers belong to
+their subsequent consumer phases.
 
 Every wrapper holds only its complete native value. Ordinary records expose
 keyword-only typed construction, getter-only named fields and keyword-only
@@ -786,7 +814,7 @@ TextOrientation, TextAnchor, TextEllipsis, TextOverflow and TextVisibility:
 
 #### Consumer-Required Text Readers
 
-The following exact public core readers serve those real Python properties and
+The following implemented public core readers serve those real Python properties and
 copies. All take `&self`, allocate nothing natively and perform no normalization,
 validation, projection or font/render work. Python child cloning need not be
 zero-cost. Deliver readers and bindings together; no private enums, instruction
@@ -809,7 +837,7 @@ Anchor inspects vertical_fraction before using the baseline query. Visibility is
 All only when hidden/every/greedy/parity queries are all absent/false. Existing
 TextLayout, TextOffset, TextBounds and the 54 Theme children need no extra reader.
 Binding implementations, the one shipped stub/exports and actual immutable-copy/
-native-attachment consumers must agree before marking this target delivered.
+native-attachment consumers agree within the bounded verification recorded above.
 Use focused sibling-validation, nested independence, presence/clear and one
 representative publication relationship rather than getter inventories or a
 family/container/style matrix.
@@ -1252,7 +1280,7 @@ renderers or scientific semantics:
 | Python native data | Extract role-appropriate values into internal native inputs; do not require Rust payload objects or force a NumPy/list/JSON round trip. Supplied geometry uses explicit named columns from the constructor plan, not a geometry map or nested input tree. |
 | NumPy arrays | Use rust-numpy readonly ndarray views and the existing ndarray adapter; recognize MaskedArray first and carry its mask into native validity. Release foreign borrows after binding owned values. |
 | pandas DataFrame/Series | Resolve exact unique original column keys, preserve identity separately from display, and extract only bound columns by logical dtype. Numeric roles reuse the NumPy/ndarray route with explicit validity; category, Boolean and identity roles keep their native meanings. Do not require whole-table ndarray, Polars or PyArrow conversion. |
-| Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. The concrete Python-to-Rust bridge still needs native runtime verification. |
+| Eager Polars DataFrame/Series | Bridge into the existing Polars adapter rather than first flattening the table into ndarray. Scatter's concrete bridge has the bounded installed verification above; other family consumers remain to be wired and verified. |
 
 Preserve the [adapter value contracts](09_DATA_ADAPTERS.md): ordinary numeric f64
 rounding, null distinct from present NaN, exact integer IDs, actual string category

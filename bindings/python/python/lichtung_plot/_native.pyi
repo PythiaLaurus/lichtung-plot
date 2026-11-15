@@ -47,10 +47,73 @@ __all__: list[str] = [
     "AnnotationTextRoles",
     "TypographyTheme",
     "SurfaceTheme",
+    "AxisTheme",
+    "FrameSides",
+    "FrameTheme",
+    "TickTheme",
+    "AxisSpacing",
+    "LegendTheme",
+    "LegendSpacing",
+    "GradientLengths",
+    "LegendFrameTheme",
+    "CompositionTheme",
+    "RootTitleSpacing",
+    "RootPadding",
+    "TextPanelSpacing",
+    "HeaderSpacing",
+    "FacetStripSpacing",
+    "StrokeTheme",
+    "SolidStrokeTheme",
+    "OutlineTheme",
+    "PointOutlineTheme",
+    "DataOutlineTheme",
+    "DataFillTheme",
+    "FixedFillTheme",
+    "PointTheme",
+    "DataLineTheme",
+    "MarkTheme",
+    "PointRoles",
+    "SizedPointTheme",
+    "SupplementalPointTheme",
+    "PointRadii",
+    "FillRoles",
+    "BodyFillRoles",
+    "BandFillRoles",
+    "DensityFillRoles",
+    "DataLineRoles",
+    "NeutralPaintRoles",
+    "StrokeRoles",
+    "ReferenceStrokeRoles",
+    "ConnectorStrokeRoles",
+    "SummaryStrokeRoles",
+    "CurveStrokeRoles",
+    "CellMarkRoles",
+    "CategoryMarkGeometry",
+    "MarkExtentTheme",
+    "AnnotationTheme",
+    "SignificanceGeometry",
+    "CellAnnotationGeometry",
+    "EstimateAnnotationGeometry",
+    "ValueShelfSpacing",
+    "AccentPalette",
+    "QualitativePalette",
+    "ColorStop",
+    "SequentialGradient",
+    "DivergingGradient",
+    "ColorScales",
     "Text",
     "TextLayout",
     "TextOffset",
     "TextBounds",
+    "TextFit",
+    "TextRotation",
+    "DataCoordinate",
+    "DataPosition",
+    "TextOrientation",
+    "TextAnchor",
+    "TextEllipsis",
+    "TextOverflow",
+    "TextVisibility",
     "PngSizing",
     "PngOptions",
     "NumericFormat",
@@ -69,6 +132,13 @@ _FitPriority = Literal["content_first", "preferred_size_first"]
 _RotationMode = Literal["rotate_about_anchor", "align_after_rotation"]
 _Wrapping = Literal["legal", "no_soft_wrap"]
 _Overlap = Literal["require_non_overlap", "allow"]
+_StrokePattern = Literal["solid", "short_dash", "medium_dash", "long_dash"]
+_PointShape = Literal["circle", "triangle_up"]
+_PaletteCapacity = Literal["fixed", "extendable"]
+_FitGrouping = Literal["independent", "uniform"]
+_Elision = Literal["start", "middle", "end", "left", "right"]
+_Failure = Literal["error", "hide", "clip", "visible"]
+_Endpoints = Literal["none", "first", "last", "both"]
 
 class DataError(ValueError): ...
 class RenderError(RuntimeError): ...
@@ -370,7 +440,16 @@ class SurfaceTheme:
 @final
 class Theme:
     def __new__(
-        cls, *, typography: TypographyTheme = ..., surfaces: SurfaceTheme = ...
+        cls,
+        *,
+        typography: TypographyTheme = ...,
+        surfaces: SurfaceTheme = ...,
+        axes: AxisTheme = ...,
+        legend: LegendTheme = ...,
+        composition: CompositionTheme = ...,
+        marks: MarkTheme = ...,
+        annotations: AnnotationTheme = ...,
+        color_scales: ColorScales = ...,
     ) -> Theme: ...
     @staticmethod
     def publication() -> Theme: ...
@@ -384,9 +463,1291 @@ class Theme:
     def typography(self) -> TypographyTheme: ...
     @property
     def surfaces(self) -> SurfaceTheme: ...
+    @property
+    def axes(self) -> AxisTheme: ...
+    @property
+    def legend(self) -> LegendTheme: ...
+    @property
+    def composition(self) -> CompositionTheme: ...
+    @property
+    def marks(self) -> MarkTheme: ...
+    @property
+    def annotations(self) -> AnnotationTheme: ...
+    @property
+    def color_scales(self) -> ColorScales: ...
     def copy_with(
-        self, *, typography: TypographyTheme = ..., surfaces: SurfaceTheme = ...
+        self,
+        *,
+        typography: TypographyTheme = ...,
+        surfaces: SurfaceTheme = ...,
+        axes: AxisTheme = ...,
+        legend: LegendTheme = ...,
+        composition: CompositionTheme = ...,
+        marks: MarkTheme = ...,
+        annotations: AnnotationTheme = ...,
+        color_scales: ColorScales = ...,
     ) -> Theme: ...
+
+@final
+class AxisTheme:
+    def __new__(
+        cls,
+        *,
+        frame: FrameTheme | None = None,
+        cell_frame: FrameTheme | None = None,
+        ticks: TickTheme | None = None,
+        grid: StrokeTheme | None = None,
+        spacing: AxisSpacing,
+    ) -> AxisTheme: ...
+    @property
+    def frame(self) -> FrameTheme | None: ...
+    @property
+    def cell_frame(self) -> FrameTheme | None: ...
+    @property
+    def ticks(self) -> TickTheme | None: ...
+    @property
+    def grid(self) -> StrokeTheme | None: ...
+    @property
+    def spacing(self) -> AxisSpacing: ...
+    def copy_with(
+        self,
+        *,
+        frame: FrameTheme | None = ...,
+        cell_frame: FrameTheme | None = ...,
+        ticks: TickTheme | None = ...,
+        grid: StrokeTheme | None = ...,
+        spacing: AxisSpacing = ...,
+    ) -> AxisTheme: ...
+
+@final
+class FrameSides:
+    def __new__(
+        cls, *, top: bool, right: bool, bottom: bool, left: bool
+    ) -> FrameSides: ...
+    @property
+    def top(self) -> bool: ...
+    @property
+    def right(self) -> bool: ...
+    @property
+    def bottom(self) -> bool: ...
+    @property
+    def left(self) -> bool: ...
+    def copy_with(
+        self,
+        *,
+        top: bool = ...,
+        right: bool = ...,
+        bottom: bool = ...,
+        left: bool = ...,
+    ) -> FrameSides: ...
+
+@final
+class FrameTheme:
+    def __new__(cls, *, sides: FrameSides, stroke: StrokeTheme) -> FrameTheme: ...
+    @property
+    def sides(self) -> FrameSides: ...
+    @property
+    def stroke(self) -> StrokeTheme: ...
+    def copy_with(
+        self, *, sides: FrameSides = ..., stroke: StrokeTheme = ...
+    ) -> FrameTheme: ...
+
+@final
+class TickTheme:
+    def __new__(cls, *, stroke: StrokeTheme, length: int) -> TickTheme: ...
+    @property
+    def stroke(self) -> StrokeTheme: ...
+    @property
+    def length(self) -> int: ...
+    def copy_with(
+        self, *, stroke: StrokeTheme = ..., length: int = ...
+    ) -> TickTheme: ...
+
+@final
+class AxisSpacing:
+    def __new__(
+        cls,
+        *,
+        x_tick_label_gap: RelativeSpacing,
+        y_tick_label_gap: RelativeSpacing,
+        x_title_tick_label_gap: RelativeSpacing,
+        x_title_without_tick_labels_gap: RelativeSpacing,
+        y_title_tick_label_gap: RelativeSpacing,
+        y_title_edge_padding: RelativeSpacing,
+    ) -> AxisSpacing: ...
+    @property
+    def x_tick_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def y_tick_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def x_title_tick_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def x_title_without_tick_labels_gap(self) -> RelativeSpacing: ...
+    @property
+    def y_title_tick_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def y_title_edge_padding(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        x_tick_label_gap: RelativeSpacing = ...,
+        y_tick_label_gap: RelativeSpacing = ...,
+        x_title_tick_label_gap: RelativeSpacing = ...,
+        x_title_without_tick_labels_gap: RelativeSpacing = ...,
+        y_title_tick_label_gap: RelativeSpacing = ...,
+        y_title_edge_padding: RelativeSpacing = ...,
+    ) -> AxisSpacing: ...
+
+@final
+class LegendTheme:
+    def __new__(
+        cls,
+        *,
+        spacing: LegendSpacing,
+        gradient_lengths: GradientLengths,
+        frame: LegendFrameTheme | None = None,
+    ) -> LegendTheme: ...
+    @property
+    def spacing(self) -> LegendSpacing: ...
+    @property
+    def gradient_lengths(self) -> GradientLengths: ...
+    @property
+    def frame(self) -> LegendFrameTheme | None: ...
+    def copy_with(
+        self,
+        *,
+        spacing: LegendSpacing = ...,
+        gradient_lengths: GradientLengths = ...,
+        frame: LegendFrameTheme | None = ...,
+    ) -> LegendTheme: ...
+
+@final
+class LegendSpacing:
+    def __new__(
+        cls,
+        *,
+        padding: RelativeSpacing,
+        key_width: RelativeSpacing,
+        key_label_gap: RelativeSpacing,
+        outside_gap: RelativeSpacing,
+        shared_gap: RelativeSpacing,
+        row_gap: RelativeSpacing,
+        column_gap: RelativeSpacing,
+        title_gap: RelativeSpacing,
+        glyph_edge_padding: RelativeSpacing,
+    ) -> LegendSpacing: ...
+    @property
+    def padding(self) -> RelativeSpacing: ...
+    @property
+    def key_width(self) -> RelativeSpacing: ...
+    @property
+    def key_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def outside_gap(self) -> RelativeSpacing: ...
+    @property
+    def shared_gap(self) -> RelativeSpacing: ...
+    @property
+    def row_gap(self) -> RelativeSpacing: ...
+    @property
+    def column_gap(self) -> RelativeSpacing: ...
+    @property
+    def title_gap(self) -> RelativeSpacing: ...
+    @property
+    def glyph_edge_padding(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        padding: RelativeSpacing = ...,
+        key_width: RelativeSpacing = ...,
+        key_label_gap: RelativeSpacing = ...,
+        outside_gap: RelativeSpacing = ...,
+        shared_gap: RelativeSpacing = ...,
+        row_gap: RelativeSpacing = ...,
+        column_gap: RelativeSpacing = ...,
+        title_gap: RelativeSpacing = ...,
+        glyph_edge_padding: RelativeSpacing = ...,
+    ) -> LegendSpacing: ...
+
+@final
+class GradientLengths:
+    def __new__(
+        cls, *, minimum: RelativeSpacing, preferred: RelativeSpacing
+    ) -> GradientLengths: ...
+    @property
+    def minimum(self) -> RelativeSpacing: ...
+    @property
+    def preferred(self) -> RelativeSpacing: ...
+    def copy_with(
+        self, *, minimum: RelativeSpacing = ..., preferred: RelativeSpacing = ...
+    ) -> GradientLengths: ...
+
+@final
+class LegendFrameTheme:
+    def __new__(
+        cls,
+        *,
+        fill: Color,
+        outline: OutlineTheme | None = None,
+        radius: RelativeSpacing,
+    ) -> LegendFrameTheme: ...
+    @property
+    def fill(self) -> Color: ...
+    @property
+    def outline(self) -> OutlineTheme | None: ...
+    @property
+    def radius(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        fill: Color = ...,
+        outline: OutlineTheme | None = ...,
+        radius: RelativeSpacing = ...,
+    ) -> LegendFrameTheme: ...
+
+@final
+class CompositionTheme:
+    def __new__(
+        cls,
+        *,
+        root_title_alignment: _Alignment,
+        root_subtitle_alignment: _Alignment | None = None,
+        root_caption_alignment: _Alignment,
+        root_title_block: RootTitleSpacing,
+        root_padding: RootPadding,
+        panel_edge_clearance: RelativeSpacing,
+        text_panel: TextPanelSpacing,
+        facet_gap: RelativeSpacing,
+        canvas_grid_gap: RelativeSpacing,
+        headers: HeaderSpacing,
+        facet_strip: FacetStripSpacing,
+    ) -> CompositionTheme: ...
+    @property
+    def root_title_alignment(self) -> _Alignment: ...
+    @property
+    def root_subtitle_alignment(self) -> _Alignment | None: ...
+    @property
+    def root_caption_alignment(self) -> _Alignment: ...
+    @property
+    def root_title_block(self) -> RootTitleSpacing: ...
+    @property
+    def root_padding(self) -> RootPadding: ...
+    @property
+    def panel_edge_clearance(self) -> RelativeSpacing: ...
+    @property
+    def text_panel(self) -> TextPanelSpacing: ...
+    @property
+    def facet_gap(self) -> RelativeSpacing: ...
+    @property
+    def canvas_grid_gap(self) -> RelativeSpacing: ...
+    @property
+    def headers(self) -> HeaderSpacing: ...
+    @property
+    def facet_strip(self) -> FacetStripSpacing: ...
+    def copy_with(
+        self,
+        *,
+        root_title_alignment: _Alignment = ...,
+        root_subtitle_alignment: _Alignment | None = ...,
+        root_caption_alignment: _Alignment = ...,
+        root_title_block: RootTitleSpacing = ...,
+        root_padding: RootPadding = ...,
+        panel_edge_clearance: RelativeSpacing = ...,
+        text_panel: TextPanelSpacing = ...,
+        facet_gap: RelativeSpacing = ...,
+        canvas_grid_gap: RelativeSpacing = ...,
+        headers: HeaderSpacing = ...,
+        facet_strip: FacetStripSpacing = ...,
+    ) -> CompositionTheme: ...
+
+@final
+class RootTitleSpacing:
+    def __new__(
+        cls,
+        *,
+        title_subtitle_gap: RelativeSpacing,
+        title_block_to_content_clearance: RelativeSpacing,
+        caption_to_content_clearance: RelativeSpacing,
+    ) -> RootTitleSpacing: ...
+    @property
+    def title_subtitle_gap(self) -> RelativeSpacing: ...
+    @property
+    def title_block_to_content_clearance(self) -> RelativeSpacing: ...
+    @property
+    def caption_to_content_clearance(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        title_subtitle_gap: RelativeSpacing = ...,
+        title_block_to_content_clearance: RelativeSpacing = ...,
+        caption_to_content_clearance: RelativeSpacing = ...,
+    ) -> RootTitleSpacing: ...
+
+@final
+class RootPadding:
+    def __new__(
+        cls,
+        *,
+        left: RelativeSpacing,
+        right: RelativeSpacing,
+        bottom: RelativeSpacing,
+        top: RelativeSpacing,
+    ) -> RootPadding: ...
+    @property
+    def left(self) -> RelativeSpacing: ...
+    @property
+    def right(self) -> RelativeSpacing: ...
+    @property
+    def bottom(self) -> RelativeSpacing: ...
+    @property
+    def top(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        left: RelativeSpacing = ...,
+        right: RelativeSpacing = ...,
+        bottom: RelativeSpacing = ...,
+        top: RelativeSpacing = ...,
+    ) -> RootPadding: ...
+
+@final
+class TextPanelSpacing:
+    def __new__(
+        cls, *, inset: RelativeSpacing, gap: RelativeSpacing
+    ) -> TextPanelSpacing: ...
+    @property
+    def inset(self) -> RelativeSpacing: ...
+    @property
+    def gap(self) -> RelativeSpacing: ...
+    def copy_with(
+        self, *, inset: RelativeSpacing = ..., gap: RelativeSpacing = ...
+    ) -> TextPanelSpacing: ...
+
+@final
+class HeaderSpacing:
+    def __new__(
+        cls,
+        *,
+        column_header_padding: RelativeSpacing,
+        row_header_padding: RelativeSpacing,
+        row_title_horizontal_padding: RelativeSpacing,
+        row_title_vertical_padding: RelativeSpacing,
+    ) -> HeaderSpacing: ...
+    @property
+    def column_header_padding(self) -> RelativeSpacing: ...
+    @property
+    def row_header_padding(self) -> RelativeSpacing: ...
+    @property
+    def row_title_horizontal_padding(self) -> RelativeSpacing: ...
+    @property
+    def row_title_vertical_padding(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        column_header_padding: RelativeSpacing = ...,
+        row_header_padding: RelativeSpacing = ...,
+        row_title_horizontal_padding: RelativeSpacing = ...,
+        row_title_vertical_padding: RelativeSpacing = ...,
+    ) -> HeaderSpacing: ...
+
+@final
+class FacetStripSpacing:
+    def __new__(
+        cls, *, horizontal_inset: RelativeSpacing, content_clearance: RelativeSpacing
+    ) -> FacetStripSpacing: ...
+    @property
+    def horizontal_inset(self) -> RelativeSpacing: ...
+    @property
+    def content_clearance(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        horizontal_inset: RelativeSpacing = ...,
+        content_clearance: RelativeSpacing = ...,
+    ) -> FacetStripSpacing: ...
+
+@final
+class StrokeTheme:
+    def __new__(
+        cls, *, color: Color, width: float, pattern: _StrokePattern
+    ) -> StrokeTheme: ...
+    @property
+    def color(self) -> Color: ...
+    @property
+    def width(self) -> float: ...
+    @property
+    def pattern(self) -> _StrokePattern: ...
+    def copy_with(
+        self, *, color: Color = ..., width: float = ..., pattern: _StrokePattern = ...
+    ) -> StrokeTheme: ...
+
+@final
+class SolidStrokeTheme:
+    def __new__(cls, *, color: Color, width: float) -> SolidStrokeTheme: ...
+    @property
+    def color(self) -> Color: ...
+    @property
+    def width(self) -> float: ...
+    def copy_with(
+        self, *, color: Color = ..., width: float = ...
+    ) -> SolidStrokeTheme: ...
+
+@final
+class OutlineTheme:
+    def __new__(cls, *, color: Color, width: float) -> OutlineTheme: ...
+    @property
+    def color(self) -> Color: ...
+    @property
+    def width(self) -> float: ...
+    def copy_with(self, *, color: Color = ..., width: float = ...) -> OutlineTheme: ...
+
+@final
+class PointOutlineTheme:
+    def __new__(
+        cls, *, color: Color, width_ratio: RelativeSpacing
+    ) -> PointOutlineTheme: ...
+    @property
+    def color(self) -> Color: ...
+    @property
+    def width_ratio(self) -> RelativeSpacing: ...
+    def copy_with(
+        self, *, color: Color = ..., width_ratio: RelativeSpacing = ...
+    ) -> PointOutlineTheme: ...
+
+@final
+class DataOutlineTheme:
+    def __new__(cls, _unavailable: NoReturn, /) -> DataOutlineTheme: ...
+    @staticmethod
+    def fixed(stroke: OutlineTheme) -> DataOutlineTheme: ...
+    @staticmethod
+    def mapped(width: float, alpha: int) -> DataOutlineTheme: ...
+    @property
+    def kind(self) -> Literal["fixed", "mapped"]: ...
+    @property
+    def fixed_stroke(self) -> OutlineTheme | None: ...
+    @property
+    def mapped_width(self) -> float | None: ...
+    @property
+    def mapped_alpha(self) -> int | None: ...
+    def copy_with(
+        self,
+        *,
+        fixed_stroke: OutlineTheme = ...,
+        mapped_width: float = ...,
+        mapped_alpha: int = ...,
+    ) -> DataOutlineTheme: ...
+
+@final
+class DataFillTheme:
+    def __new__(
+        cls, *, fill_alpha: int, outline: DataOutlineTheme | None = None
+    ) -> DataFillTheme: ...
+    @property
+    def fill_alpha(self) -> int: ...
+    @property
+    def outline(self) -> DataOutlineTheme | None: ...
+    def copy_with(
+        self, *, fill_alpha: int = ..., outline: DataOutlineTheme | None = ...
+    ) -> DataFillTheme: ...
+
+@final
+class FixedFillTheme:
+    def __new__(
+        cls, *, color: Color, outline: OutlineTheme | None = None
+    ) -> FixedFillTheme: ...
+    @property
+    def color(self) -> Color: ...
+    @property
+    def outline(self) -> OutlineTheme | None: ...
+    def copy_with(
+        self, *, color: Color = ..., outline: OutlineTheme | None = ...
+    ) -> FixedFillTheme: ...
+
+@final
+class PointTheme:
+    def __new__(
+        cls,
+        *,
+        fill_alpha: int,
+        shape: _PointShape,
+        outline: PointOutlineTheme | None = None,
+    ) -> PointTheme: ...
+    @property
+    def fill_alpha(self) -> int: ...
+    @property
+    def shape(self) -> _PointShape: ...
+    @property
+    def outline(self) -> PointOutlineTheme | None: ...
+    def copy_with(
+        self,
+        *,
+        fill_alpha: int = ...,
+        shape: _PointShape = ...,
+        outline: PointOutlineTheme | None = ...,
+    ) -> PointTheme: ...
+
+@final
+class DataLineTheme:
+    def __new__(
+        cls, *, width: float, alpha: int, pattern: _StrokePattern
+    ) -> DataLineTheme: ...
+    @property
+    def width(self) -> float: ...
+    @property
+    def alpha(self) -> int: ...
+    @property
+    def pattern(self) -> _StrokePattern: ...
+    def copy_with(
+        self, *, width: float = ..., alpha: int = ..., pattern: _StrokePattern = ...
+    ) -> DataLineTheme: ...
+
+@final
+class MarkTheme:
+    def __new__(
+        cls,
+        *,
+        accents: AccentPalette,
+        points: PointRoles,
+        fills: FillRoles,
+        data_lines: DataLineRoles,
+        neutral_paints: NeutralPaintRoles,
+        strokes: StrokeRoles,
+        cells: CellMarkRoles,
+        extents: MarkExtentTheme,
+    ) -> MarkTheme: ...
+    @property
+    def accents(self) -> AccentPalette: ...
+    @property
+    def points(self) -> PointRoles: ...
+    @property
+    def fills(self) -> FillRoles: ...
+    @property
+    def data_lines(self) -> DataLineRoles: ...
+    @property
+    def neutral_paints(self) -> NeutralPaintRoles: ...
+    @property
+    def strokes(self) -> StrokeRoles: ...
+    @property
+    def cells(self) -> CellMarkRoles: ...
+    @property
+    def extents(self) -> MarkExtentTheme: ...
+    def copy_with(
+        self,
+        *,
+        accents: AccentPalette = ...,
+        points: PointRoles = ...,
+        fills: FillRoles = ...,
+        data_lines: DataLineRoles = ...,
+        neutral_paints: NeutralPaintRoles = ...,
+        strokes: StrokeRoles = ...,
+        cells: CellMarkRoles = ...,
+        extents: MarkExtentTheme = ...,
+    ) -> MarkTheme: ...
+
+@final
+class PointRoles:
+    def __new__(
+        cls,
+        *,
+        primary: PointTheme,
+        raw_overlay: SizedPointTheme,
+        mandatory_strip: SizedPointTheme,
+        radii: PointRadii,
+        supplemental: SupplementalPointTheme,
+    ) -> PointRoles: ...
+    @property
+    def primary(self) -> PointTheme: ...
+    @property
+    def raw_overlay(self) -> SizedPointTheme: ...
+    @property
+    def mandatory_strip(self) -> SizedPointTheme: ...
+    @property
+    def radii(self) -> PointRadii: ...
+    @property
+    def supplemental(self) -> SupplementalPointTheme: ...
+    def copy_with(
+        self,
+        *,
+        primary: PointTheme = ...,
+        raw_overlay: SizedPointTheme = ...,
+        mandatory_strip: SizedPointTheme = ...,
+        radii: PointRadii = ...,
+        supplemental: SupplementalPointTheme = ...,
+    ) -> PointRoles: ...
+
+@final
+class SizedPointTheme:
+    def __new__(cls, *, appearance: PointTheme, radius: int) -> SizedPointTheme: ...
+    @property
+    def appearance(self) -> PointTheme: ...
+    @property
+    def radius(self) -> int: ...
+    def copy_with(
+        self, *, appearance: PointTheme = ..., radius: int = ...
+    ) -> SizedPointTheme: ...
+
+@final
+class SupplementalPointTheme:
+    def __new__(cls, *, radius: int, fill_alpha: int) -> SupplementalPointTheme: ...
+    @property
+    def radius(self) -> int: ...
+    @property
+    def fill_alpha(self) -> int: ...
+    def copy_with(
+        self, *, radius: int = ..., fill_alpha: int = ...
+    ) -> SupplementalPointTheme: ...
+
+@final
+class PointRadii:
+    def __new__(
+        cls,
+        *,
+        scatter: int,
+        path: int,
+        trajectory: int,
+        regression: int,
+        qq: int,
+        marginal: int,
+        matrix: int,
+        interval_estimate: int,
+        dumbbell: int,
+        interaction: int,
+        beeswarm: int,
+        box_flier: int,
+    ) -> PointRadii: ...
+    @property
+    def scatter(self) -> int: ...
+    @property
+    def path(self) -> int: ...
+    @property
+    def trajectory(self) -> int: ...
+    @property
+    def regression(self) -> int: ...
+    @property
+    def qq(self) -> int: ...
+    @property
+    def marginal(self) -> int: ...
+    @property
+    def matrix(self) -> int: ...
+    @property
+    def interval_estimate(self) -> int: ...
+    @property
+    def dumbbell(self) -> int: ...
+    @property
+    def interaction(self) -> int: ...
+    @property
+    def beeswarm(self) -> int: ...
+    @property
+    def box_flier(self) -> int: ...
+    def copy_with(
+        self,
+        *,
+        scatter: int = ...,
+        path: int = ...,
+        trajectory: int = ...,
+        regression: int = ...,
+        qq: int = ...,
+        marginal: int = ...,
+        matrix: int = ...,
+        interval_estimate: int = ...,
+        dumbbell: int = ...,
+        interaction: int = ...,
+        beeswarm: int = ...,
+        box_flier: int = ...,
+    ) -> PointRadii: ...
+
+@final
+class FillRoles:
+    def __new__(
+        cls, *, bodies: BodyFillRoles, bands: BandFillRoles, densities: DensityFillRoles
+    ) -> FillRoles: ...
+    @property
+    def bodies(self) -> BodyFillRoles: ...
+    @property
+    def bands(self) -> BandFillRoles: ...
+    @property
+    def densities(self) -> DensityFillRoles: ...
+    def copy_with(
+        self,
+        *,
+        bodies: BodyFillRoles = ...,
+        bands: BandFillRoles = ...,
+        densities: DensityFillRoles = ...,
+    ) -> FillRoles: ...
+
+@final
+class BodyFillRoles:
+    def __new__(
+        cls,
+        *,
+        bar_body: DataFillTheme,
+        box_body: DataFillTheme,
+        violin_body: DataFillTheme,
+        inner_summary: FixedFillTheme,
+        histogram_bin: DataFillTheme,
+        waterfall_bar: DataFillTheme,
+    ) -> BodyFillRoles: ...
+    @property
+    def bar_body(self) -> DataFillTheme: ...
+    @property
+    def box_body(self) -> DataFillTheme: ...
+    @property
+    def violin_body(self) -> DataFillTheme: ...
+    @property
+    def inner_summary(self) -> FixedFillTheme: ...
+    @property
+    def histogram_bin(self) -> DataFillTheme: ...
+    @property
+    def waterfall_bar(self) -> DataFillTheme: ...
+    def copy_with(
+        self,
+        *,
+        bar_body: DataFillTheme = ...,
+        box_body: DataFillTheme = ...,
+        violin_body: DataFillTheme = ...,
+        inner_summary: FixedFillTheme = ...,
+        histogram_bin: DataFillTheme = ...,
+        waterfall_bar: DataFillTheme = ...,
+    ) -> BodyFillRoles: ...
+
+@final
+class BandFillRoles:
+    def __new__(
+        cls, *, line_band: DataFillTheme, regression_band: DataFillTheme
+    ) -> BandFillRoles: ...
+    @property
+    def line_band(self) -> DataFillTheme: ...
+    @property
+    def regression_band(self) -> DataFillTheme: ...
+    def copy_with(
+        self, *, line_band: DataFillTheme = ..., regression_band: DataFillTheme = ...
+    ) -> BandFillRoles: ...
+
+@final
+class DensityFillRoles:
+    def __new__(
+        cls,
+        *,
+        density_area: DataFillTheme,
+        marginal_density: DataFillTheme,
+        matrix_density: DataFillTheme,
+    ) -> DensityFillRoles: ...
+    @property
+    def density_area(self) -> DataFillTheme: ...
+    @property
+    def marginal_density(self) -> DataFillTheme: ...
+    @property
+    def matrix_density(self) -> DataFillTheme: ...
+    def copy_with(
+        self,
+        *,
+        density_area: DataFillTheme = ...,
+        marginal_density: DataFillTheme = ...,
+        matrix_density: DataFillTheme = ...,
+    ) -> DensityFillRoles: ...
+
+@final
+class DataLineRoles:
+    def __new__(
+        cls,
+        *,
+        series_line: DataLineTheme,
+        path_line: DataLineTheme,
+        density_line: DataLineTheme,
+        interaction_interval: DataLineTheme,
+        interaction_connector: DataLineTheme,
+    ) -> DataLineRoles: ...
+    @property
+    def series_line(self) -> DataLineTheme: ...
+    @property
+    def path_line(self) -> DataLineTheme: ...
+    @property
+    def density_line(self) -> DataLineTheme: ...
+    @property
+    def interaction_interval(self) -> DataLineTheme: ...
+    @property
+    def interaction_connector(self) -> DataLineTheme: ...
+    def copy_with(
+        self,
+        *,
+        series_line: DataLineTheme = ...,
+        path_line: DataLineTheme = ...,
+        density_line: DataLineTheme = ...,
+        interaction_interval: DataLineTheme = ...,
+        interaction_connector: DataLineTheme = ...,
+    ) -> DataLineRoles: ...
+
+@final
+class NeutralPaintRoles:
+    def __new__(
+        cls, *, path: OpaqueColor, box_flier: OpaqueColor
+    ) -> NeutralPaintRoles: ...
+    @property
+    def path(self) -> OpaqueColor: ...
+    @property
+    def box_flier(self) -> OpaqueColor: ...
+    def copy_with(
+        self, *, path: OpaqueColor = ..., box_flier: OpaqueColor = ...
+    ) -> NeutralPaintRoles: ...
+
+@final
+class StrokeRoles:
+    def __new__(
+        cls,
+        *,
+        references: ReferenceStrokeRoles,
+        connectors: ConnectorStrokeRoles,
+        summaries: SummaryStrokeRoles,
+        curves: CurveStrokeRoles,
+    ) -> StrokeRoles: ...
+    @property
+    def references(self) -> ReferenceStrokeRoles: ...
+    @property
+    def connectors(self) -> ConnectorStrokeRoles: ...
+    @property
+    def summaries(self) -> SummaryStrokeRoles: ...
+    @property
+    def curves(self) -> CurveStrokeRoles: ...
+    def copy_with(
+        self,
+        *,
+        references: ReferenceStrokeRoles = ...,
+        connectors: ConnectorStrokeRoles = ...,
+        summaries: SummaryStrokeRoles = ...,
+        curves: CurveStrokeRoles = ...,
+    ) -> StrokeRoles: ...
+
+@final
+class ReferenceStrokeRoles:
+    def __new__(
+        cls,
+        *,
+        bar_zero: StrokeTheme,
+        waterfall_reference: StrokeTheme,
+        beeswarm_reference: StrokeTheme,
+        point_interval_reference: StrokeTheme,
+        estimate_reference: StrokeTheme,
+        qq_reference: StrokeTheme,
+    ) -> ReferenceStrokeRoles: ...
+    @property
+    def bar_zero(self) -> StrokeTheme: ...
+    @property
+    def waterfall_reference(self) -> StrokeTheme: ...
+    @property
+    def beeswarm_reference(self) -> StrokeTheme: ...
+    @property
+    def point_interval_reference(self) -> StrokeTheme: ...
+    @property
+    def estimate_reference(self) -> StrokeTheme: ...
+    @property
+    def qq_reference(self) -> StrokeTheme: ...
+    def copy_with(
+        self,
+        *,
+        bar_zero: StrokeTheme = ...,
+        waterfall_reference: StrokeTheme = ...,
+        beeswarm_reference: StrokeTheme = ...,
+        point_interval_reference: StrokeTheme = ...,
+        estimate_reference: StrokeTheme = ...,
+        qq_reference: StrokeTheme = ...,
+    ) -> ReferenceStrokeRoles: ...
+
+@final
+class ConnectorStrokeRoles:
+    def __new__(
+        cls, *, waterfall_connector: StrokeTheme, dumbbell_connector: StrokeTheme
+    ) -> ConnectorStrokeRoles: ...
+    @property
+    def waterfall_connector(self) -> StrokeTheme: ...
+    @property
+    def dumbbell_connector(self) -> StrokeTheme: ...
+    def copy_with(
+        self,
+        *,
+        waterfall_connector: StrokeTheme = ...,
+        dumbbell_connector: StrokeTheme = ...,
+    ) -> ConnectorStrokeRoles: ...
+
+@final
+class SummaryStrokeRoles:
+    def __new__(
+        cls,
+        *,
+        uncertainty: StrokeTheme,
+        summary: StrokeTheme,
+        estimate_interval: StrokeTheme,
+        median: StrokeTheme,
+    ) -> SummaryStrokeRoles: ...
+    @property
+    def uncertainty(self) -> StrokeTheme: ...
+    @property
+    def summary(self) -> StrokeTheme: ...
+    @property
+    def estimate_interval(self) -> StrokeTheme: ...
+    @property
+    def median(self) -> StrokeTheme: ...
+    def copy_with(
+        self,
+        *,
+        uncertainty: StrokeTheme = ...,
+        summary: StrokeTheme = ...,
+        estimate_interval: StrokeTheme = ...,
+        median: StrokeTheme = ...,
+    ) -> SummaryStrokeRoles: ...
+
+@final
+class CurveStrokeRoles:
+    def __new__(
+        cls,
+        *,
+        histogram_curve: StrokeTheme,
+        histogram_rug: StrokeTheme,
+        regression_fit: StrokeTheme,
+    ) -> CurveStrokeRoles: ...
+    @property
+    def histogram_curve(self) -> StrokeTheme: ...
+    @property
+    def histogram_rug(self) -> StrokeTheme: ...
+    @property
+    def regression_fit(self) -> StrokeTheme: ...
+    def copy_with(
+        self,
+        *,
+        histogram_curve: StrokeTheme = ...,
+        histogram_rug: StrokeTheme = ...,
+        regression_fit: StrokeTheme = ...,
+    ) -> CurveStrokeRoles: ...
+
+@final
+class CellMarkRoles:
+    def __new__(
+        cls,
+        *,
+        fill_alpha: int,
+        cell_outline: OutlineTheme | None = None,
+        missing_fill: Color,
+        missing_row_outline: OutlineTheme | None = None,
+        missing_key_outline: OutlineTheme | None = None,
+        missing_cross: StrokeTheme,
+        missing_cross_inset: RelativeSpacing,
+    ) -> CellMarkRoles: ...
+    @property
+    def fill_alpha(self) -> int: ...
+    @property
+    def cell_outline(self) -> OutlineTheme | None: ...
+    @property
+    def missing_fill(self) -> Color: ...
+    @property
+    def missing_row_outline(self) -> OutlineTheme | None: ...
+    @property
+    def missing_key_outline(self) -> OutlineTheme | None: ...
+    @property
+    def missing_cross(self) -> StrokeTheme: ...
+    @property
+    def missing_cross_inset(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        fill_alpha: int = ...,
+        cell_outline: OutlineTheme | None = ...,
+        missing_fill: Color = ...,
+        missing_row_outline: OutlineTheme | None = ...,
+        missing_key_outline: OutlineTheme | None = ...,
+        missing_cross: StrokeTheme = ...,
+        missing_cross_inset: RelativeSpacing = ...,
+    ) -> CellMarkRoles: ...
+
+@final
+class CategoryMarkGeometry:
+    def __new__(
+        cls,
+        *,
+        vertical_body_breadth: RelativeSpacing,
+        horizontal_body_breadth: RelativeSpacing,
+        vertical_group_span: RelativeSpacing,
+        horizontal_group_span: RelativeSpacing,
+        uncertainty_cap_ratio: RelativeSpacing,
+    ) -> CategoryMarkGeometry: ...
+    @property
+    def vertical_body_breadth(self) -> RelativeSpacing: ...
+    @property
+    def horizontal_body_breadth(self) -> RelativeSpacing: ...
+    @property
+    def vertical_group_span(self) -> RelativeSpacing: ...
+    @property
+    def horizontal_group_span(self) -> RelativeSpacing: ...
+    @property
+    def uncertainty_cap_ratio(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        vertical_body_breadth: RelativeSpacing = ...,
+        horizontal_body_breadth: RelativeSpacing = ...,
+        vertical_group_span: RelativeSpacing = ...,
+        horizontal_group_span: RelativeSpacing = ...,
+        uncertainty_cap_ratio: RelativeSpacing = ...,
+    ) -> CategoryMarkGeometry: ...
+
+@final
+class MarkExtentTheme:
+    def __new__(
+        cls,
+        *,
+        categories: CategoryMarkGeometry,
+        waterfall_body_category_breadth: RelativeSpacing,
+        point_interval_cap_half_height: int,
+        sampled_rug_height: RelativeSpacing,
+        marginal_density_fraction: RelativeSpacing,
+        matrix_density_fraction: RelativeSpacing,
+    ) -> MarkExtentTheme: ...
+    @property
+    def categories(self) -> CategoryMarkGeometry: ...
+    @property
+    def waterfall_body_category_breadth(self) -> RelativeSpacing: ...
+    @property
+    def point_interval_cap_half_height(self) -> int: ...
+    @property
+    def sampled_rug_height(self) -> RelativeSpacing: ...
+    @property
+    def marginal_density_fraction(self) -> RelativeSpacing: ...
+    @property
+    def matrix_density_fraction(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        categories: CategoryMarkGeometry = ...,
+        waterfall_body_category_breadth: RelativeSpacing = ...,
+        point_interval_cap_half_height: int = ...,
+        sampled_rug_height: RelativeSpacing = ...,
+        marginal_density_fraction: RelativeSpacing = ...,
+        matrix_density_fraction: RelativeSpacing = ...,
+    ) -> MarkExtentTheme: ...
+
+@final
+class AnnotationTheme:
+    def __new__(
+        cls,
+        *,
+        significance: SignificanceGeometry,
+        cells: CellAnnotationGeometry,
+        estimates: EstimateAnnotationGeometry,
+        point_label_gap: RelativeSpacing,
+        panel_text_padding: RelativeSpacing,
+        waterfall_shelf: ValueShelfSpacing,
+        planning_backdrop: OpaqueColor,
+    ) -> AnnotationTheme: ...
+    @property
+    def significance(self) -> SignificanceGeometry: ...
+    @property
+    def cells(self) -> CellAnnotationGeometry: ...
+    @property
+    def estimates(self) -> EstimateAnnotationGeometry: ...
+    @property
+    def point_label_gap(self) -> RelativeSpacing: ...
+    @property
+    def panel_text_padding(self) -> RelativeSpacing: ...
+    @property
+    def waterfall_shelf(self) -> ValueShelfSpacing: ...
+    @property
+    def planning_backdrop(self) -> OpaqueColor: ...
+    def copy_with(
+        self,
+        *,
+        significance: SignificanceGeometry = ...,
+        cells: CellAnnotationGeometry = ...,
+        estimates: EstimateAnnotationGeometry = ...,
+        point_label_gap: RelativeSpacing = ...,
+        panel_text_padding: RelativeSpacing = ...,
+        waterfall_shelf: ValueShelfSpacing = ...,
+        planning_backdrop: OpaqueColor = ...,
+    ) -> AnnotationTheme: ...
+
+@final
+class SignificanceGeometry:
+    def __new__(
+        cls,
+        *,
+        bracket_stroke: SolidStrokeTheme,
+        label_gap: RelativeSpacing,
+        tick_height: RelativeSpacing,
+        data_gap: RelativeSpacing,
+        level_step: RelativeSpacing,
+        panel_padding: RelativeSpacing,
+        attached_extra_clearance: RelativeSpacing,
+    ) -> SignificanceGeometry: ...
+    @property
+    def bracket_stroke(self) -> SolidStrokeTheme: ...
+    @property
+    def label_gap(self) -> RelativeSpacing: ...
+    @property
+    def tick_height(self) -> RelativeSpacing: ...
+    @property
+    def data_gap(self) -> RelativeSpacing: ...
+    @property
+    def level_step(self) -> RelativeSpacing: ...
+    @property
+    def panel_padding(self) -> RelativeSpacing: ...
+    @property
+    def attached_extra_clearance(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        bracket_stroke: SolidStrokeTheme = ...,
+        label_gap: RelativeSpacing = ...,
+        tick_height: RelativeSpacing = ...,
+        data_gap: RelativeSpacing = ...,
+        level_step: RelativeSpacing = ...,
+        panel_padding: RelativeSpacing = ...,
+        attached_extra_clearance: RelativeSpacing = ...,
+    ) -> SignificanceGeometry: ...
+
+@final
+class CellAnnotationGeometry:
+    def __new__(
+        cls,
+        *,
+        highlight_outline: OutlineTheme,
+        value_horizontal_padding: RelativeSpacing,
+        value_vertical_padding: RelativeSpacing,
+        null_row_horizontal_padding: RelativeSpacing,
+        null_row_vertical_padding: RelativeSpacing,
+    ) -> CellAnnotationGeometry: ...
+    @property
+    def highlight_outline(self) -> OutlineTheme: ...
+    @property
+    def value_horizontal_padding(self) -> RelativeSpacing: ...
+    @property
+    def value_vertical_padding(self) -> RelativeSpacing: ...
+    @property
+    def null_row_horizontal_padding(self) -> RelativeSpacing: ...
+    @property
+    def null_row_vertical_padding(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        highlight_outline: OutlineTheme = ...,
+        value_horizontal_padding: RelativeSpacing = ...,
+        value_vertical_padding: RelativeSpacing = ...,
+        null_row_horizontal_padding: RelativeSpacing = ...,
+        null_row_vertical_padding: RelativeSpacing = ...,
+    ) -> CellAnnotationGeometry: ...
+
+@final
+class EstimateAnnotationGeometry:
+    def __new__(
+        cls,
+        *,
+        panel_inset: RelativeSpacing,
+        guide_clearance: RelativeSpacing,
+        numeric_label_gap: RelativeSpacing,
+    ) -> EstimateAnnotationGeometry: ...
+    @property
+    def panel_inset(self) -> RelativeSpacing: ...
+    @property
+    def guide_clearance(self) -> RelativeSpacing: ...
+    @property
+    def numeric_label_gap(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        panel_inset: RelativeSpacing = ...,
+        guide_clearance: RelativeSpacing = ...,
+        numeric_label_gap: RelativeSpacing = ...,
+    ) -> EstimateAnnotationGeometry: ...
+
+@final
+class ValueShelfSpacing:
+    def __new__(
+        cls, *, padding: RelativeSpacing, gap: RelativeSpacing, row_gap: RelativeSpacing
+    ) -> ValueShelfSpacing: ...
+    @property
+    def padding(self) -> RelativeSpacing: ...
+    @property
+    def gap(self) -> RelativeSpacing: ...
+    @property
+    def row_gap(self) -> RelativeSpacing: ...
+    def copy_with(
+        self,
+        *,
+        padding: RelativeSpacing = ...,
+        gap: RelativeSpacing = ...,
+        row_gap: RelativeSpacing = ...,
+    ) -> ValueShelfSpacing: ...
+
+@final
+class AccentPalette:
+    def __new__(cls, seeds: Sequence[OpaqueColor]) -> AccentPalette: ...
+    @property
+    def seeds(self) -> tuple[OpaqueColor, ...]: ...
+    def copy_with(self, *, seeds: Sequence[OpaqueColor] = ...) -> AccentPalette: ...
+
+@final
+class QualitativePalette:
+    def __new__(cls, _unavailable: NoReturn, /) -> QualitativePalette: ...
+    @staticmethod
+    def fixed(colors: Sequence[OpaqueColor]) -> QualitativePalette: ...
+    @staticmethod
+    def extendable(colors: Sequence[OpaqueColor]) -> QualitativePalette: ...
+    @property
+    def colors(self) -> tuple[OpaqueColor, ...]: ...
+    @property
+    def capacity(self) -> _PaletteCapacity: ...
+    def copy_with(
+        self, *, colors: Sequence[OpaqueColor] = ..., capacity: _PaletteCapacity = ...
+    ) -> QualitativePalette: ...
+
+@final
+class ColorStop:
+    def __new__(cls, offset: float, color: OpaqueColor) -> ColorStop: ...
+    @property
+    def offset(self) -> float: ...
+    @property
+    def color(self) -> OpaqueColor: ...
+    def copy_with(
+        self, *, offset: float = ..., color: OpaqueColor = ...
+    ) -> ColorStop: ...
+
+@final
+class SequentialGradient:
+    def __new__(cls, stops: Sequence[ColorStop]) -> SequentialGradient: ...
+    @property
+    def stops(self) -> tuple[ColorStop, ...]: ...
+    def copy_with(
+        self, *, stops: Sequence[ColorStop] = ...
+    ) -> SequentialGradient: ...
+
+@final
+class DivergingGradient:
+    def __new__(cls, stops: Sequence[ColorStop]) -> DivergingGradient: ...
+    @property
+    def stops(self) -> tuple[ColorStop, ...]: ...
+    @property
+    def neutral(self) -> OpaqueColor: ...
+    def copy_with(
+        self, *, stops: Sequence[ColorStop] = ...
+    ) -> DivergingGradient: ...
+
+@final
+class ColorScales:
+    def __new__(
+        cls,
+        *,
+        qualitative: QualitativePalette,
+        sequential: SequentialGradient,
+        diverging: DivergingGradient,
+    ) -> ColorScales: ...
+    @property
+    def qualitative(self) -> QualitativePalette: ...
+    @property
+    def sequential(self) -> SequentialGradient: ...
+    @property
+    def diverging(self) -> DivergingGradient: ...
+    def copy_with(
+        self,
+        *,
+        qualitative: QualitativePalette = ...,
+        sequential: SequentialGradient = ...,
+        diverging: DivergingGradient = ...,
+    ) -> ColorScales: ...
 
 @final
 class Text:
@@ -462,6 +1823,11 @@ class TextLayout:
         bounds: TextBounds | None = None,
         wrapping: _Wrapping | None = None,
         overlap: _Overlap | None = None,
+        fit: TextFit | None = None,
+        orientation: TextOrientation | None = None,
+        anchor: TextAnchor | None = None,
+        overflow: TextOverflow | None = None,
+        visibility: TextVisibility | None = None,
     ) -> TextLayout: ...
     @property
     def alignment(self) -> _Alignment | None: ...
@@ -479,6 +1845,16 @@ class TextLayout:
     def wrapping(self) -> _Wrapping | None: ...
     @property
     def overlap(self) -> _Overlap | None: ...
+    @property
+    def fit(self) -> TextFit | None: ...
+    @property
+    def orientation(self) -> TextOrientation | None: ...
+    @property
+    def anchor(self) -> TextAnchor | None: ...
+    @property
+    def overflow(self) -> TextOverflow | None: ...
+    @property
+    def visibility(self) -> TextVisibility | None: ...
     def copy_with(
         self,
         *,
@@ -490,7 +1866,227 @@ class TextLayout:
         bounds: TextBounds | None = ...,
         wrapping: _Wrapping | None = ...,
         overlap: _Overlap | None = ...,
+        fit: TextFit | None = ...,
+        orientation: TextOrientation | None = ...,
+        anchor: TextAnchor | None = ...,
+        overflow: TextOverflow | None = ...,
+        visibility: TextVisibility | None = ...,
     ) -> TextLayout: ...
+
+@final
+class TextFit:
+    def __new__(cls, _unavailable: NoReturn, /) -> TextFit: ...
+    @staticmethod
+    def fixed(*, grouping: _FitGrouping = "independent") -> TextFit: ...
+    @staticmethod
+    def shrink_to(
+        minimum: float, *, grouping: _FitGrouping = "independent"
+    ) -> TextFit: ...
+    @staticmethod
+    def range(
+        minimum: float, maximum: float, *, grouping: _FitGrouping = "independent"
+    ) -> TextFit: ...
+    @property
+    def minimum(self) -> float | None: ...
+    @property
+    def maximum(self) -> float | None: ...
+    @property
+    def grouping(self) -> _FitGrouping: ...
+    def copy_with(self, *, grouping: _FitGrouping = ...) -> TextFit: ...
+
+@final
+class TextRotation:
+    def __new__(cls, degrees: float) -> TextRotation: ...
+    @staticmethod
+    def horizontal() -> TextRotation: ...
+    @staticmethod
+    def tilt_up() -> TextRotation: ...
+    @staticmethod
+    def tilt_down() -> TextRotation: ...
+    @staticmethod
+    def vertical_up() -> TextRotation: ...
+    @staticmethod
+    def vertical_down() -> TextRotation: ...
+    @property
+    def degrees(self) -> float: ...
+    def copy_with(self, *, degrees: float = ...) -> TextRotation: ...
+
+@final
+class DataCoordinate:
+    def __new__(cls, _unavailable: NoReturn, /) -> DataCoordinate: ...
+    @staticmethod
+    def numeric(value: float) -> DataCoordinate: ...
+    @staticmethod
+    def category(raw: str) -> DataCoordinate: ...
+    @staticmethod
+    def category_series(category: str, series: str) -> DataCoordinate: ...
+    @property
+    def kind(self) -> Literal["numeric", "category", "category_series"]: ...
+    @property
+    def value(self) -> float | str | tuple[str, str]: ...
+    def copy_with(
+        self, *, value: float | str | tuple[str, str] = ...
+    ) -> DataCoordinate: ...
+
+@final
+class DataPosition:
+    def __new__(cls, *, x: DataCoordinate, y: DataCoordinate) -> DataPosition: ...
+    @property
+    def x(self) -> DataCoordinate: ...
+    @property
+    def y(self) -> DataCoordinate: ...
+    def copy_with(
+        self, *, x: DataCoordinate = ..., y: DataCoordinate = ...
+    ) -> DataPosition: ...
+
+@final
+class TextOrientation:
+    def __new__(cls, _unavailable: NoReturn, /) -> TextOrientation: ...
+    @staticmethod
+    def fixed(rotation: TextRotation) -> TextOrientation: ...
+    @staticmethod
+    def data_direction(from_: DataPosition, to: DataPosition) -> TextOrientation: ...
+    @staticmethod
+    def automatic_ticks(angles: Sequence[TextRotation]) -> TextOrientation: ...
+    @property
+    def rotation(self) -> TextRotation | None: ...
+    @property
+    def data_from(self) -> DataPosition | None: ...
+    @property
+    def data_to(self) -> DataPosition | None: ...
+    @property
+    def angles(self) -> tuple[TextRotation, ...] | None: ...
+    def copy_with(
+        self,
+        *,
+        rotation: TextRotation = ...,
+        data_from: DataPosition = ...,
+        data_to: DataPosition = ...,
+        angles: Sequence[TextRotation] = ...,
+    ) -> TextOrientation: ...
+
+@final
+class TextAnchor:
+    def __new__(cls, _unavailable: NoReturn, /) -> TextAnchor: ...
+    @staticmethod
+    def fractions(horizontal: float, vertical: float) -> TextAnchor: ...
+    @staticmethod
+    def first_baseline(horizontal: float) -> TextAnchor: ...
+    @staticmethod
+    def center_baseline(horizontal: float) -> TextAnchor: ...
+    @staticmethod
+    def top_left() -> TextAnchor: ...
+    @staticmethod
+    def top_center() -> TextAnchor: ...
+    @staticmethod
+    def top_right() -> TextAnchor: ...
+    @staticmethod
+    def center_left() -> TextAnchor: ...
+    @staticmethod
+    def center() -> TextAnchor: ...
+    @staticmethod
+    def center_right() -> TextAnchor: ...
+    @staticmethod
+    def bottom_left() -> TextAnchor: ...
+    @staticmethod
+    def bottom_center() -> TextAnchor: ...
+    @staticmethod
+    def bottom_right() -> TextAnchor: ...
+    @property
+    def horizontal(self) -> float: ...
+    @property
+    def vertical_fraction(self) -> float | None: ...
+    @property
+    def baseline(self) -> Literal["first", "center"] | None: ...
+    def copy_with(self, *, horizontal: float = ...) -> TextAnchor: ...
+
+@final
+class TextEllipsis:
+    def __new__(
+        cls,
+        position: _Elision,
+        *,
+        marker: str = "…",
+        max_lines: int | None = 1,
+        distinct: bool | None = None,
+    ) -> TextEllipsis: ...
+    @property
+    def position(self) -> _Elision: ...
+    @property
+    def marker(self) -> str: ...
+    @property
+    def max_lines(self) -> int | None: ...
+    @property
+    def distinct(self) -> bool | None: ...
+    def copy_with(
+        self,
+        *,
+        position: _Elision = ...,
+        marker: str = ...,
+        max_lines: int | None = ...,
+        distinct: bool | None = ...,
+    ) -> TextEllipsis: ...
+
+@final
+class TextOverflow:
+    def __new__(
+        cls, *, failure: _Failure = "error", ellipsis: TextEllipsis | None = None
+    ) -> TextOverflow: ...
+    @property
+    def failure(self) -> _Failure: ...
+    @property
+    def ellipsis(self) -> TextEllipsis | None: ...
+    def copy_with(
+        self, *, failure: _Failure = ..., ellipsis: TextEllipsis | None = ...
+    ) -> TextOverflow: ...
+
+@final
+class TextVisibility:
+    def __new__(cls, _unavailable: NoReturn, /) -> TextVisibility: ...
+    @staticmethod
+    def all(*, boundary_tolerance: float | None = None) -> TextVisibility: ...
+    @staticmethod
+    def hidden(*, boundary_tolerance: float | None = None) -> TextVisibility: ...
+    @staticmethod
+    def every(
+        stride: int,
+        offset: int,
+        *,
+        endpoints: _Endpoints,
+        boundary_tolerance: float | None = None,
+    ) -> TextVisibility: ...
+    @staticmethod
+    def greedy(
+        *,
+        endpoints: _Endpoints,
+        separation: float = 0.0,
+        boundary_tolerance: float | None = None,
+    ) -> TextVisibility: ...
+    @staticmethod
+    def parity(
+        *,
+        endpoints: _Endpoints,
+        separation: float = 0.0,
+        boundary_tolerance: float | None = None,
+    ) -> TextVisibility: ...
+    @property
+    def kind(self) -> Literal["all", "hidden", "every", "greedy", "parity"]: ...
+    @property
+    def stride(self) -> int | None: ...
+    @property
+    def offset(self) -> int | None: ...
+    @property
+    def endpoints(self) -> _Endpoints: ...
+    @property
+    def separation(self) -> float: ...
+    @property
+    def boundary_tolerance(self) -> float | None: ...
+    def copy_with(
+        self,
+        *,
+        separation: float = ...,
+        boundary_tolerance: float | None = ...,
+    ) -> TextVisibility: ...
 
 _ValueFunction = Callable[[NumericValueContext], str]
 _SetFunction = Callable[[NumericSetContext], NumericLabels | Sequence[str]]

@@ -15,6 +15,18 @@ impl DataPosition {
     pub const fn new(x: DataCoordinate, y: DataCoordinate) -> Self {
         Self { x, y }
     }
+
+    /// Borrow the authored x coordinate.
+    #[must_use]
+    pub const fn get_x(&self) -> &DataCoordinate {
+        &self.x
+    }
+
+    /// Borrow the authored y coordinate.
+    #[must_use]
+    pub const fn get_y(&self) -> &DataCoordinate {
+        &self.y
+    }
 }
 
 /// A raw scientific coordinate. Category and series names are never aliases.
@@ -38,6 +50,33 @@ impl DataCoordinate {
     /// An exact raw category and positioned-series identity.
     pub fn category_series(category: impl Into<String>, series: impl Into<String>) -> Self {
         Self(DataValue::Series(category.into(), series.into()))
+    }
+
+    /// Numeric payload, absent for category references.
+    #[must_use]
+    pub const fn get_numeric_value(&self) -> Option<f64> {
+        match &self.0 {
+            DataValue::Numeric(value) => Some(value.get()),
+            DataValue::Category(_) | DataValue::Series(..) => None,
+        }
+    }
+
+    /// Borrow the raw category of an unqualified category reference.
+    #[must_use]
+    pub fn get_category_value(&self) -> Option<&str> {
+        match &self.0 {
+            DataValue::Category(value) => Some(value),
+            DataValue::Numeric(_) | DataValue::Series(..) => None,
+        }
+    }
+
+    /// Borrow the exact raw category and positioned-series identities.
+    #[must_use]
+    pub fn get_category_series_value(&self) -> Option<(&str, &str)> {
+        match &self.0 {
+            DataValue::Series(category, series) => Some((category, series)),
+            DataValue::Numeric(_) | DataValue::Category(_) => None,
+        }
     }
 }
 /// One independently qualified coordinate of an authored text reference.

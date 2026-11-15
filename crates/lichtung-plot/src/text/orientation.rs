@@ -51,6 +51,12 @@ impl TextRotation {
     pub const fn vertical_down() -> Self {
         Self(Finite::constant(90.0))
     }
+
+    /// Retained normalized clockwise screen angle in degrees.
+    #[must_use]
+    pub const fn get_degrees(&self) -> f64 {
+        self.0.get()
+    }
 }
 
 /// How the selected block point relates to a rotation.
@@ -83,6 +89,33 @@ impl TextOrientation {
     /// Try the retained angle order on an actual tick group.
     pub fn automatic_ticks(angles: Vec<TextRotation>) -> Self {
         Self(Orientation::Automatic(angles))
+    }
+
+    /// Fixed screen rotation, absent for the other orientation programs.
+    #[must_use]
+    pub const fn get_fixed_rotation(&self) -> Option<TextRotation> {
+        match &self.0 {
+            Orientation::Fixed(rotation) => Some(*rotation),
+            Orientation::Data(..) | Orientation::Automatic(_) => None,
+        }
+    }
+
+    /// Borrow the authored data-direction endpoints without projecting them.
+    #[must_use]
+    pub const fn get_data_direction(&self) -> Option<(&DataPosition, &DataPosition)> {
+        match &self.0 {
+            Orientation::Data(from, to) => Some((from, to)),
+            Orientation::Fixed(_) | Orientation::Automatic(_) => None,
+        }
+    }
+
+    /// Borrow the retained tick-angle order; an empty program remains present.
+    #[must_use]
+    pub fn get_automatic_angles(&self) -> Option<&[TextRotation]> {
+        match &self.0 {
+            Orientation::Automatic(angles) => Some(angles),
+            Orientation::Fixed(_) | Orientation::Data(..) => None,
+        }
     }
 }
 

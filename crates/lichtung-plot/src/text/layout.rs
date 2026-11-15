@@ -53,6 +53,27 @@ impl TextAnchor {
             vertical: VerticalAnchor::CenterBaseline,
         })
     }
+
+    /// Authored horizontal fraction, without a 0..1 clamp.
+    #[must_use]
+    pub const fn get_horizontal(&self) -> f64 {
+        self.horizontal.get()
+    }
+
+    /// Authored vertical fraction, absent for either baseline choice.
+    #[must_use]
+    pub const fn get_vertical_fraction(&self) -> Option<f64> {
+        match self.vertical {
+            VerticalAnchor::Fraction(value) => Some(value.get()),
+            VerticalAnchor::FirstBaseline | VerticalAnchor::CenterBaseline => None,
+        }
+    }
+
+    /// Whether the vertical choice is the first baseline rather than its center.
+    #[must_use]
+    pub const fn is_first_baseline(&self) -> bool {
+        matches!(self.vertical, VerticalAnchor::FirstBaseline)
+    }
 }
 macro_rules! anchors {
     ($($name:ident: ($x:literal,$y:literal)),+ $(,)?) => {impl TextAnchor {$(
@@ -226,6 +247,30 @@ impl TextEllipsis {
         self.distinct = Some(value);
         self
     }
+
+    /// Requested logical or physical elision position.
+    #[must_use]
+    pub const fn get_position(&self) -> TextElision {
+        self.position
+    }
+
+    /// Borrow the marker verbatim, including an empty marker.
+    #[must_use]
+    pub fn get_marker(&self) -> &str {
+        &self.marker
+    }
+
+    /// Optional additional line cap; zero is a concrete request.
+    #[must_use]
+    pub const fn get_max_lines(&self) -> Option<usize> {
+        self.lines
+    }
+
+    /// Authored distinctness override, separate from the owner's default.
+    #[must_use]
+    pub const fn get_distinct(&self) -> Option<bool> {
+        self.distinct
+    }
 }
 /// Whether actual label/annotation ink must avoid its peer owners.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,6 +333,18 @@ impl TextOverflow {
             failure,
             ellipsis: Some(value),
         }
+    }
+
+    /// Terminal action for an actual spatial fit miss.
+    #[must_use]
+    pub const fn get_failure(&self) -> TextFailure {
+        self.failure
+    }
+
+    /// Borrow the optional abbreviation program.
+    #[must_use]
+    pub const fn get_ellipsis(&self) -> Option<&TextEllipsis> {
+        self.ellipsis.as_ref()
     }
 }
 /// Explicit text eligibility, independent of scientific ticks and marks.
@@ -379,6 +436,54 @@ impl TextVisibility {
     pub fn boundary_tolerance(mut self, value: Option<f64>) -> Result<Self> {
         self.boundary = value.map(Finite::new).transpose()?;
         Ok(self)
+    }
+
+    /// Whether source text is suppressed independently of the selection program.
+    #[must_use]
+    pub const fn is_hidden(&self) -> bool {
+        self.hidden
+    }
+
+    /// Authored stride and offset, present only for the Every program.
+    #[must_use]
+    pub const fn get_every(&self) -> Option<(usize, usize)> {
+        match self.program {
+            VisibilityProgram::Every { stride, offset } => Some((stride, offset)),
+            VisibilityProgram::All | VisibilityProgram::Greedy | VisibilityProgram::Parity => None,
+        }
+    }
+
+    /// Whether the retained selection program is Greedy.
+    #[must_use]
+    pub const fn is_greedy(&self) -> bool {
+        matches!(self.program, VisibilityProgram::Greedy)
+    }
+
+    /// Whether the retained selection program is Parity.
+    #[must_use]
+    pub const fn is_parity(&self) -> bool {
+        matches!(self.program, VisibilityProgram::Parity)
+    }
+
+    /// Requested protected endpoints.
+    #[must_use]
+    pub const fn get_endpoints(&self) -> LabelEndpoints {
+        self.endpoints
+    }
+
+    /// Requested physical clearance for overlap reduction.
+    #[must_use]
+    pub const fn get_separation(&self) -> f64 {
+        self.separation.get()
+    }
+
+    /// Signed authored boundary overhang; present zero still requests reduction.
+    #[must_use]
+    pub const fn get_boundary_tolerance(&self) -> Option<f64> {
+        match self.boundary {
+            Some(value) => Some(value.get()),
+            None => None,
+        }
     }
 
     pub(crate) fn reduces(&self) -> bool {

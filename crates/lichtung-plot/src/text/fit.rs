@@ -76,6 +76,32 @@ impl TextFit {
         self
     }
 
+    /// Authored absolute minimum, absent when the preferred size is fixed.
+    #[must_use]
+    pub const fn get_minimum(&self) -> Option<f64> {
+        match self.interval {
+            Interval::Preferred => None,
+            Interval::At(value) | Interval::Shrink(value) | Interval::Range(value, _) => {
+                Some(value.get())
+            }
+        }
+    }
+
+    /// Authored absolute maximum, absent for preferred-size and shrink programs.
+    #[must_use]
+    pub const fn get_maximum(&self) -> Option<f64> {
+        match self.interval {
+            Interval::Preferred | Interval::Shrink(_) => None,
+            Interval::At(value) | Interval::Range(_, value) => Some(value.get()),
+        }
+    }
+
+    /// Requested grouping, without resolving any role's preferred size.
+    #[must_use]
+    pub const fn get_grouping(&self) -> TextFitGrouping {
+        self.grouping
+    }
+
     pub(crate) fn bounds(self, preferred: f64) -> Result<(f64, f64)> {
         let (lower, upper) = match self.interval {
             Interval::Preferred => (preferred, preferred),

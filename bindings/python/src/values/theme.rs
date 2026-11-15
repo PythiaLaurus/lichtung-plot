@@ -1,4 +1,4 @@
-//! Complete native appearance values and immutable typography derivation.
+//! Complete native appearance values and immutable component derivation.
 
 use lichtung_plot as core;
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -7,6 +7,154 @@ use pyo3::types::PyTuple;
 
 use super::{is_omitted, omitted};
 use crate::native_error;
+
+// Compile-time record plumbing only: every wrapper stores one native value and
+// every edit finishes with one complete native constructor, never setter chains.
+macro_rules! record_input {
+    (borrow $child:ident, $value:expr) => {
+        $value.native.clone()
+    };
+    (value $child:ident, $value:expr) => {
+        $value.native
+    };
+    (scalar, $value:expr) => {
+        $value
+    };
+    (optional $child:ident, $value:expr) => {
+        $value.map(|value| value.native.clone())
+    };
+    (choice $parse:ident $name:ident, $value:expr) => {
+        $parse($value)?
+    };
+    (optional_choice $parse:ident $name:ident, $value:expr) => {
+        $value.map($parse).transpose()?
+    };
+}
+
+macro_rules! record_read {
+    (borrow $child:ident, $value:expr) => {
+        $child {
+            native: $value.clone(),
+        }
+    };
+    (value $child:ident, $value:expr) => {
+        $child { native: $value }
+    };
+    (scalar, $value:expr) => {
+        $value
+    };
+    (optional $child:ident, $value:expr) => {
+        $value.cloned().map(|native| $child { native })
+    };
+    (choice $parse:ident $name:ident, $value:expr) => {
+        $name($value)
+    };
+    (optional_choice $parse:ident $name:ident, $value:expr) => {
+        $value.map($name)
+    };
+}
+
+macro_rules! record_retain {
+    (borrow $child:ident, $value:expr) => {
+        $value.clone()
+    };
+    (optional $child:ident, $value:expr) => {
+        $value.cloned()
+    };
+    ($($kind:ident)+, $value:expr) => {
+        $value
+    };
+}
+
+macro_rules! record_extract {
+    (borrow $child:ident, $value:expr) => {
+        $value.extract::<PyRef<'_, $child>>()?.native.clone()
+    };
+    (value $child:ident, $value:expr) => {
+        $value.extract::<PyRef<'_, $child>>()?.native
+    };
+    (scalar, $value:expr) => {
+        $value.extract()?
+    };
+    (optional $child:ident, $value:expr) => {
+        if $value.is_none() {
+            None
+        } else {
+            Some($value.extract::<PyRef<'_, $child>>()?.native.clone())
+        }
+    };
+    (choice $parse:ident $name:ident, $value:expr) => {
+        $parse($value.extract::<&str>()?)?
+    };
+    (optional_choice $parse:ident $name:ident, $value:expr) => {
+        $value.extract::<Option<&str>>()?.map($parse).transpose()?
+    };
+}
+
+macro_rules! theme_record {
+    ($wrapper:ident, $name:literal, $native:ident, {
+        $($field:ident: $input:ty $(= $default:tt)? =>
+            $get:ident ($output:ty) [$($kind:ident)+]),+ $(,)?
+    }) => {
+        #[pyclass(name = $name, module = "lichtung_plot", frozen, eq, skip_from_py_object)]
+        #[derive(Clone, PartialEq)]
+        pub(crate) struct $wrapper {
+            pub(crate) native: core::$native,
+        }
+
+        #[pymethods]
+        impl $wrapper {
+            #[new]
+            #[pyo3(signature = (*, $($field $(= $default)?),+))]
+            #[allow(
+                clippy::too_many_arguments,
+                clippy::fn_params_excessive_bools,
+                reason = "complete native records name each independent keyword field"
+            )]
+            fn new($($field: $input),+) -> PyResult<Self> {
+                Ok(Self {
+                    native: core::$native::new($(record_input!($($kind)+, $field)),+)
+                        .map_err(native_error)?,
+                })
+            }
+
+            $(
+                #[getter]
+                fn $field(&self) -> $output {
+                    record_read!($($kind)+, self.native.$get())
+                }
+            )+
+
+            #[pyo3(signature = (*, $($field = omitted()),+))]
+            #[allow(
+                clippy::too_many_arguments,
+                reason = "complete native record fields are independently omissible"
+            )]
+            fn copy_with(&self, py: Python<'_>, $($field: Py<PyAny>),+) -> PyResult<Self> {
+                $(
+                    let $field = &$field.into_bound(py);
+                    let $field = if is_omitted($field) {
+                        record_retain!($($kind)+, self.native.$get())
+                    } else {
+                        record_extract!($($kind)+, $field)
+                    };
+                )+
+                Ok(Self {
+                    native: core::$native::new($($field),+).map_err(native_error)?,
+                })
+            }
+        }
+    };
+}
+
+mod chrome;
+mod marks;
+mod paint;
+mod scales;
+
+use chrome::{PyAxisTheme, PyCompositionTheme, PyLegendTheme};
+use marks::{PyAnnotationTheme, PyMarkTheme};
+use scales::PyColorScales;
 
 #[pyclass(
     name = "Color",
@@ -653,7 +801,7 @@ impl PySurfaceTheme {
     }
 }
 
-/// Complete native Theme. Unbound components are retained, never mirrored.
+/// Complete native Theme. All eight components are retained, never mirrored.
 #[pyclass(
     name = "Theme",
     module = "lichtung_plot",
@@ -667,10 +815,20 @@ pub(crate) struct PyTheme {
 }
 
 impl PyTheme {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "all eight complete Theme components are independently omissible"
+    )]
     fn derive(
         original: &core::Theme,
         typography: &Bound<'_, PyAny>,
         surfaces: &Bound<'_, PyAny>,
+        axes: &Bound<'_, PyAny>,
+        legend: &Bound<'_, PyAny>,
+        composition: &Bound<'_, PyAny>,
+        marks: &Bound<'_, PyAny>,
+        annotations: &Bound<'_, PyAny>,
+        color_scales: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
         let mut builder = original.customize();
         if !is_omitted(typography) {
@@ -689,6 +847,39 @@ impl PyTheme {
                     .clone(),
             );
         }
+        if !is_omitted(axes) {
+            builder = builder.axes(axes.extract::<PyRef<'_, PyAxisTheme>>()?.native.clone());
+        }
+        if !is_omitted(legend) {
+            builder = builder.legend(legend.extract::<PyRef<'_, PyLegendTheme>>()?.native.clone());
+        }
+        if !is_omitted(composition) {
+            builder = builder.composition(
+                composition
+                    .extract::<PyRef<'_, PyCompositionTheme>>()?
+                    .native
+                    .clone(),
+            );
+        }
+        if !is_omitted(marks) {
+            builder = builder.marks(marks.extract::<PyRef<'_, PyMarkTheme>>()?.native.clone());
+        }
+        if !is_omitted(annotations) {
+            builder = builder.annotations(
+                annotations
+                    .extract::<PyRef<'_, PyAnnotationTheme>>()?
+                    .native
+                    .clone(),
+            );
+        }
+        if !is_omitted(color_scales) {
+            builder = builder.color_scales(
+                color_scales
+                    .extract::<PyRef<'_, PyColorScales>>()?
+                    .native
+                    .clone(),
+            );
+        }
         Ok(Self {
             native: builder.build().map_err(native_error)?,
         })
@@ -699,12 +890,44 @@ impl PyTheme {
 impl PyTheme {
     /// Start with publication appearance and replace supplied complete components.
     #[new]
-    #[pyo3(signature = (*, typography = omitted(), surfaces = omitted()),
-        text_signature = "(*, typography=..., surfaces=...)")]
-    fn new(py: Python<'_>, typography: Py<PyAny>, surfaces: Py<PyAny>) -> PyResult<Self> {
+    #[pyo3(signature = (*, typography = omitted(), surfaces = omitted(), axes = omitted(),
+        legend = omitted(), composition = omitted(), marks = omitted(),
+        annotations = omitted(), color_scales = omitted()),
+        text_signature = "(*, typography=..., surfaces=..., axes=..., legend=..., composition=..., marks=..., annotations=..., color_scales=...)")]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "all eight complete Theme components are independent keywords"
+    )]
+    fn new(
+        py: Python<'_>,
+        typography: Py<PyAny>,
+        surfaces: Py<PyAny>,
+        axes: Py<PyAny>,
+        legend: Py<PyAny>,
+        composition: Py<PyAny>,
+        marks: Py<PyAny>,
+        annotations: Py<PyAny>,
+        color_scales: Py<PyAny>,
+    ) -> PyResult<Self> {
         let typography = &typography.into_bound(py);
         let surfaces = &surfaces.into_bound(py);
-        Self::derive(&core::Theme::publication(), typography, surfaces)
+        let axes = &axes.into_bound(py);
+        let legend = &legend.into_bound(py);
+        let composition = &composition.into_bound(py);
+        let marks = &marks.into_bound(py);
+        let annotations = &annotations.into_bound(py);
+        let color_scales = &color_scales.into_bound(py);
+        Self::derive(
+            &core::Theme::publication(),
+            typography,
+            surfaces,
+            axes,
+            legend,
+            composition,
+            marks,
+            annotations,
+            color_scales,
+        )
     }
 
     #[staticmethod]
@@ -749,17 +972,87 @@ impl PyTheme {
         }
     }
 
-    #[pyo3(signature = (*, typography = omitted(), surfaces = omitted()),
-        text_signature = "($self, *, typography=..., surfaces=...)")]
+    #[getter]
+    fn axes(&self) -> PyAxisTheme {
+        PyAxisTheme {
+            native: self.native.axes().clone(),
+        }
+    }
+
+    #[getter]
+    fn legend(&self) -> PyLegendTheme {
+        PyLegendTheme {
+            native: self.native.legend().clone(),
+        }
+    }
+
+    #[getter]
+    fn composition(&self) -> PyCompositionTheme {
+        PyCompositionTheme {
+            native: self.native.composition().clone(),
+        }
+    }
+
+    #[getter]
+    fn marks(&self) -> PyMarkTheme {
+        PyMarkTheme {
+            native: self.native.marks().clone(),
+        }
+    }
+
+    #[getter]
+    fn annotations(&self) -> PyAnnotationTheme {
+        PyAnnotationTheme {
+            native: self.native.annotations().clone(),
+        }
+    }
+
+    #[getter]
+    fn color_scales(&self) -> PyColorScales {
+        PyColorScales {
+            native: self.native.color_scales().clone(),
+        }
+    }
+
+    #[pyo3(signature = (*, typography = omitted(), surfaces = omitted(), axes = omitted(),
+        legend = omitted(), composition = omitted(), marks = omitted(),
+        annotations = omitted(), color_scales = omitted()),
+        text_signature = "($self, *, typography=..., surfaces=..., axes=..., legend=..., composition=..., marks=..., annotations=..., color_scales=...)")]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "all eight complete Theme components are independently omissible"
+    )]
     fn copy_with(
         &self,
         py: Python<'_>,
         typography: Py<PyAny>,
         surfaces: Py<PyAny>,
+        axes: Py<PyAny>,
+        legend: Py<PyAny>,
+        composition: Py<PyAny>,
+        marks: Py<PyAny>,
+        annotations: Py<PyAny>,
+        color_scales: Py<PyAny>,
     ) -> PyResult<Self> {
         let typography = &typography.into_bound(py);
         let surfaces = &surfaces.into_bound(py);
-        Self::derive(&self.native, typography, surfaces)
+        let axes = &axes.into_bound(py);
+        let legend = &legend.into_bound(py);
+        let composition = &composition.into_bound(py);
+        let marks = &marks.into_bound(py);
+        let annotations = &annotations.into_bound(py);
+        let color_scales = &color_scales.into_bound(py);
+        Self::derive(
+            &self.native,
+            typography,
+            surfaces,
+            axes,
+            legend,
+            composition,
+            marks,
+            annotations,
+            color_scales,
+        )
     }
 }
 
@@ -776,5 +1069,9 @@ pub(super) fn register_components(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyContrastTextRoles>()?;
     m.add_class::<PyAnnotationTextRoles>()?;
     m.add_class::<PyTypographyTheme>()?;
-    m.add_class::<PySurfaceTheme>()
+    m.add_class::<PySurfaceTheme>()?;
+    chrome::register(m)?;
+    paint::register(m)?;
+    marks::register(m)?;
+    scales::register(m)
 }

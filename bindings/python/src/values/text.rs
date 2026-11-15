@@ -208,6 +208,16 @@ string_choice!(offset_frame, offset_frame_name, core::TextOffsetFrame, "frame", 
     "text_local" => core::TextOffsetFrame::TextLocal,
 });
 
+mod fit;
+mod layout;
+mod orientation;
+mod position;
+
+use fit::PyTextFit;
+use layout::{PyTextAnchor, PyTextEllipsis, PyTextOverflow, PyTextVisibility};
+use orientation::{PyTextOrientation, PyTextRotation};
+use position::{PyDataCoordinate, PyDataPosition};
+
 fn optional_choice<T>(
     value: &Bound<'_, PyAny>,
     inherited: Option<T>,
@@ -366,7 +376,7 @@ impl PyTextBounds {
     }
 }
 
-/// Complete native request with a deliberately bounded initial Python field set.
+/// Complete native request, with thirteen independently optional instructions.
 #[pyclass(
     name = "TextLayout",
     module = "lichtung_plot",
@@ -383,7 +393,8 @@ pub(crate) struct PyTextLayout {
 impl PyTextLayout {
     #[new]
     #[pyo3(signature = (*, alignment = None, fit_priority = None, direction = None,
-        rotation_mode = None, offset = None, bounds = None, wrapping = None, overlap = None))]
+        rotation_mode = None, offset = None, bounds = None, wrapping = None, overlap = None,
+        fit = None, orientation = None, anchor = None, overflow = None, visibility = None))]
     #[expect(
         clippy::too_many_arguments,
         reason = "each supported native layout instruction is an independent keyword"
@@ -397,33 +408,29 @@ impl PyTextLayout {
         bounds: Option<PyRef<'_, PyTextBounds>>,
         wrapping: Option<&str>,
         overlap: Option<&str>,
+        fit: Option<PyRef<'_, PyTextFit>>,
+        orientation: Option<PyRef<'_, PyTextOrientation>>,
+        anchor: Option<PyRef<'_, PyTextAnchor>>,
+        overflow: Option<PyRef<'_, PyTextOverflow>>,
+        visibility: Option<PyRef<'_, PyTextVisibility>>,
     ) -> PyResult<Self> {
-        let mut native = core::TextLayout::default();
-        if let Some(value) = alignment {
-            native = native.alignment(self::alignment(value)?);
-        }
-        if let Some(value) = fit_priority {
-            native = native.fit_priority(self::fit_priority(value)?);
-        }
-        if let Some(value) = direction {
-            native = native.direction(self::direction(value)?);
-        }
-        if let Some(value) = rotation_mode {
-            native = native.rotation_mode(self::rotation_mode(value)?);
-        }
-        if let Some(value) = offset {
-            native = native.offset(value.native);
-        }
-        if let Some(value) = bounds {
-            native = native.bounds(value.native);
-        }
-        if let Some(value) = wrapping {
-            native = native.wrapping(self::wrapping(value)?);
-        }
-        if let Some(value) = overlap {
-            native = native.overlap(self::overlap(value)?);
-        }
-        Ok(Self { native })
+        Ok(Self {
+            native: build_layout(
+                alignment.map(self::alignment).transpose()?,
+                fit.map(|value| value.native),
+                fit_priority.map(self::fit_priority).transpose()?,
+                direction.map(self::direction).transpose()?,
+                orientation.map(|value| value.native.clone()),
+                rotation_mode.map(self::rotation_mode).transpose()?,
+                anchor.map(|value| value.native),
+                offset.map(|value| value.native),
+                bounds.map(|value| value.native),
+                wrapping.map(self::wrapping).transpose()?,
+                overflow.map(|value| value.native.clone()),
+                overlap.map(self::overlap).transpose()?,
+                visibility.map(|value| value.native.clone()),
+            ),
+        })
     }
 
     #[getter]
@@ -470,10 +477,47 @@ impl PyTextLayout {
         self.native.get_overlap().map(overlap_name)
     }
 
+    #[getter]
+    fn fit(&self) -> Option<PyTextFit> {
+        self.native.get_fit().map(|native| PyTextFit { native })
+    }
+
+    #[getter]
+    fn orientation(&self) -> Option<PyTextOrientation> {
+        self.native
+            .get_orientation()
+            .cloned()
+            .map(|native| PyTextOrientation { native })
+    }
+
+    #[getter]
+    fn anchor(&self) -> Option<PyTextAnchor> {
+        self.native
+            .get_anchor()
+            .map(|native| PyTextAnchor { native })
+    }
+
+    #[getter]
+    fn overflow(&self) -> Option<PyTextOverflow> {
+        self.native
+            .get_overflow()
+            .cloned()
+            .map(|native| PyTextOverflow { native })
+    }
+
+    #[getter]
+    fn visibility(&self) -> Option<PyTextVisibility> {
+        self.native
+            .get_visibility()
+            .cloned()
+            .map(|native| PyTextVisibility { native })
+    }
+
     #[pyo3(signature = (*, alignment = omitted(), fit_priority = omitted(), direction = omitted(),
         rotation_mode = omitted(), offset = omitted(), bounds = omitted(),
-        wrapping = omitted(), overlap = omitted()),
-        text_signature = "($self, *, alignment=..., fit_priority=..., direction=..., rotation_mode=..., offset=..., bounds=..., wrapping=..., overlap=...)")]
+        wrapping = omitted(), overlap = omitted(), fit = omitted(), orientation = omitted(),
+        anchor = omitted(), overflow = omitted(), visibility = omitted()),
+        text_signature = "($self, *, alignment=..., fit_priority=..., direction=..., rotation_mode=..., offset=..., bounds=..., wrapping=..., overlap=..., fit=..., orientation=..., anchor=..., overflow=..., visibility=...)")]
     #[expect(
         clippy::too_many_arguments,
         reason = "each supported native layout instruction is independently omissible"
@@ -489,6 +533,11 @@ impl PyTextLayout {
         bounds: Py<PyAny>,
         wrapping: Py<PyAny>,
         overlap: Py<PyAny>,
+        fit: Py<PyAny>,
+        orientation: Py<PyAny>,
+        anchor: Py<PyAny>,
+        overflow: Py<PyAny>,
+        visibility: Py<PyAny>,
     ) -> PyResult<Self> {
         let alignment = &alignment.into_bound(py);
         let fit_priority = &fit_priority.into_bound(py);
@@ -498,6 +547,11 @@ impl PyTextLayout {
         let bounds = &bounds.into_bound(py);
         let wrapping = &wrapping.into_bound(py);
         let overlap = &overlap.into_bound(py);
+        let fit = &fit.into_bound(py);
+        let orientation = &orientation.into_bound(py);
+        let anchor = &anchor.into_bound(py);
+        let overflow = &overflow.into_bound(py);
+        let visibility = &visibility.into_bound(py);
         let alignment = optional_choice(alignment, self.native.get_alignment(), self::alignment)?;
         let fit_priority = optional_choice(
             fit_priority,
@@ -526,57 +580,134 @@ impl PyTextLayout {
         };
         let wrapping = optional_choice(wrapping, self.native.get_wrapping(), self::wrapping)?;
         let overlap = optional_choice(overlap, self.native.get_overlap(), self::overlap)?;
-
-        // Rebuild every native instruction, including policies not yet exposed as
-        // Python values. Omitted fields retain presence; only explicit None skips
-        // a previously present field. There is no parallel instruction store.
-        let mut native = core::TextLayout::default();
-        if let Some(value) = alignment {
-            native = native.alignment(value);
-        }
-        if let Some(value) = self.native.get_fit() {
-            native = native.fit(value);
-        }
-        if let Some(value) = fit_priority {
-            native = native.fit_priority(value);
-        }
-        if let Some(value) = direction {
-            native = native.direction(value);
-        }
-        if let Some(value) = self.native.get_orientation() {
-            native = native.orientation(value.clone());
-        }
-        if let Some(value) = rotation_mode {
-            native = native.rotation_mode(value);
-        }
-        if let Some(value) = self.native.get_anchor() {
-            native = native.anchor(value);
-        }
-        if let Some(value) = offset {
-            native = native.offset(value);
-        }
-        if let Some(value) = bounds {
-            native = native.bounds(value);
-        }
-        if let Some(value) = wrapping {
-            native = native.wrapping(value);
-        }
-        if let Some(value) = self.native.get_overflow() {
-            native = native.overflow(value.clone());
-        }
-        if let Some(value) = overlap {
-            native = native.overlap(value);
-        }
-        if let Some(value) = self.native.get_visibility() {
-            native = native.visibility(value.clone());
-        }
-        Ok(Self { native })
+        let fit = if is_omitted(fit) {
+            self.native.get_fit()
+        } else {
+            fit.extract::<Option<PyRef<'_, PyTextFit>>>()?
+                .map(|value| value.native)
+        };
+        let orientation = if is_omitted(orientation) {
+            self.native.get_orientation().cloned()
+        } else {
+            orientation
+                .extract::<Option<PyRef<'_, PyTextOrientation>>>()?
+                .map(|value| value.native.clone())
+        };
+        let anchor = if is_omitted(anchor) {
+            self.native.get_anchor()
+        } else {
+            anchor
+                .extract::<Option<PyRef<'_, PyTextAnchor>>>()?
+                .map(|value| value.native)
+        };
+        let overflow = if is_omitted(overflow) {
+            self.native.get_overflow().cloned()
+        } else {
+            overflow
+                .extract::<Option<PyRef<'_, PyTextOverflow>>>()?
+                .map(|value| value.native.clone())
+        };
+        let visibility = if is_omitted(visibility) {
+            self.native.get_visibility().cloned()
+        } else {
+            visibility
+                .extract::<Option<PyRef<'_, PyTextVisibility>>>()?
+                .map(|value| value.native.clone())
+        };
+        Ok(Self {
+            native: build_layout(
+                alignment,
+                fit,
+                fit_priority,
+                direction,
+                orientation,
+                rotation_mode,
+                anchor,
+                offset,
+                bounds,
+                wrapping,
+                overflow,
+                overlap,
+                visibility,
+            ),
+        })
     }
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call-local reconstruction retains all thirteen native instructions"
+)]
+fn build_layout(
+    alignment: Option<core::TextAlignment>,
+    fit: Option<core::TextFit>,
+    fit_priority: Option<core::TextFitPriority>,
+    direction: Option<core::TextDirection>,
+    orientation: Option<core::TextOrientation>,
+    rotation_mode: Option<core::TextRotationMode>,
+    anchor: Option<core::TextAnchor>,
+    offset: Option<core::TextOffset>,
+    bounds: Option<core::TextBounds>,
+    wrapping: Option<core::TextWrapping>,
+    overflow: Option<core::TextOverflow>,
+    overlap: Option<core::TextOverlap>,
+    visibility: Option<core::TextVisibility>,
+) -> core::TextLayout {
+    let mut native = core::TextLayout::default();
+    if let Some(value) = alignment {
+        native = native.alignment(value);
+    }
+    if let Some(value) = fit {
+        native = native.fit(value);
+    }
+    if let Some(value) = fit_priority {
+        native = native.fit_priority(value);
+    }
+    if let Some(value) = direction {
+        native = native.direction(value);
+    }
+    if let Some(value) = orientation {
+        native = native.orientation(value);
+    }
+    if let Some(value) = rotation_mode {
+        native = native.rotation_mode(value);
+    }
+    if let Some(value) = anchor {
+        native = native.anchor(value);
+    }
+    if let Some(value) = offset {
+        native = native.offset(value);
+    }
+    if let Some(value) = bounds {
+        native = native.bounds(value);
+    }
+    if let Some(value) = wrapping {
+        native = native.wrapping(value);
+    }
+    if let Some(value) = overflow {
+        native = native.overflow(value);
+    }
+    if let Some(value) = overlap {
+        native = native.overlap(value);
+    }
+    if let Some(value) = visibility {
+        native = native.visibility(value);
+    }
+    native
 }
 
 pub(super) fn register_components(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTextOffset>()?;
-    m.add_class::<PyTextBounds>()
+    m.add_class::<PyTextBounds>()?;
+    m.add_class::<PyTextFit>()?;
+    m.add_class::<PyTextRotation>()?;
+    m.add_class::<PyDataCoordinate>()?;
+    m.add_class::<PyDataPosition>()?;
+    m.add_class::<PyTextOrientation>()?;
+    m.add_class::<PyTextAnchor>()?;
+    m.add_class::<PyTextEllipsis>()?;
+    m.add_class::<PyTextOverflow>()?;
+    m.add_class::<PyTextVisibility>()
 }
 
 #[cfg(test)]

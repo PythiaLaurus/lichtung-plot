@@ -78,14 +78,20 @@ The shared contracts and remaining scope live at the workspace root:
 Exact shipped value fields and methods are described by the installed typing
 information, not by the full planned inventory.
 
-The initial immutable value fields are deliberately bounded:
+## Immutable configuration
+
+Theme exposes all eight native components and their nested paint, geometry,
+spacing, typography and palette values. TextLayout exposes all thirteen authored
+instructions. These appearance, text and PNG values comprise 84 immutable classes;
+Labels and numeric policies are separate. Other family-specific policies and the
+remaining numeric surface are still being implemented.
 
 | Value | Read-only fields |
 | --- | --- |
-| `Theme` | `typography`, `surfaces` (the complete native Theme remains retained). |
+| `Theme` | `typography`, `surfaces`, `axes`, `legend`, `composition`, `marks`, `annotations`, `color_scales`. |
 | `TextTheme` | `stack`, `color`, `font_size`, `weight`, `line_height`. |
 | `Text` | `source`, optional `style`, optional `layout`. |
-| `TextLayout` | Optional `alignment`, `fit_priority`, `direction`, `rotation_mode`, `offset`, `bounds`, `wrapping`, `overlap`. |
+| `TextLayout` | Optional `alignment`, `fit_priority`, `direction`, `rotation_mode`, `offset`, `bounds`, `wrapping`, `overlap`, `fit`, `orientation`, `anchor`, `overflow`, `visibility`. |
 | `TextOffset` / `TextBounds` | `dx`, `dy`, `frame` / optional `max_width`, `max_height`, `max_lines`. |
 | `PngOptions` / `PngSizing` | `sizing`, `compression` / `kind`, `value`. |
 | `NumericFormat` / `TickGeneration` | `fractional_digits` / `is_automatic`, `target_count`, `maximum_count`. |
@@ -93,9 +99,26 @@ The initial immutable value fields are deliberately bounded:
 | `Labels` | `mode` (`humanized`/`raw`), optional ordered string-pair `aliases`. |
 | `Output` | Frozen canonical `width`, `height`. |
 
-Typography role groups, colors, font stacks and relative spacing expose their
-typed native fields too; see the shipped stubs. Values derive through keyword-only
-`copy_with`, without mutable nested handles. Text-taking owner methods accept
+Nested values expose typed read-only fields; see the shipped stubs for exact
+constructors and closed factories. Derive a leaf, then replace its complete parent:
+
+```python
+base = Theme.publication()
+primary = base.marks.points.primary.copy_with(shape="triangle_up", outline=None)
+theme = base.copy_with(
+    marks=base.marks.copy_with(points=base.marks.points.copy_with(primary=primary))
+)
+```
+
+Values derive through keyword-only `copy_with`, without mutable nested handles.
+Omission retains a field; `None` clears only fields that admit it. An optional
+branch reader, such as `DataOutlineTheme.fixed_stroke`, does not make that branch's
+required payload nullable. Palette/gradient sequences are snapshotted in order;
+domain-dependent capacity and text-owner eligibility remain native use-time checks.
+`examples/complete_appearance.py` demonstrates nested Theme edits, complete
+Text instructions and publication from one frozen Output.
+
+Text-taking owner methods accept
 `style` and `layout`: omission preserves incoming/retained instructions, explicit
 `None` clears the corresponding local instruction.
 `Plot.labels(...)` and `Canvas.labels(...)` replace the native presentation policy.
