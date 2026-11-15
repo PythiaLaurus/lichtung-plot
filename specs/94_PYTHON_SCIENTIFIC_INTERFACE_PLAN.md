@@ -341,6 +341,72 @@ this seam. Original bounds/identity validation, unprojected-value failures and
 explicit-empty-identity no-fallback semantics remain. There is no parallel source
 class, mode mirror, cache, new core reader or independent-None main-source fallback.
 
+### Independent Layer And Result Call Forms
+
+The following is the remaining implementation target, not delivered Python API.
+Only Line exposes
+`point_layer(data=None, *, x, y, labels=None, color=None, radius=None, alpha=None, legend_label=None, legend_label_style=omitted, legend_label_layout=omitted, label_text_layout=None)`.
+Only Bar/HorizontalBar expose
+`point_layer(data=None, *, category, value, color, radius, series=None)`.
+The latter has no labels, legend, layout or independent alpha parameters: its
+required Color already owns complete RGBA. Radius is an integer native u32;
+Line's optional explicit alpha is a checked byte, not floating opacity.
+
+Each call appends one independently bound layer. None means direct-only data,
+never parent lookup; optional None instructions are absent on this new layer.
+For Line, a present legend label (str or Text, including empty authored text)
+uses the existing TextIntent rules with the two explicit legend instruction
+keywords. Instruction omission retains incoming Text instructions; explicit None
+clears that instruction. Supplying either instruction without a legend label is
+an incomplete form, rejected before data lookup. `label_text_layout` controls
+column-backed point labels, not the complete-layer legend label.
+
+Expose exactly these six method names for each placement, replacing `P` with
+`attached` or `pairwise`:
+
+| Context | Python method |
+| --- | --- |
+| Main/direct results | `significance_P(*, result_fields)` |
+| Independent results | `significance_P_from_data(data=None, *, result_fields)` |
+| One facet | `significance_P_in_facet(*, result_fields, facet_fields)` |
+| Independent one facet | `significance_P_in_facet_from_data(data=None, *, result_fields, facet_fields)` |
+| Grid facet | `significance_P_in_grid(*, result_fields, grid_fields)` |
+| Independent grid facet | `significance_P_in_grid_from_data(data=None, *, result_fields, grid_fields)` |
+
+The table names groups of real keyword parameters, not `result_fields=`,
+`facet_fields=`, `grid_fields=` or arbitrary keyword bags. Attached capability
+is exactly Bar, HorizontalBar, Coefficient; pairwise capability is exactly Bar,
+HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud.
+All result variables are keyword-only. Ordinary methods use fresh main-source
+lookup when needed; `_from_data(None, ...)` is direct-only.
+
+For attached placement, require exactly one of `target` or `target_value`.
+For pairwise placement, require exactly one of `left`/`left_value` and exactly
+one of `right`/`right_value`. A column choice accepts an ordinary categorical
+input and optional corresponding `target_series`/`left_series`/`right_series`;
+series None is absent, and a series argument is not a scalar-address modifier.
+A `_value` choice is a literal raw str or `(category, series)` string tuple.
+Never guess literal/scalar status from an ordinary input's length or tuple shape.
+
+Marks have exactly three complete forms: numeric `marks` with mapping omitted;
+categorical `marks` with required `mapping`; or literal `mark` with both `marks`
+and `mapping` omitted. A literal/mapped mark is a numeric p-value or one of
+`"ns"`, `"*"`, `"**"`, `"***"`, `"****"`. Mapping accepts a Mapping or ordered
+list/tuple of `(raw_category, mark)` pairs; keep duplicate pairs for native
+consumed-key checks, not dict normalization. Explicit mapping=None is invalid,
+not numeric-mode omission. Native p-range/nonfinite/glyph checks retain their
+existing timing; Python does not calculate a test or adjustment.
+
+One-facet methods require either categorical `facet` or literal string
+`facet_value`. Grid methods require both categorical `facet_row` and
+`facet_column`, or literal `facet_value=(row, column)` strings, never a mixture.
+Unfaceted methods accept none of these keywords. Validate complete presence
+combinations before any source lookup, then retain the original producer's
+scientific check order, scalar flags and broadcasting. Grid literal FacetCell
+may use the existing scalar-capable `_in_facet` producer internally; ordinary
+grid columns use the existing `_in_grid` producer. Do not emulate broadcasting
+or add a native facet/grid helper.
+
 Layers are flat append-only owner calls with an independent `data` context:
 Line point_layer accepts x/y, optional labels/color/radius/alpha/legend_label/
 label_text_layout; Bar/HorizontalBar accept category/value, optional series and
