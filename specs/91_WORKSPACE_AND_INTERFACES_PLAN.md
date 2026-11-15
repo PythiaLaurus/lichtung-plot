@@ -326,6 +326,203 @@ replacing their former native-payload frontend protocol as specified by the
 This native migration precedes Python supplied-geometry bindings. It is not an
 extension of accepted Rust foreign-container types or evidence of a Python bridge.
 
+### Source-Free Metadata And Constructor Projections
+
+The following are reviewed implementation targets, not delivered adapter APIs.
+Metadata round-trip and constructor projection are separate acceptance boundaries.
+They support the selected Python input routes without retaining borrowed Rust
+adapters or duplicating their origin/shape algorithms. The core and the Python
+public data-input surface do not change.
+
+#### Source-Free Exact-Family Metadata
+
+Each adapter exports its own opaque `BindingMetadata<K: kind::Marker>` at its
+root. Move the existing seven metadata fields into that single owner:
+`len`, `geometry_points`, `labels`, `facet`, `grid`, `expansion`, `matrix_keys`,
+plus `PhantomData<K>`. `PlotAdapter` retains only its native Plot, its existing
+source context and this metadata. Do not keep parallel copies of the old fields.
+Metadata contains no Plot, source, foreign reference, schema or callback registry.
+Actual family instances must naturally support Clone + Send + Sync + 'static,
+without unsafe auto-trait implementations or new bounds on ordinary sources.
+
+Both adapters add:
+
+```rust
+impl<'source, K: kind::Marker> PlotAdapter<'source, K> {
+    pub fn into_parts(self) -> (Plot<K>, BindingMetadata<K>);
+}
+
+impl<K: kind::Marker> PlotAdapter<'static, K> {
+    pub fn from_parts(plot: Plot<K>, metadata: BindingMetadata<K>) -> Self;
+}
+```
+
+ndarray additionally restores lookup through its existing validated context:
+
+```rust
+impl<K: kind::Marker> PlotAdapter<'static, K> {
+    pub fn from_parts_with_data<'source>(
+        plot: Plot<K>,
+        metadata: BindingMetadata<K>,
+        source: impl ArraySource + 'source,
+    ) -> std::result::Result<PlotAdapter<'source, K>, AdapterError>;
+}
+```
+
+Polars additionally restores its existing borrowed DataFrame context:
+
+```rust
+impl<K: kind::Marker> PlotAdapter<'static, K> {
+    pub fn from_parts_with_data<'source>(
+        plot: Plot<K>,
+        metadata: BindingMetadata<K>,
+        source: &'source polars_core::prelude::DataFrame,
+    ) -> PlotAdapter<'source, K>;
+}
+```
+
+Splitting/restoring moves existing state without scientific preflight or a
+same-version validator. ndarray restoration retains the real `context(source)?`
+structural validation; Polars must not invent a fallible operation. Restoration
+does not require a new source height to equal the old plot's slots: subsequent
+bindings retain their existing domain-specific checks. Existing `.into()` and
+`erase()` remain deliberately metadata-discarding native handoffs.
+
+The family marker prevents cross-family pairing, not mismatched versions of the
+same family. Python must commit each native Plot/metadata candidate pair together.
+Its stable configuration version owns this source-free pair; source objects and
+callback holders remain separate, physically owned Python edges. Do not retain
+an ndarray adapter containing Rc merely because its source currently equals None.
+Later label/facet edits still go through the restored adapter so their existing
+caches and native configuration remain synchronized.
+
+Bounded acceptance must cover the seven existing metadata responsibilities:
+labels/facet replacement, expanded Line roles/bands, grid shape/origins, Matrix
+keys and original geometry-point alpha alignment. Verify source release,
+source-free/restored lookup, actual-family auto-traits and a cross-family
+compile-fail boundary. Do not create per-field getter inventories or rerender all
+families; restoration must not advance scientific validation.
+
+#### ndarray Original-Coordinate Projection
+
+Add one root-exported `ColumnProjection` in a private production module:
+
+```rust
+pub struct ColumnProjection<'columns> { /* private */ }
+
+impl<'columns> ColumnProjection<'columns> {
+    pub fn new(
+        source_shape: (usize, usize),
+        columns: &'columns [(usize, &'columns dyn ArraySource)],
+    ) -> std::result::Result<Self, AdapterError>;
+}
+```
+
+Implement the existing sealed source protocol and `ArraySource`, not another
+public trait or role-payload enum. The shape is the original rows/logical-column
+count. Entries associate original logical indices with admitted one-column
+two-dimensional views or existing values/present view pairs; different entries
+may have different dtypes, strides and validity. The descriptor borrows columns
+only for a binding call and does not own or copy observations.
+
+Validate only descriptor structure: nonempty unique in-bounds indices, original
+row counts, one-column shapes and the existing validity-shape checks. `shape()`
+returns the original shape; each lookup delegates to physical column zero while
+preserving the original index in identities, axis names and diagnostics.
+Unsupported-element/source-row errors must remap physical zero to that index.
+Use private sealed per-column axis classification and one existing role extraction,
+not trial numeric/category conversion or a second scan.
+
+In-bounds but unprojected fields fail explicitly. `..` still means all original
+logical columns, not all supplied entries. Existing scalar/ordered selections,
+row repetition and cell-shape checks remain authoritative. For example a Line
+using x=4 and ys=[7,2] from an original ten-column table must keep that order and
+those origins after importing only columns 4,7,2. A later hue lookup snapshots
+only the current source's selected hue and restores the same metadata; it does
+not refresh x/y or convert hue to native slots to bypass repetition.
+
+Ordinary NumPy views need not use this descriptor. Concrete consumers are
+per-column pandas conversion and selected MaskedArray data/validity snapshots;
+mask inversion and pandas key/native-identity/display mapping remain binding
+responsibilities. Test heterogeneous/independent-stride columns, original bounds,
+missing projection entries, one-column collection meaning, null versus present
+NaN and original-index diagnostics without a container/family cross-product.
+
+#### Polars Names-Aware Selected-Column Projection
+
+Add the distinct root-exported Polars descriptor in a private production module:
+
+```rust
+pub struct ColumnProjection<'columns> { /* private */ }
+
+impl<'columns> ColumnProjection<'columns> {
+    pub fn new(
+        source_rows: usize,
+        source_names: &'columns [&'columns str],
+        columns: &'columns [polars_core::prelude::Column],
+    ) -> std::result::Result<Self, AdapterError>;
+
+    pub fn numeric_names(
+        source: &polars_core::prelude::DataFrame,
+    ) -> Vec<&str>;
+}
+```
+
+Carry the complete ordered raw names namespace separately from bound-only native
+Columns. Do not require a complete Rust SchemaRef: unrelated Decimal/Struct/Array/
+Object/Extension fields may not be representable under current Polars features.
+Do not enable those features, import their values, remove their names, fabricate
+Null/Unknown/physical dtypes or reject them merely to construct the descriptor.
+
+Construction checks only nonempty selections, unique namespace/selected names,
+selected membership and original rows. Empty raw names remain legal. Imported
+bound logical dtype fidelity belongs to the real bridge; existing role extractors
+still decide scientific admission. Add only the existing sealed implementations
+for `&ColumnProjection`: `ColumnsInput`, `NumericSeriesInput`, `BooleanInput` and
+`SourceRowsInput`. Their fixed selected/non-native-slot origins preserve ordered
+collection meaning, row-major cells and per-dimension grid checks. A 2x3 grid
+must still reject 3x2 highlights/IDs despite equal products.
+
+A private names-only scratch hook on the existing sealed protocol supplies the
+complete namespace before an input is moved. The four existing wide producers
+reuse their current Expansion naming algorithm against the union of main
+DataFrame names and projection names. Scratch expires after construction; no
+namespace/schema enters BindingMetadata or Plot. Binding code does not choose
+generated field names or install a projection as the retained lookup source.
+
+Correct the existing `multiple` helper narrowly: substitute `Column N` for an
+empty name only when `local && empty`. Selected and projected `["", "Column 1"]`
+must retain two distinct raw identities; direct-local ordinal/display defaults
+remain unchanged. Keep current length/dtype/error ordering and native required
+name/display-collision validation. Compare corrected native inputs, not updated
+goldens that accept incorrectly merged groups.
+
+`numeric_names` delegates to the existing discovery helper, sharing
+`DataType::is_primitive_numeric()` with existing constructors. Python first maps
+its supported concrete primitive logical dtype variants to actual native
+DataTypes and calls that predicate to select candidate imports. Do not use dtype
+name strings, physical storage, a generic `is_numeric()` including Decimal,
+sample values or field-name heuristics. Cover all supported concrete primitive
+variants; retain typed empty/all-null numeric columns and numeric IDs in source
+order. Boolean, Null, temporal, nested and custom/Extension types do not become
+primitive candidates through their storage.
+
+After importing only candidates, call the shared native discovery reader and
+construct the selected projection with the original complete names. Metadata
+inconsistency in imported bound dtypes must fail visibly rather than silently
+disappear through filtering. Explicit selections bypass discovery entirely.
+Test explicit [a,b] versus discovered [b,a], unused Decimal/Struct Variable* name
+avoidance, namespace union, empty selected names, zero rows and one-column
+collections. A real bound-only Arrow importer remains a separate implementation
+and compatibility gate; these Rust targets are not FFI evidence.
+
+These two descriptors are precise, reviewed exceptions to the current adapter
+contract's no-source-wrapper rule, solely for preserving original coordinates
+and names while using existing binding algorithms. Update that current contract
+with the working implementations, not in anticipation. They do not create a
+general source framework, conversion catalog, selector DSL, Python Rust-payload
+input route, cross-adapter dependency or another renderer.
+
 ## Complete Python Interface
 
 ### Public Capability Mapping
