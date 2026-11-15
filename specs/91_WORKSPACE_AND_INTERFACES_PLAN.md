@@ -30,7 +30,7 @@ values, text-entry/omission/clear/precedence rules and object-lifecycle semantic
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
 surface recorded below with bounded installed verification; final acceptance
-still requires the remaining cost, source-refresh and test-budget gates.
+still requires the remaining final-source distribution and test-budget gates.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
@@ -43,9 +43,9 @@ delivered. All 25 Python constructors, their alternatives and exact-family typin
 base data/facet/configuration methods, complete Theme/Text and numeric policies,
 13 scientific/appearance/position values, eight callback slots and all 75 alpha
 entries, independent point layers and significance results are implemented.
-The recorded Linux source-distribution gate and complete peer content/gallery
-are verified below. Same-source costs, a final-source distribution refresh and
-last-stage test deduplication/unchanged-budget certification remain open.
+The recorded Linux source-distribution gate, complete peer content/gallery
+and same-source cost observations are verified below. A final-source distribution
+refresh and last-stage test deduplication/unchanged-budget certification remain open.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -62,13 +62,13 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. The scientific-source sdist passed independent build/install/runtime and peer content/gallery is complete; same-source costs, final-source distribution refresh and test-budget checks remain open. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. The scientific-source sdist passed independent build/install/runtime; peer content/gallery and bounded same-source cost observations are complete. Final-source distribution refresh and test-budget checks remain open. |
 | Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix/independent-sdist evidence; current all-family constructors, geometry and edits have separate focused wheel evidence below, not a repeated transport matrix or current sdist certification. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
-| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. The earlier scientific-source Python sdist passed independent build/install and 188 archived runtime cases; it does not include later content changes. Same-source costs, a final-source sdist refresh and test-budget certification remain open. No publication or deployment was performed. |
+| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. Current production-source costs were observed on CPython3.10/3.13 with separate timing, allocation and independent peak processes. The earlier scientific-source Python sdist passed independent build/install and 188 archived runtime cases but does not include later content changes. Final-source sdist refresh and test-budget certification remain open. No publication or deployment was performed. |
 
 ### Current Python Implementation Scope
 
@@ -452,18 +452,158 @@ support file with exact frozen-source bytes. No native scientific behavior,
 font/Unicode asset, dependency pin or golden was changed. No full Rust suite
 was repeated, no old tests were removed, and no package/site was published.
 
+### Same-Source Cost Observations
+
+Actual Linux x86_64 observations used the same independently source-built release
+wheel/native binary recorded above on CPython 3.10.19 and 3.13.11. All 407
+production/manifest/lock files matched that scientific-source freeze; the later
+content changes did not change the measured library. A fresh newer prefix left
+previous environments untouched. Each interpreter kept its original 17 pinned
+requirements: NumPy 1.26.4/pandas 2.3.3 versus NumPy 2.2.6/pandas 3.1.1, with
+Polars/runtime 1.41.2 in both. Differences cannot be attributed to CPython alone.
+
+The simple baseline is a caller `.copy()` before each edit, holding the previous
+owner through the edit, versus direct mutable edits. Both use today's native
+sharing, not historical deep clones or a sharing-disabled implementation.
+Each side retains the same independent branches and final scientific content.
+The workload includes 256 versus 65536 observations, existing 512 ticks/32 notes/
+32 aliases, actual growing tick/alias/annotation edits, payload edits with an old
+peer retained, populated Canvas growth and shared first/subsequent overwrite.
+Plot configuration updates clone a native candidate on every call; title-only
+edits do not prove payload separation. Preauthored immutable Labels/tick inputs
+are prepared outside configuration windows; their application and parameter
+conversion remain inside.
+
+Complete-output validation covered 21 named workloads/13 paired workloads,
+34 variants per interpreter. One original large-figure layout failure remains
+recorded. Only the diagnostic canvas widths were enlarged, preserving every
+tick, note, alias and observation. Eight already-successful cases were retained,
+then 26 pending minimum-interpreter cases and 34 newer-interpreter cases ran:
+68 unique successes, not a new full 68-case rerun. Independent read-only audit
+checked 180 files/176 SVGs, complete point membership, authored text/ticks,
+Canvas cells, branch independence and unchanged peers. All paired outputs,
+four input routes, corresponding cross-interpreter outputs and fresh/frozen
+publication files were byte-equal in this revision; these are not future goldens.
+PNG checks here are header/IHDR plus current-route equality, not decoded-pixel
+or visual certification.
+
+Three distinct fresh-process passes produced **204 uninstrumented time samples**
+(three per variant), **68 allocation observations** and **68 uninstrumented peak
+observations**. Validation elapsed times and instrumented times are not reused.
+Time medians below are absolute window milliseconds; slash-separated paired
+values mean direct/copy-before-edit. Peak values are one observed process resident-
+memory high-water mark (HWM) in MiB from the parent's exact-PID `wait4`, not
+phase-net memory. They include
+startup/imports/identity, prepared state, declared warm-up, retained results and
+small result metadata, without full-output validation in those children.
+
+| Workload/window | 3.10 median ms | 3.13 median ms | 3.10 HWM MiB | 3.13 HWM MiB |
+| --- | ---: | ---: | ---: | ---: |
+| Native input, 8 bindings ×4096 rows | 3.0895 | 3.1326 | 39.277 | 40.383 |
+| NumPy input, same bindings | 3.9576 | 24.4228 | 60.047 | 59.785 |
+| pandas input, same bindings | 13.0879 | 12.6120 | 91.680 | 96.555 |
+| eager Polars input, same bindings | 4.6914 | 4.9014 | 69.371 | 70.141 |
+| 1000 titles, 256 rows | 0.3837/0.7474 | 0.2945/0.5978 | 39.586/40.047 | 40.500/40.426 |
+| 1000 titles, 65536 rows | 0.4088/0.7488 | 0.3048/0.6005 | 45.012/44.965 | 47.242/47.219 |
+| 1000 titles, large authored content | 0.3741/0.7389 | 0.3296/0.5904 | 40.156/40.312 | 40.508/42.977 |
+| One inline title edit, peer retained | 0.0065/0.0124 | 0.0088/0.0129 | 40.137/40.566 | 40.508/40.484 |
+| One payload annotation edit, peer retained | 0.0267/0.0318 | 0.0253/0.0236 | 40.223/40.254 | 40.664/40.539 |
+| Small content growth, 48 edits | 0.1133/0.1305 | 0.1067/0.1396 | 40.246/40.262 | 40.508/40.750 |
+| Large content growth, 48 edits | 1.0544/1.1074 | 1.1327/1.1486 | 40.750/40.852 | 40.539/40.500 |
+| Populate 2×2 Canvas | 0.0171/0.0213 | 0.0126/0.0191 | 41.672/41.391 | 41.605/41.730 |
+| Populate 4×4 Canvas | 0.0222/0.0332 | 0.0195/0.0322 | 41.309/41.262 | 41.582/41.730 |
+| Shared populated Canvas, first overwrite | 0.0158/0.0248 | 0.0091/0.0150 | 41.621/41.258 | 41.477/44.199 |
+| Shared populated Canvas, subsequent overwrite | 0.0139/0.0199 | 0.0074/0.0132 | 41.215/41.422 | 41.457/41.609 |
+| Retain 4 independent branches, 12 edits | 0.0665/0.0719 | 0.0572/0.0651 | 40.152/40.484 | 40.500/40.512 |
+| Retain 16 independent branches, 48 edits | 0.1828/0.2010 | 0.1646/0.2035 | 40.035/40.316 | 40.547/40.762 |
+| Process-first fresh SVG export, 512 rows | 28.7215 | 29.5398 | 65.496 | 67.832 |
+| Next fresh SVG export, prior Output retained | 30.3381 | 30.4467 | 91.301 | 93.535 |
+| Three fresh format exports | 133.9078 | 124.0980 | 124.621 | 126.828 |
+| Frozen outlined/text/PNG publication | 34.0921 | 31.9168 | 72.875 | 75.383 |
+
+Input-binding windows include conversion and FFI, with provider objects already
+prepared. Fresh `svg()` includes render/font services **and** the first SVG
+conversion/atomic publication; public calls do not expose pure render/font time.
+First/next is process-first versus a later new render operation, not an OS/font
+cache cold/warm claim. The later case retains its warm-up Output. Frozen setup
+uses a complete outlined SVG, filling that cache before the window; replay order
+is outlined SVG, text SVG, PNG. Its setup is excluded from measured time/traffic
+but included in HWM. Fresh exports retain three independent rendered scenes;
+frozen publication returns three handles sharing the prepared scene.
+
+The temporary Linux/glibc observer reports successful requests/requested-byte
+traffic at four separate boundaries: libc and PyMem RAW/MEM/OBJ. These overlap;
+never add them, call them Python object counts or Rust-only/all-heap allocation,
+or treat requested bytes as live/net memory/RSS. Successful `realloc` records its
+new requested size, not an increment. Direct mmap/private/unlisted entrypoints
+are outside scope. Wrappers preserve the existing backing allocators; bracket/
+observer overhead is included, not subtracted. Saturated counters are rejected.
+Independent source review repaired one target-libc `posix_memalign` errno
+transparency bug before use. Actual strict C builds and both-interpreter
+known-request/domain/window/failure self-checks passed, including plain/off/on
+errno comparisons. Zero-size, forced PyMem OOM and thread/fork stress were not
+certified.
+
+Representative cumulative libc traffic is below (`requests/requested bytes`;
+paired arrows mean direct→copy). All four domains, every absolute time sample
+and every independent HWM are retained in the observation receipt.
+
+| Workload | 3.10 libc requests/bytes | 3.13 libc requests/bytes |
+| --- | ---: | ---: |
+| 8 native bindings | 33281/6158872 | 33280/6158280 |
+| 8 NumPy bindings | 99156/9999961 | 106852/40369966 |
+| 8 pandas bindings | 100904/12906363 | 101171/12987165 |
+| 8 Polars bindings | 99506/11782769 | 99505/11782177 |
+| 1000 titles, each of the three input/content sizes | 3001/705592 (both) | 3000/705000 (both) |
+| Inline edit with peer | 4/1297 (both) | 3/705 (both) |
+| Payload edit with peer | 520/36281 (both) | 519/35689 (both) |
+| Small growth | 1341/272016 (both) | 1340/271424 (both) |
+| Large growth | 33697/2652192 (both) | 33696/2651600 (both) |
+| Populate 2×2 | 2/752 → 21/6608 | 1/160 → 20/6016 |
+| Populate 4×4 | 2/752 → 81/66128 | 1/160 → 80/65536 |
+| Shared Canvas first | 5/4528 → 6/4688 | 4/3936 → 5/4096 |
+| Shared Canvas subsequent | 1/592 → 6/4688 | 0/0 → 5/4096 |
+| Four retained branches | 2101/148984 (both) | 2100/148392 (both) |
+| Sixteen retained branches | 8401/594160 (both) | 8400/593568 (both) |
+| First fresh SVG | 31661/40445702 | 31661/40445650 |
+| Next fresh SVG | 31659/40445627 | 31659/40445571 |
+| Three fresh exports | 109169/137820976 | 109171/137822020 |
+| Frozen three-format publication | 15622/17348546 | 15624/17349602 |
+
+For 1000 title edits, PyMem OBJ traffic separately was 1011/65500 versus
+4013/433964 on 3.10, and 1009/64468 versus 4010/440516 on 3.13. Thus equal libc
+traffic does not mean equal Python-boundary traffic. The 3.13 subsequent direct
+Canvas edit's zero libc row still had 13 PyMem OBJ requests/708 requested bytes;
+it is not a zero-cost claim. Identical observed title traffic across data/content
+sizes is not zero-copy construction or an asymptotic
+guarantee. Payload growth, retained branches and whole-Canvas separation have
+real observed costs. The one-sample peaks and three timing samples do not support
+significance claims or a universal mutability ranking; the newer payload-edit
+sample even favored the copy wrapper. No speedup threshold or aggregate resource
+score was imposed, and no additional configuration representation or persistent
+collection layer was introduced.
+
+The complete observation audit is
+`/tmp/opencode/lichtung-python-offline-TQbAMg/verification-prep/receipts/cost3-observation-closure.json`,
+SHA-256 `277a2f63fe13b41bc83ab43e528355d86dda00efba753c160b4314c9235032ed`.
+It links the independent validation, environment and observer proofs, all 340
+cost-child records and full values in every domain. No production code, font/
+Unicode asset, dependency pin, golden or old test changed. These are bounded
+current-package observations, not the earlier prototype runs, final-source
+distribution certification or an 800/300/80 budget certificate.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Repository-wide test-budget review identified excess module-integration coverage;
 the limits have not been certified. Test deduplication remains a final closure
 task after the complete planned interface is implemented, rather than blocking
 the remaining implementation stages. Overall plan acceptance is not complete;
-overall cost, final-source distribution and test-budget acceptance is not yet certified.
+overall final-source distribution and test-budget acceptance is not yet certified.
 
 The selected scientific API, exact typing and real layer/result consumers are
 implemented. The scientific-source distribution and complete peer content/gallery
-gates above are verified. Same-source cost observations and final-source
-distribution refresh remain, followed by last-stage test deduplication and
+gates and bounded same-source cost observations above are verified. Final-source
+distribution refresh remains, followed by last-stage test deduplication and
 unchanged-budget certification. These bounded closures are not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
