@@ -586,17 +586,31 @@ input route, cross-adapter dependency or another renderer.
 #### Current Native Label Policy Access
 
 The planned Python key codec must preserve the sole native label policy when
-adding a default display for a genuinely new bound key. Each adapter therefore
-needs the narrow borrowed reader
-`PlotAdapter::get_labels(&self) -> &Labels` over its existing policy cache.
-The core needs `Labels::get_aliases(&self) ->
+adding a default display for a genuinely new bound key. The required borrowed
+reader is `Plot<K>::get_labels(&self) -> &Labels`, delegating to the existing
+private PlotDescription policy reader. Rename that private reader and migrate
+its internal callers; do not expose PlotDescription or keep a compatibility name.
+This also covers a core-origin Plot without adapter metadata. Do not add unused
+adapter readers merely for symmetry. The core also needs `Labels::get_aliases(&self) ->
 Option<impl ExactSizeIterator<Item = (&str, &str)> + '_>`. Reuse that iterator to
 test exact alias presence; do not add a parallel point reader or shadow map.
 Deliver these readers with the actual key-codec or immutable PyLabels consumer,
 not as unused APIs in the projection implementation.
 
+The selected immutable Python `Labels(*, mode="humanized", aliases=None)` holds
+only the native policy. Its read-only mode and aliases and complete-replacement
+`copy_with` use `Labels::is_humanized(&self) -> bool` and the same aliases reader;
+omission preserves a field, aliases=None clears it. Modes are the closed
+`humanized`/`raw` choices and aliases are string pairs. Rebuild through the native
+factories without retaining a Python map; preserve native last-write-wins and
+BTreeMap inspection order. Explicit `resolve(raw)` delegates to the existing
+native method; ordinary inspection/copy must not resolve or validate display text.
+Deliver Python `Plot.labels(Labels)` and `Canvas.labels(Labels)` with this consumer.
+Core-origin Plot and Canvas forward natively; ndarray/Polars-origin Plot restores
+its matching adapter before replacement and splitting.
+
 Clone the current native policy only for the candidate edit and apply it through
-the adapter's existing `.labels(...)` method. Preserve the mode, unrelated aliases
+the core or matching adapter's existing `.labels(...)` method. Preserve the mode, unrelated aliases
 and explicit aliases even when they equal the fallback text. Add defaults only
 for newly bound identities; source reordering or complete policy replacement
 must not resurrect old defaults from key bookkeeping. Reading aliases does not
@@ -989,6 +1003,43 @@ whole-table snapshot under concurrent source mutation.
 For a new complete dataset, reconstruct the Plot explicitly rather than expect
 automatic refresh or add an unselected general data-rebinding API.
 
+#### Exact-Family Input Ownership And Error Timing
+
+The implementation target retains one native Plot plus its construction origin
+in each exact-family configuration version: Core (no adapter metadata), ndarray
+metadata or Polars metadata. Store the pair together inside the existing native
+Arc version; do not retain an adapter, foreign buffer or Python reference there.
+Later argument containers do not switch origin. Expansion/grid bindings use the
+origin's existing repetition, alignment and shape algorithms, not pre-expanded
+native payloads that bypass them.
+
+The existing native list/tuple one-variable Scatter remains on its original core
+path: extract x, then y, then optional hue, construct the native Plot, and leave
+cross-column alignment to native preflight. Its hue setter likewise retains its
+existing delayed alignment. Do not replace it with an adapter constructor that
+rejects length mismatches earlier, or try one constructor and fall back after a
+validation error. New source/expanded/grid forms use the selected adapters.
+Core-origin foreign roles reuse the existing role extractors before core
+attachment, without duplicating scientific checks.
+
+For foreign work depending on owner/source/key state, capture the native/origin
+version and real Python source/key references before lookup or conversion can
+reenter Python. Plain P1 input conversion with no consumed owner state may still
+finish before capturing the current version, preserving its existing update path.
+Build candidate data, key
+bookkeeping and the matching Plot/metadata pair outside owner borrows. Commit
+only if the expected native version is still current; stale work must fail
+without overwriting a reentrant edit or automatically retrying user code.
+Labels/facet edits affecting adapter caches restore and edit the matching adapter
+before splitting again.
+
+Source and original-key bookkeeping are separate physical Python GC edges, not a
+second label store or hidden references inside Rust Arc payloads. Copies own
+their actual references. Clear/replacement and failed candidates release Python
+references only after PyO3 borrows/locks end. Canvas captures only the native
+configuration and its existing callback roots, not the source owner/key registry.
+Render operation pins and frozen Output retain their existing distinct lifetimes.
+
 ### Input Bridges And Compatible Dependencies
 
 The four supported input classes use different boundary conversions, not different
@@ -1068,24 +1119,52 @@ pandas-to-Polars conversions can preserve the tested values, but their defaults
 can turn ordinary NaNs into nulls. Reject those defaults as an implicit universal
 route, not the libraries as inherently lossy.
 
-Python Polars is not a Rust ABI object. Prefer reuse of the Polars adapter, while
-comparing the official [pyo3-polars bridge][pyo3-polars-types] with direct
-[Arrow PyCapsule][arrow-capsules] import for the native boundary. Published
-pyo3-polars 0.28 uses Polars' SeriesExport FFI, not a PyArrow conversion; capsule
-export likewise does not require the PyArrow Python package. Verify compatibility,
-logical types/schema metadata, dependency footprint, reference/release safety and
-adapter reuse before selecting one route, without fallback chains. Arrow exchange
-does not by itself guarantee zero-copy conversion. A generic PyArrow consumer's
-rejection of Polars' 128-bit formats does not disqualify a polars-arrow importer
-that recognizes them; the actual Rust import still needs testing.
+Python Polars is not a Rust ABI object. The selected implementation target uses
+its public Series `__arrow_c_stream__()` and the matching polars-arrow
+`ArrowArrayStreamReader`, then the safe Field-aware
+`Series::try_from((&field, chunks))`. Preserve complete Field metadata, including
+Categorical/Enum meaning; do not use a name-only conversion that discards it.
+This requires no PyArrow or private writable-pointer export fallback. The
+official [pyo3-polars bridge][pyo3-polars-types] remains reference evidence, not a
+second route or Rust ABI cast.
+
+Only genuinely bound Series are exported. Keep original rows and the complete
+names namespace separate from imported Columns through the working projection.
+For discovery, map supported concrete Python primitive dtype variants to actual
+native DataTypes and their shared primitive predicate; after import verify logical
+dtype fidelity and shared native discovery. Do not convert unused fields, invent
+placeholder dtypes, strip extensions to physical storage or filter an imported
+mismatch out of the result.
+
+Collect Python metadata before a capsule pointer loan. The private binding seam
+checks the `arrow_array_stream` capsule name and borrows its stream uniquely while
+the local capsule reference stays alive. In that lexical loan, perform only Rust
+work: no arbitrary Python/reentry, owner borrow, detach or worker access. Return
+an explicit Rust Result; end the reader loan before capsule DECREF or Python error
+conversion. The capsule owns stream release; imported schema/arrays own their
+distinct release obligations. Do not move the capsule's Box or manually mirror
+its C layout. Arrays are call-local conversion scratch, never native Plot state.
+
+Guard Arrow logical Field/metadata before reading chunks or invoking unsupported
+Polars conversions; dictionary/string shape alone does not validate categorical
+metadata parsers containing infallible assumptions. A conforming genuine eager
+producer is a safety precondition, not something proved by the GIL or capsule
+name. Validate actual binary release behavior, 128-bit private format codes,
+Float16, Enum/named Categorical metadata, chunks/offsets and typed empty streams.
+No static interface match proves this compatibility or zero-copy behavior.
 
 Choose a compatible dependency set, not independently latest package versions.
 Published [pyo3-polars 0.28.0 dependencies][bridge-dependencies] require PyO3 0.29
 and Polars 0.55; [numpy 0.29.0 dependencies][numpy-dependencies] also use PyO3 0.29
-and admit ndarray 0.17. Start from PyO3 0.29 / rust-numpy 0.29 / ndarray 0.17 as the
-tested minimal-extension baseline. The Polars bridge remains manifest-compatible
-candidate evidence, not compiled/runtime verification. Final exact pins and Python
-dependency bounds belong to the working binding, not speculative workspace edits.
+and admit ndarray 0.17. The next binding dependency target is PyO3 0.29.2 /
+rust-numpy 0.29.0 / ndarray 0.17.2 and polars-core/polars-arrow 0.55.2, using the
+existing adapter members. Add direct bridge dependencies only to the binding,
+with shared exact pins and no new Polars features or reverse core dependency.
+Use an ordinary offline lock update and verify preserved third-party pins; no
+asset provisioning or downloads follow. The expanded source closure needs a new
+independent sdist build/install verification. Actual bridge runtime compatibility
+and final Python dependency bounds remain working-implementation gates, not
+consequences of this target record.
 
 ### Python 3.10 And Distribution Verification
 
