@@ -6,8 +6,6 @@ use lichtung_plot::{
 
 #[path = "../support/composition.rs"]
 mod support;
-#[path = "../support/visual.rs"]
-mod visual;
 use support::*;
 
 mod connectors;

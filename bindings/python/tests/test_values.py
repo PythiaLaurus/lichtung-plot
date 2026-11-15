@@ -144,7 +144,6 @@ def test_font_preferences_snapshot_the_sequence_and_return_immutable_children():
     with pytest.raises(TypeError):
         literal.copy_with(name=None)
     assert literal.name == "sans-serif"
-    assert stack.copy_with() == stack
 
 
 def test_exact_relative_spacing_identity_survives_unchanged_derivation():

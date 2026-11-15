@@ -79,29 +79,7 @@ pub(super) struct SvgRect {
 pub(super) struct SvgTextElement {
     pub(super) x: f64,
     pub(super) y: f64,
-    pub(super) font_size: f64,
     pub(super) content: String,
-}
-
-impl SvgRect {
-    pub(super) fn intersects(self, other: Self) -> bool {
-        self.x < other.x + other.width
-            && self.x + self.width > other.x
-            && self.y < other.y + other.height
-            && self.y + self.height > other.y
-    }
-
-    pub(super) fn contains(self, other: Self) -> bool {
-        other.x >= self.x
-            && other.x + other.width <= self.x + self.width
-            && other.y >= self.y
-            && other.y + other.height <= self.y + self.height
-    }
-}
-
-pub(super) fn parse_legend_rect(svg: &str) -> (f64, f64, f64, f64) {
-    let (rect, _) = parse_legend_rect_and_start(svg);
-    (rect.x, rect.y, rect.width, rect.height)
 }
 
 pub(super) fn parse_first_clip_rect(svg: &str) -> SvgRect {
@@ -124,40 +102,6 @@ pub(super) fn parse_first_clip_rect(svg: &str) -> SvgRect {
     }
 }
 
-pub(super) fn parse_legend_svg_rect(svg: &str) -> SvgRect {
-    parse_legend_rect_and_start(svg).0
-}
-
-pub(super) fn has_legend(svg: &str) -> bool {
-    svg.contains("<g id=\"legend\">")
-}
-
-pub(super) fn parse_legend_rect_and_start(svg: &str) -> (SvgRect, usize) {
-    let mut search_offset = 0;
-    while let Some(relative_start) = svg[search_offset..].find("<rect x=\"") {
-        let start = search_offset + relative_start;
-        let tag_end = start
-            + svg[start..]
-                .find("/>")
-                .expect("legend rect tag should be closed")
-            + 2;
-        let tag = &svg[start..tag_end];
-        if tag.contains("fill-opacity=\"0.8\"") && tag.contains("stroke=\"#C8C8C8\"") {
-            return (
-                SvgRect {
-                    x: parse_svg_attr(tag, "x"),
-                    y: parse_svg_attr(tag, "y"),
-                    width: parse_svg_attr(tag, "width"),
-                    height: parse_svg_attr(tag, "height"),
-                },
-                start,
-            );
-        }
-        search_offset = tag_end;
-    }
-    panic!("legend background rect");
-}
-
 pub(super) fn parse_svg_attr(tag: &str, attr: &str) -> f64 {
     let needle = format!("{attr}=\"");
     let (_, rest) = tag.split_once(&needle).expect("svg attr exists");
@@ -174,88 +118,10 @@ pub(super) fn parse_text_elements(svg: &str) -> Vec<SvgTextElement> {
             Some(SvgTextElement {
                 x: parse_svg_attr(attrs, "x"),
                 y: parse_svg_attr(attrs, "y"),
-                font_size: parse_svg_attr(attrs, "font-size"),
                 content: content.to_string(),
             })
         })
         .collect()
-}
-
-pub(super) fn numeric_text_values<'a>(text: impl Iterator<Item = &'a SvgTextElement>) -> Vec<f64> {
-    text.filter_map(|entry| entry.content.parse::<f64>().ok())
-        .collect()
-}
-
-pub(super) fn text_element<'a>(text: &'a [SvgTextElement], content: &str) -> &'a SvgTextElement {
-    text.iter()
-        .find(|entry| entry.content == content)
-        .unwrap_or_else(|| panic!("text element {content:?} should exist"))
-}
-
-pub(super) fn text_y(text: &[SvgTextElement], content: &str) -> f64 {
-    text_element(text, content).y
-}
-
-pub(super) fn assert_legend_does_not_overlap_graphics(svg: &str, plot_type: &str) {
-    let (legend_rect, legend_start) = parse_legend_rect_and_start(svg);
-    let graphic_layer = remove_named_layer(&svg[..legend_start], "grid");
-    let graphic_bounds = parse_graphic_bounds(&graphic_layer);
-    assert!(
-        !graphic_bounds.is_empty(),
-        "{plot_type} overlap test should detect rendered graphic marks before the legend"
-    );
-    let overlaps: Vec<SvgRect> = graphic_bounds
-        .into_iter()
-        .filter(|bounds| bounds.intersects(legend_rect))
-        .collect();
-    assert!(
-        overlaps.is_empty(),
-        "{plot_type} legend should not cover graphic marks; legend={legend_rect:?}, overlaps={overlaps:?}"
-    );
-}
-
-pub(super) fn assert_inside_legend_clear(svg: &str, panel: SvgRect, plot_type: &str) {
-    let (legend_rect, _) = parse_legend_rect_and_start(svg);
-    assert!(
-        panel.contains(legend_rect),
-        "{plot_type} inside legend should stay within target axes; panel={panel:?}, legend={legend_rect:?}"
-    );
-    assert_legend_does_not_overlap_graphics(svg, plot_type);
-}
-
-pub(super) fn assert_outside_legend_clear(svg: &str, panel: SvgRect, plot_type: &str) {
-    let (legend, _) = parse_legend_rect_and_start(svg);
-    let root = SvgRect {
-        x: 0.0,
-        y: 0.0,
-        width: parse_svg_attr(svg, "width"),
-        height: parse_svg_attr(svg, "height"),
-    };
-    assert!(
-        root.contains(legend),
-        "{plot_type} guide must fit the root: {legend:?}"
-    );
-    assert!(
-        !panel.intersects(legend),
-        "{plot_type} automatic guide must be outside the data panel: {legend:?}"
-    );
-    assert_legend_does_not_overlap_graphics(svg, plot_type);
-}
-
-pub(super) fn remove_named_layer(svg: &str, layer: &str) -> String {
-    let open = format!("<g id=\"{layer}\">\n");
-    let Some(start) = svg.find(&open) else {
-        return svg.to_string();
-    };
-    let content_start = start + open.len();
-    let Some(relative_end) = svg[content_start..].find("</g>\n") else {
-        return svg.to_string();
-    };
-    let end = content_start + relative_end + "</g>\n".len();
-    let mut cleaned = String::with_capacity(svg.len() - (end - start));
-    cleaned.push_str(&svg[..start]);
-    cleaned.push_str(&svg[end..]);
-    cleaned
 }
 
 pub(super) fn remove_legend_layers(svg: &str) -> String {
@@ -371,18 +237,4 @@ pub(super) fn parse_circles(svg: &str) -> Vec<(f64, f64)> {
             Some((cx.parse::<f64>().ok()?, cy.parse::<f64>().ok()?))
         })
         .collect()
-}
-
-pub(super) fn circle_bounds(circles: &[(f64, f64)]) -> (f64, f64, f64, f64) {
-    circles.iter().fold(
-        (
-            f64::INFINITY,
-            f64::NEG_INFINITY,
-            f64::INFINITY,
-            f64::NEG_INFINITY,
-        ),
-        |(min_x, max_x, min_y, max_y), (x, y)| {
-            (min_x.min(*x), max_x.max(*x), min_y.min(*y), max_y.max(*y))
-        },
-    )
 }

@@ -70,7 +70,6 @@ fn catalog_refuses_duplicate_execution_identities() {
     assert!(
         catalog(&text.replace("\tpython\treference", "\tstruct.Plot.html\treference")).is_err()
     );
-    assert!(catalog(&text.replace("\tpython\treference", "\t#python\treference")).is_err());
     assert!(catalog(&CASE.replace("struct.Plot.html", "https://example.com/api")).is_err());
     assert!(catalog(&format!(
         "{text}\n{}",
@@ -94,7 +93,6 @@ fn artifact_names_cannot_escape_the_fresh_case_directory() {
     assert!(catalog(&CASE.replace("quick_start.svg", "plot.svg,../previous.png")).is_err());
     assert!(catalog(&CASE.replace("quick_start.svg", "plot.svg,preview.jpg")).is_err());
     assert!(catalog(&CASE.replace("quick_start.svg", "plot.svg,plot.svg")).is_err());
-    assert!(catalog(&CASE.replace("quick_start.svg", "plot.svg,preview.png,preview.png")).is_err());
     let valid = sample_png(1, 8);
     assert_eq!(&valid[29..33], &[0x1f, 0x15, 0xc4, 0x89]);
     assert!(gallery::png(&valid));

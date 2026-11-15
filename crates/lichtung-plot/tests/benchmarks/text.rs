@@ -1,5 +1,4 @@
-use super::annotations::summarize_local;
-use super::{measure_case, measure_pair, CaseMeasurement};
+use super::{measure_case, CaseMeasurement};
 use crate::orchestrator::measurements::{self, Counter};
 use crate::{CategoryValues, NumericValues, Plot};
 use std::time::{Duration, Instant};
@@ -330,79 +329,4 @@ fn specialized_text_search_contract() {
         long.observations.counters[Counter::MatrixLayoutPass as usize]
             > short.observations.counters[Counter::MatrixLayoutPass as usize]
     );
-}
-
-#[test]
-#[ignore = "release local search; run with --release --ignored --nocapture --test-threads=1"]
-fn specialized_text_search_measurements() {
-    assert!(
-        !std::hint::black_box(cfg!(debug_assertions)),
-        "requires --release"
-    );
-    for long in [false, true] {
-        measure_pair(
-            if long {
-                ["heatmap_long_wrap", "heatmap_long_elide"]
-            } else {
-                ["heatmap_short_wrap", "heatmap_short_elide"]
-            },
-            [&|| heatmap_case(long, true, false), &|| {
-                heatmap_case(long, false, false)
-            }],
-        );
-    }
-    measure_pair(
-        [
-            "heatmap_shared_prefix_wrap",
-            "heatmap_shared_prefix_elide_rejected",
-        ],
-        [&|| heatmap_case(true, true, true), &|| {
-            heatmap_case(true, false, true)
-        }],
-    );
-    for size in [1200, 600] {
-        let samples = measure_pair(
-            if size == 600 {
-                ["matrix_tight_short", "matrix_tight_long"]
-            } else {
-                ["matrix_adequate_short", "matrix_adequate_long"]
-            },
-            [&|| matrix_case(false, size), &|| matrix_case(true, size)],
-        );
-        for [short, long] in samples {
-            if size == 600 {
-                assert!(
-                    long.observations.counters[Counter::MatrixLayoutPass as usize]
-                        > short.observations.counters[Counter::MatrixLayoutPass as usize]
-                );
-            }
-        }
-    }
-}
-
-#[test]
-#[ignore = "release local search; run with --release --ignored --nocapture --test-threads=1"]
-fn paragraph_search_measurements() {
-    assert!(
-        !std::hint::black_box(cfg!(debug_assertions)),
-        "requires --release"
-    );
-    println!(
-        "conditions,paragraph,320px,font_setup_excluded,three_runs,two_calls_per_theme,OS_cache_uncontrolled"
-    );
-    let samples: [[[Duration; 2]; 2]; 3] = std::array::from_fn(|run| {
-        println!("paragraph_run,{run}");
-        if run % 2 == 0 {
-            let multiline = paragraph_case(true);
-            [paragraph_case(false), multiline]
-        } else {
-            [paragraph_case(false), paragraph_case(true)]
-        }
-    });
-    for (index, name) in ["paragraph_short", "paragraph_multiline"]
-        .into_iter()
-        .enumerate()
-    {
-        summarize_local(name, samples.map(|sample| sample[index]));
-    }
 }

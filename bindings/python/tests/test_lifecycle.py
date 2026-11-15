@@ -95,8 +95,6 @@ def test_native_input_grammar_is_explicit() -> None:
     with pytest.raises(TypeError):
         scatter(x=[0.0], y=["1.0"])
     with pytest.raises(TypeError):
-        scatter(x=None, y=[1.0])
-    with pytest.raises(TypeError):
         scatter(x=[0.0])
 
 

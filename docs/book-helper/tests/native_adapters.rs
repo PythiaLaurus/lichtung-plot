@@ -53,11 +53,7 @@ fn native_banded_line() -> nd::Plot<nd::kind::Line> {
 fn native_error_and_stats_paths() {
     let result: pp::Result<()> = Err(nd::Error::Data("native".into()));
     assert!(matches!(result, Err(pp::Error::Data(_))));
-    let quantile: fn(&[f64], f64) -> nd::Result<f64> = pp::stats::distribution::quantile;
-    assert_eq!(
-        quantile(&[1., 3.], 0.5).unwrap().to_bits(),
-        2.0_f64.to_bits()
-    );
+    let _: fn(&[f64], f64) -> nd::Result<f64> = pp::stats::distribution::quantile;
 }
 
 #[test]

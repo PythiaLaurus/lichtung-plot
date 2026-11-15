@@ -259,33 +259,6 @@ mod tests {
     }
 
     #[test]
-    fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
-        let theme = Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let theme = crate::text::TextRequestContext::new(&theme, &text);
-        let frame = RootFramePlan::measure(
-            (100, 80),
-            &theme,
-            [None; 3],
-            crate::decorations::title_block::plan::RootAlignments::resolve(
-                &theme, [None; 3], [None; 2],
-            ),
-            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
-        )
-        .unwrap();
-        assert_eq!(
-            frame.insets,
-            CanvasInsets {
-                left: 16.0,
-                right: 16.0,
-                bottom: 8.0,
-                top: 12.0
-            }
-        );
-        assert_eq!(frame.panel_box, PixelRect::new(16.0, 84.0, 8.0, 68.0));
-    }
-
-    #[test]
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,

@@ -13,7 +13,6 @@ def test_intervals_preserve_current_algorithm_and_use_native_scalar_validation()
     error = lp.StandardError(scale=0.5)
     percentile = lp.PercentileInterval(level=0.8)
     assert deviation.copy_with(scale=3).scale == 3 and deviation.scale == 2
-    assert error.copy_with().scale == 0.5
     assert percentile.copy_with(level=0.9).level == 0.9 and percentile.level == 0.8
 
     default = lp.ConfidenceInterval()

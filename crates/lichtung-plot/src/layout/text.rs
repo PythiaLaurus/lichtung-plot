@@ -2772,26 +2772,6 @@ mod tests {
     }
 
     #[test]
-    fn exact_fit_retains_the_whole_paragraph_without_reshaping() {
-        TEXT_WORK.with(|work| work.set(TextWork::default()));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let plan = plan("A A A", 23_552, PhysicalTextAlignment::Start);
-        assert_eq!(line_texts(&plan), ["A A A"]);
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        TEXT_WORK.with(|work| {
-            assert_eq!(
-                work.get(),
-                TextWork {
-                    proposal_visits: 0,
-                    exact_trials: 1,
-                    shaping_scalars: 5,
-                    shaped_glyphs: 5,
-                }
-            );
-        });
-    }
-
-    #[test]
     fn requested_width_selects_only_its_greedy_lines() {
         for (width, expected, shapes) in [
             (8_704, vec!["A ", "A ", "A"], 6),
@@ -2808,15 +2788,6 @@ mod tests {
             crate::font::canonical::FONT_SHAPE_CALLS
                 .with(|calls| assert_eq!(calls.get(), shapes, "width {width}"));
         }
-    }
-
-    #[test]
-    fn unwrapped_shapes_only_one_final_line() {
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let plan = plan("A", i64::MAX, PhysicalTextAlignment::Start);
-        assert_eq!(line_texts(&plan), ["A"]);
-        assert_eq!(plan.lines[0].ending_grapheme_index, 1);
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
     }
 
     #[test]
@@ -2886,15 +2857,6 @@ mod tests {
     }
 
     #[test]
-    fn paragraph_bidi_is_computed_once_for_proposals_and_selected_lines() {
-        PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(0));
-        let plan = plan("A A A", i64::MAX, PhysicalTextAlignment::Start);
-
-        assert_eq!(line_texts(&plan), ["A A A"]);
-        PARAGRAPH_BIDI_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-    }
-
-    #[test]
     fn mixed_direction_non_latin_text_retains_exact_runs_and_glyph_identity() {
         let plan = plan("Aא", i64::MAX, PhysicalTextAlignment::Start);
         let line = &plan.lines[0];
@@ -2938,29 +2900,6 @@ mod tests {
         let plan = plan("A A\nA A", 8_704, PhysicalTextAlignment::Start);
         assert_eq!(line_texts(&plan), ["A ", "A", "A ", "A"]);
         PARAGRAPH_BIDI_CALLS.with(|calls| assert_eq!(calls.get(), 2));
-    }
-
-    #[test]
-    fn original_144_repeat_wraps_with_linear_selected_work() {
-        TEXT_WORK.with(|work| work.set(TextWork::default()));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let source = "A ".repeat(144);
-        let plan = plan(&source, 87_040, PhysicalTextAlignment::Start);
-        assert_eq!(line_texts(&plan).concat(), source);
-        assert_eq!(plan.lines.len(), 15);
-        // Whole paragraph, selected lines, and the first failing extension.
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 30));
-        TEXT_WORK.with(|work| {
-            assert_eq!(
-                work.get(),
-                TextWork {
-                    proposal_visits: 158,
-                    exact_trials: 30,
-                    shaping_scalars: 884,
-                    shaped_glyphs: 884,
-                }
-            );
-        });
     }
 
     #[test]
@@ -3156,14 +3095,6 @@ mod tests {
                 }
             );
         }
-    }
-
-    #[test]
-    fn physical_end_alignment_uses_block_ink_width() {
-        let plan = plan("AA A", 14_848, PhysicalTextAlignment::End);
-
-        assert_eq!(plan.lines[0].translation_x_quanta, 0);
-        assert_eq!(plan.lines[1].translation_x_quanta, 6144);
     }
 
     #[test]

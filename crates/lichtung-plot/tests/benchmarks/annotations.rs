@@ -96,45 +96,9 @@ fn significance_case(count: usize) -> [Duration; 2] {
     .unwrap()
 }
 
-pub(super) fn summarize_local(name: &str, samples: [[Duration; 2]; 3]) {
-    for (repeat, phase) in ["first", "cached_repeat"].into_iter().enumerate() {
-        let mut values = samples.map(|sample| sample[repeat]);
-        values.sort_unstable();
-        println!(
-            "local_summary,{name},{phase},samples={},min_ms={:.6},median_ms={:.6},max_ms={:.6}",
-            values.len(),
-            values[0].as_secs_f64() * 1000.0,
-            values[1].as_secs_f64() * 1000.0,
-            values[2].as_secs_f64() * 1000.0,
-        );
-    }
-}
-
 #[test]
 fn significance_search_contract() {
     significance_case(4);
     measurements::start();
     assert_eq!(measurements::finish().counters, [0; Counter::ALL.len()]);
-}
-
-#[test]
-#[ignore = "release local search; run with --release --ignored --nocapture --test-threads=1"]
-fn significance_search_measurements() {
-    assert!(
-        !std::hint::black_box(cfg!(debug_assertions)),
-        "requires --release"
-    );
-    println!(
-        "conditions,significance,direct_planner,800x600_panel,font_setup_excluded,three_runs,two_calls_per_theme,OS_cache_uncontrolled"
-    );
-    let samples: [[[Duration; 2]; 3]; 3] = std::array::from_fn(|run| {
-        println!("significance_run,{run}");
-        [1, 4, 8].map(significance_case)
-    });
-    for (index, count) in [1, 4, 8].into_iter().enumerate() {
-        summarize_local(
-            &format!("significance_{count}"),
-            samples.map(|sample| sample[index]),
-        );
-    }
 }

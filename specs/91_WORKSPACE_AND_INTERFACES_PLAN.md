@@ -30,7 +30,9 @@ values, text-entry/omission/clear/precedence rules and object-lifecycle semantic
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
 surface recorded below with bounded installed verification; final acceptance
-still requires final test deduplication and unchanged-budget certification.
+is blocked by the unchanged test budgets. Reviewed redundant-test cleanup has
+passed focused verification; its changed packaged bytes still require a new
+independent source-distribution gate.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
@@ -46,7 +48,9 @@ entries, independent point layers and significance results are implemented.
 The recorded Linux source-distribution gate, complete peer content/gallery
 and same-source cost observations are verified below. The post-content source
 distribution also passed a new independent build/install/runtime gate. Last-stage
-test deduplication/unchanged-budget certification remains open.
+reviewed test cleanup is verified below, but conservative reviewed counts already
+exceed all three unchanged limits. Whole-workspace exact counts remain unresolved;
+post-cleanup source-distribution refresh is still required.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -63,13 +67,14 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Peer content/gallery, same-source costs and the post-content source distribution's actual independent build/install/runtime are complete. Final test deduplication and unchanged-budget checks remain open. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Peer content/gallery, same-source costs and the recorded post-content distribution are complete. Reviewed test cleanup passed focused verification; unchanged budgets fail and changed packaged tests require another actual source gate. |
 | Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix evidence; all-family constructors, geometry and edits have focused wheel evidence below. The post-content source archive also passed its own installed runtime tests, without repeating the whole transport/provider matrix. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
-| Integrated content/package/site closure | Current native archives include all six new core examples/support and passed independent Cargo verification. Complete peer guides/gallery passed source, semantic, execution and actual image review. Current production-source costs were observed on CPython3.10/3.13 with separate timing, allocation and independent peak processes. A newly produced 575-file post-content Python sdist passed actual independent build/install, 188 archived runtime cases and its revised four-input example. Final test deduplication and unchanged-budget certification remain open; later packaged-source changes require another real distribution refresh. No publication or deployment was performed. |
+| Integrated content/package/site closure | Recorded native archives include all six new core examples/support and passed independent Cargo verification. Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The recorded 575-file post-content Python sdist passed actual independent build/install, 188 archived runtime cases and its revised four-input example. Subsequent packaged test cleanup is not covered by that archive: another real distribution gate remains required. No publication or deployment was performed. |
+| Reviewed test cleanup and unchanged budgets | Thirteen redundant Rust drivers, thirteen Python parameter cases, duplicate checks and dead test support were removed with concrete retained witnesses and independent patch review. Focused behavior, formatting and strict workspace/all-target Clippy passed. Reviewed lower bounds are already at least 805 unit / 588 module / 81 E2E against unchanged 800/300/80 limits: FAIL, not a complete exact census or overall acceptance. |
 
 ### Current Python Implementation Scope
 
@@ -648,25 +653,104 @@ SHA-256 `9b20fc29ea237472e0e3cb07fa1f49e94bc0731e3f281e0f00160f8724f798fe`.
 It links the actual producer/build/install/runtime records and identities.
 This closes the recorded post-content source gate on Linux/CPython3.10, not a
 new typing/stubtest, stdlib-only, platform/provider matrix or budget certificate.
-Final redundant-test cleanup and unchanged-budget certification still remain.
-If cleanup changes packaged sources or tests, this archive cannot certify those
-later bytes: another genuinely new source archive/build/install/runtime is required.
+This archive precedes the test cleanup below and cannot certify those later
+packaged bytes. Another genuinely new source archive/build/install/runtime
+is required.
+
+### Reviewed Test Cleanup And Failed Budget Gate
+
+Only after the planned interface, content/gallery, cost observations and the
+post-content source gate were committed at `ff91d18` did test cleanup begin.
+Each removal has concrete retained coverage and independent source/patch review.
+Six repeated ignored measurement drivers and seven internal default-coordinate,
+search-trace or getter-inventory drivers were removed, together with genuinely
+dead local helpers and one test-only numeric diagnostic accessor. Three duplicate
+Book checks and the old duplicate Python `None` refusal were removed. Public
+Polars dispatch retains one real Float64 stream consumer and categorical-U8/Enum
+consumers rather than repeating every importer dtype/physical width. All thirteen
+native dtype/value/missing-shape witnesses and native U16 namespace/width/decoded
+rows remain. Two no-op copy echoes were removed without scenario credit.
+Unused visual-support functions, an unread field and an unused module include
+were also removed without scenario credit; live parsers and transitive helpers
+remain.
+
+The independently reviewed removal is **15 unit / 44 module / 9 E2E contracts**,
+not merely thirteen fewer Rust function names. No independent cases were hidden
+in loops, merged functions, parameter wrappers or responsibility relabeling.
+No scientific behavior, error ordering, callback/font/cache/publication policy,
+public API, dependency pin, font/Unicode asset or golden changed. All 25-family
+scientific views, bilingual prose, observations and captions remain intact.
+Raw source inventory is now 1,087 Rust test definitions, including nine ignored
+and three Windows-only definitions, and 147 Python runtime functions with 175
+parameter cases. These are source counts, not a claim that a new full runtime
+invocation has already passed.
+
+Actual focused verification first passed 54 Rust tests and eight isolated,
+installed-wheel Python cases. It selected real Polars-enabled native witnesses
+for all thirteen dtypes and U16 categorical fidelity, plus the existing complete
+TextLayout copy consumers. The first strict Clippy run failed on two unused
+parent-test imports, the now-unconsumed test-only diagnostic accessor and a
+no-effect named underscore function-pointer binding. Its failure is preserved.
+Only those support issues were repaired; the typed cross-adapter stats reexport
+still has an explicit anonymous function-pointer coercion. Four relevant Rust
+checks were then run, not the successful whole selection again. Across both
+invocations, 55 distinct Rust test functions passed; two retained expensive
+benchmark diagnostics remained ignored and still count toward the budget.
+Formatting and the exact
+`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`
+both passed. No full Rust behavior suite, Rustdoc suite, gallery, cost or new
+typing/stubtest matrix was rerun. The focused Python wheel is earlier verified
+installed production code, not post-cleanup source-distribution certification.
+
+The following disjoint, independently reviewed subsets already prove failure;
+they are **conservative lower bounds, not whole-workspace exact totals**:
+
+| Included reviewed subset | Unit | Module | Core E2E |
+| --- | ---: | ---: | ---: |
+| Core external tests after removal | 23 | 533 | 34 |
+| Book/helper/gallery after removal | 37 | 46 | 47 |
+| Rustdoc contracts | 149 | 9 | 0 |
+| Corrected static typing contracts | 539 | 0 | 0 |
+| Unchanged scalar distribution-statistics subset | 57 | 0 | 0 |
+| **Reviewed lower bound** | **805** | **588** | **81** |
+| **Unchanged upper limit** | **800** | **300** | **80** |
+| **Budget disposition** | **FAIL** | **FAIL** | **FAIL** |
+
+The remaining 626 internal-function expansions, recursive runtime signature/member
+census and unsigned ordinary-binding exact subtotal are explicitly unresolved,
+not zero. Counting corrections are not deletion savings; no source declaration
+inventory or repeated interpreter run was added as an automatic test multiplier.
+Safe reviewed removals do not close the budget gap, and unique scientific,
+error/lifecycle, Unicode, independent numeric or gallery contracts were not
+discarded to force a pass.
+
+The actual focused verification audit is
+`/tmp/opencode/lichtung-test-cleanup1/cleanup-verification.json`,
+SHA-256 `4de8e052d36cb39e858aea5bff4fa9c51a83f615e62c1bafe656877b3945f25b`.
+The reviewed lower-bound audit is
+`/tmp/opencode/lichtung-test-cleanup1/post-cleanup-counts.json`,
+SHA-256 `214bb67c711978bc0b4c757e02abaf1df2f6fcdca210b85059dea80f139e63b0`.
+Both preserve baseline and changed-source identities, exact scope and unresolved
+items. The verification audit also links the actual initial Clippy failure and
+successful narrow repair; neither receipt is replaced by a synthesized pass.
+Before current-source distribution acceptance, these packaged test changes still
+require newly verified native archives excluding Book, a genuinely new full
+Python sdist, independent unpacking, an actual fresh-target release build and
+fresh-prefix installation/runtime of that archive's own tests. Neither the old
+575-file archive nor the focused installed-wheel run substitutes for that chain.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
-Repository-wide test-budget review identified excess module-integration coverage;
-the limits have not been certified. Test deduplication remains a final closure
-task now that the planned interface, content, cost and post-content distribution
-deliveries are complete. Overall plan acceptance remains open until genuine
-redundant-test cleanup and unchanged-budget certification are complete.
+Reviewed test deduplication is verified within its stated scope. Unchanged budget
+acceptance has failed in every layer, and full exact semantic counting remains
+unresolved. Overall plan acceptance is not complete.
 
 The selected scientific API, exact typing and real layer/result consumers are
 implemented. The scientific-source distribution and complete peer content/gallery
 gates and bounded same-source cost observations above are verified. Final-source
-distribution for the recorded post-content source is verified too. The next step
-is last-stage test deduplication and unchanged-budget certification, refreshing
-the distribution again if packaged sources change. These bounded closures are
-not overall plan closure.
+distribution for the recorded post-content source is verified too. The next
+required gate is a genuinely new post-cleanup distribution; the failed budget
+gate remains separate. These bounded closures are not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints
