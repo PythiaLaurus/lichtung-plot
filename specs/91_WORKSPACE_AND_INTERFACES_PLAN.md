@@ -18,9 +18,9 @@ example and gallery foundation covers existing Rust capabilities. Both ndarray
 and Polars now expose complete direct plotting frontends and unchanged native
 re-exports, including wide/grid bindings, independent layers and scientific result
 tables. Workspace checks, joint offline archives, cross-adapter consumers and
-rebuilt peer guides have passed. Python implementation is authorized to proceed but
-remains undelivered; no binding package code exists yet. Package publication, site
-deployment, Git push and history rewriting are not authorized by this work.
+rebuilt peer guides have passed. Python package code now exists; its bounded
+verification and remaining delivery gates are recorded below. Package publication,
+site deployment, Git push and history rewriting are not authorized by this work.
 
 Python architecture, the four input routes, constructor/binding/explicit-selector
 rules, one-runtime-entry/overload-signature model, explicit row-position/column-name
@@ -28,15 +28,16 @@ modes and numeric discovery, flat named geometry arguments, strict signed positi
 selection, exact pandas column keys, MaskedArray validity, immutable configuration
 values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
 below are settled implementation directions, supported by bounded prototypes and
-explicit API discussion, not delivered binding code. Native configuration sharing
-is delivered; its use in Python owners still needs real-PyO3 verification. The
-[Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25 families
-and records the selected call forms. The
+explicit API discussion. The current package implements only the subset recorded
+below; native configuration sharing is delivered and the Python subset has bounded
+installed verification, not complete interface delivery.
+The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
+families and records the selected call forms. The
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) specifies the prerequisite
 core/adapter migration. Its flat core inputs, coupled consumers and adapter column
 extraction, native Text/slot clearing and reusable native ownership facilities are
-delivered. Exact stubs, Python ownership and the selected input-boundary contracts
-still need implementation and verification before expanding the binding surface.
+delivered. Full-surface stubs, complete Python coverage and the remaining
+input-boundary contracts still need implementation and verification.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -50,15 +51,80 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native Text/slot clearing | Delivered: independent style/layout removal on Text, Plot/Canvas retained slots, PointLayer legend labels and NumericExplanation; both adapters forward applicable operations. Presence/default-reset/omission semantics, value independence and current Theme/Canvas inheritance passed focused tests and strict Clippy; peer guides are synchronized. |
 | Native Canvas region overwrite | Delivered: set_panel/set_panel_span share strict insertion's native footprint/occupancy authority, remove complete intersecting Plot/TextPanel owners and prepare validation/resources before mutation. Focused topology/atomicity, composed rendering, doctest, strict Clippy and peer Book checks passed. Borrowed failure-safe placement now supplies reusable receiver ownership too. |
 | Native reusable ownership | Delivered: borrowed Plot/Canvas/adapter exports, shared frozen Output handles with failure-safe borrowed publication, Canvas Clone with shared placements/Plot payloads, and borrowed placement primitives used by the consuming builders. Plot Clone shares the authored description's payload; Plot exports borrow that description directly, Canvas placement moves it, and one operation-local Root/occurrence registry supplies measurement factories without temporary working Plots. Recorded native placement, render/replay/failure, composed/shared-guide and cross-adapter checks passed. This is not a zero-copy/constant-cost guarantee or Python lifecycle evidence. |
-| Python lifecycle decision and complete binding | Implementation is authorized; no binding package code, selectors or stubs exist yet. Four ordinary-data input routes without exposed Rust payload classes, binding-time snapshots, one runtime entry with overload signatures, explicit col/cols, by_row_position/by_column_name modes, numeric_only discovery, flat named geometry, mutable owners, immutable configuration values, text keyword/clear rules and span/overwrite semantics remain settled. All 25 constructors are inventoried; exact stubs and native capability mapping remain implementation work. Bounded experiments are design evidence only. Actual Python ownership, callback/GC and full distribution verification remain open. |
+| Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
+| Python lifecycle decision and complete binding | Bounded native-data lifecycle/value/callback behavior and accurate subset typing are installed-verified in the environments below; independently unpacked sdist build/install also passed. The remaining product gate is recorded below. The complete four-route/25-family interface and remaining values/input typing are not delivered; selected semantics are unchanged. |
 | Python input boundaries | Selected, not implemented: negative positional indices and signed-step positional slices with strict bounds for table sources; exact, unique pandas hashable column labels without stringification-based identity; MaskedArray data/mask snapshots through native validity. Normalization, key mapping and mask handling require implementation/verification, not another admission decision. |
-| Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Python and complete per-family gallery coverage remain planned; no publication or deployment was performed. |
+| Integrated content/package/site closure | Rust adapter examples, peer guides/site and all three source archives are verified. Bounded Python wheel/unpacked-sdist verification passed; complete per-family gallery and broader platform/distribution coverage remain open. No publication or deployment was performed. |
+
+### Current Python Implementation Scope
+
+`bindings/python/` is the sole binding package. The following implemented subset
+has the bounded installed verification described below:
+
+- Direct native Python list/tuple Scatter: int/float/None x/y with booleans rejected,
+  optional string/None hue through constructor/setter, and binding-time snapshots.
+  Mutable Plot/Canvas owners support aliases, independent copies, insertion-time
+  captures, keyword-only spans/overwrite and failure-safe configuration edits.
+- All five native terminal exports and frozen Output reuse use the same core path.
+  NumericFormat value/set callbacks, TickGeneration function callbacks, scoped
+  contexts, reentry/exception ownership and GC hooks are covered by those bounded
+  installed checks.
+- Twenty-one immutable appearance/text/output value classes cover colors, fonts,
+  spacing, complete typography roles, surfaces, Theme/Text/layout and PNG options.
+  Theme exposes only typography/surfaces while retaining all eight native components.
+  TextLayout exposes alignment, fit_priority, direction, rotation_mode, offset,
+  bounds, wrapping and overlap; its five opaque fit/orientation/anchor/overflow/
+  visibility instructions are preserved during derivation, not exposed as inputs.
+- The mixed package uses PyO3 =0.29.2 with abi3-py310. The core remains the independent
+  default workspace member; no NumPy or Polars binding dependencies/routes are added.
+  One actual native stub, `bindings/python/python/lichtung_plot/_native.pyi`, public
+  owner annotations and `bindings/python/python/lichtung_plot/py.typed` describe
+  only the implemented surface, not complete input typing.
+
+Source owners are `bindings/python/src/input.rs`, `bindings/python/src/owner/`,
+`bindings/python/src/output.rs`, `bindings/python/src/values/` and
+`bindings/python/src/callbacks/`; the thin public owners live in
+`bindings/python/python/lichtung_plot/_owners.py`. Installed-wheel runtime/callback/
+GC checks passed on sampled Linux CPython
+3.10 (NumPy 1.26/2.2 installed) and 3.13 (NumPy 2.2 installed) environments. The
+3.10/NumPy 1.26 check was focused, not another full runtime-suite run; these NumPy
+versions describe the environment, not supported plotting inputs.
+Installed mypy checks targeting Python 3.10 and stubtest checks passed in the
+CPython 3.13 environment.
+
+The PEP 517 source producer is `bindings/python/_build_backend.py`; its derived-lock
+policy is defined in `specs/90_DEVELOPMENT.md`. An independently produced sdist was
+freshly unpacked, built through its backend with locked/offline Rust 1.96, and its
+cp310-abi3 Linux wheel installed in a fresh CPython 3.10 environment. All 38 archived
+runtime cases and dependency-consistency/pin-preservation checks passed there.
+The Python example ran outside the checkout and its PNG was inspected;
+representative native example outputs remained byte-identical to their baseline.
+Strict workspace all-target Clippy passed. The recorded full Rust test command
+remains exit 1: 1,036 tests passed and 15 were ignored before Python initialization
+failed. On the same source freeze, an exact binding-test retry passed after only
+the child PATH was corrected; the full command was not rerun or reclassified.
+The 140 doctests, API/Book checks and native archive checks passed on their recorded
+earlier source freeze, not as a final-freeze rerun.
+
+This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
+PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
+Repository-wide test-budget review identified excess module-integration coverage;
+the limits have not been certified. Test deduplication remains a final closure
+task after the complete planned interface is implemented, rather than blocking
+the remaining implementation stages. Overall plan acceptance is not complete;
+the complete Python binding is not delivered.
+
+The complete four input routes, all 25 constructor families, retained-source lookup,
+col/cols and signed positional selection, exact pandas keys, MaskedArray, remaining
+configuration values, full input typing and cost observations remain planned. They
+are not permanently reduced to this subset. The 2026-11-06 prototypes below are not
+runs of this package.
 
 ## Confirmed Scope And Constraints
 
 | Concern | Required outcome |
 | --- | --- |
-| Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python is not implemented. No repository/history import is requested. |
+| Existing adapter/binding code | Replace the existing adapters' conversion-only public design, reusing sound private conversion support; Python's bounded verification and remaining delivery gates are recorded above. No repository/history import is requested. |
 | Renderer boundary | One independent `lichtung-plot` core, with adapters and bindings depending on it, never the reverse. |
 | Adapter public entry points | Either adapter exposes every native public item/module at its original relative path and with the same definition/signatures. Foreign input uses top-level `Family::new` and `Family::from_data` with non-conflicting helper names, never native-name shadowing or a mandatory binding namespace. No separate direct core dependency is needed; both adapters can coexist and share native types through one compatible resolved core package. |
 | Adapter foreign-container boundary | ndarray accepts its own views/validity/column selections; Polars accepts eager DataFrame/Series/Column and field selections. Preserve existing core-value pass-through and native re-exports. No cross-adapter foreign-container conversion or dependency; Python owns four-source unification. |
@@ -319,7 +385,8 @@ shape is `scatter(data=None, *, x, y, hue=None)`, not its complete eventual
 signature. Do not additionally interpret `scatter(a, b)` as x/y, or guess whether
 the first positional object is a source or x based on its type.
 
-The following examples specify planned call forms, not an implemented package:
+The following examples specify the full selected call grammar; only the native-data
+subset recorded above is currently implemented:
 
 ```python
 scatter(x=[1, 2], y=[3, 4])
@@ -1011,7 +1078,7 @@ not mutable owners or live editing handles. Read declared fields through named
 attributes and derive edited values with keyword-only `copy_with(...)`:
 
 ```python
-# Planned Python interfaces, not implemented bindings.
+# Installed-verified value subset; complete interface remains planned.
 title_style = theme.typography.root.title
 size = title_style.font_size
 large_style = title_style.copy_with(font_size=24, color=new_color)
@@ -1128,7 +1195,7 @@ checks before committing an owner edit, preserving native validation boundaries;
 a keyword/conversion failure leaves the prior configuration intact.
 
 ```python
-# Planned interfaces; explicit None clearing is not implemented yet.
+# Installed-verified native-data owner subset.
 p.title("Changed")                             # Preserve existing instructions.
 p.title("Changed", style=None)                  # Clear only the local style.
 p.title(Text("Changed", style=a), style=b)       # Use complete style b.
@@ -1203,9 +1270,9 @@ values remain editable through ordinary native value construction/clearing.
 
 Native clearing passed focused value/slot/numeric-explanation tests, a composed
 current-Theme/parent-alignment inheritance witness, strict workspace Clippy and
-peer Book checks. Python private-sentinel handling, explicit keyword precedence
-and failure-safe owners still need binding implementation and verification; native
-clear evidence does not establish those Python behaviors.
+peer Book checks. Bounded installed checks now cover the current binding's
+private-sentinel handling, explicit keyword precedence and failure-safe owners;
+those Python behaviors are not established by native clear evidence alone.
 
 ### Canvas Captures Configuration, Not A Live Child Alias
 
@@ -1221,8 +1288,9 @@ A binding can clone the native Plot for a retained external Python handle withou
 duplicating the shared tick/layer/annotation vectors at capture time. `.copy()` can
 likewise start from shared native payloads while returning a distinct Python owner.
 Inline fields still clone, and separation can copy payload-owned content; these
-facilities do not promise zero-copy or constant-cost capture. Python copy/capture
-independence still requires real-PyO3 verification, not another core representation.
+facilities do not promise zero-copy or constant-cost capture. Current native-data
+Python copy/capture independence has bounded installed verification, not a general
+cost guarantee or another core representation.
 
 A Canvas grid can be created before its Plot contents are decided; empty slots do
 not require placeholder Plot objects or live-reference insertion. Updating occupied
@@ -1292,8 +1360,8 @@ and errors to that capability. Do not maintain a second panel list or simulate
 overwrite by rebuilding Canvas in Python. These native setters now exist and
 passed focused topology/atomicity and composed-rendering witnesses plus their
 public example and strict Clippy. Borrowed native placement now preserves the Canvas
-on error; its Python owner and argument mapping still require implementation and
-verification.
+on error; the current Python owner and argument mapping passed the bounded installed
+checks described above.
 
 ### Rendering Does Not Consume Python Configuration
 
@@ -1348,7 +1416,7 @@ The authored source owners are `crates/lichtung-plot/src/builder.rs`,
 | `Plot<K>` contains only an authored PlotDescription and `PhantomData<K>`. The description has inline fields and one `Arc<SharedPayload>`; Plot Clone shares that payload, including exact ticks and layer/annotation vectors, while cloning inline fields such as title/subtitle. | Use public Plot Clone for independent handles without reconverting data. Payload edits use Arc::make_mut and may copy those collections; neither clones nor separation are promised constant-cost. |
 | Exact-family/capability bounds, eleven public const configuration setters and const `kind()` are retained. | Map deliberate public family APIs; the private description/payload is not a binding extension point or another public mode. |
 | Theme has complete immutable components and a construction-only ThemeBuilder; Text/component field edits consume values. | Expose Python read-only attributes/copy_with through public native value construction and validation, not matching mutable setters or a new Rust alias family. |
-| Text preserves content absence, omitted style/layout and present default-layout reset without a separate slot wrapper; Text and retained owners expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; Python precedence and failure safety still need verification. |
+| Text preserves content absence, omitted style/layout and present default-layout reset without a separate slot wrapper; Text and retained owners expose independent explicit clear operations. | Map Python omitted/None/value intentions into the same native slots without another retained state; bounded installed checks cover precedence and failure safety for the current native-data subset. |
 | Canvas placement takes an owned exact-family Plot and moves its description into the canonical placement payload, not an erased or temporary working Plot. Canvas Clone shares placements; separating them clones placement descriptions while retaining shared Plot payloads. | Capture configuration at insertion, not a live external child. Keep the Python Plot usable through a native clone when needed; inline fields, Canvas headers and range requests can still copy. Whole-Canvas copying and separation are not constant-cost promises. |
 | Strict panel/panel_span and region-overwrite set_panel/set_panel_span share one native validation/placement path. | Map Python spans/overwrite to these current capabilities; preserve whole-owner removal and atomic resource preparation through reusable ownership. |
 | Borrowed place_panel/place_text_panel preserve the Canvas on error. Consuming insertion/replacement builders delegate to these same native mutations. | Use borrowed placement without taking the sole Python owner or cloning the entire growing Canvas per insertion. Failed placement can detach shared storage but does not change logical configuration. |
@@ -1409,7 +1477,7 @@ add a Python builder mode or a second panel list:
   create short-lived measurement contexts; services/caches remain operation-local,
   while owning results survive scene freezing/publication. These private owners
   are not additional Python APIs or a reason to redesign core storage.
-- The planned binding must retain a stable native configuration version and release
+- The binding must retain a stable native configuration version and release
   its PyO3 borrow before callbacks/rendering. Reentry edits a later version. Actual Python
   GC, exception/thread/context safety and wheel behavior remain separate real-PyO3
   verification gates, not consequences of these native signatures.
@@ -1465,13 +1533,14 @@ surface:
    reentry may edit a later version. Verify the Python mapping through that same
    native path, without a new core-storage task or compatibility alternative.
 
-   Two consumer-required read-only public seams are planned, not delivered. Ship
-   each with its actual Python consumer in the same logical product commit, not as
-   unused native API. Source/design inspection is not runtime verification.
+   These two consumer-required read-only public seams are implemented with their
+   actual Python consumers, for delivery in the same logical product commit rather
+   than as unused native APIs. Three focused native checks and the bounded installed
+   Python consumer checks described above passed.
 
-   - **Canvas callback roots.** Add public
+   - **Canvas callback roots.** The public
      `Canvas::contains_plot_anchor(&self, row: usize, column: usize) -> bool` in
-     `crates/lichtung-plot/src/canvas.rs`, reading the canonical placements in
+     `crates/lichtung-plot/src/canvas.rs` reads the canonical placements in
      `crates/lichtung-plot/src/canvas/placement.rs`. Only an actual Plot owner's
      anchor returns true; covered non-anchor cells, TextPanel, empty and out-of-range
      coordinates, including `usize::MAX`, return false. The query allocates nothing
@@ -1481,7 +1550,7 @@ surface:
      old roots at the incoming anchor even when membership remains true. Failed
      placement leaves roots unchanged. Do not mirror spans/occupancy or maintain
      another native Plot inventory.
-   - **Immutable layout derivation.** Add the following TextLayout readers in
+   - **Immutable layout derivation.** The following TextLayout readers are public in
      `crates/lichtung-plot/src/text.rs`. Each is a public method taking only `&self`:
 
      | Reader | Return type |
@@ -1507,8 +1576,8 @@ surface:
      original value. `rotation` is only the fixed-orientation convenience, not an
      additional stored field.
 
-     For Python TextOffset/TextBounds read-only attributes and `copy_with`, add only
-     these public `&self` readers in `crates/lichtung-plot/src/text/layout.rs`:
+     Python TextOffset/TextBounds read-only attributes and `copy_with` use these
+     public `&self` readers in `crates/lichtung-plot/src/text/layout.rs`:
 
      | Owner | Reader | Return type |
      | --- | --- | --- |

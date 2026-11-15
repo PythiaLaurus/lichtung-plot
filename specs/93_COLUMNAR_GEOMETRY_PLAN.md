@@ -3,8 +3,9 @@
 ## Status And Authority
 
 The core columnar geometry API, coupled consumers and both adapters' column-binding
-surfaces are delivered. No Python binding is delivered. Current scientific and
-adapter behavior remains defined by the
+surfaces are delivered. Python implementation status belongs to
+`specs/91_WORKSPACE_AND_INTERFACES_PLAN.md`. Current scientific and adapter behavior
+remains defined by the
 [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). Update those current contracts with working
 code, not in anticipation of it.

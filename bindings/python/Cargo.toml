@@ -1,0 +1,20 @@
+[package]
+name = "lichtung-plot-python"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Python owners for the native Lichtung scientific renderer"
+readme = "README.md"
+publish = false
+
+[lib]
+name = "_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lichtung-plot.workspace = true
+pyo3.workspace = true
+
+[lints]
+workspace = true

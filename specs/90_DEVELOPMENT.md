@@ -4,7 +4,7 @@
 
 Use pinned Rust 1.96 with rustfmt/Clippy and one tracked root Cargo.lock. The root
 Cargo.toml is a virtual workspace; crates/lichtung-plot is its default member.
-Prefer root Justfile recipes; commands are locked/offline and explicitly select
+Prefer root Justfile recipes; Rust commands are locked/offline and explicitly select
 the workspace rather than relying on default members:
 
 | Recipe | Contract |
@@ -15,15 +15,50 @@ the workspace rather than relying on default members:
 | just test-doc | Execute all members' public examples and compile-fail API boundaries |
 | just docs | Build all members' API documentation with warnings denied |
 | just package | Verify explicitly selected renderer/ndarray/Polars archives from Cargo's independently unpacked staging directories; exclude the workspace-local Book command |
+| just python-build | Build the mixed Python package with selected, already-installed Python/maturin tools |
+| just python-test [args] | Test an installed wheel using the selected Python in isolated mode; accepts focused selections |
+| just python-sdist | Produce the Python source archive through its offline PEP 517 backend and derived-lock validation; independently unpacked build verification is separate |
 | just book-check | Check peer tutorial anchors, image-to-code links, source includes and gallery metadata without rendering |
 | just gallery | Execute catalog examples once and assemble fresh outputs/grids for both editions |
 | just book | Assemble the gallery and invoke installed mdBook 0.5.4 for both single-page guides |
-| just verify | Complete source format/lint/tests/doctests/docs/package gate plus structural Book checks; not site generation |
+| just verify | Rust/source workspace format/lint/tests/doctests/docs/package gate plus structural Book checks; not installed-Python runtime or site generation |
 
 Compiler validation must use strict Clippy, never cargo check or a nonlinting
 build as a substitute. Pass that requirement to delegated work. Documentation
 build alone does not execute doctests. Do not claim a discovery-only command,
 filtered zero tests or ignored case as executed behavioral verification.
+
+Python recipes select installed executables through `LICHTUNG_PYTHON` (default
+`python3`) and `LICHTUNG_MATURIN` (default `maturin`); they do not install tools or
+download dependencies. Use installed maturin 1.16.0 and CPython 3.10 or newer.
+`python-test` requires the wheel and pytest already installed in the selected
+isolated environment; pass focused test selections as recipe arguments. Its
+`-I -B` invocation excludes source-tree package imports. Building/installing wheels,
+checking the shipped typing, and building a wheel from an independently unpacked
+sdist remain separate gates, not consequences of source archive creation.
+
+The local PEP 517 backend, `bindings/python/_build_backend.py`, is selected by
+`bindings/python/pyproject.toml` and included at the source archive's root.
+Wheel/editable, metadata and requirements hooks delegate directly to maturin.
+`python-sdist` uses this same source producer, not raw `maturin sdist`, and respects
+`LICHTUNG_MATURIN`, including relative executable paths. Source builds require the
+already-installed Rust 1.96 toolchain identified by `rust-toolchain.toml`; select it
+explicitly for independently unpacked builds rather than provisioning a toolchain.
+On Python below 3.11, `tomli==2.5.0` is a build-only requirement, not a runtime or
+adapter dependency.
+
+Only source-archive production normalizes its Cargo.lock in a private offline
+stage to match the actual source closure. Retained package pins and nondependency
+fields are unchanged; resolved dependency edges must remain a subset of the
+source lock's edges. The root Cargo.lock remains the sole maintained lockfile.
+The archive's derived lock is not a second tracked lock, and normalization never
+edits or restores the source workspace lock.
+
+Rust/source workspace verification includes the Python member; the independent
+core remains the default member. Keep PyO3's `extension-module` linkage specific
+to extension builds, not a permanent Cargo feature that breaks ordinary workspace
+test linkage. Select/unset interpreter/build overrides per verification command
+and record them with its actual receipt, not as global environment changes.
 
 Workspace members inherit appropriate package metadata, dependency versions and
 lints from the root Cargo.toml. Member manifests declare the dependencies they
@@ -53,7 +88,7 @@ Keep the renderer's source, tests, fixtures, examples, package README and licens
 texts together under crates/lichtung-plot. Each member must package its required source inputs
 without reaching outside the independently unpacked package. Keep Rust development/
 test support in workspace members. Python package code, stubs, tests and examples
-are restricted to bindings/python when implemented; no Python development support
+are restricted to `bindings/python/`; no Python development support
 elsewhere or tools directory. Modern module layout is foo.rs plus foo/ siblings.
 
 ## Books, Examples And Gallery

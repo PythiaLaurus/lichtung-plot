@@ -290,6 +290,84 @@ pub(crate) struct TextInstructions {
 }
 
 impl TextLayout {
+    /// Inspect the requested physical line alignment.
+    #[must_use]
+    pub const fn get_alignment(&self) -> Option<TextAlignment> {
+        self.alignment
+    }
+
+    /// Inspect the requested font-size program.
+    #[must_use]
+    pub fn get_fit(&self) -> Option<TextFit> {
+        self.instructions().fit
+    }
+
+    /// Inspect the requested fitting and abbreviation priority.
+    #[must_use]
+    pub fn get_fit_priority(&self) -> Option<TextFitPriority> {
+        self.instructions().fit_priority
+    }
+
+    /// Inspect the requested paragraph direction.
+    #[must_use]
+    pub fn get_direction(&self) -> Option<TextDirection> {
+        self.instructions().direction
+    }
+
+    /// Borrow the requested orientation program.
+    #[must_use]
+    pub fn get_orientation(&self) -> Option<&TextOrientation> {
+        self.instructions().orientation.as_ref()
+    }
+
+    /// Inspect the requested rotation-anchor relationship.
+    #[must_use]
+    pub fn get_rotation_mode(&self) -> Option<TextRotationMode> {
+        self.instructions().rotation_mode
+    }
+
+    /// Inspect the requested measured-block anchor.
+    #[must_use]
+    pub fn get_anchor(&self) -> Option<TextAnchor> {
+        self.instructions().anchor
+    }
+
+    /// Inspect the requested signed CSS-pixel displacement.
+    #[must_use]
+    pub fn get_offset(&self) -> Option<TextOffset> {
+        self.instructions().offset
+    }
+
+    /// Inspect the requested text-local maxima.
+    #[must_use]
+    pub fn get_bounds(&self) -> Option<TextBounds> {
+        self.instructions().bounds
+    }
+
+    /// Inspect the requested soft-wrap policy.
+    #[must_use]
+    pub fn get_wrapping(&self) -> Option<TextWrapping> {
+        self.instructions().wrapping
+    }
+
+    /// Borrow the requested overflow program.
+    #[must_use]
+    pub fn get_overflow(&self) -> Option<&TextOverflow> {
+        self.instructions().overflow.as_ref()
+    }
+
+    /// Inspect the requested peer-overlap policy.
+    #[must_use]
+    pub fn get_overlap(&self) -> Option<TextOverlap> {
+        self.instructions().overlap
+    }
+
+    /// Borrow the requested text-eligibility program.
+    #[must_use]
+    pub fn get_visibility(&self) -> Option<&TextVisibility> {
+        self.instructions().visibility.as_ref()
+    }
+
     pub(crate) fn hidden(&self) -> bool {
         self.instructions()
             .visibility
@@ -497,6 +575,139 @@ mod tests {
         AxisTick, Canvas, DataAreaCorner, Labels, NumericValues, Plot, PlotTextAnnotation,
         TextPanel,
     };
+
+    #[test]
+    fn layout_readers_rebuild_requests_without_clearing_other_fields_or_the_source() {
+        use super::{
+            TextAlignment, TextAnchor, TextBounds, TextDirection, TextElision, TextEllipsis,
+            TextFailure, TextFit, TextFitGrouping, TextFitPriority, TextLayout, TextOffset,
+            TextOffsetFrame, TextOrientation, TextOverflow, TextOverlap, TextRotation,
+            TextRotationMode, TextVisibility, TextWrapping,
+        };
+
+        fn rebuild(source: &TextLayout, omit_overflow: bool) -> TextLayout {
+            let mut layout = TextLayout::default();
+            if let Some(value) = source.get_alignment() {
+                layout = layout.alignment(value);
+            }
+            if let Some(value) = source.get_fit() {
+                layout = layout.fit(value);
+            }
+            if let Some(value) = source.get_fit_priority() {
+                layout = layout.fit_priority(value);
+            }
+            if let Some(value) = source.get_direction() {
+                layout = layout.direction(value);
+            }
+            if let Some(value) = source.get_orientation() {
+                layout = layout.orientation(value.clone());
+            }
+            if let Some(value) = source.get_rotation_mode() {
+                layout = layout.rotation_mode(value);
+            }
+            if let Some(value) = source.get_anchor() {
+                layout = layout.anchor(value);
+            }
+            if let Some(value) = source.get_offset() {
+                layout = layout.offset(value);
+            }
+            if let Some(value) = source.get_bounds() {
+                layout = layout.bounds(value);
+            }
+            if let Some(value) = source.get_wrapping() {
+                layout = layout.wrapping(value);
+            }
+            if let Some(value) = source.get_overflow().filter(|_| !omit_overflow) {
+                layout = layout.overflow(value.clone());
+            }
+            if let Some(value) = source.get_overlap() {
+                layout = layout.overlap(value);
+            }
+            if let Some(value) = source.get_visibility() {
+                layout = layout.visibility(value.clone());
+            }
+            layout
+        }
+
+        let other_fields = || {
+            TextLayout::default()
+                .alignment(TextAlignment::End)
+                .fit(
+                    TextFit::range(8.0, 14.0)
+                        .unwrap()
+                        .grouping(TextFitGrouping::Uniform),
+                )
+                .fit_priority(TextFitPriority::PreferredSizeFirst)
+                .direction(TextDirection::RightToLeft)
+                .orientation(TextOrientation::automatic_ticks(vec![
+                    TextRotation::tilt_up(),
+                    TextRotation::horizontal(),
+                ]))
+                .rotation_mode(TextRotationMode::AlignAfterRotation)
+                .anchor(TextAnchor::first_baseline(0.75).unwrap())
+                .offset(TextOffset::new(-2.0, 0.0, TextOffsetFrame::TextLocal).unwrap())
+                .bounds(TextBounds::new(Some(0.0), None, Some(2)).unwrap())
+                .wrapping(TextWrapping::NoSoftWrap)
+                .overlap(TextOverlap::Allow)
+                .visibility(
+                    TextVisibility::parity(crate::LabelEndpoints::Both)
+                        .separation(1.0)
+                        .unwrap()
+                        .boundary_tolerance(Some(-0.5))
+                        .unwrap(),
+                )
+        };
+        let original = other_fields().overflow(TextOverflow::ellipsis(
+            TextEllipsis::new(TextElision::Middle)
+                .marker("...")
+                .max_lines(None)
+                .distinct(true),
+            TextFailure::Clip,
+        ));
+        let retained = original.clone();
+        assert_eq!(rebuild(&original, false), original);
+        assert_eq!(rebuild(&original, true), other_fields());
+        assert_eq!(original, retained);
+        assert_eq!(
+            rebuild(&TextLayout::default(), false),
+            TextLayout::default()
+        );
+    }
+
+    #[test]
+    fn scalar_layout_readers_preserve_zero_absence_and_constructor_validation() {
+        use super::{TextBounds, TextOffset, TextOffsetFrame};
+
+        let offset = TextOffset::new(-0.0, -2.5, TextOffsetFrame::TextLocal).unwrap();
+        assert_eq!(
+            TextOffset::new(offset.get_dx(), offset.get_dy(), offset.get_frame()).unwrap(),
+            offset
+        );
+        let zero_bounds = TextBounds::new(Some(0.0), Some(0.0), Some(0)).unwrap();
+        let unbounded = TextBounds::new(None, None, None).unwrap();
+        for bounds in [zero_bounds, unbounded] {
+            assert_eq!(
+                TextBounds::new(
+                    bounds.get_max_width(),
+                    bounds.get_max_height(),
+                    bounds.get_max_lines(),
+                )
+                .unwrap(),
+                bounds
+            );
+        }
+        assert_ne!(zero_bounds, unbounded);
+        assert!(TextOffset::new(f64::NAN, offset.get_dy(), offset.get_frame()).is_err());
+        assert!(TextOffset::new(offset.get_dx(), f64::INFINITY, offset.get_frame()).is_err());
+        assert!(TextBounds::new(Some(-1.0), None, None).is_err());
+        assert!(TextBounds::new(None, Some(-1.0), None).is_err());
+        assert!(TextBounds::new(Some(f64::NAN), None, None).is_err());
+        assert!(TextBounds::new(None, Some(f64::INFINITY), None).is_err());
+        assert_eq!(
+            offset,
+            TextOffset::new(0.0, -2.5, TextOffsetFrame::TextLocal).unwrap()
+        );
+    }
 
     #[test]
     fn content_replacement_retains_instructions_until_a_whole_request_replaces_them() {

@@ -86,6 +86,24 @@ impl TextOffset {
             frame,
         })
     }
+
+    /// Signed CSS-pixel displacement along the frame's x axis.
+    #[must_use]
+    pub const fn get_dx(&self) -> f64 {
+        self.dx.get()
+    }
+
+    /// Signed CSS-pixel displacement along the frame's y axis.
+    #[must_use]
+    pub const fn get_dy(&self) -> f64 {
+        self.dy.get()
+    }
+
+    /// Coordinate frame of the displacement.
+    #[must_use]
+    pub const fn get_frame(&self) -> TextOffsetFrame {
+        self.frame
+    }
 }
 
 /// Explicit text-local finite maxima, independent of the parent's assigned region.
@@ -113,6 +131,30 @@ impl TextBounds {
             height: max_height.map(bound).transpose()?,
             lines: max_lines,
         })
+    }
+
+    /// Requested maximum width in CSS pixels; zero remains distinct from None.
+    #[must_use]
+    pub const fn get_max_width(&self) -> Option<f64> {
+        match self.width {
+            Some(value) => Some(value.get()),
+            None => None,
+        }
+    }
+
+    /// Requested maximum height in CSS pixels; zero remains distinct from None.
+    #[must_use]
+    pub const fn get_max_height(&self) -> Option<f64> {
+        match self.height {
+            Some(value) => Some(value.get()),
+            None => None,
+        }
+    }
+
+    /// Requested maximum line count; zero remains distinct from None.
+    #[must_use]
+    pub const fn get_max_lines(&self) -> Option<usize> {
+        self.lines
     }
 }
 /// Soft-wrap policy; both choices preserve caller-authored mandatory breaks.

@@ -41,6 +41,9 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
 - [`crates/lichtung-plot-polars/`](crates/lichtung-plot-polars/): eager Polars
   field/direct-column plotting frontends and unchanged native renderer exports;
   wide/grid roles, independent layers and scientific result bindings.
+- `bindings/python/`: native-data Scatter/lifecycle subset; see
+  `bindings/python/README.md` and `specs/91_WORKSPACE_AND_INTERFACES_PLAN.md` for
+  bounded verification and remaining delivery gates.
 - [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
   assembling the single-page guides and executable gallery; adapter interoperability
   dependencies are test-only.

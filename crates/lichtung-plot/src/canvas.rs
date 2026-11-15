@@ -338,6 +338,17 @@ impl Canvas {
         })
     }
 
+    /// Whether this cell is the top-left anchor of a placed Plot.
+    ///
+    /// Covered cells, TextPanels, empty cells and out-of-range coordinates return false.
+    #[must_use]
+    pub fn contains_plot_anchor(&self, row: usize, column: usize) -> bool {
+        if row >= self.rows || column >= self.columns {
+            return false;
+        }
+        self.placements.plot(row * self.columns + column).is_some()
+    }
+
     /// Place one exact-family chart in an unoccupied zero-based grid cell.
     ///
     /// An already erased plot cannot be inserted:

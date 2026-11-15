@@ -150,6 +150,17 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
     canvas
         .place_panel(0, 0, 1, 1, source.clone(), false)
         .unwrap();
+    assert!(canvas.contains_plot_anchor(0, 0));
+    for (row, column) in [
+        (0, 1),
+        (1, 0),
+        (0, 3),
+        (usize::MAX, 0),
+        (0, usize::MAX),
+        (usize::MAX, usize::MAX),
+    ] {
+        assert!(!canvas.contains_plot_anchor(row, column));
+    }
     assert_eq!(
         Arc::as_ptr(&canvas.placements),
         unique,
@@ -176,9 +187,12 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
         .is_err());
     assert_eq!(canvas.placements.anchor(0, 0), Some(0));
     assert_eq!(canvas.placements.anchor(0, 1), None);
+    assert!(canvas.contains_plot_anchor(0, 0));
+    assert!(!canvas.contains_plot_anchor(0, 1));
     canvas
         .place_text_panel(0, 1, TextPanel::new("Independent note", "Body").unwrap())
         .unwrap();
+    assert!(!canvas.contains_plot_anchor(0, 1));
     assert!(!Arc::ptr_eq(&canvas.placements, &snapshot.placements));
     let original = snapshot.placements.plot(0).unwrap();
     let edited = canvas.placements.plot(0).unwrap();
@@ -198,10 +212,21 @@ fn borrowed_canvas_edits_preserve_failures_and_separate_shared_placement_snapsho
     assert!(canvas
         .place_text_panel(0, 0, TextPanel::new("Rejected", "Body").unwrap())
         .is_err());
+    assert!(canvas.contains_plot_anchor(0, 0));
     canvas.place_panel(0, 1, 1, 2, source, true).unwrap();
     assert!(canvas.placements.text(1).is_none());
     assert_eq!(canvas.placements.anchor(0, 2), Some(1));
     assert_eq!(snapshot.placements.anchor(0, 2), None);
+    assert!(canvas.contains_plot_anchor(0, 1));
+    assert!(!canvas.contains_plot_anchor(0, 2));
+    let branch = canvas.clone();
+    canvas.place_panel(0, 2, 1, 1, plot(), true).unwrap();
+    assert!(!canvas.contains_plot_anchor(0, 1));
+    assert!(canvas.contains_plot_anchor(0, 2));
+    assert!(branch.contains_plot_anchor(0, 1));
+    assert!(!branch.contains_plot_anchor(0, 2));
+    assert!(snapshot.contains_plot_anchor(0, 0));
+    assert!(!snapshot.contains_plot_anchor(0, 2));
 }
 
 #[test]

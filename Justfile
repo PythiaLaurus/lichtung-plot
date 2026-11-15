@@ -1,5 +1,8 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
+python := env_var_or_default("LICHTUNG_PYTHON", "python3")
+maturin := env_var_or_default("LICHTUNG_MATURIN", "maturin")
+
 # Format Rust sources.
 fmt:
     cargo fmt --all
@@ -28,6 +31,18 @@ docs:
 package:
     cargo package --locked --offline -p lichtung-plot -p lichtung-plot-ndarray -p lichtung-plot-polars --allow-dirty
 
+# Build the mixed Python package with already-installed maturin and Python.
+python-build:
+    env -u PYO3_BUILD_EXTENSION_MODULE -u PYO3_NO_PYTHON -u PYO3_CONFIG_FILE PYO3_PYTHON="{{python}}" "{{maturin}}" build --manifest-path bindings/python/Cargo.toml --locked --offline --release --interpreter "{{python}}"
+
+# Test an installed wheel; isolated mode excludes source-tree package imports.
+python-test *args:
+    "{{python}}" -I -B -m pytest -q bindings/python/tests {{args}}
+
+# Use the PEP 517 source producer, including its projected-lock validation.
+python-sdist:
+    LICHTUNG_MATURIN="{{maturin}}" "{{python}}" -I -B bindings/python/_build_backend.py --out "{{justfile_directory()}}/target/python-sdist"
+
 # Check peer tutorial anchors, image-to-code links and executable source includes.
 book-check:
     cargo run --locked --offline -p lichtung-plot-book -- check
@@ -40,5 +55,5 @@ gallery:
 book:
     cargo run --locked --offline -p lichtung-plot-book -- build
 
-# Run the complete read-only repository verification.
+# Run Rust/source workspace verification; installed-wheel checks are separate.
 verify: fmt-check lint test test-doc docs book-check package

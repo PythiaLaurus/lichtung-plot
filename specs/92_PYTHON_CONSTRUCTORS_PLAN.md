@@ -2,23 +2,24 @@
 
 ## Status And Scope
 
-This is a constructor inventory and API draft, not an implemented Python package,
-stub file or change to the Rust API. The selected architecture, selectors, binding
-snapshots and object lifecycle remain in the
+This is the full constructor inventory and API draft, not the current package's
+shipped stubs or evidence of complete implementation. The selected architecture,
+selectors, binding snapshots and object lifecycle remain in the
 [workspace/interface plan](91_WORKSPACE_AND_INTERFACES_PLAN.md). Current scientific
 behavior remains defined by the [rendering contract](02_RENDERING_CONTRACT.md) and
 [adapter contract](09_DATA_ADAPTERS.md). The selected
 [columnar geometry refactor](93_COLUMNAR_GEOMETRY_PLAN.md) owns the prerequisite
-core/adapter migration and its native delivery status; the Python calls here remain
-planned, not implemented bindings.
+core/adapter migration and its native delivery status. Native-data direct Scatter
+has bounded installed verification; other constructor call forms remain planned.
+The workspace/interface plan records the current scope and remaining delivery gate.
 
 The inventory covers all 25 existing families, their primary input alternatives
 and a bounded set of optional categorical bindings. Row-position/column-name modes,
 explicit numeric discovery and flat named geometry inputs are selected below.
 Signed positional selection, complete hashable pandas column keys and MaskedArray
-support are selected too. Exact annotated overloads, native label mappings and
-method signatures remain implementation work; recording these decisions does not
-deliver a binding.
+support are selected too. Full-surface annotated overloads, native label mappings
+and method signatures remain implementation work; recording these decisions does
+not deliver a binding.
 
 ## Shared Public Surface
 

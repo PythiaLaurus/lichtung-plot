@@ -1,0 +1,31 @@
+[build-system]
+requires = [
+    "maturin==1.16.0",
+    "tomli==2.5.0; python_version < '3.11'",
+]
+build-backend = "_build_backend"
+backend-path = ["."]
+
+[project]
+name = "lichtung-plot"
+version = "0.1.0"
+description = "Native scientific plots with reusable Python configuration owners"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+
+[tool.maturin]
+bindings = "pyo3"
+python-source = "python"
+module-name = "lichtung_plot._native"
+include = [
+    { path = "_build_backend.py", format = "sdist" },
+    { path = "tests/**/*.py", format = "sdist" },
+    { path = "examples/*.py", format = "sdist" },
+]
