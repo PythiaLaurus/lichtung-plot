@@ -577,6 +577,48 @@ avoidance, namespace union, empty selected names, zero rows and one-column
 collections. A real bound-only Arrow importer remains a separate implementation
 and compatibility gate; these Rust APIs and checks are not FFI evidence.
 
+##### Direct-Local Namespace Transport Target
+
+The input bridge exposes one remaining native seam: direct-local collections
+cannot carry complete main-source names through ordinary column references,
+whereas `new(...)` deliberately supplies selected raw identities. The reviewed
+implementation target adds one factory to the same descriptor:
+
+```rust
+pub fn from_direct(
+    source_names: &'columns [&'columns str],
+    columns: &'columns [polars_core::prelude::Column],
+) -> std::result::Result<Self, AdapterError>;
+```
+
+It borrows names/columns and checks only nonempty columns and unique namespace
+names. Empty namespaces, zero rows and duplicate/empty direct column names remain
+legal; there is no membership requirement or factory-time dtype/row-length scan.
+A private selected/local mode controls both `ColumnsInput::local_identities` and
+the existing `multiple(..., local, ...)`; native-slot status stays false. Direct
+`cell_shape` calls the existing `columns_shape` at consumption, not construction.
+Do not use the main source's rows for independent direct values.
+
+Keep `new(...)`, existing direct inputs, the four wide producers and their
+ordering unchanged. The numeric producer still checks slot count, then each
+column's length and dtype/extraction in order; do not prescan all lengths.
+Boolean/IDs retain row-major order, per-dimension checks and no repetition.
+Namespaces remain call-local naming scratch, not lookup or metadata state.
+
+The bridge must retain actual input origin before conversion loses it. Main
+selected collections use `new(main_rows, main_names, selected_columns)`.
+Anonymous native/NumPy rectangles and genuine direct-local collections use
+`from_direct(main_names, columns)`. Independent Polars DataFrame collections keep
+named identities through `new(actual_y_rows, ordered_unique_union(main_names,
+y_names), y_columns)`; they are not all rewritten as local. This also implements
+the newly admitted ordinary DataFrame collection: there is no existing
+`NumericSeriesInput for &DataFrame` to claim as its old route.
+
+Acceptance must witness unused `Variable*` namespace avoidance with duplicate/
+empty local display names and private ordinals, one-column collection meaning,
+unchanged delayed dtype/length ordering, real grid shape/ID authority, and named
+independent-frame identity. These are target requirements, not runtime evidence.
+
 These two descriptors are precise exceptions documented in the current adapter
 contract, solely for preserving original coordinates and names while using
 existing binding algorithms. They do not create a
