@@ -690,6 +690,130 @@ its existing timing, including empty aliases and display-domain collisions.
 
 ## Complete Python Interface
 
+### Complete Theme And Text Value Target
+
+The next immutable-value closure completes the existing Theme/Text roots, not a
+new owner hierarchy or scientific-data route. It is a selected implementation
+target, not delivered behavior. Keep the existing 21 appearance/text/PNG classes,
+add the 54 Theme descendants and nine Text value classes below, and extend the
+same Theme and TextLayout classes. Labels was delivered with the input codec and
+is not implemented again. Numeric policies and six additional appearance-policy
+roots with family-specific callers belong to their subsequent consumer phases.
+
+Every wrapper holds only its complete native value. Ordinary records expose
+keyword-only typed construction, getter-only named fields and keyword-only
+`copy_with` with private omission defaults. Child reads clone public native
+readers, not linked handles or Python mirrors. Optional fields admit None;
+required fields do not. Resolve all edits and reconstruct a complete native value
+once so a valid simultaneous sibling change is not rejected by an invalid
+intermediate state. Preserve native validation/use-time boundaries and exact
+spacing; never run fonts/rendering for value construction or inspection.
+
+Theme retains Publication as its default and existing typography/surfaces keyword
+order. Add axes, legend, composition, marks, annotations and color_scales to both
+constructor and copy, with all eight components readable. None is invalid for any
+component. Use existing complete native constructors/ThemeBuilder only within the
+call; do not expose a Python builder, sparse dictionary, flattened margins or
+effective-style cache.
+
+| Native source under `crates/lichtung-plot/src/theme/` | New Python classes |
+| --- | --- |
+| `axis.rs` | AxisTheme, FrameSides, FrameTheme, TickTheme, AxisSpacing |
+| `guide.rs` | LegendTheme, LegendSpacing, GradientLengths, LegendFrameTheme |
+| `composition.rs` | CompositionTheme, RootTitleSpacing, RootPadding, TextPanelSpacing, HeaderSpacing, FacetStripSpacing |
+| `mark_paint.rs` | StrokeTheme, SolidStrokeTheme, OutlineTheme, PointOutlineTheme, DataOutlineTheme, DataFillTheme, FixedFillTheme, PointTheme, DataLineTheme |
+| `mark.rs` | MarkTheme, PointRoles, SizedPointTheme, SupplementalPointTheme, PointRadii, FillRoles, BodyFillRoles, BandFillRoles, DensityFillRoles, DataLineRoles, NeutralPaintRoles, StrokeRoles, ReferenceStrokeRoles, ConnectorStrokeRoles, SummaryStrokeRoles, CurveStrokeRoles, CellMarkRoles, CategoryMarkGeometry, MarkExtentTheme |
+| `annotation.rs` | AnnotationTheme, SignificanceGeometry, CellAnnotationGeometry, EstimateAnnotationGeometry, ValueShelfSpacing |
+| `scale_values.rs` | AccentPalette, QualitativePalette, ColorStop, SequentialGradient, DivergingGradient, ColorScales |
+
+The complete public native `new` arguments/readers define ordinary record fields;
+no Theme reader is missing. Retain the existing RelativeSpacing/Color/font/
+typography types. Closed scalar policies use Literals, not wrapper inventories:
+StrokePattern is solid/short_dash/medium_dash/long_dash; PointShape is circle/
+triangle_up. Alpha fields here are literal appearance bytes, not observation
+alpha encodings.
+
+DataOutlineTheme is factory-only fixed(stroke)/mapped(width, alpha), with readonly
+kind/fixed_stroke/mapped_width/mapped_alpha; copy edits only the current branch.
+An optional branch inspection does not make its required payload nullable.
+QualitativePalette is factory-only fixed/extendable with readonly colors/capacity;
+copy may replace both complete inputs. Accent/palette/gradient sequences are
+snapshotted into native values, preserve order and use native validation without
+sorting or cycling. Gradient neutral is derived, not editable.
+Specialized scalar/sequence constructors keep their positional payloads:
+`ColorStop(offset, color)`, `AccentPalette(seeds)`, `SequentialGradient(stops)`,
+`DivergingGradient(stops)` and `TextRotation(degrees)`. Their `copy_with` fields
+remain keyword-only; the ordinary-record keyword-only rule does not replace these
+selected call forms.
+
+TextLayout adds fit, orientation, anchor, overflow and visibility to its existing
+eight fields. Constructor defaults are None and copy defaults are omission;
+explicit None removes only that instruction. Preserve all thirteen through
+derivation. Rotation remains a fixed-orientation convenience, not another field.
+The nine new classes are TextFit, TextRotation, DataCoordinate, DataPosition,
+TextOrientation, TextAnchor, TextEllipsis, TextOverflow and TextVisibility:
+
+- TextFit is factory-only fixed/shrink_to/range with grouping=independent/uniform.
+  Read minimum/maximum/grouping; copy changes grouping while retaining the
+  absolute authored interval. Fixed has absent bounds; equal explicit endpoints
+  read the same number twice. Never resolve against a preferred font size.
+- TextRotation(degrees) reads the normalized native degrees and derives through
+  that constructor; retain the five named native preset factories.
+- DataCoordinate is factory-only numeric/category/category_series, with readonly
+  kind/value and same-branch value derivation. DataPosition has required x/y.
+  These are authored scalar locations needed by data_direction, not columns,
+  selectors, domain lookups or a fifth input route.
+- TextOrientation is factory-only fixed(rotation), data_direction(from_, to) or
+  automatic_ticks(angles). Read optional rotation/data_from/data_to/angles;
+  copy edits only the present branch. Some(empty automatic angles) stays present
+  and is not proactively rejected.
+- TextAnchor is factory-only fractions/first_baseline/center_baseline plus the
+  nine named box points. Read horizontal/vertical_fraction/baseline; copy changes
+  horizontal while preserving the vertical choice. Fractions are not clamped.
+- TextEllipsis(position, *, marker="…", max_lines=1, distinct=None) exposes these four
+  fields and complete copy. Position is start/middle/end/left/right. None clears
+  the actual optional max_lines/distinct; empty marker, zero cap and false remain
+  concrete. Marker admission stays in the reached abbreviation operation.
+- TextOverflow(*, failure="error", ellipsis=None) reads/copies those two fields.
+  Failure is error/hide/clip/visible; None clears ellipsis, not failure.
+- TextVisibility is factory-only all/hidden/every/greedy/parity, preserving native
+  required endpoint choices. Read kind/stride/offset/endpoints/separation/
+  boundary_tolerance. Copy changes only separation and boundary_tolerance on a
+  clone. Even zero separation is only admitted for Greedy/Parity; signed finite
+  boundary tolerance follows native rules. A present boundary tolerance,
+  including zero, requests boundary reduction; None clears that optional field.
+  Owner/context eligibility remains a use-time check.
+
+#### Consumer-Required Text Readers
+
+The following exact public core readers serve those real Python properties and
+copies. All take `&self`, allocate nothing natively and perform no normalization,
+validation, projection or font/render work. Python child cloning need not be
+zero-cost. Deliver readers and bindings together; no private enums, instruction
+dump, placeholder fields or second retained state is authorized.
+
+| Native owner | New reader signatures, return type after `->` |
+| --- | --- |
+| TextFit | `get_minimum -> Option<f64>`, `get_maximum -> Option<f64>`, `get_grouping -> TextFitGrouping` |
+| TextRotation | `get_degrees -> f64` |
+| DataCoordinate | `get_numeric_value -> Option<f64>`, `get_category_value -> Option<&str>`, `get_category_series_value -> Option<(&str, &str)>` |
+| DataPosition | `get_x -> &DataCoordinate`, `get_y -> &DataCoordinate` |
+| TextOrientation | `get_fixed_rotation -> Option<TextRotation>`, `get_data_direction -> Option<(&DataPosition, &DataPosition)>`, `get_automatic_angles -> Option<&[TextRotation]>` |
+| TextAnchor | `get_horizontal -> f64`, `get_vertical_fraction -> Option<f64>`, `is_first_baseline -> bool` |
+| TextEllipsis | `get_position -> TextElision`, `get_marker -> &str`, `get_max_lines -> Option<usize>`, `get_distinct -> Option<bool>` |
+| TextOverflow | `get_failure -> TextFailure`, `get_ellipsis -> Option<&TextEllipsis>` |
+| TextVisibility | `is_hidden -> bool`, `get_every -> Option<(usize, usize)>`, `is_greedy -> bool`, `is_parity -> bool`, `get_endpoints -> LabelEndpoints`, `get_separation -> f64`, `get_boundary_tolerance -> Option<f64>` |
+
+These are 28 readers on nine types. Orientation branches are mutually exclusive;
+Anchor inspects vertical_fraction before using the baseline query. Visibility is
+All only when hidden/every/greedy/parity queries are all absent/false. Existing
+TextLayout, TextOffset, TextBounds and the 54 Theme children need no extra reader.
+Binding implementations, the one shipped stub/exports and actual immutable-copy/
+native-attachment consumers must agree before marking this target delivered.
+Use focused sibling-validation, nested independence, presence/clear and one
+representative publication relationship rather than getter inventories or a
+family/container/style matrix.
+
 ### Public Capability Mapping
 
 Use PyO3 and maturin with a mixed package layout, an internal native extension,
