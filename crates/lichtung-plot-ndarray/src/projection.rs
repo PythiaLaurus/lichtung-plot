@@ -18,6 +18,8 @@ use crate::{AdapterError, ArraySource, AxisValues, CategoryValues, NumericValues
 /// in-bounds column without a value entry fails explicitly; `..` still means
 /// every original column, not every supplied entry. Grid positions and source
 /// row IDs remain independent of field identities.
+/// [`Self::from_identities`] supplies the same original namespace without any
+/// value entries when only field-identity resolution is needed.
 ///
 /// ```
 /// use lichtung_plot_ndarray::{ArraySource, ColumnProjection, Line};
@@ -56,6 +58,28 @@ impl<'columns> ColumnProjection<'columns> {
             source_shape,
             columns,
             identities: None,
+        };
+        projection.validate()?;
+        Ok(projection)
+    }
+
+    /// Borrow an explicit original namespace without projecting observations.
+    ///
+    /// The shape is the actual source shape, not the number of identities or
+    /// selector rows. Indices and raw identities follow [`Self::with_identities`]
+    /// validation. An empty identity table remains explicit: it does not enable
+    /// positional-name fallback. Every value lookup still fails as unprojected.
+    ///
+    /// This uses the same descriptor representation; [`Self::new`] continues to
+    /// require at least one value entry.
+    pub fn from_identities(
+        source_shape: (usize, usize),
+        identities: &'columns [(usize, &'columns str)],
+    ) -> std::result::Result<Self, AdapterError> {
+        let projection = Self {
+            source_shape,
+            columns: &[],
+            identities: Some(identities),
         };
         projection.validate()?;
         Ok(projection)
@@ -174,7 +198,7 @@ macro_rules! projected_column {
 
 impl ArraySource for ColumnProjection<'_> {
     fn validate(&self) -> BindingResult<()> {
-        if self.columns.is_empty() {
+        if self.columns.is_empty() && self.identities.is_none() {
             return Err(binding(
                 "column projection",
                 "supply at least one value column",

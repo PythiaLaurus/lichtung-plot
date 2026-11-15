@@ -14,7 +14,7 @@ core/adapter migration and its native delivery status. Scatter now has bounded
 installed transport verification across all four input routes, including selectors,
 MaskedArray, many-y, explicit row-position/numeric-discovery modes and fresh
 retained-source lookup. The other 24 families, flat geometry and base configuration
-now have focused installed verification; alpha/layers/results and final complete
+now have focused installed verification; layers/results and final complete
 interface verification remain open.
 The workspace/interface plan records the current scope and remaining delivery gate.
 
@@ -433,8 +433,9 @@ Rust point class or a hidden lookup against the samples source.
 The selected selector bounds, pandas key identities, MaskedArray validity,
 callback ownership and exception translation are implemented with bounded
 verification recorded in the parent plan. Bootstrap units, status mappings and
-supplied KDE use ordinary inputs and explicit independent contexts. Alpha mappings,
-independent layers/results and their exact method signatures remain work under
+supplied KDE use ordinary inputs and explicit independent contexts. Alpha mappings
+also have their separate delivered closure. Independent layers/results and their
+exact method signatures remain work under
 `94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`, followed by final distribution verification.
 They must use ordinary inputs, not require Rust payload objects or silently
 borrow a parent source. Per-API mapping connects Python calls to existing Rust

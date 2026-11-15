@@ -5,9 +5,9 @@
 This plan specifies the complete remaining scientific/numeric Python interface.
 All 25 constructors/alternatives, exact-family base data/facet/configuration
 methods, complete Canvas configuration, Theme/Text and numeric/locator policies,
-13 scientific/appearance/position values and all eight callback slots are
-implemented. Alpha scopes/mappers and independent layers/results below remain
-targets, not delivered functionality. Current evidence and remaining gates
+13 scientific/appearance/position values, all eight callback slots and all 75 alpha
+entries are implemented. Independent layers/results below remain targets, not
+delivered functionality. Current evidence and remaining gates
 are recorded in `91_WORKSPACE_AND_INTERFACES_PLAN.md`. Constructor fields, modes,
 presence and flat geometry are defined once in `92_PYTHON_CONSTRUCTORS_PLAN.md`.
 Do not replace that inventory with a smaller family subset.
@@ -265,6 +265,10 @@ No persistent callback slot or retained mapper is needed.
 
 ### Alpha Call Forms
 
+These 75 entries are implemented with the bounded verification recorded in
+`91_WORKSPACE_AND_INTERFACES_PLAN.md`: three targets each have 23 entries,
+including their Theme reset, plus six Histogram bin entries.
+
 For `T = point_alpha | line_alpha | fill_alpha`, expose the existing adapter
 method families on precisely the corresponding sealed capability sets:
 
@@ -324,30 +328,18 @@ inputs, not new public alpha payload/configuration classes.
 
 ### Necessary Identity-Only ndarray Projection
 
-Loan-safe named-column alpha has one additional adapter representation gap:
-`ColumnProjection::new` currently rejects an empty value-entry collection even
-when the call needs only the actual source shape and ID-to-raw-field namespace.
-For example, restored named expansion plus direct alpha and direct column-ID
-vectors must not import an unrelated source column merely to satisfy that guard.
+The required namespace-only branch is delivered by exactly
+`ColumnProjection::from_identities(source_shape, identities)`, returning the
+existing `Result<Self, AdapterError>` with the original descriptor representation.
+It carries actual source shape and explicit raw identities, no value entries.
+Restored named expansion with direct alpha/direct column-ID vectors therefore
+does not import unrelated observations merely to satisfy `new()`'s unchanged
+nonempty-value rule. The shared working contract is in `09_DATA_ADAPTERS.md`.
 
-Add exactly `ColumnProjection::from_identities(source_shape, identities)` returning
-the existing `Result<Self, AdapterError>`. It borrows the explicit identity table
-and has no value entries, in the same existing descriptor representation.
-Keep `new()`'s nonempty value-entry admission unchanged. Retain the actual source
-`(rows, logical_width)`, original bounds and identity validation.
-Do not fabricate a value column, change shape, infer identities from display
-labels or grant a value lookup through an identity-only entry. Every attempted
-observation/axis/ID/byte lookup of an unprojected column still fails through the
-existing path; explicit variable selections remain nonempty. An explicit empty
-identity table still means no supplied identities, not positional fallback.
-
-This distinct identity-only constructor must not add a mode mirror, parallel
-schema/source class, cache or compatibility alias. Preserve all existing
-descriptor construction failures, nonempty behavior and native
-scientific producer checks. Deliver the small admission change and focused native
-checks with the real Python named-expansion alpha consumer, then synchronize
-`09_DATA_ADAPTERS.md`. This gap does not authorize a new core reader or a fallback
-from independent source=None to the main source.
+The real named-expansion Python alpha consumer and focused native checks accompany
+this seam. Original bounds/identity validation, unprojected-value failures and
+explicit-empty-identity no-fallback semantics remain. There is no parallel source
+class, mode mirror, cache, new core reader or independent-None main-source fallback.
 
 Layers are flat append-only owner calls with an independent `data` context:
 Line point_layer accepts x/y, optional labels/color/radius/alpha/legend_label/
@@ -374,7 +366,7 @@ already-existing attached-facet/grid native helpers.
 
 The owning policy values, full-family forwarding and all eight physical slots
 are implemented within the bounded checks recorded in the workspace/interface
-plan. This does not imply alpha mapper/layer/result delivery or final
+plan. This does not imply layer/result delivery or final
 distribution/content/cost and budget acceptance.
 
 No new core numeric reader is required. Owning policies and existing scoped

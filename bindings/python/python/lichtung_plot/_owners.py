@@ -5,6 +5,7 @@ from __future__ import annotations
 from os import PathLike
 from typing import (
     TYPE_CHECKING,
+    Callable,
     Literal,
     Mapping,
     NoReturn,
@@ -114,6 +115,19 @@ if TYPE_CHECKING:
         | _SingleColumn
         | ColumnsSelector
     )
+    _AlphaInput: TypeAlias = (
+        list[int] | tuple[int, ...] | _Array | _Series | _SingleColumn
+    )
+    _IdInput: TypeAlias = (
+        list[int] | tuple[int, ...] | _Array | _Series | _SingleColumn
+    )
+    _K = TypeVar("_K", bound=tuple[str | ColumnSelector, _CategoryInput])
+    _AlphaKeys: TypeAlias = list[_K] | tuple[_K, ...]
+    _AlphaLinear: TypeAlias = tuple[tuple[float, float], tuple[int, int]]
+    _AlphaThreshold: TypeAlias = tuple[
+        list[int] | list[float] | tuple[float, ...], list[int] | tuple[int, ...]
+    ]
+    _AlphaContinuous: TypeAlias = tuple[tuple[float, float], Callable[[float], int]]
 
 ExactTicks: TypeAlias = list[tuple[float, str]] | tuple[tuple[float, str], ...]
 PathInput: TypeAlias = str | bytes | PathLike[str] | PathLike[bytes]
@@ -728,15 +742,1112 @@ class _EstimateStatusMethods(_Handle):
         return self
 
 
+class _PointAlpha(_Handle):
+    __slots__ = ()
+
+    def point_alpha(self: _H, input: _AlphaInput) -> _H:
+        self._owner.point_alpha(input)
+        return self
+
+    def point_alpha_cells(self: _H, input: _AlphaInput) -> _H:
+        self._owner.point_alpha_cells(input)
+        return self
+
+    def point_alpha_linear(
+        self: _H, input: _NumericInput,
+        domain: tuple[float, float], range: tuple[int, int],
+    ) -> _H:
+        self._owner.point_alpha_linear(input, domain, range)
+        return self
+
+    @overload
+    def point_alpha_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_map(input, linear, log10, threshold, continuous, _UNSET)
+        return self
+
+    def point_alpha_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_map_categories(input, mapper)
+        return self
+
+    @overload
+    def point_alpha_cells_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_cells_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_cells_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_cells_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_cells_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_cells_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def point_alpha_cells_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_cells_map_categories(input, mapper)
+        return self
+
+    @overload
+    def point_alpha_single(self: _H, *, value: int) -> _H: ...
+
+    @overload
+    def point_alpha_single(self: _H, *, input: _AlphaInput) -> _H: ...
+
+    def point_alpha_single(
+        self: _H, *, value: int = cast(int, _UNSET),
+        input: _AlphaInput = cast("_AlphaInput", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_single(value, input, _UNSET)
+        return self
+
+    @overload
+    def point_alpha_single_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_single_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_single_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_single_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_single_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_single_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def point_alpha_single_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_single_map_categories(input, mapper)
+        return self
+
+    def point_alpha_keyed(
+        self: _H, input: _AlphaInput, *, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.point_alpha_keyed(input, keys)
+        return self
+
+    @overload
+    def point_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_keyed_map(
+        self: _H, input: _NumericInput, *, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_keyed_map(
+            input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def point_alpha_keyed_map_categories(
+        self: _H, input: _CategoryInput, *,
+        keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_keyed_map_categories(input, keys, mapper)
+        return self
+
+    def point_alpha_keyed_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _AlphaInput, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.point_alpha_keyed_from_data(data, input, keys)
+        return self
+
+    @overload
+    def point_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_keyed_map_from_data(
+            data, input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def point_alpha_keyed_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _CategoryInput, keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_keyed_map_categories_from_data(data, input, keys, mapper)
+        return self
+
+    def point_alpha_columns(
+        self: _H, input: _AlphaInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.point_alpha_columns(input, column_key, other_keys)
+        return self
+
+    @overload
+    def point_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_columns_map(
+            input, column_key, other_keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def point_alpha_columns_map_categories(
+        self: _H, input: _CategoryInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_columns_map_categories(
+            input, column_key, other_keys, mapper
+        )
+        return self
+
+    def point_alpha_columns_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _AlphaInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.point_alpha_columns_from_data(data, input, column_key, other_keys)
+        return self
+
+    @overload
+    def point_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def point_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def point_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.point_alpha_columns_map_from_data(
+            data, input, column_key, other_keys,
+            linear, log10, threshold, continuous, _UNSET,
+        )
+        return self
+
+    def point_alpha_columns_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _CategoryInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.point_alpha_columns_map_categories_from_data(
+            data, input, column_key, other_keys, mapper
+        )
+        return self
+
+    def point_alpha_theme(self: _H) -> _H:
+        self._owner.point_alpha_theme()
+        return self
+
+
+class _LineAlpha(_Handle):
+    __slots__ = ()
+
+    def line_alpha(self: _H, input: _AlphaInput) -> _H:
+        self._owner.line_alpha(input)
+        return self
+
+    def line_alpha_cells(self: _H, input: _AlphaInput) -> _H:
+        self._owner.line_alpha_cells(input)
+        return self
+
+    def line_alpha_linear(
+        self: _H, input: _NumericInput,
+        domain: tuple[float, float], range: tuple[int, int],
+    ) -> _H:
+        self._owner.line_alpha_linear(input, domain, range)
+        return self
+
+    @overload
+    def line_alpha_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_map(input, linear, log10, threshold, continuous, _UNSET)
+        return self
+
+    def line_alpha_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_map_categories(input, mapper)
+        return self
+
+    @overload
+    def line_alpha_cells_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_cells_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_cells_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_cells_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_cells_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_cells_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def line_alpha_cells_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_cells_map_categories(input, mapper)
+        return self
+
+    @overload
+    def line_alpha_single(self: _H, *, value: int) -> _H: ...
+
+    @overload
+    def line_alpha_single(self: _H, *, input: _AlphaInput) -> _H: ...
+
+    def line_alpha_single(
+        self: _H, *, value: int = cast(int, _UNSET),
+        input: _AlphaInput = cast("_AlphaInput", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_single(value, input, _UNSET)
+        return self
+
+    @overload
+    def line_alpha_single_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_single_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_single_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_single_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_single_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_single_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def line_alpha_single_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_single_map_categories(input, mapper)
+        return self
+
+    def line_alpha_keyed(
+        self: _H, input: _AlphaInput, *, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.line_alpha_keyed(input, keys)
+        return self
+
+    @overload
+    def line_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_keyed_map(
+        self: _H, input: _NumericInput, *, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_keyed_map(
+            input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def line_alpha_keyed_map_categories(
+        self: _H, input: _CategoryInput, *,
+        keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_keyed_map_categories(input, keys, mapper)
+        return self
+
+    def line_alpha_keyed_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _AlphaInput, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.line_alpha_keyed_from_data(data, input, keys)
+        return self
+
+    @overload
+    def line_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_keyed_map_from_data(
+            data, input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def line_alpha_keyed_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _CategoryInput, keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_keyed_map_categories_from_data(data, input, keys, mapper)
+        return self
+
+    def line_alpha_columns(
+        self: _H, input: _AlphaInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.line_alpha_columns(input, column_key, other_keys)
+        return self
+
+    @overload
+    def line_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_columns_map(
+            input, column_key, other_keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def line_alpha_columns_map_categories(
+        self: _H, input: _CategoryInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_columns_map_categories(
+            input, column_key, other_keys, mapper
+        )
+        return self
+
+    def line_alpha_columns_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _AlphaInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.line_alpha_columns_from_data(data, input, column_key, other_keys)
+        return self
+
+    @overload
+    def line_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def line_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def line_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.line_alpha_columns_map_from_data(
+            data, input, column_key, other_keys,
+            linear, log10, threshold, continuous, _UNSET,
+        )
+        return self
+
+    def line_alpha_columns_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _CategoryInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.line_alpha_columns_map_categories_from_data(
+            data, input, column_key, other_keys, mapper
+        )
+        return self
+
+    def line_alpha_theme(self: _H) -> _H:
+        self._owner.line_alpha_theme()
+        return self
+
+
+class _FillAlpha(_Handle):
+    __slots__ = ()
+
+    def fill_alpha(self: _H, input: _AlphaInput) -> _H:
+        self._owner.fill_alpha(input)
+        return self
+
+    def fill_alpha_cells(self: _H, input: _AlphaInput) -> _H:
+        self._owner.fill_alpha_cells(input)
+        return self
+
+    def fill_alpha_linear(
+        self: _H, input: _NumericInput,
+        domain: tuple[float, float], range: tuple[int, int],
+    ) -> _H:
+        self._owner.fill_alpha_linear(input, domain, range)
+        return self
+
+    @overload
+    def fill_alpha_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_map(input, linear, log10, threshold, continuous, _UNSET)
+        return self
+
+    def fill_alpha_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_map_categories(input, mapper)
+        return self
+
+    @overload
+    def fill_alpha_cells_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_cells_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_cells_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_cells_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_cells_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_cells_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_cells_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_cells_map_categories(input, mapper)
+        return self
+
+    @overload
+    def fill_alpha_single(self: _H, *, value: int) -> _H: ...
+
+    @overload
+    def fill_alpha_single(self: _H, *, input: _AlphaInput) -> _H: ...
+
+    def fill_alpha_single(
+        self: _H, *, value: int = cast(int, _UNSET),
+        input: _AlphaInput = cast("_AlphaInput", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_single(value, input, _UNSET)
+        return self
+
+    @overload
+    def fill_alpha_single_map(
+        self: _H, input: _NumericInput, *, linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_single_map(
+        self: _H, input: _NumericInput, *, log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_single_map(
+        self: _H, input: _NumericInput, *, threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_single_map(
+        self: _H, input: _NumericInput, *, continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_single_map(
+        self: _H, input: _NumericInput, *,
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_single_map(
+            input, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_single_map_categories(
+        self: _H, input: _CategoryInput, *, mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_single_map_categories(input, mapper)
+        return self
+
+    def fill_alpha_keyed(
+        self: _H, input: _AlphaInput, *, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.fill_alpha_keyed(input, keys)
+        return self
+
+    @overload
+    def fill_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map(
+        self: _H, input: _NumericInput, *,
+        keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_keyed_map(
+        self: _H, input: _NumericInput, *, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_keyed_map(
+            input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_keyed_map_categories(
+        self: _H, input: _CategoryInput, *,
+        keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_keyed_map_categories(input, keys, mapper)
+        return self
+
+    def fill_alpha_keyed_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _AlphaInput, keys: _AlphaKeys[_K],
+    ) -> _H:
+        self._owner.fill_alpha_keyed_from_data(data, input, keys)
+        return self
+
+    @overload
+    def fill_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K], continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_keyed_map_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _NumericInput, keys: _AlphaKeys[_K],
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_keyed_map_from_data(
+            data, input, keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_keyed_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *,
+        input: _CategoryInput, keys: _AlphaKeys[_K], mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_keyed_map_categories_from_data(data, input, keys, mapper)
+        return self
+
+    def fill_alpha_columns(
+        self: _H, input: _AlphaInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.fill_alpha_columns(input, column_key, other_keys)
+        return self
+
+    @overload
+    def fill_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_columns_map(
+        self: _H, input: _NumericInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_columns_map(
+            input, column_key, other_keys, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_columns_map_categories(
+        self: _H, input: _CategoryInput, *,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_columns_map_categories(
+            input, column_key, other_keys, mapper
+        )
+        return self
+
+    def fill_alpha_columns_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _AlphaInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+    ) -> _H:
+        self._owner.fill_alpha_columns_from_data(data, input, column_key, other_keys)
+        return self
+
+    @overload
+    def fill_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> _H: ...
+
+    @overload
+    def fill_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> _H: ...
+
+    def fill_alpha_columns_map_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _NumericInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> _H:
+        self._owner.fill_alpha_columns_map_from_data(
+            data, input, column_key, other_keys,
+            linear, log10, threshold, continuous, _UNSET,
+        )
+        return self
+
+    def fill_alpha_columns_map_categories_from_data(
+        self: _H, data: _DataSource | None = None, *, input: _CategoryInput,
+        column_key: _CategoryInput | _IdInput, other_keys: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> _H:
+        self._owner.fill_alpha_columns_map_categories_from_data(
+            data, input, column_key, other_keys, mapper
+        )
+        return self
+
+    def fill_alpha_theme(self: _H) -> _H:
+        self._owner.fill_alpha_theme()
+        return self
+
+
 class Scatter(
     _NumericX, _NumericY, _Hue, _Facet, _Guides, _Annotations, _Outline,
-    _CategoricalScale, Plot,
+    _CategoricalScale, _PointAlpha, Plot,
 ):
     """Numeric Scatter with exact native capabilities."""
     __slots__ = ()
 
 
-class Histogram(_NumericX, _NumericY, _Facet, _Guides, _Annotations, Plot):
+class Histogram(
+    _NumericX, _NumericY, _Facet, _Guides, _Annotations, _LineAlpha, _FillAlpha, Plot,
+):
     __slots__ = ()
 
     @overload
@@ -777,15 +1888,128 @@ class Histogram(_NumericX, _NumericY, _Facet, _Guides, _Annotations, Plot):
         self._owner.composite_precomputed_kde_from_data(data, x, y)
         return self
 
+    def fill_alpha_bins(
+        self, input: _AlphaInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (),
+    ) -> Histogram:
+        self._owner.fill_alpha_bins(input, lower, upper, facets)
+        return self
+
+    @overload
+    def fill_alpha_bins_map(
+        self, input: _NumericInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (), linear: _AlphaLinear,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map(
+        self, input: _NumericInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (), log10: _AlphaLinear,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map(
+        self, input: _NumericInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (), threshold: _AlphaThreshold,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map(
+        self, input: _NumericInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (), continuous: _AlphaContinuous,
+    ) -> Histogram: ...
+
+    def fill_alpha_bins_map(
+        self, input: _NumericInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> Histogram:
+        self._owner.fill_alpha_bins_map(
+            input, lower, upper, facets, linear, log10, threshold, continuous, _UNSET
+        )
+        return self
+
+    def fill_alpha_bins_map_categories(
+        self, input: _CategoryInput, *, lower: _NumericInput, upper: _NumericInput,
+        facets: _AlphaKeys[_K] = (), mapper: Callable[[str], int],
+    ) -> Histogram:
+        self._owner.fill_alpha_bins_map_categories(input, lower, upper, facets, mapper)
+        return self
+
+    def fill_alpha_bins_from_data(
+        self, data: _DataSource | None = None, *, input: _AlphaInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+    ) -> Histogram:
+        self._owner.fill_alpha_bins_from_data(data, input, lower, upper, facets)
+        return self
+
+    @overload
+    def fill_alpha_bins_map_from_data(
+        self, data: _DataSource | None = None, *, input: _NumericInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map_from_data(
+        self, data: _DataSource | None = None, *, input: _NumericInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        log10: _AlphaLinear,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map_from_data(
+        self, data: _DataSource | None = None, *, input: _NumericInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        threshold: _AlphaThreshold,
+    ) -> Histogram: ...
+
+    @overload
+    def fill_alpha_bins_map_from_data(
+        self, data: _DataSource | None = None, *, input: _NumericInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        continuous: _AlphaContinuous,
+    ) -> Histogram: ...
+
+    def fill_alpha_bins_map_from_data(
+        self, data: _DataSource | None = None, *, input: _NumericInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        linear: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        log10: _AlphaLinear = cast("_AlphaLinear", _UNSET),
+        threshold: _AlphaThreshold = cast("_AlphaThreshold", _UNSET),
+        continuous: _AlphaContinuous = cast("_AlphaContinuous", _UNSET),
+    ) -> Histogram:
+        self._owner.fill_alpha_bins_map_from_data(
+            data, input, lower, upper, facets,
+            linear, log10, threshold, continuous, _UNSET,
+        )
+        return self
+
+    def fill_alpha_bins_map_categories_from_data(
+        self, data: _DataSource | None = None, *, input: _CategoryInput,
+        lower: _NumericInput, upper: _NumericInput, facets: _AlphaKeys[_K] = (),
+        mapper: Callable[[str], int],
+    ) -> Histogram:
+        self._owner.fill_alpha_bins_map_categories_from_data(
+            data, input, lower, upper, facets, mapper
+        )
+        return self
+
 
 class Density(
     _NumericX, _NumericY, _Hue, _Group, _Facet, _Guides, _Annotations,
-    _Outline, _CategoricalScale, Plot,
+    _Outline, _CategoricalScale, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
-class Qq(_NumericX, _NumericY, _Facet, _Guides, _Annotations, _Outline, Plot):
+class Qq(
+    _NumericX, _NumericY, _Facet, _Guides, _Annotations, _Outline,
+    _PointAlpha, _LineAlpha, Plot,
+):
     __slots__ = ()
 
     def reference_line(self, line: Literal["quartiles", "identity", "hidden"]) -> Qq:
@@ -795,14 +2019,15 @@ class Qq(_NumericX, _NumericY, _Facet, _Guides, _Annotations, _Outline, Plot):
 
 class PointInterval(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _Outline,
-    _CategoryOrder, _ZeroLine, _EstimateDetails, _EstimateStatusMethods, Plot,
+    _CategoryOrder, _ZeroLine, _EstimateDetails, _EstimateStatusMethods,
+    _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class Line(
     _NumericX, _NumericY, _Hue, _Group, _Facet, _Guides, _Annotations, _Outline,
-    _CategoricalScale, _Markers, Plot,
+    _CategoricalScale, _Markers, _PointAlpha, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -816,14 +2041,14 @@ class Line(
 
 class Trajectory(
     _NumericX, _NumericY, _CategoricalX, _Hue, _Facet, _Guides, _Annotations,
-    _Outline, _CategoricalScale, Plot,
+    _Outline, _CategoricalScale, _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class LinePath(
     _NumericX, _NumericY, _Hue, _Facet, _Guides, _Annotations, _Outline,
-    _CategoricalScale, _Markers, Plot,
+    _CategoricalScale, _Markers, _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -834,7 +2059,7 @@ class LinePath(
 
 class Interaction(
     _NumericY, _CategoricalX, _Hue, _Facet, _Guides, _Annotations, _Outline,
-    _CategoricalScale, _Markers, Plot,
+    _CategoricalScale, _Markers, _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -849,7 +2074,8 @@ class Interaction(
 
 class Coefficient(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _Outline,
-    _EstimateDetails, _EstimateStatusMethods, _SignificanceStyle, Plot,
+    _EstimateDetails, _EstimateStatusMethods, _SignificanceStyle,
+    _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -864,7 +2090,7 @@ class Coefficient(
 
 class Forest(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _Outline,
-    _EstimateDetails, _EstimateStatusMethods, Plot,
+    _EstimateDetails, _EstimateStatusMethods, _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -874,13 +2100,14 @@ class Forest(
 
 
 class Dumbbell(
-    _NumericX, _CategoricalY, _Group, _Facet, _Guides, _Annotations, _Outline, Plot,
+    _NumericX, _CategoricalY, _Group, _Facet, _Guides, _Annotations, _Outline,
+    _PointAlpha, _LineAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class Heatmap(
-    _CategoricalX, _CategoricalY, _Facet, _Annotations, _ContinuousColor, Plot,
+    _CategoricalX, _CategoricalY, _Facet, _Annotations, _ContinuousColor, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -950,7 +2177,7 @@ class Heatmap(
 
 class Bar(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoryOrder, _CategoricalScale, _SignificanceStyle, Plot,
+    _CategoryOrder, _CategoricalScale, _SignificanceStyle, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -961,7 +2188,8 @@ class Bar(
 
 class HorizontalBar(
     _NumericX, _CategoricalY, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoryOrder, _CategoricalScale, _SignificanceStyle, _ZeroLine, Plot,
+    _CategoryOrder, _CategoricalScale, _SignificanceStyle, _ZeroLine,
+    _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -976,35 +2204,38 @@ class HorizontalBar(
 
 class StackedBar(
     _NumericY, _CategoricalX, _Facet, _Guides, _Annotations, _CategoryOrder,
-    _CategoricalScale, _SignificanceStyle, Plot,
+    _CategoricalScale, _SignificanceStyle, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class StackedHorizontalBar(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _CategoryOrder,
-    _CategoricalScale, _SignificanceStyle, _ZeroLine, Plot,
+    _CategoricalScale, _SignificanceStyle, _ZeroLine, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class Boxplot(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay, Plot,
+    _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay,
+    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class Violin(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay, Plot,
+    _CategoricalScale, _SignificanceStyle, _Outline, _RawOverlay,
+    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
 class Raincloud(
     _NumericY, _CategoricalX, _SeriesRole, _Facet, _Guides, _Annotations,
-    _CategoricalScale, _SignificanceStyle, _Outline, Plot,
+    _CategoricalScale, _SignificanceStyle, _Outline,
+    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -1026,7 +2257,8 @@ class Raincloud(
 
 
 class Regression(
-    _NumericX, _NumericY, _Facet, _Guides, _Annotations, _Outline, Plot,
+    _NumericX, _NumericY, _Facet, _Guides, _Annotations, _Outline,
+    _PointAlpha, _LineAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
@@ -1037,12 +2269,12 @@ class Regression(
 
 class Marginal(
     _NumericX, _NumericY, _Hue, _Group, _Guides, _Annotations, _Outline,
-    _CategoricalScale, Plot,
+    _CategoricalScale, _PointAlpha, _FillAlpha, Plot,
 ):
     __slots__ = ()
 
 
-class Matrix(_Hue, _Group, _Outline, _CategoricalScale, Plot):
+class Matrix(_Hue, _Group, _Outline, _CategoricalScale, _PointAlpha, _FillAlpha, Plot):
     __slots__ = ()
 
     def matrix_row_text_layout(self, layout: TextLayout) -> Matrix:
@@ -1056,12 +2288,14 @@ class Matrix(_Hue, _Group, _Outline, _CategoricalScale, Plot):
 
 class Beeswarm(
     _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _Outline,
-    _ContinuousColor, _ZeroLine, Plot,
+    _ContinuousColor, _ZeroLine, _PointAlpha, Plot,
 ):
     __slots__ = ()
 
 
-class Waterfall(_NumericX, _CategoricalY, _Facet, _Guides, _Annotations, Plot):
+class Waterfall(
+    _NumericX, _CategoricalY, _Facet, _Guides, _Annotations, _FillAlpha, Plot,
+):
     __slots__ = ()
 
     def total_labels(self, base: TextInput, terminal: TextInput) -> Waterfall:

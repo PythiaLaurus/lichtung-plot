@@ -66,6 +66,63 @@ fn descriptor_validation_checks_original_bounds_shapes_and_validity_without_role
 }
 
 #[test]
+fn identity_only_projection_supports_restored_column_alpha_without_value_lookup() {
+    let x = array![[0.], [1.]];
+    let control = array![[1.], [2.]];
+    let treated = array![[2.], [3.]];
+    let x_view = x.view();
+    let control_view = control.view();
+    let treated_view = treated.view();
+    let entries: [(usize, &dyn ArraySource); 3] =
+        [(4, &x_view), (7, &control_view), (2, &treated_view)];
+    let identities = [(4, "time"), (7, "control"), (2, "treated")];
+    let source = ColumnProjection::new((2, 10), &entries)
+        .unwrap()
+        .with_identities(&identities)
+        .unwrap();
+    let (plot, metadata) = crate::Line::from_data(source, 4usize, [7usize, 2usize])
+        .unwrap()
+        .into_parts();
+
+    let namespace = ColumnProjection::from_identities((2, 10), &identities).unwrap();
+    assert_eq!(namespace.shape(), (2, 10));
+    assert_eq!(
+        crate::source::identity(Some(&namespace), 7, "key").unwrap(),
+        "control"
+    );
+    assert!(matches!(
+        namespace.numeric_column(7, "value"),
+        Err(AdapterError::Binding { detail, .. }) if detail.contains("was not projected")
+    ));
+    let column_ids = array![7usize, 2usize];
+    let bytes = array![55u8, 173u8];
+    // Ordinary direct ID/byte views retain their original protocols. Neither
+    // vector is a value entry masquerading as one of the source's ten columns.
+    let _adapted = crate::Line::from_parts(plot, metadata)
+        .line_alpha_columns_from_data(
+            namespace,
+            column_ids.view(),
+            std::iter::empty::<(&str, usize)>(),
+            bytes.view(),
+        )
+        .unwrap();
+
+    let explicit_empty = ColumnProjection::from_identities((2, 10), &[]).unwrap();
+    assert!(matches!(
+        crate::source::identity(Some(&explicit_empty), 7, "key"),
+        Err(AdapterError::Binding { detail, .. }) if detail.contains("no raw identity")
+    ));
+    assert!(matches!(
+        ColumnProjection::from_identities((2, 10), &[(10, "outside")]),
+        Err(AdapterError::Column {
+            index: 10,
+            columns: 10,
+            ..
+        })
+    ));
+}
+
+#[test]
 fn explicit_identity_tables_replace_completely_without_authorizing_value_lookup() {
     let values = array![[1], [2]];
     let one = values.view();

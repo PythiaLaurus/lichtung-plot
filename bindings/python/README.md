@@ -2,8 +2,8 @@
 
 This package provides all 25 plot families from native Python, NumPy, pandas and
 eager Polars inputs, with exact-family configuration and the reusable
-Plot/Canvas/Output lifecycle. Alpha bindings, independent point layers and
-significance results are still being implemented.
+Plot/Canvas/Output lifecycle and complete native alpha scopes. Independent point
+layers and significance results are still being implemented.
 
 ```python
 from lichtung_plot import Canvas, Text, Theme, scatter
@@ -173,6 +173,27 @@ single-cell text panels, panel-title alignment and native range groups.
 explicitly unavailable Forest estimates and annotated/highlighted Heatmap cells.
 Its synthetic values and supplied bounds are illustrative, not inferential results.
 The complete remaining interface and verification gates are tracked in
+`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
+
+## Alpha
+
+Applicable families expose native observation/cell, explicit Single, keyed and
+generated-column alpha scopes; Histogram also supports bin selectors. Native
+lists/tuples contain checked byte integers, while foreign byte inputs require
+u8/UInt8. A length-one variable does not implicitly broadcast. Use the explicit
+`_single(value=...)` or `_single(input=...)` form, and `_theme()` to reset.
+
+Numeric maps select one native linear, log10, threshold or continuous factory;
+categorical maps require a scalar mapper. Mappers run at binding time after
+foreign data loans end, retain native guide declarations and are not stored as
+render-time callbacks. Alpha never filters scientific membership. Independent
+`_from_data(None, ...)` calls are direct-only, not main-source fallback.
+Semantic key fields use plain raw strings or `col[original_key]` for an already
+bound pandas identity, never display labels.
+
+`examples/alpha_mappings.py` combines categorical point alpha and numeric cell
+alpha using supplied synthetic coverage, explicitly not statistical confidence.
+Exact call forms and source namespaces are defined in
 `specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
 
 ## Local development

@@ -205,12 +205,12 @@ importers.
 
 ndarray `ColumnProjection::new((rows, logical_columns), columns)` associates
 original indices with borrowed one-column `ArraySource` values. Entries may have
-different admitted element types, strides and present masks. Indices must be
-unique and in bounds; each source has the original row count, one column and
-valid existing validity shape. The descriptor reports the original complete
-shape. Missing value entries fail explicitly; `..` still requests all original
-columns. Role extraction delegates once and remaps physical-column-zero dtype
-and source-row diagnostics to the original index.
+different admitted element types, strides and present masks. Entries form a
+nonempty collection with unique, in-bounds indices; each source has the original
+row count, one column and valid existing validity shape. The descriptor reports
+the original complete shape. Missing value entries fail explicitly; `..` still
+requests all original columns. Role extraction delegates once and remaps
+physical-column-zero dtype and source-row diagnostics to the original index.
 
 Optional `.with_identities(&[(index, raw_identity)])` borrows unique indices and
 unique exact raw strings, covering all value entries. Extra in-bounds
@@ -222,6 +222,16 @@ wide and Matrix field names use the same identity transport. Generated fields
 avoid the entire supplied identity table; direct-local ordinals, grid positional
 keys and exact SourceRows values remain unchanged. Current-source indices are
 not frozen constructor positions or a codec address space.
+
+`ColumnProjection::from_identities((rows, logical_columns), identities)` borrows
+an explicit namespace with no value entries, using that same descriptor and
+identity validator. This supports named column-alpha identity resolution after
+all required values have been snapshotted separately; it does not import an
+unrelated column or turn direct vectors into source columns. The shape remains
+the actual current source shape, not an inferred selector-table shape.
+`new(..., &[])` still rejects. An explicit empty identity table never falls back
+to positional names, and every value/axis/ID/byte lookup of an unprojected column
+still fails. No descriptor or borrowed namespace enters Plot/BindingMetadata.
 
 Polars `ColumnProjection::new(rows, source_names, columns)` borrows the complete
 ordered raw namespace separately from the selected Columns. It checks nonempty,

@@ -117,6 +117,21 @@ macro_rules! map_capability {
     (BarSpacing, $native:expr, $plot:ident => $body:expr) => {
         map_kinds!($native, [Bar, HorizontalBar], $plot => $body)
     };
+    (PointAlpha, $native:expr, $plot:ident => $body:expr) => {
+        map_kinds!($native, [Scatter, Qq, PointInterval, Line, Trajectory, LinePath,
+            Interaction, Coefficient, Forest, Dumbbell, Boxplot, Violin, Raincloud,
+            Regression, Marginal, Matrix, Beeswarm], $plot => $body)
+    };
+    (LineAlpha, $native:expr, $plot:ident => $body:expr) => {
+        map_kinds!($native, [Histogram, Density, Qq, PointInterval, Line, Trajectory,
+            LinePath, Interaction, Coefficient, Forest, Dumbbell, Bar, HorizontalBar,
+            Boxplot, Violin, Raincloud, Regression], $plot => $body)
+    };
+    (FillAlpha, $native:expr, $plot:ident => $body:expr) => {
+        map_kinds!($native, [Histogram, Density, Line, Heatmap, Bar, HorizontalBar,
+            StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Regression,
+            Marginal, Matrix, Waterfall], $plot => $body)
+    };
     // Exact-only native methods, not invented capability traits.
     ($kind:ident, $native:expr, $plot:ident => $body:expr) => {
         map_kinds!($native, [$kind], $plot => $body)

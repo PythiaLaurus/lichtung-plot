@@ -1,5 +1,6 @@
 //! Binding-time input snapshots; foreign work never borrows a Python owner.
 
+mod alpha;
 mod array;
 mod binding;
 mod channels;
@@ -12,6 +13,10 @@ pub(crate) mod polars;
 mod selectors;
 mod wide;
 
+pub(crate) use alpha::{
+    fill_alpha, fill_alpha_bins, line_alpha, point_alpha, AlphaBinsArgs, AlphaInputArgs,
+    AlphaMapArgs, AlphaRequestArgs, AlphaSourceArgs,
+};
 pub(crate) use binding::{hue, scatter, source_rows, source_rows_cells};
 pub(crate) use channels::{
     column_labels, estimate_status, estimate_status_boolean, estimate_status_categorical, group,

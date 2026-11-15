@@ -11,7 +11,9 @@ use pyo3::{PyTraverseError, PyVisit};
 
 use super::{native_snapshot, policy, CallbackSlot, NativePlot, PlotRoots};
 use crate::callbacks::{self, CallbackRoots};
-use crate::input;
+use crate::input::{
+    self, AlphaBinsArgs, AlphaInputArgs, AlphaMapArgs, AlphaRequestArgs, AlphaSourceArgs,
+};
 use crate::output::{PyOutput, Terminal};
 use crate::values::numeric::{PyNumericFormat, PyTickGeneration};
 use crate::values::{
@@ -65,6 +67,21 @@ macro_rules! prepare_capability {
     (EstimateStatus, $native:expr, $config:ident => $body:expr) => {
         prepare_kinds!($native, [PointInterval, Coefficient, Forest], $config => $body)
     };
+    (PointAlpha, $native:expr, $config:ident => $body:expr) => {
+        prepare_kinds!($native, [Scatter, Qq, PointInterval, Line, Trajectory, LinePath,
+            Interaction, Coefficient, Forest, Dumbbell, Boxplot, Violin, Raincloud,
+            Regression, Marginal, Matrix, Beeswarm], $config => $body)
+    };
+    (LineAlpha, $native:expr, $config:ident => $body:expr) => {
+        prepare_kinds!($native, [Histogram, Density, Qq, PointInterval, Line, Trajectory,
+            LinePath, Interaction, Coefficient, Forest, Dumbbell, Bar, HorizontalBar,
+            Boxplot, Violin, Raincloud, Regression], $config => $body)
+    };
+    (FillAlpha, $native:expr, $config:ident => $body:expr) => {
+        prepare_kinds!($native, [Histogram, Density, Line, Heatmap, Bar, HorizontalBar,
+            StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Regression,
+            Marginal, Matrix, Waterfall], $config => $body)
+    };
     ($kind:ident, $native:expr, $config:ident => $body:expr) => {
         prepare_kinds!($native, [$kind], $config => $body)
     };
@@ -83,6 +100,7 @@ macro_rules! owner_api {
         }
         inputs ($slf:ident, $native:ident, $config:ident, $roots:ident) {
             $(
+                $(#[$method_attribute:meta])*
                 fn $method:ident($($parameter:ident: $parameter_type:ty),* $(,)?)
                     : $capability:ident => $producer:expr;
             )*
@@ -105,6 +123,7 @@ macro_rules! owner_api {
                     }
                 )*
                 $(
+                    $(#[$method_attribute])*
                     fn $method(
                         $slf: &Bound<'_, Self>,
                         $($parameter: $parameter_type),*
@@ -471,6 +490,538 @@ owner_api! {
         fn facet_grid_columns_column(row: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_column(config, roots, row);
         fn facet_grid_columns_row_cells(column: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_row_cells(config, roots, column);
         fn facet_grid_columns_column_cells(row: &Bound<'_, PyAny>): Facet => input::facet_grid_columns_column_cells(config, roots, row);
+
+        // D receives the original values and presence markers, including byte
+        // literals and map settings. Collection fields stay Bound -> Some(field):
+        // an explicit Python None is not the omitted empty keys/facets case.
+        fn point_alpha(input: &Bound<'_, PyAny>): PointAlpha =>
+            input::point_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Row(AlphaInputArgs::Raw(input)));
+        fn point_alpha_cells(input: &Bound<'_, PyAny>): PointAlpha =>
+            input::point_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Cells(AlphaInputArgs::Raw(input)));
+        fn point_alpha_linear(
+            input: &Bound<'_, PyAny>, domain: &Bound<'_, PyAny>, range: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Linear { input, domain, range });
+        fn point_alpha_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn point_alpha_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Categories { input, mapper }));
+        fn point_alpha_cells_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn point_alpha_cells_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Categories { input, mapper }));
+        fn point_alpha_single(
+            value: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Single { value, input, unset });
+        fn point_alpha_single_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleMap {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            });
+        fn point_alpha_single_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleCategories { input, mapper });
+        fn point_alpha_keyed(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "complete keyed alpha scope and exclusive numeric map fields")]
+        fn point_alpha_keyed_map(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn point_alpha_keyed_map_categories(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn point_alpha_keyed_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent keyed alpha scope and exclusive numeric map fields")]
+        fn point_alpha_keyed_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn point_alpha_keyed_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn point_alpha_columns(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "generated-column alpha scope and exclusive numeric map fields")]
+        fn point_alpha_columns_map(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn point_alpha_columns_map_categories(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn point_alpha_columns_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys), input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent generated-column scope and exclusive numeric map fields")]
+        fn point_alpha_columns_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn point_alpha_columns_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): PointAlpha => input::point_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+
+        fn line_alpha(input: &Bound<'_, PyAny>): LineAlpha =>
+            input::line_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Row(AlphaInputArgs::Raw(input)));
+        fn line_alpha_cells(input: &Bound<'_, PyAny>): LineAlpha =>
+            input::line_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Cells(AlphaInputArgs::Raw(input)));
+        fn line_alpha_linear(
+            input: &Bound<'_, PyAny>, domain: &Bound<'_, PyAny>, range: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Linear { input, domain, range });
+        fn line_alpha_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn line_alpha_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Categories { input, mapper }));
+        fn line_alpha_cells_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn line_alpha_cells_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Categories { input, mapper }));
+        fn line_alpha_single(
+            value: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Single { value, input, unset });
+        fn line_alpha_single_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleMap {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            });
+        fn line_alpha_single_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleCategories { input, mapper });
+        fn line_alpha_keyed(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "complete keyed alpha scope and exclusive numeric map fields")]
+        fn line_alpha_keyed_map(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn line_alpha_keyed_map_categories(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn line_alpha_keyed_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent keyed alpha scope and exclusive numeric map fields")]
+        fn line_alpha_keyed_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn line_alpha_keyed_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn line_alpha_columns(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "generated-column alpha scope and exclusive numeric map fields")]
+        fn line_alpha_columns_map(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn line_alpha_columns_map_categories(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn line_alpha_columns_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys), input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent generated-column scope and exclusive numeric map fields")]
+        fn line_alpha_columns_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn line_alpha_columns_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): LineAlpha => input::line_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+
+        fn fill_alpha(input: &Bound<'_, PyAny>): FillAlpha =>
+            input::fill_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Row(AlphaInputArgs::Raw(input)));
+        fn fill_alpha_cells(input: &Bound<'_, PyAny>): FillAlpha =>
+            input::fill_alpha(slf.py(), config, roots,
+                AlphaRequestArgs::Cells(AlphaInputArgs::Raw(input)));
+        fn fill_alpha_linear(
+            input: &Bound<'_, PyAny>, domain: &Bound<'_, PyAny>, range: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Linear { input, domain, range });
+        fn fill_alpha_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn fill_alpha_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Row(AlphaInputArgs::Categories { input, mapper }));
+        fn fill_alpha_cells_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            }));
+        fn fill_alpha_cells_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Cells(AlphaInputArgs::Categories { input, mapper }));
+        fn fill_alpha_single(
+            value: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Single { value, input, unset });
+        fn fill_alpha_single_map(
+            input: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleMap {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            });
+        fn fill_alpha_single_map_categories(
+            input: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::SingleCategories { input, mapper });
+        fn fill_alpha_keyed(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "complete keyed alpha scope and exclusive numeric map fields")]
+        fn fill_alpha_keyed_map(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn fill_alpha_keyed_map_categories(
+            input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Main, keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn fill_alpha_keyed_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                keys, input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent keyed alpha scope and exclusive numeric map fields")]
+        fn fill_alpha_keyed_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn fill_alpha_keyed_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Keyed {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)), keys,
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn fill_alpha_columns(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "generated-column alpha scope and exclusive numeric map fields")]
+        fn fill_alpha_columns_map(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn fill_alpha_columns_map_categories(
+            input: &Bound<'_, PyAny>, column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Main, column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+        fn fill_alpha_columns_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys), input: AlphaInputArgs::Raw(input),
+            });
+        #[allow(clippy::too_many_arguments, reason = "independent generated-column scope and exclusive numeric map fields")]
+        fn fill_alpha_columns_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Numeric {
+                    input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+                },
+            });
+        fn fill_alpha_columns_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            column_key: &Bound<'_, PyAny>, other_keys: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): FillAlpha => input::fill_alpha(slf.py(), config, roots,
+            AlphaRequestArgs::Columns {
+                source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+                column_key, other_keys: Some(other_keys),
+                input: AlphaInputArgs::Categories { input, mapper },
+            });
+
+        fn fill_alpha_bins(
+            input: &Bound<'_, PyAny>, lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>,
+            facets: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Main, lower, upper, facets: Some(facets),
+            input: AlphaInputArgs::Raw(input),
+        });
+        #[allow(clippy::too_many_arguments, reason = "exact bin selectors and exclusive numeric map fields")]
+        fn fill_alpha_bins_map(
+            input: &Bound<'_, PyAny>, lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>,
+            facets: &Bound<'_, PyAny>, linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Main, lower, upper, facets: Some(facets),
+            input: AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            },
+        });
+        fn fill_alpha_bins_map_categories(
+            input: &Bound<'_, PyAny>, lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>,
+            facets: &Bound<'_, PyAny>, mapper: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Main, lower, upper, facets: Some(facets),
+            input: AlphaInputArgs::Categories { input, mapper },
+        });
+        fn fill_alpha_bins_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>, facets: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+            lower, upper, facets: Some(facets), input: AlphaInputArgs::Raw(input),
+        });
+        #[allow(clippy::too_many_arguments, reason = "independent exact bin selectors and exclusive numeric map fields")]
+        fn fill_alpha_bins_map_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>, facets: &Bound<'_, PyAny>,
+            linear: &Bound<'_, PyAny>, log10: &Bound<'_, PyAny>,
+            threshold: &Bound<'_, PyAny>, continuous: &Bound<'_, PyAny>, unset: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+            lower, upper, facets: Some(facets),
+            input: AlphaInputArgs::Numeric {
+                input, map: AlphaMapArgs { linear, log10, threshold, continuous, unset },
+            },
+        });
+        fn fill_alpha_bins_map_categories_from_data(
+            data: &Bound<'_, PyAny>, input: &Bound<'_, PyAny>,
+            lower: &Bound<'_, PyAny>, upper: &Bound<'_, PyAny>, facets: &Bound<'_, PyAny>,
+            mapper: &Bound<'_, PyAny>,
+        ): Histogram => input::fill_alpha_bins(slf.py(), config, roots, AlphaBinsArgs {
+            source: AlphaSourceArgs::Independent((!data.is_none()).then_some(data)),
+            lower, upper, facets: Some(facets),
+            input: AlphaInputArgs::Categories { input, mapper },
+        });
     }
     api {
     text {
@@ -531,6 +1082,27 @@ owner_api! {
     }
     }
     manual {
+    fn point_alpha_theme(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |native| {
+            map_capability!(PointAlpha, native, plot =>
+                plot.point_alpha(core::AlphaEncoding::theme()))
+        })
+    }
+
+    fn line_alpha_theme(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |native| {
+            map_capability!(LineAlpha, native, plot =>
+                plot.line_alpha(core::AlphaEncoding::theme()))
+        })
+    }
+
+    fn fill_alpha_theme(slf: &Bound<'_, Self>) -> PyResult<()> {
+        Self::update(slf, |native| {
+            map_capability!(FillAlpha, native, plot =>
+                plot.fill_alpha(core::AlphaEncoding::theme()))
+        })
+    }
+
     #[staticmethod]
     #[pyo3(signature = (data=None, *, x, y, hue=None, by_row_position=false, numeric_only=false, unset))]
     fn scatter(
