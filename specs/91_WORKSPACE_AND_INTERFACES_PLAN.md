@@ -10,6 +10,11 @@ Current behavior remains defined by [architecture](01_ARCHITECTURE.md),
 [development](90_DEVELOPMENT.md). Update those contracts with working behavior,
 not in anticipation of it.
 
+The scenario/contract/input-expanded budget arithmetic in the historical receipts
+below is withdrawn. Current counting follows `specs/90_DEVELOPMENT.md`: one actual
+test function counts once in one layer. Those historical build, wheel and package
+receipts do not certify later test-source cleanup or its current budget.
+
 The scope covers a workspace migration, new Polars/ndarray adapters, a complete
 Python interface, and replacement of the loose guides with a serious Book-style
 documentation system and gallery. The standalone renderer now lives in a virtual
@@ -29,8 +34,7 @@ selection, exact pandas column keys, MaskedArray validity, immutable configurati
 values, text-entry/omission/clear/precedence rules and object-lifecycle semantics
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
-surface recorded below with bounded installed verification; final acceptance
-is blocked by the unchanged test budgets. The recorded cleanup at `7fb6829`
+surface recorded below with bounded installed verification. The recorded cleanup at `7fb6829`
 passed focused verification and a new independent source build/fresh installed
 runtime gate. Further hard-budget cleanup is now in progress; its later packaged
 test changes require another final source-distribution refresh.
@@ -48,21 +52,17 @@ base data/facet/configuration methods, complete Theme/Text and numeric policies,
 entries, independent point layers and significance results are implemented.
 The recorded Linux source-distribution gate, complete peer content/gallery
 and same-source cost observations are verified below. The post-content source
-distribution also passed a new independent build/install/runtime gate. Last-stage
-reviewed test cleanup is verified below, but conservative reviewed counts already
-exceeded all three unchanged limits at that checkpoint. The further cleanup below
-now closes E2E at 80; whole-workspace unit/module exact counts remain unresolved.
-The scalar-domain audit below also proves a constraint conflict: retaining the
-existing full Unicode casefold conformance while charging independent ignored
-inputs already exceeds the 800-unit ceiling by itself. No budget completion is
-claimed and no unique Unicode coverage has been deleted to manufacture one.
+distribution also passed a new independent build/install/runtime gate. The cleanup
+receipts below describe their historical source only. Their expanded E2E, scalar
+and contract counts are not a current function census, constraint conflict or
+budget completion certificate.
 The recorded post-cleanup source-distribution refresh passed before the further
 hard-budget cleanup below; it does not certify later test-source changes.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
 
-| Objective | Current status |
+| Objective | Recorded delivery status |
 | --- | --- |
 | Mechanical workspace and policy migration | Delivered; workspace verification, representative example execution and standalone Cargo package verification passed. |
 | Peer-language Book/example/gallery | Delivered: two equal-status gallery-first single-page tutorials, 12 scientific showcases covering all 25 families and eight references, including four installed-wheel Python workflows. All 20 programs ran once; one caption repair received a focused rerun and static peer-site rebuild. Source/prose and actual full/card images have independent review below. |
@@ -74,14 +74,14 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Native lifecycle read access | Implemented with actual Python consumers: canonical Canvas plot-anchor membership and TextLayout/TextOffset/TextBounds readers support callback-root cleanup and immutable derivation. Three focused native checks and bounded installed consumer checks passed. |
 | Source-free adapter metadata | Delivered: each adapter splits/restores its exact-family native Plot and opaque binding metadata without retaining lookup. Native checks and earlier independent archives passed; Python exact-family owners preserve the matching native/origin version through copies, policy edits and stale-safe input commits. |
 | Bound-only adapter projections | Implemented and consumed by Python: ndarray preserves original coordinates and stable raw identities, including identity-only descriptors for actual named-column alpha consumers; Polars carries complete names with selected or direct-local Columns and shared numeric discovery. Focused native and installed evidence is separated below. |
-| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Peer content/gallery, same-source costs and the recorded post-content distribution are complete. Reviewed test cleanup passed focused verification and a genuinely new source build/install/runtime gate; unchanged budgets still fail. |
+| Python lifecycle decision and complete binding | All 25 constructors and the selected complete scientific/configuration surface, including Canvas, eight callback slots, all 75 alpha entries and independent layers/results, have bounded installed verification below. Peer content/gallery, same-source costs and the recorded post-content distribution are complete. Reviewed test cleanup passed focused verification and a genuinely new source build/install/runtime gate for its recorded source. |
 | Python input boundaries | Strict signed positional selection, exact complete pandas keys and direct Series identities, MaskedArray validity, bound-only eager Polars Arrow import, fresh source lookup and failure-safe paired native/key-root commits are implemented. Shared transport has the earlier Scatter matrix evidence; all-family constructors, geometry and edits have focused wheel evidence below. The post-cleanup source archive passed its own fresh installed runtime tests, without repeating the whole transport/provider matrix. |
 | Python Theme/Text values | Implemented: all eight Theme components and thirteen TextLayout fields, 54 Theme descendants and nine Text value additions, with 28 consumer-required native readers. Six family appearance policies and two opaque text-position values are now delivered too; focused installed evidence is separated below. |
 | Python owning numeric values | Implemented: twelve native-only policy additions, complete NumericFormat inputs/compiled specifiers and TickGeneration locators, shared TextIntent results, full-family forwarding and all eight owner attachment slots. Focused installed checks are recorded below. |
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,612 numeric input/configuration repeats, 202 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
+| Historical test cleanup | The receipts below used subsequently withdrawn scenario/contract/input-expanded budget arithmetic. Recursive reflection was retired, but those historical counts and artifacts do not certify the current function budget or later test-source changes. Current counting and retention rules are in `specs/90_DEVELOPMENT.md`. |
 
 ### Current Python Implementation Scope
 

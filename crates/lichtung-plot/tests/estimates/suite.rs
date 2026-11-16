@@ -1,13 +1,9 @@
-use lichtung_plot::{
-    AxisScale, AxisTick, Bounds, CategoryValues, CoefficientInput, FacetScales, FacetSpec,
-    NumericFormat, NumericValues, Plot, Significance, SignificanceMark, ValueSort,
-};
+use lichtung_plot::{Bounds, CategoryValues, CoefficientInput, NumericValues, Plot};
 
 #[path = "../support/composition.rs"]
 mod support;
 
-use support::*;
+use support::render_svg;
 
 mod estimate_status;
-mod model_displays;
 mod point_interval;

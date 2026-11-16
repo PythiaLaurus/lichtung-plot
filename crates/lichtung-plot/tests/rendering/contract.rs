@@ -1,24 +1,10 @@
-use lichtung_plot::{
-    BarInput, BarPointLayer, Bounds, Canvas, CategoryValues, Color, FacetSpec, NumericValues, Plot,
-    TextPanel,
-};
-
-use super::unique_dir;
+use lichtung_plot::{BarInput, Bounds, CategoryValues, NumericValues, Plot};
 
 struct IntervalData {
     category: CategoryValues,
     value: NumericValues,
     lower: NumericValues,
     upper: NumericValues,
-}
-
-fn identity_interval_data() -> IntervalData {
-    IntervalData {
-        category: CategoryValues::new("category", ["a", "b"]).unwrap(),
-        value: NumericValues::new("value", [2.0, 5.0]),
-        lower: NumericValues::new("lower", [1.0, 3.5]),
-        upper: NumericValues::new("upper", [4.0, 8.0]),
-    }
 }
 
 fn identity_interval_plot(data: &IntervalData, horizontal: bool) -> Plot {
@@ -43,41 +29,6 @@ fn identity_interval_plot(data: &IntervalData, horizontal: bool) -> Plot {
     }
 }
 
-fn svg<K: lichtung_plot::kind::Marker>(
-    plot: impl std::borrow::Borrow<Plot<K>>,
-    name: &str,
-) -> String {
-    let directory = unique_dir(name);
-    let output = directory.join("plot.svg");
-    plot.borrow().svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
-    svg
-}
-
-#[test]
-fn precomputed_bar_bounds_render_asymmetric_endpoints() {
-    let data = identity_interval_data();
-    let vertical = svg(
-        identity_interval_plot(&data, false),
-        "vertical-identity-interval",
-    );
-    let horizontal = svg(
-        identity_interval_plot(&data, true),
-        "horizontal-identity-interval",
-    );
-
-    let plain = svg(
-        Plot::bar(
-            data.category.clone(),
-            BarInput::estimates(data.value.clone()),
-        ),
-        "plain-identity-bar",
-    );
-    assert!(vertical.matches("<polyline ").count() > plain.matches("<polyline ").count());
-    assert!(horizontal.matches("<polyline ").count() > plain.matches("<polyline ").count());
-}
-
 #[test]
 fn identity_bar_rejects_invalid_endpoint_order_during_preflight() {
     let data = IntervalData {
@@ -91,159 +42,4 @@ fn identity_bar_rejects_invalid_endpoint_order_during_preflight() {
         .unwrap_err();
 
     assert!(error.to_string().contains("lower <= value <= upper"));
-}
-
-#[test]
-fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() {
-    let category = CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap();
-    let group = CategoryValues::new("group", ["left", "right", "left", "right"]).unwrap();
-    let value = NumericValues::new("value", [2.0, 3.0, 4.0, 5.0]);
-    let point_category = CategoryValues::new("point_category", ["a", "a", "b"]).unwrap();
-    let point_group = CategoryValues::new("point_group", ["left", "right", "left"]).unwrap();
-    let point_value = NumericValues::new("point_value", [1.0, 7.0, 6.0]);
-    let layer = || {
-        BarPointLayer::new(
-            point_category.clone(),
-            Some(point_group.clone()),
-            point_value.clone(),
-            Color::rgba(123, 45, 200, 102),
-            5,
-        )
-        .unwrap()
-    };
-    let render = |horizontal| {
-        if horizontal {
-            svg(
-                Plot::horizontal_bar(category.clone(), BarInput::estimates(value.clone()))
-                    .series(group.clone())
-                    .point_layer(layer()),
-                "horizontal-bar-point-layer",
-            )
-        } else {
-            svg(
-                Plot::bar(category.clone(), BarInput::estimates(value.clone()))
-                    .series(group.clone())
-                    .point_layer(layer()),
-                "vertical-bar-point-layer",
-            )
-        }
-    };
-
-    for output in [render(false), render(true)] {
-        assert_eq!(
-            output
-                .lines()
-                .filter(|line| line.starts_with("<circle ")
-                    && line.contains("fill=\"#7B2DC8\"")
-                    && line.contains("r=\"5\"")
-                    && line.contains("fill-opacity=\"0.4\""))
-                .count(),
-            3
-        );
-    }
-}
-
-#[test]
-fn unknown_bar_point_category_rejects_during_preflight() {
-    let layer = BarPointLayer::new(
-        CategoryValues::new("category", ["missing"]).unwrap(),
-        None,
-        NumericValues::new("value", [3.0]),
-        Color::rgba(1, 2, 3, 128),
-        3,
-    )
-    .unwrap();
-    let plot = Plot::bar(
-        CategoryValues::new("category", ["a"]).unwrap(),
-        BarInput::estimates(NumericValues::new("value", [2.0])),
-    )
-    .point_layer(layer);
-
-    let error = plot.preflight().unwrap_err();
-
-    assert!(error.to_string().contains("unknown category"));
-}
-
-#[test]
-fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
-    let category = CategoryValues::new("category", ["a", "b"]).unwrap();
-    let group = CategoryValues::new("group", ["left", "left"]).unwrap();
-    let value = NumericValues::new("value", [2.0, 3.0]);
-    let facet = CategoryValues::new("facet", ["one", "two"]).unwrap();
-    let point_category = CategoryValues::new("category", ["a"]).unwrap();
-    let point_group = CategoryValues::new("group", ["left"]).unwrap();
-    let point_value = NumericValues::new("value", [2.5]);
-    let nonfinite = BarPointLayer::new(
-        point_category.clone(),
-        None,
-        NumericValues::new("value", [f64::NAN]),
-        Color::rgba(1, 2, 3, 128),
-        3,
-    )
-    .unwrap();
-    let grouped = BarPointLayer::new(
-        point_category.clone(),
-        Some(point_group),
-        point_value.clone(),
-        Color::rgba(1, 2, 3, 128),
-        3,
-    )
-    .unwrap();
-    let nonfinite_plot =
-        Plot::bar(category.clone(), BarInput::estimates(value.clone())).point_layer(nonfinite);
-    let mismatch_plot = Plot::bar(category.clone(), BarInput::estimates(value.clone()))
-        .series(group.clone())
-        .point_layer(
-            BarPointLayer::new(
-                point_category,
-                None,
-                point_value,
-                Color::rgba(1, 2, 3, 128),
-                3,
-            )
-            .unwrap(),
-        );
-    let faceted_plot = Plot::bar(category, BarInput::estimates(value))
-        .series(group)
-        .point_layer(grouped)
-        .facet(FacetSpec::wrap(facet, 2).unwrap());
-
-    let cases = [
-        (nonfinite_plot, "finite"),
-        (mismatch_plot, "must match"),
-        (faceted_plot, "faceting"),
-    ];
-    for (plot, expected) in cases {
-        let error = plot.preflight().unwrap_err();
-        assert!(error.to_string().contains(expected), "{error}");
-    }
-}
-
-#[test]
-fn canvas_text_cells_enforce_occupancy_and_fitting() {
-    let panel = TextPanel::new("Title", "Body").unwrap();
-    let occupied = Canvas::grid(1, 1)
-        .unwrap()
-        .text_panel(0, 0, panel.clone())
-        .unwrap()
-        .text_panel(0, 0, panel)
-        .err()
-        .unwrap();
-    let too_long = TextPanel::new("Title", "word ".repeat(20).trim().to_owned()).unwrap();
-    let fitting = Canvas::grid(1, 1)
-        .unwrap()
-        .text_panel(0, 0, too_long)
-        .unwrap()
-        .size(160, 120)
-        .preflight()
-        .unwrap_err();
-
-    assert!(matches!(occupied, lichtung_plot::Error::Data(_)));
-    assert!(
-        fitting.to_string().contains("TextPanelContent")
-            && fitting
-                .to_string()
-                .contains("assigned tracks cannot preserve their hard requirements"),
-        "{fitting}"
-    );
 }

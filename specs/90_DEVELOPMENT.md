@@ -119,8 +119,8 @@ requires publication parents to exist. Keep examples self-contained in their pac
 include real source through named mdBook anchors, not copied code or line ranges.
 Excerpts retain their complete-example context; compile their owning Cargo targets
 and execute actual gallery programs rather than claim Markdown fragments ran as
-standalone doctests. New independent snippets/scenarios still count at their real
-semantic layer; imported source does not create another plotting implementation.
+standalone doctests. Documentation blocks, source includes and example programs
+are not test functions; imported source does not create another plotting implementation.
 
 docs/gallery.tsv contains stable case/package/source/artifact/tutorial-anchor/API identities,
 showcase/reference placement and peer-language titles/purposes, not plotting
@@ -171,8 +171,8 @@ cross-environment byte equality. Fonts/data remain preinstalled/local. Source
 checks and generated-site assembly have separate recipes; ordinary core compilation
 does not execute examples, provision tools or generate a site.
 
-Count independent gallery scenarios even when several share an executable; batch
-drivers and reused language editions do not exempt scenarios. Do not duplicate
+Record gallery execution by its catalog cases, separately from test-function counts.
+Batch drivers and reused language editions do not create test functions. Do not duplicate
 rendering suites for tutorial references or languages that use the same source and
 operation outputs. Package verification selects actual distributable members;
 the workspace-local Book command is not shipped as a standalone user package.
@@ -198,14 +198,18 @@ reference checks and git diff --check, not compiler/tests by default.
 | --- | --- | --- |
 | Unit tests | 300–800 tests | 800 |
 | Module integration, excluding core E2E | 100–300 tests | 300 |
-| Core E2E | 30–80 scenarios | 80 |
+| Core E2E | 30–80 tests | 80 |
 
-The upper bounds apply across all workspace members, bindings, doctests and
-automated documentation/gallery workflows; a new package or runner does not gain
-a separate allowance. The lower ends are not quotas to fill. Meaningful coverage
-may grow within these limits without replacing a test in the same change or
-preserving a historical count. Count ignored tests too.
-Review the affected layer's count when changing tests.
+The upper bounds apply across the public workspace's members and bindings;
+a new public package or runner does not gain a separate allowance. Count each
+actual Rust, Python runtime/packaging or typing test function exactly once in one
+layer, including ignored and platform-conditional definitions. Assertions, loops,
+parameterization, input routes and graph families do not multiply a function.
+Ordinary helpers, doctest blocks, example programs and build/documentation
+workflows do not count as test functions. Internal acceptance functions are
+counted separately; moving a complete definition out of the public workspace
+reduces the public count, while copying or moving within it does not.
+The lower ends are not quotas to fill. Review counts when changing tests.
 
 Classify by responsibility, not Cargo target type. A unit test exercises an
 isolated calculation or policy, including public numerical functions compiled
@@ -216,27 +220,30 @@ public workflows through preparation, layout and real publication, including
 composition and frozen-output reuse. SVG inspection alone does not turn a
 feature-focused integration assertion into a separate core E2E workflow.
 
-Count independent E2E scenarios, not only their driver functions. Configuration
-cross-products still count as separate scenarios; do not compress them into a
-loop to satisfy a ceiling. Ignoring, merging functions, parameterized packaging,
-relabeling or moving tests between suites does not evade a limit. Delete
-redundant/low-value tests and remove test-only hooks/helpers when their last
-meaningful consumer disappears. Do not add getter/setter inventories, repeated
-per-family smoke/determinism checks, arbitrary pixel/default-style expectations
-or expensive boundary-sized workloads without a distinct useful contract.
+Retain a function only with concrete evidence of its necessity in the minimal
+public regression set: the product contract, harmful failure and source-based
+reason it must remain public. A unique assertion, branch, family, input or lack
+of a complete replacement is not sufficient. Delete unnecessary checks; move
+independently useful deep acceptance activities only when existing public APIs
+or ordinary test support can directly carry them. Do not expose private APIs,
+copy production algorithms or build private-source injection machinery merely
+to preserve a test. If direct migration is unavailable, remove the test.
+Do not evade counts by ignoring, merging, hiding or relabeling functions.
+Remove test-only hooks/helpers after their last meaningful consumer disappears.
+Avoid getter/setter inventories, repeated per-family smoke/determinism checks,
+arbitrary pixel/default-style expectations and mechanical configuration matrices.
 
 Core integration targets are declared in crates/lichtung-plot/Cargo.toml, each with
 package-relative tests/<domain>/suite.rs and cohesive sibling modules; shared
-helpers are in that package's tests/support. Targets are annotations, categorical,
-composition, distributions, estimates, heatmap, interactions, layout, lines,
-marginal-matrix, output, rendering and statistics.
+helpers are in that package's tests/support. Targets are annotations, composition,
+distributions, estimates, heatmap, interactions, layout, lines, output and rendering.
 Run one with cargo test --locked --offline -p lichtung-plot --test <target>.
 Add a target only for a distinct contract, not a chronological/catch-all/general suite.
 
 Python regression verification uses the installed wheel's real consumers and
 `just python-typing` with an explicitly selected `LICHTUNG_PYTHON`. The latter
-checks the three installed declaration modules and the maintained input, family,
-alpha, result and lifecycle fixtures under strict typing and unused-ignore errors.
+checks the three installed declaration modules and the maintained input and
+lifecycle fixtures under strict typing and unused-ignore errors.
 It neither installs packages nor falls back to checkout package imports.
 Keep exact-family returns, capability/overload boundaries and opaque callback
 types; avoid a second getter/copy inventory of every native value.
@@ -253,7 +260,7 @@ regression should receive a bounded real consumer, not restore a whole-API mirro
 
 Keep normal externally compiled library-to-file SVG/PNG tests and selected decoded
 pixel/format checks. They cannot all become private mocks. Retain a small internal
-lifecycle witness for invariants output equality cannot prove: source/operation
+lifecycle witness within the crate for invariants output equality cannot prove: source/operation
 ownership, no repeated statistics/font work, one selected capture/final Null and
 source-independent frozen replay. Every family needs a valid public dispatch
 route; extra cross-products require distinct failure surfaces, not mechanical
@@ -320,9 +327,10 @@ peak memory. Report actual scope and uncertainty, not unsupported speedup claims
 Retain runtime tables, focused independently expected default cases, pinned hashes,
 generation provenance and licenses. Full official Unicode conformance corpora
 must not be stored in the repository/package, compressed into another blob or
-recreated by regeneration. Explicitly invoked ignored conformance/regeneration
-checks read LICHTUNG_UNICODE16_SOURCE_DIR and verify official 16.0.0 hashes before
-parsing; missing/mismatched input fails. No automatic download, provisioning or
+recreated by regeneration. Any separately maintained conformance/regeneration
+activity requires explicit local source paths and official 16.0.0 hashes before
+parsing; missing/mismatched input fails. It is not a public renderer test target
+or a reason to expose private APIs. No automatic download, provisioning or
 dependency-cache lookup. Regeneration checks source/table agreement without
 writing the full corpus back into the tree.
 

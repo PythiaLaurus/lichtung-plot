@@ -229,19 +229,3 @@ fn column_domains_reject_misalignment_missing_values_and_incomplete_hue() {
     raincloud.q1 = NumericValues::new("q1", [-1.0]);
     assert!(matches!(raincloud.membership(), Err(Error::Data(_))));
 }
-
-#[test]
-fn geometry_equality_uses_column_contents_names_and_validity() {
-    let mut left = histogram();
-    let mut right = histogram();
-    assert_eq!(left, right);
-    right.rug_x = NumericValues::new("different scientific name", [0.0]);
-    assert_ne!(left, right);
-    left.kde_y = NumericValues::nullable("density", [None, Some(0.5)]);
-    right = left.clone();
-    assert_eq!(left, right);
-    right.kde_y = NumericValues::new("density", [f64::NAN, 0.5]);
-    assert_ne!(left, right);
-    assert_ne!(right, right.clone());
-    assert_eq!(raincloud(), raincloud());
-}

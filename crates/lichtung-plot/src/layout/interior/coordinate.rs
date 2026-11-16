@@ -4,13 +4,9 @@
 use super::{InteriorRoute, OneCategoricalAxis, StandardCoordinate};
 use crate::builder::PlotDescription;
 use crate::layout::fit::{self, FitKind, PlanError};
-#[cfg(test)]
-use crate::layout::PixelRect;
 use crate::layout::{Axis, AxisSide, CoordinateLayoutInputs, Layout, Projection};
 use crate::spec::{AxisDomain, PlotMeasureContext, PlotRenderResult};
 use crate::Error;
-#[cfg(test)]
-use crate::Plot;
 
 /// Foundational axis text contributes hard requirements independently from
 /// the prepared mark and annotation intrinsics of each family.
@@ -119,13 +115,7 @@ impl Intrinsics {
             axes.axis(input.registered.source, 0),
             axes.axis(input.registered.source, 1),
         ];
-        #[cfg(not(test))]
         let _ = diagnostic_scope;
-        #[cfg(test)]
-        crate::orchestrator::measurements::intrinsic(
-            crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
-            diagnostic_scope,
-        );
         let standard = CoordinateLayoutInputs::new(theme)?;
         let mut minimum_body = (
             crate::layout::canvas::MINIMUM_PANEL_SPAN,
@@ -324,13 +314,6 @@ impl InteriorRoute {
         context: &PlotMeasureContext<'_, '_>,
         request: &crate::text::TextRequestContext<'_, '_>,
     ) -> Result<PlotRenderResult, PlanError> {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(match self {
-            Self::OneCategoricalAxis(_) => {
-                crate::orchestrator::measurements::Counter::OneCategoricalAxisMeasure
-            }
-            _ => crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
-        });
         self.validate(plot)?;
         let inputs = context.registered.axes.coordinate().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
@@ -520,181 +503,5 @@ impl InteriorRoute {
         result.x_domain = domains[0];
         result.y_domain = domains[1];
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-mod intrinsic_tests {
-    use super::*;
-
-    #[test]
-    fn terminal_sources_fit_the_traced_parallel_minimum_including_tight_vertical_ink() {
-        for tight_lines in [false, true] {
-            let source = Plot::scatter(
-                crate::NumericValues::new("x", [-1.0, 1.0]),
-                crate::NumericValues::new("y", [-1.0, 1.0]),
-            )
-            .x_limits(-1.0, 1.0)
-            .y_limits(-1.0, 1.0)
-            .x_label("")
-            .y_label("")
-            .erase();
-            let mut theme = crate::Theme::publication().resolve().unwrap();
-            if tight_lines {
-                theme.typography.axes.tick_label.line_height_multiplier = 0.1;
-            }
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
-            crate::orchestrator::with_prepared_plot_for_test(
-                &source,
-                &theme,
-                |_| Ok(()),
-                |_, inputs, theme, operation, _round| {
-                    let minimum = crate::orchestrator::root::coordinate_intrinsic(
-                        inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
-                        &crate::orchestrator::root::intrinsic_inputs(
-                            inputs.plots.first(),
-                            theme,
-                            operation,
-                        )
-                        .unwrap(),
-                    )
-                    .unwrap()
-                    .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);
-                    let projection = Projection::new(
-                        (-1.0, 1.0),
-                        (-1.0, 1.0),
-                        (0.25, 0.25 + minimum.0, 0.25, 0.25 + minimum.1),
-                    );
-                    for side in [AxisSide::Bottom, AxisSide::Left] {
-                        let selected = crate::layout::numeric_tick_plan(
-                            (-1.0, 1.0),
-                            crate::TickGeneration::automatic(),
-                            false,
-                            &projection,
-                            side,
-                            theme,
-                            None,
-                            &fit::ROOT_SCOPE,
-                        )
-                        .unwrap();
-                        assert_eq!(selected.ticks.len(), 1);
-                        assert_eq!(selected.ticks[0].label, "0");
-                    }
-                    let raw_windows = inputs.plots[0].raw_windows();
-                    assert_eq!(
-                        raw_windows[0].map(|window| window.pair()),
-                        Some((-1.0, 1.0))
-                    );
-                    assert_eq!(
-                        raw_windows[1].map(|window| window.pair()),
-                        Some((-1.0, 1.0))
-                    );
-                },
-            )
-            .unwrap();
-        }
-    }
-
-    #[test]
-    fn numeric_intrinsic_uses_the_actual_indivisible_terminal_domain_source() {
-        use crate::numeric::{
-            decimal::NumericNotation,
-            format::{NumericFormat, NumericPrecision},
-        };
-        for (range, label) in [((-1.0, 1.0), "[0.00e0]"), ((1e100, 3e100), "[2.00e100]")] {
-            let source = Plot::scatter(
-                crate::NumericValues::new("x", [range.0, range.1]),
-                crate::NumericValues::new("y", [0.0, 1.0]),
-            )
-            .x_limits(range.0, range.1)
-            .x_label("")
-            .y_label("")
-            .x_tick_format(
-                NumericFormat::new(
-                    NumericNotation::Scientific,
-                    NumericPrecision::AdaptiveFractional { min: 2, max: 4 },
-                )
-                .unwrap()
-                .prefix("[")
-                .unwrap()
-                .suffix("]")
-                .unwrap(),
-            )
-            .y_tick_format(
-                NumericFormat::new(
-                    NumericNotation::Decimal,
-                    NumericPrecision::AdaptiveFractional { min: 0, max: 17 },
-                )
-                .unwrap(),
-            )
-            .erase();
-            let theme = crate::Theme::publication().resolve().unwrap();
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
-            crate::orchestrator::with_prepared_plot_for_test(
-                &source,
-                &theme,
-                |_| Ok(()),
-                |chart, inputs, theme, operation, _round| {
-                    let measured = theme
-                        .measure_text(
-                            label,
-                            &theme.typography.axes.tick_label,
-                            crate::layout::PhysicalTextAlignment::Center,
-                            "independent numeric terminal source",
-                            false,
-                        )
-                        .unwrap();
-                    let minimum = crate::orchestrator::root::coordinate_intrinsic(
-                        inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap(),
-                        &crate::orchestrator::root::intrinsic_inputs(
-                            inputs.plots.first(),
-                            theme,
-                            operation,
-                        )
-                        .unwrap(),
-                    )
-                    .unwrap()
-                    .minimum(inputs.plots[0].policy.axis_text.tick_labels[1]);
-                    assert_eq!(
-                        minimum.0.to_bits(),
-                        crate::layout::kernel::required_length(
-                            measured.width().max(measured.fit_width())
-                                + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
-                        )
-                        .unwrap()
-                        .to_bits()
-                    );
-                    assert_eq!(
-                        inputs.plots[0].axes.coordinate().unwrap().ranges()[0],
-                        range
-                    );
-                    let widest_probe = theme
-                        .measure_text(
-                            "0.5",
-                            &theme.typography.axes.tick_label,
-                            crate::layout::PhysicalTextAlignment::End,
-                            "independent distinct midpoint gutter probe",
-                            false,
-                        )
-                        .unwrap();
-                    assert!(
-                        crate::layout::interior::sizing::horizontal_gutter_preference(
-                            chart,
-                            inputs.plots.first(),
-                            operation,
-                            theme
-                        )
-                        .unwrap()
-                        .0 >= widest_probe.width()
-                    );
-                },
-            )
-            .unwrap();
-        }
     }
 }

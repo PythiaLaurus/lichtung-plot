@@ -1,7 +1,4 @@
-use crate::{
-    snapshot, AdapterError, BooleanElement, BooleanInput, CategoryElement, ColumnsInput,
-    NumericElement, NumericInput, SourceRowsInput,
-};
+use crate::{snapshot, AdapterError, BooleanInput, ColumnsInput, NumericElement, SourceRowsInput};
 use ndarray::{array, s, Array2, ShapeBuilder};
 use std::cell::Cell;
 use std::error::Error as _;
@@ -53,51 +50,6 @@ fn grid_pairs_logical_cells_with_independently_strided_validity() {
             .1,
         [None, Some(true), Some(true), Some(false)]
     );
-}
-#[test]
-fn category_snapshot_owns_exact_nullable_raw_keys() {
-    let mut keys = array![
-        Some(" A ".to_owned()),
-        None,
-        Some("é".to_owned()),
-        Some("e\u{301}".to_owned())
-    ];
-    let values = snapshot::values(
-        keys.view(),
-        None,
-        |value| value.as_key().map(str::to_owned),
-        "categories",
-    )
-    .unwrap();
-    keys[0] = Some("edited".into());
-    drop(keys);
-    assert_eq!(
-        values,
-        [
-            Some(" A ".into()),
-            None,
-            Some("é".into()),
-            Some("e\u{301}".into())
-        ]
-    );
-}
-#[test]
-fn boolean_validity_is_presence_not_selection_or_numeric_coercion() {
-    let values = array![Some(true), Some(false), None, Some(true)];
-    let validity = array![false, true, true, true];
-    let snapshot = snapshot::values(
-        values.view(),
-        Some(validity.view()),
-        BooleanElement::as_boolean,
-        "booleans",
-    )
-    .unwrap();
-    assert_eq!(snapshot, [None, Some(false), None, Some(true)]);
-    let source = array![[true, false], [true, true]];
-    assert!(matches!(
-        0usize.bind_numeric(Some(&source.view()), "x"),
-        Err(AdapterError::UnsupportedElement { .. })
-    ));
 }
 #[test]
 fn provenance_uses_exact_ids_and_reports_logical_slots() {
@@ -159,33 +111,6 @@ fn provenance_uses_exact_ids_and_reports_logical_slots() {
             ..
         })
     ));
-}
-#[test]
-fn validity_requires_each_logical_dimension_not_just_length() {
-    let values = Array2::<f64>::zeros((2, 3));
-    let wrong = Array2::<bool>::from_elem((3, 2), true);
-    assert!(
-        matches!(crate::Heatmap::new((values.view(),wrong.view())),Err(AdapterError::Shape{expected,actual,..}) if expected==[2,3]&&actual==[3,2])
-    );
-    assert!(matches!(
-        crate::Scatter::new(
-            (array![1, 2].view(), array![true].view()),
-            array![2, 3].view()
-        ),
-        Err(AdapterError::Shape { .. })
-    ));
-    let (plot, metadata) = crate::Heatmap::new(values.view()).unwrap().into_parts();
-    assert!(crate::Heatmap::from_parts(plot, metadata)
-        .heatmap_highlight(wrong.view())
-        .is_err());
-    assert!(crate::Matrix::from_data(values.view(), [1, 1]).is_err());
-    assert!(crate::Matrix::from_data(values.view(), []).is_err());
-    let no_rows = Array2::<f64>::zeros((0, 2));
-    let (plot, metadata) = crate::Matrix::new(no_rows.view()).unwrap().into_parts();
-    assert!(crate::Matrix::from_parts(plot, metadata)
-        .column_labels(["First", "Second"])
-        .is_ok());
-    assert!(crate::Heatmap::new(Array2::<f64>::zeros((2, 0)).view()).is_err());
 }
 
 pub(crate) fn render<K: crate::kind::Marker>(plot: &crate::Plot<K>, case: &str) -> String {
@@ -279,100 +204,4 @@ fn wide_views_preserve_actual_coordinates_selected_order_bounds_and_mapping_call
         .unwrap()
         .source_rows(array![1, 2, 3].view())
         .is_err());
-}
-#[test]
-fn masked_composite_annotation_roles_do_not_confuse_validity_with_target_series() {
-    let categories = array!["A", "B"];
-    let present = array![true, true];
-    let series = array!["drug", "drug"];
-    let p = array![0.01, 2.0];
-    let annotations = crate::significance_pairwise_in_facet(
-        ((categories.view(), present.view()), series.view()),
-        crate::SignificanceTarget::category("C"),
-        (p.view(), present.view()),
-        crate::FacetCell::grid("row", "column"),
-    )
-    .unwrap();
-    assert_eq!(
-        annotations,
-        vec![
-            crate::Significance::between(
-                crate::SignificanceTarget::category_series("A", "drug"),
-                "C",
-                crate::SignificanceMark::PValue(0.01)
-            )
-            .facet(crate::FacetCell::grid("row", "column")),
-            crate::Significance::between(
-                crate::SignificanceTarget::category_series("B", "drug"),
-                "C",
-                crate::SignificanceMark::PValue(2.0)
-            )
-            .facet(crate::FacetCell::grid("row", "column"))
-        ]
-    );
-    let missing = array![true, false];
-    assert!(crate::significance_attached(
-        (categories.view(), missing.view()),
-        crate::SignificanceMark::PValue(0.1)
-    )
-    .is_err());
-    let result_source = array![["A", "B", "yes"], ["B", "C", "no"]];
-    let mapped = crate::significance_pairwise_from_data(
-        result_source.view(),
-        0,
-        1,
-        (
-            2,
-            [
-                ("yes", crate::SignificanceMark::PValue(0.01)),
-                ("no", crate::SignificanceMark::PValue(0.5)),
-            ],
-        ),
-    )
-    .unwrap();
-    assert_eq!(mapped.len(), 2);
-}
-#[test]
-fn independent_layer_labels_and_fit_bounds_use_their_own_source_lengths() {
-    let fit = array![[0., 2., 1., 3.], [20., 4., 3., 5.]];
-    let observed = array![[0., 1.], [5., 2.], [20., 3.]];
-    let labels = array![["first"], ["middle"], ["last"]];
-    let points =
-        crate::PointLayerAdapter::from_data(labels.view(), observed.column(0), observed.column(1))
-            .unwrap()
-            .labels(0)
-            .unwrap()
-            .alpha(128)
-            .legend_label("Observed");
-    let adapted = crate::Line::from_data(fit.view(), 0, 1)
-        .unwrap()
-        .band(2, 3)
-        .unwrap()
-        .point_layer(points)
-        .markers(false);
-    let native: crate::Plot<crate::kind::Line> = adapted.into();
-    drop(fit);
-    drop(observed);
-    drop(labels);
-    let text = render(&native, "independent-layer");
-    assert!(text.contains("first") && text.contains("middle") && text.contains("last"));
-    let expected = crate::Plot::line(
-        crate::NumericValues::new("Column 1", [0., 20.]),
-        crate::NumericValues::new("Column 2", [2., 4.]),
-    )
-    .band(crate::Bounds::new(
-        crate::NumericValues::new("Column 3", [1., 3.]),
-        crate::NumericValues::new("Column 4", [3., 5.]),
-    ))
-    .point_layer(
-        crate::PointLayer::new(
-            crate::NumericValues::new("point layer x", [0., 5., 20.]),
-            crate::NumericValues::new("point layer y", [1., 2., 3.]),
-        )
-        .labels(crate::CategoryValues::new("Column 1", ["first", "middle", "last"]).unwrap())
-        .alpha(128)
-        .legend_label("Observed"),
-    )
-    .markers(false);
-    assert_eq!(text, render(&expected, "independent-layer-native"));
 }

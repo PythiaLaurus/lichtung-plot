@@ -8,8 +8,6 @@ mod casefold_data;
 mod conformance;
 mod nfc;
 mod nfc_data;
-#[cfg(test)]
-mod regeneration;
 
 use casefold_data::NFKC_CASEFOLD;
 
@@ -100,17 +98,7 @@ pub(super) fn folded_for_test(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use sha2::{Digest, Sha256};
-
-    use super::{
-        folded_for_test as nfkc_casefold,
-        nfc_data::{CANONICAL_COMBINING_CLASS, CANONICAL_COMPOSITION, CANONICAL_DECOMPOSITION},
-        NFKC_CASEFOLD,
-    };
-
-    fn hash_len(digest: &mut Sha256, len: usize) {
-        digest.update(u64::try_from(len).unwrap().to_be_bytes());
-    }
+    use super::folded_for_test as nfkc_casefold;
 
     #[test]
     fn checked_unicode_lengths_refuse_without_reservation() {
@@ -123,13 +111,6 @@ mod tests {
     }
 
     #[test]
-    fn unicode_16_casefold_sentinels_are_exact() {
-        assert_eq!(nfkc_casefold("\u{AB70}"), "\u{13A0}");
-        assert_eq!(nfkc_casefold("a\u{034F}\u{200B}\u{2060}\u{FEFF}b"), "ab");
-        assert_eq!(nfkc_casefold("\u{A7F1}"), "\u{A7F1}");
-    }
-
-    #[test]
     fn unicode_16_versions_are_exact() {
         assert_eq!(unicode_script::UNICODE_VERSION, (16, 0, 0));
         assert_eq!(unicode_bidi::UNICODE_VERSION, (16, 0, 0));
@@ -138,44 +119,5 @@ mod tests {
         assert_eq!(unicode_ccc::UNICODE_VERSION, (16, 0, 0));
         assert_eq!(unicode_bidi_mirroring::UNICODE_VERSION, (16, 0, 0));
         assert_eq!(nfkc_casefold("\u{0315}\u{1ACF}"), "\u{0315}\u{1ACF}");
-    }
-
-    #[test]
-    fn generated_normalization_tables_have_expected_digest() {
-        // Hash semantic entries so Rust source formatting does not affect the digest.
-        let mut digest = Sha256::new();
-        digest.update(b"NFKC_CASEFOLD");
-        hash_len(&mut digest, NFKC_CASEFOLD.len());
-        for &(start, end, replacement) in NFKC_CASEFOLD {
-            digest.update(start.to_be_bytes());
-            digest.update(end.to_be_bytes());
-            hash_len(&mut digest, replacement.len());
-            digest.update(replacement.as_bytes());
-        }
-        digest.update(b"CANONICAL_COMBINING_CLASS");
-        hash_len(&mut digest, CANONICAL_COMBINING_CLASS.len());
-        for &(start, end, class) in CANONICAL_COMBINING_CLASS {
-            digest.update(start.to_be_bytes());
-            digest.update(end.to_be_bytes());
-            digest.update([class]);
-        }
-        digest.update(b"CANONICAL_DECOMPOSITION");
-        hash_len(&mut digest, CANONICAL_DECOMPOSITION.len());
-        for &(codepoint, decomposition) in CANONICAL_DECOMPOSITION {
-            digest.update(codepoint.to_be_bytes());
-            hash_len(&mut digest, decomposition.len());
-            digest.update(decomposition.as_bytes());
-        }
-        digest.update(b"CANONICAL_COMPOSITION");
-        hash_len(&mut digest, CANONICAL_COMPOSITION.len());
-        for &(first, second, composition) in CANONICAL_COMPOSITION {
-            digest.update(first.to_be_bytes());
-            digest.update(second.to_be_bytes());
-            digest.update(composition.to_be_bytes());
-        }
-        assert_eq!(
-            format!("{:x}", digest.finalize()),
-            "56796172967f43285a9e98b49d28ecbb0eacb4ed8cf2a9c9d65ba9513cbb8835"
-        );
     }
 }

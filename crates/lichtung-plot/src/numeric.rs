@@ -40,11 +40,6 @@ pub(crate) mod values;
 
 pub(crate) mod power;
 
-#[cfg(test)]
-thread_local! {
-    static SERIES_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 pub(crate) fn log10(value: f64) -> Result<f64, Error> {
     if value.is_nan() || value < 0.0 {
         return Ok(f64::NAN);
@@ -128,8 +123,6 @@ fn ln_bounds(
     // With N = floor(precision/3)+1, 2*sum(k>=N) z^(2k+1)/(2k+1)
     // < (3/4)*9^-N < 2^-precision. Add one unit to the upper bound.
     for index in 0..=precision / 3 {
-        #[cfg(test)]
-        SERIES_WORK.with(|work| work.set(work.get() + 1));
         let divisor = index
             .checked_mul(2)
             .and_then(|value| value.checked_add(1))

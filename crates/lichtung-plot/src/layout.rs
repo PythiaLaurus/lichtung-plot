@@ -9,16 +9,12 @@ pub(crate) mod text;
 mod unicode16;
 
 pub(crate) use canvas::{PixelRect, RootFramePlan};
-#[cfg(test)]
-pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_root, FrozenRoot, MeasuredLayout, RootRequest, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
 pub(crate) use panel::category_label_span;
 pub(crate) use panel::fixed_interval_is_empty;
 pub(crate) use panel::format_guide_label;
 pub(crate) use panel::layout_axis_ticks;
-#[cfg(test)]
-pub(crate) use panel::numeric_tick_plan;
 pub use panel::AxisTick;
 pub(crate) use panel::NumericTickPlan;
 pub(crate) use panel::TickSource;

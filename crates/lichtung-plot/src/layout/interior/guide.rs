@@ -9,12 +9,6 @@ use crate::orchestrator::registration::{
 };
 use crate::{Error, PlotKind};
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static NATIVE_RIGHT_STAGES: std::cell::RefCell<Vec<&'static str>> =
-        const { std::cell::RefCell::new(Vec::new()) };
-}
-
 /// One measured mandatory right guide beside the flexible scientific body.
 #[expect(
     clippy::too_many_lines,
@@ -63,8 +57,6 @@ pub(crate) fn native_right(
         &mut false,
         scope,
     ))?;
-    #[cfg(test)]
-    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("measured"));
     let hard = crate::layout::kernel::ceil_spatial_quanta(minimum)?;
     let width = crate::layout::kernel::ceil_spatial_quanta(guide.compute_box_width())?;
     let tracks = [
@@ -105,11 +97,7 @@ pub(crate) fn native_right(
         reason = "root-bounded spatial quanta convert exactly to CSS pixels"
     )]
     let body_right = edge as f64 / 1024.0;
-    #[cfg(test)]
-    NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("allocated"));
     let top = if let Some(context) = content_plot {
-        #[cfg(test)]
-        NATIVE_RIGHT_STAGES.with(|stages| stages.borrow_mut().push("content"));
         let plot = context.registered.source;
         let registered = Some(context.registered);
         let intrinsic = context.intrinsic;

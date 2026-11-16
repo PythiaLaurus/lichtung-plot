@@ -14,76 +14,6 @@ use crate::orchestrator::registration::{PlotOccurrenceId, PlotRegistration};
 use crate::orchestrator::root::Root;
 use crate::Error;
 
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-thread_local! {
-    static HEIGHT_TRACES_ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static CELL_HEIGHT_STEPS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
-    pub(super) static CHILD_HEIGHT_STEPS: std::cell::RefCell<Vec<(&'static str, usize, [f64; 3])>> = const { std::cell::RefCell::new(Vec::new()) };
-    #[expect(clippy::type_complexity, reason = "test-only observation at the original HeightInputs constructor")]
-    static HEIGHT_AXIS_INPUTS: std::cell::RefCell<Vec<(Option<RootSize>, [[u64; 2]; 2], Option<[u64; 2]>)>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-/// Only the height fixtures arm these value-only observations. The marker keeps
-/// cleanup on the thread whose TLS was armed, including during unwinding.
-#[cfg(test)]
-#[must_use]
-struct HeightTraceGuard {
-    _same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
-}
-
-#[cfg(test)]
-impl HeightTraceGuard {
-    fn start() -> Self {
-        assert!(!HEIGHT_TRACES_ARMED.with(|armed| armed.replace(true)));
-        let guard = Self {
-            _same_thread: std::marker::PhantomData,
-        };
-        CELL_HEIGHT_STEPS.with(|steps| steps.borrow_mut().clear());
-        CHILD_HEIGHT_STEPS.with(|steps| steps.borrow_mut().clear());
-        HEIGHT_AXIS_INPUTS.with(|inputs| inputs.borrow_mut().clear());
-        guard
-    }
-}
-
-#[cfg(test)]
-impl Drop for HeightTraceGuard {
-    fn drop(&mut self) {
-        let _ = HEIGHT_TRACES_ARMED.try_with(|armed| armed.set(false));
-        let _ = CELL_HEIGHT_STEPS.try_with(|steps| {
-            if let Ok(mut steps) = steps.try_borrow_mut() {
-                *steps = Vec::new();
-            }
-        });
-        let _ = CHILD_HEIGHT_STEPS.try_with(|steps| {
-            if let Ok(mut steps) = steps.try_borrow_mut() {
-                *steps = Vec::new();
-            }
-        });
-        let _ = HEIGHT_AXIS_INPUTS.try_with(|inputs| {
-            if let Ok(mut inputs) = inputs.try_borrow_mut() {
-                *inputs = Vec::new();
-            }
-        });
-    }
-}
-
-#[cfg(test)]
-fn cell_height_step(step: &'static str) {
-    if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
-        CELL_HEIGHT_STEPS.with(|steps| steps.borrow_mut().push(step));
-    }
-}
-
-#[cfg(test)]
-pub(super) fn child_height_step(step: &'static str, index: usize, operands: [f64; 3]) {
-    if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
-        CHILD_HEIGHT_STEPS.with(|steps| steps.borrow_mut().push((step, index, operands)));
-    }
-}
-
 /// Root-local measured consequences. Source data, labels, typography and guide
 /// semantics are immutable under this owner; coordinated inputs below are not.
 #[derive(Default)]
@@ -256,16 +186,6 @@ impl HeightInputs {
                 .map(crate::data::source::copy_source_string)
                 .transpose()?,
         };
-        #[cfg(test)]
-        if HEIGHT_TRACES_ARMED.with(std::cell::Cell::get) {
-            HEIGHT_AXIS_INPUTS.with(|snapshots| {
-                snapshots.borrow_mut().push((
-                    inputs.output_dimensions,
-                    inputs.ranges,
-                    inputs.resolved_x,
-                ));
-            });
-        }
         Ok(inputs)
     }
 }
@@ -338,8 +258,6 @@ impl HeightMeasurements {
             inputs,
             height: crate::layout::kernel::required_length(height)?,
         });
-        #[cfg(test)]
-        child_height_step("record", index, [width, height, 0.0]);
         Ok(())
     }
 }
@@ -368,12 +286,6 @@ pub(super) fn measured_preference(
         Some(ranges),
     )?;
     let preference = body_preference(source, Some(registered), intrinsic, operation, theme, hard)?;
-    #[cfg(test)]
-    child_height_step(
-        "measured-preference",
-        usize::try_from(owner.leaf_slot_index()).expect("Canvas slot fits usize"),
-        [plan.panel_box.width(), local_text_height, 0.0],
-    );
     let mut height = source.natural_body_height(
         Some(registered),
         intrinsic,
@@ -404,7 +316,6 @@ pub(super) fn measured_preference(
 
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     clippy::type_complexity,
     reason = "keep the ordered hard/preference/prose/key/lookup program and its three original narrow axis operands together"
 )]
@@ -429,8 +340,6 @@ pub(super) fn cell_height(
     dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
     let source = registered.source;
-    #[cfg(test)]
-    cell_height_step("hard");
     let hard = crate::layout::interior::intrinsic_body_minimum_for_ranges(
         registered,
         intrinsic,
@@ -438,13 +347,9 @@ pub(super) fn cell_height(
         theme,
         Some(axes.0),
     )?;
-    #[cfg(test)]
-    cell_height_step("preference");
     let preference = body_preference(source, Some(registered), intrinsic, operation, theme, hard)?;
     let sources = registered.source.prose();
     let present = sources.iter().any(Option::is_some);
-    #[cfg(test)]
-    cell_height_step("prose");
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
@@ -457,8 +362,6 @@ pub(super) fn cell_height(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    #[cfg(test)]
-    cell_height_step("key");
     let identity = HeightInputs::new(
         registered,
         Some(canvas),
@@ -474,16 +377,10 @@ pub(super) fn cell_height(
         dependencies,
     )?;
     if let Some(measurements) = measurements {
-        #[cfg(test)]
-        cell_height_step("lookup");
         if let Some(height) = measurements.measured(&identity, owner, round)? {
-            #[cfg(test)]
-            cell_height_step("hit");
             return Ok(height);
         }
     }
-    #[cfg(test)]
-    cell_height_step("computed");
     let mut local = [0.0; 4];
     for (index, value) in local.iter_mut().enumerate() {
         let quanta = identity.own_insets[0][index]

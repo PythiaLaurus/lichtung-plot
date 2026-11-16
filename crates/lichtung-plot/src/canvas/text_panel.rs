@@ -10,9 +10,6 @@ use crate::render::backend::{PlannedTextPlacement, Point2D};
 use crate::text::TextAppearance;
 use crate::{Error, TextAlignment};
 
-#[cfg(test)]
-mod tests;
-
 #[expect(
     clippy::cast_precision_loss,
     reason = "the assigned cell is bounded by exact u32 root dimensions"

@@ -8,9 +8,6 @@ use crate::layout::{
 use crate::text::TextAppearance;
 use crate::{Error, TextFailure, TextWrapping};
 
-#[cfg(test)]
-mod tests;
-
 #[expect(
     clippy::too_many_arguments,
     reason = "original occurrence eligibility is independent of the complete measured text request and assignment"

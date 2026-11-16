@@ -16,11 +16,6 @@ use crate::theme::Color;
 use crate::{Error, PointShape};
 use std::sync::Arc;
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static TEXT_PLACEMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 #[derive(Debug, PartialEq)]
 pub(crate) struct CanonicalTextRun {
     pub(crate) origin: Option<CanonicalPoint>,
@@ -71,8 +66,6 @@ impl CanonicalPlannedText {
         height: u32,
         mut stage: Option<&mut FinalStage<'_>>,
     ) -> Result<Self, Error> {
-        #[cfg(test)]
-        TEXT_PLACEMENTS.with(|count| count.set(count.get() + 1));
         let half = |value| {
             backend::nearest_even_text_half(value)
                 .ok_or_else(|| Error::Render("planned text extent cannot be negative".into()))

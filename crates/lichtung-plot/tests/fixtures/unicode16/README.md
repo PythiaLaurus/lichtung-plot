@@ -16,47 +16,26 @@ Archive SHA-256:
 `sources.json` records the SHA-256 of every selected original archive
 member, before comment stripping or other transformation. These checksums were
 computed from the supplied official archive, not a separately signed digest.
-The ignored Rust test in `src/font/unicode16/regeneration.rs` regenerates the
-runtime tables from an explicitly supplied, locally extracted UCD directory.
-It validates all 11 original members against this manifest before generating or
-writing any output. The manifest reader accepts only the checked-in canonical
-JSON format, allowlisted member names, unique entries, and lowercase SHA-256
-values; it rejects missing members, unexpected paths, escapes, and malformed data.
-No additional dependency, executable target, script, or network access is needed.
+The runtime tables were generated from all 11 manifest members. Original bytes
+were verified before generation; the retained canonical JSON identifies
+allowlisted member names and lowercase SHA-256 values. This package retains the
+tables and provenance, not a public regeneration or full-corpus test command.
 
 ## Offline Regeneration
 
-Extract the already acquired, hash-verified archive locally before running the
-test. Extraction is not performed by project code. Use the repository's Rust
-toolchain, including rustfmt, which the test invokes to format the three tables.
-The default mode compares all output bytes without modifying repository files:
+Independent offline tooling must receive an explicit local UCD directory and
+verify all selected raw member bytes against `sources.json` before parsing.
+If it also receives an archive, verify the archive digest above; directory-only
+input does not certify the archive container. There is no discovery, download,
+dependency-cache lookup or asset provisioning in the renderer.
 
-```sh
-LICHTUNG_UNICODE16_SOURCE_DIR=/absolute/local/UCD-16.0.0 \
-LICHTUNG_UNICODE16_ARCHIVE=/absolute/local/UCD-16.0.0.zip \
-cargo test --locked --offline --lib font::unicode16::regeneration::regenerate_unicode16 -- --ignored --exact --nocapture
-```
-
-`LICHTUNG_UNICODE16_SOURCE_DIR` is mandatory; there is no discovery or download
-fallback. `LICHTUNG_UNICODE16_ARCHIVE` is optional and, when supplied, verifies
-the original archive's pinned SHA-256 in addition to the mandatory member checks.
-Directory-only input validates the extracted members, not an archive container.
-
-Leave `LICHTUNG_UNICODE16_WRITE` unset for checking. To intentionally overwrite
-the generated outputs, set it to exactly `1` for that invocation:
-
-```sh
-LICHTUNG_UNICODE16_SOURCE_DIR=/absolute/local/UCD-16.0.0 \
-LICHTUNG_UNICODE16_WRITE=1 \
-cargo test --locked --offline --lib font::unicode16::regeneration::regenerate_unicode16 -- --ignored --exact --nocapture
-```
-
-Any other value is rejected. Both modes validate every source before processing,
-then construct all outputs in memory. The output set is exactly five files: three
-Rust tables, the original ReadMe, and `SHA256SUMS`. Neither mode emits corpora,
-compressed or otherwise. Output hashes use deterministic path order. The test
-does not overwrite this README, `sources.json`, or the retained Unicode license.
-Normal test runs leave regeneration and full-corpus conformance ignored.
+Regeneration must preserve the single runtime implementation and Unicode version.
+The derived output set is three Rust tables, the original ReadMe and
+`SHA256SUMS`; use deterministic path order and the pinned Rust formatter.
+Compare all outputs without writing by default. Asset writes require explicit
+authorization and must not recreate full corpora, overwrite `sources.json` or
+change the retained license. These requirements describe provenance maintenance,
+not an available public executable or a successful current conformance run.
 
 ## Generated Data
 
@@ -72,29 +51,12 @@ adjacent equal-valued entries are coalesced without changing lookup semantics.
 
 The six complete conformance/property corpora are not retained in the checkout.
 The original archive ReadMe is retained verbatim. `SHA256SUMS` covers only the
-three generated tables and ReadMe; an active Rust test checks those bytes from
-project-relative paths. Default tests are self-contained: literal, independently
-expected NFC/casefold, bidi, grapheme, line-break, and ASCII-contraction cases
-complement the existing rule regressions, admission tests, profile version checks,
-and semantic table checksums. They do not claim full official coverage.
-
-Full-corpus tests are explicitly ignored and require
-`LICHTUNG_UNICODE16_SOURCE_DIR` pointing to original official raw UCD members,
-including the `auxiliary/` subdirectory. Each consumer verifies the source's raw
-SHA-256 against `sources.json` before parsing. Comments, blank lines, and surrounding
-whitespace are stripped only in memory; source order, expected values, and
-`@` section directives are preserved. Explicit invocation with an unset variable,
-missing member, or mismatched hash fails rather than skipping. There is no source
-discovery, dependency-cache lookup, network access, or compressed corpus fallback.
-
-Run the five Unicode corpus tests and the separate contraction corpus test with:
-
-```sh
-LICHTUNG_UNICODE16_SOURCE_DIR=/absolute/local/UCD-16.0.0 \
-cargo test --locked --offline --lib ::conformance::official_ -- --ignored
-LICHTUNG_UNICODE16_SOURCE_DIR=/absolute/local/UCD-16.0.0 \
-cargo test --locked --offline --lib contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii_runs -- --ignored
-```
+three generated tables and ReadMe; a public regression checks those bytes from
+package-relative paths. The bounded public normalization/font guards do not
+claim full official coverage. Full-corpus activities are not public test targets.
+Independent consumers must verify raw hashes before stripping comments or
+whitespace, preserve source order, expected values and `@` directives, and fail
+on missing or mismatched local input rather than silently skipping.
 
 The Unicode data and all derived tables are covered by the accompanying
 `tests/fixtures/unicode16/LICENSE` (Unicode License V3). The original source
@@ -115,9 +77,8 @@ notice is Copyright 2024 Unicode, Inc.; see the retained ReadMe and
 | Family-name NFC and NFKC_CF | Generated project tables | 16.0.0 |
 | Default UAX #14 | Generated project tables | 16.0.0 |
 
-Existing Rust version tests assert every exported Unicode version in this table,
-including the tables shared with rustybuzz's transitive dependencies. The exact
-package constraints and Cargo.lock retain the audited dependency profile;
+The exact package constraints and Cargo.lock retain the audited dependency profile,
+including the tables shared with rustybuzz's transitive dependencies;
 no separate graph-audit script ships. rustybuzz's private normalization
 version is defined by the pinned dependency's
 `rustybuzz-0.20.1/src/hb/unicode_norm.rs`; it is not exported, so its
@@ -125,8 +86,8 @@ exact 0.20.1 package pin and Cargo.lock checksum protect that audited source.
 rustybuzz also has upstream assertions for all its Unicode tables. In particular,
 unicode-properties 0.1.4 contains Unicode 17 despite the compatible package
 version; the direct =0.1.3 constraint prevents rustybuzz resolving it again.
-The ccc and mirroring dev dependencies let tests assert the same resolved tables,
-not substitute test implementations.
+The ccc and mirroring constraints pin those same resolved tables, not substitute
+test implementations.
 
 unicode-ident belongs to host proc-macro parsing, not rendered text, and is
 excluded from the target-runtime closure. The renderer does not use Rust's host
@@ -140,7 +101,7 @@ rendering. Removing those features compiles the library and its unit tests and
 removes unicode-vo 0.1.0 and the usvg font engine edges from Cargo.lock. This
 change did not remove fontdb capabilities or change canonical discovery.
 
-## Conformance Coverage
+## Historical Conformance Evidence
 
 | Official Input | Executed Coverage |
 | --- | --- |
@@ -152,8 +113,9 @@ change did not remove fontdb capabilities or change canonical discovery.
 | BidiTest | 490,846 class rows, all 770,241 selected paragraph-direction runs, levels and visual order |
 | LineBreakTest through ASCII contraction | 16,672 rows at each of two ASCII expansion lengths (33,344 comparisons) |
 
-These counts apply to the opt-in full-corpus tests, not default tests. Once invoked,
-all corpus cases are scalar-representable; none are skipped. Bidi
+These are historical opt-in conformance receipts, not current public test
+definitions or a new execution claim. All executed corpus cases were
+scalar-representable; none were skipped. Bidi
 `x` entries are the official X9 exclusions, not suppressed failures. L1 is applied
 before comparing levels and L2 visual ordering, with original scalar indices
 preserved after X9 removal. Class fixtures use non-bracket representatives;

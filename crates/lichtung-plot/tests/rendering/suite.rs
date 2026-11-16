@@ -1,11 +1,10 @@
-use lichtung_plot::{BarInput, CategoryValues, NumericValues, Plot, ValueSort};
+use lichtung_plot::{CategoryValues, NumericValues, Plot};
 
 #[path = "../support/visual.rs"]
 mod support;
 
-use support::*;
+use support::{parse_first_clip_rect, parse_text_elements};
 
 mod contract;
-mod degeneracy;
 mod labels;
 mod public_contracts;

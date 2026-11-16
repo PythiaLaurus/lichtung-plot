@@ -13,11 +13,6 @@ use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotMeasureContext, PointShape};
 use crate::theme::CategoryColors;
 use crate::Error;
-#[cfg(test)]
-use crate::Plot;
-
-#[cfg(test)]
-pub(crate) mod extraction;
 
 #[derive(Debug, Clone, Copy, Default)]
 struct TraceStyle {

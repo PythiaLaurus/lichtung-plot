@@ -1,10 +1,6 @@
-use lichtung_plot::{HistogramInput, NumericValues, Plot, QqLine};
-
 #[path = "../support/visual.rs"]
 mod support;
 
-use support::*;
+use support::{parse_circles, unique_dir};
 
-mod composites;
 mod raw_overlays;
-mod sample_plots;

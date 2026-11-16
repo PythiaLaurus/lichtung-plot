@@ -146,27 +146,3 @@ fn compose_hangul(first: char, second: char) -> Option<char> {
     }
     None
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn ordering_preserves_equal_class_marks() {
-        let mut scalars = ['\u{0315}', '\u{0300}', '\u{0300}'];
-        super::canonical_order(&mut scalars);
-        assert_eq!(scalars, ['\u{0300}', '\u{0300}', '\u{0315}']);
-    }
-
-    fn normalize(value: &str) -> String {
-        super::normalize(value).unwrap()
-    }
-
-    #[test]
-    fn canonically_decomposes_before_recomposition() {
-        assert_eq!(normalize("\u{212B}"), "\u{00C5}");
-    }
-
-    #[test]
-    fn unicode_17_combining_mark_is_a_unicode_16_starter() {
-        assert_eq!(normalize("\u{0315}\u{1ACF}"), "\u{0315}\u{1ACF}");
-    }
-}

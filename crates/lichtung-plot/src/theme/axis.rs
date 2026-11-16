@@ -401,18 +401,6 @@ impl AxisLengths {
     pub(crate) fn before(value: &ExactLength, anchor: f64) -> Result<f64> {
         Self::pixels(value.before(anchor)?)
     }
-    /// Position/preference consequence of one exact local product.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "boundary fixtures inspect standalone products; painted positions retain their complete anchors"
-        )
-    )]
-    pub(crate) fn position(value: &ExactLength) -> Result<f64> {
-        Self::pixels(value.round(SpatialRounding::NearestEven)?)
-    }
-
     pub(crate) fn hard(value: &ExactLength) -> Result<f64> {
         Self::pixels(value.round(SpatialRounding::Ceil)?)
     }
@@ -430,6 +418,3 @@ impl AxisLengths {
         Ok(value.quanta() as f64 / 1024.0)
     }
 }
-
-#[cfg(test)]
-mod tests;

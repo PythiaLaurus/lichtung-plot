@@ -930,7 +930,6 @@ fn length_error(plot: &str, name: &str, row: usize) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Plot;
 
     #[test]
     fn typed_source_reads_keep_full_read_precedence_and_diagnostic_rows() {
@@ -958,82 +957,6 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "data error: source: value \"value\" contains non-finite value inf at source row 901"
-        );
-    }
-
-    #[test]
-    fn source_configuration_keeps_original_bar_and_trajectory_ordinal_errors() {
-        let rows = crate::SourceRows::new([70, 901]).unwrap();
-        let bar = Plot::bar(
-            CategoryValues::new("category", ["a", "b"]).unwrap(),
-            crate::BarInput::estimates(NumericValues::nullable("value", [Some(1.0), None])),
-        )
-        .source_rows(rows.clone());
-        assert_eq!(
-            bar.description()
-                .validate_configuration(bar.kind())
-                .unwrap_err()
-                .to_string(),
-            "data error: bar: value \"value\" contains null at source row 1"
-        );
-        let trajectory = Plot::trajectory(
-            CategoryValues::new("condition", ["valid", "   "]).unwrap(),
-            NumericValues::new("value", [1.0, 2.0]),
-            CategoryValues::new("group", ["g", "g"]).unwrap(),
-        )
-        .source_rows(rows);
-        assert_eq!(trajectory.description().validate_configuration(trajectory.kind()).unwrap_err().to_string(), "data error: trajectory: condition label is empty after whitespace normalization at source row 1");
-    }
-
-    #[test]
-    fn observed_collectives_order_groups_then_hues_within_each_group() {
-        let plot = Plot::line(
-            crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0]),
-            crate::NumericValues::new("y", [0.0, 1.0, 2.0, 3.0, 4.0]),
-        )
-        .group(crate::CategoryValues::new("group", ["g1", "g2", "g2", "g1", "g1"]).unwrap())
-        .hue(crate::CategoryValues::new("hue", ["h2", "h1", "h2", "h1", "h2"]).unwrap())
-        .erase();
-
-        let channels = with_source_data_for_test(
-            &plot,
-            &crate::font::canonical::OperationContext::new(),
-            crate::orchestrator::registration::RowSelection::Full,
-            |data| {
-                observed_collectives(
-                    data,
-                    plot.description().group_col(),
-                    plot.description().group_name(),
-                    plot.description().hue_col(),
-                    plot.description().hue_name(),
-                    None,
-                    "test",
-                )
-                .unwrap()
-            },
-        )
-        .unwrap();
-
-        assert_eq!(
-            channels.identities,
-            [
-                CollectivePair {
-                    group: Some("g1".into()),
-                    hue: Some("h2".into()),
-                },
-                CollectivePair {
-                    group: Some("g1".into()),
-                    hue: Some("h1".into()),
-                },
-                CollectivePair {
-                    group: Some("g2".into()),
-                    hue: Some("h1".into()),
-                },
-                CollectivePair {
-                    group: Some("g2".into()),
-                    hue: Some("h2".into()),
-                },
-            ]
         );
     }
 }

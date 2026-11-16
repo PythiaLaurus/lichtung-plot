@@ -27,11 +27,6 @@ use crate::theme::{AccentColors, CategoryColors};
 use crate::Plot;
 use crate::{CategoryOrder, ValueSort};
 
-#[cfg(test)]
-thread_local! {
-    static BOOTSTRAP_DRAWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// Bar arrangement mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BarMode {
@@ -2262,8 +2257,6 @@ impl SplitMix64 {
     }
 
     fn next(&mut self) -> u64 {
-        #[cfg(test)]
-        BOOTSTRAP_DRAWS.with(|draws| draws.set(draws.get() + 1));
         self.state = self.state.wrapping_add(0x9e37_79b9_7f4a_7c15);
         let mut value = self.state;
         value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);

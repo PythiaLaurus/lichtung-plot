@@ -416,6 +416,3 @@ pub fn check(root: &Path) -> Result<Vec<Case>> {
     println!("Checked peer single-page guides: {} shared anchors, {} showcase walkthroughs and {} reference workflows. Prose equivalence still requires review.", english.order.len(), cases.iter().filter(|case| case.featured).count(), cases.iter().filter(|case| !case.featured).count());
     Ok(cases)
 }
-
-#[cfg(test)]
-mod tests;

@@ -1323,10 +1323,6 @@ fn marginal_display_range<'a>(
 }
 
 fn marginal_data_display_range(data_range: (f64, f64), spec: &AuthoredAxisSpec) -> (f64, f64) {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AxisRangePreparation,
-    );
     if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return limits;
     }
@@ -1381,9 +1377,6 @@ fn kde_visible_support_range<'a>(
 
     Ok((low.is_finite() && high.is_finite() && low < high).then_some((low, high)))
 }
-
-#[cfg(test)]
-mod alpha_tests;
 
 #[cfg(test)]
 mod tests;

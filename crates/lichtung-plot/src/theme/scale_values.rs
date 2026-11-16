@@ -338,16 +338,6 @@ impl ColorScales {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn test_defaults() -> ColorScales {
-    ColorScales::new(
-        QualitativePalette::extendable([OpaqueColor::rgb(0, 0, 0)]).unwrap(),
-        SequentialGradient::new(HEATMAP_SEQUENTIAL_STOPS).unwrap(),
-        DivergingGradient::new(HEATMAP_DIVERGING_STOPS).unwrap(),
-    )
-    .unwrap()
-}
-
 fn zero(value: f64) -> f64 {
     if value == 0.0 {
         0.0

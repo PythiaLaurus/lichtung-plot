@@ -6,9 +6,6 @@ use crate::text::TextAppearance;
 use crate::{Error, TextDirection, TextElision, TextEllipsis, TextOverflow};
 use unicode_segmentation::UnicodeSegmentation;
 
-#[cfg(test)]
-mod tests;
-
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -118,10 +115,6 @@ pub(crate) fn measure(
         };
         let right = count - (kept - left);
         let (view, map) = view(source, boundaries[left], boundaries[right], &policy.marker)?;
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::EllipsisViewTrial,
-        );
         match super::request::measure_current(
             theme,
             &view,

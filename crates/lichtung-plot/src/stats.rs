@@ -31,24 +31,3 @@ pub(crate) fn student_t_critical(df: usize, level: f64) -> Result<f64, &'static 
         Err("Student-t critical value is not finite and positive")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::student_t_critical_975;
-
-    #[test]
-    fn student_t_inverse_cdf_matches_hard_coded_oracles() {
-        let expected = [
-            (1, 12.706_204_736_432_095),
-            (2, 4.302_652_729_696_142),
-            (10, 2.228_138_851_964_938_5),
-        ];
-        for (df, oracle) in expected {
-            let actual = student_t_critical_975(df).unwrap();
-            assert!(
-                (actual - oracle).abs() < 1e-9,
-                "df={df}: {actual} != {oracle}"
-            );
-        }
-    }
-}

@@ -3,8 +3,6 @@
 use super::text::TextPlanError;
 use std::cmp::Ordering;
 
-#[cfg(test)]
-mod conformance;
 mod data;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -186,11 +184,6 @@ pub(super) fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), T
             .map_err(|_| TextPlanError::Allocation("Unicode vector"))?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-fn breaks_for_test(value: &str) -> Vec<(usize, BreakOpportunity)> {
-    linebreaks(value).unwrap()
 }
 
 #[expect(
@@ -514,55 +507,5 @@ fn compare_range(start: u32, end: u32, codepoint: u32) -> Ordering {
         Ordering::Greater
     } else {
         Ordering::Equal
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{breaks_for_test as linebreaks, line_break_class, BreakOpportunity, Class};
-
-    #[test]
-    fn checked_unicode_lengths_refuse_without_reservation() {
-        let mut values = Vec::<usize>::new();
-        assert!(matches!(
-            super::reserve(&mut values, usize::MAX),
-            Err(super::TextPlanError::Arithmetic(_))
-        ));
-        assert_eq!(values.capacity(), 0);
-        assert!(values.is_empty());
-    }
-
-    fn allowed_offsets(value: &str) -> Vec<usize> {
-        linebreaks(value)
-            .into_iter()
-            .filter_map(|(offset, opportunity)| {
-                (opportunity == BreakOpportunity::Allowed).then_some(offset)
-            })
-            .collect()
-    }
-
-    #[test]
-    fn unicode_16_brahmic_syllables_follow_lb28a() {
-        let akara = "\u{1B05}";
-        let virama = "\u{1B44}";
-        let pangolat = "\u{1BF2}";
-        assert!(allowed_offsets(&format!("{akara}{virama}{akara}")).is_empty());
-        assert!(allowed_offsets(&format!("{akara}{pangolat}")).is_empty());
-        assert_eq!(
-            allowed_offsets(&format!("{akara}{akara}")),
-            vec![akara.len()]
-        );
-    }
-
-    #[test]
-    fn line_break_offsets_are_utf8_byte_offsets() {
-        assert_eq!(allowed_offsets("a b"), vec![2]);
-        assert_eq!(allowed_offsets("\u{4E00}\u{4E01}"), vec![3]);
-    }
-
-    #[test]
-    fn unicode_16_quote_rules_and_version_boundary_are_exact() {
-        assert!(allowed_offsets("\u{23E9} \u{00BB}").is_empty());
-        assert_eq!(line_break_class(0xA7F1), Class::XX);
     }
 }

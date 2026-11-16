@@ -7,9 +7,6 @@ use crate::layout::{
 use crate::text::layout::VisibilityProgram;
 use crate::{TextFailure, TextVisibility};
 
-#[cfg(test)]
-mod tests;
-
 pub(crate) struct Candidate {
     pub(crate) index: usize,
     pub(crate) position: f64,

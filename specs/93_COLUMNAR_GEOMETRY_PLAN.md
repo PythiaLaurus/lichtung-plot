@@ -315,11 +315,10 @@ Start from the actual source owners:
   and [alpha](../crates/lichtung-plot-ndarray/src/frontend/alpha.rs);
   [Polars constructors](../crates/lichtung-plot-polars/src/frontend/constructors.rs)
   and [alpha](../crates/lichtung-plot-polars/src/frontend/alpha.rs).
-- [distribution integration](../crates/lichtung-plot/tests/distributions/composites.rs),
-  [degeneracy](../crates/lichtung-plot/tests/rendering/degeneracy.rs),
-  [ndarray tests](../crates/lichtung-plot-ndarray/src/tests.rs),
-  [Polars tests](../crates/lichtung-plot-polars/src/tests.rs) and the existing
-  [cross-adapter consumer](../docs/book-helper/tests/native_adapters.rs).
+- Public regression consumers under `crates/lichtung-plot/tests/`,
+  `crates/lichtung-plot-ndarray/src/` and `crates/lichtung-plot-polars/src/`.
+  Separate cross-adapter acceptance uses the same public native identities;
+  the Book command does not own or depend on that acceptance activity.
 - Peer [English](../docs/en/src/sections/data.md) and
   [Chinese](../docs/zh-CN/src/sections/data.md) data guides. Search the whole
   repository for further live examples/consumers before removing the old types.

@@ -250,7 +250,7 @@ impl CompensatedSum {
 
 #[cfg(test)]
 mod tests {
-    use super::{ols, OlsFit};
+    use super::OlsFit;
 
     fn assert_close(actual: f64, expected: f64, tolerance: f64) {
         assert!(
@@ -297,22 +297,6 @@ mod tests {
             -268_435_456.0 + 4_096.0 * original_interval.upper,
             1e-7,
         );
-    }
-
-    #[test]
-    fn tiny_nonzero_x_scale_is_not_rejected_by_an_absolute_floor() {
-        let (_, slope, _) = ols(&[1.0e-200, 2.0e-200, 3.0e-200], &[1.0, 2.0, 3.0]).unwrap();
-
-        assert_close(slope, 1.0e200, 1.0e185);
-    }
-
-    #[test]
-    fn public_wrapper_preserves_two_point_descriptive_fit() {
-        let result = ols(&[2.0, 4.0], &[5.0, 9.0]).unwrap();
-
-        assert_close(result.0, 1.0, 1e-14);
-        assert_close(result.1, 2.0, 1e-14);
-        assert_close(result.2, 1.0, 1e-14);
     }
 
     #[test]

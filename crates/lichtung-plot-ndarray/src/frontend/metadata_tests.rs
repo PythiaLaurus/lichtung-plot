@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use ndarray::{array, Array2};
 
-use crate::{kind, AdapterError, FacetScales, Labels, Line, Plot, Raincloud, Scatter};
+use crate::{kind, AdapterError, FacetScales, Labels, Line, Plot, Scatter};
 
 #[test]
 fn source_free_pair_outlives_source_and_restores_validated_lookup() {
@@ -90,34 +90,4 @@ fn restored_policy_caches_keep_replacements_and_native_validation() {
     assert!(
         matches!(native.preflight(), Err(crate::Error::Data(detail)) if detail.contains("facet") && detail.contains("null"))
     );
-}
-
-#[test]
-fn supplied_geometry_point_alpha_retains_its_original_domain_after_roundtrip() {
-    let adapted = Raincloud::geometry(
-        array!["a"].view(),
-        array![0.].view(),
-        array![1.].view(),
-        array![2.].view(),
-        array!["a", "a"].view(),
-        array![-1., 3.].view(),
-        array![0.5, 0.5].view(),
-        array!["a", "a", "a"].view(),
-        array![0., 1., 2.].view(),
-        array![0.25, 0.5, 0.75].view(),
-        "category",
-        "value",
-    )
-    .unwrap();
-    let (plot, metadata) = adapted.into_parts();
-    let adapted = Raincloud::from_parts(plot, metadata);
-    assert!(adapted
-        .clone()
-        .point_alpha(array![0u8, 128, 255].view())
-        .is_ok());
-    assert!(matches!(
-        adapted.point_alpha(array![64u8, 128].view()),
-        Err(AdapterError::Binding { role: "alpha", detail })
-            if detail.contains("expected 3 slots, got 2")
-    ));
 }

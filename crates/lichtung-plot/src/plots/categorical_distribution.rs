@@ -8,14 +8,6 @@ use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle}
 use crate::theme::CategoryColors;
 use crate::{Error, PlotKind};
 
-#[cfg(test)]
-pub(crate) mod extraction;
-
-#[cfg(test)]
-thread_local! {
-    pub(crate) static FACET_CATEGORY_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 #[derive(Debug)]
 pub(crate) enum PreparedDistribution {
     Boxplot(crate::plots::boxplot::PreparedBoxplot),
@@ -86,8 +78,6 @@ impl PreparedDistribution {
         ) && facet_categories
             && !matches!(self, Self::Supplied(_))
         {
-            #[cfg(test)]
-            FACET_CATEGORY_SCANS.with(|scans| scans.set(scans.get() + 1));
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
             let column = chart.x_col().ok_or_else(|| {

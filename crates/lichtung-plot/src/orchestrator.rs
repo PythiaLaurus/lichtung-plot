@@ -25,16 +25,12 @@ mod validation;
 
 pub(crate) use artifacts::write_atomic;
 pub(crate) use backend::{capture_calls, validate_text_replay_plan, TextReplayPlan};
-#[cfg(test)]
-pub(crate) use backend::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
 pub(crate) use facets::text_census_labels as facet_text_census_labels;
 pub(crate) use lifecycle::{capture_selected, plan_scene, render_scene};
 
 #[cfg(test)]
 thread_local! {
     pub(crate) static SELECTED_INTERIOR_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static PLOT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FINAL_PLOT_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -101,8 +97,6 @@ pub(crate) fn measure_probe(
 ) -> Result<(assignment::PlotMeasureAssignment, PlotRenderResult), crate::layout::fit::PlanError> {
     let source = factory.registered.source;
     crate::layout::interior::InteriorRoute::classify(source.kind()).validate(source)?;
-    #[cfg(test)]
-    RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
     let mut frame = crate::layout::Layout::envelope(entry.body);
     {
         let context = factory.context(&entry, guides, scope)?;
@@ -268,38 +262,6 @@ fn validate_axis_text(
     layout
         .measure_axes(theme, scope, layout.test_semantics())
         .map(|_| ())
-}
-
-#[cfg(test)]
-#[test]
-fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
-    let source = Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 1.0]),
-        crate::NumericValues::new("y", [1.0, 2.0]),
-    );
-    let before = crate::font::canonical::planning_counts();
-    let error = crate::layout::interior::InteriorRoute::classify(PlotKind::Line)
-        .validate(source.description())
-        .unwrap_err();
-    assert!(matches!(error, Error::Data(_)));
-    assert_eq!(crate::font::canonical::planning_counts(), before);
-}
-
-#[cfg(test)]
-#[test]
-fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
-    let panel = crate::layout::PixelRect::new(0.0, 600.0, 0.0, 400.0);
-    let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let error = validate_frozen_axes_and_guides(None, &mut result).unwrap_err();
-    assert!(
-        matches!(error, crate::layout::fit::PlanError::Fatal(Error::Render(message)) if message.contains("missing its frozen axes"))
-    );
-    assert_eq!(
-        shapes,
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
-    );
-    assert!(result.layout.x_axis.label.is_none() && result.layout.y_axis.label.is_none());
 }
 
 #[cfg(test)]

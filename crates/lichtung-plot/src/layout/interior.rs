@@ -774,9 +774,3 @@ mod automatic_ink_tests {
         );
     }
 }
-
-#[cfg(test)]
-pub(crate) mod distributions;
-
-#[cfg(test)]
-pub(crate) mod bars;

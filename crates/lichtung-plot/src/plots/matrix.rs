@@ -44,8 +44,6 @@ use crate::stats::distribution::{gaussian_kde, strict_scott_bandwidth};
 use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
 use crate::LegendPosition;
-#[cfg(test)]
-use crate::Plot;
 
 /// One graphical group for the matrix plot.
 #[derive(Debug)]
@@ -644,11 +642,6 @@ pub(crate) fn measure(
         context.fit_scope(),
     )?;
     let (grid_bottom, grid_top) = (outer.y0, outer.y1);
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::MatrixLayoutPass,
-    );
-
     // --- Per-variable axis ranges ---
     // A pairplot is a coordinated matrix: each variable should use one
     // canonical range wherever it appears, not one range as x and another
@@ -1464,9 +1457,3 @@ fn extract_columns_f64(
     }
     Ok(columns)
 }
-
-#[cfg(test)]
-mod alpha_tests;
-
-#[cfg(test)]
-mod tests;

@@ -435,10 +435,6 @@ impl Sources {
             precision: None,
         };
         self.ordinal += 1;
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::TickSource,
-        );
         let mut maximum = self.generation.get_maximum_count().unwrap_or(
             if self.generation.target_count().is_some() || self.generation.is_interval() {
                 usize::MAX
@@ -740,11 +736,6 @@ impl NumericTickPlan {
                         );
                     Self::omitted(&positions, &operands, integral, source)?
                 };
-                #[cfg(test)]
-                crate::orchestrator::measurements::count(
-                    crate::orchestrator::measurements::Counter::TickDistinctList,
-                );
-
                 if let Some(plan) = plan {
                     if labels_fit(&plan.ticks, projection, side, theme)? {
                         return Ok(plan);
@@ -752,10 +743,6 @@ impl NumericTickPlan {
                 }
             }
             if source.kind == SourceKind::Midpoint || sources.fixed() {
-                #[cfg(test)]
-                crate::orchestrator::measurements::count(
-                    crate::orchestrator::measurements::Counter::TickFitMiss,
-                );
                 return Err(scope
                     .child(
                         match side {
@@ -907,10 +894,6 @@ pub(super) fn labels_fit(
         if visibility.is_some_and(|policy| !policy.includes(index, &eligible)) {
             continue;
         }
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::TickMetricLookup,
-        );
         let (width, alignment, role) = match side {
             AxisSide::Bottom => (
                 crate::layout::maximum_width_quanta(if allow {

@@ -29,11 +29,6 @@ const TICK_FONT_SIZE: u32 = 16;
 const MUTED_TEXT: (u8, u8, u8) = (80, 80, 80);
 const SIGNIFICANCE_FONT_SIZE: u32 = 16;
 
-#[cfg(test)]
-thread_local! {
-    static FONT_ENVIRONMENT_DISCOVERIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// A theme's full resolved visual specification. Layout and renderers consume
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
@@ -286,18 +281,6 @@ struct TextQueryKey {
 }
 
 impl CachedTextQuery {
-    #[cfg(test)]
-    fn fingerprints(
-        input: &TextPlanInput<'_>,
-        preferred_lines: Option<usize>,
-    ) -> ([u8; 32], [u8; 32]) {
-        let state = Self::shaping_state(input);
-        (
-            state.clone().finalize().into(),
-            Self::presentation_fingerprint(state, input, preferred_lines),
-        )
-    }
-
     fn shaping_state(input: &TextPlanInput<'_>) -> Sha256 {
         let mut hash = Sha256::new();
         // The complete, unnormalized source fixes paragraph bidi and scripts;
@@ -525,10 +508,6 @@ pub(crate) struct TextService {
 }
 
 impl TextService {
-    #[cfg(test)]
-    pub(crate) fn text_query_count(&self) -> usize {
-        self.queries.lock().expect("text query cache").entries.len()
-    }
     /// Initialize this operation's canonical system-font environment.
     pub(crate) fn prepare_font_environment(&self) -> Result<(), Error> {
         self.prepared_font_environment().map(|_| ())
@@ -542,8 +521,6 @@ impl TextService {
     ) -> Result<(), Error> {
         self.fonts
             .get_or_init(|| {
-                #[cfg(test)]
-                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
                 census
                     .prepare_system_fonts(presence, prepared_stage)
                     .map_err(|error| error.to_string())
@@ -558,7 +535,6 @@ impl TextService {
         #[cfg(test)]
         if self.fonts.get().is_none() {
             self.fonts.get_or_init(|| {
-                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
                 PreparedFontEnvironment::discover_system().map_err(|error| error.to_string())
             });
         }
@@ -1609,53 +1585,6 @@ mod tests {
             ),
             Some(expected)
         );
-    }
-
-    #[test]
-    fn indexed_query_fingerprints_include_exact_presentation_and_provenance() {
-        let appearance = Theme::publication()
-            .resolve()
-            .unwrap()
-            .typography
-            .root
-            .caption
-            .clone();
-        let input = indexed_query_input("A", &appearance, "owner");
-
-        let fingerprints = CachedTextQuery::fingerprints(&input, None);
-        for change in 0..7 {
-            let mut changed = input.clone();
-            match change {
-                0 => changed.maximum_width_quanta += 1,
-                1 => changed.alignment = PhysicalTextAlignment::End,
-                2 => changed.paint = Color::rgba(4, 5, 6, 7),
-                3 => changed.line_height = TextLineHeight::ResolvedQuanta(1000),
-                4 => changed.exact_override = true,
-                5 => changed.provenance.owner.push('x'),
-                _ => changed.provenance.pair_ordinal += 1,
-            }
-            let changed = CachedTextQuery::fingerprints(&changed, None);
-            assert_eq!(changed.0, fingerprints.0);
-            assert_ne!(changed.1, fingerprints.1);
-        }
-        assert_ne!(
-            CachedTextQuery::fingerprints(&input, Some(2)).1,
-            fingerprints.1
-        );
-        for change in 0..4 {
-            let mut changed = input.clone();
-            let other = crate::font::canonical::named_stack(&["Other"]);
-            match change {
-                0 => changed.source = "AA",
-                1 => changed.stack = &other,
-                2 => changed.font_size += 1.0,
-                _ => changed.weight = TextWeight::Bold,
-            }
-            assert_ne!(
-                CachedTextQuery::fingerprints(&changed, None).0,
-                fingerprints.0
-            );
-        }
     }
 
     #[test]

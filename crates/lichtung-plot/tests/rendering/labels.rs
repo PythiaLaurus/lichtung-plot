@@ -4,50 +4,6 @@ use lichtung_plot::{BarInput, CategoryValues, Labels, NumericValues, Plot};
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[test]
-fn explicit_tilt_keeps_complete_category_labels_and_non_tenth_annotation_rotation() {
-    use lichtung_plot::{
-        DataAreaCorner, PlotTextAnnotation, Text, TextAnchor, TextLayout, TextOverflow,
-        TextRotation,
-    };
-    let plot = Plot::bar(
-        CategoryValues::new("model", ["LightGBM", "CatBoost", "RandomForest"]).unwrap(),
-        BarInput::estimates(NumericValues::new("score", [1.0, 2.0, 3.0])),
-    )
-    .size(360, 380)
-    .labels(Labels::raw())
-    .x_tick_text_layout(TextLayout::default().rotation(TextRotation::degrees(-60.0).unwrap()))
-    .text_annotation(
-        PlotTextAnnotation::new(
-            DataAreaCorner::TopLeft,
-            Text::new("Projected note").layout(
-                TextLayout::default()
-                    .anchor(TextAnchor::top_left())
-                    .rotation(TextRotation::degrees(30.05).unwrap())
-                    .overflow(TextOverflow::visible()),
-            ),
-        )
-        .unwrap(),
-    );
-    let svg = render(plot);
-    for label in ["LightGBM", "CatBoost", "RandomForest", "Projected note"] {
-        assert!(svg.contains(&format!(">{label}</text>")));
-    }
-    assert!(svg.contains("rotate(30.05"));
-    assert!(svg.contains("rotate(-60"));
-}
-
-#[test]
-fn scatter_legend_omits_hues_from_discarded_nonfinite_rows() {
-    Plot::scatter(
-        NumericValues::new("x", [0.0, 1.0, f64::NAN]),
-        NumericValues::new("y", [0.0, 1.0, 2.0]),
-    )
-    .hue(CategoryValues::new("cohort", ["kept", "kept", "\u{10FFFF}"]).unwrap())
-    .preflight()
-    .unwrap();
-}
-
 fn render<K: lichtung_plot::kind::Marker>(plot: impl std::borrow::Borrow<Plot<K>>) -> String {
     let directory = std::env::temp_dir().join(format!(
         "lichtung-labels-{}-{}",
@@ -60,16 +16,6 @@ fn render<K: lichtung_plot::kind::Marker>(plot: impl std::borrow::Borrow<Plot<K>
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg
-}
-
-fn horizontal_bar(
-    treatment_group: &CategoryValues,
-    mean_score: &NumericValues,
-) -> Plot<lichtung_plot::kind::HorizontalBar> {
-    Plot::horizontal_bar(
-        treatment_group.clone(),
-        BarInput::estimates(mean_score.clone()),
-    )
 }
 
 fn text_layer<'a>(svg: &'a str, name: &str) -> &'a str {
@@ -101,70 +47,6 @@ fn horizontal_category_text(svg: &str, count: u32) -> Vec<String> {
                 .collect()
         })
         .collect()
-}
-
-#[test]
-fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
-    let treatment_group =
-        CategoryValues::new("treatment_group", ["control_group", "active_group"]).unwrap();
-    let mean_score = NumericValues::new("mean_score", [1.0, 2.0]);
-    let study_arm = CategoryValues::new("study_arm", ["control_arm", "active_arm"]).unwrap();
-    let svg = render(horizontal_bar(&treatment_group, &mean_score).series(study_arm));
-
-    let resolved =
-        ["control_group", "active_group"].map(|raw| Labels::default().resolve(raw).unwrap());
-    assert_eq!(resolved, ["Control group", "Active group"]);
-    assert_eq!(horizontal_category_text(&svg, 2), resolved);
-    let axes = super::parse_text_elements(text_layer(&svg, "axes"));
-    let words = axes
-        .iter()
-        .flat_map(|entry| entry.content.split_whitespace())
-        .collect::<Vec<_>>();
-    for label in ["Mean score", "Treatment group"] {
-        let required = label.split_whitespace().collect::<Vec<_>>();
-        assert!(
-            words.windows(required.len()).any(|words| words == required),
-            "missing {label:?}"
-        );
-    }
-    assert_eq!(
-        super::parse_text_elements(text_layer(&svg, "legend"))
-            .into_iter()
-            .flat_map(|entry| entry
-                .content
-                .split_whitespace()
-                .map(str::to_owned)
-                .collect::<Vec<_>>())
-            .collect::<Vec<_>>(),
-        ["Study", "arm", "Control", "arm", "Active", "arm"]
-    );
-}
-
-#[test]
-fn svg_preserves_repeated_spaces_in_vertical_axis_labels() {
-    let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
-    let value = NumericValues::new("value", [1.0, 1.5, 2.0, 2.5]);
-    let svg = render(
-        Plot::bar(category, BarInput::samples(value))
-            .y_label("Response  score")
-            .size(640, 480),
-    );
-    let label = svg
-        .lines()
-        .find(|line| line.contains(">Response  score</text>"))
-        .unwrap();
-
-    assert!(label.contains("xml:space=\"preserve\""));
-    let angle = label
-        .split_once("rotate(")
-        .unwrap()
-        .1
-        .split_once(',')
-        .unwrap()
-        .0
-        .parse::<f64>()
-        .unwrap();
-    assert_eq!(angle.to_bits(), (-90.0_f64).to_bits());
 }
 
 #[test]

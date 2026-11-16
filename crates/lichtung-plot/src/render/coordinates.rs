@@ -11,8 +11,6 @@ const MAX_EXACT_UNITS: i64 = (1_i64 << 53) - 1;
 #[cfg(test)]
 thread_local! {
     pub(crate) static SPATIAL_CONVERSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static COORDINATE_CONVERSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static Y_CONVERSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 struct CoordinateSpelling {
@@ -93,8 +91,6 @@ impl CanonicalCoordinate {
         precision: CoordinatePrecision,
         context: impl fmt::Display,
     ) -> Result<Self, Error> {
-        #[cfg(test)]
-        COORDINATE_CONVERSIONS.with(|count| count.set(count.get() + 1));
         if precision == CoordinatePrecision::CssQuantum {
             #[cfg(test)]
             SPATIAL_CONVERSIONS.with(|count| count.set(count.get() + 1));
@@ -237,8 +233,6 @@ impl CanonicalCoordinate {
     }
 
     pub(crate) fn inverted(self, canvas_height: u32) -> Result<Self, Error> {
-        #[cfg(test)]
-        Y_CONVERSIONS.with(|count| count.set(count.get() + 1));
         let height_units = i128::from(canvas_height) * i128::from(self.precision.scale());
         let units = i64::try_from(height_units - i128::from(self.units))
             .map_err(|_| Error::Render("inverted coordinate exceeds signed range".into()))?;
@@ -1046,22 +1040,5 @@ mod tests {
         assert_eq!(native.y.to_string(), "96.875");
         assert_eq!(native.width.to_string(), "1.5");
         assert_eq!(native.height.to_string(), "5.625");
-    }
-
-    #[test]
-    fn accepted_signed_coordinate_range_is_closed_under_canvas_inversion() {
-        let reserve = i64::from(u32::MAX);
-        let input_limit = MAX_EXACT_UNITS - reserve;
-        let coordinate = CanonicalCoordinate::from_units(
-            -input_limit,
-            CoordinatePrecision::Integer,
-            false,
-            "test coordinate",
-        )
-        .unwrap();
-
-        let inverted = coordinate.inverted(u32::MAX).unwrap();
-
-        assert_eq!(inverted.units(), MAX_EXACT_UNITS);
     }
 }

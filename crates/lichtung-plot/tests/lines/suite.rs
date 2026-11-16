@@ -1,12 +1,8 @@
-use lichtung_plot::{
-    AxisTick, AxisValues, Bounds, Canvas, CanvasLegendPolicy, CategoryValues, FacetSpec, GuideSpec,
-    GuideStyle, LinePattern, NumericValues, Plot, PointLayer,
-};
+use lichtung_plot::{AxisValues, CategoryValues, NumericValues, Plot};
 
 #[path = "../support/composition.rs"]
 mod support;
-use support::*;
 
-mod effect_bands;
-mod numeric_layers;
+use support::render_svg;
+
 mod paths;

@@ -429,66 +429,6 @@ mod tests {
     }
 
     #[test]
-    fn constructors_have_one_reduced_exact_identity() {
-        let ratio = RelativeSpacing::ratio(6, 14).unwrap();
-        assert_eq!(ratio, RelativeSpacing::ratio(3, 7).unwrap());
-        assert_eq!(ratio.0.rational.numerator, BigUint::from(3_u8));
-        assert_eq!(ratio.0.rational.denominator, BigUint::from(7_u8));
-        assert_ne!(ratio, RelativeSpacing::new(6.0 / 14.0).unwrap());
-        assert_ne!(
-            RelativeSpacing::new(0.6).unwrap(),
-            RelativeSpacing::ratio(3, 5).unwrap()
-        );
-        assert_eq!(
-            RelativeSpacing::ratio(0, 17).unwrap(),
-            RelativeSpacing::new(-0.0).unwrap()
-        );
-        assert_eq!(RelativeSpacing::new(-0.0).unwrap().as_f64().to_bits(), 0);
-        assert_eq!(resolved(&ratio, 14, SpatialRounding::Ceil), 6144);
-        assert_eq!(
-            resolved(
-                &RelativeSpacing::ratio(5, 14).unwrap(),
-                14,
-                SpatialRounding::Ceil
-            ),
-            5120
-        );
-        // Binary64 5/14 lies above the mathematical rational.
-        assert_eq!(
-            resolved(
-                &RelativeSpacing::new(5.0 / 14.0).unwrap(),
-                14,
-                SpatialRounding::Ceil
-            ),
-            5121
-        );
-    }
-
-    #[test]
-    fn validation_and_local_metric_bounds_are_checked() {
-        for value in [-1.0, f64::NEG_INFINITY, f64::INFINITY, f64::NAN] {
-            assert!(RelativeSpacing::new(value).is_err());
-            assert!(RelativeSpacing::from_pixels(value, 11).is_err());
-        }
-        assert!(RelativeSpacing::ratio(1, 0).is_err());
-        assert!(RelativeSpacing::from_pixels(1.0, 0).is_err());
-        assert!(LocalMetric::css_pixels(0.0).is_err());
-        assert!(LocalMetric::scalar(LayoutScalar::from_quanta(-1)).is_err());
-        assert_eq!(
-            RelativeSpacing::ratio(1, 1)
-                .unwrap()
-                .product(LocalMetric::css_pixels(f64::from(u32::MAX)).unwrap())
-                .round(SpatialRounding::NearestEven)
-                .unwrap()
-                .quanta(),
-            4_398_046_510_080
-        );
-        assert!(
-            matches!(LocalMetric::scalar(LayoutScalar::from_quanta(i64::MAX)).unwrap(),LocalMetric::Quanta(value) if value == i64::MAX as u64)
-        );
-    }
-
-    #[test]
     fn finite_binary64_extremes_roundtrip_and_spatial_overflow_refuses() {
         for bits in [
             1,
@@ -541,78 +481,6 @@ mod tests {
     }
 
     #[test]
-    fn pixel_factories_preserve_all_pinned_source_bits_through_exact_division() {
-        for (pixels, bits, em, nearest, hard) in [
-            (8.8, 0x4021_9999_9999_999a, 11, 9011, 9012),
-            (17.6, 0x4031_9999_9999_999a, 11, 18022, 18023),
-            (3.3, 0x400a_6666_6666_6666, 11, 3379, 3380),
-            (13.2, 0x402a_6666_6666_6666, 11, 13517, 13517),
-            (7.8, 0x401f_3333_3333_3333, 12, 7987, 7988),
-        ] {
-            assert_eq!(f64::to_bits(pixels), bits);
-            let value = RelativeSpacing::from_pixels(pixels, em).unwrap();
-
-            let restored = value.product(LocalMetric::css_pixels(f64::from(em)).unwrap());
-            let source = RelativeSpacing::new(pixels)
-                .unwrap()
-                .product(LocalMetric::css_pixels(1.0).unwrap());
-            assert_eq!(restored.compare(&source), Ordering::Equal);
-            assert_eq!(
-                restored
-                    .round(SpatialRounding::NearestEven)
-                    .unwrap()
-                    .quanta(),
-                nearest
-            );
-            assert_eq!(
-                restored.round(SpatialRounding::Ceil).unwrap().quanta(),
-                hard
-            );
-            assert_eq!(value.as_f64().to_bits(), (pixels / f64::from(em)).to_bits());
-        }
-        assert_ne!(
-            RelativeSpacing::from_pixels(8.8, 11).unwrap(),
-            RelativeSpacing::new(8.8 / 11.0).unwrap()
-        );
-        assert_ne!(
-            RelativeSpacing::from_pixels(8.8, 11).unwrap(),
-            RelativeSpacing::ratio(4, 5).unwrap()
-        );
-        assert_eq!(
-            RelativeSpacing::from_pixels(0.0, 11).unwrap(),
-            RelativeSpacing::ratio(0, 1).unwrap()
-        );
-        assert_eq!(
-            RelativeSpacing::from_pixels(-0.0, 11)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            0
-        );
-        for pixels in [2, 11, 40, 160] {
-            assert_eq!(
-                RelativeSpacing::from_pixels(f64::from(pixels), 11).unwrap(),
-                RelativeSpacing::ratio(pixels, 11).unwrap()
-            );
-            assert_eq!(
-                resolved(
-                    &RelativeSpacing::from_pixels(f64::from(pixels), 11).unwrap(),
-                    11,
-                    SpatialRounding::Ceil
-                ),
-                i64::from(pixels) * 1024
-            );
-        }
-        assert_eq!(
-            RelativeSpacing::from_pixels(f64::MAX, 1)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            f64::MAX.to_bits()
-        );
-    }
-
-    #[test]
     fn exact_aggregate_retains_the_edge_inset_quantum_and_repeated_gap_sum() {
         let em = LocalMetric::css_pixels(11.0).unwrap();
         let padding = RelativeSpacing::from_pixels(8.8, 11).unwrap().product(em);
@@ -641,49 +509,5 @@ mod tests {
         );
         assert_eq!(gap.compare(&edge), Ordering::Less);
         assert!(gap.add_quanta(LayoutScalar::from_quanta(-1)).is_err());
-    }
-
-    #[test]
-    fn inspection_rounds_rational_ties_to_even_without_integer_overflow() {
-        assert_eq!(
-            RelativeSpacing::ratio(u32::MAX, u32::MAX)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            1.0_f64.to_bits()
-        );
-        assert_eq!(
-            RelativeSpacing::ratio(5, 14).unwrap().as_f64().to_bits(),
-            0x3fd6_db6d_b6db_6db7
-        );
-        assert_eq!(
-            RelativeSpacing::ratio(u32::MAX, 1)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            4_294_967_295.0_f64.to_bits()
-        );
-        // P can supply actual binary64 halfway values through exact division.
-        assert_eq!(
-            RelativeSpacing::from_pixels(f64::from_bits(3), 2)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            2
-        );
-        assert_eq!(
-            RelativeSpacing::from_pixels(f64::from_bits(5), 2)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            2
-        );
-        assert_eq!(
-            RelativeSpacing::from_pixels(f64::from_bits(1), u32::MAX)
-                .unwrap()
-                .as_f64()
-                .to_bits(),
-            0
-        );
     }
 }

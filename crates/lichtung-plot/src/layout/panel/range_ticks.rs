@@ -1,27 +1,13 @@
-#[cfg(test)]
-use super::{AuthoredAxisSpec, AxisSide, AxisTick, Projection};
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_RANGE_SEED_COUNT: usize = 5;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
 
-#[cfg(test)]
-pub(super) fn resolve_range(
-    range: (f64, f64),
-    spec: &AuthoredAxisSpec,
-) -> Result<(f64, f64), Error> {
-    continuous_auto_range(range, spec.window.map(super::RawWindow::pair))
-}
-
 pub(crate) fn continuous_auto_range(
     range: (f64, f64),
     limits: Option<(f64, f64)>,
 ) -> Result<(f64, f64), Error> {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AxisRangePreparation,
-    );
     if let Some(limits) = limits {
         Ok(limits)
     } else {
@@ -34,10 +20,6 @@ pub(crate) fn anchored_auto_range(
     limits: Option<(f64, f64)>,
     anchor: f64,
 ) -> Result<(f64, f64), Error> {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AxisRangePreparation,
-    );
     if let Some(limits) = limits {
         return Ok(limits);
     }
@@ -139,57 +121,6 @@ fn broaden_nice_range(
     }
 }
 
-#[cfg(test)]
-pub(crate) fn automatic_numeric_ticks(
-    range: (f64, f64),
-    projection: &Projection,
-    side: AxisSide,
-    theme: &crate::text::TextRequestContext<'_, '_>,
-) -> Result<Vec<AxisTick>, Error> {
-    Ok(super::sources::numeric_tick_plan(
-        range,
-        crate::TickGeneration::automatic(),
-        false,
-        projection,
-        side,
-        theme,
-        None,
-        &crate::layout::fit::ROOT_SCOPE,
-    )
-    .map_err(crate::layout::fit::PlanError::into_error)?
-    .ticks)
-}
-
-#[cfg(test)]
-pub(super) fn distinct_tick_labels(positions: &[f64]) -> Vec<String> {
-    let mut labels = positions
-        .iter()
-        .copied()
-        .map(format_tick)
-        .collect::<Vec<_>>();
-    if labels_are_unique(&labels) {
-        return labels;
-    }
-    for precision in 2..=17 {
-        labels = positions
-            .iter()
-            .map(|value| format!("{value:.precision$e}"))
-            .collect();
-        if labels_are_unique(&labels) {
-            break;
-        }
-    }
-    labels
-}
-
-#[cfg(test)]
-pub(super) fn labels_are_unique(labels: &[String]) -> bool {
-    labels
-        .iter()
-        .enumerate()
-        .all(|(index, label)| !labels[..index].contains(label))
-}
-
 /// The range owner's snapping grammar is deliberately independent of tick sources.
 pub(crate) fn nice_range(lo: f64, hi: f64, target_ticks: usize) -> Result<(f64, f64), Error> {
     if !(lo.is_finite() && hi.is_finite()) || lo > hi || target_ticks == 0 {
@@ -266,16 +197,6 @@ fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> Result<f64, Error> {
     Ok(best_step)
 }
 
-#[cfg(test)]
-pub(crate) fn nice_ticks(lo: f64, hi: f64, seed: usize) -> Vec<f64> {
-    if !(lo.is_finite() && hi.is_finite()) || lo >= hi || seed == 0 {
-        return Vec::new();
-    }
-    super::sources::adaptive_positions((lo, hi), seed, super::sources::MAX_TICKS)
-        .unwrap()
-        .unwrap_or_default()
-}
-
 fn finite_span(lo: f64, hi: f64) -> f64 {
     let direct = hi - lo;
     if direct.is_finite() {
@@ -299,9 +220,4 @@ fn snapped_tick_count(lo: f64, hi: f64, step: f64) -> Option<usize> {
     } else {
         None
     }
-}
-
-#[cfg(test)]
-pub(crate) fn format_tick(value: f64) -> String {
-    super::sources::format_label(value, false, false, 0).unwrap()
 }

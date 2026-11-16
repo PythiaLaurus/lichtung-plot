@@ -618,12 +618,6 @@ dependencies = [
 [[package]]
 name = "lichtung-plot-book"
 version = "0.0.0"
-dependencies = [
- "lichtung-plot-ndarray",
- "lichtung-plot-polars",
- "ndarray",
- "polars-core",
-]
 
 [[package]]
 name = "lichtung-plot-ndarray"

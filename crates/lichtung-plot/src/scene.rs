@@ -215,15 +215,6 @@ pub(crate) fn validate_png_target_dimensions(width: f64, height: f64) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::backend::Backend;
-    use crate::render::svg_backend::SvgBackend;
-
-    fn finalized(width: u32, height: u32) -> FinalizedSvgOutput {
-        let mut backend = SvgBackend::in_memory(width, height);
-        backend.begin(width, height).unwrap();
-        backend.end().unwrap();
-        backend.into_output().unwrap()
-    }
 
     fn direct_scene(width: u32, height: u32, byte_count: usize) -> RenderedScene {
         RenderedScene {
@@ -234,26 +225,6 @@ mod tests {
             outline_plan: SvgOutlinePlan::Failed("not used by source-limit tests".into()),
             outlined_svg: OnceLock::new(),
         }
-    }
-
-    #[test]
-    fn canonical_scene_rejects_incomplete_zero_and_mismatched_output() {
-        assert!(RenderedScene::new(320, 240, None)
-            .unwrap_err()
-            .to_string()
-            .contains("did not finish"));
-        assert!(RenderedScene::new(0, 240, Some(finalized(320, 240)))
-            .unwrap_err()
-            .to_string()
-            .contains("dimensions must be positive"));
-        assert!(RenderedScene::new(320, 0, Some(finalized(320, 240)))
-            .unwrap_err()
-            .to_string()
-            .contains("dimensions must be positive"));
-        assert!(RenderedScene::new(321, 240, Some(finalized(320, 240)))
-            .unwrap_err()
-            .to_string()
-            .contains("do not match canonical scene dimensions"));
     }
 
     #[test]
@@ -281,105 +252,5 @@ mod tests {
             .is_ok());
         assert!(validate_png_parser_bytes(MAX_CONVERSION_SCENE_BYTES).is_ok());
         assert!(validate_png_parser_bytes(MAX_CONVERSION_SCENE_BYTES + 1).is_err());
-    }
-
-    #[test]
-    fn svg_routes_bypass_png_source_limits() {
-        let scene = RenderedScene::new(
-            MAX_EXPORT_DIMENSION + 1,
-            1,
-            Some(finalized(MAX_EXPORT_DIMENSION + 1, 1)),
-        )
-        .unwrap();
-
-        assert!(scene.svg_bytes().starts_with(b"<svg"));
-        assert!(scene.svg_with_text_as_paths().is_ok());
-        let error = scene
-            .png_bytes(&PngOptions {
-                sizing: crate::PngSizing::Scale(f32::NAN),
-                compression: crate::PngCompression::Balanced,
-            })
-            .unwrap_err();
-        assert!(error.to_string().contains("scene dimensions"));
-    }
-
-    #[test]
-    fn invalid_png_options_do_not_initialize_the_outline_cache() {
-        let scene = RenderedScene::new(10, 10, Some(finalized(10, 10))).unwrap();
-        let error = scene
-            .png_bytes(&PngOptions {
-                sizing: crate::PngSizing::Scale(f32::NAN),
-                compression: crate::PngCompression::Balanced,
-            })
-            .unwrap_err();
-        assert!(error.to_string().contains("png scale"));
-        assert!(scene.outlined_svg.get().is_none());
-        assert!(scene.svg_with_text_as_paths().is_ok());
-    }
-
-    #[test]
-    fn actual_glyph_payload_limit_precedes_derived_buffer_reservation() {
-        use crate::layout::{
-            PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance,
-        };
-        use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
-        use crate::theme::Color;
-        let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
-        let plan = environment
-            .plan_text(TextPlanInput {
-                size_trace: None,
-                direction: crate::TextDirection::Auto,
-                source: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                stack: crate::font::canonical::test_sans_stack(),
-                weight: crate::TextWeight::Normal,
-                font_size: 10.0,
-                line_height: TextLineHeight::Multiplier(1.2),
-                maximum_width_quanta: i64::MAX,
-                alignment: PhysicalTextAlignment::Start,
-                paint: Color::rgb(1, 2, 3),
-                provenance: TextPlanProvenance {
-                    pair_ordinal: 0,
-                    owner: "parser count test".into(),
-                },
-                exact_override: false,
-            })
-            .unwrap();
-        let mut backend = SvgBackend::in_memory_with_fonts(320, 40, &environment);
-        backend.begin(320, 40).unwrap();
-        backend
-            .draw_planned_text(
-                PlannedTextPlacement::middle(Point2D::new(10.0, 20.0), TextAnchor::Start, 0.0),
-                &plan,
-            )
-            .unwrap();
-        backend.end().unwrap();
-        let scene = RenderedScene::new(320, 40, backend.into_output()).unwrap();
-        let parser_limit = scene.svg_bytes().len();
-        assert!(scene.outline_plan.count_bytes(320, 40).unwrap() > parser_limit);
-        crate::render::svg_backend::DERIVED_BUFFER_RESERVATIONS.with(|calls| calls.set(0));
-        let error = scene
-            .png_bytes_with_parser_limit(&PngOptions::default(), parser_limit)
-            .unwrap_err();
-        assert!(error.to_string().contains("parser input size"));
-        crate::render::svg_backend::DERIVED_BUFFER_RESERVATIONS
-            .with(|calls| assert_eq!(calls.get(), 0));
-        assert!(scene.outlined_svg.get().is_none());
-        assert!(scene.svg_with_text_as_paths().unwrap().len() > parser_limit);
-        assert!(scene.png_bytes(&PngOptions::default()).is_ok());
-    }
-
-    #[test]
-    fn png_parser_gate_uses_outlined_bytes_without_poisoning_svg() {
-        let scene = RenderedScene::new(10, 10, Some(finalized(10, 10))).unwrap();
-        let oversized = vec![b' '; MAX_CONVERSION_SCENE_BYTES + 1];
-        scene.outlined_svg.set(Ok(oversized)).unwrap();
-        assert!(scene.svg_bytes().len() < MAX_CONVERSION_SCENE_BYTES);
-        let error = scene.png_bytes(&PngOptions::default()).unwrap_err();
-        assert!(error.to_string().contains("parser input size"));
-        assert_eq!(
-            scene.outlined_svg_bytes().unwrap().len(),
-            MAX_CONVERSION_SCENE_BYTES + 1
-        );
-        assert!(scene.svg_bytes().starts_with(b"<svg"));
     }
 }

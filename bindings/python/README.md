@@ -239,9 +239,9 @@ settings rather than pretend maturin 1.16 forwards build arguments there; supply
 locked/offline build arguments to the subsequent wheel operation.
 
 Build requirements are maturin 1.16.0 and, on Python 3.10, tomli 2.5.0; neither is
-a runtime dependency of `lichtung_plot`. Source-only backend tests are selected
-explicitly with `python -I -B -m pytest -q bindings/python/tests/packaging_backend.py`;
-installed-wheel runtime tests do not collect them.
+a runtime dependency of `lichtung_plot`. Installed-wheel runtime regression and
+independent source-backend acceptance are separate activities; the public runtime
+test entry does not perform source builds.
 
 The extension starts with `abi3-py310` for ordinary CPython. This is not a
 certification of other platforms, PyPy or free-threaded interpreters.

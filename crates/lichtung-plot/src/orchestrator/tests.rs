@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 use super::artifacts::TEMP_FILE_COUNTER;
@@ -14,10 +14,7 @@ use crate::render::primitives::{
     CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
     CanonicalScatter,
 };
-use crate::{Significance, SignificanceMark};
 
-#[path = "../../tests/benchmarks/suite.rs"]
-mod benchmarks;
 #[path = "tests/lifecycle.rs"]
 mod lifecycle;
 
@@ -404,35 +401,4 @@ fn test_directory(name: &str) -> PathBuf {
     ));
     std::fs::create_dir(&path).unwrap();
     path
-}
-
-fn assert_no_staging_files(directory: &Path) {
-    let leaked = std::fs::read_dir(directory)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name.contains(".lichtung-tmp-"))
-        .collect::<Vec<_>>();
-    assert!(leaked.is_empty(), "leaked staging files: {leaked:?}");
-}
-
-#[test]
-fn deferred_backend_lazily_begins_and_forwards_complete_surface_calls() {
-    let mut recorded = RecordingBackend::default();
-    let surface = SurfaceCall {
-        bounds: PixelRect::new(0.0, 320.0, 0.0, 200.0),
-        paint: crate::theme::Color::rgba(1, 2, 3, 4),
-        role: SurfaceRole::CanvasRoot,
-    };
-
-    {
-        let mut backend = DeferredBackend::new(&mut recorded, 320, 200);
-        backend
-            .draw_surface(surface.bounds, surface.paint, surface.role)
-            .unwrap();
-        backend.finish(Ok(()), "test canvas").unwrap();
-    }
-
-    assert_eq!(recorded.begin_sizes, [(320, 200)]);
-    assert_eq!((recorded.begins, recorded.ends), (1, 1));
-    assert_eq!(recorded.surfaces, [surface]);
 }

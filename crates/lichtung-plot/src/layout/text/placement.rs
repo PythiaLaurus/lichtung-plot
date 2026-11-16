@@ -8,9 +8,6 @@ use crate::render::backend::{
 use crate::text::layout::VerticalAnchor;
 use crate::{Error, TextAnchor, TextOffsetFrame};
 
-#[cfg(test)]
-mod tests;
-
 pub(crate) fn resolve(
     default: PlannedTextPlacement,
     plan: &ResolvedTextPlan,

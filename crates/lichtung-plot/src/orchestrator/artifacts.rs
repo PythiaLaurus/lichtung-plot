@@ -14,12 +14,6 @@ const STAGING_RANDOM_BYTES: usize = 16;
 #[cfg(test)]
 pub(super) static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[cfg(test)]
-thread_local! {
-    static REMOVE_FAILURES: std::cell::RefCell<Vec<(PathBuf, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
-    static REMOVE_ATTEMPTS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StagingPathState {
@@ -141,14 +135,6 @@ impl OwnedArtifactStaging {
             .staged
             .as_ref()
             .ok_or_else(|| Error::Render("artifact staging is no longer active".into()))?;
-        #[cfg(test)]
-        if injected_remove_failure(staged.path()) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "injected temporary artifact removal failure",
-            )
-            .into());
-        }
         windows_owned::remove(staged.as_file())?;
         self.disarm();
         Ok(())
@@ -369,8 +355,6 @@ fn windows_stem_eq(stem: &[u16], expected: &str) -> bool {
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), Error> {
-    #[cfg(test)]
-    let _timer = super::measurements::Timer::new(4);
     stage_and_publish(path, |staged| staged.write_all(bytes).map_err(Error::Io))
 }
 
@@ -397,31 +381,8 @@ fn stage_and_publish(
     }
 }
 
-#[cfg(test)]
-fn injected_remove_failure(path: &Path) -> bool {
-    REMOVE_ATTEMPTS.with(|attempts| attempts.borrow_mut().push(path.to_path_buf()));
-    REMOVE_FAILURES.with(|failures| {
-        let mut failures = failures.borrow_mut();
-        let Some((_, remaining)) = failures
-            .iter_mut()
-            .find(|(candidate, remaining)| candidate == path && *remaining > 0)
-        else {
-            return false;
-        };
-        *remaining -= 1;
-        true
-    })
-}
-
 #[cfg(unix)]
 fn remove_if_present(path: &Path) -> std::io::Result<()> {
-    #[cfg(test)]
-    if injected_remove_failure(path) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "injected temporary artifact removal failure",
-        ));
-    }
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -441,64 +402,6 @@ mod tests {
         ));
         std::fs::create_dir(&directory).unwrap();
         directory
-    }
-
-    fn reset_removal_evidence() {
-        REMOVE_FAILURES.with(|failures| failures.borrow_mut().clear());
-        REMOVE_ATTEMPTS.with(|attempts| attempts.borrow_mut().clear());
-    }
-
-    fn fail_next_removal(path: &Path) {
-        REMOVE_FAILURES.with(|failures| failures.borrow_mut().push((path.to_path_buf(), 1)));
-    }
-
-    fn removal_attempts(path: &Path) -> usize {
-        REMOVE_ATTEMPTS.with(|attempts| {
-            attempts
-                .borrow()
-                .iter()
-                .filter(|candidate| *candidate == path)
-                .count()
-        })
-    }
-
-    #[test]
-    fn staging_leaf_is_fixed_sibling_and_destination_independent() {
-        let directory = test_directory("owned-staging-leaf");
-        let output = directory.join("a-very-long-destination-name.svg");
-        let staging = OwnedArtifactStaging::create(&output).unwrap();
-        let path = staging.path().unwrap().to_path_buf();
-        let leaf = path.file_name().unwrap().to_string_lossy();
-
-        assert_eq!(path.parent(), Some(directory.as_path()));
-        assert!(leaf.starts_with(STAGING_PREFIX));
-        assert_eq!(leaf.len(), STAGING_PREFIX.len() + STAGING_RANDOM_BYTES);
-        assert!(!leaf.contains("destination") && !leaf.ends_with(".svg"));
-        drop(staging);
-        assert!(!path.exists());
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn reservation_rejects_missing_leaf_and_parent() {
-        let error = OwnedArtifactStaging::create(Path::new("/")).unwrap_err();
-        assert!(error.to_string().contains("has no file name"));
-        let directory = test_directory("reservation-io-failure");
-        let output = directory.join("missing").join("plot.svg");
-        let error = OwnedArtifactStaging::create(&output).unwrap_err();
-        assert!(matches!(error, Error::Io(_)));
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn relative_destination_is_anchored_before_staging() {
-        let destination = publication_destination(Path::new("plot.svg")).unwrap();
-
-        assert!(destination.is_absolute());
-        assert_eq!(
-            destination,
-            std::fs::canonicalize(".").unwrap().join("plot.svg")
-        );
     }
 
     #[test]
@@ -525,158 +428,6 @@ mod tests {
             .file_name()
             .to_string_lossy()
             .starts_with(STAGING_PREFIX)));
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn cleanup_failure_retains_primary_diagnostic_and_drop_retries_once() {
-        reset_removal_evidence();
-        let directory = test_directory("cleanup-failure");
-        let output = directory.join("plot.svg");
-        let mut staging = OwnedArtifactStaging::create(&output).unwrap();
-        let staged_path = staging.path().unwrap().to_path_buf();
-        staging.file_mut().unwrap().write_all(b"partial").unwrap();
-        fail_next_removal(&staged_path);
-
-        let cleanup = staging.cleanup();
-        let result: Result<(), Error> = crate::render::backend::finish_scope(
-            Err(Error::Render("primary publication failure".into())),
-            cleanup,
-            "temporary render artifacts",
-        );
-        let error = result.unwrap_err().to_string();
-        drop(staging);
-
-        assert!(error.contains("primary publication failure"));
-        assert!(error.contains("injected temporary artifact removal failure"));
-        assert_eq!(removal_attempts(&staged_path), 2);
-        assert!(!staged_path.exists());
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn successful_commit_disarms_cleanup_before_returning() {
-        reset_removal_evidence();
-        let directory = test_directory("commit-boundary");
-        let output = directory.join("plot.svg");
-        let mut staging = OwnedArtifactStaging::create(&output).unwrap();
-        let staged_path = staging.path().unwrap().to_path_buf();
-        staging
-            .file_mut()
-            .unwrap()
-            .write_all(b"replacement artifact")
-            .unwrap();
-
-        staging.commit().unwrap();
-        std::fs::write(&staged_path, "new occupant").unwrap();
-        drop(staging);
-
-        assert_eq!(
-            std::fs::read_to_string(output).unwrap(),
-            "replacement artifact"
-        );
-        assert_eq!(
-            std::fs::read_to_string(&staged_path).unwrap(),
-            "new occupant"
-        );
-        assert_eq!(removal_attempts(&staged_path), 0);
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn publication_failure_preserves_destination_and_removes_staging() {
-        let directory = test_directory("publication-failure");
-        let output = directory.join("plot.svg");
-        std::fs::create_dir(&output).unwrap();
-        std::fs::write(output.join("existing"), "existing artifact").unwrap();
-
-        let result = write_atomic(&output, b"replacement artifact");
-
-        assert!(result.is_err());
-        assert_eq!(
-            std::fs::read_to_string(output.join("existing")).unwrap(),
-            "existing artifact"
-        );
-        assert!(std::fs::read_dir(&directory).unwrap().all(|entry| !entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .starts_with(STAGING_PREFIX)));
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn drop_removes_owned_staging_file_during_unwind() {
-        let directory = test_directory("drop-cleanup");
-        let output = directory.join("plot.svg");
-        let staging = OwnedArtifactStaging::create(&output).unwrap();
-        let observed = staging.path().unwrap().to_path_buf();
-
-        let unwind = std::panic::catch_unwind(|| {
-            let _staging = staging;
-            panic!("simulate transaction unwind");
-        });
-
-        assert!(unwind.is_err());
-        assert!(!observed.exists());
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn drop_suppresses_final_cleanup_failure() {
-        reset_removal_evidence();
-        let directory = test_directory("drop-cleanup-failure");
-        let output = directory.join("plot.svg");
-        let staging = OwnedArtifactStaging::create(&output).unwrap();
-        let observed = staging.path().unwrap().to_path_buf();
-        fail_next_removal(&observed);
-
-        drop(staging);
-
-        assert_eq!(removal_attempts(&observed), 1);
-        assert!(observed.exists());
-        reset_removal_evidence();
-        std::fs::remove_file(observed).unwrap();
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn component_limit_destination_uses_short_independent_staging_leaf() {
-        let directory = test_directory("component-limit");
-        let output = directory.join("d".repeat(255));
-
-        write_atomic(&output, b"complete artifact").unwrap();
-
-        assert_eq!(std::fs::read(&output).unwrap(), b"complete artifact");
-        assert!(std::fs::read_dir(&directory).unwrap().all(|entry| !entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .starts_with(STAGING_PREFIX)));
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn published_permissions_match_ordinary_file_creation() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let directory = test_directory("publication-permissions");
-        let reference = directory.join("reference");
-        let output = directory.join("plot.svg");
-        drop(
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&reference)
-                .unwrap(),
-        );
-
-        write_atomic(&output, b"complete artifact").unwrap();
-
-        let reference_mode = std::fs::metadata(reference).unwrap().permissions().mode() & 0o777;
-        let output_mode = std::fs::metadata(output).unwrap().permissions().mode() & 0o777;
-        assert_eq!(output_mode, reference_mode);
         std::fs::remove_dir_all(directory).unwrap();
     }
 

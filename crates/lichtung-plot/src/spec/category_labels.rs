@@ -29,9 +29,6 @@ pub struct CategoryLabelSelection {
     endpoints: LabelEndpoints,
 }
 
-#[cfg(test)]
-mod tests;
-
 impl Default for CategoryLabelSelection {
     fn default() -> Self {
         Self::all()

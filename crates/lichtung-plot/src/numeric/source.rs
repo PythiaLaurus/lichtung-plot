@@ -336,64 +336,6 @@ pub(crate) fn empty_fixed_source(
     Ok(false)
 }
 
-/// Primitive numeric-source fixtures keep the request inside its real operation.
-#[cfg(test)]
-pub(crate) fn with_axis_binding_for_test<T>(visit: impl FnOnce(NumericBinding<'_>) -> T) -> T {
-    let operation = crate::font::canonical::OperationContext::new();
-    let owner = OwnerInfo {
-        kind: None,
-        canvas: None,
-        facet: None,
-        shared: false,
-        scope: None,
-    };
-    visit(NumericBinding {
-        operation: &operation,
-        owner: &owner,
-        plot_id: None,
-    })
-}
-
-#[cfg(test)]
-pub(crate) fn axis_request_for_test<'v>(
-    binding: NumericBinding<'v>,
-    format: Option<&'v crate::NumericFormat>,
-    generation: &'v crate::TickGeneration,
-    projection: &crate::layout::Projection,
-    side: crate::layout::AxisSide,
-    log: bool,
-) -> AxisRequest<'v> {
-    let (range, axis, parallel_span) = match side {
-        crate::layout::AxisSide::Bottom => (
-            projection.x_range(),
-            CoordinateAxis::X,
-            projection.panel_box().width(),
-        ),
-        crate::layout::AxisSide::Left => (
-            projection.y_range(),
-            CoordinateAxis::Y,
-            projection.panel_box().height(),
-        ),
-    };
-    AxisRequest {
-        binding,
-        format,
-        generation,
-        axis,
-        domain: DomainInfo::axis(
-            range,
-            if log {
-                crate::AxisScale::Log10
-            } else {
-                crate::AxisScale::Linear
-            },
-            crate::layout::RangeProvenance::Automatic,
-            (!log).then_some(range),
-        ),
-        phase: AxisNumericPhase::Actual { parallel_span },
-    }
-}
-
 pub(crate) fn collect_values(
     count: usize,
     values: impl Iterator<Item = Result<ContextValue>>,

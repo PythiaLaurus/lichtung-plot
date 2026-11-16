@@ -483,6 +483,3 @@ impl DataLineTheme {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

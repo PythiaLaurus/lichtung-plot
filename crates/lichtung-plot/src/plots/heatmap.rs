@@ -936,7 +936,6 @@ pub(crate) fn heatmap_minima(
     let crate::orchestrator::root::PlotIntrinsics::Heatmap { value } = intrinsic else {
         unreachable!("Heatmap intrinsic slot")
     };
-    #[cfg(not(test))]
     let _ = diagnostic_scope;
 
     if let Some(cached) = value.get() {
@@ -944,11 +943,6 @@ pub(crate) fn heatmap_minima(
             return Ok((cached.minimum, cached.without_y_labels));
         }
     }
-    #[cfg(test)]
-    crate::orchestrator::measurements::intrinsic(
-        crate::orchestrator::measurements::Counter::HeatmapIntrinsic,
-        diagnostic_scope,
-    );
     let mut minimum = (1.0_f64 / 1024.0, 1.0_f64 / 1024.0);
     let levels = [0, 1].map(|side| {
         axes.categories(side)

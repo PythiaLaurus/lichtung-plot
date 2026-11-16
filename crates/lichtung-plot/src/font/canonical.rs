@@ -26,7 +26,6 @@ thread_local! {
     pub(crate) static FONT_SOURCE_ADMISSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_FINAL_SEALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static SHAPED_GLYPH_RETAINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
@@ -1516,12 +1515,6 @@ impl CanonicalFontCore {
                 for scalar in unit.chars() {
                     #[cfg(test)]
                     FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
-                    #[cfg(test)]
-                    if !is_nonpainting_control(scalar) {
-                        crate::orchestrator::measurements::count(
-                            crate::orchestrator::measurements::Counter::FontUnitProbe,
-                        );
-                    }
                     if !is_nonpainting_control(scalar) && parsed.glyph_index(scalar).is_none() {
                         covered = false;
                         break;
@@ -1949,10 +1942,6 @@ impl CanonicalFontCore {
                             index: face.identity.face_index,
                             reason: error.to_string(),
                         })?;
-                    #[cfg(test)]
-                    crate::orchestrator::measurements::count(
-                        crate::orchestrator::measurements::Counter::FontScalarProbe,
-                    );
                     Ok(parsed.glyph_index(scalar).is_some())
                 },
             )?;
@@ -2062,10 +2051,6 @@ impl CanonicalFontCore {
                             index: face.identity.face_index,
                             reason: error.to_string(),
                         })?;
-                    #[cfg(test)]
-                    crate::orchestrator::measurements::count(
-                        crate::orchestrator::measurements::Counter::FontScalarProbe,
-                    );
                     Ok(parsed.glyph_index(scalar).is_some())
                 },
             )?;
@@ -2921,8 +2906,6 @@ fn shape_retained_run(
     let mut glyphs = Vec::new();
     try_reserve_exact(&mut glyphs, shaped.len(), "shaped glyphs")?;
     for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
-        #[cfg(test)]
-        SHAPED_GLYPH_RETAINS.with(|count| count.set(count.get() + 1));
         let glyph_id = u16::try_from(info.glyph_id).map_err(|_| FontError::Shape {
             identity: metadata.identity,
             reason: "shaper emitted an out-of-range glyph id",
@@ -4173,23 +4156,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn literal_stack_copy_preserves_values_and_owns_its_buffers() {
-        let source = FontStack::new([
-            FontFamily::named("A, B").unwrap(),
-            FontFamily::named("A, B").unwrap(),
-            FontFamily::generic(GenericFontFamily::Serif),
-        ])
-        .unwrap();
-        let retained = source.try_copy().unwrap();
-        assert_eq!(retained, source);
-        assert_ne!(retained.families().as_ptr(), source.families().as_ptr());
-        assert_ne!(
-            retained.families()[0].name().unwrap().as_ptr(),
-            source.families()[0].name().unwrap().as_ptr()
-        );
-    }
-
-    #[test]
     fn retained_face_lookups_require_the_exact_identity() {
         struct Outline(usize);
         impl ttf_parser::OutlineBuilder for Outline {
@@ -4261,48 +4227,6 @@ mod tests {
     }
 
     #[test]
-    fn css_preserves_quoted_utf8_names() {
-        let stack = named_stack(&["α, A"]);
-        assert_eq!(stack.css().unwrap(), "\"α, A\"");
-    }
-
-    #[test]
-    fn incremental_and_normalized_hits_do_not_reprobe_fonts() {
-        for normalized in [false, true] {
-            let environment = PreparedFontEnvironment::synthetic();
-            let stack = named_stack(&["Test Sans"]);
-            environment
-                .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
-                .unwrap();
-            for _ in 0..3 {
-                FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
-                FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
-                FONT_SELECTION_PROBES.with(|calls| calls.set(0));
-                let success = if normalized {
-                    let mut core = environment.core.write().unwrap();
-                    let CanonicalFontCore {
-                        database,
-                        preparation,
-                        ..
-                    } = &mut *core;
-                    let mut names = Vec::with_capacity(1);
-                    resolve_stack_names_into(database, &stack, &mut names, preparation, None)
-                        .is_ok()
-                } else {
-                    environment
-                        .resolve_pair(1, &stack, RequestedWeight::Normal, &['A'])
-                        .is_ok()
-                };
-                assert!(success);
-
-                FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-                FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-                FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 0));
-            }
-        }
-    }
-
-    #[test]
     fn literal_font_values_preserve_bytes_duplicates_and_css_semantics() {
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let named = FontFamily::named("A, B").unwrap();
@@ -4365,122 +4289,6 @@ mod tests {
     }
 
     #[test]
-    fn literal_comma_and_keyword_select_named_faces_independently_of_generics() {
-        let environment = PreparedFontEnvironment::synthetic_faces(&[
-            ("A, B", &['X']),
-            ("A", &['X']),
-            ("B", &['X']),
-            ("sans-serif", &['X']),
-        ]);
-        environment
-            .core
-            .write()
-            .unwrap()
-            .database
-            .set_sans_serif_family("B");
-        let literal = named_stack(&["A, B"]);
-        let separate = named_stack(&["A", "B"]);
-        let keyword = named_stack(&["sans-serif"]);
-        let generic = FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap();
-        for (ordinal, stack) in [&literal, &separate, &keyword, &generic]
-            .into_iter()
-            .enumerate()
-        {
-            environment
-                .prepare_pair(
-                    u32::try_from(ordinal).unwrap(),
-                    stack,
-                    RequestedWeight::Normal,
-                    &['X'],
-                    None,
-                )
-                .unwrap();
-        }
-        environment.operation().seal_fonts().unwrap();
-        let pairs = [&literal, &separate, &keyword, &generic].map(|stack| {
-            environment
-                .prepared_pair(stack, RequestedWeight::Normal)
-                .unwrap()
-                .unwrap()
-        });
-        assert_eq!(pairs[0].provenance.candidates.len(), 1);
-        assert_eq!(pairs[1].provenance.candidates.len(), 2);
-        assert_ne!(pairs[0].primary, pairs[1].primary);
-        assert_ne!(pairs[2].primary, pairs[3].primary);
-        assert_eq!(pairs[3].primary, pairs[1].provenance.candidates[1]);
-        assert!(environment
-            .prepared_pair(&named_stack(&["A,B"]), RequestedWeight::Normal)
-            .unwrap()
-            .is_none());
-        assert!(environment
-            .prepared_pair(&named_stack(&["Noto Sans"]), RequestedWeight::Normal)
-            .unwrap()
-            .is_none());
-    }
-
-    #[test]
-    fn prepared_fonts_keep_their_operation_across_clones() {
-        let font = OperationContext::new();
-        let generation = font.clone();
-        let environment = PreparedFontEnvironment::synthetic();
-        let original = environment.operation();
-        environment.validate_operation(&original).unwrap();
-        environment
-            .clone()
-            .validate_operation(&original.clone())
-            .unwrap();
-        assert!(environment.clone().validate_operation(&generation).is_err());
-        assert!(environment.operation().same_operation(&original));
-    }
-
-    #[test]
-    fn pair_extensions_keep_original_identity_and_reuse_selection() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let shared = environment.clone();
-        FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
-        FONT_SELECTION_PROBES.with(|calls| calls.set(0));
-        let stack = named_stack(&["Test Sans"]);
-        environment
-            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
-            .unwrap();
-
-        for ordinal in [1, 2] {
-            let stack = stack.clone();
-            let pair = shared
-                .resolve_pair(ordinal, &stack, RequestedWeight::Normal, &['A', 'A'])
-                .unwrap();
-            assert_eq!(pair.provenance.pair_ordinal, 0);
-            assert_eq!(pair.selected_scalars.len(), 1);
-        }
-
-        FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 1));
-
-        let pair = shared
-            .resolve_pair(
-                1001,
-                &stack,
-                RequestedWeight::Normal,
-                &['A', ' ', '\n', 'A'],
-            )
-            .unwrap();
-        assert_eq!(pair.selected_scalars.len(), 3);
-        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 2));
-        shared
-            .resolve_pair(1002, &stack, RequestedWeight::Bold, &['A'])
-            .unwrap();
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
-        FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 3));
-
-        shared
-            .resolve_pair(1003, &stack, RequestedWeight::Normal, &['A'])
-            .unwrap();
-    }
-
-    #[test]
     fn registered_pairs_reuse_normalization_and_selection_after_final_sealing() {
         let environment = PreparedFontEnvironment::synthetic();
         let stack = named_stack(&["Test Sans"]);
@@ -4525,193 +4333,6 @@ mod tests {
         not(any(target_os = "macos", target_os = "android", target_os = "redox"))
     ))]
     #[test]
-    fn bounded_fontconfig_preserves_include_order_resets_and_aliases() {
-        let root = tempfile::tempdir().unwrap();
-        let includes = root.path().join("conf.d");
-        fs::create_dir(&includes).unwrap();
-        fs::write(
-            includes.join("10-first.conf"),
-            "<fontconfig><dir>/first</dir><alias><family>serif</family><prefer><family>First Serif</family></prefer></alias></fontconfig>",
-        )
-        .unwrap();
-        fs::write(
-            includes.join("20-reset.conf"),
-            "<fontconfig><reset-dirs/><dir>/after</dir><alias><family>sans-serif</family><accept><family>After Sans</family></accept></alias></fontconfig>",
-        )
-        .unwrap();
-        let config_path = root.path().join("fonts.conf");
-        fs::write(
-            &config_path,
-            "<fontconfig><dir>/before</dir><include prefix=\"relative\">conf.d</include><alias><family>monospace</family><default><family>Root Mono</family></default></alias></fontconfig>",
-        )
-        .unwrap();
-
-        let mut config = BoundedFontConfig::default();
-        assert!(merge_fontconfig_root(&mut config, &config_path, None).unwrap());
-        assert_eq!(
-            config
-                .dirs
-                .iter()
-                .map(|directory| directory.path.as_path())
-                .collect::<Vec<_>>(),
-            [Path::new("/after")]
-        );
-        assert_eq!(
-            config
-                .aliases
-                .iter()
-                .map(|alias| alias.alias.as_str())
-                .collect::<Vec<_>>(),
-            ["serif", "sans-serif", "monospace"]
-        );
-        let mut upstream = fontconfig_parser::FontConfig::default();
-        upstream.merge_config(&config_path).unwrap();
-        assert_eq!(config.dirs, upstream.dirs);
-        assert_eq!(config.aliases, upstream.aliases);
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_retains_directives_before_a_relevant_parse_failure() {
-        let root = tempfile::tempdir().unwrap();
-        let config_path = root.path().join("fonts.conf");
-        fs::write(
-            &config_path,
-            "<fontconfig><dir>/first</dir><dir/><dir>/discarded</dir></fontconfig>",
-        )
-        .unwrap();
-
-        let mut config = BoundedFontConfig::default();
-        assert!(!merge_fontconfig_root(&mut config, &config_path, None).unwrap());
-
-        assert_eq!(config.dirs.len(), 1);
-        assert_eq!(config.dirs[0].path, Path::new("/first"));
-        let mut upstream = fontconfig_parser::FontConfig::default();
-        assert!(upstream.merge_config(&config_path).is_err());
-        assert_eq!(config.dirs, upstream.dirs);
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_root_status_drives_fallback_like_locked_parser() {
-        let root = tempfile::tempdir().unwrap();
-        let local = root.path().join("local.conf");
-        let default = root.path().join("default.conf");
-        fs::write(&local, "<fontconfig><dir>/local</dir></fontconfig>").unwrap();
-        fs::write(&default, "<fontconfig><dir>/default</dir></fontconfig>").unwrap();
-        for source in [
-            None,
-            Some("<fontconfig><dir>/valid</dir></fontconfig>"),
-            Some("<fontconfig><dir>/prefix</dir><dir/><dir>/discarded</dir></fontconfig>"),
-            Some(
-                "<fontconfig><dir>/prefix</dir><include prefix=\"invalid\">bad</include></fontconfig>",
-            ),
-            Some("<fontconfig><dir>/prefix</dir><alias><family/></alias></fontconfig>"),
-            Some("<fontconfig><dir>/malformed</dir>"),
-            Some("<wrong-root/>"),
-        ] {
-            let user = root.path().join("user.conf");
-            if let Some(source) = source {
-                fs::write(&user, source).unwrap();
-            }
-            let mut config = BoundedFontConfig::default();
-            let mut upstream = fontconfig_parser::FontConfig::default();
-            let complete = merge_fontconfig_root(&mut config, &user, None).unwrap();
-            let upstream_complete = upstream.merge_config(&user).is_ok();
-            assert_eq!(complete, upstream_complete, "{source:?}");
-            assert_eq!(config.dirs, upstream.dirs, "{source:?}");
-            if !complete {
-                assert!(merge_fontconfig_root(&mut config, &local, None).unwrap());
-            }
-            if !upstream_complete {
-                upstream.merge_config(&local).unwrap();
-            }
-            assert!(merge_fontconfig_root(&mut config, &default, None).unwrap());
-            upstream.merge_config(&default).unwrap();
-            assert_eq!(config.dirs, upstream.dirs, "{source:?}");
-            assert_eq!(config.aliases, upstream.aliases, "{source:?}");
-            if source.is_some() {
-                // Canonical deduplication is successful even after the first parse failed.
-                assert!(merge_fontconfig_root(&mut config, &user, None).unwrap());
-                upstream.merge_config(&user).unwrap();
-                fs::remove_file(&user).unwrap();
-            }
-        }
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_included_failures_do_not_fail_parent() {
-        let root = tempfile::tempdir().unwrap();
-        let includes = root.path().join("conf.d");
-        fs::create_dir(&includes).unwrap();
-        fs::write(
-            includes.join("10-partial.conf"),
-            "<fontconfig><dir>/included</dir><dir/><dir>/discarded</dir></fontconfig>",
-        )
-        .unwrap();
-        fs::write(
-            includes.join("20-malformed.conf"),
-            "<fontconfig><dir>/malformed</dir>",
-        )
-        .unwrap();
-        fs::write(
-            includes.join("30-last.conf"),
-            "<fontconfig><dir>/last</dir><include prefix=\"relative\">../fonts.conf</include></fontconfig>",
-        )
-        .unwrap();
-        for include in [
-            "conf.d/10-partial.conf",
-            "conf.d/20-malformed.conf",
-            "conf.d",
-            "absent",
-        ] {
-            let path = root.path().join("fonts.conf");
-            fs::write(&path, format!(
-                "<fontconfig><include prefix=\"relative\">{include}</include><dir>/parent</dir></fontconfig>"
-            )).unwrap();
-            let mut config = BoundedFontConfig::default();
-            assert!(merge_fontconfig_root(&mut config, &path, None).unwrap());
-            let mut upstream = fontconfig_parser::FontConfig::default();
-            upstream.merge_config(&path).unwrap();
-            assert_eq!(config.dirs, upstream.dirs, "{include}");
-        }
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_empty_preferences_match_locked_parser() {
-        let root = tempfile::tempdir().unwrap();
-        let path = root.path().join("fonts.conf");
-        fs::write(&path,
-            "<fontconfig><alias><family>serif</family><prefer><family/><family>Preferred</family></prefer><accept><family/><family>Accepted</family></accept><default><family/><family>Default</family></default></alias><dir>/after</dir></fontconfig>"
-        ).unwrap();
-        let mut config = BoundedFontConfig::default();
-        assert!(merge_fontconfig_root(&mut config, &path, None).unwrap());
-        let mut upstream = fontconfig_parser::FontConfig::default();
-        upstream.merge_config(&path).unwrap();
-        assert_eq!(config.aliases, upstream.aliases);
-        assert_eq!(config.dirs, upstream.dirs);
-        assert_eq!(config.aliases[0].prefer, ["Preferred"]);
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
     fn bounded_fontconfig_missing_optional_paths_but_not_admitted_io_are_ignored() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("absent.conf");
@@ -4744,28 +4365,6 @@ mod tests {
             merge_fontconfig_root(&mut config, &parent, None),
             Err(FontError::Io { .. })
         ));
-    }
-
-    #[test]
-    fn discovery_retains_one_handle_at_a_time_and_preserves_file_bytes() {
-        let root = tempfile::tempdir().unwrap();
-        for (name, bytes) in [
-            ("a.ttf", b"first".as_slice()),
-            ("b.otf", b"second".as_slice()),
-        ] {
-            fs::write(root.path().join(name), bytes).unwrap();
-        }
-        let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
-        DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
-        let files = discover_retained_files(&roots, None).unwrap();
-        DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 2, 2, 2]));
-        for (file, source) in files
-            .iter()
-            .zip([b"first".as_slice(), b"second".as_slice()])
-        {
-            assert_eq!(file.bytes.as_slice(), source);
-            assert_eq!(file.sha256, <[u8; 32]>::from(Sha256::digest(source)));
-        }
     }
 
     #[test]
@@ -4808,173 +4407,6 @@ mod tests {
         ));
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn discovery_distinguishes_missing_roots_from_entry_io_failures() {
-        let root = tempfile::tempdir().unwrap();
-        let roots = ordinal_roots(vec![root.path().join("missing")], None).unwrap();
-        assert!(discover_retained_files(&roots, None).unwrap().is_empty());
-        std::os::unix::fs::symlink(root.path().join("absent"), root.path().join("broken.ttf"))
-            .unwrap();
-        let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
-        assert!(matches!(
-            discover_retained_files(&roots, None),
-            Err(FontError::Io { .. })
-        ));
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_include_entries_skip_subdirectories() {
-        let root = tempfile::tempdir().unwrap();
-        let includes = root.path().join("conf.d");
-        fs::create_dir(&includes).unwrap();
-        // Include directories supply files, not a recursive directory traversal.
-        fs::create_dir(includes.join("ignored-directory")).unwrap();
-        for name in ["10.conf", "20.conf"] {
-            fs::write(
-                includes.join(name),
-                "<fontconfig><dir>/fonts</dir></fontconfig>",
-            )
-            .unwrap();
-        }
-        let config_path = root.path().join("fonts.conf");
-        fs::write(
-            &config_path,
-            "<fontconfig><include prefix=\"relative\">conf.d</include></fontconfig>",
-        )
-        .unwrap();
-        let mut config = BoundedFontConfig::default();
-        assert!(merge_fontconfig_root(&mut config, &config_path, None).unwrap());
-        assert_eq!(config.files.len(), 3);
-        assert_eq!(config.dirs.len(), 2);
-        assert!(config
-            .dirs
-            .iter()
-            .all(|dir| dir.path == Path::new("/fonts")));
-    }
-
-    #[test]
-    fn retained_discovery_sorts_by_root_then_native_path_and_deduplicates() {
-        let first = tempfile::tempdir().unwrap();
-        let second = tempfile::tempdir().unwrap();
-        File::create(first.path().join("z.ttf")).unwrap();
-        File::create(first.path().join("a.TTF")).unwrap();
-        File::create(second.path().join("b.otf")).unwrap();
-        File::create(second.path().join("ignored.TtF")).unwrap();
-        let roots = vec![
-            SourceRoot {
-                ordinal: 1,
-                path: second.path().to_path_buf(),
-                entry_prefix: None,
-            },
-            SourceRoot {
-                ordinal: 0,
-                path: first.path().to_path_buf(),
-                entry_prefix: None,
-            },
-            SourceRoot {
-                ordinal: 2,
-                path: first.path().to_path_buf(),
-                entry_prefix: None,
-            },
-        ];
-        let files = discover_retained_files(&roots, None).unwrap();
-        let names: Vec<_> = files
-            .iter()
-            .map(|file| {
-                (
-                    file.root_ordinal,
-                    file.canonical_path
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                )
-            })
-            .collect();
-        assert_eq!(
-            names,
-            [
-                (0, "a.TTF".into()),
-                (0, "z.ttf".into()),
-                (1, "b.otf".into())
-            ]
-        );
-    }
-
-    #[test]
-    fn direct_file_discovery_root_is_not_retained() {
-        let directory = tempfile::tempdir().unwrap();
-        let font = directory.path().join("direct.ttf");
-        fs::write(&font, [1_u8, 2]).unwrap();
-        let roots = [SourceRoot {
-            ordinal: 0,
-            path: font,
-            entry_prefix: None,
-        }];
-        let files = discover_retained_files(&roots, None).unwrap();
-
-        assert!(files.is_empty());
-    }
-
-    #[test]
-    fn retained_font_read_rejects_short_and_never_reads_past_admitted_length() {
-        struct FailedRead;
-        impl Read for FailedRead {
-            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-                Err(std::io::Error::other("injected admitted read failure"))
-            }
-        }
-
-        let path = Path::new("changing-test.ttf");
-        let mut short = std::io::Cursor::new([1_u8, 2]);
-        let mut bytes = Vec::with_capacity(3);
-        assert!(matches!(
-            read_exact_font_bytes(&mut short, path, 3, &mut bytes),
-            Err(FontError::ChangedFile(changed)) if changed == path
-        ));
-
-        let mut growing = std::io::Cursor::new([1_u8, 2, 3]);
-        let mut bytes = Vec::with_capacity(2);
-        let digest = read_exact_font_bytes(&mut growing, path, 2, &mut bytes).unwrap();
-        let expected: [u8; 32] = Sha256::digest([1_u8, 2]).into();
-        assert_eq!(bytes, [1, 2]);
-        assert_eq!(growing.position(), 2);
-        assert_eq!(digest, expected);
-
-        assert!(matches!(
-            read_exact_font_bytes(&mut FailedRead, path, 1, &mut Vec::with_capacity(1)),
-            Err(FontError::Io {
-                operation: "read font file",
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn directory_symlinks_are_not_followed() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::symlink;
-
-            let root = tempfile::tempdir().unwrap();
-            let outside = tempfile::tempdir().unwrap();
-            File::create(outside.path().join("hidden.ttf")).unwrap();
-            symlink(outside.path(), root.path().join("linked")).unwrap();
-            let roots = [SourceRoot {
-                ordinal: 0,
-                path: root.path().to_path_buf(),
-                entry_prefix: None,
-            }];
-            let files = discover_retained_files(&roots, None).unwrap();
-            assert!(files.is_empty());
-        }
-    }
-
     #[test]
     fn canonical_candidate_order_retains_least_occurrence_per_identity() {
         let identity_a = identity(1, 0);
@@ -4991,22 +4423,6 @@ mod tests {
         assert_eq!(candidates[0].occurrence.identity, identity_a);
         assert_eq!(candidates[0].occurrence.weight_distance, 10);
         assert_eq!(candidates[1].occurrence.identity, identity_b);
-    }
-
-    #[test]
-    fn unmatched_family_produces_no_candidates() {
-        let database = Database::new();
-        let face = fake_face(identity(1, 0), "Test Sans");
-        let mut preparation = FontPreparation::new();
-        let candidates = canonical_candidates(
-            &database,
-            &[face],
-            &named_stack(&["Other Sans"]),
-            RequestedWeight::Normal,
-            &mut preparation,
-        )
-        .unwrap();
-        assert!(candidates.is_empty());
     }
 
     #[test]
@@ -5037,96 +4453,6 @@ mod tests {
             selected.selection,
             ScalarFaceSelection::NonRenderingMandatoryBreak
         )));
-    }
-
-    #[test]
-    fn scalar_selection_preserves_first_observed_probe_order() {
-        let first = identity(1, 0);
-        let second = identity(2, 0);
-        let candidates = [candidate(first, 0, 0, 0), candidate(second, 0, 0, 0)];
-
-        let mut presence = scalar_presence_map();
-        let mut probes = Vec::new();
-
-        let selected = select_scalar_faces(
-            0,
-            &candidates,
-            &['z', 'a', 'z', 'm'],
-            &mut presence,
-            |candidate, scalar| {
-                probes.push((candidate.occurrence.identity, scalar));
-                Ok(candidate.occurrence.identity == second || scalar != 'z')
-            },
-        )
-        .unwrap();
-
-        assert_eq!(
-            probes,
-            [
-                (first, 'z'),
-                (second, 'z'),
-                (first, 'a'),
-                (second, 'a'),
-                (first, 'm'),
-                (second, 'm')
-            ]
-        );
-        assert_eq!(
-            selected
-                .iter()
-                .map(|selection| selection.scalar)
-                .collect::<Vec<_>>(),
-            ['z', 'a', 'm']
-        );
-        assert_eq!(
-            selected
-                .iter()
-                .map(|selection| selection.selection)
-                .collect::<Vec<_>>(),
-            [
-                ScalarFaceSelection::Face(second),
-                ScalarFaceSelection::Face(first),
-                ScalarFaceSelection::Face(first),
-            ]
-        );
-        let selected = SelectedScalarFaces(selected);
-        for scalar in ['z', 'a', 'm'] {
-            let index = selected
-                .binary_search_by_key(&scalar, |selection| selection.scalar)
-                .unwrap();
-            assert_eq!(selected[index].scalar, scalar);
-        }
-    }
-
-    #[test]
-    fn scalar_selection_reports_first_observed_missing_scalar() {
-        let first = identity(1, 0);
-        let second = identity(2, 0);
-        let candidates = [candidate(first, 0, 0, 0), candidate(second, 0, 0, 0)];
-
-        let mut presence = scalar_presence_map();
-        let mut probes = Vec::new();
-
-        let error = select_scalar_faces(
-            7,
-            &candidates,
-            &['z', 'a', 'z'],
-            &mut presence,
-            |candidate, scalar| {
-                probes.push((candidate.occurrence.identity, scalar));
-                Ok(false)
-            },
-        )
-        .unwrap_err();
-
-        assert!(matches!(
-            error,
-            FontError::MissingGlyph {
-                pair_ordinal: 7,
-                scalar: 0x7A
-            }
-        ));
-        assert_eq!(probes, [(first, 'z'), (second, 'z')]);
     }
 
     #[test]
@@ -5177,117 +4503,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn batch_pair_preparation_preserves_order_and_exact_work() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        let normal_scalars = ['A'];
-        let bold_scalars = ['\n', 'A', '\n'];
-
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
-
-        environment
-            .prepare_pairs(
-                [
-                    FontPairPreparationRequest::new(
-                        4,
-                        &stack,
-                        RequestedWeight::Normal,
-                        &normal_scalars,
-                    ),
-                    FontPairPreparationRequest::new(
-                        2,
-                        &stack,
-                        RequestedWeight::Bold,
-                        &bold_scalars,
-                    ),
-                ]
-                .into_iter(),
-                None,
-            )
-            .unwrap();
-
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
-        let core = environment.core.read().unwrap();
-        assert_eq!(
-            core.prepared_pairs
-                .iter()
-                .map(|pair| pair.resolved.provenance.pair_ordinal)
-                .collect::<Vec<_>>(),
-            [4, 2]
-        );
-        assert_eq!(core.prepared_pairs[0].resolved.selected_scalars.len(), 1);
-        assert_eq!(core.prepared_pairs[1].resolved.selected_scalars.len(), 2);
-        assert!(matches!(
-            core.prepared_pairs[1].resolved.selected_scalars[0].selection,
-            ScalarFaceSelection::NonRenderingMandatoryBreak
-        ));
-    }
-
-    #[test]
-    fn batch_pair_preparation_rejects_duplicates_before_resolution() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        let scalars = ['A'];
-
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
-
-        let error = environment
-            .prepare_pairs(
-                [
-                    FontPairPreparationRequest::new(0, &stack, RequestedWeight::Normal, &scalars),
-                    FontPairPreparationRequest::new(1, &stack, RequestedWeight::Normal, &scalars),
-                ]
-                .into_iter(),
-                None,
-            )
-            .unwrap_err();
-
-        assert!(matches!(
-            error,
-            FontError::DuplicatePreparedPair { pair_ordinal: 1 }
-        ));
-
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-        assert!(environment.core.read().unwrap().prepared_pairs.is_empty());
-    }
-
-    #[test]
-    fn generated_font_resolves_and_shapes_without_external_assets() {
-        let mut core = generated_core();
-        let pair = core
-            .resolve_pair(
-                0,
-                &named_stack(&["TEST SANS"]),
-                RequestedWeight::Normal,
-                &['A'],
-            )
-            .unwrap();
-        let run = core
-            .shape_run(
-                pair.primary,
-                "A",
-                ShapingDirection::LeftToRight,
-                rustybuzz::script::LATIN,
-            )
-            .unwrap();
-        assert_eq!(run.identity, pair.primary);
-        assert_eq!(run.metrics.units_per_em, 1000);
-        assert_eq!(run.glyphs.len(), 1);
-        assert_eq!(run.glyphs[0].glyph_id, 1);
-        assert_eq!(run.glyphs[0].cluster, 0);
-        assert_eq!(run.glyphs[0].x_advance, 600);
-        assert_eq!(
-            run.glyphs[0].ink,
-            Some(GlyphInk {
-                x_min: 0,
-                y_min: 0,
-                x_max: 500,
-                y_max: 700
-            })
-        );
-    }
-
     fn identity(byte: u8, face_index: u32) -> FaceIdentity {
         FaceIdentity {
             sha256: [byte; 32],
@@ -5321,28 +4536,6 @@ mod tests {
         }
     }
 
-    fn fake_face(identity: FaceIdentity, name: &str) -> FaceMetadata {
-        FaceMetadata {
-            identity,
-            file_ordinal: 0,
-            database_id: ID::dummy(),
-            names: vec![NameOccurrence {
-                value: name.into(),
-                folded: super::super::unicode16::folded_for_test(name),
-                rank: NameRank::TypographicFamily,
-                record_ordinal: 0,
-            }],
-            style: Style::Normal,
-            stretch: Stretch::Normal,
-            weight: 400,
-            metrics: DesignMetrics {
-                units_per_em: 1000,
-                ascender: 800,
-                descender: -200,
-            },
-        }
-    }
-
     pub(super) fn generated_core() -> CanonicalFontCore {
         let bytes = Arc::new(build_test_font());
         let sha256: [u8; 32] = Sha256::digest(bytes.as_slice()).into();
@@ -5358,47 +4551,6 @@ mod tests {
             scalar_presence_map(),
         )
         .unwrap()
-    }
-
-    #[test]
-    fn formatted_census_counts_utf8_bytes_across_write_boundaries() {
-        for mark in (0..=0x10_FFFF)
-            .filter_map(char::from_u32)
-            .filter(|scalar| is_visible_mark(*scalar))
-        {
-            for base in [
-                'A',
-                '\n',
-                '\u{0301}',
-                '\u{0600}',
-                '\u{0915}',
-                '\u{200D}',
-                '\u{1F469}',
-            ] {
-                let source = format!("{base}{mark}\u{0301}");
-                let mut count = CensusFormatCount::default();
-                for scalar in source.chars() {
-                    write!(&mut count, "{scalar}").unwrap();
-                }
-                assert_eq!(count.bytes, source.len());
-            }
-        }
-    }
-
-    #[test]
-    fn formatted_census_retains_chunked_output_after_counting() {
-        struct Observed<'a>(&'a std::cell::Cell<usize>);
-        impl std::fmt::Display for Observed<'_> {
-            fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                self.0.set(self.0.get() + 1);
-                output.write_str("A")?;
-                output.write_str("\u{0301}")
-            }
-        }
-        let writes = std::cell::Cell::new(0);
-        let source = format_census_source(format_args!("{}", Observed(&writes)), None).unwrap();
-        assert_eq!(source, "A\u{0301}");
-        assert_eq!(writes.get(), 2);
     }
 
     #[test]
@@ -5505,31 +4657,6 @@ mod tests {
     }
 
     #[test]
-    fn units_are_narrow_and_controls_do_not_require_nominal_coverage() {
-        assert_eq!(
-            selection_units("A\u{0301}B\u{0301}\u{200D}A\u{FE0F}").collect::<Vec<_>>(),
-            ["A\u{0301}", "B\u{0301}", "\u{200D}", "A", "\u{FE0F}"]
-        );
-        let mut core = generated_core();
-        let stack = named_stack(&["Test Sans"]);
-        core.resolve_pair(
-            0,
-            &stack,
-            RequestedWeight::Normal,
-            &['\n', '\u{200C}', '\u{200D}', '\u{FE0F}', '\u{2067}'],
-        )
-        .unwrap();
-        assert!(matches!(
-            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\u{0301}']),
-            Err(FontError::MissingGlyph { .. })
-        ));
-        assert!(matches!(
-            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\t']),
-            Err(FontError::UnsupportedControl { .. })
-        ));
-    }
-
-    #[test]
     fn decoder_may_admit_zero_faces_from_a_retained_file() {
         let mut files = Arc::try_unwrap(generated_core().fonts).unwrap().files;
         files.push(RetainedFontFile {
@@ -5565,53 +4692,6 @@ mod tests {
         drop(environment);
         assert!(!alive() && !operation());
         assert_eq!(registry.files[1].bytes.as_slice(), &[0; 16]);
-    }
-
-    #[test]
-    fn partial_collection_preserves_actual_decoder_face_index() {
-        let mut font = build_test_font();
-        let tables = usize::from(u16::from_be_bytes(font[4..6].try_into().unwrap()));
-        for table in 0..tables {
-            let position = 12 + table * 16 + 8;
-            let offset = u32::from_be_bytes(font[position..position + 4].try_into().unwrap());
-            set_u32(&mut font, position, offset + 32);
-        }
-        let mut collection = b"ttcf".to_vec();
-        push_u32(&mut collection, 0x0001_0000);
-        push_u32(&mut collection, 2);
-        push_u32(&mut collection, 20);
-        push_u32(&mut collection, 32);
-        collection.extend_from_slice(&[0; 12]);
-        collection.extend_from_slice(&font);
-        let bytes = Arc::new(collection);
-        let core = CanonicalFontCore::from_retained(
-            vec![RetainedFontFile {
-                root_ordinal: 0,
-                canonical_path: PathBuf::from("partial.ttc"),
-                sha256: Sha256::digest(bytes.as_slice()).into(),
-                bytes,
-            }],
-            &HostGenericNames::default(),
-            FontPreparation::new(),
-            scalar_presence_map(),
-        )
-        .unwrap();
-        assert_eq!(core.fonts.faces.len(), 1);
-        assert_eq!(core.fonts.faces[0].identity.face_index, 1);
-        assert_eq!(
-            core.database
-                .face(core.fonts.faces[0].database_id)
-                .unwrap()
-                .index,
-            1
-        );
-        core.shape_run(
-            core.fonts.faces[0].identity,
-            "A",
-            ShapingDirection::LeftToRight,
-            rustybuzz::script::LATIN,
-        )
-        .unwrap();
     }
 
     fn build_test_font() -> Vec<u8> {

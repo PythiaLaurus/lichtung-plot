@@ -911,10 +911,6 @@ impl PlotDescription {
 
         policy: Option<&crate::Labels>,
     ) -> Result<[Option<crate::Text>; 2], Error> {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        );
         let mut labels = [None, None];
         for ((target, source), authored) in labels
             .iter_mut()
@@ -951,12 +947,6 @@ impl PlotDescription {
         domain: &str,
         raw_labels: impl IntoIterator<Item = &'b str>,
     ) -> Result<Vec<String>, crate::Error> {
-        #[cfg(test)]
-        if domain.contains("axis categories") {
-            crate::orchestrator::measurements::count(
-                crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-            );
-        }
         self.payload.labels.resolve_domain(domain, raw_labels)
     }
 
@@ -1261,16 +1251,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn into_description(self) -> PlotDescription {
         self.description
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_test_axis_ticks(mut self, side: usize, ticks: Vec<crate::AxisTick>) -> Self {
-        if side == 0 {
-            self.description.payload_mut().axes[0].exact_ticks = Some(ticks);
-        } else {
-            self.description.payload_mut().axes[1].exact_ticks = Some(ticks);
-        }
-        self
     }
 
     /// Selected semantic plot kind.

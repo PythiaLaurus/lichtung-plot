@@ -44,11 +44,6 @@ pub(crate) use axis_frame_grid::AxisSystemPlan;
 pub(crate) use cells::category_label_span;
 pub(crate) use cells::LABEL_CLEARANCE;
 pub(crate) use range_ticks::{anchored_auto_range, continuous_auto_range};
-#[cfg(test)]
-pub(crate) use range_ticks::{automatic_numeric_ticks, nice_ticks};
-
-#[cfg(test)]
-use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 
 /// User-configurable axis behavior.
 #[derive(Debug, Clone, Default, PartialEq)]

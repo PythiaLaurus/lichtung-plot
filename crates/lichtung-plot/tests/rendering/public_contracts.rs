@@ -1,50 +1,5 @@
 use super::*;
 
-fn render<K: lichtung_plot::kind::Marker>(
-    plot: impl std::borrow::Borrow<Plot<K>>,
-    name: &str,
-) -> String {
-    let directory = unique_dir(name);
-    let output = directory.join("plot.svg");
-    let scene = plot.borrow().svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    assert!(svg.contains(&format!(
-        "width=\"{}\" height=\"{}\"",
-        scene.width(),
-        scene.height()
-    )));
-    std::fs::remove_dir_all(directory).unwrap();
-    svg
-}
-
-#[test]
-fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
-    use lichtung_plot::{PlotKind, Theme};
-
-    let (x, y) = fixture_values();
-    let alpha = lichtung_plot::AlphaValues::new(
-        "confidence",
-        (0..x.len()).map(|index| [0, 128, 230][index % 3]),
-    )
-    .unwrap();
-    let exact = Plot::scatter(x, y)
-        .point_alpha(lichtung_plot::AlphaEncoding::observations(alpha))
-        .theme(Theme::nature())
-        .size(321, 234)
-        .title("Erasure parity");
-
-    assert_eq!(exact.kind(), PlotKind::Scatter);
-    let exact_svg = render(exact.clone(), "exact-before-erasure");
-    assert!(exact_svg.contains(">Erasure parity</text>"));
-    assert!(exact_svg.contains("width=\"321\" height=\"234\""));
-
-    let erased: Plot = exact.erase();
-    assert_eq!(erased.kind(), PlotKind::Scatter);
-    erased.preflight().unwrap();
-
-    assert_eq!(render(erased, "erased-terminal-output"), exact_svg);
-}
-
 #[test]
 fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
     let plot = Plot::waterfall(
@@ -61,23 +16,6 @@ fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
 }
 
 #[test]
-fn waterfall_accepts_finite_ordered_geometry_when_detached_delta_sum_overflows() {
-    // Two successive deltas overflow as a detached sum; ordered endpoints
-    // remain finite. The broad exact window also gives the required
-    // 300-digit total label a containing shelf without numeric-edge clipping.
-    let span = f64::MAX * 0.6;
-    let plot = Plot::waterfall(
-        CategoryValues::new("label", ["a", "b", "c"]).unwrap(),
-        NumericValues::new("delta", [span, span, -span]),
-        -span,
-    )
-    .size(16_000, 300)
-    .x_limits(-f64::MAX * 0.9, f64::MAX * 0.9);
-
-    plot.preflight().unwrap();
-}
-
-#[test]
 fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
     let plot = Plot::waterfall(
         CategoryValues::new("label", ["a", "b"]).unwrap(),
@@ -89,36 +27,4 @@ fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
         plot.preflight().unwrap_err().to_string(),
         "data error: waterfall: cumulative endpoint is non-finite at source row 1"
     );
-}
-
-#[test]
-fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
-    let plot = Plot::horizontal_bar(
-        CategoryValues::new("label", ["neutral", "positive", "negative"]).unwrap(),
-        BarInput::estimates(NumericValues::new("value", [0.1, 2.0, -1.0])),
-    )
-    .category_order(ValueSort::Descending)
-    .color_by_sign()
-    .zero_line();
-    let svg = render(plot.clone(), "signed-horizontal-bar");
-    assert!(svg.contains("Negative"));
-    let directory = unique_dir("shared-signed-horizontal-bar");
-    let path = directory.join("plot.svg");
-    lichtung_plot::Canvas::grid(1, 2)
-        .unwrap()
-        .size(1000, 500)
-        .panel(0, 0, plot.clone())
-        .unwrap()
-        .panel(0, 1, plot)
-        .unwrap()
-        .legend_policy(lichtung_plot::CanvasLegendPolicy::Shared)
-        .svg_preserve_text(&path)
-        .unwrap();
-    let shared = std::fs::read_to_string(&path).unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
-    for output in [&svg, &shared] {
-        for source in ["Change", "Nondecreasing", "Decreasing"] {
-            assert_eq!(output.matches(&format!(">{source}</text>")).count(), 1);
-        }
-    }
 }

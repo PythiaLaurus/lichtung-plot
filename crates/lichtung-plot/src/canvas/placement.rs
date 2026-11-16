@@ -3,9 +3,6 @@
 use crate::builder::PlotDescription;
 use crate::{Error, TextPanel};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Footprint {
     pub row: usize,

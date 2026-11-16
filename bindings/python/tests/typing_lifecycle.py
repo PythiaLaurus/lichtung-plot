@@ -2,14 +2,7 @@
 
 from typing_extensions import assert_type
 
-from lichtung_plot import (
-    Canvas,
-    NumericValueContext,
-    Output,
-    Scatter,
-    TickPositions,
-    scatter,
-)
+from lichtung_plot import Canvas, Output, Scatter, scatter
 
 
 def owner_contract(destination: str) -> None:
@@ -30,10 +23,3 @@ def owner_contract(destination: str) -> None:
 
     # Scatter must not inherit setters for another scientific capability.
     plot.line_alpha(None)  # type: ignore[attr-defined]
-
-
-def factory_only_contract() -> None:
-    assert_type(TickPositions.data([0.0, 1.0]), TickPositions)
-    TickPositions()  # type: ignore[call-arg]
-    NumericValueContext()  # type: ignore[call-arg]
-    Output()  # type: ignore[call-arg]

@@ -156,23 +156,6 @@ impl ResolvedGuideKey {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn point(point: PointStyle) -> Self {
-        let alpha = source::AlphaExplanationMask {
-            point_fill: Some(source::AlphaExplanation::Constant),
-            point_outline: point
-                .outline
-                .as_ref()
-                .map(|_| source::AlphaExplanation::Constant),
-            ..source::AlphaExplanationMask::default()
-        };
-        Self {
-            point: Some(point),
-            explanation: source::GuideExplanation::Complete(alpha),
-            ..Self::default()
-        }
-    }
-
     fn glyph_ink(
         &self,
         metrics: &LegendMetrics,
@@ -819,11 +802,6 @@ impl Legend {
     }
 
     pub(crate) fn select(&self, x: f64, y: f64) -> Result<LegendDrawPlan, Error> {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::LegendSelection,
-        );
-
         let color_calls = self.descriptor.continuous().map_or(Ok(0), |color| {
             color
                 .numeric

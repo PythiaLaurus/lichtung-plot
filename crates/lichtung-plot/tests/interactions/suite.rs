@@ -1,12 +1,3 @@
-use lichtung_plot::{
-    Bounds, Canvas, CanvasLegendPolicy, CategoricalColorMap, CategoricalColorScale, CategoryValues,
-    FacetSpec, InteractionStyle, Labels, LegendPolicy, LinePattern, NumericValues, OpaqueColor,
-    Plot, PointShape,
-};
+use lichtung_plot::{Bounds, CategoryValues, NumericValues, Plot};
 
-#[path = "../support/composition.rs"]
-mod support;
-use support::*;
-
-mod connectors;
 mod styles;

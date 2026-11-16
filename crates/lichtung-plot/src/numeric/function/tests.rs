@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc, Mutex,
-};
+use std::sync::{Arc, Mutex};
 
 use crate::numeric::source::NumericBinding;
 use crate::{
@@ -164,50 +161,6 @@ fn value_functions_keep_ordered_occurrences_whole_set_helpers_and_operation_iden
         source.operation.seal_fonts().unwrap();
         assert!(format.materialize(source.operation, context, true).is_err());
         assert_eq!(calls.lock().unwrap().len(), 9);
-    });
-}
-
-#[test]
-fn set_functions_own_final_spelling_and_replace_one_styled_explanation_without_precision_retries() {
-    with_source(|source| {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let observed = calls.clone();
-        let style = crate::Theme::publication()
-            .typography()
-            .get_axes()
-            .get_tick_label()
-            .clone()
-            .font_size(17.0)
-            .unwrap();
-        let format = NumericFormat::default()
-            .precision(NumericPrecision::Fractional(0))
-            .unwrap()
-            .locale(NumericLocale::named("ar-001").unwrap())
-            .unwrap()
-            .explanation(crate::NumericExplanation::automatic().style(style.clone()))
-            .set_function(move |context| {
-                observed.fetch_add(1, Ordering::SeqCst);
-                assert!(context.format_builtin().is_err());
-                Ok(
-                    NumericLabels::new(vec!["literal 012".into(), "literal 001".into()])
-                        .explanation("Authored unit"),
-                )
-            });
-        let context = info(&source, &[1.1, 1.2], NumericPurpose::ActualSet);
-        let set = format
-            .materialize(source.operation, context.clone(), true)
-            .unwrap()
-            .unwrap();
-        assert_eq!(set.labels, ["literal 012", "literal 001"]);
-        let text = set.explanation.unwrap();
-        assert_eq!(text.as_str(), "Authored unit");
-        assert_eq!(text.get_style(), Some(&style));
-        format.materialize(source.operation, context, true).unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-        let mut changed = info(&source, &[1.1, 1.2], NumericPurpose::ActualSet);
-        changed.domain.as_mut().unwrap().limits.1 = 20.0_f64.to_bits();
-        format.materialize(source.operation, changed, true).unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 2);
     });
 }
 

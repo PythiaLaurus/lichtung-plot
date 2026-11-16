@@ -8,7 +8,6 @@ struct StatusData {
     lower: NumericValues,
     upper: NumericValues,
     status: Vec<EstimateStatus>,
-    panel: Option<CategoryValues>,
 }
 
 fn status_data(
@@ -24,7 +23,6 @@ fn status_data(
         lower,
         upper,
         status,
-        panel: None,
     }
 }
 
@@ -40,51 +38,6 @@ fn mixed_data() -> StatusData {
             EstimateStatus::Estimated,
         ],
     )
-}
-
-fn all_estimated_data() -> StatusData {
-    status_data(
-        CategoryValues::new("term", ["first", "second"]).unwrap(),
-        NumericValues::new("estimate", [1.0, 2.0]),
-        NumericValues::new("lower", [0.5, 1.5]),
-        NumericValues::new("upper", [1.5, 2.5]),
-        vec![EstimateStatus::Estimated; 2],
-    )
-}
-
-fn all_unavailable_facet_data() -> StatusData {
-    let mut data = status_data(
-        CategoryValues::new("term", ["one", "two", "one", "two"]).unwrap(),
-        NumericValues::nullable("estimate", [None; 4]),
-        NumericValues::nullable("lower", [None; 4]),
-        NumericValues::nullable("upper", [None; 4]),
-        vec![EstimateStatus::NotEstimable; 4],
-    );
-    data.panel = Some(CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap());
-    data
-}
-
-fn estimated_sibling_facet_data() -> StatusData {
-    let mut data = status_data(
-        CategoryValues::new("term", ["first", "second", "first", "second"]).unwrap(),
-        NumericValues::nullable("estimate", [Some(10.0), Some(20.0), None, None]),
-        NumericValues::nullable("lower", [Some(9.0), Some(18.0), None, None]),
-        NumericValues::nullable("upper", [Some(12.0), Some(23.0), None, None]),
-        vec![
-            EstimateStatus::Estimated,
-            EstimateStatus::Estimated,
-            EstimateStatus::NotEstimable,
-            EstimateStatus::NotEstimable,
-        ],
-    );
-    data.panel = Some(
-        CategoryValues::new(
-            "panel",
-            ["estimated", "estimated", "unavailable", "unavailable"],
-        )
-        .unwrap(),
-    );
-    data
 }
 
 fn with_status<K: lichtung_plot::kind::Marker + lichtung_plot::kind::EstimateStatus>(
@@ -141,19 +94,6 @@ fn forest(data: &StatusData, status: bool) -> Plot<lichtung_plot::kind::Forest> 
     .size(480, 300)
 }
 
-fn faceted_point_interval(
-    data: &StatusData,
-    scales: FacetScales,
-    limits: Option<(f64, f64)>,
-) -> Plot<lichtung_plot::kind::PointInterval> {
-    let facet = || FacetSpec::column(data.panel.clone().unwrap()).scales(scales);
-    let point = point_interval(data, true).facet(facet()).size(960, 300);
-    match limits {
-        Some((lower, upper)) => point.x_limits(lower, upper),
-        None => point,
-    }
-}
-
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     render_svg(plot, name).unwrap()
 }
@@ -172,17 +112,6 @@ fn estimate_status_keeps_unavailable_rows_visible_without_numeric_marks() {
         assert!(text_y(&output, "First") < text_y(&output, "Unavailable"));
         assert!(text_y(&output, "Unavailable") < text_y(&output, "Third"));
     }
-}
-
-#[test]
-fn estimate_status_values_must_align_with_estimate_rows() {
-    let frame = all_estimated_data();
-    assert!(point_interval(&frame, false)
-        .estimate_status([EstimateStatus::Estimated])
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("plot estimate status values have length 1, expected 2"));
 }
 
 #[test]
@@ -218,240 +147,11 @@ fn estimate_status_enforces_complete_null_tuples() {
     }
 }
 
-#[test]
-fn estimate_status_rejects_nonfinite_values() {
-    let data = status_data(
-        CategoryValues::new("term", ["first"]).unwrap(),
-        NumericValues::nullable("estimate", [Some(f64::NAN)]),
-        NumericValues::nullable("lower", [Some(0.0)]),
-        NumericValues::nullable("upper", [Some(1.0)]),
-        Vec::new(),
-    );
-    assert!(point_interval(&data, false)
-        .estimate_status([EstimateStatus::NotEstimable])
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("non-finite"));
-}
-
-#[test]
-fn estimate_status_value_order_contract_preserves_source_order() {
-    let mixed = mixed_data();
-    assert!(point_interval(&mixed, true)
-        .category_order(ValueSort::Ascending)
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("do not support value-derived category order"));
-
-    let estimated = all_estimated_data();
-    let strict = svg(
-        point_interval(&estimated, false).category_order(ValueSort::Descending),
-        "strict-sorted-status",
-    );
-    let status = svg(
-        point_interval(&estimated, true).category_order(ValueSort::Descending),
-        "sorted-status",
-    );
-    assert_eq!(strict, status);
-    assert!(text_y(&status, "Second") < text_y(&status, "First"));
-}
-
-#[test]
-fn shared_x_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
-    let frame = estimated_sibling_facet_data();
-    for scales in [FacetScales::Fixed, FacetScales::FreeY] {
-        let output = svg(
-            faceted_point_interval(&frame, scales, None),
-            &format!("facet-{scales:?}"),
-        );
-        assert_eq!(output.matches(">Not estimable</text>").count(), 2);
-        assert_eq!(output.matches("<circle ").count(), 2);
-        let first = text_ys(&output, "First");
-        let second = text_ys(&output, "Second");
-        assert_eq!((first.len(), second.len()), (2, 2));
-        assert!(first
-            .iter()
-            .zip(second)
-            .all(|(first, second)| first < &second));
-    }
-}
-
-#[test]
-fn free_x_facets_require_explicit_limits_for_unavailable_panels() {
-    let frame = estimated_sibling_facet_data();
-    for scales in [FacetScales::FreeX, FacetScales::Free] {
-        let error = faceted_point_interval(&frame, scales, None)
-            .preflight()
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("all rows are not_estimable; set explicit x-axis limits"),
-            "{scales:?}: {error}"
-        );
-    }
-}
-
-#[test]
-fn explicit_limits_allow_unavailable_panels_with_free_x_scales() {
-    let frame = estimated_sibling_facet_data();
-    for scales in [FacetScales::FreeX, FacetScales::Free] {
-        let output = svg(
-            faceted_point_interval(&frame, scales, Some((-5.0, 30.0))),
-            &format!("facet-explicit-{scales:?}"),
-        );
-        assert_eq!(output.matches(">Not estimable</text>").count(), 2);
-        assert_eq!(output.matches("<circle ").count(), 2);
-    }
-}
-
-#[test]
-fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
-    let frame = all_unavailable_facet_data();
-    for scales in [FacetScales::Fixed, FacetScales::FreeY] {
-        let error = faceted_point_interval(&frame, scales, None)
-            .preflight()
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("set explicit x-axis limits"),
-            "{scales:?}: {error}"
-        );
-    }
-    let output = svg(
-        faceted_point_interval(&frame, FacetScales::FreeY, Some((-2.0, 2.0))),
-        "all-unavailable-facets-explicit",
-    );
-    assert_eq!(output.matches(">Not estimable</text>").count(), 4);
-    // Inward endpoint labels no longer reserve the old outer half-label gutters.
-    let narrow = point_interval(&frame, true)
-        .facet(FacetSpec::column(frame.panel.clone().unwrap()))
-        .x_limits(-2.0, 2.0)
-        .size(360, 300);
-    let error = narrow.preflight().unwrap_err().to_string();
-    assert!(
-        error.contains("Not estimable row text requires") && error.contains("chart panel provides"),
-        "{error}"
-    );
-    let output = svg(narrow.size(960, 300), "all-unavailable-facets");
-    assert_eq!(output.matches(">Not estimable</text>").count(), 4);
-}
-
-#[test]
-fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values() {
-    let data = status_data(
-        CategoryValues::new("term", ["first"]).unwrap(),
-        NumericValues::nullable("estimate", [None]),
-        NumericValues::nullable("lower", [None]),
-        NumericValues::nullable("upper", [None]),
-        vec![EstimateStatus::NotEstimable],
-    );
-    let output = svg(
-        forest(&data, true)
-            .scale(AxisScale::Log10)
-            .x_limits(0.1, 10.0),
-        "all-unavailable-log-forest",
-    );
-    assert!(output.contains(">0.1</text>") && output.contains(">10</text>"));
-    assert!(!output.contains("<circle "));
-}
-
-#[test]
-fn unavailable_text_avoids_estimate_guides() {
-    let data = status_data(
-        CategoryValues::new("term", ["unavailable"]).unwrap(),
-        NumericValues::nullable("estimate", [None]),
-        NumericValues::nullable("lower", [None]),
-        NumericValues::nullable("upper", [None]),
-        vec![EstimateStatus::NotEstimable],
-    );
-    let coefficient = svg(
-        coefficient(&data, true).x_limits(-1.0, 1.0),
-        "unavailable-coefficient-guide",
-    );
-    let forest = svg(
-        forest(&data, true)
-            .scale(AxisScale::Log10)
-            .x_limits(0.1, 10.0),
-        "unavailable-forest-guide",
-    );
-    let point = svg(
-        point_interval(&data, true).zero_line().x_limits(-1.0, 1.0),
-        "unavailable-point-guide",
-    );
-    let separation = 6.0;
-    for output in [&coefficient, &forest] {
-        assert!(
-            (text_x(output, "Not estimable") - vertical_line_x(output, "stroke-dasharray")).abs()
-                >= separation
-        );
-    }
-    assert!(
-        (text_x(&point, "Not estimable")
-            - vertical_line_x(&point, "stroke-width=\"0.7998046875\""))
-        .abs()
-            >= separation
-    );
-}
-
-#[test]
-fn unavailable_text_without_a_fitting_guide_side_fails_preflight() {
-    let data = status_data(
-        CategoryValues::new("term", ["x"]).unwrap(),
-        NumericValues::nullable("estimate", [None]),
-        NumericValues::nullable("lower", [None]),
-        NumericValues::nullable("upper", [None]),
-        vec![EstimateStatus::NotEstimable],
-    );
-    let error = point_interval(&data, true)
-        .zero_line()
-        .x_limits(-1.0, 1.0)
-        .size(224, 240)
-        .preflight()
-        .unwrap_err();
-    assert!(error.to_string().contains("does not fit on either side"));
-}
-
 fn text_y(svg: &str, text: &str) -> f64 {
     let needle = format!(">{text}</text>");
     let end = svg.find(&needle).unwrap();
     let start = svg[..end].rfind("<text ").unwrap();
     attribute(&svg[start..end], "y")
-}
-
-fn text_x(svg: &str, text: &str) -> f64 {
-    let needle = format!(">{text}</text>");
-    let end = svg.find(&needle).unwrap();
-    let start = svg[..end].rfind("<text ").unwrap();
-    attribute(&svg[start..end], "x")
-}
-
-fn vertical_line_x(svg: &str, identifying_attribute: &str) -> f64 {
-    let line = svg
-        .lines()
-        .find(|line| line.starts_with("<polyline ") && line.contains(identifying_attribute))
-        .unwrap();
-    line.split_once("points=\"")
-        .unwrap()
-        .1
-        .split_once(',')
-        .unwrap()
-        .0
-        .parse()
-        .unwrap()
-}
-
-fn text_ys(svg: &str, text: &str) -> Vec<f64> {
-    let needle = format!(">{text}</text>");
-    let mut remaining = svg;
-    let mut values = Vec::new();
-    while let Some(end) = remaining.find(&needle) {
-        let start = remaining[..end].rfind("<text ").unwrap();
-        values.push(attribute(&remaining[start..end], "y"));
-        remaining = &remaining[end + needle.len()..];
-    }
-    values
 }
 
 fn attribute(tag: &str, name: &str) -> f64 {

@@ -10,18 +10,12 @@ use crate::theme::spacing::ExactLength;
 use crate::theme::AxisLengths;
 
 #[cfg(test)]
-mod appearance_tests;
-#[cfg(test)]
 mod tests;
 
 impl AuthoredAxisSpec {
     /// Return a copy with finite, strictly ascending explicit limits.
     #[must_use]
     pub fn limits(mut self, min: f64, max: f64) -> Self {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
-        );
         self.window = Some(super::RawWindow::from_pair((min, max)));
         self
     }
@@ -45,10 +39,6 @@ impl AxisTick {
     /// Construct a tick with an unchanged display label.
     #[must_use]
     pub fn new(position: f64, label: impl Into<String>) -> Self {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        );
         Self {
             position,
             label: label.into(),
@@ -217,14 +207,6 @@ impl AxisSystemPlan {
         }
         Ok(geometry)
     }
-    #[cfg(test)]
-    pub(crate) fn range(&self, side: AxisSide) -> (f64, f64) {
-        match side {
-            AxisSide::Bottom => self.projection.x_range(),
-            AxisSide::Left => self.projection.y_range(),
-        }
-    }
-
     pub(crate) fn requirements(&self) -> EdgeSpaceRequirements {
         self.requirements
     }

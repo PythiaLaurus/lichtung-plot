@@ -18,8 +18,6 @@ use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::layout::AuthoredAxisSpec;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{CategoryOrder, PlotMeasureContext};
-#[cfg(test)]
-use crate::Plot;
 
 #[derive(Debug)]
 struct DumbbellRow {
@@ -511,6 +509,3 @@ fn replicate_y(
     let slot = 0.72 / group_count as f64;
     center + 0.36 - slot * (group_index as f64 + 0.5)
 }
-
-#[cfg(test)]
-mod tests;

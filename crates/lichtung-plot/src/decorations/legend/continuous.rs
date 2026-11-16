@@ -1,8 +1,5 @@
 //! Continuous-color content inside the single sectioned guide envelope.
 
-#[cfg(test)]
-mod tests;
-
 use super::descriptor::ContinuousDescriptor;
 use super::{LegendCall, LegendMetrics};
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};

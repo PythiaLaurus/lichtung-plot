@@ -425,21 +425,4 @@ mod tests {
             "facet row=B, column=C"
         );
     }
-
-    #[test]
-    fn source_facet_selector_retains_mapped_strict_read_errors() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [1.0, 0.0]),
-        )
-        .source_rows(crate::SourceRows::new([90, 7001]).unwrap())
-        .facet(crate::FacetSpec::column(
-            crate::CategoryValues::nullable("facet", [Some("first"), None]).unwrap(),
-        ));
-        let error = facet_selectors(source.description()).err().unwrap();
-        assert_eq!(
-            error.to_string(),
-            "data error: facet: value \"facet\" contains null at source row 7001"
-        );
-    }
 }

@@ -820,12 +820,6 @@ impl Canvas {
         self.preflight_plan().map(drop)
     }
 
-    #[cfg(test)]
-    pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        let preflight = self.preflight_plan()?;
-        Self::render_preflighted(&preflight, backend)
-    }
-
     /// Render one immutable canonical composed SVG scene without creating a file.
     ///
     /// # Errors
@@ -1604,50 +1598,6 @@ impl Canvas {
         Ok(plan)
     }
 
-    #[cfg(test)]
-    fn build_preflight_plan(
-        &self,
-        inspect: impl FnOnce(&Root<'_>, &crate::orchestrator::TextReplayPlan),
-    ) -> Result<crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan>, Error> {
-        let frozen = crate::layout::plan_root(
-            self.root_size,
-            |stage| Root::prepare(RootSource::Canvas(self), stage),
-            Root::measure,
-            |root, size, plan, stage| {
-                size.dimensions()?;
-                let before = lifecycle_tests::capture_counters();
-                let panel_measurements =
-                    crate::orchestrator::RENDER_PANEL_CALLS.with(std::cell::Cell::get);
-                let replay = crate::orchestrator::capture_selected(
-                    root,
-                    plan,
-                    &root.sealed_verifier()?,
-                    stage,
-                )?;
-                assert_eq!(
-                    lifecycle_tests::capture_counters(),
-                    before,
-                    "Canvas first capture must not read, prepare, project, shape, or measure"
-                );
-                assert_eq!(
-                    crate::orchestrator::RENDER_PANEL_CALLS.with(std::cell::Cell::get),
-                    panel_measurements,
-                    "Canvas capture must not enter the panel measurement path",
-                );
-                inspect(root, &replay);
-                Ok(replay)
-            },
-        )?;
-        let (width, height) = frozen.dimensions();
-        crate::orchestrator::validate_text_replay_plan(
-            width,
-            height,
-            frozen.plan(),
-            "prepared canvas Null replay",
-        )?;
-        Ok(frozen)
-    }
-
     #[expect(
         clippy::type_complexity,
         reason = "one prepared root and both cell-intrinsic inventories are retained before parent allocation"
@@ -2050,10 +2000,6 @@ impl Canvas {
                         .map_err(|_| Error::Render("Canvas guide ordinal overflowed".into()))?,
                 )?;
                 let checkpoint = round.begin_trial()?;
-                #[cfg(test)]
-                let guide_trial = shared_legend.is_some().then(|| {
-                    crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact)
-                });
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
                 let outcome = self.build_canvas_attempt(
@@ -2075,29 +2021,13 @@ impl Canvas {
                 match outcome {
                     FitOutcome::Measured(plan) => match round.finish_trial(checkpoint) {
                         _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
-                            #[cfg(test)]
-                            #[expect(
-                                clippy::used_underscore_binding,
-                                reason = "outcome is observed only in tests"
-                            )]
-                            if let Some(trial) = &guide_trial {
-                                trial.complete(&_outcome);
-                            }
                             return Ok(plan);
                         }
                         TrialOutcome::Miss(reason) => {
-                            #[cfg(test)]
-                            if let Some(trial) = &guide_trial {
-                                trial.reject();
-                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                         }
                     },
                     FitOutcome::Miss(reason) => {
-                        #[cfg(test)]
-                        if let Some(trial) = &guide_trial {
-                            trial.reject();
-                        }
                         round.record_failure(reason)?;
                         if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, reason);
@@ -2373,8 +2303,6 @@ impl Canvas {
                     sizing::content_frame(self, request, assigned.dimensions()?.0, height)?;
                 full_outer = canvas_layout.panel_box;
             }
-            #[cfg(test)]
-            crate::orchestrator::measurements::guide_body();
             outer = match frame.assign_fit(full_outer, Some((w, h)), [0.0; 4], &scope)? {
                 FitOutcome::Measured(panel) => panel,
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -2702,31 +2630,11 @@ impl Canvas {
                 match children.plan(&factory, entry, role, guides, &child_scope, round, owner)? {
                     FitOutcome::Measured(result) => result,
                     FitOutcome::Miss(failure) => {
-                        #[cfg(test)]
-                        sizing::child_height_step(
-                            "child-miss",
-                            index,
-                            [
-                                cell.width(),
-                                local.body.width(),
-                                cell.height() - local.body.height(),
-                            ],
-                        );
                         FitFailure::retain_least(&mut child_miss, failure);
                         continue;
                     }
                 };
             if fill_content_height {
-                #[cfg(test)]
-                sizing::child_height_step(
-                    "child-measured",
-                    index,
-                    [
-                        cell.width(),
-                        panel_plan.panel_box.width(),
-                        cell.height() - local.body.height(),
-                    ],
-                );
                 let target = grid_address.child(
                     crate::layout::AddressRole::CanvasCell,
                     u32::try_from(index).map_err(|_| {
@@ -2768,8 +2676,6 @@ impl Canvas {
                     FeedbackKind::ContentHeight,
                     [cell.width(), 0.0, preferred, 0.0],
                 )?;
-                #[cfg(test)]
-                sizing::child_height_step("content-height", index, [cell.width(), preferred, 0.0]);
                 if request.is_some() || preferred > cell.height() + 1.0 / 1024.0 {
                     round.miss(
                         &target,

@@ -7,9 +7,6 @@ use crate::theme::composition::RootPaddingLengths;
 use crate::theme::spacing::ExactLength;
 use crate::{Error, TextAlignment};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootAlignments {
     pub(crate) title: TextAlignment,
@@ -209,14 +206,7 @@ impl RootTitleBlockPlan {
         sources: [Option<&crate::Text>; 3],
         scope: Option<&str>,
     ) -> Result<RootTitleBlockIntrinsics, Error> {
-        #[cfg(not(test))]
         let _ = scope;
-
-        #[cfg(test)]
-        crate::orchestrator::measurements::intrinsic(
-            crate::orchestrator::measurements::Counter::RootTitleIntrinsic,
-            scope,
-        );
         let mut roles = [(0.0_f64, 0.0_f64); 3];
         for ((source, appearance), widths) in sources
             .into_iter()

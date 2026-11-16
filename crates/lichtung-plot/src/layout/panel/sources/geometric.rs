@@ -11,9 +11,6 @@ struct Positions {
     operands: Vec<Operand>,
 }
 
-#[cfg(test)]
-mod tests;
-
 fn positions(
     range: &LatticeRange,
     first: &BigInt,

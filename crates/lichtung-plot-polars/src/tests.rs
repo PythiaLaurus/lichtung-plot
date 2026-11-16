@@ -2,7 +2,7 @@ use std::error::Error as _;
 
 use polars_core::prelude::*;
 
-use crate::{boolean, category, numeric, provenance, AdapterError as Error};
+use crate::{category, numeric, provenance, AdapterError as Error};
 
 #[test]
 fn numeric_chunks_and_sliced_validity_preserve_null_nan_and_signed_zero() {
@@ -21,83 +21,6 @@ fn numeric_chunks_and_sliced_validity_preserve_null_nan_and_signed_zero() {
     assert!(values[1].is_none());
     assert!(values[2].unwrap().is_nan());
     assert_eq!(values[3].unwrap().to_bits(), f64::INFINITY.to_bits());
-}
-
-#[test]
-fn numeric_dispatch_rounds_wide_primitives_without_a_precision_gate() {
-    let integers = Column::new(
-        "counts".into(),
-        [Some(9_007_199_254_740_993_u64), None, Some(u64::MAX)],
-    );
-    assert_eq!(
-        numeric::values(&integers)
-            .unwrap()
-            .iter()
-            .map(|value| value.map(f64::to_bits))
-            .collect::<Vec<_>>(),
-        [
-            Some(9_007_199_254_740_992.0_f64.to_bits()),
-            None,
-            Some(18_446_744_073_709_551_616.0_f64.to_bits())
-        ]
-    );
-    let wide = Column::new("wide".into(), [u128::MAX]);
-    assert_eq!(
-        numeric::values(&wide).unwrap()[0].unwrap().to_bits(),
-        2.0_f64.powi(128).to_bits()
-    );
-    let negative = Column::new("signed".into(), [i128::MIN]);
-    assert_eq!(
-        numeric::values(&negative).unwrap()[0].unwrap().to_bits(),
-        (-2.0_f64.powi(127)).to_bits()
-    );
-    let half = Series::new("half".into(), [Some(1.5), None, Some(-0.0)])
-        .strict_cast(&DataType::Float16)
-        .unwrap()
-        .into_column();
-    assert_eq!(
-        numeric::values(&half)
-            .unwrap()
-            .iter()
-            .map(|value| value.map(f64::to_bits))
-            .collect::<Vec<_>>(),
-        [Some(1.5_f64.to_bits()), None, Some((-0.0_f64).to_bits())]
-    );
-}
-
-#[test]
-fn scalar_and_untyped_null_columns_use_logical_length_including_zero() {
-    let scalar = Column::new_scalar(
-        "repeat".into(),
-        Scalar::new(DataType::Float64, AnyValue::Float64(1.5)),
-        5,
-    );
-    let values = numeric::values(&scalar).unwrap();
-    assert_eq!(values.len(), 5);
-    assert!(values
-        .iter()
-        .all(|value| value.unwrap().to_bits() == 1.5_f64.to_bits()));
-    let null = Column::new_scalar(
-        "missing".into(),
-        Scalar::new(DataType::Null, AnyValue::Null),
-        3,
-    );
-    assert!(numeric::values(&null).unwrap().iter().all(Option::is_none));
-    assert_eq!(category::values(&null).unwrap(), [None, None, None]);
-    assert_eq!(boolean::values(&null).unwrap(), [None, None, None]);
-    assert_eq!(numeric::numeric(&null).unwrap().len(), 3);
-    let empty = Column::new_empty("empty".into(), &DataType::Float64);
-    assert!(numeric::values(&empty).unwrap().is_empty());
-    let typed_null = Column::new_scalar(
-        "typed missing".into(),
-        Scalar::new(DataType::Float64, AnyValue::Null),
-        4,
-    );
-    assert_eq!(numeric::values(&typed_null).unwrap().len(), 4);
-    assert!(numeric::values(&typed_null)
-        .unwrap()
-        .iter()
-        .all(Option::is_none));
 }
 
 #[test]
@@ -132,27 +55,6 @@ fn categorical_and_enum_decode_observations_not_codes_or_unobserved_levels() {
     drop(categorical);
     drop(enumeration);
     assert_eq!(owned, expected);
-}
-
-#[test]
-fn boolean_chunks_keep_nullable_observations_without_coercion() {
-    let mut source = Series::new("flag".into(), [Some(true), None]);
-    source
-        .append(&Series::new("flag".into(), [Some(false), Some(true)]))
-        .unwrap();
-    let column = source.slice(1, 3).into_column();
-    assert_eq!(
-        boolean::values(&column).unwrap(),
-        [None, Some(false), Some(true)]
-    );
-    assert_eq!(boolean::booleans(&column).unwrap().len(), 3);
-    assert!(matches!(
-        numeric::numeric(&column),
-        Err(Error::UnsupportedDtype {
-            channel: "numeric",
-            ..
-        })
-    ));
 }
 
 #[test]

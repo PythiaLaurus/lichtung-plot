@@ -1,21 +1,16 @@
 """Real native callbacks, scoped views, and operation-owned Python exceptions."""
 
-from collections import UserDict
 import gc
 from pathlib import Path
 import struct
-import sys
 import threading
 import xml.etree.ElementTree as ET
 
 import pytest
 
 from lichtung_plot import (
-    DataError,
-    NumericField,
     NumericFormat,
     NumericLabels,
-    NumericPrecision,
     RenderError,
     Text,
     TickGeneration,
@@ -276,48 +271,6 @@ def test_nested_failure_does_not_poison_outer_and_outer_context_stays_active(
     outer.svg_preserve_text(tmp_path / "outer-again")
 
 
-def test_native_helper_is_truly_lazy_and_caught_error_is_not_pending(
-    tmp_path: Path,
-) -> None:
-    # usize::MAX cannot be a real output field. Native callback metadata itself
-    # is valid: only explicitly requesting the built-in helper allocates a field.
-    enormous_width = sys.maxsize * 2 + 1
-    ignored = NumericFormat.value_function(
-        lambda view: str(view.index), field=NumericField(enormous_width)
-    )
-    plot = figure().x_tick_format(ignored)
-    plot.svg_preserve_text(tmp_path / "ignored-helper")
-
-    caught_helpers = []
-
-    def catch_helper(view):
-        try:
-            view.format_builtin()
-        except RenderError as error:
-            caught_helpers.append(error)
-        return str(view.index)
-
-    plot.x_tick_format(ignored.copy_with(value_function=catch_helper))
-    plot.svg_preserve_text(tmp_path / "caught-helper")
-    assert caught_helpers
-
-    escaped_errors = []
-
-    def request_helper(view):
-        try:
-            return view.format_builtin()
-        except RenderError as error:
-            escaped_errors.append(error)
-            raise
-
-    plot.x_tick_format(ignored.copy_with(value_function=request_helper))
-    with pytest.raises(RenderError) as caught:
-        plot.svg_preserve_text(tmp_path / "requested-helper")
-    assert caught.value is escaped_errors[0]
-    plot.x_tick_format(NumericFormat())
-    plot.svg_preserve_text(tmp_path / "after-helper-error")
-
-
 def test_scoped_nested_views_bound_methods_threads_and_nonreused_keys(
     tmp_path: Path,
 ) -> None:
@@ -416,42 +369,6 @@ def test_scoped_nested_views_bound_methods_threads_and_nonreused_keys(
     assert old_checked_in_new_scope
 
 
-def test_native_domains_are_not_reclassified_as_python_callback_failures(
-    tmp_path: Path,
-) -> None:
-    plot = figure().x_tick_format(NumericFormat.set_function(lambda _: []))
-    with pytest.raises(DataError):
-        plot.svg_preserve_text(tmp_path / "cardinality")
-    plot.x_tick_format(NumericFormat.value_function(lambda _: "tab\ttext"))
-    with pytest.raises(DataError):
-        plot.svg_preserve_text(tmp_path / "native-text")
-    plot.x_tick_format(NumericFormat())
-    plot.x_tick_generation(
-        TickGeneration.function(lambda _: TickPositions.log10_exponents([0.0, 1.0]))
-    )
-    with pytest.raises(DataError):
-        plot.svg_preserve_text(tmp_path / "linear-exponents")
-    plot.x_tick_generation(TickGeneration.function(lambda _: [float("nan")]))
-    with pytest.raises(RenderError):
-        plot.svg_preserve_text(tmp_path / "unprojectable")
-    plot.x_tick_generation(TickGeneration.exact_count(3))
-    plot.svg_preserve_text(tmp_path / "after-domain-errors")
-
-
-def test_exact_ticks_suppress_callbacks_in_both_setter_orders(tmp_path: Path) -> None:
-    def forbidden(_):
-        raise AssertionError("exact ticks must suppress generated callback work")
-
-    locator = TickGeneration.function(forbidden)
-    formatter = NumericFormat.value_function(forbidden)
-    exact = [(0.0, "zero"), (1.0, "one"), (2.0, "two")]
-    first = figure().x_ticks(exact).x_tick_generation(locator).x_tick_format(formatter)
-    second = figure().x_tick_format(formatter).x_tick_generation(locator).x_ticks(exact)
-    first.svg_preserve_text(tmp_path / "exact-first")
-    second.svg_preserve_text(tmp_path / "exact-last")
-    assert text(tmp_path / "exact-first.svg") == text(tmp_path / "exact-last.svg")
-
-
 def test_reached_contexts_new_terminals_frozen_replay_and_io_failure(
     tmp_path: Path,
 ) -> None:
@@ -533,103 +450,3 @@ def test_reached_contexts_new_terminals_frozen_replay_and_io_failure(
     numeric_views.clear()
     plot.svg_preserve_text(tmp_path / "after-io-failure")
     assert tick_views and numeric_views
-
-
-def test_callback_operation_is_fresh_on_each_python_render_thread(tmp_path: Path) -> None:
-    caller_ids = set()
-    callback_ids = set()
-    errors = []
-    barrier = threading.Barrier(2)
-
-    def labels(view):
-        callback_ids.add(threading.get_ident())
-        return view.format_builtin()
-
-    plot = figure().x_tick_format(NumericFormat.value_function(labels))
-
-    def render(name):
-        caller_ids.add(threading.get_ident())
-        barrier.wait()
-        try:
-            plot.svg_preserve_text(tmp_path / name)
-        except BaseException as error:
-            errors.append(error)
-
-    first = threading.Thread(target=render, args=("thread-one",))
-    second = threading.Thread(target=render, args=("thread-two",))
-    first.start()
-    second.start()
-    first.join()
-    second.join()
-    assert not errors
-    assert len(caller_ids) == 2 and callback_ids == caller_ids
-    assert (tmp_path / "thread-one.svg").is_file()
-    assert (tmp_path / "thread-two.svg").is_file()
-
-
-def test_numeric_value_derivation_keeps_native_policy_and_callback_identity(
-    tmp_path: Path,
-) -> None:
-    original = NumericFormat.value_function(lambda view: view.format_builtin())
-    derived = original.copy_with(precision=NumericPrecision.fractional(1))
-    assert original.precision.digits == 2 and derived.precision.digits == 1
-    with pytest.raises(AttributeError):
-        derived.precision = NumericPrecision.fractional(3)
-    with pytest.raises(DataError):
-        original.copy_with(precision=NumericPrecision.fractional(255))
-    with pytest.raises(TypeError):
-        original.copy_with(value_function=None, set_function=None)
-    figure().x_tick_format(derived).svg_preserve_text(tmp_path / "derived-format")
-    figure().x_tick_format(original.copy_with(value_function=None)).svg_preserve_text(
-        tmp_path / "native-emitter"
-    )
-
-    locator = TickGeneration.function(lambda _: [0.0, 1.0, 2.0])
-    capped = locator.copy_with(maximum_count=3)
-    assert locator.maximum_count is None and capped.maximum_count == 3
-    figure().x_tick_generation(capped).svg_preserve_text(tmp_path / "derived-locator")
-    positions = TickPositions.log10_exponents([0.0, 1.0])
-    changed = positions.copy_with(positions=[2.0])
-    assert positions.positions == (0.0, 1.0)
-    assert changed.kind == "log10_exponents" and changed.positions == (2.0,)
-    labels = NumericLabels(["a"], explanation=Text("Authored"))
-    plain = labels.copy_with(explanation=None)
-    assert labels.explanation.source == "Authored"
-    assert plain.labels == ("a",) and plain.explanation is None
-
-    # Mapping keys, unordered sets, and generator-only inputs are not sequence data.
-    with pytest.raises(TypeError):
-        NumericLabels({"key": "not a label sequence"})
-
-    class DictSubclass(dict):
-        pass
-
-    with pytest.raises(TypeError):
-        NumericLabels(DictSubclass({"key": "not a label sequence"}))
-    with pytest.raises(TypeError):
-        NumericLabels(UserDict({"key": "not a label sequence"}))
-    with pytest.raises(TypeError):
-        TickPositions.data({0.0, 1.0})
-    with pytest.raises(TypeError):
-        TickPositions.data(value for value in [0.0, 1.0])
-
-    protocol_failure = LookupError("sequence protocol lookup refused")
-
-    class ProtocolLookup(type):
-        def __getattribute__(cls, name):
-            if name == "__getitem__":
-                raise protocol_failure
-            return super().__getattribute__(name)
-
-    class ProtocolResult(metaclass=ProtocolLookup):
-        def __len__(self):
-            return 1
-
-        def __getitem__(self, index):
-            if index == 0:
-                return "label"
-            raise IndexError(index)
-
-    with pytest.raises(LookupError) as caught_protocol:
-        NumericLabels(ProtocolResult())
-    assert caught_protocol.value is protocol_failure

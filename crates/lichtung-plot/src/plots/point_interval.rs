@@ -184,10 +184,6 @@ pub(crate) fn point_interval_display_range(
     data_range: (f64, f64),
     spec: &AuthoredAxisSpec,
 ) -> Result<(f64, f64), Error> {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AxisRangePreparation,
-    );
     if let Some(limits) = spec.window.map(crate::layout::RawWindow::pair) {
         return Ok(limits);
     }

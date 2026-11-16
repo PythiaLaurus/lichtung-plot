@@ -23,7 +23,8 @@ def main() -> int:
         "lichtung_plot",
         "lichtung_plot._owners",
         "lichtung_plot._native",
-        *(path.stem for path in sorted(tests.glob("typing_*.py"))),
+        "typing_inputs",
+        "typing_lifecycle",
     ]
     environment = os.environ.copy()
     environment["MYPYPATH"] = str(tests)
@@ -34,6 +35,8 @@ def main() -> int:
         "-m",
         "mypy",
         "--no-incremental",
+        "--cache-dir",
+        os.devnull,
         "--config-file",
         str(tests / "typing_inputs.ini"),
         "--python-executable",

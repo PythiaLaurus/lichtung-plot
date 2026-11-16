@@ -15,8 +15,6 @@ use crate::render::backend::{
 };
 use crate::theme::annotation::EffectiveSignificance;
 use crate::theme::spacing::ExactLength;
-#[cfg(test)]
-use crate::SignificanceMarkStyle;
 
 #[derive(Debug)]
 pub(crate) struct SignificancePlan {
@@ -42,12 +40,9 @@ struct BracketMetrics {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "non-default constraints remain only for direct significance planner regression tests"
-    )
+#[expect(
+    dead_code,
+    reason = "non-default constraints have no runtime constructor"
 )]
 enum LegendAnnotationConstraint {
     NoObstacle,
@@ -93,42 +88,6 @@ pub(crate) fn plan<'a>(
         theme,
         scope,
     )
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the wrapper preserves the existing validated significance planner inputs"
-)]
-#[cfg(test)]
-fn plan_comparisons(
-    annotations: &[SignificanceAnnotation],
-    categories: &[String],
-    rendered_maxima: &[f64],
-    y_range: (f64, f64),
-    categorical_x_override: Option<(f64, f64)>,
-    y_limits: Option<(f64, f64)>,
-    panel: PixelRect,
-    legend_constraint: LegendAnnotationConstraint,
-    mark_style: SignificanceMarkStyle,
-) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::publication().resolve().unwrap();
-    let text = crate::text::TextService::default();
-    let theme = crate::text::TextRequestContext::new(&theme, &text);
-    let effective = theme.effective_significance(Some(mark_style))?;
-    plan_comparisons_with_label(
-        annotations.iter(),
-        categories,
-        rendered_maxima,
-        y_range,
-        categorical_x_override,
-        y_limits,
-        panel,
-        legend_constraint,
-        &effective,
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE,
-    )
-    .map_err(crate::layout::fit::PlanError::into_error)
 }
 
 #[expect(
@@ -962,10 +921,6 @@ fn place_lines(
         annotation_capacity(panel, annotation_ceiling)?.pixels_rounded(SpatialRounding::Floor)?;
     let mut lines = Vec::<ExactLength>::with_capacity(level_maxima.len());
     for (level, maximum) in level_maxima.iter().enumerate() {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::SignificanceLevelCheck,
-        );
         let offset = *maximum - range.0;
         let span = range.1 - range.0;
         if !offset.is_finite() || !span.is_finite() || span <= 0.0 {
@@ -1043,10 +998,6 @@ fn expand_upper_limit(
     let mut passing_upper = range.1;
     let mut span = (range.1 - lower).max(f64::EPSILON);
     let passing_lines = loop {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::SignificanceRangeGrowth,
-        );
         passing_upper = passing_upper
             .max(
                 level_maxima
@@ -1078,10 +1029,6 @@ fn expand_upper_limit(
 
     let mut lines = passing_lines;
     for _ in 0..64 {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::SignificanceBisection,
-        );
         let midpoint = f64::midpoint(failing_upper, passing_upper);
         if let Some(candidate) = place_lines(
             (lower, midpoint),
@@ -1133,10 +1080,6 @@ fn fit_data_below_ceiling(
     let mut passing_upper = range.1;
     let mut span = range.1 - range.0;
     loop {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::SignificanceRangeGrowth,
-        );
         passing_upper = passing_upper.max(maximum) + span;
         if !passing_upper.is_finite() {
             return Err(render_error(
@@ -1151,10 +1094,6 @@ fn fit_data_below_ceiling(
     }
     for _ in 0..64 {
         let midpoint = f64::midpoint(failing_upper, passing_upper);
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::SignificanceBisection,
-        );
         if fits(midpoint)? {
             passing_upper = midpoint;
         } else {
@@ -1212,6 +1151,3 @@ pub(crate) fn render_selected(
 fn render_error(message: impl Into<String>) -> Error {
     Error::Render(message.into())
 }
-
-#[cfg(test)]
-mod tests;

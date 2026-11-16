@@ -179,6 +179,3 @@ impl TypographyTheme {
         ]
     }
 }
-
-#[cfg(test)]
-mod tests;

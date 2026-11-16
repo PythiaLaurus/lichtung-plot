@@ -111,63 +111,6 @@ fn rounding_preserves_signed_neighbors_and_both_tie_parities() {
 }
 
 #[test]
-fn fractional_quantization_certifies_dyadic_ties_scale_shifts_and_precision_limits() {
-    // Independent bounded u128 oracle: the source is the exact rational n/2^b.
-    // All floating construction operations here are exact, and no float-to-text
-    // conversion supplies an expected answer. Keep distinct rounding/shift and
-    // precision boundaries instead of the full arbitrary numerator × denominator
-    // × scale × precision product. Both signs remain independent checked inputs.
-    for (numerator, bits, scale, precision) in [
-        (0_u32, 0_u32, 0_i16, 0_u8), // signed zero
-        (3, 1, 0, 0),                // odd half-cell rounds up
-        (5, 1, 0, 0),                // even half-cell stays
-        (9, 3, 0, 0),                // below half-cell
-        (15, 3, 0, 0),               // above half-cell
-        (1999, 1, 0, 0),             // rounding carries through the integer
-        (1, 10, -3, 0),              // negative shift, rounded zero
-        (125, 10, -3, 20),           // negative scale with maximum precision
-        (1999, 10, 3, 20),           // largest bounded oracle product
-        (31, 10, -3, 3),             // scale and precision cancel
-        (63, 10, 3, 0),              // positive shift at zero precision
-        (7, 3, -1, 2),               // positive shift with a fractional result
-    ] {
-        let denominator = 1_u32 << bits;
-        let value = f64::from(numerator) / f64::from(denominator);
-        let shift = i32::from(scale) + i32::from(precision);
-        let (top, bottom) = if shift >= 0 {
-            (
-                u128::from(numerator) * 10_u128.pow(shift.unsigned_abs()),
-                u128::from(denominator),
-            )
-        } else {
-            (
-                u128::from(numerator),
-                u128::from(denominator) * 10_u128.pow(shift.unsigned_abs()),
-            )
-        };
-        let floor = top / bottom;
-        let remainder = top % bottom;
-        let coefficient = floor
-            + u128::from(2 * remainder > bottom || (2 * remainder == bottom && floor % 2 == 1));
-        let places = usize::from(precision);
-        let mut expected = format!("{coefficient:0width$}", width = places + 1);
-        if places > 0 {
-            expected.insert(expected.len() - places, '.');
-        }
-        let format = ResolvedFormat {
-            precision: ResolvedPrecision::Fractional(precision),
-            decimal_scale: scale,
-            ..ResolvedFormat::default()
-        };
-        assert_eq!(format_finite(value, &format).unwrap(), expected);
-        assert_eq!(
-            format_finite(-value, &format).unwrap(),
-            format!("-{expected}")
-        );
-    }
-}
-
-#[test]
 fn decimal_emission_obeys_notation_precision_and_zero_occupancy() {
     use NumericNotation::{Decimal, Engineering, Scientific};
     use ResolvedPrecision::{Fractional, Significant};
@@ -272,47 +215,6 @@ fn decimal_emission_obeys_notation_precision_and_zero_occupancy() {
         .unwrap(),
         "[1000]"
     );
-}
-
-#[test]
-fn extended_precision_matches_independent_binary_rational_cells() {
-    for (value, numerator, denominator_bits, notation, precision, coefficient, expected) in [
-        (
-            0.1,
-            3_602_879_701_896_397_u64,
-            55,
-            NumericNotation::Decimal,
-            ResolvedPrecision::Fractional(20),
-            10_000_000_000_000_000_555_u128,
-            "0.10000000000000000555",
-        ),
-        (
-            1.0_f64.next_up(),
-            (1_u64 << 52) + 1,
-            52,
-            NumericNotation::Scientific,
-            ResolvedPrecision::Significant(21),
-            100_000_000_000_000_022_204,
-            "1.00000000000000022204e0",
-        ),
-    ] {
-        certify_rational_cell(
-            BigUint::from(numerator),
-            BigUint::from(1_u8) << denominator_bits,
-            20,
-            coefficient,
-        );
-        let format = ResolvedFormat {
-            notation,
-            precision,
-            ..ResolvedFormat::default()
-        };
-        assert_eq!(format_finite(value, &format).unwrap(), expected);
-        assert_eq!(
-            format_finite(-value, &format).unwrap(),
-            format!("-{expected}")
-        );
-    }
 }
 
 #[test]

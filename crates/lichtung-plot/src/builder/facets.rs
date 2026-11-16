@@ -203,25 +203,6 @@ fn working_axes(
 }
 
 impl ComposedInputs {
-    #[cfg(test)]
-    #[expect(
-        clippy::type_complexity,
-        reason = "observe the three original key operands without another representation"
-    )]
-    pub(crate) fn axis_snapshot_for_test(
-        &self,
-    ) -> (
-        [Option<(f64, f64)>; 2],
-        [RangeProvenance; 2],
-        Option<(f64, f64)>,
-    ) {
-        (
-            [self.x_axis_spec.0, self.y_axis_spec.0],
-            [self.x_axis_spec.1, self.y_axis_spec.1],
-            self.resolved_facet_x_range,
-        )
-    }
-
     /// Compare only the original computed inputs of a root-local child owner.
     pub(crate) fn matches(
         &self,

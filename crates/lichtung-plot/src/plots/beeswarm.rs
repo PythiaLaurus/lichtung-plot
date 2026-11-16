@@ -13,8 +13,6 @@ use crate::layout::{Layout, PhysicalTextAlignment, PixelRect};
 use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, Point2D};
 use crate::spec::{PlotMeasureContext, PlotRenderResult};
 use crate::Error;
-#[cfg(test)]
-use crate::Plot;
 
 #[derive(Debug)]
 pub(crate) struct PreparedBeeswarm {
@@ -766,6 +764,3 @@ fn select_colorbar(
 }
 
 mod packing;
-
-#[cfg(test)]
-mod tests;

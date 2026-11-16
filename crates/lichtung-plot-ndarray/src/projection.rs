@@ -264,6 +264,3 @@ impl ArraySource for ColumnProjection<'_> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

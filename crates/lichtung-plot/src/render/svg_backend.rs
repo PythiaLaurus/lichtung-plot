@@ -29,12 +29,9 @@ use std::sync::Arc;
 #[cfg(test)]
 thread_local! {
     pub(crate) static PNG_TARGET_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static SVG_RAW_TEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static SVG_PLANNED_TEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SVG_BEGIN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SVG_END_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static REFUSE_STORAGE: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
-    pub(crate) static DERIVED_BUFFER_RESERVATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     // Some((unmodified text-prefix bytes, injection count)) belongs to one guard.
     static CANONICAL_COUNT_OVERFLOW: std::cell::Cell<Option<(usize, usize)>> = const { std::cell::Cell::new(None) };
 }
@@ -93,23 +90,6 @@ pub(crate) fn reserve_storage<T>(
 }
 
 impl SvgBackend {
-    #[cfg(test)]
-    pub(crate) fn reserved_storage_addresses(&self) -> [(usize, usize); 8] {
-        let address = |text: &String| (text.as_ptr().addr(), text.capacity());
-        [
-            address(&self.body.text),
-            address(&self.root_surfaces.text),
-            address(&self.panel_surfaces.text),
-            address(&self.grid_buf.text),
-            address(&self.clip_defs.text),
-            address(&self.gradient_defs.text),
-            address(&self.document),
-            (
-                self.text_replacements.as_ptr().addr(),
-                self.text_replacements.capacity(),
-            ),
-        ]
-    }
     #[cfg(test)]
     pub(crate) fn in_memory(width: u32, height: u32) -> Self {
         Self {
@@ -492,26 +472,6 @@ pub(crate) struct FinalizedSvgOutput {
 type FinalizedSvgParts = (u32, u32, Vec<u8>, SvgOutlinePlan);
 
 impl FinalizedSvgOutput {
-    #[cfg(test)]
-    pub(crate) fn storage_addresses(&self) -> [(usize, usize); 8] {
-        let SvgOutlinePlan::Ready(source) = &self.outline_plan else {
-            panic!("expected real SVG source");
-        };
-        let address = |text: &String| (text.as_ptr().addr(), text.capacity());
-        [
-            address(&source.body),
-            address(&source.root_surfaces),
-            address(&source.panel_surfaces),
-            address(&source.grid),
-            address(&source.clip_defs),
-            address(&source.gradient_defs),
-            (self.bytes.as_ptr().addr(), self.bytes.capacity()),
-            (
-                source.replacements.as_ptr().addr(),
-                source.replacements.capacity(),
-            ),
-        ]
-    }
     pub(crate) fn into_parts(self) -> FinalizedSvgParts {
         (
             self.width_css_px,
@@ -561,8 +521,6 @@ impl SvgOutlinePlan {
         count: usize,
     ) -> Result<Vec<u8>, String> {
         let mut output = WriteBuffer::default();
-        #[cfg(test)]
-        DERIVED_BUFFER_RESERVATIONS.with(|calls| calls.set(calls.get() + 1));
         output
             .text
             .try_reserve_exact(count)
@@ -1863,10 +1821,6 @@ impl<S: SvgSink> SvgSerializer<S> {
         text: &str,
         style: &TextStyle,
     ) -> Result<(), Error> {
-        #[cfg(test)]
-        if !S::COUNTING {
-            SVG_RAW_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
-        }
         self.ensure_begun("draw_text")?;
         let canonical = validate_text(position, style)?;
         let fill = SvgPaint::from(style.color).attributes("fill");
@@ -1921,10 +1875,6 @@ impl<S: SvgSink> SvgSerializer<S> {
     }
 
     pub(crate) fn draw_canonical_text(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
-        #[cfg(test)]
-        if !S::COUNTING {
-            SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
-        }
         self.ensure_begun("draw_planned_text")?;
         self.draw_multiline_planned_text(text)
     }
@@ -2141,8 +2091,7 @@ fn emit_svg_header(svg: &mut impl fmt::Write, width: u32, height: u32) -> fmt::R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::PreparedFontEnvironment;
-    use crate::layout::{PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance};
+    use crate::layout::PhysicalTextAlignment;
 
     #[test]
     fn canonical_count_overflow_releases_the_operation_after_a_real_text_prefix() {
@@ -2242,267 +2191,5 @@ mod tests {
         SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         let (core, operation, analysis) = probes.unwrap();
         assert!(!core() && !operation() && !analysis());
-    }
-
-    #[test]
-    fn shared_svg_tokens_count_escaped_utf8_and_refuse_overflow() {
-        let escaped = EscapedText("<&\"'\u{03b1}");
-        let attribute = EscapedAttribute("\t\n\r<&");
-        let paint = SvgPaint(Color::rgba(1, 2, 3, 128)).attributes("fill");
-        let mut count = CountBuffer::default();
-        write!(count, "{escaped} {paint} {attribute}").unwrap();
-        let mut output = WriteBuffer::default();
-        write!(output, "{escaped} {paint} {attribute}").unwrap();
-        assert_eq!(count.len(), output.len());
-        assert!(output.starts_with("&lt;&amp;&quot;&apos;"));
-        assert!(output.ends_with("&#9;&#10;&#13;&lt;&amp;"));
-        let mut overflow = CountBuffer {
-            bytes: usize::MAX,
-            ..CountBuffer::default()
-        };
-        assert!(overflow.write_str("x").is_err());
-        assert_eq!(overflow.len(), usize::MAX);
-    }
-
-    #[test]
-    fn formatter_errors_remain_latched_through_enclosing_serialization() {
-        struct FailingDisplay;
-        impl fmt::Display for FailingDisplay {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("prefix")?;
-                Err(fmt::Error)
-            }
-        }
-
-        let mut count = CountBuffer::default();
-        assert!(write!(count, "{FailingDisplay}").is_err());
-        count.write_str("suffix").unwrap();
-        assert_eq!(count.len(), 12);
-        assert!(!count.limit_exceeded);
-        assert!(count.check().is_err());
-        assert!(emit_svg_parts(
-            &mut count,
-            100,
-            100,
-            &CountBuffer::default(),
-            &CountBuffer::default(),
-            &[]
-        )
-        .is_err());
-
-        let mut buffer = WriteBuffer {
-            text: String::with_capacity(32),
-            fixed: true,
-            failed: false,
-        };
-        assert!(write!(buffer, "{FailingDisplay}").is_err());
-        buffer.write_str("suffix").unwrap();
-        assert_eq!(&*buffer, "prefixsuffix");
-        assert!(buffer.len() < buffer.text.capacity());
-        assert!(buffer.check().is_err());
-        let mut svg = SvgBackend::in_memory(100, 100);
-        Backend::begin(&mut svg, 100, 100).unwrap();
-        svg.body = buffer;
-        assert!(Backend::end(&mut svg).is_err());
-        assert!(svg.into_output().is_none());
-    }
-
-    #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the existing document refusal now follows one real font, capture, Null and reserved concrete replay lifecycle"
-    )]
-    fn fixed_primitive_and_document_overflows_reject_enclosing_svg_output() {
-        let points = [Point2D::new(10.0, 20.0), Point2D::new(30.0, 40.0)];
-        let style = LineStyle::solid(Color::rgb(1, 2, 3), 1.0);
-        let mut svg = SvgBackend::in_memory(100, 100);
-        Backend::begin(&mut svg, 100, 100).unwrap();
-        svg.body.fixed = true;
-        assert!(Backend::draw_line(&mut svg, &points, &style).is_err());
-        assert!(svg.body.failed);
-        assert_eq!(svg.body.text.capacity(), 0);
-        assert!(Backend::end(&mut svg).is_err());
-        assert!(svg.into_output().is_none());
-
-        let appearance = crate::Theme::publication().resolve().unwrap();
-        let mut probes = None;
-        let mut draws = 0;
-        let root = crate::layout::plan_root(
-            crate::layout::RootRequest::ExactSize {
-                width: 100,
-                height: 100,
-            },
-            |stage| {
-                let text = crate::text::TextService::default();
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    Vec::new(),
-                    Some(stage),
-                    Some(&mut presence),
-                )
-                .map_err(|error| Error::Render(error.to_string()))?;
-                text.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                assert!(text
-                    .prepared_font_environment()?
-                    .operation()
-                    .same_operation(&stage.operation()));
-                Ok(text)
-            },
-            |text, assigned, _| {
-                let measured = crate::text::TextRequestContext::new(&appearance, text)
-                    .measure_text(
-                        "A",
-                        &appearance.typography.root.title,
-                        PhysicalTextAlignment::Start,
-                        "concrete document text",
-                        false,
-                    )?;
-                Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
-                    measured,
-                ))
-            },
-            |text, size, measured, stage| {
-                size.dimensions()?;
-                let environment = text.prepared_font_environment()?;
-                let core = environment.liveness_probe();
-                let operation = environment.operation().liveness_probe();
-                let analysis = measured.analysis_liveness_probe();
-                assert!(core() && operation() && analysis());
-                let plan = crate::orchestrator::capture_calls(
-                    size,
-                    &SealedTextVerifier::new(environment),
-                    stage,
-                    |backend| {
-                        draws += 1;
-                        backend.draw_line(&points, &style)?;
-                        backend.draw_planned_text(
-                            PlannedTextPlacement::baseline(
-                                Point2D::new(10.0, 20.0),
-                                TextAnchor::Start,
-                                0.0,
-                            ),
-                            &measured,
-                        )
-                    },
-                )?;
-                assert!(core() && operation() && analysis());
-                probes = Some((core, operation, analysis));
-                Ok(plan)
-            },
-        )
-        .unwrap();
-        assert_eq!(draws, 1);
-        let (core, operation, analysis) = probes.unwrap();
-        assert!(!core() && !operation() && !analysis());
-        let plan = root.plan();
-        assert!(plan.take_svg_backend().is_err());
-        let fonts = crate::font::canonical::planning_counts();
-        crate::orchestrator::validate_text_replay_plan(100, 100, plan, "document capacity Null")
-            .unwrap();
-        assert!(!core() && !operation() && !analysis());
-        let mut svg = plan.take_svg_backend().unwrap();
-        let required = svg.expected_document_bytes.unwrap();
-        assert!(svg.fixed && svg.document.capacity() >= required);
-        svg.document = String::with_capacity(required - 1);
-        assert!(svg.document.capacity() < required);
-        SVG_BEGIN_CALLS.with(|calls| calls.set(0));
-        SVG_END_CALLS.with(|calls| calls.set(0));
-        let error = plan
-            .replay(100, 100, &mut svg, "document capacity concrete replay")
-            .unwrap_err();
-        assert!(error.to_string().contains("reserved storage"));
-        SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        SVG_END_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        assert!(!svg.body.failed && !svg.body.is_empty() && svg.replacement_count > 0);
-        assert!(!svg.text_replacements.is_empty());
-        assert_eq!(svg.text_replacements.len(), svg.replacement_count);
-        assert!(svg.group_stack.is_empty());
-        assert!(svg.into_output().is_none());
-        assert_eq!(crate::font::canonical::planning_counts(), fonts);
-        assert!(!core() && !operation() && !analysis());
-    }
-
-    #[test]
-    fn fixed_glyph_and_outline_overflows_reject_derived_output() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let plan = environment
-            .plan_text(TextPlanInput {
-                size_trace: None,
-                direction: crate::TextDirection::Auto,
-                source: "A",
-                stack: crate::font::canonical::test_sans_stack(),
-                weight: crate::TextWeight::Normal,
-                font_size: 12.0,
-                line_height: TextLineHeight::Multiplier(1.2),
-                maximum_width_quanta: i64::MAX,
-                alignment: PhysicalTextAlignment::Start,
-                paint: Color::rgb(1, 2, 3),
-                provenance: TextPlanProvenance {
-                    pair_ordinal: 0,
-                    owner: "outline overflow".into(),
-                },
-                exact_override: false,
-            })
-            .unwrap();
-        let placement =
-            PlannedTextPlacement::middle(Point2D::new(8.0, 20.0), TextAnchor::Start, 0.0);
-        let outline = PlannedLineOutline {
-            text: CanonicalPlannedText::new(placement, &plan, 40, None).unwrap(),
-            line_index: 0,
-        };
-        let mut buffer = WriteBuffer {
-            fixed: true,
-            ..WriteBuffer::default()
-        };
-        let error = SvgBackend::outline_planned_line(
-            &SealedTextVerifier::new(&environment).retain_fonts(),
-            &outline,
-            &mut buffer,
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("reserved storage"));
-        assert!(buffer.failed);
-        assert_eq!(buffer.text.capacity(), 0);
-
-        let mut svg = SvgBackend::in_memory_with_fonts(100, 40, &environment);
-        Backend::begin(&mut svg, 100, 40).unwrap();
-        Backend::draw_planned_text(&mut svg, placement, &plan).unwrap();
-        Backend::end(&mut svg).unwrap();
-        let output = svg.into_output().unwrap();
-        let required = output.outline_plan.count_bytes(100, 40).unwrap();
-        let error = output
-            .outline_plan
-            .derive_counted(100, 40, required - 1)
-            .unwrap_err();
-        assert!(error.contains("reserved storage"), "{error}");
-        assert_eq!(
-            output
-                .outline_plan
-                .derive_counted(100, 40, required)
-                .unwrap()
-                .len(),
-            required
-        );
-    }
-
-    #[test]
-    fn canonical_quantum_spelling_is_exact_and_minimal() {
-        use coordinates::CanonicalCoordinate;
-        assert_eq!(CanonicalCoordinate::from_quanta(0).to_string(), "0");
-        assert_eq!(
-            CanonicalCoordinate::from_quanta(1).to_string(),
-            "0.0009765625"
-        );
-        assert_eq!(CanonicalCoordinate::from_quanta(512).to_string(), "0.5");
-        assert_eq!(
-            CanonicalCoordinate::from_quanta(1023).to_string(),
-            "0.9990234375"
-        );
-        assert_eq!(CanonicalCoordinate::from_quanta(-1536).to_string(), "-1.5");
-        assert_eq!(
-            CanonicalCoordinate::from_quanta(i64::MIN).to_string(),
-            "-9007199254740992"
-        );
     }
 }

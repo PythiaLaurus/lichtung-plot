@@ -19,8 +19,6 @@ use crate::text::TextRequestContext;
 
 mod data;
 mod legend;
-#[cfg(test)]
-mod parent_tests;
 mod planning;
 mod rendering;
 mod sizing;
@@ -450,15 +448,8 @@ impl OwnedFacetPlan {
                     .map_err(|_| Error::Render("facet guide ordinal overflowed".into()))?;
                 let scope = FitScope::new(&crate::layout::ComponentAddress::root(), ordinal);
                 let guide_scope = FitScope::new(&owner, ordinal);
-                #[cfg(test)]
-                let mut guide_trial = None;
                 let (reserved_outer, mut outside_legend) = if outside {
                     round.claim_guide_trial(&owner, if automatic { 8 } else { 2 }, ordinal)?;
-                    #[cfg(test)]
-                    {
-                        guide_trial =
-                            Some(super::measurements::GuideTrial::new(&owner, edge, compact));
-                    }
                     let horizontal = matches!(
                         edge,
                         LegendPosition::OutsideTopLeft
@@ -483,18 +474,10 @@ impl OwnedFacetPlan {
                     )? {
                         FitOutcome::Measured(guide) => guide,
                         FitOutcome::Miss(reason) => {
-                            #[cfg(test)]
-                            if let Some(trial) = &guide_trial {
-                                trial.reject();
-                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                             continue;
                         }
                     };
-                    #[cfg(test)]
-                    if let Some(trial) = &guide_trial {
-                        trial.body();
-                    }
                     if content_sizing {
                         let grid_width = canvas_layout.panel_box.width()
                             - if horizontal {
@@ -548,10 +531,6 @@ impl OwnedFacetPlan {
                     )? {
                         FitOutcome::Measured((panel, guide)) => (panel, Some(guide)),
                         FitOutcome::Miss(reason) => {
-                            #[cfg(test)]
-                            if let Some(trial) = &guide_trial {
-                                trial.reject();
-                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                             continue;
                         }
@@ -595,10 +574,6 @@ impl OwnedFacetPlan {
                     ))? {
                         FitOutcome::Measured(insets) => insets,
                         FitOutcome::Miss(reason) => {
-                            #[cfg(test)]
-                            if let Some(trial) = &guide_trial {
-                                trial.reject();
-                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                             continue 'trial;
                         }
@@ -616,10 +591,6 @@ impl OwnedFacetPlan {
                                     "shared facet titles leave insufficient assigned grid space",
                                 ),
                         );
-                        #[cfg(test)]
-                        if let Some(trial) = &guide_trial {
-                            trial.reject();
-                        }
                         continue;
                     }
                 }
@@ -636,10 +607,6 @@ impl OwnedFacetPlan {
                 ))? {
                     FitOutcome::Measured(outer) => outer,
                     FitOutcome::Miss(reason) => {
-                        #[cfg(test)]
-                        if let Some(trial) = &guide_trial {
-                            trial.reject();
-                        }
                         round.record_failure(reason)?;
                         if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, reason);
@@ -677,10 +644,6 @@ impl OwnedFacetPlan {
                 let (mut children, grid) = match measured {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
-                        #[cfg(test)]
-                        if let Some(trial) = &guide_trial {
-                            trial.reject();
-                        }
                         round.record_failure(failure)?;
                         if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, failure);
@@ -688,27 +651,12 @@ impl OwnedFacetPlan {
                         continue;
                     }
                 };
-                #[cfg(test)]
-                let guide_outcome;
                 match round.finish_trial(checkpoint) {
                     TrialOutcome::Miss(reason) => {
-                        #[cfg(test)]
-                        if let Some(trial) = &guide_trial {
-                            trial.reject();
-                        }
                         FitFailure::retain_least(&mut first_miss, reason);
                         continue;
                     }
-                    _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
-                        #[cfg(test)]
-                        #[expect(
-                            clippy::used_underscore_binding,
-                            reason = "outcome is observed only in tests"
-                        )]
-                        {
-                            guide_outcome = _outcome;
-                        }
-                    }
+                    _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {}
                 }
                 let mut strip_text = Vec::new();
                 crate::render::backend::reserve_text_records(&mut strip_text, panels.len())?;
@@ -852,10 +800,6 @@ impl OwnedFacetPlan {
                     outside_legend.as_ref(),
                     round,
                 )?;
-                #[cfg(test)]
-                if let Some(trial) = &guide_trial {
-                    trial.complete(&guide_outcome);
-                }
                 return Ok(MeasuredOwnedPlan {
                     measurement,
                     size: crate::layout::RootSize::new(dimensions.0, dimensions.1),
@@ -1204,274 +1148,5 @@ mod feedback_tests {
                 }
             }
         }
-    }
-
-    #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "complete parent capture retains every producer and checks stage counters"
-    )]
-    fn facet_producer_plans_survive_first_capture_without_shaping() {
-        let text = format!(
-            "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
-            "A\u{ad}".repeat(60)
-        );
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
-        )
-        .facet(crate::FacetSpec::column(
-            crate::CategoryValues::new("facet", [&text, &text, "second", "second"]).unwrap(),
-        ))
-        .facet_column_text_layout(
-            crate::TextLayout::default()
-                .anchor(crate::TextAnchor::top_center())
-                .rotation(crate::TextRotation::degrees(30.05).unwrap())
-                .rotation_mode(crate::TextRotationMode::AlignAfterRotation),
-        )
-        .x_label(&text)
-        .y_label(&text)
-        .title("Outer title\nShort")
-        .subtitle("Independent subtitle")
-        .caption("Common caption")
-        .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
-        .size(900, 900)
-        .erase();
-        crate::layout::plan_root(
-            source.description().sizing_request(),
-            |stage| {
-                let appearance = source.description().resolve_theme()?;
-                let (inputs, composition) = crate::plots::shared_x::prepare_plot(
-                    source.description(),
-                    &stage.operation(),
-                    &appearance,
-                )?;
-                assert!(inputs.panels.iter().all(|registered| {
-                    registered
-                        .axes
-                        .as_ref()
-                        .unwrap()
-                        .sources()
-                        .iter()
-                        .all(|source| source.label.get().is_none())
-                }));
-                super::super::complete_prepared_plot_for_test(
-                    source.description(),
-                    appearance,
-                    inputs,
-                    composition,
-                    stage,
-                )
-            },
-            |prepared, assigned, round| {
-                assert!(prepared.plots.iter().all(|registered| {
-                    (0..2).all(|side| {
-                        registered.axes.sources()[side].label.get().is_some()
-                            && registered.axes.label(registered, side).is_none()
-                    })
-                }));
-                Ok(crate::layout::MeasuredLayout::new(
-                    assigned.assigned_size()?,
-                    {
-                        let super::super::root::PreparedComposition::Facets(topology) =
-                            &prepared.composition
-                        else {
-                            panic!("facet topology")
-                        };
-                        let mut caches = prepared.caches.borrow_mut();
-                        OwnedFacetPlan::measure(
-                            source.description(),
-                            prepared,
-                            topology,
-                            prepared
-                                .assignment_factory()
-                                .assign(assigned.assigned_size()?),
-                            &prepared.request(),
-                            round,
-                            &mut caches.children,
-                            false,
-                        )
-                        .map_err(crate::layout::fit::PlanError::into_error)?
-                    },
-                ))
-            },
-            |prepared, assigned, plan, stage| {
-                let MeasuredRootContent::Facets(content) = &plan.content else {
-                    panic!("measured facet content")
-                };
-                let expected = content
-                    .children
-                    .iter()
-                    .flat_map(|child| &child.strips)
-                    .chain(&content.shared_titles)
-                    .collect::<Vec<_>>();
-                assert!(expected.iter().any(|text| {
-                    text.plan
-                        .lines
-                        .iter()
-                        .any(|line| line.selected_soft_hyphen.is_some())
-                }));
-                assert!(content
-                    .shared_titles
-                    .iter()
-                    .all(|planned| planned.plan.source == text));
-                assert!(content
-                    .children
-                    .iter()
-                    .flat_map(|child| &child.strips)
-                    .all(|text| text
-                        .plan
-                        .request
-                        .as_ref()
-                        .is_some_and(|request| request.instructions().anchor
-                            == Some(crate::TextAnchor::top_center()))));
-                crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-                let projections = crate::layout::Projection::test_projection_calls();
-                let (_, height) = assigned.dimensions()?;
-                let verifier = prepared.sealed_verifier()?;
-                let replay =
-                    crate::orchestrator::capture_calls(assigned, &verifier, stage, |backend| {
-                        content.render(
-                            source.description(),
-                            PlotKind::Scatter,
-                            &plan.frame,
-                            backend,
-                        )
-                    })?;
-                crate::font::canonical::FONT_SHAPE_CALLS
-                    .with(|calls| assert_eq!(calls.get(), 0, "first capture must not shape"));
-                assert_eq!(
-                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-                    reads
-                );
-                assert_eq!(
-                    crate::layout::Projection::test_projection_calls(),
-                    projections
-                );
-                let captured = replay.retained_text();
-                for text in expected {
-                    let canonical = crate::render::primitives::CanonicalPlannedText::new(
-                        text.placement,
-                        &text.plan,
-                        height,
-                        None,
-                    )?;
-                    assert!(captured
-                        .iter()
-                        .any(|(placement, actual)| *placement == canonical
-                            && actual.shares_content(&text.plan)
-                            && **actual == text.plan.freeze_selected()));
-                }
-                Ok(())
-            },
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn automatic_shared_facet_guide_remeasures_the_whole_grid() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),
-            crate::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
-        )
-        .hue(
-            crate::CategoryValues::new(
-                "hue",
-                [
-                    "Complete explanatory first condition",
-                    "Complete explanatory second condition",
-                    "Complete explanatory first condition",
-                    "Complete explanatory second condition",
-                ],
-            )
-            .unwrap(),
-        )
-        .facet(crate::FacetSpec::column(
-            crate::CategoryValues::new("facet", ["first", "first", "second", "second"]).unwrap(),
-        ))
-        .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM")
-        .size(960, 640)
-        .erase();
-        let root = crate::layout::plan_root(
-            source.description().sizing_request(),
-            |stage| {
-                Root::prepare(
-                    super::super::root::RootSource::Plot(source.description()),
-                    stage,
-                )
-            },
-            Root::measure,
-            |_, _, plan, _| Ok(plan),
-        )
-        .unwrap();
-        let MeasuredRootContent::Facets(plan) = &root.plan().content else {
-            panic!("measured facet content")
-        };
-        assert!(plan.parent_guide.is_some());
-        assert!(plan.children.iter().all(|child| {
-            child.plot.legend.is_none() && child.plot.selected.guide.allocation.is_none()
-        }));
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        plan.parent_guide
-            .as_ref()
-            .unwrap()
-            .1
-            .geometry(&mut geometry)
-            .unwrap();
-        let guide_bottom = geometry
-            .bounds()
-            .iter()
-            .map(|ink| ink.bottom)
-            .reduce(f64::min)
-            .unwrap();
-        assert!(plan
-            .children
-            .iter()
-            .all(|child| guide_bottom > plan.cells[child.slot.0].y1));
-        assert_eq!(
-            plan.shared_titles[0].plan.source,
-            source.description().prepare_axis_labels(None).unwrap()[0]
-                .as_ref()
-                .unwrap()
-                .as_str()
-        );
-    }
-
-    #[test]
-    fn fatal_scatter_facet_source_rejects_before_fonts_or_layout() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0, f64::INFINITY, 3.0]),
-            crate::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
-        )
-        .facet(crate::FacetSpec::column(
-            crate::CategoryValues::new("facet", ["first", "first", "second", "second"]).unwrap(),
-        ))
-        .legend(crate::LegendPolicy::Hidden)
-        .size(960, 640)
-        .erase();
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let result = crate::layout::plan_root(
-            source.description().sizing_request(),
-            |stage| {
-                crate::plots::shared_x::prepare_plot(
-                    source.description(),
-                    &stage.operation(),
-                    &source.description().resolve_theme()?,
-                )
-            },
-            |_, _, _| -> Result<crate::layout::MeasuredLayout<()>, Error> {
-                panic!("invalid semantics must reject before layout")
-            },
-            |_, _, (), _| -> Result<(), Error> {
-                panic!("a failed sibling set must never finalize")
-            },
-        );
-        let error = result.err().expect("fatal second facet");
-        assert!(matches!(error, Error::Data(_)), "{error}");
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
     }
 }

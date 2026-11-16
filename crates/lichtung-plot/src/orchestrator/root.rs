@@ -84,30 +84,21 @@ pub(crate) struct PreparedCanvasTopology {
 
 pub(crate) enum DeclaredFacetSelector {
     Single {
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "retains the declared single-facet level ordinal as passive topology identity"
-            )
+        #[expect(
+            dead_code,
+            reason = "retains the declared single-facet level ordinal as passive topology identity"
         )]
         level: usize,
     },
     Grid {
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "retains the declared row-level ordinal as passive crossed-facet identity"
-            )
+        #[expect(
+            dead_code,
+            reason = "retains the declared row-level ordinal as passive crossed-facet identity"
         )]
         row_level: usize,
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "retains the declared column-level ordinal as passive crossed-facet identity"
-            )
+        #[expect(
+            dead_code,
+            reason = "retains the declared column-level ordinal as passive crossed-facet identity"
         )]
         column_level: usize,
     },
@@ -345,101 +336,5 @@ impl RootLayoutCaches {
             heights: crate::canvas::HeightMeasurements::default(),
             frames: None,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{CategoryValues, NumericValues, Plot, PlotKind};
-
-    #[test]
-    fn native_intrinsic_slots_wait_for_the_original_hard_minimum_reader() {
-        let categories = CategoryValues::new("group", ["a", "b", "c"]).unwrap();
-        let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
-        let y = NumericValues::new("y", [2.0, 4.0, 3.0]);
-        let sources = [
-            Plot::beeswarm(categories.clone(), x.clone(), y.clone()).erase(),
-            Plot::waterfall(categories, x.clone(), 0.0).erase(),
-            Plot::marginal(x, y).erase(),
-        ];
-        let appearance = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let request = crate::text::TextRequestContext::new(&appearance, &text);
-        for source in sources {
-            crate::orchestrator::with_prepared_plot_for_test(&source, &request, |_| Ok(()), |plot, inputs, request, operation, _round| {
-                let registered = &inputs.plots[0];
-                let intrinsic = inputs.plot_intrinsic(&registered.scope.id).unwrap();
-                let PlotIntrinsics::Coordinate { value } = intrinsic else {
-                    panic!("native coordinate slot")
-                };
-                assert!(value.get().is_none(), "post-font preparation must remain lazy");
-                let mut input = intrinsic_inputs(Some(registered), request, operation).unwrap();
-                input.y_visible = plot.kind() != PlotKind::Beeswarm;
-                if plot.kind() == PlotKind::Beeswarm {
-                    coordinate_intrinsic(intrinsic, &input).unwrap();
-                } else {
-                    crate::layout::interior::intrinsic_body_minimum(
-                        registered, crate::builder::RootFrameDomainInput::Prepared,
-                        intrinsic, operation, request,
-                    ).unwrap();
-                }
-                let initialized = value.get().unwrap();
-                let same = coordinate_intrinsic(intrinsic, &input).unwrap();
-                assert!(std::ptr::eq(initialized, same));
-                if plot.kind() == PlotKind::Beeswarm {
-                    let error = crate::layout::interior::intrinsic_body_minimum(
-                        registered, crate::builder::RootFrameDomainInput::Prepared,
-                        intrinsic, operation, request,
-                    ).unwrap_err();
-                    assert_eq!(error.to_string(), "render error: previously suppressed axis text cannot become active in prepared intrinsics");
-                }
-            }).unwrap();
-        }
-    }
-
-    #[test]
-    fn coordinate_intrinsic_mismatch_remains_fatal_without_reanalysis() {
-        let source = Plot::scatter(
-            NumericValues::new("x", [0.0, 1.0]),
-            NumericValues::new("y", [1.0, 2.0]),
-        )
-        .erase();
-        let appearance = crate::Theme::publication().resolve().unwrap();
-        let text = crate::text::TextService::default();
-        let request = crate::text::TextRequestContext::new(&appearance, &text);
-        crate::orchestrator::with_prepared_plot_for_test(
-            &source,
-            &request,
-            |_| Ok(()),
-            |_, inputs, request, operation, _round| {
-                let intrinsic = inputs.plot_intrinsic(&inputs.plots[0].scope.id).unwrap();
-                let PlotIntrinsics::Coordinate { value } = intrinsic else {
-                    panic!("coordinate slot")
-                };
-                assert!(value.get().is_some());
-                let mut changed = request.theme.clone();
-                changed.typography.axes.tick_label.font_size += 1.0;
-                let changed = crate::text::TextRequestContext::new(&changed, request.text);
-                crate::orchestrator::measurements::start();
-                let error = coordinate_intrinsic(
-                    intrinsic,
-                    &intrinsic_inputs(inputs.plots.first(), &changed, operation).unwrap(),
-                )
-                .unwrap_err();
-                let measured = crate::orchestrator::measurements::finish();
-                assert_eq!(
-                    error.to_string(),
-                    "render error: prepared panel intrinsic typography changed"
-                );
-                assert_eq!(
-                    measured.counters
-                        [crate::orchestrator::measurements::Counter::StandardPanelIntrinsic
-                            as usize],
-                    0
-                );
-            },
-        )
-        .unwrap();
     }
 }

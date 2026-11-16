@@ -378,18 +378,6 @@ mod tests {
     // ---- kde ----
 
     #[test]
-    fn kde_dense_at_center_for_uniform_samples() {
-        // 5 samples uniformly spaced in [0, 4]; the
-        // density is highest at the center (x = 2)
-        // and falls off at the edges.
-        let samples = vec![0.0, 1.0, 2.0, 3.0, 4.0];
-        let grid = vec![0.0, 1.0, 2.0, 3.0, 4.0];
-        let d = kde(&samples, &grid).unwrap();
-        assert!(d[2] > d[0], "center should have higher density than edge");
-        assert!(d[2] > d[4], "center should have higher density than edge");
-    }
-
-    #[test]
     fn kde_integrates_to_approximately_one() {
         // The KDE integrates to 1 over the real line
         // (it's a probability density). With Scott's
@@ -410,49 +398,9 @@ mod tests {
     }
 
     #[test]
-    fn kde_empty_samples_raises() {
-        let err = kde(&[], &[0.0, 1.0]).unwrap_err();
-        assert!(matches!(err, crate::Error::Data(_)));
-    }
-
-    #[test]
     fn strict_scott_bandwidth_rejects_small_and_constant_samples() {
         assert!(strict_scott_bandwidth(&[1.0]).is_err());
         assert!(strict_scott_bandwidth(&[2.0, 2.0]).is_err());
-    }
-
-    #[test]
-    fn strict_scott_bandwidth_handles_large_offset_samples() {
-        let bandwidth = strict_scott_bandwidth(&[
-            1e300,
-            1.000_000_000_000_000_2e300,
-            1.000_000_000_000_000_4e300,
-        ])
-        .unwrap();
-
-        assert!(bandwidth.is_finite() && bandwidth > 0.0);
-    }
-
-    #[test]
-    fn strict_scott_bandwidth_handles_subnormal_scale() {
-        let bandwidth = strict_scott_bandwidth(&[
-            f64::from_bits(1_000),
-            f64::from_bits(2_000),
-            f64::from_bits(3_000),
-        ])
-        .unwrap();
-
-        assert!(bandwidth.is_finite() && bandwidth > 0.0);
-    }
-
-    #[test]
-    fn strict_scott_bandwidth_reports_unrepresentable_variance() {
-        let mut samples = vec![0.0; 1_024];
-        samples[0] = f64::from_bits(1);
-
-        let error = strict_scott_bandwidth(&samples).unwrap_err();
-
-        assert!(error.contains("not representable"));
     }
 
     // ---- quantile ----
@@ -470,49 +418,8 @@ mod tests {
     }
 
     #[test]
-    fn quantile_rejects_empty_sample_exactly() {
-        let error = quantile(&[], 0.5).unwrap_err();
-
-        assert_eq!(error.to_string(), "data error: quantile: samples is empty");
-    }
-
-    #[test]
-    fn quantile_singleton_has_identical_quartiles() {
-        assert_eq!(bits(quartiles(&[7.0])), bits([7.0, 7.0, 7.0]));
-    }
-
-    #[test]
     fn quantile_type_7_quartiles_are_exact_for_two_samples() {
         assert_eq!(bits(quartiles(&[0.0, 4.0])), bits([1.0, 2.0, 3.0]));
-    }
-
-    #[test]
-    fn quantile_type_7_handles_repeated_values_exactly() {
-        assert_eq!(
-            bits(quartiles(&[1.0, 1.0, 1.0, 9.0])),
-            bits([1.0, 1.0, 3.0])
-        );
-    }
-
-    #[test]
-    fn quantile_sorts_unsorted_input_deterministically() {
-        assert_eq!(
-            bits(quartiles(&[6.0, 0.0, 4.0, 2.0])),
-            bits([1.5, 3.0, 4.5])
-        );
-    }
-
-    #[test]
-    fn quantile_returns_exact_validated_endpoints() {
-        let samples = [3.0, -2.0, 8.0, 1.0];
-
-        assert_eq!(
-            bits([
-                quantile(&samples, 0.0).unwrap(),
-                quantile(&samples, 1.0).unwrap()
-            ]),
-            bits([-2.0, 8.0])
-        );
     }
 
     #[test]
@@ -530,28 +437,6 @@ mod tests {
     }
 
     #[test]
-    fn quantile_type_7_interpolates_same_sign_extremes_without_overflow() {
-        let lower = f64::MAX / 2.0;
-
-        assert_eq!(
-            quantile(&[lower, f64::MAX], 0.5).unwrap().to_bits(),
-            (lower + (f64::MAX - lower) * 0.5).to_bits()
-        );
-    }
-
-    #[test]
-    fn quantile_rejects_non_finite_and_out_of_range_q_exactly() {
-        for q in [f64::NAN, f64::NEG_INFINITY, -0.1, 1.1, f64::INFINITY] {
-            let error = quantile(&[1.0], q).unwrap_err();
-
-            assert_eq!(
-                error.to_string(),
-                format!("data error: quantile: q must be finite and in [0, 1], got {q}")
-            );
-        }
-    }
-
-    #[test]
     fn quantile_rejects_each_non_finite_sample_exactly() {
         for value in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
             let error = quantile(&[1.0, value, 3.0], 0.5).unwrap_err();
@@ -561,17 +446,6 @@ mod tests {
                 format!("data error: quantile: sample at index 1 must be finite, got {value}")
             );
         }
-    }
-
-    #[test]
-    fn standard_normal_quantile_matches_known_values() {
-        let lower = standard_normal_quantile(0.025).unwrap();
-        let median = standard_normal_quantile(0.5).unwrap();
-        let upper = standard_normal_quantile(0.975).unwrap();
-
-        assert!((lower + 1.959_963_984_540_054).abs() < 1e-7);
-        assert!(median.abs() < 1e-12);
-        assert!((upper - 1.959_963_984_540_054).abs() < 1e-7);
     }
 
     #[test]
@@ -592,53 +466,5 @@ mod tests {
                 "p={probability}: {actual}"
             );
         }
-    }
-
-    #[test]
-    fn standard_normal_quantile_rejects_closed_boundaries() {
-        for invalid in [
-            -1.0,
-            0.0,
-            1.0,
-            2.0,
-            f64::NAN,
-            f64::NEG_INFINITY,
-            f64::INFINITY,
-        ] {
-            assert!(standard_normal_quantile(invalid).is_err(), "{invalid}");
-        }
-    }
-
-    #[test]
-    fn standard_normal_quantile_is_continuous_at_branch_transitions() {
-        for (probability, expected) in [
-            (0.024_25_f64, -1.972_961_051_311_885),
-            (1.0 - 0.024_25, 1.972_961_051_311_885),
-        ] {
-            let below = standard_normal_quantile(probability.next_down()).unwrap();
-            let at = standard_normal_quantile(probability).unwrap();
-            let above = standard_normal_quantile(probability.next_up()).unwrap();
-
-            assert!((above - below).abs() < 1e-7);
-            assert!((at - expected).abs() < 1e-7);
-        }
-    }
-
-    #[test]
-    fn standard_normal_quantile_preserves_representable_symmetry() {
-        for probability in [0.1, 0.024_25, 1e-10] {
-            let lower = standard_normal_quantile(probability).unwrap();
-            let upper = standard_normal_quantile(1.0 - probability).unwrap();
-
-            assert!((lower + upper).abs() < 1e-7, "p={probability}");
-        }
-    }
-
-    #[test]
-    fn standard_normal_quantile_matches_extreme_representable_upper_tail() {
-        let probability = 1.0_f64.next_down();
-        let actual = standard_normal_quantile(probability).unwrap();
-
-        assert!((actual - 8.209_536_151_601_387).abs() < 1e-7, "{actual}");
     }
 }

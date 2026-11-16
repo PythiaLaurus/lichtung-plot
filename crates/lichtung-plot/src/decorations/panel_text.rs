@@ -370,10 +370,6 @@ fn check_collisions(plans: &[PlotTextAnnotationPlan], scope: &FitScope) -> Resul
     Ok(())
 }
 fn overlap_predicate(left: PixelRect, right: PixelRect) -> bool {
-    #[cfg(test)]
-    crate::orchestrator::measurements::count(
-        crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,
-    );
     left.width() > 0.0
         && left.height() > 0.0
         && right.width() > 0.0

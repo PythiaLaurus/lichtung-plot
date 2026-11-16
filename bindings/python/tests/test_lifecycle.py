@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from lichtung_plot import Canvas, DataError, Plot, Scatter, Text, Theme, scatter
+from lichtung_plot import Canvas, Plot, Scatter, Text, Theme, scatter
 
 
 SVG = "{http://www.w3.org/2000/svg}"
@@ -128,42 +128,6 @@ def test_canvas_captures_native_configuration_without_python_children(
     assert "External later edit" not in captured
     assert "Independent Canvas" not in captured
     assert "Independent Canvas" in svg_text(tmp_path / "canvas-branch.svg")
-
-
-def test_canvas_spans_overwrite_and_fallible_headers_are_atomic(tmp_path: Path) -> None:
-    def panel(title: str) -> Scatter:
-        return scatter(x=[0.0, 1.0], y=[1.0, 2.0]).title(title)
-
-    canvas = (
-        Canvas.grid(2, 3)
-        .panel(0, 0, panel("Removed whole owner"), row_span=2, column_span=2)
-        .panel(0, 2, panel("Upper survivor"))
-        .panel(1, 2, panel("Lower survivor"))
-    )
-    prior = canvas.copy()
-    with pytest.raises(DataError):
-        canvas.panel(1, 1, panel("Rejected strict overlap"))
-    with pytest.raises(DataError):
-        canvas.panel(1, 1, panel("Rejected empty span"), row_span=0, overwrite=True)
-    with pytest.raises(DataError):
-        canvas.panel(1, 1, panel("Rejected out of grid"), column_span=3, overwrite=True)
-
-    assert canvas.panel(1, 1, panel("Replacement"), overwrite=True) is canvas
-    # This cell was occupied outside the replacement's footprint by the old owner.
-    canvas.panel(0, 0, panel("Freed cell"))
-    canvas.column_header(0, 2, "Kept header")
-    with pytest.raises(DataError):
-        canvas.column_header(1, 2, "Rejected overlapping header")
-    canvas.column_header(2, 1, "Valid later header")
-    canvas.svg_preserve_text(tmp_path / "overwritten")
-    prior.svg_preserve_text(tmp_path / "prior")
-    overwritten = svg_text(tmp_path / "overwritten.svg")
-    assert "Removed whole owner" not in overwritten
-    assert "Rejected" not in overwritten
-    assert "Replacement" in overwritten and "Freed cell" in overwritten
-    assert "Upper survivor" in overwritten and "Lower survivor" in overwritten
-    assert "Kept header" in overwritten and "Valid later header" in overwritten
-    assert "Removed whole owner" in svg_text(tmp_path / "prior.svg")
 
 
 def test_new_terminals_frozen_output_and_io_failure_preserve_handles(

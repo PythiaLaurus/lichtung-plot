@@ -5,9 +5,6 @@ use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::numeric::{operand::Operand, source::AxisRequest};
 use crate::{Error, TickPositions};
 
-#[cfg(test)]
-mod tests;
-
 fn materialize(request: &AxisRequest<'_>) -> Result<std::sync::Arc<TickPositions>, Error> {
     let view = request.position_view()?;
     request

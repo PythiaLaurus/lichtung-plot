@@ -23,8 +23,6 @@ use crate::layout::interior::MeasuredCoordinateMarks;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::Point2D;
 use crate::spec::PlotMeasureContext;
-#[cfg(test)]
-use crate::Plot;
 use crate::RawOverlay;
 
 #[derive(Debug, PartialEq)]
@@ -587,6 +585,3 @@ fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {
         hi_whisker,
     })
 }
-
-#[cfg(test)]
-mod alpha_tests;

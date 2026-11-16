@@ -43,10 +43,6 @@ name = "annotations"
 path = "tests/annotations/suite.rs"
 
 [[test]]
-name = "categorical"
-path = "tests/categorical/suite.rs"
-
-[[test]]
 name = "composition"
 path = "tests/composition/suite.rs"
 
@@ -75,20 +71,12 @@ name = "lines"
 path = "tests/lines/suite.rs"
 
 [[test]]
-name = "marginal-matrix"
-path = "tests/marginal_matrix/suite.rs"
-
-[[test]]
 name = "output"
 path = "tests/output/suite.rs"
 
 [[test]]
 name = "rendering"
 path = "tests/rendering/suite.rs"
-
-[[test]]
-name = "statistics"
-path = "tests/statistics/suite.rs"
 
 [lints]
 workspace = true

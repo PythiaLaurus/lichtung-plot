@@ -73,18 +73,6 @@ impl PointStyle {
         }
     }
 
-    /// Construct a filled point without an outline.
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) fn plain(color: (u8, u8, u8), radius: u32) -> Self {
-        Self {
-            color: color_from_rgb(color).alpha(209),
-            radius,
-            outline: None,
-            shape: PointShape::Circle,
-        }
-    }
-
     /// Set the marker geometry.
     #[must_use]
     pub const fn with_shape(mut self, shape: PointShape) -> Self {
@@ -146,17 +134,6 @@ impl LineStyle {
             color,
             width,
             pattern: StrokePattern::Solid,
-        }
-    }
-
-    /// Create a line using the fixed `3 2` dash pattern.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn short_dashed(color: Color, width: f32) -> Self {
-        Self {
-            color,
-            width,
-            pattern: StrokePattern::ShortDash,
         }
     }
 }

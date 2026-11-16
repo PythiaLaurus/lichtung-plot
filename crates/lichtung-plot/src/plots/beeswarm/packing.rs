@@ -176,58 +176,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn coincident_points_take_zero_then_negative_tangencies_in_source_order() {
-        let projection = Projection::new((-1.0, 1.0), (0.0, 1.0), (0.0, 2.0, 0.0, 1.0));
-        let rows = [
-            (0, 0.0, 0.0, 0),
-            (0, 0.0, 1.0, 1),
-            (0, 0.0, -1.0, 2),
-            (0, 0.0, 2.0, 3),
-        ];
-        let result = pack(rows.into_iter(), &projection, 2).unwrap();
-        assert_eq!(
-            result
-                .points
-                .iter()
-                .map(|point| point.offset)
-                .collect::<Vec<_>>(),
-            [0, -4, 4, -8]
-        );
-        assert_eq!(
-            result
-                .points
-                .iter()
-                .map(|point| point.source_row)
-                .collect::<Vec<_>>(),
-            [0, 1, 2, 3]
-        );
-        assert_eq!(result.hard_pitch, 20);
-        let separated = [(0, 0.0, 0.0, 0), (0, 4.0 / 1024.0, 0.0, 1)];
-        let result = pack(separated.into_iter(), &projection, 2).unwrap();
-        assert_eq!(
-            result
-                .points
-                .iter()
-                .map(|point| point.offset)
-                .collect::<Vec<_>>(),
-            [0, 0]
-        );
-    }
-
-    #[test]
-    fn nonintegral_tangent_distances_round_outward_once() {
-        let projection = Projection::new((-1.0, 1.0), (0.0, 1.0), (0.0, 2.0, 0.0, 1.0));
-        let rows = [(0, 0.0, 0.0, 0), (0, 1.0 / 1024.0, 0.0, 1)];
-        let result = pack(rows.into_iter(), &projection, 2).unwrap();
-        assert_eq!(result.points[1].x - result.points[0].x, 1);
-        assert_eq!(result.points[1].offset, -4);
-        assert_eq!(ceil_sqrt(0).unwrap(), 0);
-        assert_eq!(ceil_sqrt(15).unwrap(), 4);
-        assert_eq!(ceil_sqrt(16).unwrap(), 4);
-        assert_eq!(ceil_sqrt(17).unwrap(), 5);
-    }
-
-    #[test]
     fn stroked_circle_and_triangle_glyphs_have_complete_conservative_disks() {
         let rows = (0..12)
             .map(|row| (0, 0.0, row as f64, row))

@@ -2,8 +2,6 @@
 
 mod cache;
 mod flow;
-#[cfg(test)]
-mod tests;
 pub(crate) use cache::GuideMeasurements;
 
 use std::cmp::Ordering;

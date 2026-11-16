@@ -17,7 +17,6 @@ pub(crate) fn ceil_spatial_quanta(value: f64) -> Result<i64, Error> {
 #[cfg(test)]
 thread_local! {
     static FORCED_RESERVATION_FAILURE: std::cell::Cell<Option<ReservationStage>> = const { std::cell::Cell::new(None) };
-    pub(crate) static ROOT_FEEDBACK_ROUNDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -805,15 +804,9 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
         reservations: &mut reservations,
     };
 
-    #[cfg(test)]
-    let preparation_timer = crate::orchestrator::measurements::Timer::new(0);
     let prepared = prepare(&mut prepared_stage)?;
-    #[cfg(test)]
-    drop(preparation_timer);
 
     reservations.phase = ReservationStage::Measured;
-    #[cfg(test)]
-    ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(0));
     let mut history = Vec::new();
     reservations.reserve_additional(
         ReservationStage::Measured,
@@ -822,10 +815,6 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
         "measured root plan",
     )?;
     let measured = loop {
-        #[cfg(test)]
-        let _measurement_timer = crate::orchestrator::measurements::root_round(history.len());
-        #[cfg(test)]
-        ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(rounds.get() + 1));
         let mut round = FeedbackRound::new(history.last(), history.len())?;
         round.observe_root_request(request)?;
         if let Some(width) = assigned.exact_width() {
@@ -930,8 +919,6 @@ pub(crate) fn plan_root<Plan, FinalPlan, Prepared>(
         .into_boxed_slice()
         .try_into()
         .unwrap_or_else(|_| unreachable!("one frozen root allocation"));
-    #[cfg(test)]
-    crate::orchestrator::measurements::root_success();
     Ok(FrozenRoot { allocation })
 }
 

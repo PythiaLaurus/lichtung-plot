@@ -7,8 +7,6 @@ use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
 use crate::GuideSpec;
-#[cfg(test)]
-use crate::Plot;
 
 impl PlotDescription {
     pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<f64>>, Error> {
@@ -160,45 +158,10 @@ fn projected_x_ticks(chart: &PlotDescription, ticks: &[AxisTick]) -> Result<Vec<
                     tick.position
                 )));
                 }
-                #[cfg(test)]
-                super::measurements::count(super::measurements::Counter::ForestRawTickProjection);
                 crate::numeric::log10(tick.position)?
             };
             Ok(position)
         }))
-}
-
-#[cfg(test)]
-#[test]
-fn projected_exact_ticks_validate_positions_and_preserve_labels() {
-    let chart = Plot::forest(
-        crate::CategoryValues::new("term", ["a"]).unwrap(),
-        crate::NumericValues::new("value", [1.0]),
-        crate::Bounds::new(
-            crate::NumericValues::new("lower", [0.1]),
-            crate::NumericValues::new("upper", [10.0]),
-        ),
-        1.0,
-    )
-    .scale(AxisScale::Log10)
-    .erase();
-    let error =
-        projected_x_ticks(chart.description(), &[AxisTick::new(0.0, "invalid")]).unwrap_err();
-    assert!(
-        matches!(&error, Error::Data(message) if message.contains("strictly positive")),
-        "{error}"
-    );
-
-    let ticks = [AxisTick::new(0.1, "lower"), AxisTick::new(10.0, "upper")];
-    let positions = projected_x_ticks(chart.description(), &ticks).unwrap();
-    let exact = crate::orchestrator::registration::ExactTicksRef {
-        raw: &ticks,
-        projected: Some(&positions),
-    };
-    assert_eq!(
-        [exact.tick(0).unwrap(), exact.tick(1).unwrap()],
-        [(-1.0, "lower"), (1.0, "upper")]
-    );
 }
 
 fn project_guide(

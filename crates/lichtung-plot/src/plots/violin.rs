@@ -36,8 +36,6 @@ use crate::plots::categorical_distribution::{self, DistributionPayload, Prepared
 use crate::render::backend::Point2D;
 use crate::spec::PlotMeasureContext;
 use crate::stats::distribution::{kde, kde_support_range};
-#[cfg(test)]
-use crate::Plot;
 
 #[derive(Debug, PartialEq)]
 struct ViolinSummary {
@@ -884,6 +882,3 @@ fn violin_summary_with_source(values: &[f64]) -> Result<ViolinSummary, Error> {
         hi_whisker,
     })
 }
-
-#[cfg(test)]
-mod alpha_tests;

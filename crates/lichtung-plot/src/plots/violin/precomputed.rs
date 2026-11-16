@@ -235,11 +235,6 @@ struct PreparedRaincloudGroup {
     fill_alpha: Option<ResolvedAlpha>,
 }
 
-#[cfg(test)]
-thread_local! {
-    static HUE_LOOKUP_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 pub(crate) fn prepare(
     chart: &crate::builder::PlotDescription,
 ) -> Result<(PreparedRaincloud, Vec<String>, Vec<String>), Error> {
@@ -275,8 +270,6 @@ pub(crate) fn prepare(
                     .map(|hue| category_value(hue, row, "raincloud hue"))
                     .transpose()?;
                 if let Some(hue) = hue {
-                    #[cfg(test)]
-                    HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
                     if !hues.iter().any(|level| level == hue) {
                         crate::data::source::reserve_source(&mut hues, 1)?;
                         hues.push(crate::data::source::copy_source_string(hue)?);

@@ -514,7 +514,8 @@ Result<Output>, preserving operation/publication behavior.
 The package-local examples use adapter-only renderer imports, default to the
 working directory and accept one optional output directory. They share real source
 anchors and frozen outputs with equivalent peer-language single-page guides.
-The Book helper's test-only consumer checks cross-adapter native identity and
-handoff; its production command does not depend on the renderer. Follow
+Cross-adapter native identity and handoff are exercised by ordinary public-API
+consumers, not dependencies of the Book command. Its production command does not
+depend on the renderer. Follow
 [development](90_DEVELOPMENT.md) for semantic test ceilings, focused validation,
 strict Clippy, independent-package verification and publication authorization.
