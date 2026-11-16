@@ -39,6 +39,10 @@ python-build:
 python-test *args:
     "{{python}}" -I -B -m pytest -q bindings/python/tests {{args}}
 
+# Check installed declarations and public type boundaries, without API reflection.
+python-typing:
+    "{{python}}" -I -B bindings/python/tests/check_typing.py
+
 # Use the PEP 517 source producer, including its projected-lock validation.
 python-sdist:
     LICHTUNG_MATURIN="{{maturin}}" "{{python}}" -I -B bindings/python/_build_backend.py --out "{{justfile_directory()}}/target/python-sdist"

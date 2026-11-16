@@ -77,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | The first reviewed cleanup and its independent distribution gate passed. Further hard-budget cleanup has removed 112 repeated module scenarios and 59 publication scenarios, with retained-contract tests and strict Clippy passing. Complete E2E accounting is now 80/80. Unit/module limits still fail; this is not overall acceptance or a current post-change distribution gate. |
+| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 215 static unit cases, 112 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 324 static contracts and 136 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
 
 ### Current Python Implementation Scope
 
@@ -909,6 +909,46 @@ The complete 80-case E2E ledger and 34 actual deletions are in
 SHA-256 `bf3c07fe352ff16b682fc1a3c77f3dc54851c564eb585306f22af6f102a4d662`.
 Unit/module ceilings still fail. Later packaged test bytes still require a final
 new sdist, independent unpack/fresh-target build and fresh install/runtime gate.
+
+The third partition removes the two exhaustive static appearance/numeric value
+fixtures and the additional Canvas/native-value typing inventory: **215 unit
+contracts actually deleted**, leaving **324** across five fixtures, including
+**136** unchanged negative guards. All remaining fixture functions are
+byte-identical, including all 25 exact-family constructor returns across the
+family/lifecycle fixtures. Real numeric-policy, immutable Theme/Text, native
+scientific-value, Canvas and callback consumers remain unchanged. These are
+deliberate inventory deletions, not fixture merging or a claim that runtime tests
+prove static inference.
+
+The 2,037-contract recursive reflection workflow is now explicitly retired in the
+shared development contract. No reflection allowlist, lint reclassification or
+modified shipped declaration replaces it. Exhaustive per-member signature,
+descriptor and class-metadata conformance is no longer a regression guarantee;
+the historical successful traversal is still evidence only of its recorded wheel.
+Strict installed source typing and scientific/runtime consumers remain the
+maintained gates. The new `just python-typing` runner checks all three installed
+modules plus the five maintained fixtures with no installation or checkout
+fallback. Its installed-root identity guard is conservatively charged as one
+module contract, not hidden as free support.
+
+Outside-source execution passed all eight strict typing roots and strict
+workspace/all-target Clippy passed. The first new-runner invocation exited 2
+because file roots made site-packages shadow `typing_extensions`; the runner now
+uses explicit module roots, as the earlier successful verification did. That
+failure is preserved; no typing ignore, declaration or dependency was changed.
+No successful runtime test was repeated for this static/workflow-only partition.
+The complete removed/retained static ledger, related concrete runtime witnesses,
+explicitly reduced guarantees and actual command identities are in
+`/tmp/opencode/lichtung-budget2/phase3-proof.json`,
+SHA-256 `489e9674e132bd02ebcf47e9936c4ea9ba2cefda29e1131727d34990c6f72e8e`.
+
+This still does not close the budgets. The disjoint core-internal lower bound
+(461 unit / 657 module after the real matrix deletions), external-core subset
+(23 / 533), Book/helper (37 / 46), Rustdoc (149 / 9), retained typing (324 / 0)
+and installed-root guard (0 / 1) already prove **at least 994 unit / 1,246 module**,
+without charging any ordinary binding/adapter cases. The complete 626-function
+expansion and further genuine redundancy cleanup remain open; unknowns are not
+zero and this lower bound is not a total. E2E remains exactly **80**.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.

@@ -553,7 +553,10 @@ and all four new persistent slots with actual attachment/retirement/capture.
 Reuse existing diagnostics; do not create general fault-injection or quota systems.
 
 Run strict locked/offline workspace all-target Clippy, focused affected native
-tests and actual outside-source installed-wheel runtime/typing/stubtest. After
+tests and actual outside-source installed-wheel runtime/typing. The completed
+interface-delivery stubtest census retains its historical receipts; the current
+regression strategy and its explicit reflection retirement are owned by
+`90_DEVELOPMENT.md`, not an indefinitely repeated API metadata inventory. After
 the full interface is implemented, independently unpack/build/install its actual
 sdist, complete representative content and same-source cost observations, then
 deduplicate tests and certify the unchanged whole-repository budgets. Never update

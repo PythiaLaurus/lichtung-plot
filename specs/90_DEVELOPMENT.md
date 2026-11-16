@@ -233,6 +233,24 @@ marginal-matrix, output, rendering and statistics.
 Run one with cargo test --locked --offline -p lichtung-plot --test <target>.
 Add a target only for a distinct contract, not a chronological/catch-all/general suite.
 
+Python regression verification uses the installed wheel's real consumers and
+`just python-typing` with an explicitly selected `LICHTUNG_PYTHON`. The latter
+checks the three installed declaration modules and the maintained input, family,
+alpha, result and lifecycle fixtures under strict typing and unused-ignore errors.
+It neither installs packages nor falls back to checkout package imports.
+Keep exact-family returns, capability/overload boundaries and opaque callback
+types; avoid a second getter/copy inventory of every native value.
+
+The completed interface-delivery audit's recursive `mypy.stubtest` traversal is
+retired as a regression workflow, not reclassified as lint or narrowed by an
+allowlist. Its historical receipts remain evidence of that wheel only. Runtime
+consumers own extraction/default/None behavior, immutable snapshots, scientific
+results and callback/output lifetimes; static fixtures own type boundaries.
+This deliberately drops exhaustive class metadata, descriptor and per-member
+signature reflection. Do not claim that static typing proves runtime signatures
+or that descriptor inspection executes getters. A concrete signature/default
+regression should receive a bounded real consumer, not restore a whole-API mirror.
+
 Keep normal externally compiled library-to-file SVG/PNG tests and selected decoded
 pixel/format checks. They cannot all become private mocks. Retain a small internal
 lifecycle witness for invariants output equality cannot prove: source/operation
