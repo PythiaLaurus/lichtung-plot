@@ -59,6 +59,6 @@ cargo run --locked --offline -p lichtung-plot-ndarray --example strided_heatmap
 ```
 
 This package is not yet published. See the peer
-[English](../../docs/en/src/sections/ndarray.md) and
-[Chinese](../../docs/zh-CN/src/sections/ndarray.md) guides and the shared
-[adapter contract](../../specs/09_DATA_ADAPTERS.md).
+[English](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/en/src/sections/ndarray.md) and
+[Chinese](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/zh-CN/src/sections/ndarray.md) guides and the shared
+[adapter contract](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/09_DATA_ADAPTERS.md).

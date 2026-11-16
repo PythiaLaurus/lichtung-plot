@@ -87,6 +87,6 @@ cargo run --locked --offline -p lichtung-plot-polars --example grouped_observati
 ```
 
 This package is not yet published. See the peer
-[English](../../docs/en/src/sections/polars.md) and
-[Chinese](../../docs/zh-CN/src/sections/polars.md) guides and the shared
-[adapter contract](../../specs/09_DATA_ADAPTERS.md).
+[English](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/en/src/sections/polars.md) and
+[Chinese](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/zh-CN/src/sections/polars.md) guides and the shared
+[adapter contract](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/09_DATA_ADAPTERS.md).

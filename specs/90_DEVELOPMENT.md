@@ -17,7 +17,7 @@ the workspace rather than relying on default members:
 | just package | Verify explicitly selected renderer/ndarray/Polars archives from Cargo's independently unpacked staging directories; exclude the workspace-local Book command |
 | just python-build | Build the mixed Python package with selected, already-installed Python/maturin tools |
 | just python-test [args] | Test an installed wheel using the selected Python in isolated mode; accepts focused selections |
-| just python-sdist | Produce the Python source archive through its offline PEP 517 backend and derived-lock validation; independently unpacked build verification is separate |
+| just python-sdist [out] | Produce the Python source archive through its offline PEP 517 backend and derived-lock validation; defaults to target/python-sdist and never overwrites an archive; independently unpacked build verification is separate |
 | just book-check | Check peer tutorial anchors, image-to-code links, source includes and gallery metadata without rendering |
 | just gallery | Execute catalog examples once and assemble fresh outputs/grids for both editions |
 | just book | Assemble the gallery and invoke installed mdBook 0.5.4 for both single-page guides |
@@ -67,6 +67,13 @@ features and constraints when moving declarations. Publishable inter-member
 dependencies need a local path and a release version; independently unpacked
 packages must not require the checkout or unpublished registry substitutes.
 Dependency changes update Cargo.lock and run the complete verification gate.
+
+The three Rust libraries and Python member inherit `workspace.package.version`;
+Python's `project.dynamic = ["version"]` lets maturin use that Cargo version.
+Keep explicit inter-member registry version requirements aligned with it. The
+nonpublished Book command retains its independent development version. Product
+members inherit the public repository URL; Python declares registry-facing URLs
+and includes exact workspace license copies from `bindings/python/`.
 
 Distributable renderer/adapter libraries inherit the workspace's `publish =
 ["crates-io"]` metadata; workspace-local commands explicitly use `publish = false`.

@@ -1,9 +1,10 @@
 [package]
 name = "lichtung-plot-python"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Python owners for the native Lichtung scientific renderer"
 readme = "README.md"
 publish = false

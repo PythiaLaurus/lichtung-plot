@@ -1,9 +1,10 @@
 [package]
 name = "lichtung-plot-polars"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Direct scientific plotting from eager Polars fields and columns"
 documentation = "https://docs.rs/lichtung-plot-polars"
 readme = "README.md"

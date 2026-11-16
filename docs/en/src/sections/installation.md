@@ -5,8 +5,9 @@
 
 This development checkout uses Rust 1.96.0. The renderer is the default workspace
 member at `crates/lichtung-plot`; [ndarray](#ndarray) and [Polars](#polars) adapters
-are separate packages. The [Python binding](#python) is implemented, but has not
-been published to PyPI. Until a release is published, a neighboring Rust application
+are separate packages. The coordinated Rust/Python `0.1.0` release is in
+preparation; registry installation is not available yet. See `specs/95_RELEASE.md`
+for the release procedure. Until publication, a neighboring Rust application
 can use the actual member path:
 
 ```toml
@@ -22,6 +23,10 @@ with the compatible wheel you have built or received:
 ```sh
 python -m pip install --no-index --no-deps /absolute/path/to/lichtung_plot-0.1.0-cp310-abi3-linux_x86_64.whl
 ```
+
+The filename above illustrates a local Linux build, not a portable manylinux
+release or a promise of platform support. A compatible wheel needs no Rust
+compiler; source builds require Rust 1.96 and the documented build tools.
 
 This installs a local artifact, not a package fetched from PyPI. Native Python
 lists/tuples need no data provider. Install optional NumPy, pandas or eager Polars

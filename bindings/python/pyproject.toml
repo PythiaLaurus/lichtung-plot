@@ -8,17 +8,24 @@ backend-path = ["."]
 
 [project]
 name = "lichtung-plot"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Native scientific plots with reusable Python configuration owners"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Rust",
     "Typing :: Typed",
 ]
+
+[project.urls]
+Repository = "https://github.com/PythiaLaurus/lichtung-plot"
+Documentation = "https://github.com/PythiaLaurus/lichtung-plot/tree/main/docs"
+Issues = "https://github.com/PythiaLaurus/lichtung-plot/issues"
+Changelog = "https://github.com/PythiaLaurus/lichtung-plot/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 bindings = "pyo3"

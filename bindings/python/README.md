@@ -224,6 +224,8 @@ Use CPython 3.10 or newer, Rust 1.96 and already-installed maturin 1.16.0. From 
 workspace root, `just python-build` builds a wheel and `just python-sdist` assembles
 a source archive through the same package-local backend as PEP 517. Set
 `LICHTUNG_PYTHON` and `LICHTUNG_MATURIN` to select installed executables.
+Use `just python-sdist /absolute/path/to/fresh-output` to keep candidate archives
+separate; the default output is `target/python-sdist`.
 After installing the wheel into an isolated environment,
 `just python-test` runs that installation's tests. These recipes never install
 tools or download dependencies.
@@ -249,3 +251,18 @@ certification of other platforms, PyPy or free-threaded interpreters.
 Building a wheel from an independently unpacked sdist remains a required separate
 distribution check; an in-checkout build alone does not certify source completeness
 or platform support.
+
+## Release preparation
+
+Version `0.1.0` is in preparation, not announced as published on PyPI. Install a
+locally verified wheel matching your platform with
+`python -m pip install --no-index --no-deps /absolute/path/to/package.whl`.
+This needs no Rust compiler; building from source does. Optional data providers
+must already be installed when used.
+
+The product version is inherited from the workspace Cargo metadata; maturin
+supplies the Python version dynamically. The included `LICENSE-MIT` and
+`LICENSE-APACHE` are exact copies of the workspace license texts, declared through
+`project.license-files` for source and wheel distributions. The shared procedure
+in `specs/95_RELEASE.md` governs platform evidence, artifact hashes and separately
+approved uploads; the repository changelog records the intended release scope.

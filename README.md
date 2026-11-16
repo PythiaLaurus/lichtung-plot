@@ -65,4 +65,5 @@ See [development](specs/90_DEVELOPMENT.md) for verification scope and test limit
 The coordinated Rust/Python `0.1.0` release is being prepared, not announced as
 published. `specs/95_RELEASE.md` defines candidate verification, artifact/platform
 requirements, approval boundaries and the crates.io → PyPI → GitHub Release
-sequence. Local verification does not upload packages, push tags or deploy a site.
+sequence; `CHANGELOG.md` records the intended release scope. Local verification
+does not upload packages, push tags or deploy a site.

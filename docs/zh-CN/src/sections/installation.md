@@ -5,8 +5,8 @@
 
 当前开发仓库使用 Rust 1.96.0。绘图核心位于 `crates/lichtung-plot`，是工作区的默认
 成员。[ndarray 适配器](#ndarray)与 [Polars 适配器](#polars)位于独立包中。
-[Python 绑定](#python)已经实现，但尚未发布到 PyPI。在正式版本发布之前，相邻的 Rust
-应用可以引用实际成员路径：
+Rust／Python 协同版本 `0.1.0` 正在准备，暂不能从注册表安装。发布流程见
+`specs/95_RELEASE.md`。在正式发布之前，相邻的 Rust 应用可以引用实际成员路径：
 
 ```toml
 [dependencies]
@@ -20,6 +20,9 @@ Python 使用普通 CPython 3.10 或更新版本，并安装与操作系统、�
 ```sh
 python -m pip install --no-index --no-deps /absolute/path/to/lichtung_plot-0.1.0-cp310-abi3-linux_x86_64.whl
 ```
+
+上面的文件名仅示意本地 Linux 构建，不代表便携 manylinux 发行物或平台支持承诺。
+安装兼容 wheel 无需 Rust 编译器；从源码构建则需要 Rust 1.96 及文档规定的构建工具。
 
 这条命令安装本地产物，不从 PyPI 获取包。原生 Python list／tuple 无需数据提供库；
 使用 NumPy、pandas 或 eager Polars 时，再在同一环境中单独安装相应的可选依赖。
