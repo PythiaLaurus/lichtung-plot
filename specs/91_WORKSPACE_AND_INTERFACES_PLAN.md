@@ -77,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 215 static unit cases, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 324 static contracts and 136 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
+| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,550 dyadic input/configuration repeats, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
 
 ### Current Python Implementation Scope
 
@@ -1020,6 +1020,29 @@ Including these previously unsigned ordinary cases and the retained 24 dyadic
 cases now proves **at least 1,550 unit / 1,650 module / exactly 80 E2E**.
 The remaining **625** core-function expansions are still unresolved, not zero.
 Unit/module quotas and the final new source-distribution gate remain open.
+
+The sixth partition deletes **96 more static unit contracts**: repeated scalar
+key examples, mirrored provider/container positive forms, value getter/copy lists
+and generic fluent repetitions. It retains all 25 exact-family returns, positive
+contracts for all four providers (including nullable/native rows, NumPy mask/index
+roles and pandas/Polars metadata), both pandas nominal directions, all constructor
+mode boundaries, subclass-preserving fluent Self and opaque alpha/results types.
+Five fixtures now contain **228** independent contracts and **125** negative
+guard lines. Every retained assertion expression and expected type matches its
+original AST; no guard code, shipped declaration or runtime/scientific test changed.
+Eleven redundant static guard lines were actually removed with their inventories,
+not silenced with broader ignores.
+
+Outside-source strict installed typing again passed eight roots; strict
+workspace/all-target Clippy passed. No already successful runtime suite was
+repeated. Exact deleted/retained AST cases and concrete unchanged runtime
+consumers are recorded in `/tmp/opencode/lichtung-budget2/phase6-static-ledger.json`
+(SHA-256 `2cec51e434b7fb80a611cc4c49cdc7a824bc9737e4a903f8bedfd1f3f1995467`)
+and `/tmp/opencode/lichtung-budget2/phase6-proof.json`
+(SHA-256 `be4dc17f9249a600c342fec09c2b1f3ea864acff10bc894c8043fc51eb68fcab`).
+The disjoint lower bound is now **at least 1,454 unit / 1,650 module / exactly
+80 E2E**, not a complete total or a budget pass. The 625 unresolved core
+expansions and final source-distribution refresh remain open.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.

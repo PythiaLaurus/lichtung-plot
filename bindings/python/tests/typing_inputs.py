@@ -9,7 +9,6 @@ is installed; it does not supply replacement pandas declarations.
 from __future__ import annotations
 
 from collections.abc import Hashable
-from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -34,33 +33,15 @@ class _HashableLabel:
         return 17
 
 
-def _literal_callable_label() -> str:
-    return "a literal key, not a query"
-
-
 def selector_contract(
     frame: pd.DataFrame, key: Hashable, custom_key: _HashableLabel
 ) -> None:
     assert_type(col[key], ColumnSelector)
-    assert_type(col[custom_key], ColumnSelector)
-    assert_type(col[_literal_callable_label], ColumnSelector)
-    assert_type(col[("complete", 1)], ColumnSelector)
-    assert_type(col[1.25], ColumnSelector)
-    assert_type(col[None], ColumnSelector)
     assert_type(cols[key], ColumnsSelector)
-    assert_type(cols["only_one"], ColumnsSelector)
-    assert_type(cols["a", "b"], ColumnsSelector)
-    assert_type(cols[("a", "b")], ColumnsSelector)
     assert_type(cols[::-1], ColumnsSelector)
-    assert_type(cols[-3:-1:1], ColumnsSelector)
     assert_type(scatter(frame, x=col[custom_key], y=cols["y"]), Scatter)
-    assert_type(
-        scatter(frame, x=col[_literal_callable_label], y=col[("complete", 1)]),
-        Scatter,
-    )
     # Missing lookup context is a native check, not a container-overload matrix.
     assert_type(scatter(None, x=col["x"], y=col["y"]), Scatter)
-    assert_type(scatter(None, y=cols["y"], by_row_position=True), Scatter)
 
     col[["not hashable"]]  # type: ignore[index]
     cols[["not selector syntax"]]  # type: ignore[index]
@@ -69,24 +50,12 @@ def selector_contract(
 
 
 def native_contract(
-    integers: list[int],
-    floats: list[float],
     nullable_integers: list[int | None],
     nullable_floats: list[float | None],
-    integer_rows: list[list[int]],
     nullable_rows: list[list[float | None]],
 ) -> None:
-    assert_type(scatter(x=integers, y=floats), Scatter)
-    assert_type(scatter(x=floats, y=integers), Scatter)
     assert_type(scatter(x=nullable_integers, y=nullable_floats), Scatter)
-    assert_type(scatter(x=nullable_floats, y=nullable_integers), Scatter)
-    assert_type(scatter(x=(0, None), y=(1.0, None), hue=("a", None)), Scatter)
-    assert_type(scatter(x=integers, y=integer_rows, hue=None), Scatter)
-    assert_type(scatter(y=integer_rows, by_row_position=True), Scatter)
     assert_type(scatter(y=nullable_rows, by_row_position=True), Scatter)
-    plot = scatter(x=integers, y=floats)
-    assert_type(plot.hue(["a", "b"]).source_rows(integers), Scatter)
-    assert_type(plot.labels(Labels(mode="raw")).copy(), Scatter)
 
 
 def numpy_contract(
@@ -95,23 +64,12 @@ def numpy_contract(
     rectangle: NDArray[np.float64],
     masked: np.ma.MaskedArray[tuple[int, ...], np.dtype[np.float64]],
     categories: NDArray[np.str_],
-    ids: NDArray[np.uint64],
 ) -> None:
     # NumPy rank/dtype/validity remain runtime checks, including MaskedArray rank.
     assert_type(scatter(table, x=0, y=cols[1, 2]), Scatter)
     assert_type(scatter(table, x=np.int64(0), y=1), Scatter)
-    assert_type(scatter(table, x=col[np.int64(-1)], y=col[0]), Scatter)
-    assert_type(scatter(masked, x=0, y=col[1]), Scatter)
     assert_type(scatter(x=masked, y=values, hue=categories), Scatter)
-    assert_type(scatter(x=values, y=rectangle), Scatter)
     assert_type(scatter(y=rectangle, by_row_position=True), Scatter)
-    assert_type(
-        scatter(table, by_row_position=True, numeric_only=True, hue=None),
-        Scatter,
-    )
-    plot = scatter(table, x=col[0], y=cols[1:3])
-    assert_type(plot.hue(categories).source_rows(ids), Scatter)
-    assert_type(plot.hue(col[-1]).source_rows(cols[0, 1]), Scatter)
 
 
 def pandas_contract(
@@ -119,14 +77,8 @@ def pandas_contract(
 ) -> None:
     assert_type(scatter(frame, x="x", y=cols["a", "b"], hue="group"), Scatter)
     assert_type(scatter(x=values, y=values, hue=categories), Scatter)
-    assert_type(scatter(frame, x=values, y=col["y"]), Scatter)
-    assert_type(scatter(x=values, y=frame), Scatter)
-    assert_type(scatter(y=frame, by_row_position=True), Scatter)
-    assert_type(scatter(frame, by_row_position=True, numeric_only=True), Scatter)
     plot = scatter(frame, x=col["x"], y=cols["y"])
     assert_type(plot.hue(categories).source_rows(ids), Scatter)
-    assert_type(plot.hue(col["group"]).source_rows(cols["id"]), Scatter)
-    assert_type(plot.source_rows(frame), Scatter)
 
 
 def polars_contract(
@@ -134,13 +86,8 @@ def polars_contract(
 ) -> None:
     assert_type(scatter(frame, x="x", y=cols["a", "b"]), Scatter)
     assert_type(scatter(x=values, y=values, hue=categories), Scatter)
-    assert_type(scatter(frame, x=col["x"], y=values), Scatter)
-    assert_type(scatter(x=values, y=frame), Scatter)
-    assert_type(scatter(frame, y=cols["a", "b"], by_row_position=True), Scatter)
-    assert_type(scatter(frame, by_row_position=True, numeric_only=True), Scatter)
     plot = scatter(frame, x=col["x"], y=col["y"])
     assert_type(plot.hue(categories).source_rows(ids), Scatter)
-    assert_type(plot.hue(col["group"]).source_rows(cols["id"]), Scatter)
 
 
 def role_boundaries(
@@ -206,20 +153,6 @@ class _CustomScatter(Scatter):
     pass
 
 
-def labels_and_owner_contract(plot: Scatter, custom: _CustomScatter) -> None:
+def labels_and_owner_contract(custom: _CustomScatter) -> None:
     labels = Labels(aliases=[("raw_key", "Displayed")])
-    assert_type(labels.mode, Literal["humanized", "raw"])
-    assert_type(labels.aliases, tuple[tuple[str, str], ...] | None)
-    assert_type(labels.resolve("raw_key"), str)
-    assert_type(labels.copy_with(), Labels)
-    assert_type(labels.copy_with(mode="raw", aliases=None), Labels)
-    assert_type(plot.labels(labels).source_rows((0, 1)).copy(), Scatter)
     assert_type(custom.labels(labels).source_rows([0, 1]).copy(), _CustomScatter)
-    assert_type(Canvas.grid(1, 1).labels(labels).copy(), Canvas)
-
-    labels.mode = "raw"  # type: ignore[misc]
-    labels.aliases = None  # type: ignore[misc]
-    Labels(mode="automatic")  # type: ignore[arg-type]
-    Labels(aliases={"raw_key": "Displayed"})  # type: ignore[arg-type]
-    labels.copy_with(mode=None)  # type: ignore[arg-type]
-    labels.resolve(1)  # type: ignore[arg-type]

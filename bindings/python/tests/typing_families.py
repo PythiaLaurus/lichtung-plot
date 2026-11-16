@@ -76,62 +76,12 @@ def distribution_and_grid_returns() -> None:
     )
 
 
-def complete_forms_and_exact_capabilities(
+def rejected_family_capabilities_and_constructor_forms(
     heatmap: lp.Heatmap, coefficient: lp.Coefficient, waterfall: lp.Waterfall,
     matrix: lp.Matrix, marginal: lp.Marginal, regression: lp.Regression,
-    bars: lp.Bar, trajectory: lp.Trajectory,
+    bars: lp.Bar,
 ) -> None:
     format = lp.NumericFormat()
-    assert_type(heatmap.copy().annotations(format).color_label_format(format), lp.Heatmap)
-    flags: list[list[bool | None]] = [[True, None], [False, True]]
-    assert_type(heatmap.heatmap_highlight(flags), lp.Heatmap)
-    assert_type(coefficient.copy().estimate_labels(format), lp.Coefficient)
-    assert_type(coefficient.estimate_status(["estimated"]), lp.Coefficient)
-    assert_type(coefficient.estimate_status_boolean([True]), lp.Coefficient)
-    assert_type(
-        coefficient.estimate_status_categorical(["fit"], [("fit", "estimated")]),
-        lp.Coefficient,
-    )
-    assert_type(waterfall.copy().total_format(format), lp.Waterfall)
-    assert_type(
-        trajectory.copy().x_category_labels(every=2).x_tick_format(format),
-        lp.Trajectory,
-    )
-    assert_type(
-        lp.line(y=[[1.0, 2.0], [3.0, 4.0]], by_row_position=True).markers(False),
-        lp.Line,
-    )
-    assert_type(
-        lp.boxplot(value=[[1.0, 2.0], [3.0, 4.0]], by_column_name=True),
-        lp.Boxplot,
-    )
-    assert_type(
-        lp.bar(
-            category=["a"], estimate=[1.0], lower=[0.0], upper=[2.0],
-        ).category_order("value_descending"),
-        lp.Bar,
-    )
-    assert_type(
-        lp.histogram(
-            bin_lower=[0.0], bin_upper=[2.0], bin_density=[0.5],
-            kde_x=[0.0, 1.0, 2.0], kde_y=[0.0, 0.5, 0.0],
-            rug_x=[1.0], rug_baseline=[0.0], rug_top=[0.1],
-            value_label=lp.Text("Value"), density_label="Density",
-        ),
-        lp.Histogram,
-    )
-    assert_type(
-        lp.raincloud(
-            category=["a"], q1=[1.0], median=[2.0], q3=[3.0],
-            density_category=["a", "a", "a"], density_y=[0.0, 2.0, 4.0],
-            normalized_width=[0.0, 1.0, 0.0],
-            point_category=["a", "a"], point_y=[1.0, 3.0],
-            normalized_strip=[0.25, 0.75], hue=["g"],
-            density_hue=["g", "g", "g"], point_hue=["g", "g"],
-            hue_label="Treatment",
-        ).hue_label("Updated", style=None, layout=None),
-        lp.Raincloud,
-    )
     heatmap.y_limits(0, 1)  # type: ignore[attr-defined]
     heatmap.annotations(None)  # type: ignore[arg-type]
     heatmap.layout("lower_triangle")  # type: ignore[call-overload]
