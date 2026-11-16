@@ -1091,6 +1091,25 @@ Closing their previously unresolved expansion gives the current disjoint bound
 expansions still open. Unit/module ceilings and the final new distribution gate
 remain unsigned.
 
+A subsequent source-only census closes another **35 unchanged core functions**:
+their complete responsibility is **48 unit / 25 module**, replacing lower bounds
+of 22 / 13. The expansion includes independent raw category identity operands,
+continuous-guide clearance cases, Raincloud validation order, font operation/
+discovery/parser boundaries, pinned Unicode checks, supplied-geometry validation
+and equality, and typed feedback/error relationships. Reference-parser comparison
+legs and same-input clone phases are not extra configurations. The isolated
+selection-unit calculation and its three real font-operation cases are separately
+charged; no module case was relabeled as a unit saving.
+
+All 35 function bodies still match their original source hashes. No source,
+Unicode asset, dependency pin or test changed, and this read-only census did not
+run behavior/platform tests. Full source and per-case identities are in
+`/tmp/opencode/lichtung-budget2/short-core1-ledger.json`,
+SHA-256 `685ff20f9ba0da5796c4d28814eace3a097915648a294d11a907050e7a457d73`.
+The disjoint lower bound is **at least 1,610 unit / 1,676 module / exactly 80 E2E**;
+**582** core-function expansions remain unresolved. This is still not an upper
+bound or a quota certificate.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Reviewed test deduplication is verified within its stated scope. Unchanged budget
