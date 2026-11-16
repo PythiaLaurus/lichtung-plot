@@ -16,6 +16,7 @@ env:
   RUSTUP_TOOLCHAIN: "1.96.0"
   LICHTUNG_PYTHON: python
   LICHTUNG_MATURIN: maturin
+  MATURIN_NO_INSTALL_RUST: "1"
   UV_PYTHON_DOWNLOADS: never
 
 defaults:
@@ -36,12 +37,28 @@ jobs:
           architecture: x64
       - name: Prepare explicit build tools and Cargo cache
         run: |
-          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy --component rust-docs
           cargo install just --version 1.56.0 --locked
           python -m pip install --only-binary=:all: uv==0.9.28 maturin==1.16.0 twine==6.2.0
           cargo fetch --locked
+          python - <<'PY'
+          import hashlib, io, os, pathlib, tarfile, urllib.request
+          url = "https://github.com/EmbarkStudios/cargo-about/releases/download/0.9.3/cargo-about-0.9.3-x86_64-unknown-linux-musl.tar.gz"
+          with urllib.request.urlopen(url, timeout=120) as response:
+              data = response.read()
+          assert hashlib.sha256(data).hexdigest() == "3ad1e94ea1e63d69d1961f4fb15ccbbe9575d906111f96d2cb4dce6df48f71b4"
+          target = pathlib.Path(os.environ["RUNNER_TEMP"]) / "tools/cargo-about"
+          target.parent.mkdir(parents=True, exist_ok=True)
+          with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+              member, = [m for m in archive if m.isfile() and pathlib.PurePosixPath(m.name).name == "cargo-about"]
+              target.write_bytes(archive.extractfile(member).read())
+          target.chmod(0o755)
+          PY
       - name: Verify source and all three Rust archives
-        run: just fmt-check lint book-check package
+        run: |
+          just fmt-check lint book-check
+          LICHTUNG_CARGO_ABOUT="$RUNNER_TEMP/tools/cargo-about" just python-notices
+          CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-package" just package
       - name: Produce and inspect the single shared sdist
         env:
           SOURCE: ${{ runner.temp }}/source-artifacts
@@ -58,7 +75,8 @@ jobs:
           metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1"]))
           for name in ("lichtung-plot", "lichtung-plot-ndarray", "lichtung-plot-polars"):
               package = next(p for p in metadata["packages"] if p["name"] == name)
-              shutil.copyfile(pathlib.Path("target/package") / f"{name}-{package['version']}.crate", root / f"{name}-{package['version']}.crate")
+              archive = pathlib.Path(os.environ["RUNNER_TEMP"]) / "cargo-package/package" / f"{name}-{package['version']}.crate"
+              shutil.copyfile(archive, root / archive.name)
           (root / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(root.iterdir()) if path.is_file()))
           PY
           git diff --exit-code
@@ -79,18 +97,24 @@ jobs:
             target: x86_64-pc-windows-msvc
             architecture: x64
             machine: amd64
+            cpu: x86-64
+            jobs: 2
             tag: win_amd64
             executable: Scripts/python.exe
           - runner: macos-15
             target: aarch64-apple-darwin
             architecture: arm64
             machine: arm64
+            cpu: apple-m1
+            jobs: 1
             tag: macosx_15_0_arm64
             executable: bin/python
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
+      RUSTFLAGS: -C target-cpu=${{ matrix.cpu }}
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,13 +192,13 @@ jobs:
             "$executable" -I -B -m pytest -q -p no:cacheprovider bindings/python/tests/test_lifecycle.py
             uv pip install --only-binary=:all: --python "$executable" numpy==2.2.6 "pandas==$pandas" polars==1.41.2 polars-runtime-32==1.41.2
             just python-test --import-mode=importlib -p no:cacheprovider --junitxml="$OUTPUT/runtime-$version.xml"
-            uv pip freeze --python "$executable" > "$OUTPUT/environment-$version.txt"
             if [[ "$version" == 3.13.* ]]; then
               uv pip install --only-binary=:all: --python "$executable" mypy==1.20.2
               just python-typing
               "$executable" -I -B bindings/python/examples/four_inputs.py "$OUTPUT/examples"
               "$executable" -I -B bindings/python/examples/complete_appearance.py "$OUTPUT/examples"
             fi
+            uv pip freeze --python "$executable" > "$OUTPUT/environment-$version.txt"
           done
           python - <<'PY'
           import os, pathlib, xml.etree.ElementTree as ET
@@ -273,6 +297,10 @@ jobs:
           subprocess.run([python, "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", str(root / "tests/test_lifecycle.py")], env=env, check=True)
           subprocess.run([*pip, "numpy==2.2.6", "pandas==2.3.3", "polars==1.41.2", "polars-runtime-32==1.41.2"], env=env, check=True)
           subprocess.run([python, "-I", "-B", "-m", "pytest", "-q", "--import-mode=importlib", "-p", "no:cacheprovider", str(root / "tests"), "--junitxml=/work/output/runtime-3.10.xml"], env=env, check=True)
+          freeze = subprocess.check_output([python, "-I", "-B", "-m", "pip", "freeze", "--all"], env=env, text=True)
+          (work / "output/environment-3.10.txt").write_text(freeze)
+          build = "\n".join(subprocess.check_output(command, env=env, text=True) for command in (["rustc", "-vV"], ["gcc", "--version"], ["uv", "--version"], ["auditwheel", "--version"]))
+          (work / "output/build-environment.txt").write_text(sys.version + "\n" + build)
           PY
       - name: Inspect wheel and run newer CPython acceptance
         run: |

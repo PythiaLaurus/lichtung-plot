@@ -265,6 +265,12 @@ supplies the Python version dynamically. The included `LICENSE-MIT` and
 support requires independent verification; uploads require separate approval.
 The repository `CHANGELOG.md` records the intended release scope and current limits.
 
+Distributions also carry `licenses/THIRD-PARTY-NOTICES.txt` and
+`licenses/RUST-LIBRARY-LICENSE.html`. These retain upstream dependency copyrights,
+license terms and Rust standard-library notices; they do not relicense those
+components under the project's own license. They are static distribution inputs,
+not an installation-time downloader or another runtime dependency.
+
 The manually triggered `.github/workflows/artifact-acceptance.yml` builds one
 shared sdist and verifies wheels on fixed manylinux, native Windows x86_64 and
 native macOS arm64 runners. It only retains candidate artifacts and evidence;

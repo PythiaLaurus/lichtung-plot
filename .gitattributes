@@ -1,1 +1,3 @@
 * text=auto eol=lf
+# Preserve the official Rust library notice verbatim, including upstream spaces.
+bindings/python/licenses/RUST-LIBRARY-LICENSE.html whitespace=-blank-at-eol

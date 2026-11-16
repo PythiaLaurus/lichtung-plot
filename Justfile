@@ -2,6 +2,7 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 python := env_var_or_default("LICHTUNG_PYTHON", "python3")
 maturin := env_var_or_default("LICHTUNG_MATURIN", "maturin")
+cargo_about := env_var_or_default("LICHTUNG_CARGO_ABOUT", "cargo-about")
 
 # Format Rust sources.
 fmt:
@@ -54,6 +55,10 @@ python-sdist out="target/python-sdist":
 # Inspect an actual archive against this checkout; never install or rebuild it.
 python-artifact archive platform="" output="-":
     "{{python}}" -I -B bindings/python/check_artifact.py "{{archive}}" --platform "{{platform}}" --output "{{output}}"
+
+# Offline maintainer-only notice verification; --write explicitly regenerates.
+python-notices *args:
+    "{{python}}" -I -B bindings/python/third_party.py --cargo-about "{{cargo_about}}" {{args}}
 
 # Check peer tutorial anchors, image-to-code links and executable source includes.
 book-check:

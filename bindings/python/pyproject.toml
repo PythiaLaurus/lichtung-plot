@@ -13,7 +13,7 @@ description = "Native scientific plots with reusable Python configuration owners
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT OR Apache-2.0"
-license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+license-files = ["LICENSE-MIT", "LICENSE-APACHE", "licenses/THIRD-PARTY-NOTICES.txt", "licenses/RUST-LIBRARY-LICENSE.html"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",

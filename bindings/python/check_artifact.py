@@ -6,6 +6,7 @@ import argparse
 import base64
 import csv
 from email.parser import BytesParser
+from email.policy import default
 import hashlib
 from io import StringIO
 import json
@@ -80,6 +81,31 @@ def inspect(path: Path, project: Path, platform: str) -> dict:
         for match in matches:
             require(match.is_file() and not match.is_symlink(), f"invalid license file: {match}")
             licenses[match.relative_to(project).as_posix()] = match.read_bytes()
+    notice_name = "licenses/THIRD-PARTY-NOTICES.txt"
+    if notice_name in licenses:
+        notice = licenses[notice_name].decode()
+        lock_digest = hashlib.sha256((workspace / "Cargo.lock").read_bytes()).hexdigest()
+        channel = tomllib.loads((workspace / "rust-toolchain.toml").read_text())[
+            "toolchain"
+        ]["channel"]
+        rust_digest = hashlib.sha256(licenses["licenses/RUST-LIBRARY-LICENSE.html"]).hexdigest()
+        manifests = [
+            "Cargo.toml", "bindings/python/Cargo.toml",
+            "crates/lichtung-plot/Cargo.toml", "crates/lichtung-plot-ndarray/Cargo.toml",
+            "crates/lichtung-plot-polars/Cargo.toml",
+        ]
+        manifest_digest = hashlib.sha256(b"".join(
+            name.encode() + b"\0" + (workspace / name).read_bytes()
+            for name in sorted(manifests)
+        )).hexdigest()
+        for line in (
+            f"Cargo.lock SHA256: {lock_digest}", f"Rust toolchain: {channel}",
+            f"Cargo manifests SHA256: {manifest_digest}",
+            f"Rust library notice SHA256: {rust_digest}",
+            f"Notice policy SHA256: {hashlib.sha256((project / 'about.toml').read_bytes()).hexdigest()}",
+            f"Notice generator SHA256: {hashlib.sha256((project / 'third_party.py').read_bytes()).hexdigest()}",
+        ):
+            require(line in notice.splitlines()[:10], f"stale third-party notice: {line}")
     files = contents(path)
     wheel = path.suffix == ".whl"
     if wheel:
@@ -88,7 +114,7 @@ def inspect(path: Path, project: Path, platform: str) -> dict:
         metadata_name = f"{info_root}/METADATA"
         license_prefix = f"{info_root}/licenses/"
         package_prefix = "lichtung_plot/"
-        tags = BytesParser().parsebytes(files[f"{info_root}/WHEEL"])
+        tags = BytesParser(policy=default).parsebytes(files[f"{info_root}/WHEEL"])
         require(tags.get_all("Tag") == [f"cp310-abi3-{platform}"], "unexpected wheel tag")
         require(tags["Root-Is-Purelib"] == "false", "native wheel marked as pure Python")
         records = list(csv.reader(StringIO(files[f"{info_root}/RECORD"].decode())))
@@ -119,14 +145,14 @@ def inspect(path: Path, project: Path, platform: str) -> dict:
         metadata_name, license_prefix, package_prefix = "PKG-INFO", "", "python/lichtung_plot/"
         for name in ("Cargo.toml", "Cargo.lock", "bindings/python/Cargo.toml", "_build_backend.py"):
             require(name in files, f"missing source input: {name}")
-    info = BytesParser().parsebytes(files[metadata_name])
+    info = BytesParser(policy=default).parsebytes(files[metadata_name])
     for key, expected in (
         ("Name", config["name"]), ("Version", version),
         ("Requires-Python", config["requires-python"]), ("License-Expression", config["license"]),
     ):
         require(info[key] == expected, f"unexpected {key}: {info[key]}")
     require(info.get_all("Requires-Dist") is None, "optional providers became runtime dependencies")
-    declared = info.get_all("License-File", [])
+    declared = [str(value).strip() for value in info.get_all("License-File", [])]
     require(
         len(declared) == len(licenses) and set(declared) == licenses.keys(),
         "License-File differs from source",
@@ -140,7 +166,10 @@ def inspect(path: Path, project: Path, platform: str) -> dict:
             f"Python payload differs: {name}",
         )
     urls = {f"{name}, {url}" for name, url in config["urls"].items()}
-    require(set(info.get_all("Project-URL", [])) == urls, "project URLs differ")
+    require(
+        {str(value).strip() for value in info.get_all("Project-URL", [])} == urls,
+        "project URLs differ",
+    )
     description = files[metadata_name].replace(b"\r\n", b"\n").split(b"\n\n", 1)[1]
     require(
         description.rstrip(b"\n")

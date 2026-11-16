@@ -1,0 +1,4 @@
+# Notice harvesting only; this configuration is not a product build dependency.
+accepted = ["Zlib", "MIT", "Apache-2.0", "Unicode-3.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "0BSD", "Apache-2.0 WITH LLVM-exception"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
+ignore-dev-dependencies = true
