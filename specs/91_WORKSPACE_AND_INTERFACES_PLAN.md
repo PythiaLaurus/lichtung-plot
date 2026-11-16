@@ -77,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,550 dyadic input/configuration repeats, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
+| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,612 numeric input/configuration repeats, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
 
 ### Current Python Implementation Scope
 
@@ -1043,6 +1043,32 @@ and `/tmp/opencode/lichtung-budget2/phase6-proof.json`
 The disjoint lower bound is now **at least 1,454 unit / 1,650 module / exactly
 80 E2E**, not a complete total or a budget pass. The 625 unresolved core
 expansions and final source-distribution refresh remain open.
+
+The seventh partition removes **62** arbitrary exponent/scale combinations from
+the independent power range-reduction certificate: **96 become 34**, counted
+individually. All twelve binary64 magnitude inputs and both signs remain. Tiny
+and huge exponents keep scale -324/+324, and the large exact integer keeps the
+unit shift that binary64 addition would lose. The independent 1074-bit rational
+oracle, full dyadic remainder checks, literal postchecks and every other power
+vector/helper remain byte-identical. Four focused reduction/directed/integral/
+fractional certificate functions, formatting and strict Clippy passed.
+The actual retained input/fraction records and subset proof are in
+`/tmp/opencode/lichtung-budget2/phase7-proof.json`,
+SHA-256 `137767991e8d100cc5a0104efd0cbcd6519670f1f70a63568ddda22a5ea8142e`.
+
+The six power-certificate functions now have a complete source-derived ledger of
+**136 unit cases**, including all literal vectors, configured oracle precisions
+and actual representation refusals. Sequential refinement stages and fresh/warm
+comparison legs for the same input are not invented independent configurations.
+Only four of these six functions were executed in this partition; the other two
+are unchanged counted source, not a claimed new run. The ledger is
+`/tmp/opencode/lichtung-budget2/power-ledger.json`,
+SHA-256 `a8bf9a836db514c75948a29cb92587385d36b1805f5181831dd9c9774fc5f2b5`.
+This expands a formerly unresolved six-function lower bound; its newly counted
+existing cases are not new tests. The current disjoint bound is **at least 1,584
+unit / 1,650 module / exactly 80 E2E**, with **619** core functions still requiring
+exact expansion. Neither unit/module quota nor current source-distribution
+acceptance is signed.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.

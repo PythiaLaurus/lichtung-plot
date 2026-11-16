@@ -91,19 +91,23 @@ fn exact_exponent_reduction_retains_scaled_floor_and_full_dyadic_remainders() {
     // an integer multiple of 2^-1074. This oracle never reduces a denominator or
     // relies on signed truncating division for the expected floor.
     let unit = BigInt::from(1_u8) << 1074_usize;
-    for bits in [
-        0,
-        1,
-        2,
-        0x000f_ffff_ffff_ffff,
-        0x0010_0000_0000_0000,
-        0x3fd0_0000_0000_0000,
-        0x3fe0_0000_0000_0000,
-        0x3fef_ffff_ffff_ffff,
-        0x3ff0_0000_0000_0000,
-        0x4073_4800_0000_0000,
-        0x43b0_0000_0000_0000,
-        0x7fef_ffff_ffff_ffff,
+    // Exercise each binary64 magnitude class with both signs. Scale extremes
+    // belong to the tiny/huge boundaries; the large exact integer also needs the
+    // unit shift that binary64 addition would lose. Do not cross every scale
+    // with every already represented magnitude.
+    for (bits, scales) in [
+        (0, &[0_i16][..]),
+        (1, &[-324, 0, 324]),
+        (2, &[0]),
+        (0x000f_ffff_ffff_ffff, &[0]),
+        (0x0010_0000_0000_0000, &[0]),
+        (0x3fd0_0000_0000_0000, &[0]),
+        (0x3fe0_0000_0000_0000, &[0]),
+        (0x3fef_ffff_ffff_ffff, &[0]),
+        (0x3ff0_0000_0000_0000, &[0]),
+        (0x4073_4800_0000_0000, &[0]),
+        (0x43b0_0000_0000_0000, &[0, 1]),
+        (0x7fef_ffff_ffff_ffff, &[-324, 0, 324]),
     ] {
         for bits in [bits, bits | (1_u64 << 63)] {
             let stored = (bits >> 52) & 0x7ff;
@@ -121,7 +125,7 @@ fn exact_exponent_reduction_retains_scaled_floor_and_full_dyadic_remainders() {
                 },
                 magnitude,
             );
-            for scale in [-324, 0, 1, 324] {
+            for &scale in scales {
                 let operand = Log10Operand::new(f64::from_bits(bits), scale).unwrap();
                 let scaled = &numerator + &unit * scale;
                 let remainder = BigInt::from(operand.fraction.clone())
