@@ -27,4 +27,4 @@ entry does not announce publication.
 - Callers install fonts covering their visible text. The renderer never downloads
   fonts or assets and does not perform application inferential analysis.
 
-See `specs/95_RELEASE.md` for artifact verification and publication requirements.
+Local build results do not certify unverified platforms or authorize publication.

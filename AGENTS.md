@@ -35,7 +35,7 @@ Use `foo.rs` and `foo/` module layouts, not `mod.rs`. Expose modules publicly on
 
 Run focused tests covering changed behavior and affected callers. Expand coverage only when justified by concrete failures or cross-cutting invariants. Do not run full test suites routinely.
 
-Test semantic contracts rather than incidental rendering details. Avoid snapshot or golden updates that merely accept changed output. See `specs/90_DEVELOPMENT.md` for detailed testing conventions.
+Test semantic contracts rather than incidental rendering details. Avoid snapshot or golden updates that merely accept changed output.
 
 For code changes, run `cargo clippy --locked --offline --workspace --all-targets -- -D warnings` or `just lint`. Do not substitute `cargo check`. Documentation-only changes do not require tests.
 

@@ -14,10 +14,10 @@ This is a usage guide, not another method matrix. For exact overloads and immuta
 value fields, inspect the installed `lichtung_plot/__init__.py`,
 `lichtung_plot/_owners.py` and `lichtung_plot/_native.pyi`, or the corresponding
 files under `bindings/python/python/lichtung_plot/`. The maintained
-`bindings/python/README.md` explains input and lifecycle rules. Shared contracts
-remain in `specs/92_PYTHON_CONSTRUCTORS_PLAN.md` and
-`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`; the workspace plan records bounded
-verification and remaining acceptance work.
+`bindings/python/README.md` explains input and lifecycle rules. Native scientific
+and rendering semantics remain in `specs/02_RENDERING_CONTRACT.md`, and Rust
+adapter behavior is defined in `specs/09_DATA_ADAPTERS.md`. Python-specific call
+forms are defined by the shipped declarations above.
 
 ### Select variables without inventing a data language
 

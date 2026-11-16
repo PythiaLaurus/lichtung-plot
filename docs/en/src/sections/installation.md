@@ -6,9 +6,8 @@
 This development checkout uses Rust 1.96.0. The renderer is the default workspace
 member at `crates/lichtung-plot`; [ndarray](#ndarray) and [Polars](#polars) adapters
 are separate packages. The coordinated Rust/Python `0.1.0` release is in
-preparation; registry installation is not available yet. See `specs/95_RELEASE.md`
-for the release procedure. Until publication, a neighboring Rust application
-can use the actual member path:
+preparation; registry installation is not available yet. Until publication, a
+neighboring Rust application can use the actual member path:
 
 ```toml
 [dependencies]
@@ -32,8 +31,8 @@ This installs a local artifact, not a package fetched from PyPI. Native Python
 lists/tuples need no data provider. Install optional NumPy, pandas or eager Polars
 separately in that environment when using them. The current Polars bridge requires
 `polars==1.41.2` and `polars-runtime-32==1.41.2`, not PyArrow. Build recipes and
-sampled provider versions are recorded in `bindings/python/README.md` and the shared
-workspace specifications; neither the renderer nor the gallery installs dependencies.
+provider requirements are described in `bindings/python/README.md`;
+neither the renderer nor the gallery installs dependencies.
 
 No renderer initialization is needed. Install suitable system fonts before
 rendering; the library never downloads them. The default ordered stack is Noto

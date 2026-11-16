@@ -12,8 +12,9 @@ Bar 也不会获得 Line 的图层图例。在普通 CPython 3.10 或更新版�
 `lichtung_plot/__init__.py`、`lichtung_plot/_owners.py` 和 `lichtung_plot/_native.pyi`，
 或仓库中 `bindings/python/python/lichtung_plot/` 下的对应文件。
 持续维护的 `bindings/python/README.md` 解释输入与生命周期。
-共享契约仍以 `specs/92_PYTHON_CONSTRUCTORS_PLAN.md`、
-`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md` 为准；工作区计划另记有界验证与剩余验收工作。
+原生科学与渲染语义以 `specs/02_RENDERING_CONTRACT.md` 为准，
+Rust 适配器行为由 `specs/09_DATA_ADAPTERS.md` 定义。
+Python 特有调用形式以上述随包交付的类型声明为准。
 
 ### 选择变量，不另造数据语言
 

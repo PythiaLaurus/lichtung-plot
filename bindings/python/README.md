@@ -3,8 +3,7 @@
 This package provides all 25 plot families from native Python, NumPy, pandas and
 eager Polars inputs, with exact-family configuration and the reusable
 Plot/Canvas/Output lifecycle, complete native alpha scopes, independent point
-layers and caller-supplied significance results. Remaining distribution, content
-and cost verification is tracked in the shared workspace plan.
+layers and caller-supplied significance results.
 
 ```python
 from lichtung_plot import Canvas, Text, Theme, scatter
@@ -59,14 +58,14 @@ inside foreign non-GC-traversed storage collectable.
 
 Input providers are optional and imported only when used. The current eager
 Polars bridge requires `polars==1.41.2` with `polars-runtime-32==1.41.2`, using its
-public Arrow C stream without PyArrow. The sampled NumPy/pandas compatibility
-matrix and remaining distribution scope are recorded in the shared plan.
+public Arrow C stream without PyArrow. Other provider/platform combinations
+require their own compatibility verification.
 `examples/four_inputs.py` demonstrates all four routes.
 
-All constructor forms, including supplied estimates, flat Histogram/Raincloud
-geometry, wide/grid inputs and explicit discovery, follow
-`specs/92_PYTHON_CONSTRUCTORS_PLAN.md`. Applicable families expose data-channel and
-facet edits without refreshing earlier snapshots. Display labels do not change
+Constructor overloads cover supplied estimates, flat Histogram/Raincloud
+geometry, wide/grid inputs and explicit discovery; see the shipped declarations
+listed below. Applicable families expose data-channel and facet edits without
+refreshing earlier snapshots. Display labels do not change
 scientific keys. Matrix and generic faceted plots require standalone publication;
 they cannot be nested inside Canvas.
 
@@ -81,11 +80,12 @@ existing `Output` to reuse its frozen scene instead. Publication failures preser
 the configuration and earlier outputs. Only installed fonts are used; installation
 does not download or provision fonts.
 
-The shared contracts and remaining scope live at the workspace root:
-`specs/91_WORKSPACE_AND_INTERFACES_PLAN.md`,
-`specs/92_PYTHON_CONSTRUCTORS_PLAN.md`, and `specs/02_RENDERING_CONTRACT.md`.
-Exact shipped value fields and methods are described by the installed typing
-information, not by the full planned inventory.
+Native scientific/rendering semantics and Rust adapter behavior are defined at
+the workspace root in `specs/02_RENDERING_CONTRACT.md` and
+`specs/09_DATA_ADAPTERS.md`. Exact Python constructor overloads, value fields and
+capability-gated methods are declared in `python/lichtung_plot/__init__.py`,
+`python/lichtung_plot/_owners.py` and `python/lichtung_plot/_native.pyi`.
+These declarations also ship in the installed package.
 
 ## Immutable configuration
 
@@ -173,8 +173,6 @@ single-cell text panels, panel-title alignment and native range groups.
 `examples/scientific_composition.py` combines wide Line data, supplied Bar intervals,
 explicitly unavailable Forest estimates and annotated/highlighted Heatmap cells.
 Its synthetic values and supplied bounds are illustrative, not inferential results.
-The complete remaining interface and verification gates are tracked in
-`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
 
 ## Alpha
 
@@ -194,8 +192,7 @@ bound pandas identity, never display labels.
 
 `examples/alpha_mappings.py` combines categorical point alpha and numeric cell
 alpha using supplied synthetic coverage, explicitly not statistical confidence.
-Exact call forms and source namespaces are defined in
-`specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
+See the shipped declarations listed above for exact call forms.
 
 ## Independent observations and supplied results
 
@@ -216,7 +213,8 @@ not display aliases.
 
 `examples/supplied_results.py` combines independent observations, supplied trends/
 intervals and illustrative display p-values. Exact capability-gated call forms
-remain defined once in `specs/94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md`.
+are declared in `python/lichtung_plot/_owners.py` and
+`python/lichtung_plot/_native.pyi`.
 
 ## Local development
 
@@ -263,6 +261,6 @@ must already be installed when used.
 The product version is inherited from the workspace Cargo metadata; maturin
 supplies the Python version dynamically. The included `LICENSE-MIT` and
 `LICENSE-APACHE` are exact copies of the workspace license texts, declared through
-`project.license-files` for source and wheel distributions. The shared procedure
-in `specs/95_RELEASE.md` governs platform evidence, artifact hashes and separately
-approved uploads; the repository changelog records the intended release scope.
+`project.license-files` for source and wheel distributions. Artifact/platform
+support requires independent verification; uploads require separate approval.
+The repository `CHANGELOG.md` records the intended release scope and current limits.

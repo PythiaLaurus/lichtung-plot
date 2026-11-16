@@ -5,8 +5,8 @@
 
 当前开发仓库使用 Rust 1.96.0。绘图核心位于 `crates/lichtung-plot`，是工作区的默认
 成员。[ndarray 适配器](#ndarray)与 [Polars 适配器](#polars)位于独立包中。
-Rust／Python 协同版本 `0.1.0` 正在准备，暂不能从注册表安装。发布流程见
-`specs/95_RELEASE.md`。在正式发布之前，相邻的 Rust 应用可以引用实际成员路径：
+Rust／Python 协同版本 `0.1.0` 正在准备，暂不能从注册表安装。
+在正式发布之前，相邻的 Rust 应用可以引用实际成员路径：
 
 ```toml
 [dependencies]
@@ -27,7 +27,7 @@ python -m pip install --no-index --no-deps /absolute/path/to/lichtung_plot-0.1.0
 这条命令安装本地产物，不从 PyPI 获取包。原生 Python list／tuple 无需数据提供库；
 使用 NumPy、pandas 或 eager Polars 时，再在同一环境中单独安装相应的可选依赖。
 当前 Polars 桥要求 `polars==1.41.2` 和 `polars-runtime-32==1.41.2`，不要求 PyArrow。
-构建配方与已抽样验证的提供库版本见 `bindings/python/README.md` 及工作区共享规范；
+构建配方与提供库要求见 `bindings/python/README.md`；
 渲染器和图库都不会安装依赖。
 
 绘图器无需初始化。生成图形前，请自行安装合适的系统字体；库不会下载字体。

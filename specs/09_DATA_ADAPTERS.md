@@ -516,6 +516,4 @@ working directory and accept one optional output directory. They share real sour
 anchors and frozen outputs with equivalent peer-language single-page guides.
 Cross-adapter native identity and handoff are exercised by ordinary public-API
 consumers, not dependencies of the Book command. Its production command does not
-depend on the renderer. Follow
-[development](90_DEVELOPMENT.md) for semantic test ceilings, focused validation,
-strict Clippy, independent-package verification and publication authorization.
+depend on the renderer.

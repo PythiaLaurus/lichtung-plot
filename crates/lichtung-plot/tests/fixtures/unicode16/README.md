@@ -166,5 +166,6 @@ Rendered text preserves its original bytes; family-name matching alone uses
 NFKC-casefold. Line breaking retains collapsed-scalar context for numeric prefixes,
 previous nonspace positions and RI parity; grapheme filtering intersects sorted
 boundaries without changing legal opportunities. Actual arithmetic, storage,
-font-coverage and sealed-census failures remain errors. Resource and external-corpus
-publication policies are defined in [development](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/90_DEVELOPMENT.md).
+font-coverage and sealed-census failures remain errors under the
+[font/layout contract](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/05_LAYOUT_SYSTEM.md).
+External-corpus provenance and distribution limits are described above.
