@@ -77,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 215 static unit cases, 112 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 324 static contracts and 136 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
+| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 215 static unit cases, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 324 static contracts and 136 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
 
 ### Current Python Implementation Scope
 
@@ -949,6 +949,34 @@ and installed-root guard (0 / 1) already prove **at least 994 unit / 1,246 modul
 without charging any ordinary binding/adapter cases. The complete 626-function
 expansion and further genuine redundancy cleanup remain open; unknowns are not
 zero and this lower bound is not a total. E2E remains exactly **80**.
+
+The fourth partition removes **62 more module scenarios**, without unit or E2E
+removals: 25 repeated family-by-composition preparations, 19 family repetitions of
+an exact-tick fault injected after scientific preparation, and 18 duplicate
+estimate-family-by-facet-scale checks. All 25 independent symbol/alpha expectations
+remain, with the shared composition consumers checking both policies. Both
+numeric-axis exact-tick scopes still refuse before any mark projection. The eight
+native coordinate projection/intrinsic routes, all four facet-scale policies,
+three-family unavailable-status/guide consumers, and raw logarithmic Forest
+limits remain. Two fixture-only modules lost their final consumer and their 109
+dead lines and `cfg(test)` declarations were removed.
+
+Twelve distinct focused Rust functions passed. Initial Clippy caught the newly
+dead helpers; after their deletion, only the affected exact-tick consumer,
+formatting and strict workspace/all-target Clippy were rerun and passed.
+The original lint failure is preserved. Actual selection, source comparison and
+the 62-case deletion map are in
+`/tmp/opencode/lichtung-budget2/phase4-proof.json`,
+SHA-256 `b22d90b6f7aa25ca7e6fe1877670eb1996a7d3674f2be3d56d49a5b84ff8a6b4`.
+
+The ordinary-binding migration also identifies an accounting correction: the
+retained 24 constructor/exact-owner assertions were previously bundled inside the
+24 publication workflows, not separately charged as units. They must now appear
+as **24 unit contracts** in the current ledger. Their source/inputs are unchanged;
+this is not 24 new tests or a deletion saving, and they cannot be made free by
+renaming the driver. The current disjoint lower bound including these residual
+constructor cases is therefore **at least 1,018 unit / 1,184 module / 80 E2E**.
+Unit/module exact expansion and real cleanup remain unfinished.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.

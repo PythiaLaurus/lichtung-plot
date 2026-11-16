@@ -893,7 +893,7 @@ fn assert_actual_alpha_sections(
 /// actual source fixture above, including authoritative absence where appropriate.
 fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     use crate::decorations::legend::discrete::GuideCounts;
-    use crate::LegendComposition::{Combined, Separate};
+    use crate::LegendComposition::Combined;
     let components = match kind {
         PlotKind::Scatter | PlotKind::Trajectory | PlotKind::LinePath | PlotKind::Dumbbell => {
             Some((2, 0, 0))
@@ -919,7 +919,10 @@ fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     };
     let theme = crate::Theme::publication().resolve().unwrap();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    for composition in [Combined, Separate] {
+    {
+        // Composition compatibility has its own shared-guide consumers; each
+        // family's independently specified native glyphs need only one source.
+        let composition = Combined;
         let operation = crate::font::canonical::OperationContext::new();
         let (mut inputs, _) =
             crate::plots::shared_x::prepare_plot(plot.description(), &operation, &theme).unwrap();

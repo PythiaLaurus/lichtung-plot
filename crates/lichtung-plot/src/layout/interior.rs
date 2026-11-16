@@ -779,10 +779,4 @@ mod automatic_ink_tests {
 pub(crate) mod distributions;
 
 #[cfg(test)]
-pub(crate) mod estimates;
-
-#[cfg(test)]
 pub(crate) mod bars;
-
-#[cfg(test)]
-pub(crate) mod categorical_distributions;

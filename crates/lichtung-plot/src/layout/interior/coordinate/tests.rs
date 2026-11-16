@@ -19,16 +19,6 @@ fn sources() -> Vec<Plot> {
     ]
 }
 
-fn all_sources() -> impl Iterator<Item = Plot> {
-    sources()
-        .into_iter()
-        .chain(super::super::estimates::sources())
-        .chain(super::super::bars::sources())
-        .chain(super::super::categorical_distributions::sources())
-        .chain([crate::plots::interaction::extraction::source().erase()])
-        .chain([crate::plots::categorical_distribution::extraction::supplied()])
-}
-
 #[test]
 fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_legacy_constructors() {
     let theme = crate::Theme::publication().resolve().unwrap();
@@ -328,8 +318,16 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     clippy::too_many_lines,
     reason = "one real operation injects exact intent after science and checks downstream fit before mark projection"
 )]
-fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks() {
-    for source in all_sources() {
+fn exact_tick_misses_keep_both_axis_scopes_without_coarsening_or_mark_projection() {
+    // Exact-tick fitting precedes the family-specific mark dispatch. Keep both
+    // numeric-axis orientations, not another matrix of already prepared families.
+    let scatter = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0, 2.0]),
+        NumericValues::new("y", [2.0, 1.0, 3.0]),
+    )
+    .erase();
+    let [bar, _, _, _] = super::super::bars::sources();
+    for source in [scatter, bar] {
         let fault_source = std::sync::OnceLock::new();
         let appearance = crate::Theme::publication().resolve().unwrap();
         crate::layout::plan_root(
