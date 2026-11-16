@@ -1110,6 +1110,24 @@ The disjoint lower bound is **at least 1,610 unit / 1,676 module / exactly 80 E2
 **582** core-function expansions remain unresolved. This is still not an upper
 bound or a quota certificate.
 
+The second short-function census resolves **35 further unchanged functions** as
+**47 unit / 20 module**, replacing lower bounds of 19 / 16. It explicitly expands
+quantum/constraint boundaries, track allocation inputs, extreme/subnormal numeric
+axes, complete-source tick fitting and font/text preparation identity. The local
+line-leading plan/reflow remains a module relationship; its separate subnormal
+width-to-quantum calculation is additionally charged as a unit. No retained
+module responsibility disappears. Same-input clone/reflow/lifecycle stages are
+not treated as independent configurations.
+
+All 35 complete function hashes match the original ledger, and the batch is
+disjoint from the preceding census. No behavior test or platform execution is
+claimed for this read-only audit. Source and individual contracts are in
+`/tmp/opencode/lichtung-budget2/short-core2-ledger.json`,
+SHA-256 `6aa864f0ebc9d52e96fc186449558416608a8b2195bb7f894f91fea011b6ace4`.
+The current disjoint lower bound is **at least 1,638 unit / 1,680 module / exactly
+80 E2E**, with **547** core-function expansions unresolved. Both unit/module
+ceilings and the final current-source distribution gate remain open.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Reviewed test deduplication is verified within its stated scope. Unchanged budget
