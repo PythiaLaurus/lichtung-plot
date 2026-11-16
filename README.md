@@ -46,9 +46,8 @@ sections' sources in [English](docs/en/src/sections/installation.md) /
   layers and supplied results. See
   `bindings/python/README.md` and `specs/91_WORKSPACE_AND_INTERFACES_PLAN.md` for
   bounded verification and remaining delivery gates.
-- [`docs/book-helper/`](docs/book-helper/): nonpublished Rust command checking and
-  assembling the single-page guides and executable gallery; adapter interoperability
-  dependencies are test-only.
+- `docs/book-helper/`: nonpublished Rust command checking and assembling the
+  single-page guides and executable gallery; it has no renderer/adapter dependency.
 - [`specs/`](specs/): one root architectural source of truth.
 - [`docs/`](docs/): peer-language user guides and gallery catalog.
 
@@ -60,3 +59,10 @@ for its Python examples. The build writes
 `target/book/site/index.html`. `just verify` is the broad source-verification
 gate; it includes structural Book checks but does not regenerate the gallery/site.
 See [development](specs/90_DEVELOPMENT.md) for verification scope and test limits.
+
+## Release Preparation
+
+The coordinated Rust/Python `0.1.0` release is being prepared, not announced as
+published. `specs/95_RELEASE.md` defines candidate verification, artifact/platform
+requirements, approval boundaries and the crates.io → PyPI → GitHub Release
+sequence. Local verification does not upload packages, push tags or deploy a site.

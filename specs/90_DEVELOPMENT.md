@@ -340,6 +340,10 @@ external data as successful full conformance.
 
 ## Documentation And Commits
 
+`specs/95_RELEASE.md` defines coordinated release preparation, artifact evidence,
+platform claims and separately approved external publication. A successful local
+build or source gate is not a registry release or a portable Python wheel audit.
+
 For requested capabilities with precedents in established plotting libraries,
 preserve their meaningful configuration choices. Cite the actual API/behavior in
 implementation planning; a conventional default is not a restriction to that one
