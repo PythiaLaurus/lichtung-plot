@@ -1314,7 +1314,7 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one lifecycle checks every text origin, anchor, rotation and both bracket orientations"
+        reason = "one lifecycle checks both text origins, each anchor, rotation signs and both bracket orientations"
     )]
     fn frozen_text_and_brackets_never_relayout_or_convert_during_count_replay_and_outline() {
         use crate::font::canonical::FONT_SHAPE_CALLS;
@@ -1398,23 +1398,29 @@ mod tests {
                     &SealedTextVerifier::new(text.prepared_font_environment()?),
                     final_stage,
                     |backend| {
+                        let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::middle(position, TextAnchor::Start, -0.0),
+                            &plans[0],
+                        )?;
                         for (anchor, plan) in
                             [TextAnchor::Start, TextAnchor::Middle, TextAnchor::End]
                                 .into_iter()
                                 .zip(&plans)
                         {
-                            for angle in [-0.0, -0.04, 0.06, -89.96] {
-                                let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
-                                backend.draw_planned_text(
-                                    PlannedTextPlacement::middle(position, anchor, angle),
-                                    plan,
-                                )?;
-                                backend.draw_planned_text(
-                                    PlannedTextPlacement::baseline(position, anchor, angle),
-                                    plan,
-                                )?;
-                            }
+                            backend.draw_planned_text(
+                                PlannedTextPlacement::middle(position, anchor, 0.06),
+                                plan,
+                            )?;
+                            backend.draw_planned_text(
+                                PlannedTextPlacement::baseline(position, anchor, 0.06),
+                                plan,
+                            )?;
                         }
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::middle(position, TextAnchor::Start, -89.96),
+                            &plans[0],
+                        )?;
                         for (orientation, label) in
                             [BracketOrientation::Vertical, BracketOrientation::Horizontal]
                                 .into_iter()
@@ -2105,7 +2111,7 @@ mod tests {
     }
 
     #[test]
-    fn all_root_preflights_reserve_before_the_only_null_lifecycle() {
+    fn root_preflights_reserve_scene_storage_before_the_only_null_lifecycle() {
         let scatter = || {
             crate::Plot::scatter(
                 crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
@@ -2122,27 +2128,22 @@ mod tests {
             .panel(0, 0, scatter())
             .unwrap();
         for root in 0..3 {
-            for payload in [
-                "canonical SVG body",
-                "canonical SVG document",
-                "canonical SVG replacements",
-                "canonical SVG scopes",
-                "final Null scopes",
-            ] {
-                NULL_BEGIN_CALLS.with(|calls| calls.set(0));
-                crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
-                let result = match root {
-                    0 => plot.preflight(),
-                    1 => faceted.preflight(),
-                    _ => canvas.preflight(),
-                };
-                let error = result.unwrap_err();
-                assert!(
-                    error.to_string().contains(payload),
-                    "root {root}, {payload}: {error}"
-                );
-                NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-            }
+            // The storage-specific refusal/release matrix is checked above.
+            // Public preflight needs one reservation-order witness per root.
+            let payload = "canonical SVG body";
+            NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+            crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
+            let result = match root {
+                0 => plot.preflight(),
+                1 => faceted.preflight(),
+                _ => canvas.preflight(),
+            };
+            let error = result.unwrap_err();
+            assert!(
+                error.to_string().contains(payload),
+                "root {root}, {payload}: {error}"
+            );
+            NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             match root {
                 0 => plot.preflight(),

@@ -77,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,612 numeric input/configuration repeats, 174 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
+| Reviewed test cleanup and unchanged budgets | Further cleanup has removed 311 static unit cases, 35,612 numeric input/configuration repeats, 202 repeated module scenarios and 59 publication scenarios, and explicitly retired the 2,037-contract recursive reflection workflow. Installed typing still checks all three shipped modules, 228 static contracts and 125 negative guards. Complete E2E accounting is 80/80; unit/module still fail and the final source refresh remains open. |
 
 ### Current Python Implementation Scope
 
@@ -1069,6 +1069,27 @@ existing cases are not new tests. The current disjoint bound is **at least 1,584
 unit / 1,650 module / exactly 80 E2E**, with **619** core functions still requiring
 exact expansion. Neither unit/module quota nor current source-distribution
 acceptance is signed.
+
+The eighth partition deletes **28 module configurations** from generic backend
+matrices. Text replay keeps eight of the original 24 anchor/origin/rotation
+combinations: both origins for all three anchors at a non-tenth angle, plus the
+original signed-zero and negative-angle witnesses. Both bracket orientations
+remain. Plot, owning-facet and Canvas preflights each retain one actual storage
+refusal before Null and one successful single Null lifecycle. The full
+storage-specific refusal/release matrix remains in its direct capture witness,
+instead of being repeated across every public root.
+
+All original retained coordinate, font-work, source-release, buffer-identity,
+text/outline/PNG and error assertions remain. No golden changed. Five exact
+backend/neighbor functions, formatting and strict Clippy passed. The before/after
+configuration sets and actual verification are in
+`/tmp/opencode/lichtung-budget2/phase8-proof.json`,
+SHA-256 `9ef3e013665cdf7fcc62e383626d2a8082a420f60f52d8439e928ae0aa848a8d`.
+These two drivers now contribute **16 module cases**, not two function names.
+Closing their previously unresolved expansion gives the current disjoint bound
+**at least 1,584 unit / 1,664 module / exactly 80 E2E**, with **617** core-function
+expansions still open. Unit/module ceilings and the final new distribution gate
+remain unsigned.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
