@@ -31,6 +31,10 @@ docs:
 package:
     cargo package --locked --offline -p lichtung-plot -p lichtung-plot-ndarray -p lichtung-plot-polars --allow-dirty
 
+# Exercise native atomic-output contracts, including target-specific handle rules.
+test-output:
+    cargo test --locked --offline -p lichtung-plot --lib orchestrator::artifacts::tests::
+
 # Build the mixed Python package with already-installed maturin and Python.
 python-build:
     env -u PYO3_BUILD_EXTENSION_MODULE -u PYO3_NO_PYTHON -u PYO3_CONFIG_FILE PYO3_PYTHON="{{python}}" "{{maturin}}" build --manifest-path bindings/python/Cargo.toml --locked --offline --release --interpreter "{{python}}"
@@ -46,6 +50,10 @@ python-typing:
 # Use the PEP 517 source producer, including its projected-lock validation.
 python-sdist out="target/python-sdist":
     LICHTUNG_MATURIN="{{maturin}}" "{{python}}" -I -B bindings/python/_build_backend.py --out "{{out}}"
+
+# Inspect an actual archive against this checkout; never install or rebuild it.
+python-artifact archive platform="" output="-":
+    "{{python}}" -I -B bindings/python/check_artifact.py "{{archive}}" --platform "{{platform}}" --output "{{output}}"
 
 # Check peer tutorial anchors, image-to-code links and executable source includes.
 book-check:

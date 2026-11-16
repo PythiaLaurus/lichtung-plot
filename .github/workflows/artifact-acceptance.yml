@@ -1,0 +1,307 @@
+name: Artifact acceptance
+
+# Build-only rehearsal. No tag trigger, registry credentials or publishing jobs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifact-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_BUILD_JOBS: "2"
+  RUSTUP_TOOLCHAIN: "1.96.0"
+  LICHTUNG_PYTHON: python
+  LICHTUNG_MATURIN: maturin
+  UV_PYTHON_DOWNLOADS: never
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.11"
+          architecture: x64
+      - name: Prepare explicit build tools and Cargo cache
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+          cargo install just --version 1.56.0 --locked
+          python -m pip install --only-binary=:all: uv==0.9.28 maturin==1.16.0 twine==6.2.0
+          cargo fetch --locked
+      - name: Verify source and all three Rust archives
+        run: just fmt-check lint book-check package
+      - name: Produce and inspect the single shared sdist
+        env:
+          SOURCE: ${{ runner.temp }}/source-artifacts
+        run: |
+          just python-sdist "$SOURCE"
+          sdists=("$SOURCE"/*.tar.gz)
+          test "${#sdists[@]}" -eq 1
+          just python-artifact "${sdists[0]}" "" "$SOURCE/sdist.json"
+          python -m twine check --strict "${sdists[0]}"
+          python - <<'PY'
+          import hashlib, json, os, pathlib, shutil, subprocess
+          root = pathlib.Path(os.environ["SOURCE"])
+          assert not json.loads((root / "sdist.json").read_text())["source_dirty"]
+          metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1"]))
+          for name in ("lichtung-plot", "lichtung-plot-ndarray", "lichtung-plot-polars"):
+              package = next(p for p in metadata["packages"] if p["name"] == name)
+              shutil.copyfile(pathlib.Path("target/package") / f"{name}-{package['version']}.crate", root / f"{name}-{package['version']}.crate")
+          (root / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(root.iterdir()) if path.is_file()))
+          PY
+          git diff --exit-code
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: candidate-source-${{ github.sha }}
+          path: ${{ runner.temp }}/source-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+  native:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            architecture: x64
+            machine: amd64
+            tag: win_amd64
+            executable: Scripts/python.exe
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            architecture: arm64
+            machine: arm64
+            tag: macosx_15_0_arm64
+            executable: bin/python
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.11"
+          architecture: ${{ matrix.architecture }}
+      - name: Select isolated output paths
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              for name, path in (("SOURCE", "source-artifacts"), ("OUTPUT", "accepted-artifacts"), ("CARGO_TARGET_DIR", "wheel-target")):
+                  output.write(f"{name}={(root / path).as_posix()}\n")
+          PY
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: candidate-source-${{ github.sha }}
+          path: ${{ runner.temp }}/source-artifacts
+      - name: Prepare native tools
+        run: |
+          python -c 'import platform; assert platform.machine().lower() == "${{ matrix.machine }}"'
+          rustup toolchain install 1.96.0 --profile minimal
+          rustc -vV | grep "host: ${{ matrix.target }}"
+          cargo install just --version 1.56.0 --locked
+          python -m pip install --only-binary=:all: uv==0.9.28 maturin==1.16.0 twine==6.2.0
+          UV_PYTHON_DOWNLOADS=manual uv python install 3.10.19
+          cargo fetch --locked
+      - name: Check shared source identity and native output handles
+        run: |
+          sdists=("$SOURCE"/*.tar.gz)
+          test "${#sdists[@]}" -eq 1
+          just python-artifact "${sdists[0]}"
+          python -c 'import json, os; assert json.load(open(os.path.join(os.environ["SOURCE"], "sdist.json")))["source_commit"] == "${{ github.sha }}"'
+          just test-output
+      - name: Build only from independently unpacked source
+        run: |
+          python - <<'PY'
+          import os, pathlib, tarfile
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "unpacked"
+          with tarfile.open(next(pathlib.Path(os.environ["SOURCE"]).glob("*.tar.gz"))) as archive:
+              archive.extractall(root, filter="data")
+          PY
+          unpacked=("$RUNNER_TEMP"/unpacked/lichtung_plot-*)
+          test "${#unpacked[@]}" -eq 1
+          unset PYO3_BUILD_EXTENSION_MODULE PYO3_NO_PYTHON PYO3_CONFIG_FILE
+          uv build "${unpacked[0]}" --offline --no-build-isolation --wheel --no-create-gitignore --python "$(python -c 'import sys; print(sys.executable)')" --out-dir "$OUTPUT" -C "build-args=--locked --offline"
+      - name: Inspect the exact wheel
+        run: |
+          wheels=("$OUTPUT"/*.whl)
+          test "${#wheels[@]}" -eq 1
+          just python-artifact "${wheels[0]}" "${{ matrix.tag }}" "$OUTPUT/wheel.json"
+          python -m twine check --strict "${wheels[0]}"
+      - name: Install the same wheel in fresh minimum and newer CPython environments
+        run: |
+          wheels=("$OUTPUT"/*.whl)
+          for version in 3.10.19 3.13.11; do
+            venv="$RUNNER_TEMP/acceptance-$version"
+            uv venv --offline --python "$version" "$venv"
+            executable="$venv/${{ matrix.executable }}"
+            export LICHTUNG_PYTHON="$executable"
+            "$executable" -I -B -c 'import platform; assert platform.machine().lower() == "${{ matrix.machine }}"'
+            uv pip install --offline --no-index --no-deps --python "$executable" "${wheels[0]}"
+            "$executable" -I -B -c 'import importlib.util; assert all(importlib.util.find_spec(n) is None for n in ("numpy", "pandas", "polars", "pyarrow")); import lichtung_plot'
+            if [[ "$version" == 3.10.* ]]; then
+              pytest=8.4.2
+              pandas=2.3.3
+            else
+              pytest=9.1.1
+              pandas=3.1.1
+            fi
+            uv pip install --only-binary=:all: --python "$executable" "pytest==$pytest"
+            "$executable" -I -B -m pytest -q -p no:cacheprovider bindings/python/tests/test_lifecycle.py
+            uv pip install --only-binary=:all: --python "$executable" numpy==2.2.6 "pandas==$pandas" polars==1.41.2 polars-runtime-32==1.41.2
+            just python-test --import-mode=importlib -p no:cacheprovider --junitxml="$OUTPUT/runtime-$version.xml"
+            uv pip freeze --python "$executable" > "$OUTPUT/environment-$version.txt"
+            if [[ "$version" == 3.13.* ]]; then
+              uv pip install --only-binary=:all: --python "$executable" mypy==1.20.2
+              just python-typing
+              "$executable" -I -B bindings/python/examples/four_inputs.py "$OUTPUT/examples"
+              "$executable" -I -B bindings/python/examples/complete_appearance.py "$OUTPUT/examples"
+            fi
+          done
+          python - <<'PY'
+          import os, pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path(os.environ["OUTPUT"]).glob("runtime-*.xml"))
+          assert len(reports) == 2
+          for path in reports:
+              suites = list(ET.parse(path).getroot().iter("testsuite"))
+              assert sum(int(s.get("tests", 0)) for s in suites) > 0
+              assert all(int(s.get(key, 0)) == 0 for s in suites for key in ("skipped", "failures", "errors"))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accepted-${{ matrix.target }}-${{ github.sha }}
+          path: ${{ runner.temp }}/accepted-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+  manylinux:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:d086f64cddcace250ef0f0073583c51b8298159303290a730c9f59bd91edfd2c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.11"
+          architecture: x64
+      - name: Select isolated output paths
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              for name, path in (("SOURCE", "source-artifacts"), ("WORK", "manylinux"), ("OUTPUT", "manylinux/output")):
+                  output.write(f"{name}={(root / path).as_posix()}\n")
+          PY
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: candidate-source-${{ github.sha }}
+          path: ${{ runner.temp }}/source-artifacts
+      - name: Explicit networked preparation
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          python -m pip install --only-binary=:all: uv==0.9.28 twine==6.2.0
+          cargo fetch --locked
+          mkdir -p "$WORK/wheelhouse" "$OUTPUT"
+          docker pull "$IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp --mount "type=bind,src=$WORK/wheelhouse,dst=/wheelhouse" "$IMAGE" /opt/python/cp310-cp310/bin/python -m pip download --no-cache-dir --only-binary=:all: --dest /wheelhouse uv==0.9.28 maturin==1.16.0 tomli==2.5.0 pytest==8.4.2 numpy==2.2.6 pandas==2.3.3 polars==1.41.2 polars-runtime-32==1.41.2
+      - name: Offline build, audit and glibc-baseline acceptance
+        run: |
+          python -c 'import json, os; assert json.load(open(os.path.join(os.environ["SOURCE"], "sdist.json")))["source_commit"] == "${{ github.sha }}"'
+          rust="$(dirname "$(dirname "$(rustup which rustc)")")"
+          registry="${CARGO_HOME:-$HOME/.cargo}/registry"
+          docker run --rm -i --network none --read-only --tmpfs /tmp:rw,exec,size=4g --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$SOURCE,dst=/sdist,readonly" \
+            --mount "type=bind,src=$WORK,dst=/work" \
+            --mount "type=bind,src=$rust,dst=/opt/rust,readonly" \
+            --mount "type=bind,src=$registry,dst=/cargo-registry,readonly" \
+            --mount "type=bind,src=/usr/share/fonts,dst=/usr/share/fonts,readonly" \
+            "$IMAGE" /opt/python/cp310-cp310/bin/python -I -B - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, sys, tarfile
+          work = pathlib.Path("/work")
+          sdist, = pathlib.Path("/sdist").glob("*.tar.gz")
+          source = json.loads(pathlib.Path("/sdist/sdist.json").read_text())
+          assert hashlib.sha256(sdist.read_bytes()).hexdigest() == source["sha256"]
+          with tarfile.open(sdist) as archive:
+              archive.extractall(work / "source", filter="data")
+          root, = (work / "source").iterdir()
+          lock = (root / "Cargo.lock").read_bytes()
+          pathlib.Path("/tmp/cargo").mkdir()
+          pathlib.Path("/tmp/cargo/registry").symlink_to("/cargo-registry")
+          env = os.environ.copy()
+          env.update(HOME="/tmp", CARGO_HOME="/tmp/cargo", CARGO_NET_OFFLINE="true", CARGO_BUILD_JOBS="2", CARGO_TARGET_DIR="/work/target", RUSTFLAGS="-C target-cpu=x86-64", CFLAGS="-march=x86-64 -mtune=generic", MATURIN_NO_INSTALL_RUST="1", UV_PYTHON_DOWNLOADS="never")
+          subprocess.run([sys.executable, "-m", "venv", "/tmp/build"], env=env, check=True)
+          python = "/tmp/build/bin/python"
+          pip = [python, "-I", "-B", "-m", "pip", "install", "--no-cache-dir", "--no-index", "--find-links", "/work/wheelhouse"]
+          subprocess.run([*pip, "uv==0.9.28", "maturin==1.16.0", "tomli==2.5.0"], env=env, check=True)
+          env["PATH"] = "/opt/rust/bin:/tmp/build/bin:" + env["PATH"]
+          subprocess.run(["uv", "build", "--offline", "--no-cache", "--no-build-isolation", "--wheel", "--no-create-gitignore", "--python", python, "--out-dir", "/work/output", "-C", "build-args=--locked --offline --compatibility manylinux_2_28 --auditwheel check"], cwd=root, env=env, check=True)
+          assert (root / "Cargo.lock").read_bytes() == lock
+          wheel, = (work / "output").glob("*.whl")
+          audit = subprocess.check_output(["auditwheel", "show", str(wheel)], env=env, text=True)
+          (work / "output/auditwheel.txt").write_text(audit)
+          print(audit)
+          subprocess.run([sys.executable, "-m", "venv", "/tmp/accept"], env=env, check=True)
+          python = "/tmp/accept/bin/python"
+          pip = [python, "-I", "-B", "-m", "pip", "install", "--no-cache-dir", "--no-index", "--find-links", "/work/wheelhouse"]
+          subprocess.run([*pip, "--no-deps", str(wheel)], env=env, check=True)
+          subprocess.run([python, "-I", "-B", "-c", 'import importlib.util; assert all(importlib.util.find_spec(n) is None for n in ("numpy", "pandas", "polars", "pyarrow")); import lichtung_plot'], env=env, check=True)
+          subprocess.run([*pip, "pytest==8.4.2"], env=env, check=True)
+          subprocess.run([python, "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", str(root / "tests/test_lifecycle.py")], env=env, check=True)
+          subprocess.run([*pip, "numpy==2.2.6", "pandas==2.3.3", "polars==1.41.2", "polars-runtime-32==1.41.2"], env=env, check=True)
+          subprocess.run([python, "-I", "-B", "-m", "pytest", "-q", "--import-mode=importlib", "-p", "no:cacheprovider", str(root / "tests"), "--junitxml=/work/output/runtime-3.10.xml"], env=env, check=True)
+          PY
+      - name: Inspect wheel and run newer CPython acceptance
+        run: |
+          wheels=("$OUTPUT"/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python -I -B bindings/python/check_artifact.py "${wheels[0]}" --platform manylinux_2_28_x86_64 --output "$OUTPUT/wheel.json"
+          python -m twine check --strict "${wheels[0]}"
+          uv venv --offline --python 3.13.11 "$RUNNER_TEMP/acceptance"
+          executable="$RUNNER_TEMP/acceptance/bin/python"
+          uv pip install --offline --no-index --no-deps --python "$executable" "${wheels[0]}"
+          uv pip install --only-binary=:all: --python "$executable" pytest==9.1.1 numpy==2.2.6 pandas==3.1.1 polars==1.41.2 polars-runtime-32==1.41.2 mypy==1.20.2
+          export LICHTUNG_PYTHON="$executable"
+          "$executable" -I -B -m pytest -q --import-mode=importlib -p no:cacheprovider bindings/python/tests --junitxml="$OUTPUT/runtime-3.13.xml"
+          "$executable" -I -B bindings/python/tests/check_typing.py
+          "$executable" -I -B bindings/python/examples/four_inputs.py "$OUTPUT/examples"
+          "$executable" -I -B bindings/python/examples/complete_appearance.py "$OUTPUT/examples"
+          uv pip freeze --python "$executable" > "$OUTPUT/environment-3.13.txt"
+          python - <<'PY'
+          import os, pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path(os.environ["OUTPUT"]).glob("runtime-*.xml"))
+          assert len(reports) == 2
+          for path in reports:
+              suites = list(ET.parse(path).getroot().iter("testsuite"))
+              assert sum(int(s.get("tests", 0)) for s in suites) > 0
+              assert all(int(s.get(key, 0)) == 0 for s in suites for key in ("skipped", "failures", "errors"))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accepted-x86_64-unknown-linux-gnu-${{ github.sha }}
+          path: ${{ runner.temp }}/manylinux/output/
+          if-no-files-found: error
+          retention-days: 30

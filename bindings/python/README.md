@@ -264,3 +264,11 @@ supplies the Python version dynamically. The included `LICENSE-MIT` and
 `project.license-files` for source and wheel distributions. Artifact/platform
 support requires independent verification; uploads require separate approval.
 The repository `CHANGELOG.md` records the intended release scope and current limits.
+
+The manually triggered `.github/workflows/artifact-acceptance.yml` builds one
+shared sdist and verifies wheels on fixed manylinux, native Windows x86_64 and
+native macOS arm64 runners. It only retains candidate artifacts and evidence;
+it neither publishes packages nor certifies a platform before its checks pass.
+`just python-artifact <archive> [platform] [output]` inspects actual archive
+metadata, license texts, typing payload and wheel RECORD hashes without importing
+the extension. A wheel requires its explicit expected platform tag.
