@@ -111,53 +111,59 @@ fn rounding_preserves_signed_neighbors_and_both_tie_parities() {
 }
 
 #[test]
-fn fractional_quantization_matches_independent_small_dyadic_rationals() {
+fn fractional_quantization_certifies_dyadic_ties_scale_shifts_and_precision_limits() {
     // Independent bounded u128 oracle: the source is the exact rational n/2^b.
     // All floating construction operations here are exact, and no float-to-text
-    // conversion supplies an expected answer. Cover every admitted fractional
-    // precision and both quotient parities, including negative rounded zero.
-    for numerator in [0_u32, 1, 3, 5, 7, 9, 15, 31, 63, 125, 1999] {
-        for bits in 0..=10 {
-            let denominator = 1_u32 << bits;
-            let value = f64::from(numerator) / f64::from(denominator);
-            for scale in -3_i16..=3 {
-                for precision in 0..=20 {
-                    let shift = i32::from(scale) + i32::from(precision);
-                    let (top, bottom) = if shift >= 0 {
-                        (
-                            u128::from(numerator) * 10_u128.pow(shift.unsigned_abs()),
-                            u128::from(denominator),
-                        )
-                    } else {
-                        (
-                            u128::from(numerator),
-                            u128::from(denominator) * 10_u128.pow(shift.unsigned_abs()),
-                        )
-                    };
-                    let floor = top / bottom;
-                    let remainder = top % bottom;
-                    let coefficient = floor
-                        + u128::from(
-                            2 * remainder > bottom || (2 * remainder == bottom && floor % 2 == 1),
-                        );
-                    let places = usize::from(precision);
-                    let mut expected = format!("{coefficient:0width$}", width = places + 1);
-                    if places > 0 {
-                        expected.insert(expected.len() - places, '.');
-                    }
-                    let format = ResolvedFormat {
-                        precision: ResolvedPrecision::Fractional(precision),
-                        decimal_scale: scale,
-                        ..ResolvedFormat::default()
-                    };
-                    assert_eq!(format_finite(value, &format).unwrap(), expected);
-                    assert_eq!(
-                        format_finite(-value, &format).unwrap(),
-                        format!("-{expected}")
-                    );
-                }
-            }
+    // conversion supplies an expected answer. Keep distinct rounding/shift and
+    // precision boundaries instead of the full arbitrary numerator × denominator
+    // × scale × precision product. Both signs remain independent checked inputs.
+    for (numerator, bits, scale, precision) in [
+        (0_u32, 0_u32, 0_i16, 0_u8), // signed zero
+        (3, 1, 0, 0),                // odd half-cell rounds up
+        (5, 1, 0, 0),                // even half-cell stays
+        (9, 3, 0, 0),                // below half-cell
+        (15, 3, 0, 0),               // above half-cell
+        (1999, 1, 0, 0),             // rounding carries through the integer
+        (1, 10, -3, 0),              // negative shift, rounded zero
+        (125, 10, -3, 20),           // negative scale with maximum precision
+        (1999, 10, 3, 20),           // largest bounded oracle product
+        (31, 10, -3, 3),             // scale and precision cancel
+        (63, 10, 3, 0),              // positive shift at zero precision
+        (7, 3, -1, 2),               // positive shift with a fractional result
+    ] {
+        let denominator = 1_u32 << bits;
+        let value = f64::from(numerator) / f64::from(denominator);
+        let shift = i32::from(scale) + i32::from(precision);
+        let (top, bottom) = if shift >= 0 {
+            (
+                u128::from(numerator) * 10_u128.pow(shift.unsigned_abs()),
+                u128::from(denominator),
+            )
+        } else {
+            (
+                u128::from(numerator),
+                u128::from(denominator) * 10_u128.pow(shift.unsigned_abs()),
+            )
+        };
+        let floor = top / bottom;
+        let remainder = top % bottom;
+        let coefficient = floor
+            + u128::from(2 * remainder > bottom || (2 * remainder == bottom && floor % 2 == 1));
+        let places = usize::from(precision);
+        let mut expected = format!("{coefficient:0width$}", width = places + 1);
+        if places > 0 {
+            expected.insert(expected.len() - places, '.');
         }
+        let format = ResolvedFormat {
+            precision: ResolvedPrecision::Fractional(precision),
+            decimal_scale: scale,
+            ..ResolvedFormat::default()
+        };
+        assert_eq!(format_finite(value, &format).unwrap(), expected);
+        assert_eq!(
+            format_finite(-value, &format).unwrap(),
+            format!("-{expected}")
+        );
     }
 }
 

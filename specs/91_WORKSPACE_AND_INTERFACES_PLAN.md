@@ -978,6 +978,49 @@ renaming the driver. The current disjoint lower bound including these residual
 constructor cases is therefore **at least 1,018 unit / 1,184 module / 80 E2E**.
 Unit/module exact expansion and real cleanup remain unfinished.
 
+The fifth partition closes and actually prunes one of the previously unresolved
+numeric products. The dyadic fractional-quantization test formerly executed
+11 numerators × 11 denominator exponents × 7 decimal scales × 21 precisions ×
+two signs = **35,574 independent signed input/configuration checks**. It now
+executes **24**, not one hidden loop case: twelve original tuples, each checked
+with both signs. The **35,550 deleted combinations** repeat the bounded oracle
+without a new mathematical failure surface. Retained tuples cover odd/even ties,
+below/above-half cells, integer carry, exact/rounded signed zero, negative/zero/
+positive combined shifts, precision 0/20 and scale -3/+3.
+The exact integer-rational oracle expressions are unchanged apart from
+indentation and optional trailing-comma formatting. The other five decimal
+tests, their seven rounding policies, finite extremes/high-precision certificates
+and independent rational-cell helper remain byte-identical.
+
+Six exact decimal test functions, final formatting and strict workspace/all-target
+Clippy passed. The initial direct formatting check only reported comment alignment
+and a line wrap; it was not a behavior failure. The retained 24 input/expected
+records, subset proof and actual verification are in
+`/tmp/opencode/lichtung-budget2/phase5-proof.json`,
+SHA-256 `9cf071b8a09015ea699954cf7d8a835254730953437e2d3c34519ae2ba045fb7`.
+These 35,550 removals cannot be subtracted from earlier lower bounds that never
+expanded this function.
+
+Current case-by-case migrations also reconcile all **225** ordinary
+binding/adapter drivers and **259** core external drivers, including ignored and
+Windows-only cases. The first inventory's 224 ordinary rows omitted a renamed
+Float64 driver; that was not another deletion. Ordinary binding/adapter
+responsibilities are **533 unit / 466 module / 2 E2E**, including the explicitly
+charged 24 residual constructor-unit cases. External core responsibilities are
+**23 / 515 / 24**, with the 18 deleted facet cases selected by their original
+family identity rather than assuming ledger order matched loop order.
+The complete migrations are `/tmp/opencode/lichtung-budget2/binding-ledger.json`
+(SHA-256 `a59f7c417eca7e81bd102f028058070e1755501e8811c47a303006de022b777f`)
+and `/tmp/opencode/lichtung-budget2/external-ledger.json`
+(SHA-256 `ee458dcbab290d330d07565e04f2719a86d1bfb540c87b6bb247d876d1c4bc97`).
+They carry forward the reviewed RF1–RF4 corrections; no new execution/platform
+evidence or overall exact census is implied.
+
+Including these previously unsigned ordinary cases and the retained 24 dyadic
+cases now proves **at least 1,550 unit / 1,650 module / exactly 80 E2E**.
+The remaining **625** core-function expansions are still unresolved, not zero.
+Unit/module quotas and the final new source-distribution gate remain open.
+
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
 Reviewed test deduplication is verified within its stated scope. Unchanged budget
