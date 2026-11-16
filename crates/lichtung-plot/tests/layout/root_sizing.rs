@@ -10,40 +10,6 @@ mod support;
 
 use support::unique_dir;
 
-#[derive(Clone, Copy, Debug)]
-enum Sizing {
-    Automatic,
-    Maximum(u32),
-    Exact(u32, u32),
-}
-
-impl Sizing {
-    fn plot<K: kind::Marker>(self, plot: Plot<K>) -> Plot<K> {
-        match self {
-            Self::Automatic => plot,
-            Self::Maximum(width) => plot.size(0, 0).max_width(width),
-            Self::Exact(width, height) => plot.size(width, height),
-        }
-    }
-
-    fn canvas(self, canvas: Canvas) -> Canvas {
-        match self {
-            Self::Automatic => canvas,
-            Self::Maximum(width) => canvas.size(0, 0).max_width(width),
-            Self::Exact(width, height) => canvas.size(width, height),
-        }
-    }
-
-    fn assert_dimensions(self, dimensions: (u32, u32)) {
-        assert!(dimensions.0 > 0 && dimensions.1 > 0);
-        match self {
-            Self::Automatic => {}
-            Self::Maximum(width) => assert!(dimensions.0 <= width),
-            Self::Exact(width, height) => assert_eq!(dimensions, (width, height)),
-        }
-    }
-}
-
 struct Scene {
     dimensions: (u32, u32),
     svg: String,
@@ -260,49 +226,43 @@ fn automatic_roots_expand_for_complete_unbreakable_text_and_capped_width_refuses
 #[test]
 fn owning_facets_keep_sparse_wrap_complete_prose_and_multiline_shared_titles() {
     let caption = caption();
-    for sizing in [
-        Sizing::Automatic,
-        Sizing::Maximum(1001),
-        Sizing::Exact(1201, 1401),
-    ] {
-        let plot = Plot::scatter(
-            NumericValues::new("dose", [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
-            NumericValues::new("response", [1.0, 2.0, 2.0, 1.0, 1.0, 3.0]),
-        )
-        .facet(
-            FacetSpec::wrap(
-                CategoryValues::new(
-                    "panel",
-                    ["First", "First", "Second", "Second", "Third", "Third"],
-                )
-                .unwrap(),
-                2,
+    let plot = Plot::scatter(
+        NumericValues::new("dose", [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
+        NumericValues::new("response", [1.0, 2.0, 2.0, 1.0, 1.0, 3.0]),
+    )
+    .facet(
+        FacetSpec::wrap(
+            CategoryValues::new(
+                "panel",
+                ["First", "First", "Second", "Second", "Third", "Third"],
             )
             .unwrap(),
+            2,
         )
-        .title("Owning facet title")
-        .subtitle("Independent facet subtitle")
-        .x_label("Shared dose\nwith units")
-        .y_label("Shared response\nwith units")
-        .caption(&caption);
-        let scene = publish("public-facet-sizing", |path| {
-            sizing.plot(plot).svg_preserve_text(path)
-        });
-        sizing.assert_dimensions(scene.dimensions);
-        for source in [
-            "Owning facet title",
-            "Independent facet subtitle",
-            "Panel = First",
-            "Panel = Second",
-            "Panel = Third",
-            "Shared dose with units",
-            "Shared response with units",
-            &caption,
-        ] {
-            assert_complete_source(&scene.svg, source);
-        }
-        assert_eq!(scene.svg.matches("<clipPath ").count(), 3);
+        .unwrap(),
+    )
+    .title("Owning facet title")
+    .subtitle("Independent facet subtitle")
+    .x_label("Shared dose\nwith units")
+    .y_label("Shared response\nwith units")
+    .caption(&caption);
+    let scene = publish("public-facet-sizing", |path| {
+        plot.size(0, 0).max_width(1001).svg_preserve_text(path)
+    });
+    assert!(scene.dimensions.0 > 0 && scene.dimensions.0 <= 1001 && scene.dimensions.1 > 0);
+    for source in [
+        "Owning facet title",
+        "Independent facet subtitle",
+        "Panel = First",
+        "Panel = Second",
+        "Panel = Third",
+        "Shared dose with units",
+        "Shared response with units",
+        &caption,
+    ] {
+        assert_complete_source(&scene.svg, source);
     }
+    assert_eq!(scene.svg.matches("<clipPath ").count(), 3);
 }
 
 #[test]
@@ -457,18 +417,12 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
             .title("Canvas prose sizing")
             .caption("Independent root footnote.")
     };
-    for sizing in [
-        Sizing::Automatic,
-        Sizing::Maximum(601),
-        Sizing::Exact(801, 1101),
-    ] {
-        let scene = publish("public-text-canvas", |path| {
-            sizing.canvas(canvas()).svg_preserve_text(path)
-        });
-        sizing.assert_dimensions(scene.dimensions);
-        assert_complete_source(&scene.svg, &body);
-        assert_complete_source(&scene.svg, "Independent root footnote.");
-    }
+    let scene = publish("public-text-canvas", |path| {
+        canvas().size(0, 0).max_width(601).svg_preserve_text(path)
+    });
+    assert!(scene.dimensions.0 > 0 && scene.dimensions.0 <= 601 && scene.dimensions.1 > 0);
+    assert_complete_source(&scene.svg, &body);
+    assert_complete_source(&scene.svg, "Independent root footnote.");
     let direct = publish("public-text-canvas-width", |path| {
         canvas().width(601).svg_preserve_text(path)
     });
@@ -480,16 +434,6 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
             .svg_preserve_text(path)
     });
     assert_eq!(direct.svg, replaced.svg);
-    let exact = publish("public-text-canvas-replaced-size", |path| {
-        canvas()
-            .width(0)
-            .max_width(0)
-            .size(700, 1)
-            .size(801, 1101)
-            .svg_preserve_text(path)
-    });
-    assert_eq!(exact.dimensions, (801, 1101));
-    assert_complete_source(&exact.svg, &body);
 }
 
 #[test]

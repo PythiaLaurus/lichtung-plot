@@ -50,7 +50,8 @@ The recorded Linux source-distribution gate, complete peer content/gallery
 and same-source cost observations are verified below. The post-content source
 distribution also passed a new independent build/install/runtime gate. Last-stage
 reviewed test cleanup is verified below, but conservative reviewed counts already
-exceed all three unchanged limits. Whole-workspace exact counts remain unresolved.
+exceeded all three unchanged limits at that checkpoint. The further cleanup below
+now closes E2E at 80; whole-workspace unit/module exact counts remain unresolved.
 The recorded post-cleanup source-distribution refresh passed before the further
 hard-budget cleanup below; it does not certify later test-source changes.
 The three input-boundary choices below are settled, not outstanding product decisions.
@@ -76,7 +77,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | The first reviewed cleanup and its independent distribution gate passed. Further hard-budget cleanup has removed 112 repeated module scenarios and 25 per-family publication scenarios, with retained-contract tests and strict Clippy passing. Current-wheel recursive metadata checking has now been enumerated instead of treated as zero; limits remain FAIL, not a complete exact census or overall acceptance. |
+| Reviewed test cleanup and unchanged budgets | The first reviewed cleanup and its independent distribution gate passed. Further hard-budget cleanup has removed 112 repeated module scenarios and 59 publication scenarios, with retained-contract tests and strict Clippy passing. Complete E2E accounting is now 80/80. Unit/module limits still fail; this is not overall acceptance or a current post-change distribution gate. |
 
 ### Current Python Implementation Scope
 
@@ -874,10 +875,40 @@ and `/tmp/opencode/lichtung-budget2/signature-ledger.json`; the latter SHA-256 i
 `1b37c82feb0e56c05ab3efdb752c6dd4dc01d4abb75cfa3dcea94e3474d47e53`.
 These are newly counted existing checks, not newly added test cases. They do not
 overlap the earlier five reviewed lower-bound subsets. Including this previously
-unsigned component therefore already proves **at least 805 / 2,625 / 81**;
-all three unchanged ceilings still fail. The complete workspace census and
-further genuine redundancy cleanup remain unfinished. No budget pass or current
-post-change source-distribution acceptance is claimed.
+unsigned component therefore proved **at least 805 / 2,625 / 81** at the first
+partition. Those were lower bounds, not an exact total; the next partition closes
+E2E separately below. Unit/module census and genuine redundancy cleanup remain
+unfinished. No overall budget pass or current post-change source-distribution
+acceptance is claimed.
+
+The second partition deletes another **34 E2E scenarios**: 24 redundant Python
+family publications, five repeated SVG/PNG publication workflows and five
+arbitrary root-mode/replacement workflows. The 24 constructor inputs and exact
+returned-owner assertions remain unchanged; they do not become new unit cases.
+The retained public frozen Plot/Canvas lifecycle witness covers preview, custom
+192-DPI and publication PNGs with exact output sizes, density and no repeated
+scene/font work. Focused PNG sizing tests and Plot SVG text/outline replay remain.
+Capped owning facets and text-only Canvas retain complete content; kernel
+exact/automatic/refusal and standalone request-replacement witnesses remain.
+
+The complete current E2E ledger is **80**, with mutually exclusive owners:
+seven internal lifecycle/Canvas workflows, 24 external core workflows, two Python
+workflows and all 47 existing gallery scenarios. Same-source bilingual pages and
+archive copies are not charged twice. No gallery, scientific input, error policy,
+callback, cache/font contract or shipped declaration was changed to reach this
+ceiling. Fourteen exact Rust functions and five installed-wheel Python functions
+passed, with no failures or skips; formatting and strict workspace/all-target
+Clippy passed. This focused Python run uses the unchanged verified production
+wheel, not a newly produced source distribution.
+
+The actual selection/retained-source proof is
+`/tmp/opencode/lichtung-budget2/phase2-proof.json`,
+SHA-256 `5efe9a19f40101659d8467e73791faca53293a7b63f9eab86b4a941d3025a117`.
+The complete 80-case E2E ledger and 34 actual deletions are in
+`/tmp/opencode/lichtung-budget2/e2e-ledger.json`,
+SHA-256 `bf3c07fe352ff16b682fc1a3c77f3dc54851c564eb585306f22af6f102a4d662`.
+Unit/module ceilings still fail. Later packaged test bytes still require a final
+new sdist, independent unpack/fresh-target build and fresh install/runtime gate.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.

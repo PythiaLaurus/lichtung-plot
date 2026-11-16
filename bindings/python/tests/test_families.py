@@ -19,9 +19,9 @@ def texts(path):
     ]
 
 
-def test_remaining_24_exact_constructors_dispatch_through_valid_native_roots(tmp_path):
-    # 24 new-family dispatch inputs; Matrix requires its own publication root.
-    # Scatter keeps its existing baseline rather than another new smoke input.
+def test_family_constructors_return_their_exact_owners():
+    # Native family publication is covered by the scientific gallery; this
+    # boundary checks each Python constructor's exact returned owner.
     samples = [1.0, 1.5, 2.5, 3.0, 2.0, 2.5, 3.5, 4.0]
     categories = ["a"] * 4 + ["b"] * 4
     plots = [
@@ -76,17 +76,8 @@ def test_remaining_24_exact_constructors_dispatch_through_valid_native_roots(tmp
         ("Waterfall", lp.waterfall(category=["first", "second"], delta=[2, -1], base=10)),
     ]
     assert len(plots) == 24
-    canvas = lp.Canvas.grid(5, 5).size(5000, 5000)
-    for index, (name, plot) in enumerate(plots):
+    for name, plot in plots:
         assert type(plot).__name__ == name
-        plot.title(f"Family {name}").legend("hidden")
-        if name == "Matrix":
-            plot.size(1600, 1400).svg_preserve_text(tmp_path / "matrix-family")
-        else:
-            canvas.panel(index // 5, index % 5, plot)
-    canvas.svg_preserve_text(tmp_path / "all-families")
-    rendered = texts(tmp_path / "all-families") + texts(tmp_path / "matrix-family")
-    assert {f"Family {name}" for name, _ in plots} <= set(rendered)
 
 
 def test_complete_combinations_and_required_none_precede_lookup():
