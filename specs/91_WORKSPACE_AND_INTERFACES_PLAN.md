@@ -52,6 +52,10 @@ distribution also passed a new independent build/install/runtime gate. Last-stag
 reviewed test cleanup is verified below, but conservative reviewed counts already
 exceeded all three unchanged limits at that checkpoint. The further cleanup below
 now closes E2E at 80; whole-workspace unit/module exact counts remain unresolved.
+The scalar-domain audit below also proves a constraint conflict: retaining the
+existing full Unicode casefold conformance while charging independent ignored
+inputs already exceeds the 800-unit ceiling by itself. No budget completion is
+claimed and no unique Unicode coverage has been deleted to manufacture one.
 The recorded post-cleanup source-distribution refresh passed before the further
 hard-budget cleanup below; it does not certify later test-source changes.
 The three input-boundary choices below are settled, not outstanding product decisions.
@@ -1127,6 +1131,38 @@ SHA-256 `6aa864f0ebc9d52e96fc186449558416608a8b2195bb7f894f91fea011b6ace4`.
 The current disjoint lower bound is **at least 1,638 unit / 1,680 module / exactly
 80 E2E**, with **547** core-function expansions unresolved. Both unit/module
 ceilings and the final current-source distribution gate remain open.
+
+### Hard-Budget Constraint Conflict
+
+The unchanged ignored `official_nfkc_casefold` in
+`crates/lichtung-plot/src/font/unicode16/conformance.rs` checks every explicitly
+mapped scalar against its official NFKC_CF value, then every scalar absent from
+that set against the official default identity. These branches are disjoint and
+jointly cover the two inclusive scalar domains U+0000–U+D7FF and
+U+E000–U+10FFFF: **1,112,064 distinct transformation inputs**. Each is charged as
+an isolated unit input under the same rule used for the numeric products;
+neither one driver/loop nor its ignored flag makes those inputs one scenario.
+This is a source-proven lower bound, not an exact raw invocation count or a new
+official-corpus execution. It does not assume source-row uniqueness.
+
+Replacing this function's old unresolved minimum of one with that positive
+domain bound raises the current mutually exclusive workspace lower bound to
+**at least 1,113,701 unit / 1,680 module / exactly 80 E2E**. The full raw-call
+census and the other unresolved expansions remain open. The compact scalar-domain
+proof, original/current function hashes and provenance-manifest identity are in
+`/tmp/opencode/lichtung-budget2/unicode-scalar-lower-bound.json`,
+SHA-256 `8213044467d46107afe4eeb044c473897fa720176a7367f980a05a1f4052ca21`.
+The local Unicode source variable was observed unset; it was not changed, no
+asset was read/downloaded and no normalization was run for this proof.
+
+Even deleting every other workspace test cannot reconcile that retained
+unique-input conformance contract with the unchanged 800-unit ceiling. Achieving
+both would require an explicitly changed scope/counting or coverage requirement,
+not more duplicate removal. None is authorized here: no reclassification,
+corpus exclusion, workflow retirement or reduced Unicode coverage is silently
+introduced. Consequently this work cannot truthfully be signed complete under
+all current constraints. The current-source distribution refresh remains a
+separate required verification; passing it cannot waive this conflict.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
