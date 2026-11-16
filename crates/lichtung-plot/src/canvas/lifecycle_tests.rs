@@ -2934,7 +2934,7 @@ pub(super) fn capture_counters() -> ([usize; 6], [usize; 6]) {
 }
 
 /// Parent interaction uses representative coordinate, categorical, grid and
-/// distribution children. The caller separately exercises every family as a root.
+/// distribution children. The caller separately checks every family's guides.
 pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
     assert_eq!(plots.len(), 25);
     let mut canvas = Canvas::grid(2, 2)

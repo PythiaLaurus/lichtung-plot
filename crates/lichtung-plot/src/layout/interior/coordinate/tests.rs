@@ -49,74 +49,68 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
                 let factory = inputs
                     .plot_assignment_factory(&measurement, &registered.scope.id)
                     .unwrap();
-                for panel in [
-                    PixelRect::new(80.25, 550.75, 70.5, 410.25),
-                    PixelRect::new(30.0, 810.0, 50.0, 600.0),
-                ] {
-                    for ranges in [[(-1.0, 3.0), (0.0, 4.0)], [(-2.0, 5.0), (-1.0, 6.0)]] {
-                        let mut entry = factory
-                            .assign(
-                                crate::orchestrator::assignment::PlotAllocationInputs::for_test(
-                                    measurement.measurement_size,
-                                    panel,
-                                    round,
-                                    &registered.scope.address,
-                                ),
-                                round,
-                                None,
-                            )
-                            .unwrap();
-                        // This is the supplied-allocation projection contract,
-                        // not evidence of factory domain derivation.
-                        let crate::orchestrator::assignment::AxisDomainAssignments::Pair(pair) =
-                            &mut entry.domains
-                        else {
-                            unreachable!("coordinate pair")
-                        };
-                        for (domain, (lower, upper)) in pair.iter_mut().zip(ranges) {
-                            domain.extent =
-                                crate::orchestrator::registration::DisplayExtent { lower, upper };
-                        }
-                        measurements::start();
-                        let selected = crate::orchestrator::measure_plot(
-                            &factory,
-                            entry,
-                            crate::decorations::legend::discrete::scoped::GuideConsumption {
-                                use_kind:
-                                    crate::decorations::legend::discrete::scoped::GuideUse::Local,
-                                ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
-                            },
-                            &crate::layout::fit::FitScope::root(),
-                        )
-                        .unwrap()
-                        .1;
-                        let work = measurements::finish();
-                        assert_eq!(
-                            work.counters[Counter::StandardCoordinateMeasure as usize],
-                            1
-                        );
-                        assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
-                        assert_eq!(selected.layout.projection.panel_box(), panel);
-                        assert_eq!(selected.layout.projection.x_range(), ranges[0]);
-                        assert_eq!(selected.layout.projection.y_range(), ranges[1]);
-                        assert_eq!(
-                            selected.layout.projection.project(ranges[0].0, ranges[1].0),
-                            (panel.x0, panel.y0)
-                        );
-                        assert_eq!(
-                            selected.layout.projection.project(ranges[0].1, ranges[1].1),
-                            (panel.x1, panel.y1)
-                        );
-                        for side in [AxisSide::Bottom, AxisSide::Left] {
-                            assert_eq!(
-                                selected.axes.as_ref().unwrap().range(side),
-                                ranges[usize::from(side == AxisSide::Left)]
-                            );
-                        }
-                        assert!(selected.marks.is_some());
-                        assert_eq!(selected.annotations.as_ref().unwrap().panel_clip, panel);
-                    }
+                let panel = PixelRect::new(80.25, 550.75, 70.5, 410.25);
+                let ranges = [(-1.0, 3.0), (0.0, 4.0)];
+                let mut entry = factory
+                    .assign(
+                        crate::orchestrator::assignment::PlotAllocationInputs::for_test(
+                            measurement.measurement_size,
+                            panel,
+                            round,
+                            &registered.scope.address,
+                        ),
+                        round,
+                        None,
+                    )
+                    .unwrap();
+                // This is the supplied-allocation projection contract,
+                // not evidence of factory domain derivation.
+                let crate::orchestrator::assignment::AxisDomainAssignments::Pair(pair) =
+                    &mut entry.domains
+                else {
+                    unreachable!("coordinate pair")
+                };
+                for (domain, (lower, upper)) in pair.iter_mut().zip(ranges) {
+                    domain.extent =
+                        crate::orchestrator::registration::DisplayExtent { lower, upper };
                 }
+                measurements::start();
+                let selected = crate::orchestrator::measure_plot(
+                    &factory,
+                    entry,
+                    crate::decorations::legend::discrete::scoped::GuideConsumption {
+                        use_kind: crate::decorations::legend::discrete::scoped::GuideUse::Local,
+                        ..crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES
+                    },
+                    &crate::layout::fit::FitScope::root(),
+                )
+                .unwrap()
+                .1;
+                let work = measurements::finish();
+                assert_eq!(
+                    work.counters[Counter::StandardCoordinateMeasure as usize],
+                    1
+                );
+                assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
+                assert_eq!(selected.layout.projection.panel_box(), panel);
+                assert_eq!(selected.layout.projection.x_range(), ranges[0]);
+                assert_eq!(selected.layout.projection.y_range(), ranges[1]);
+                assert_eq!(
+                    selected.layout.projection.project(ranges[0].0, ranges[1].0),
+                    (panel.x0, panel.y0)
+                );
+                assert_eq!(
+                    selected.layout.projection.project(ranges[0].1, ranges[1].1),
+                    (panel.x1, panel.y1)
+                );
+                for side in [AxisSide::Bottom, AxisSide::Left] {
+                    assert_eq!(
+                        selected.axes.as_ref().unwrap().range(side),
+                        ranges[usize::from(side == AxisSide::Left)]
+                    );
+                }
+                assert!(selected.marks.is_some());
+                assert_eq!(selected.annotations.as_ref().unwrap().panel_clip, panel);
             },
         )
         .unwrap();

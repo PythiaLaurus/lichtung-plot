@@ -579,9 +579,9 @@ fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "explicit native constructors keep lifecycle coverage free of a generic fixture"
+    reason = "explicit native constructors independently specify guide symbols and alpha units"
 )]
-fn every_canonical_plot_kind_renders_through_one_lifecycle() {
+fn native_guides_preserve_family_symbols_and_alpha_units_without_fonts() {
     let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
     let interval_group = CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap();
     let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
@@ -750,7 +750,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             Plot::waterfall(group, delta, 10.0).erase(),
         ),
     ];
-    let mut preparation_work = [0_u64; 2];
     let mut alpha_components = [0_usize; 3];
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
@@ -785,192 +784,13 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         )
         .unwrap();
         assert_actual_alpha_sections(kind, guide.as_ref().unwrap());
-        let prepared = prepared.finish().unwrap();
+        prepared.finish().unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0,
             "{kind:?}"
         );
-        if kind != PlotKind::Matrix {
-            let axes = prepared[0].axes.coordinate().unwrap();
-            for side in 0..2 {
-                if axes.categories(side).is_some() {
-                    continue;
-                }
-                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-                let invalid = plot.clone().with_test_axis_ticks(
-                    side,
-                    vec![crate::AxisTick::new(
-                        axes.ranges()[side].1.next_up(),
-                        "outside",
-                    )],
-                );
-                let error = invalid
-                    .render_with_backend(&mut RecordingBackend::default())
-                    .unwrap_err();
-                assert!(
-                    error.to_string().contains("outside"),
-                    "{kind:?} {side}: {error}"
-                );
-                assert_eq!(
-                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-                    0,
-                    "{kind:?} {side}: {error}"
-                );
-            }
-            let theme = crate::Theme::publication().resolve().unwrap();
-            let text = crate::text::TextService::default();
-            let theme = crate::text::TextRequestContext::new(&theme, &text);
-            crate::orchestrator::with_prepared_plot_for_test(
-                &plot,
-                &theme,
-                |_| Ok(()),
-                |plot, root, theme, operation, round| {
-                    let preparations =
-                        crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-                    let registered = &root.plots[0];
-                    let size = plot.sizing_request().assigned_size().unwrap();
-                    let panel = crate::builder::measure_root_frame(
-                        registered,
-                        size,
-                        crate::builder::RootFrameDomainInput::Prepared,
-                        theme,
-                        root.plot_intrinsic(&registered.scope.id).unwrap(),
-                        operation,
-                        &crate::layout::fit::ROOT_SCOPE,
-                    )
-                    .unwrap()
-                    .panel_box;
-                    crate::layout::interior::InteriorRoute::classify(kind)
-                        .validate(plot)
-                        .unwrap();
-                    plot.validate_category_order_configuration(kind).unwrap();
-                    assert!(
-                        plot.significance_annotations().is_empty()
-                            || kind.supports_significance_annotations()
-                    );
-                    plot.configured_source_rows().unwrap();
-                    theme.text.prepared_font_environment().unwrap();
-                    let measurement = root.assignment_factory().assign(size);
-                    let factory = root
-                        .plot_assignment_factory(&measurement, &registered.scope.id)
-                        .unwrap();
-                    let entry = factory
-                        .assign(
-                            crate::orchestrator::assignment::PlotAllocationInputs::for_test(
-                                size,
-                                panel,
-                                round,
-                                &registered.scope.address,
-                            ),
-                            round,
-                            None,
-                        )
-                        .unwrap();
-                    crate::orchestrator::measure_probe(
-                        &factory,
-                        entry,
-                        crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
-                        &crate::layout::fit::ROOT_SCOPE,
-                    )
-                    .unwrap_or_else(|error| panic!("{kind:?}: {error:?}"));
-                    assert_eq!(
-                        crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
-                        preparations,
-                        "{kind:?}: measurement must consume retained preparation"
-                    );
-                },
-            )
-            .unwrap();
-        }
-        let mut backend = RecordingBackend::default();
-        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
-        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
-        crate::orchestrator::TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
-        crate::orchestrator::measurements::start();
-        let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, kind)
-            .unwrap_or_else(|error| panic!("{kind:?} failed: {error}"));
-        plan.render(&mut backend).unwrap();
-        let work = crate::orchestrator::measurements::finish();
-        assert_eq!(work.calls[2], 1, "{kind:?}: selected capture");
-        assert_eq!(work.calls[3], 1, "{kind:?}: final Null validation");
-        assert_eq!(
-            work.capture_counters,
-            [0; crate::orchestrator::measurements::Counter::ALL.len()],
-            "{kind:?}: no foundational or deferred work in capture"
-        );
-        crate::orchestrator::TEXT_PLAN_CAPTURE_SESSIONS
-            .with(|calls| assert_eq!(calls.get(), 1, "{kind:?}"));
-        crate::render::geometry::GEOMETRY_BACKEND_BEGINS
-            .with(|calls| assert_eq!(calls.get(), 0, "{kind:?}"));
-        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS
-            .with(|calls| assert_eq!(calls.get(), 0, "{kind:?}"));
-        for (total, counter) in preparation_work.iter_mut().zip([
-            crate::orchestrator::measurements::Counter::AxisRangePreparation,
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        ]) {
-            *total += work.counters[counter as usize];
-        }
-        assert_eq!(
-            work.counters[crate::orchestrator::measurements::Counter::AxisSpecPreparation as usize],
-            0,
-            "{kind:?}: root preparation must not replay authored AxisSpec::limits"
-        );
-        assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
-        assert_eq!(plan.dimensions(), (1200, 900));
-        // Dropping the source before every concrete output makes a source-size
-        // or source-data reread impossible after exact-root promotion.
-        drop(plot);
-        let frozen_work = || {
-            [
-                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
-                crate::layout::Projection::test_projection_calls(),
-                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
-                crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
-                crate::orchestrator::SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get),
-            ]
-        };
-        let before = frozen_work();
-        crate::orchestrator::measurements::start();
-        let mut svg = plan.take_svg_backend().unwrap();
-        plan.render(&mut svg).unwrap();
-        let scene = crate::scene::RenderedScene::new(1200, 900, svg.into_output()).unwrap();
-        let preserve = scene.svg_bytes().to_vec();
-        assert!(std::str::from_utf8(&preserve)
-            .unwrap()
-            .contains("viewBox=\"0 0 1200 900\""));
-        if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
-            assert_eq!(
-                std::str::from_utf8(&preserve)
-                    .unwrap()
-                    .matches("<linearGradient")
-                    .count(),
-                1,
-                "{kind:?}: one native guide placement owner"
-            );
-        }
-        let outlined = scene.svg_with_text_as_paths().unwrap();
-        assert!(!std::str::from_utf8(&outlined).unwrap().contains("<text"));
-        let png = scene
-            .png_bytes(&crate::PngOptions {
-                sizing: crate::PngSizing::Scale(1.0),
-                ..crate::PngOptions::default()
-            })
-            .unwrap();
-        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
-        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 1200);
-        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), 900);
-        assert_eq!(scene.svg_bytes(), preserve);
-        assert_eq!(scene.svg_with_text_as_paths().unwrap(), outlined);
-        let work = crate::orchestrator::measurements::finish();
-        assert_eq!(
-            work.counters,
-            [0; crate::orchestrator::measurements::Counter::ALL.len()],
-            "{kind:?}: frozen output work"
-        );
-        assert_eq!(frozen_work(), before, "{kind:?}: post-freeze work");
     }
-    assert!(preparation_work.into_iter().all(|count| count > 0));
     assert_eq!(alpha_components, [17, 17, 15]);
 }
 

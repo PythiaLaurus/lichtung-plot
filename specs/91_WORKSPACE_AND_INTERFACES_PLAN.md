@@ -30,9 +30,10 @@ values, text-entry/omission/clear/precedence rules and object-lifecycle semantic
 below are settled implementation directions, supported by bounded prototypes and
 explicit API discussion. The current package implements the binding/scientific
 surface recorded below with bounded installed verification; final acceptance
-is blocked by the unchanged test budgets. Reviewed redundant-test cleanup has
-passed focused verification; its changed packaged bytes also passed a new
-independent source build and fresh installed runtime gate recorded below.
+is blocked by the unchanged test budgets. The recorded cleanup at `7fb6829`
+passed focused verification and a new independent source build/fresh installed
+runtime gate. Further hard-budget cleanup is now in progress; its later packaged
+test changes require another final source-distribution refresh.
 The [Python constructor inventory](92_PYTHON_CONSTRUCTORS_PLAN.md) maps all 25
 families and records the selected call forms. The
 [scientific/numeric interface plan](94_PYTHON_SCIENTIFIC_INTERFACE_PLAN.md) records
@@ -49,8 +50,9 @@ The recorded Linux source-distribution gate, complete peer content/gallery
 and same-source cost observations are verified below. The post-content source
 distribution also passed a new independent build/install/runtime gate. Last-stage
 reviewed test cleanup is verified below, but conservative reviewed counts already
-exceed all three unchanged limits. Whole-workspace exact counts remain unresolved;
-the separate post-cleanup source-distribution refresh has passed.
+exceed all three unchanged limits. Whole-workspace exact counts remain unresolved.
+The recorded post-cleanup source-distribution refresh passed before the further
+hard-budget cleanup below; it does not certify later test-source changes.
 The three input-boundary choices below are settled, not outstanding product decisions.
 
 ### Delivery Status
@@ -74,7 +76,7 @@ The three input-boundary choices below are settled, not outstanding product deci
 | Python alpha | Implemented: capability-gated row/cell, Single, keyed, generated-column and Histogram bin scopes, independent-source forms, native mappings and Theme resets. Owned preparation ends foreign loans before binding-time Python mappers; no persistent ninth callback slot. Focused two-prefix wheel/typing evidence is recorded below. |
 | Python independent layers/results | Implemented: Line and ordinary Bar/HorizontalBar point layers; capability-gated attached/pairwise results with facet/grid, independent-source and explicit scalar forms. Original adapters own counts, broadcasting and scientific validation; focused installed evidence is recorded below. |
 | Integrated content/package/site closure | Peer guides/gallery passed source, execution and actual image review; current-source costs have separate timing, allocation and peak processes. The historical 575-file post-content distribution passed 188 runtime cases and its revised four-input example. After packaged test cleanup, all three native archives were newly verified and a genuinely new 574-file Python sdist passed its own fresh build/install and 175 archived runtime cases. No publication or deployment was performed. |
-| Reviewed test cleanup and unchanged budgets | Thirteen redundant Rust drivers, thirteen Python parameter cases, duplicate checks and dead test support were removed with concrete retained witnesses and independent patch review. Focused behavior, formatting and strict workspace/all-target Clippy passed. Reviewed lower bounds are already at least 805 unit / 588 module / 81 E2E against unchanged 800/300/80 limits: FAIL, not a complete exact census or overall acceptance. |
+| Reviewed test cleanup and unchanged budgets | The first reviewed cleanup and its independent distribution gate passed. Further hard-budget cleanup has removed 112 repeated module scenarios and 25 per-family publication scenarios, with retained-contract tests and strict Clippy passing. Current-wheel recursive metadata checking has now been enumerated instead of treated as zero; limits remain FAIL, not a complete exact census or overall acceptance. |
 
 ### Current Python Implementation Scope
 
@@ -716,9 +718,10 @@ they are **conservative lower bounds, not whole-workspace exact totals**:
 | **Unchanged upper limit** | **800** | **300** | **80** |
 | **Budget disposition** | **FAIL** | **FAIL** | **FAIL** |
 
-The remaining 626 internal-function expansions, recursive runtime signature/member
-census and unsigned ordinary-binding exact subtotal are explicitly unresolved,
-not zero. Counting corrections are not deletion savings; no source declaration
+At this checkpoint, the remaining 626 internal-function expansions, recursive
+runtime signature/member census and unsigned ordinary-binding exact subtotal were
+explicitly unresolved, not zero. The later traversal census below addresses the
+recursive component separately. Counting corrections are not deletion savings; no source declaration
 inventory or repeated interpreter run was added as an automatic test multiplier.
 Safe reviewed removals do not close the budget gap, and unique scientific,
 error/lifecycle, Unicode, independent numeric or gallery contracts were not
@@ -806,8 +809,75 @@ identities, independent source/build reviews and both retained audit failures.
 This is current-source Linux/CPython3.10 distribution evidence, not a rerun of
 unchanged gallery/examples, cost observations, typing/stubtest or provider and
 platform matrices. It does not close the failed budgets or unresolved semantic
-census. Only this root status document changed after the gate; no packaged bytes
-were changed to accept the result.
+census. Between that gate and its evidence commit `58e4b1e`, only this root status
+document changed; no packaged bytes were changed to accept the result. The
+subsequent budget cleanup below changes test sources and requires a new final gate.
+
+### Continuing Hard-Budget Cleanup
+
+The next inventory starts at clean `58e4b1e`: 604 tracked files, 1,087 Rust test
+definitions and 147 Python runtime functions/175 parameter cases. The ceilings
+remain **800 unit / 300 module integration / 80 core E2E**. The earlier conservative
+lower bound is not an exact total or an acceptance target.
+
+The first additional cleanup removes real invocations rather than hiding cases:
+
+| Existing test responsibility | Before | Retained |
+| --- | ---: | ---: |
+| Eight coordinate routes × arbitrary panel/range choices | 64 module | 8 module |
+| All-family guide/alpha, generic axis/probe and publication matrix | 132 module + 27 E2E | 76 module + 2 E2E |
+| **Actual removal** | **112 module + 25 E2E** | **0 unit reduction** |
+
+All 25 native constructor fixtures, their independently specified symbol/alpha
+unit expectations and the mixed Canvas cache comparison remain. The removed
+generic invalid-axis paths are represented by the retained both-axis error-order
+witness; direct assigned projection and exact/intrinsic fit checks remain.
+Public family dispatch remains covered by the scientific gallery and Python
+consumers. The unchanged small lifecycle witnesses still exercise one selected
+capture/final lifecycle, source-free frozen replay, real SVG/outline/PNG outputs
+and operation/font/analysis release. Only arbitrary allocation coordinate
+cross-products and repeated per-family generic pipelines were removed.
+The raw Rust function count is unchanged: this saving is in actual scenarios,
+not renaming, merging, ignoring or moving functions.
+
+Eight exact retained Rust tests passed. Formatting and
+`cargo clippy --locked --offline --workspace --all-targets -- -D warnings`
+passed. The first formatting check's line-wrap failure is retained separately;
+no behavior test failure was relabeled. Actual selection, retained-source hashes
+and the before/after responsibility map are recorded in
+`/tmp/opencode/lichtung-budget2/phase1-proof.json`,
+SHA-256 `d26814fdc99c03df32a1b3811318f4f75acc7b8af7d13a9a7319043c18b35eea`.
+
+The previously unresolved recursive checker was also actually observed using the
+current verified wheel/native in a new offline CPython 3.13 prefix with the
+original verification pins and mypy 1.20.2. No prior prefix, shipped declaration,
+scientific behavior, font/Unicode source or dependency pin changed. The original
+stubtest verifiers ran without added ignore/allowlist rules and passed all three
+modules. All **906 canonical project callable groups** reached an actual signature
+comparison; no inspected signature was absent.
+
+The complete selected-path disposition is **2,037 module conformance contracts**:
+1,114 callable comparisons (including 208 distinct runtime-owned equality shadows),
+456 property-descriptor checks, 194 class shapes, 255 variable/class-metadata
+checks, three module/export sets, thirteen aliases and two type variables.
+Decorator-to-function delegation is not counted twice; neither inherited methods
+nor root reexports create another family cross-product. One missing class lookup
+of an instance-only `_owner` variable is an observed verifier skip, not an unknown
+assigned zero. Property checks do not execute getters or prove their return values.
+The collector's compiler-fullname grouping alone would incorrectly merge
+runtime-owned shadows; the actual selected object paths are retained instead.
+This resolves the traversal component, not all remaining core/ordinary cases.
+
+The actual traversal and complete normalized ledger are
+`/tmp/opencode/lichtung-python-offline-TQbAMg/verification-prep/receipts/budget2-signature-census.json`
+and `/tmp/opencode/lichtung-budget2/signature-ledger.json`; the latter SHA-256 is
+`1b37c82feb0e56c05ab3efdb752c6dd4dc01d4abb75cfa3dcea94e3474d47e53`.
+These are newly counted existing checks, not newly added test cases. They do not
+overlap the earlier five reviewed lower-bound subsets. Including this previously
+unsigned component therefore already proves **at least 805 / 2,625 / 81**;
+all three unchanged ceilings still fail. The complete workspace census and
+further genuine redundancy cleanup remain unfinished. No budget pass or current
+post-change source-distribution acceptance is claimed.
 
 This verifies sampled ordinary Linux CPython builds, not manylinux, multiplatform,
 PyPy, free-threaded CPython, subinterpreters or native-worker-thread callbacks.
@@ -818,9 +888,10 @@ unresolved. Overall plan acceptance is not complete.
 The selected scientific API, exact typing and real layer/result consumers are
 implemented. The scientific-source distribution and complete peer content/gallery
 gates and bounded same-source cost observations above are verified. Final-source
-distributions for both the recorded post-content source and committed test cleanup
-are verified too. The failed budget gate and incomplete exact census remain
-separate. These bounded closures are not overall plan closure.
+distributions for the recorded post-content source and first committed test
+cleanup are verified too. Further hard-budget cleanup, its final source refresh,
+the failed budget gate and incomplete workspace census remain open. These bounded
+closures are not overall plan closure.
 The 2026-11-06 prototypes below are not runs of this package.
 
 ## Confirmed Scope And Constraints
