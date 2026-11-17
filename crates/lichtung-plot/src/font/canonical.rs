@@ -4028,10 +4028,6 @@ fn push_bounded_fontconfig_include(
 }
 
 #[cfg(target_os = "windows")]
-#[expect(
-    clippy::too_many_lines,
-    reason = "platform source ordering and generic-family extraction form one locked fontdb contract"
-)]
 fn platform_sources(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
