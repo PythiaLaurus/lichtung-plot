@@ -348,6 +348,61 @@ fn required_table_ranges_and_absent_family_have_distinct_local_diagnostics() {
 }
 
 #[test]
+fn uninspectable_directories_and_rejected_lookups_are_not_absent_or_out_of_bounds() {
+    let missing = build_sfnt(
+        tables(&build_test_font())
+            .into_iter()
+            .filter(|(tag, _)| tag == b"name")
+            .collect(),
+    );
+    let mut invalid_hhea = tables(&build_test_font());
+    invalid_hhea
+        .iter_mut()
+        .find(|(tag, _)| tag == b"hhea")
+        .unwrap()
+        .1
+        .truncate(8);
+    let mut unsorted = build_sfnt(invalid_hhea);
+    // Put the valid head record where binary search cannot find it. This is
+    // adversarial generated input; admission must not reorder or repair it.
+    unsorted[12..12 + 4 * 16].rotate_right(16);
+    let raw = ttf_parser::RawFace::parse(&unsorted, 0).unwrap();
+    assert!(raw.table(ttf_parser::Tag::from_bytes(b"head")).is_none());
+    let head = raw
+        .table_records
+        .into_iter()
+        .find(|record| record.tag == ttf_parser::Tag::from_bytes(b"head"))
+        .unwrap();
+    assert!(usize::try_from(head.offset + head.length).unwrap() <= unsorted.len());
+    let originals = vec![missing, vec![0; 16], unsorted];
+    let core = core(originals.clone());
+    assert!(core.faces().is_empty());
+    let observations: Vec<_> = core
+        .fonts
+        .issues
+        .iter()
+        .filter_map(|issue| {
+            if let ScanReason::Parser { head, .. } = issue.reason {
+                Some(head)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(
+        observations,
+        [
+            TableState::Absent,
+            TableState::Uninspectable,
+            TableState::LookupRejected
+        ]
+    );
+    for (file, original) in core.files().iter().zip(&originals) {
+        assert_eq!(file.bytes.as_slice(), original);
+    }
+}
+
+#[test]
 fn admission_order_is_not_candidate_order_and_failures_retain_context() {
     let one = build_test_font_with_coverage("Same", &['A']);
     let two = build_test_font_with_coverage("Same", &['A', 'B']);

@@ -562,6 +562,10 @@ fatal. No decoded face means no candidate, not a post-selection silent discard.
 Missing/malformed required tables, unaddressable families and explicitly
 image-only faces contribute no candidate. A missing head is not evidence of a
 bitmap font; record table observations and the original parser rejection.
+If the raw directory cannot be inspected, table presence is Uninspectable, not
+Absent. A rejected table lookup is OutOfBounds only when checked directory
+ranges prove it; an in-bounds record that lookup cannot return is LookupRejected.
+Do not reorder directory entries or repair bytes to improve these observations.
 Read name records by ordinal so one bad record cannot hide later family keys.
 Decode only consumed ID16/ID1 keys and the optional ID6 mirror, not copyright,
 FullName or unrelated encodings. An unreadable record need not be diagnosed

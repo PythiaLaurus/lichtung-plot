@@ -19,8 +19,10 @@ pub(super) fn format_diagnostic(arguments: std::fmt::Arguments<'_>) -> Result<St
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TableState {
+    Uninspectable,
     Absent,
     OutOfBounds,
+    LookupRejected,
     Readable,
 }
 
@@ -62,12 +64,27 @@ fn issue(
 fn table_state(raw: &ttf_parser::RawFace<'_>, tag: [u8; 4]) -> TableState {
     let tag = ttf_parser::Tag::from_bytes(&tag);
     if raw.table(tag).is_some() {
-        TableState::Readable
-    } else if raw
+        return TableState::Readable;
+    }
+    let mut present = false;
+    for record in raw
         .table_records
         .into_iter()
-        .any(|record| record.tag == tag)
+        .filter(|record| record.tag == tag)
     {
+        present = true;
+        let end = usize::try_from(record.offset).ok().and_then(|offset| {
+            usize::try_from(record.length)
+                .ok()
+                .and_then(|length| offset.checked_add(length))
+        });
+        if end.is_some_and(|end| end <= raw.data.len()) {
+            // E.g. unsorted table records: a valid range does not imply the
+            // parser's binary-search lookup can locate it. Never repair it.
+            return TableState::LookupRejected;
+        }
+    }
+    if present {
         TableState::OutOfBounds
     } else {
         TableState::Absent
@@ -116,7 +133,7 @@ pub(super) fn admit_file(
             Err(error) => {
                 let head = raw
                     .as_ref()
-                    .map_or(TableState::Absent, |raw| table_state(raw, *b"head"));
+                    .map_or(TableState::Uninspectable, |raw| table_state(raw, *b"head"));
                 let apple_bitmap_tables = raw.as_ref().is_ok_and(|raw| {
                     table_state(raw, *b"bhed") == TableState::Readable
                         && [b"bdat", b"bloc"]
