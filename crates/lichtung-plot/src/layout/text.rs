@@ -2372,7 +2372,13 @@ fn finalize_plan(
                 .iter()
                 .flat_map(|line| &line.plan.runs)
                 .map(|run| run.face)
-                .chain(pair_provenance.candidates.first().copied()),
+                .chain(
+                    pair_provenance
+                        .candidates
+                        .first()
+                        .copied()
+                        .filter(|_| built_lines.iter().any(|line| line.plan.runs.is_empty())),
+                ),
         )?;
     }
     let line_pitch_quanta = metric_height.max(line_height_quanta);

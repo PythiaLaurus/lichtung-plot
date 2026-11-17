@@ -173,6 +173,30 @@ fn frozen_metric_source_mismatch_is_an_output_error_not_font_fallback() {
 }
 
 #[test]
+fn zero_height_error_identifies_used_faces_not_unused_primary_or_fallback() {
+    let environment = PreparedFontEnvironment::synthetic_shaping_fonts(vec![
+        font("Primary", &['X'], Some((0, 0)), (0, 0)),
+        font("Used", &[' '], Some((0, 0)), (0, 0)),
+        font("Unused", &[' '], Some((800, -200)), (900, -300)),
+    ]);
+    let stack = canonical::named_stack(&["Primary", "Used", "Unused"]);
+    let error = plan(&environment, " ", &["Primary", "Used", "Unused"]).unwrap_err();
+    let pair = environment
+        .prepared_pair(&stack, RequestedWeight::Normal)
+        .unwrap()
+        .unwrap();
+    let TextPlanError::NoTextHeight { faces, .. } = error else {
+        panic!("selected blank is not replaced by another font")
+    };
+    assert_eq!(faces, [pair.provenance.candidates[1]]);
+    let error = plan(&environment, "", &["Primary", "Used", "Unused"]).unwrap_err();
+    let TextPlanError::NoTextHeight { faces, .. } = error else {
+        panic!("empty block uses primary metrics")
+    };
+    assert_eq!(faces, [pair.primary]);
+}
+
+#[test]
 fn metric_pairs_preserve_zero_endpoints_and_use_one_same_face_source() {
     for (typo, hhea, expected, values) in [
         (
