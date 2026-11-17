@@ -221,6 +221,27 @@ mod windows_owned {
     };
 
     pub(super) fn replace(file: &std::fs::File, destination: &Path) -> std::io::Result<()> {
+        let (mut buffer, buffer_bytes) = rename_information(destination)?;
+        // SAFETY: `rename_information` supplies an aligned buffer with the
+        // populated header and NUL-terminated filename, live for this
+        // synchronous Win32 call.
+        if unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle(),
+                FileRenameInfo,
+                buffer.as_mut_ptr().cast(),
+                buffer_bytes,
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    fn rename_information(
+        destination: &Path,
+    ) -> std::io::Result<(Vec<MaybeUninit<FILE_RENAME_INFO>>, u32)> {
         let name = destination.as_os_str().encode_wide().collect::<Vec<_>>();
         let name_bytes = name
             .len()
@@ -229,32 +250,27 @@ mod windows_owned {
             .ok_or_else(path_too_long)?;
         let buffer_bytes = mem::offset_of!(FILE_RENAME_INFO, FileName)
             .checked_add(name_bytes as usize)
+            .and_then(|length| length.checked_add(mem::size_of::<u16>()))
             .ok_or_else(path_too_long)?;
-        let entries = buffer_bytes.div_ceil(mem::size_of::<FILE_RENAME_INFO>());
+        let buffer_bytes = u32::try_from(buffer_bytes).map_err(|_| path_too_long())?;
+        let entries = (buffer_bytes as usize).div_ceil(mem::size_of::<FILE_RENAME_INFO>());
         let mut buffer = vec![MaybeUninit::<FILE_RENAME_INFO>::uninit(); entries];
         let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-        let buffer_bytes = u32::try_from(buffer_bytes).map_err(|_| path_too_long())?;
 
         // SAFETY: `buffer` is aligned for FILE_RENAME_INFO and large enough for
-        // its header plus the exact trailing UTF-16 name. The handle and buffer
-        // remain live for the synchronous Win32 call.
+        // its header, UTF-16 name and terminating NUL. Initialize the entire
+        // allocation, including padding, before writing the counted name.
         unsafe {
+            std::ptr::write_bytes(info, 0, buffer.len());
             std::ptr::addr_of_mut!((*info).Anonymous.ReplaceIfExists).write(true);
             std::ptr::addr_of_mut!((*info).RootDirectory).write(std::ptr::null_mut());
             std::ptr::addr_of_mut!((*info).FileNameLength).write(name_bytes);
             let name_destination = std::ptr::addr_of_mut!((*info).FileName).cast::<u16>();
             std::ptr::copy_nonoverlapping(name.as_ptr(), name_destination, name.len());
-            if SetFileInformationByHandle(
-                file.as_raw_handle(),
-                FileRenameInfo,
-                info.cast(),
-                buffer_bytes,
-            ) == 0
-            {
-                return Err(std::io::Error::last_os_error());
-            }
+            // Win32 path conversion reads to NUL even with FileNameLength set.
+            name_destination.add(name.len()).write(0);
         }
-        Ok(())
+        Ok((buffer, buffer_bytes))
     }
 
     pub(super) fn remove(file: &std::fs::File) -> std::io::Result<()> {
@@ -283,6 +299,45 @@ mod windows_owned {
             std::io::ErrorKind::InvalidInput,
             "render output path is too long for Windows atomic replacement",
         )
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn rename_information_terminates_utf16_outside_the_counted_name() {
+            let boundary_units = (mem::size_of::<FILE_RENAME_INFO>()
+                - mem::offset_of!(FILE_RENAME_INFO, FileName))
+                / mem::size_of::<u16>();
+            let boundary_name = "a".repeat(boundary_units);
+            for name in [boundary_name.as_str(), "图🦀.svg"] {
+                let expected = std::ffi::OsStr::new(name).encode_wide().collect::<Vec<_>>();
+                let (mut buffer, buffer_bytes) = rename_information(Path::new(name)).unwrap();
+                let expected_bytes = mem::offset_of!(FILE_RENAME_INFO, FileName)
+                    + (expected.len() + 1) * mem::size_of::<u16>();
+                assert_eq!(buffer_bytes as usize, expected_bytes);
+                assert!(buffer.len() * mem::size_of::<FILE_RENAME_INFO>() >= expected_bytes);
+
+                // SAFETY: the builder initializes the header and complete
+                // UTF-16 name, including the separately sized terminator.
+                let info = unsafe { &*buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>() };
+                assert_eq!(unsafe { info.Anonymous.Flags }, 1);
+                assert!(info.RootDirectory.is_null());
+                assert_eq!(
+                    info.FileNameLength as usize,
+                    expected.len() * mem::size_of::<u16>()
+                );
+                let actual = unsafe {
+                    std::slice::from_raw_parts(
+                        std::ptr::addr_of!(info.FileName).cast::<u16>(),
+                        expected.len() + 1,
+                    )
+                };
+                assert_eq!(&actual[..expected.len()], expected);
+                assert_eq!(actual.last(), Some(&0));
+            }
+        }
     }
 }
 
@@ -434,10 +489,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_owned_handle_prevents_reopen_and_path_substitution() {
+        use std::os::windows::fs::OpenOptionsExt;
+
         let directory = test_directory("windows-owned-staging");
-        let output = directory.join("plot.svg");
+        let output = directory.join("图🦀.svg");
         let moved = directory.join("moved-staging");
-        std::fs::write(&output, "existing artifact").unwrap();
         let mut staging = OwnedArtifactStaging::create(&output).unwrap();
         let staged_path = staging.path().unwrap().to_path_buf();
 
@@ -454,10 +510,29 @@ mod tests {
         staging.commit().unwrap();
 
         assert_eq!(
-            std::fs::read_to_string(output).unwrap(),
+            std::fs::read_to_string(&output).unwrap(),
             "owned staging bytes"
         );
         assert!(!staged_path.exists() && !moved.exists());
+
+        write_atomic(&output, b"replacement artifact").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&output).unwrap(),
+            "replacement artifact"
+        );
+
+        let locked_destination = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&output)
+            .unwrap();
+        assert!(write_atomic(&output, b"must not be published").is_err());
+        drop(locked_destination);
+        assert_eq!(
+            std::fs::read_to_string(&output).unwrap(),
+            "replacement artifact"
+        );
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
         std::fs::remove_dir_all(directory).unwrap();
     }
 

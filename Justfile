@@ -34,7 +34,7 @@ package:
 
 # Exercise native atomic-output contracts, including target-specific handle rules.
 test-output:
-    cargo test --locked --offline -p lichtung-plot --lib orchestrator::artifacts::tests::
+    cargo test --locked --offline -p lichtung-plot --lib orchestrator::artifacts::
 
 # Exercise canonical font discovery, selection and retained-face use contracts.
 test-font:
