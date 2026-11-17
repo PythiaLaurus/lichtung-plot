@@ -253,7 +253,7 @@ fn contextual_font() -> Vec<u8> {
     sfnt(tables)
 }
 
-fn sfnt(mut tables: Vec<([u8; 4], Vec<u8>)>) -> Vec<u8> {
+pub(super) fn sfnt(mut tables: Vec<([u8; 4], Vec<u8>)>) -> Vec<u8> {
     tables.sort_by_key(|(tag, _)| *tag);
     let mut font = words(&[1, 0, u16::try_from(tables.len()).unwrap(), 0, 0, 0]);
     let mut offset = 12 + tables.len() * 16;
@@ -271,7 +271,7 @@ fn sfnt(mut tables: Vec<([u8; 4], Vec<u8>)>) -> Vec<u8> {
     font
 }
 
-fn contextual_fonts() -> Vec<Vec<u8>> {
+pub(super) fn contextual_fonts() -> Vec<Vec<u8>> {
     let names = PreparedFontEnvironment::synthetic_faces(&[("First", &['A']), ("Second", &['A'])]);
     let mut database = fontdb::Database::new();
     names.populate_database(&mut database).unwrap();

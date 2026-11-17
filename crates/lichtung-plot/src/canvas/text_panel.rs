@@ -452,3 +452,83 @@ impl TextPanelPlan {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::canonical::{named_stack, PreparedFontEnvironment};
+    use crate::layout::text::metric_tests::font;
+    use crate::render::backend::Backend;
+
+    #[test]
+    fn ink_only_fit_floors_still_allocate_and_remeasure_real_text_panel_rows() {
+        let resolved = crate::Theme::publication().resolve().unwrap();
+        let text = crate::text::TextService::default();
+        let environment = PreparedFontEnvironment::synthetic_shaping_fonts(vec![
+            font("Ink", &['0', 'A'], Some((0, 0)), (0, 0)),
+            font("Unused", &['B'], Some((0, 0)), (0, 0)),
+        ]);
+        text.fonts.set(Ok(environment.clone())).unwrap();
+        let theme = crate::text::TextRequestContext::new(&resolved, &text);
+        let style = theme
+            .typography
+            .composition
+            .body
+            .clone()
+            .stack(named_stack(&["Ink", "Unused"]))
+            .unwrap()
+            .font_size(10.0)
+            .unwrap();
+        let request = crate::TextLayout::default().fit(crate::TextFit::shrink_to(2.0).unwrap());
+        let source = TextPanel::new(
+            crate::Text::new("A")
+                .style(style.clone())
+                .layout(request.clone()),
+            crate::Text::new("A\nA").style(style).layout(request),
+        )
+        .unwrap();
+        let intrinsics = TextPanelIntrinsics::prepare(&source, &theme).unwrap();
+        let lengths = theme.text_panel_lengths(10.0, 10.0).unwrap();
+        let reserve =
+            crate::theme::composition::hard(&lengths.inset.times(2).add_length(&lengths.gap))
+                .unwrap();
+        let FitOutcome::Measured(plan) = TextPanelPlan::measure(
+            &source,
+            0,
+            PixelRect::new(0.0, 160.0, 0.0, reserve + 20.0),
+            &theme,
+            intrinsics,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("both assigned rows have feasible fractional sizes")
+        };
+        assert!(plan.title.height() > 0.0 && plan.body.height() > 0.0);
+        assert!(plan.title.height() + plan.body.height() <= 20.0);
+        assert!(plan.body.plan().style.font_size < 10.0);
+        environment.operation().seal_fonts().unwrap();
+        let mut backend =
+            crate::render::svg_backend::SvgBackend::in_memory_with_fonts(160, 120, &environment);
+        backend.begin(160, 120).unwrap();
+        backend
+            .draw_planned_text(plan.title_placement, plan.title.plan())
+            .unwrap();
+        backend
+            .draw_planned_text(plan.body_placement, plan.body.plan())
+            .unwrap();
+        backend.end().unwrap();
+        let scene = crate::scene::RenderedScene::new(160, 120, backend.into_output()).unwrap();
+        assert!(scene
+            .svg_with_text_as_paths()
+            .unwrap()
+            .windows(5)
+            .any(|bytes| bytes == b"<path"));
+        assert!(!scene
+            .png_bytes(&crate::PngOptions {
+                sizing: crate::PngSizing::Source,
+                ..crate::PngOptions::default()
+            })
+            .unwrap()
+            .is_empty());
+    }
+}

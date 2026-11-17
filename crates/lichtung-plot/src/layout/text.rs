@@ -28,6 +28,8 @@ mod requirements;
 pub(crate) mod visibility;
 use rational::ExactRational;
 #[cfg(test)]
+pub(crate) mod metric_tests;
+#[cfg(test)]
 mod shaping_tests;
 #[allow(unused_imports)]
 pub(crate) use requirements::{
@@ -155,6 +157,7 @@ pub(crate) struct ShapedTextRun {
     pub(crate) units_per_em: u16,
     pub(crate) design_ascender: i16,
     pub(crate) design_descender: i16,
+    pub(crate) metric_source: canonical::MetricSource,
     pub(crate) ascender_quanta: i64,
     pub(crate) descender_quanta: i64,
     pub(crate) design_x_advance: i64,
@@ -1000,6 +1003,11 @@ pub(crate) enum TextPlanError {
     InvalidMaximumWidth,
     #[error("line height must be finite and positive")]
     InvalidLineHeight,
+    #[error("text block {span:?} has neither usable nominal metrics nor positive vertical ink; selected faces {faces:?}")]
+    NoTextHeight {
+        span: TextSourceSpan,
+        faces: Vec<FaceIdentity>,
+    },
     #[error("text source exceeds the supported u32 byte range")]
     SourceTooLong,
     #[error("text planning arithmetic overflow while calculating {0}")]
@@ -1106,7 +1114,6 @@ fn measure_text(
         .prepared_pair(stack, weight)?
         .ok_or(TextPlanError::MissingPreparedPair)?;
     input.provenance.pair_ordinal = pair.provenance.pair_ordinal;
-    let primary_metrics = environment.face_metrics(pair.primary)?;
 
     let paragraph_seeds = mandatory_paragraph_seeds(input.source)?;
     let mut built_lines = Vec::new();
@@ -1134,7 +1141,12 @@ fn measure_text(
             .map_err(|_| TextPlanError::Arithmetic("grapheme index"))?;
         if paragraph.is_empty() {
             if intrinsic_lines.is_none() {
-                let whole = empty_line(seed.span, ending, primary_metrics, scale)?;
+                let whole = empty_line(
+                    seed.span,
+                    ending,
+                    environment.face_metrics(pair.primary)?,
+                    scale,
+                )?;
                 retain_paragraph(
                     &mut analyzed_paragraphs,
                     AnalyzedParagraph {
@@ -2229,6 +2241,7 @@ fn scale_run<'a>(
             units_per_em: shaped.metrics.units_per_em,
             design_ascender: shaped.metrics.ascender,
             design_descender: shaped.metrics.descender,
+            metric_source: shaped.metrics.source,
             ascender_quanta,
             descender_quanta,
             design_x_advance: design_horizontal_advance,
@@ -2288,18 +2301,39 @@ fn scaled_metrics<'a>(
     font_size: impl Into<FontScale<'a>>,
 ) -> Result<(i64, i64), TextPlanError> {
     let font_size = font_size.into();
-    let ascender = scale_design(i64::from(metrics.ascender), font_size, metrics.units_per_em)?
-        .ceil_i64("face ascender")?;
+    let ascender = scale_design(
+        i64::from(metrics.ascender).max(0),
+        font_size,
+        metrics.units_per_em,
+    )?
+    .ceil_i64("face ascender")?;
     let descender = scale_design(
-        i64::from(metrics.descender),
+        i64::from(metrics.descender).min(0),
         font_size,
         metrics.units_per_em,
     )?
     .floor_i64("face descender")?;
-    if ascender <= 0 || descender >= 0 {
+    if ascender < 0 || descender > 0 {
         return Err(TextPlanError::Arithmetic("scaled face metrics"));
     }
     Ok((ascender, descender))
+}
+
+fn require_block_height(
+    span: TextSourceSpan,
+    ascent: i64,
+    descent: i64,
+    identities: impl Iterator<Item = FaceIdentity>,
+) -> Result<(), TextPlanError> {
+    if ascent == 0 && descent == 0 {
+        let mut faces = Vec::new();
+        for identity in identities {
+            super::unicode16::reserve(&mut faces, 1)?;
+            faces.push(identity);
+        }
+        return Err(TextPlanError::NoTextHeight { span, faces });
+    }
+    Ok(())
 }
 
 #[expect(
@@ -2326,6 +2360,21 @@ fn finalize_plan(
     let metric_height = ascent
         .checked_add(descent)
         .ok_or(TextPlanError::Arithmetic("text metric height"))?;
+    // Existing consumers use one common A/D for the entire block. Ink on
+    // another line can therefore bound blank lines too; do not require a new
+    // per-face or per-empty-line strut that the geometry does not need.
+    if !built_lines.is_empty() {
+        require_block_height(
+            TextSourceSpan::new(0, input.source.len())?,
+            ascent,
+            descent,
+            built_lines
+                .iter()
+                .flat_map(|line| &line.plan.runs)
+                .map(|run| run.face)
+                .chain(pair_provenance.candidates.first().copied()),
+        )?;
+    }
     let line_pitch_quanta = metric_height.max(line_height_quanta);
 
     let width_quanta = built_lines.iter().try_fold(0_i64, |width, line| {

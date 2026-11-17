@@ -229,7 +229,7 @@ pub(crate) fn measure(
 
 /// Optimistic, exact design-space lower bounds prune only proven nonfits.
 /// Rounded glyph origins move an ideal full-line ink span by at most one
-/// quantum. Each real line also retains at least one admitted face's metrics.
+/// quantum. A zero nominal lower bound is valid evidence, not a bad face.
 struct BoundsEvidence {
     width: ExactRational,
     metric: ExactRational,
@@ -296,25 +296,7 @@ impl BoundsEvidence {
                 width = width.max(ink.right.add(&ink.left.negated()?, "ideal span")?);
             }
         }
-        let pair = environment
-            .prepared_pair(
-                appearance.theme.get_stack(),
-                appearance.theme.get_weight().into(),
-            )?
-            .ok_or(TextPlanError::MissingPreparedPair)?;
-        let mut metric = None;
-        for &face in &pair.provenance.candidates {
-            let metrics = environment.face_metrics(face)?;
-            let next = ExactRational::design(
-                i64::from(metrics.ascender) - i64::from(metrics.descender),
-                1.0,
-                metrics.units_per_em,
-            )?;
-            metric = Some(match metric {
-                Some(current) => ExactRational::min(current, next),
-                None => next,
-            });
-        }
+        let metric = nominal_height_evidence(environment, &basis.source, appearance)?;
         let mut unbreakable = true;
         if let Some(analysis) = &basis.1 {
             for paragraph in &analysis.paragraphs {
@@ -328,7 +310,7 @@ impl BoundsEvidence {
         }
         Ok(Self {
             width,
-            metric: metric.ok_or(TextPlanError::MissingPreparedPair)?,
+            metric,
             paragraphs: basis.lines.len(),
             unbreakable,
         })
@@ -353,18 +335,23 @@ impl BoundsEvidence {
         }
         let possible = |size: f64| -> Result<bool, TextPlanError> {
             let factor = ExactRational::design(1, size, 1024)?;
-            let metric = self
-                .metric
-                .multiply(&factor)?
-                .multiply(&ExactRational::new(
-                    if complete {
-                        i128::try_from(self.paragraphs)
-                            .map_err(|_| TextPlanError::Arithmetic("font fit paragraph count"))?
-                    } else {
-                        1
-                    },
-                    1,
-                )?)?;
+            // A reached marker can introduce a different face. Do not admit it
+            // early, or use the original source's nominal floor for marked views.
+            let metric = if complete {
+                self.metric.clone()
+            } else {
+                ExactRational::ZERO
+            }
+            .multiply(&factor)?
+            .multiply(&ExactRational::new(
+                if complete {
+                    i128::try_from(self.paragraphs)
+                        .map_err(|_| TextPlanError::Arithmetic("font fit paragraph count"))?
+                } else {
+                    1
+                },
+                1,
+            )?)?;
             if request.instructions().orientation.is_none()
                 && assigned_height
                     .is_some_and(|height| metric.greater(&ExactRational::Small(height.into(), 1)))
@@ -426,6 +413,51 @@ impl BoundsEvidence {
         }
         Ok(Some(f64::from_bits(lo)))
     }
+}
+
+/// Closed over this actual source's selected units, discretionary hyphen and
+/// possible primary-only empty/control lines, not every candidate in the stack
+/// or previously admitted source. Every participating face contributes, even 0.
+fn nominal_height_evidence(
+    environment: &crate::font::canonical::PreparedFontEnvironment,
+    source: &str,
+    appearance: TextAppearance<'_>,
+) -> Result<ExactRational, TextPlanError> {
+    use crate::font::canonical::{selection_units, ScalarFaceSelection};
+    let pair = environment
+        .prepared_pair(
+            appearance.theme.get_stack(),
+            appearance.theme.get_weight().into(),
+        )?
+        .ok_or(TextPlanError::MissingPreparedPair)?;
+    let mut metric: Option<ExactRational> = None;
+    let mut include = |identity| -> Result<(), TextPlanError> {
+        let metrics = environment.face_metrics(identity)?;
+        let height = i64::from(metrics.ascender).max(0) - i64::from(metrics.descender).min(0);
+        let next = ExactRational::design(height, 1.0, metrics.units_per_em)?;
+        metric = Some(metric.take().map_or(next.clone(), |prior| prior.min(next)));
+        Ok(())
+    };
+    for unit in selection_units(source) {
+        for scalar in unit.chars() {
+            if let ScalarFaceSelection::Face(identity) = pair.selection_for_unit(unit, scalar)? {
+                include(identity)?;
+            }
+        }
+    }
+    if source.contains('\u{ad}') {
+        if let ScalarFaceSelection::Face(identity) = pair.selection_for_unit("-", '-')? {
+            include(identity)?;
+        }
+    }
+    if source.chars().any(crate::text::is_nonpainting_control)
+        || super::mandatory_paragraph_seeds(source)?
+            .iter()
+            .any(|seed| seed.span.range().is_empty())
+    {
+        include(pair.primary)?;
+    }
+    Ok(metric.unwrap_or(ExactRational::ZERO))
 }
 #[expect(
     clippy::needless_pass_by_value,
@@ -712,6 +744,7 @@ pub(crate) fn minimum_height(
         return Ok(None);
     };
     if appearance.hidden()
+        || request.instructions().orientation.is_some()
         || request
             .instructions()
             .overflow
@@ -727,43 +760,24 @@ pub(crate) fn minimum_height(
         .bounds(appearance.theme.get_font_size())?
         .0;
     let environment = theme.text.prepared_font_environment()?;
-    let pair = environment
-        .prepared_pair(
-            appearance.theme.get_stack(),
-            appearance.theme.get_weight().into(),
-        )
-        .map_err(|error| metric_error(error.into()))?
-        .ok_or_else(|| Error::Render("text minimum has no admitted font pair".into()))?;
-    let mut metric = None;
-    for &face in &pair.provenance.candidates {
-        let metrics = environment
-            .face_metrics(face)
-            .map_err(|error| metric_error(error.into()))?;
-        let value = ExactRational::design(
-            i64::from(metrics.ascender) - i64::from(metrics.descender),
-            minimum,
-            metrics.units_per_em,
-        )
-        .map_err(metric_error)?;
-        metric = Some(metric.map_or(value.clone(), |prior: ExactRational| prior.min(value)));
-    }
-    let count = if request
+    if request
         .instructions()
         .overflow
         .as_ref()
         .is_some_and(|overflow| overflow.ellipsis.is_some())
     {
-        1
-    } else {
-        super::mandatory_paragraph_seeds(source)
-            .map_err(metric_error)?
-            .len()
-    };
+        return Ok(Some(0));
+    }
+    let metric = nominal_height_evidence(environment, source, appearance).map_err(metric_error)?;
+    let count = super::mandatory_paragraph_seeds(source)
+        .map_err(metric_error)?
+        .len();
     let count = i128::try_from(count)
         .map_err(|_| Error::Render("text minimum paragraph count overflow".into()))?;
     Ok(Some(
         metric
-            .ok_or_else(|| Error::Render("text minimum has no font metrics".into()))?
+            .multiply(&ExactRational::design(1, minimum, 1024).map_err(metric_error)?)
+            .map_err(metric_error)?
             .multiply(&ExactRational::new(count, 1).map_err(metric_error)?)
             .map_err(metric_error)?
             .ceil_i64("minimum text height")

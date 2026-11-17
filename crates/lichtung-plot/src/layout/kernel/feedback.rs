@@ -1101,6 +1101,7 @@ fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> bool {
                 a.units_per_em,
                 a.design_ascender,
                 a.design_descender,
+                a.metric_source,
                 a.ascender_quanta,
                 a.descender_quanta,
             ) != (
@@ -1112,6 +1113,7 @@ fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> bool {
                 b.units_per_em,
                 b.design_ascender,
                 b.design_descender,
+                b.metric_source,
                 b.ascender_quanta,
                 b.descender_quanta,
             ) || (

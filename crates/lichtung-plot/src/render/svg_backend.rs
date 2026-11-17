@@ -266,6 +266,7 @@ impl SvgBackend {
                 if metrics.units_per_em != run.units_per_em
                     || metrics.ascender != run.design_ascender
                     || metrics.descender != run.design_descender
+                    || metrics.source != run.metric_source
                 {
                     return Err(Error::Render(
                         "retained outline face metrics do not match the immutable text plan".into(),

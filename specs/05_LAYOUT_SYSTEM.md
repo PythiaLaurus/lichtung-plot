@@ -385,10 +385,23 @@ even, not individually rounded advance sums. Outward painted bounds use those
 same origins/scaled outlines as collisions and outlined/PNG output. Complete-line
 hard advance is separate from glyph placement.
 
-Use OS/2 sTypoAscender/sTypoDescender when present, otherwise hhea; invalid metrics,
-including nonnegative descender, reject. A/D contain maximum positive ascent/
-absolute descent and selected ink above/below baseline across fallback faces;
-without glyphs use primary metrics. With upward role leading,
+Select OS/2 sTypoAscender/sTypoDescender as one pair when its ascender exceeds
+its descender; otherwise try the same face's hhea pair. This deterministic
+typo-first policy does not mix component-wise zero fallbacks or usWin clipping
+fields; USE_TYPO_METRICS does not disable typo selection when clear. A zero
+endpoint is meaningful, not a missing field. If neither pair has a positive
+interval, retain an InkOnly state with zero nominal extents, not a rejected
+face. Retain the selected source with the immutable run.
+
+Scale `max(ascender,0)` upward and `min(descender,0)` downward with checked exact
+arithmetic and legal unitsPerEm (16..16384). A/D contain those nonnegative
+nominal extents and actual selected ink above/below baseline across fallback
+faces. Query primary metrics only for actual empty paragraphs, not every
+measurement. A block's common A/D may come entirely from ink, and may also bound
+its blank lines. A block with logical lines but neither nominal height nor
+positive vertical ink fails explicitly; positive role leading alone does not
+invent its baseline/first-line height. Do not try another font or silently
+omit the block. With upward role leading (no extra font-table line gap),
 `pitch=max(A+D,line_height)`, `height=A+D+(line_count-1)*pitch`, baseline i=A+i*pitch.
 First baseline is sequence baseline; retain last for ink checks.
 
@@ -524,6 +537,12 @@ Empty candidate list/uncovered visible scalar fails. Selected-face metrics/shapi
 failure is not permission to try another candidate. Layout cannot change fonts
 because another face fits better.
 Retaining or ranking an unselected face does not validate its design metrics.
+Font-fit height evidence uses this source's selected units, discretionary
+hyphen and possible primary-only lines, not all candidates or another source's
+selections. Include zero nominal extents in the minimum; never skip them to
+raise a lower bound. Unknown/unreached marker evidence and rotated hard floors
+use zero, without early marker admission. Zero is a conservative pruning bound,
+not an acceptable zero-height final result; actual trial geometry remains strict.
 
 Retain canonical ordered lists, pair ordinals, unit spans, selected identities and
 same immutable font bytes through geometry/path conversion. Discovery/hash/metadata/

@@ -30,6 +30,7 @@ thread_local! {
     pub(crate) static FONT_FINAL_SEALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static FONT_METRIC_QUERIES: std::cell::RefCell<Vec<FaceIdentity>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(test)]
@@ -261,15 +262,23 @@ pub(crate) struct NameOccurrence {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MetricSource {
+    Typographic,
+    Hhea,
+    InkOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DesignMetrics {
     pub(crate) units_per_em: u16,
     pub(crate) ascender: i16,
     pub(crate) descender: i16,
+    pub(crate) source: MetricSource,
 }
 
 impl DesignMetrics {
     fn validate(self, identity: FaceIdentity) -> Result<Self, FontError> {
-        if self.ascender <= 0 || self.descender >= 0 {
+        if !(16..=16384).contains(&self.units_per_em) {
             return Err(FontError::InvalidMetrics { identity });
         }
         Ok(self)
@@ -2115,6 +2124,8 @@ impl CanonicalFontCore {
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
+        #[cfg(test)]
+        FONT_METRIC_QUERIES.with(|queries| queries.borrow_mut().push(identity));
         let face = self.find_face(identity).ok_or(FontError::Shape {
             identity,
             reason: "identity is not retained",
@@ -2274,15 +2285,24 @@ impl FrozenFontRegistry {
 }
 
 fn design_metrics(face: &ttf_parser::Face<'_>) -> DesignMetrics {
-    // Discovery retains every decoded face; metric validity is a use-site check.
+    // Keep the existing typo-first policy without component-wise zero fallbacks.
+    // No usable nominal interval is not proof that actual glyph ink is unusable.
+    let typo = face
+        .typographic_ascender()
+        .zip(face.typographic_descender());
+    let hhea = face.tables().hhea;
+    let (ascender, descender, source) = if let Some((a, d)) = typo.filter(|(a, d)| a > d) {
+        (a, d, MetricSource::Typographic)
+    } else if hhea.ascender > hhea.descender {
+        (hhea.ascender, hhea.descender, MetricSource::Hhea)
+    } else {
+        (0, 0, MetricSource::InkOnly)
+    };
     DesignMetrics {
         units_per_em: face.units_per_em(),
-        ascender: face
-            .typographic_ascender()
-            .unwrap_or_else(|| face.ascender()),
-        descender: face
-            .typographic_descender()
-            .unwrap_or_else(|| face.descender()),
+        ascender,
+        descender,
+        source,
     }
 }
 
@@ -4257,7 +4277,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_metrics_are_rejected_on_use_without_filtering_retained_faces() {
+    fn zero_descent_is_not_an_invalid_face_or_permission_to_reselect() {
         let valid = build_test_font_with_coverage("Valid Metrics", &['A']);
         let mut invalid = build_test_font_with_coverage("Invalid Metrics", &['A', 'B']);
         let os2 = ttf_parser::RawFace::parse(&invalid, 0)
@@ -4266,7 +4286,7 @@ mod tests {
             .into_iter()
             .find(|record| record.tag == ttf_parser::Tag::from_bytes(b"OS/2"))
             .unwrap();
-        // OS/2 is present but invalid; valid hhea metrics must not replace it.
+        // A zero descent is meaningful, not a request for hhea/win replacement.
         set_i16(&mut invalid, usize::try_from(os2.offset).unwrap() + 70, 0);
         let files = [valid, invalid]
             .into_iter()
@@ -4314,34 +4334,29 @@ mod tests {
             pair.selection_for_unit("B", 'B').unwrap(),
             ScalarFaceSelection::Face(invalid),
         );
-        assert!(matches!(
-            environment.face_metrics(invalid),
-            Err(FontError::InvalidMetrics { identity }) if identity == invalid
-        ));
-        assert!(matches!(
-            environment.shape_run(
-                invalid,
-                "B",
-                ShapingDirection::LeftToRight,
-                rustybuzz::script::LATIN,
-            ),
-            Err(FontError::InvalidMetrics { identity }) if identity == invalid
-        ));
+        assert_eq!(environment.face_metrics(invalid).unwrap().descender, 0);
+        assert_eq!(
+            environment
+                .shape_run(
+                    invalid,
+                    "B",
+                    ShapingDirection::LeftToRight,
+                    rustybuzz::script::LATIN,
+                )
+                .unwrap()
+                .metrics
+                .source,
+            MetricSource::Typographic,
+        );
         let mut outline = Outline(0);
-        assert!(matches!(
-            environment.outline_glyph(invalid, 1, &mut outline),
-            Err(FontError::InvalidMetrics { identity }) if identity == invalid
-        ));
-        assert_eq!(outline.0, 0);
+        environment.outline_glyph(invalid, 1, &mut outline).unwrap();
+        assert!(outline.0 > 0);
         let invalid_primary = named_stack(&["Invalid Metrics", "Valid Metrics"]);
         let pair = environment
             .resolve_pair(1, &invalid_primary, RequestedWeight::Normal, &[])
             .unwrap();
         assert_eq!(pair.primary, invalid);
-        assert!(matches!(
-            environment.face_metrics(pair.primary),
-            Err(FontError::InvalidMetrics { identity }) if identity == invalid
-        ));
+        assert_eq!(environment.face_metrics(pair.primary).unwrap().descender, 0);
     }
 
     #[test]
