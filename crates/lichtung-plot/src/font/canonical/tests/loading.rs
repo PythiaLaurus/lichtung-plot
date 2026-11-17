@@ -193,7 +193,8 @@ fn candidate_union_not_unrelated_payload_controls_full_read_hash_and_retention()
             .materialized
             .iter()
             .all(|(path, _)| path.file_name().unwrap() != "unrelated.ttf"));
-        assert!(loaded.metadata_bytes[&directory.path().join("unrelated.ttf")] < payload + 256);
+        let unrelated_path = fs::canonicalize(directory.path().join("unrelated.ttf")).unwrap();
+        assert!(loaded.metadata_bytes[&unrelated_path] < payload + 256);
 
         // New weight, generic pair and new source share the already closed file
         // union. None may invalidate or replace the original scalar choice.
@@ -385,6 +386,7 @@ fn consumed_metadata_changes_fail_even_with_restored_mtime_and_do_not_publish_a_
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("font.ttf");
         fs::write(&path, &foo).unwrap();
+        let canonical_path = fs::canonicalize(&path).unwrap();
         let environment = indexed_environment(directory.path(), "Foo");
         let old_modified = fs::metadata(&path).unwrap().modified().unwrap();
         assert_eq!(foo.len(), changed.len());
@@ -401,10 +403,11 @@ fn consumed_metadata_changes_fail_even_with_restored_mtime_and_do_not_publish_a_
         );
         let stack = named_stack(&["Foo"]);
         reset_observations();
-        assert!(matches!(
-            environment.admit_text(&stack, RequestedWeight::Normal, "A", None),
-            Err(FontError::ChangedFile(changed)) if changed == path
-        ));
+        let result = environment.admit_text(&stack, RequestedWeight::Normal, "A", None);
+        assert!(
+            matches!(&result, Err(FontError::ChangedFile(changed)) if changed == &canonical_path),
+            "{result:?}; supplied={path:?}"
+        );
         assert_eq!(observations().full_bytes, changed.len());
         assert!(observations().face_checks.is_empty());
         assert!(environment
