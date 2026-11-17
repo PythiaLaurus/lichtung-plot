@@ -200,6 +200,84 @@ fn admission_does_not_absorb_work_resource_or_internal_failures() {
 }
 
 #[test]
+fn image_only_declarations_and_optional_defaults_do_not_become_an_outline_sanitizer() {
+    let mut image = tables(&build_test_font());
+    image.retain(|(tag, _)| !matches!(tag, b"glyf" | b"loca"));
+    // A declaration-only classification witness, not a claim of valid sbix data.
+    image.push((*b"sbix", vec![0; 8]));
+    let mut mixed = tables(&build_test_font());
+    mixed.push((*b"sbix", vec![0; 8]));
+    let mut optional = tables(&build_test_font());
+    optional.retain(|(tag, _)| tag != b"OS/2");
+    optional.push((*b"post", vec![0; 4]));
+    let core = core(vec![
+        build_sfnt(image),
+        build_sfnt(mixed),
+        build_sfnt(optional),
+    ]);
+    assert_eq!(
+        core.faces().len(),
+        2,
+        "an optional paint parser None does not reject vectors"
+    );
+    assert_eq!(
+        core.fonts.issues[0].reason,
+        ScanReason::UnsupportedImageOnly
+    );
+    assert_eq!(core.fonts.issues[0].file_ordinal, 0);
+    let optional = &core.faces()[1];
+    assert_eq!(
+        (optional.style, optional.stretch, optional.weight),
+        (Style::Normal, Stretch::Normal, 400)
+    );
+    let mirror = core.database.face(optional.database_id).unwrap();
+    assert!(
+        !mirror.monospaced,
+        "short post is not positive monospaced/italic evidence"
+    );
+    assert!(core.fonts.issues.iter().any(|issue| issue.file_ordinal == 2
+        && issue.reason == ScanReason::OptionalDefault(*b"post", TableState::Readable)));
+}
+
+#[test]
+fn required_table_ranges_and_absent_family_have_distinct_local_diagnostics() {
+    let mut out_of_bounds = build_test_font();
+    let directory = (12..12
+        + usize::from(u16::from_be_bytes([out_of_bounds[4], out_of_bounds[5]])) * 16)
+        .step_by(16)
+        .find(|offset| &out_of_bounds[*offset..*offset + 4] == b"head")
+        .unwrap();
+    set_u32(&mut out_of_bounds, directory + 8, u32::MAX);
+    let mut unaddressable = tables(&build_test_font());
+    let names = &mut unaddressable
+        .iter_mut()
+        .find(|(tag, _)| tag == b"name")
+        .unwrap()
+        .1;
+    set_u16(names, 6 + 6, 2);
+    set_u16(names, 6 + 12 + 6, 2);
+    let core = core(vec![
+        out_of_bounds,
+        build_sfnt(unaddressable),
+        build_test_font(),
+    ]);
+    assert_eq!(core.faces().len(), 1);
+    assert!(core.fonts.issues.iter().any(|issue| matches!(
+        issue.reason,
+        ScanReason::Parser {
+            head: TableState::OutOfBounds,
+            apple_bitmap_tables: false,
+            ..
+        }
+    )));
+    assert!(core
+        .fonts
+        .issues
+        .iter()
+        .any(|issue| issue.file_ordinal == 1 && issue.reason == ScanReason::MissingFamily));
+}
+
+#[test]
 fn admission_order_is_not_candidate_order_and_failures_retain_context() {
     let one = build_test_font_with_coverage("Same", &['A']);
     let two = build_test_font_with_coverage("Same", &['A', 'B']);
