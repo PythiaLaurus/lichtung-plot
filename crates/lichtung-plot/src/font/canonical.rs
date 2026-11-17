@@ -260,6 +260,15 @@ pub(crate) struct DesignMetrics {
     pub(crate) descender: i16,
 }
 
+impl DesignMetrics {
+    fn validate(self, identity: FaceIdentity) -> Result<Self, FontError> {
+        if self.ascender <= 0 || self.descender >= 0 {
+            return Err(FontError::InvalidMetrics { identity });
+        }
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct FaceMetadata {
     pub(crate) identity: FaceIdentity,
@@ -2093,12 +2102,11 @@ impl CanonicalFontCore {
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
-        self.find_face(identity)
-            .map(|face| face.metrics)
-            .ok_or(FontError::Shape {
-                identity,
-                reason: "identity is not retained",
-            })
+        let face = self.find_face(identity).ok_or(FontError::Shape {
+            identity,
+            reason: "identity is not retained",
+        })?;
+        face.metrics.validate(identity)
     }
 
     fn find_face(&self, identity: FaceIdentity) -> Option<&FaceMetadata> {
@@ -2176,7 +2184,7 @@ impl CanonicalFontCore {
                     sha256: file.sha256,
                     face_index: index,
                 };
-                let metrics = design_metrics(&parsed, identity)?;
+                let metrics = design_metrics(&parsed);
                 faces.push(FaceMetadata {
                     identity,
                     file_ordinal,
@@ -2226,6 +2234,7 @@ impl FrozenFontRegistry {
                 reason: "identity is not retained",
             })?;
         let file = &self.files[metadata.file_ordinal];
+        let metrics = metadata.metrics.validate(identity)?;
         let face = ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|_| {
             FontError::Outline {
                 identity,
@@ -2241,28 +2250,21 @@ impl FrozenFontRegistry {
                 x_max: bounds.x_max,
                 y_max: bounds.y_max,
             });
-        Ok((metadata.metrics, ink))
+        Ok((metrics, ink))
     }
 }
 
-fn design_metrics(
-    face: &ttf_parser::Face<'_>,
-    identity: FaceIdentity,
-) -> Result<DesignMetrics, FontError> {
-    let ascender = face
-        .typographic_ascender()
-        .unwrap_or_else(|| face.ascender());
-    let descender = face
-        .typographic_descender()
-        .unwrap_or_else(|| face.descender());
-    if ascender <= 0 || descender >= 0 {
-        return Err(FontError::InvalidMetrics { identity });
-    }
-    Ok(DesignMetrics {
+fn design_metrics(face: &ttf_parser::Face<'_>) -> DesignMetrics {
+    // Discovery retains every decoded face; metric validity is a use-site check.
+    DesignMetrics {
         units_per_em: face.units_per_em(),
-        ascender,
-        descender,
-    })
+        ascender: face
+            .typographic_ascender()
+            .unwrap_or_else(|| face.ascender()),
+        descender: face
+            .typographic_descender()
+            .unwrap_or_else(|| face.descender()),
+    }
 }
 
 fn decode_family_names(
@@ -2854,6 +2856,7 @@ fn shape_retained_run(
             reason: "run crosses a mandatory paragraph break",
         });
     }
+    let metrics = metadata.metrics.validate(metadata.identity)?;
     let face = rustybuzz::Face::from_slice(&file.bytes, metadata.identity.face_index).ok_or(
         FontError::Shape {
             identity: metadata.identity,
@@ -2938,7 +2941,7 @@ fn shape_retained_run(
         identity: metadata.identity,
         direction,
         script,
-        metrics: metadata.metrics,
+        metrics,
         glyphs,
     })
 }
@@ -4155,26 +4158,27 @@ fn ordinal_roots(
 mod tests {
     use super::*;
 
+    struct Outline(usize);
+    impl ttf_parser::OutlineBuilder for Outline {
+        fn move_to(&mut self, _: f32, _: f32) {
+            self.0 += 1;
+        }
+        fn line_to(&mut self, _: f32, _: f32) {
+            self.0 += 1;
+        }
+        fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {
+            self.0 += 1;
+        }
+        fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {
+            self.0 += 1;
+        }
+        fn close(&mut self) {
+            self.0 += 1;
+        }
+    }
+
     #[test]
     fn retained_face_lookups_require_the_exact_identity() {
-        struct Outline(usize);
-        impl ttf_parser::OutlineBuilder for Outline {
-            fn move_to(&mut self, _: f32, _: f32) {
-                self.0 += 1;
-            }
-            fn line_to(&mut self, _: f32, _: f32) {
-                self.0 += 1;
-            }
-            fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {
-                self.0 += 1;
-            }
-            fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {
-                self.0 += 1;
-            }
-            fn close(&mut self) {
-                self.0 += 1;
-            }
-        }
         let environment = PreparedFontEnvironment::synthetic_faces(&[
             ("First", &['A']),
             ("Middle", &['A']),
@@ -4224,6 +4228,94 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn invalid_metrics_are_rejected_on_use_without_filtering_retained_faces() {
+        let valid = build_test_font_with_coverage("Valid Metrics", &['A']);
+        let mut invalid = build_test_font_with_coverage("Invalid Metrics", &['A', 'B']);
+        let os2 = ttf_parser::RawFace::parse(&invalid, 0)
+            .unwrap()
+            .table_records
+            .into_iter()
+            .find(|record| record.tag == ttf_parser::Tag::from_bytes(b"OS/2"))
+            .unwrap();
+        // OS/2 is present but invalid; valid hhea metrics must not replace it.
+        set_i16(&mut invalid, usize::try_from(os2.offset).unwrap() + 70, 0);
+        let files = [valid, invalid]
+            .into_iter()
+            .map(|bytes| RetainedFontFile {
+                root_ordinal: 0,
+                canonical_path: PathBuf::from("generated-metrics.ttf"),
+                sha256: Sha256::digest(&bytes).into(),
+                bytes: Arc::new(bytes),
+            })
+            .collect();
+        let core = CanonicalFontCore::from_retained(
+            files,
+            &HostGenericNames::default(),
+            FontPreparation::new(),
+            scalar_presence_map(),
+        )
+        .unwrap();
+        let valid = core.faces()[0].identity;
+        let invalid = core.faces()[1].identity;
+        let environment = PreparedFontEnvironment::for_core(core).unwrap();
+        let stack = named_stack(&["Valid Metrics", "Invalid Metrics"]);
+        let pair = environment
+            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
+            .unwrap();
+        assert_eq!(pair.provenance.candidates, [valid, invalid]);
+        assert_eq!(pair.primary, valid);
+        assert_eq!(environment.face_metrics(valid).unwrap().descender, -200);
+        environment
+            .shape_run(
+                valid,
+                "A",
+                ShapingDirection::LeftToRight,
+                rustybuzz::script::LATIN,
+            )
+            .unwrap();
+
+        environment
+            .admit_text(&stack, RequestedWeight::Normal, "B", None)
+            .unwrap();
+        let pair = environment
+            .prepared_pair(&stack, RequestedWeight::Normal)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pair.selection_for_unit("B", 'B').unwrap(),
+            ScalarFaceSelection::Face(invalid),
+        );
+        assert!(matches!(
+            environment.face_metrics(invalid),
+            Err(FontError::InvalidMetrics { identity }) if identity == invalid
+        ));
+        assert!(matches!(
+            environment.shape_run(
+                invalid,
+                "B",
+                ShapingDirection::LeftToRight,
+                rustybuzz::script::LATIN,
+            ),
+            Err(FontError::InvalidMetrics { identity }) if identity == invalid
+        ));
+        let mut outline = Outline(0);
+        assert!(matches!(
+            environment.outline_glyph(invalid, 1, &mut outline),
+            Err(FontError::InvalidMetrics { identity }) if identity == invalid
+        ));
+        assert_eq!(outline.0, 0);
+        let invalid_primary = named_stack(&["Invalid Metrics", "Valid Metrics"]);
+        let pair = environment
+            .resolve_pair(1, &invalid_primary, RequestedWeight::Normal, &[])
+            .unwrap();
+        assert_eq!(pair.primary, invalid);
+        assert!(matches!(
+            environment.face_metrics(pair.primary),
+            Err(FontError::InvalidMetrics { identity }) if identity == invalid
+        ));
     }
 
     #[test]

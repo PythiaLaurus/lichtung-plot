@@ -36,6 +36,10 @@ package:
 test-output:
     cargo test --locked --offline -p lichtung-plot --lib orchestrator::artifacts::tests::
 
+# Exercise canonical font discovery, selection and retained-face use contracts.
+test-font:
+    cargo test --locked --offline -p lichtung-plot --lib font::canonical::tests::
+
 # Build the mixed Python package with already-installed maturin and Python.
 python-build:
     env -u PYO3_BUILD_EXTENSION_MODULE -u PYO3_NO_PYTHON -u PYO3_CONFIG_FILE PYO3_PYTHON="{{python}}" "{{maturin}}" build --manifest-path bindings/python/Cargo.toml --locked --offline --release --interpreter "{{python}}"

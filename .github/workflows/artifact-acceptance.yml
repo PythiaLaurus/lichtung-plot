@@ -56,7 +56,7 @@ jobs:
           PY
       - name: Verify source and all three Rust archives
         run: |
-          just fmt-check lint book-check
+          just fmt-check lint book-check test-font
           LICHTUNG_CARGO_ABOUT="$RUNNER_TEMP/tools/cargo-about" just python-notices
           CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-package" just package
       - name: Produce and inspect the single shared sdist
@@ -145,13 +145,13 @@ jobs:
           python -m pip install --only-binary=:all: uv==0.9.28 maturin==1.16.0 twine==6.2.0
           UV_PYTHON_DOWNLOADS=manual uv python install 3.10.19
           cargo fetch --locked
-      - name: Check shared source identity and native output handles
+      - name: Check shared source identity and native font/output contracts
         run: |
           sdists=("$SOURCE"/*.tar.gz)
           test "${#sdists[@]}" -eq 1
           just python-artifact "${sdists[0]}"
           python -c 'import json, os; assert json.load(open(os.path.join(os.environ["SOURCE"], "sdist.json")))["source_commit"] == "${{ github.sha }}"'
-          just test-output
+          just test-font test-output
       - name: Build only from independently unpacked source
         run: |
           python - <<'PY'

@@ -518,6 +518,7 @@ ZWJ/whole-word/general whole-grapheme fallback or multiple-base unit is implied.
 Empty candidate list/uncovered visible scalar fails. Selected-face metrics/shaping
 failure is not permission to try another candidate. Layout cannot change fonts
 because another face fits better.
+Retaining or ranking an unselected face does not validate its design metrics.
 
 Retain canonical ordered lists, pair ordinals, unit spans, selected identities and
 same immutable font bytes through geometry/path conversion. Discovery/hash/metadata/
