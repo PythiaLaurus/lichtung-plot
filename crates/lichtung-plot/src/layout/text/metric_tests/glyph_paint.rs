@@ -130,6 +130,129 @@ fn assert_image_payload(bytes: &[u8], kind: ImageKind) {
     }
 }
 
+fn layered_color_font() -> Vec<u8> {
+    let base = image_font(ImageKind::Raster, false);
+    let raw = ttf_parser::RawFace::parse(&base, 0).unwrap();
+    let mut tables: Vec<_> = raw
+        .table_records
+        .into_iter()
+        .filter(|record| record.tag != ttf_parser::Tag::from_bytes(b"sbix"))
+        .map(|record| {
+            (
+                record.tag.0.to_be_bytes(),
+                raw.table(record.tag).unwrap().to_vec(),
+            )
+        })
+        .collect();
+    let mut palette = Vec::new();
+    for value in [0_u16, 1, 1, 1] {
+        palette.extend(value.to_be_bytes()); // v0, one entry/palette/color
+    }
+    palette.extend(14_u32.to_be_bytes());
+    palette.extend(0_u16.to_be_bytes()); // first palette's color index
+    palette.extend([0, 0, 255, 255]); // opaque red, BGRA
+    let mut layers = Vec::new();
+    layers.extend(0_u16.to_be_bytes()); // COLR v0
+    layers.extend(2_u16.to_be_bytes()); // B=1 and A=3 have color definitions
+    layers.extend(14_u32.to_be_bytes()); // base records
+    layers.extend(26_u32.to_be_bytes()); // layer records
+    layers.extend(1_u16.to_be_bytes());
+    for glyph in [1_u16, 3] {
+        for value in [glyph, 0, 1] {
+            layers.extend(value.to_be_bytes()); // first layer 0, count 1
+        }
+    }
+    layers.extend(1_u16.to_be_bytes()); // draw the real B outline
+    layers.extend(0_u16.to_be_bytes()); // using palette entry 0
+    tables.extend([(*b"CPAL", palette), (*b"COLR", layers)]);
+    super::super::shaping_tests::sfnt(tables)
+}
+
+#[derive(Default)]
+struct ColorPaintWitness {
+    glyph: Option<ttf_parser::GlyphId>,
+    color: Option<ttf_parser::RgbaColor>,
+}
+
+impl<'a> ttf_parser::colr::Painter<'a> for ColorPaintWitness {
+    fn outline_glyph(&mut self, glyph: ttf_parser::GlyphId) {
+        assert!(self.glyph.replace(glyph).is_none());
+    }
+
+    fn paint(&mut self, paint: ttf_parser::colr::Paint<'a>) {
+        let ttf_parser::colr::Paint::Solid(color) = paint else {
+            panic!("the generated v0 fixture has one solid layer")
+        };
+        assert!(self.color.replace(color).is_none());
+    }
+
+    // COLR v0 emits no transforms, clips or compositing operations.
+    fn push_clip(&mut self) {}
+    fn push_clip_box(&mut self, _: ttf_parser::colr::ClipBox) {}
+    fn pop_clip(&mut self) {}
+    fn push_layer(&mut self, _: ttf_parser::colr::CompositeMode) {}
+    fn pop_layer(&mut self) {}
+    fn push_transform(&mut self, _: ttf_parser::Transform) {}
+    fn pop_transform(&mut self) {}
+}
+
+fn assert_color_payload(bytes: &[u8]) {
+    let face = ttf_parser::Face::parse(bytes, 0).unwrap();
+    let glyph = face.glyph_index('A').unwrap();
+    assert_eq!(glyph.0, 3);
+    assert!(face.glyph_bounding_box(glyph).is_none());
+    assert!(face.glyph_raster_image(glyph, u16::MAX).is_none());
+    assert!(face.glyph_svg_image(glyph).is_none());
+    assert!(face.is_color_glyph(glyph));
+    let mut witness = ColorPaintWitness::default();
+    let color = ttf_parser::RgbaColor::new(255, 0, 0, 255);
+    face.paint_color_glyph(glyph, 0, color, &mut witness)
+        .unwrap();
+    assert_eq!(witness.glyph, Some(ttf_parser::GlyphId(1)));
+    assert_eq!(witness.color, Some(color));
+    let ink = face.glyph_bounding_box(witness.glyph.unwrap()).unwrap();
+    assert!(ink.x_max > ink.x_min && ink.y_max > ink.y_min);
+}
+
+#[test]
+fn selected_color_layers_without_base_outline_fail_at_use() {
+    let bytes = layered_color_font();
+    assert_color_payload(&bytes);
+    let face = ttf_parser::Face::parse(&bytes, 0).unwrap();
+    let b = face.glyph_index('B').unwrap();
+    let space = face.glyph_index(' ').unwrap();
+    assert!(face.glyph_bounding_box(b).is_some() && face.is_color_glyph(b));
+    assert!(face.glyph_bounding_box(space).is_none() && !face.is_color_glyph(space));
+    let fallback = font("Fallback", &['A'], Some((800, -200)), (800, -200));
+    let environment = PreparedFontEnvironment::synthetic_shaping_fonts(vec![bytes, fallback]);
+    let error = plan(&environment, "A", &["Image", "Fallback"]).unwrap_err();
+    let stack = canonical::named_stack(&["Image", "Fallback"]);
+    let pair = environment
+        .prepared_pair(&stack, RequestedWeight::Normal)
+        .unwrap()
+        .unwrap();
+    assert_eq!(pair.provenance.candidates.len(), 2);
+    assert!(matches!(error,
+        TextPlanError::Font(FontError::UnsupportedGlyphPaint {
+            identity, glyph_id: 3, paint: canonical::GlyphPaint::ColorLayers
+        }) if identity == pair.primary));
+    let mut outline = OutlineCount::default();
+    assert!(
+        matches!(environment.outline_glyph(pair.primary, 3, &mut outline),
+        Err(FontError::UnsupportedGlyphPaint {
+            identity, glyph_id: 3, paint: canonical::GlyphPaint::ColorLayers
+        }) if identity == pair.primary)
+    );
+    assert_eq!(outline.0, 0);
+    // A retained color-only glyph does not reject another selected outline or
+    // a legitimate empty glyph, even after a failed request in this environment.
+    for source in ["B", " "] {
+        let measured = plan(&environment, source, &["Image", "Fallback"]).unwrap();
+        assert_eq!(measured.lines[0].ink_quanta.is_some(), source == "B");
+        check_output(&environment, &measured);
+    }
+}
+
 #[test]
 fn selected_image_only_glyph_fails_at_use_without_font_fallback() {
     for (kind, placeholders) in [

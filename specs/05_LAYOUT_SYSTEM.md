@@ -539,8 +539,8 @@ Empty candidate list/uncovered visible scalar fails. Selected-face metrics/shapi
 failure is not permission to try another candidate. Layout cannot change fonts
 because another face fits better.
 For each actually shaped/outlined glyph, an absent outline plus a positive
-locked-parser raster-image (largest strike) or SVG-image result is an explicit
-unsupported-paint error, not an empty glyph or a reason to select another face.
+locked-parser raster-image (largest strike), SVG-image or COLR definition is an
+explicit unsupported-paint error, not an empty glyph or a reason to select another face.
 An available outline remains usable despite optional image tables. No Unicode
 visibility rule requires ink: a defined empty glyph without an image result is
 still allowed. These Option APIs do not prove validity or detect every damaged

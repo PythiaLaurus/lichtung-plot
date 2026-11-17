@@ -927,6 +927,7 @@ impl From<ShapingDirection> for rustybuzz::Direction {
 pub(crate) enum GlyphPaint {
     RasterImage,
     SvgImage,
+    ColorLayers,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2303,7 +2304,7 @@ impl FrozenFontRegistry {
 }
 
 /// Only inspect paint for an actually used glyph with no outline result.
-/// Parser image APIs expose encoded data, not an all-table/glyph validity proof.
+/// Paint queries expose declarations or encoded data, not a full validity proof.
 fn validate_selected_glyph_paint(
     face: &ttf_parser::Face<'_>,
     identity: FaceIdentity,
@@ -2318,6 +2319,8 @@ fn validate_selected_glyph_paint(
         Some(GlyphPaint::RasterImage)
     } else if face.glyph_svg_image(glyph).is_some() {
         Some(GlyphPaint::SvgImage)
+    } else if face.is_color_glyph(glyph) {
+        Some(GlyphPaint::ColorLayers)
     } else {
         None
     };
