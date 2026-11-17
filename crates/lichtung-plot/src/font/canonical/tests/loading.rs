@@ -98,6 +98,48 @@ fn collection(faces: &[Option<Vec<u8>>]) -> Vec<u8> {
 }
 
 #[test]
+fn projected_family_names_match_the_locked_parser_across_supported_name_layouts() {
+    let base = build_test_font_with_coverage("Projection", &['A']);
+    let tables = super::admission::tables(&base);
+    let original = &tables.iter().find(|(tag, _)| tag == b"name").unwrap().1;
+    let storage = usize::from(u16::from_be_bytes([original[4], original[5]]));
+
+    let mut padded = original[..storage].to_vec();
+    padded.extend([0; 16]);
+    padded.extend_from_slice(&original[storage..]);
+    set_u16(&mut padded, 4, u16::try_from(storage + 16).unwrap());
+
+    // Exercise the locked parser's version-1 language-record layout, not a
+    // separate interpretation of OpenType conformance. Matching ignores these
+    // language tags, but must preserve original family record ordinals.
+    let mut version_one = padded[..6].to_vec();
+    push_u16(&mut version_one, 1);
+    version_one.extend([0; 4]);
+    version_one.extend_from_slice(&padded[6..]);
+    set_u16(&mut version_one, 0, 1);
+    set_u16(&mut version_one, 4, u16::try_from(storage + 22).unwrap());
+
+    for names in [original.clone(), padded, version_one] {
+        let mut edited = tables.clone();
+        edited.iter_mut().find(|(tag, _)| tag == b"name").unwrap().1 = names;
+        let bytes = build_sfnt(edited);
+        let face = ttf_parser::Face::parse(&bytes, 0).unwrap();
+        let expected = decode_family_names(face.names(), None).unwrap();
+        assert!(expected.iter().any(|name| name.value == "Projection"));
+        reset_observations();
+        let indexed = index::generated(bytes).unwrap();
+        assert_eq!(indexed.faces.len(), 1);
+        assert_eq!(indexed.faces[0].index, 0);
+        assert_eq!(indexed.faces[0].names, expected);
+        assert!(indexed.issues.is_empty());
+        let observed = observations();
+        assert_eq!(observed.full_bytes, 0);
+        assert_eq!(observed.hash_bytes, 0);
+        assert!(observed.face_checks.is_empty());
+    }
+}
+
+#[test]
 fn candidate_union_not_unrelated_payload_controls_full_read_hash_and_retention() {
     let good = build_test_font_with_coverage("Used", &['A', 'B']);
     let alternate = build_test_font_with_coverage("Used", &['A']);
