@@ -563,6 +563,10 @@ Missing/malformed required tables, unaddressable families and explicitly
 image-only faces contribute no candidate. A missing head is not evidence of a
 bitmap font; record table observations and the original parser rejection.
 Read name records by ordinal so one bad record cannot hide later family keys.
+Decode only consumed ID16/ID1 keys and the optional ID6 mirror, not copyright,
+FullName or unrelated encodings. An unreadable record need not be diagnosed
+individually; report MissingFamily only if no usable matching key remains.
+Absent ID6 and ordinary optional-field defaults are not font scan problems.
 Optional metadata uses Normal/400/normal-width defaults, not new rejection
 conditions; no outline tables alone can describe legitimate all-empty glyphs.
 This admission boundary is not a sanitizer of all tables or glyphs. Diagnostics

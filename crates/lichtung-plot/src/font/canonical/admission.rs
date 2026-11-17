@@ -34,9 +34,6 @@ pub(super) enum ScanReason {
     },
     UnsupportedImageOnly,
     MissingFamily,
-    MissingPostScriptName,
-    UnusableNameRecord(u16),
-    OptionalDefault([u8; 4], TableState),
 }
 
 #[derive(Debug)]
@@ -159,21 +156,8 @@ pub(super) fn admit_file(
             )?;
             continue;
         }
-        for ordinal in 0..parsed.names().len() {
-            if parsed
-                .names()
-                .get(ordinal)
-                .is_none_or(|record| !decodes_like_ttf_parser(&record))
-            {
-                issue(
-                    issues,
-                    file_ordinal,
-                    Some(index),
-                    ScanReason::UnusableNameRecord(ordinal),
-                    stage.as_deref_mut(),
-                )?;
-            }
-        }
+        // Decode only actual family keys, then the optional ID6 mirror below.
+        // Unknown/unreadable and unrelated name records are not scan issues.
         let names = decode_family_names(&parsed, stage.as_deref_mut())?;
         if names.is_empty() {
             issue(
@@ -184,24 +168,6 @@ pub(super) fn admit_file(
                 stage.as_deref_mut(),
             )?;
             continue;
-        }
-        for (tag, usable) in [
-            (*b"OS/2", parsed.tables().os2.is_some()),
-            (
-                *b"post",
-                raw.table(ttf_parser::Tag::from_bytes(b"post"))
-                    .is_some_and(|data| data.len() >= 16),
-            ),
-        ] {
-            if !usable {
-                issue(
-                    issues,
-                    file_ordinal,
-                    Some(index),
-                    ScanReason::OptionalDefault(tag, table_state(raw, tag)),
-                    stage.as_deref_mut(),
-                )?;
-            }
         }
         let mut families = Vec::new();
         reserve_prepared_or_local(
@@ -235,15 +201,6 @@ pub(super) fn admit_file(
                     }
                 }
             }
-        }
-        if post_script_name.is_empty() {
-            issue(
-                issues,
-                file_ordinal,
-                Some(index),
-                ScanReason::MissingPostScriptName,
-                stage.as_deref_mut(),
-            )?;
         }
         let post = raw.table(ttf_parser::Tag::from_bytes(b"post"));
         let nonzero = |range| {

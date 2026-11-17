@@ -50,11 +50,10 @@ fn family_without_id6_and_after_bad_record_is_admitted() {
         .unwrap()
         .post_script_name
         .is_empty());
-    assert!(core
-        .fonts
-        .issues
-        .iter()
-        .any(|issue| issue.reason == ScanReason::UnusableNameRecord(0)));
+    assert!(
+        core.fonts.issues.is_empty(),
+        "unknown record and absent optional ID6 are not scan issues"
+    );
     let environment = PreparedFontEnvironment::for_core(core).unwrap();
     let pair = environment
         .resolve_pair(
@@ -75,6 +74,54 @@ fn family_without_id6_and_after_bad_record_is_admitted() {
         .unwrap()
         .glyphs
         .is_empty());
+}
+
+#[test]
+fn unrelated_bad_or_unsupported_names_do_not_add_scan_requirements() {
+    let mut data = tables(&build_test_font());
+    let name = &mut data.iter_mut().find(|(tag, _)| tag == b"name").unwrap().1;
+    // Valid ID16 remains. A malformed Unicode copyright and a non-Unicode
+    // FullName are neither matching keys nor the optional ID6 mirror.
+    set_u16(name, 6 + 6, 0);
+    set_u16(name, 42, 0xd800);
+    set_u16(name, 6 + 2 * 12, 1); // Macintosh, not the supported Unicode encoding.
+    set_u16(name, 6 + 2 * 12 + 2, 0);
+    set_u16(name, 6 + 2 * 12 + 6, 4);
+    let bytes = build_sfnt(data);
+    let parsed = ttf_parser::Face::parse(&bytes, 0).unwrap();
+    assert!(parsed.names().get(0).unwrap().to_string().is_none());
+    assert!(!parsed.names().get(2).unwrap().is_unicode());
+    let core = core(vec![bytes]);
+    assert!(
+        core.fonts.issues.is_empty(),
+        "no diagnostics allocated for unconsumed names/defaults"
+    );
+    assert_eq!(core.faces()[0].names.len(), 1);
+    assert_eq!(core.faces()[0].names[0].value, "Test Sans");
+    assert_eq!(core.faces()[0].names[0].record_ordinal, 1);
+    let mirror = core.database.face(core.faces()[0].database_id).unwrap();
+    assert_eq!(mirror.families[0].0, "Test Sans");
+    assert!(mirror.post_script_name.is_empty());
+    let environment = PreparedFontEnvironment::for_core(core).unwrap();
+    let pair = environment
+        .resolve_pair(
+            0,
+            &named_stack(&["Test Sans"]),
+            RequestedWeight::Normal,
+            &['A'],
+        )
+        .unwrap();
+    assert!(environment
+        .shape_run(
+            pair.primary,
+            "A",
+            ShapingDirection::LeftToRight,
+            rustybuzz::script::LATIN
+        )
+        .unwrap()
+        .glyphs[0]
+        .ink
+        .is_some());
 }
 
 #[test]
@@ -252,8 +299,14 @@ fn image_only_declarations_and_optional_defaults_do_not_become_an_outline_saniti
         !mirror.monospaced,
         "short post is not positive monospaced/italic evidence"
     );
-    assert!(core.fonts.issues.iter().any(|issue| issue.file_ordinal == 2
-        && issue.reason == ScanReason::OptionalDefault(*b"post", TableState::Readable)));
+    assert!(
+        !core
+            .fonts
+            .issues
+            .iter()
+            .any(|issue| issue.file_ordinal == 2),
+        "normal optional-field defaults are not invalid-font diagnostics"
+    );
 }
 
 #[test]
