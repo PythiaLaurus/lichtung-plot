@@ -17,6 +17,9 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::text::{is_nonpainting_control, is_nonrendering_mandatory_break};
 
+mod admission;
+use admission::FontScanIssue;
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static FONT_DISCOVERY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -160,8 +163,12 @@ pub(crate) enum FontError {
         index: u32,
         reason: String,
     },
-    #[error("fontdb did not load every parsed face in '{0}'")]
-    DatabaseLoad(PathBuf),
+    #[error("{context}: {source}")]
+    Admission {
+        context: String,
+        #[source]
+        source: Box<Self>,
+    },
     #[error("no canonical system fonts were found")]
     NoSystemFonts,
     #[error("font candidate list is empty for pair {pair_ordinal}")]
@@ -1101,6 +1108,7 @@ pub(crate) struct PreparedFontEnvironment {
 pub(crate) struct FrozenFontRegistry {
     files: Vec<RetainedFontFile>,
     faces: Vec<FaceMetadata>,
+    issues: Vec<FontScanIssue>,
 }
 
 pub(crate) struct SealedTextVerifier<'a> {
@@ -1303,8 +1311,9 @@ impl PreparedFontEnvironment {
         if source.contains('\u{ad}') {
             scalars.push('-');
         }
-        let index =
-            core.admit_scalars_in(ordinal, stack, weight, &scalars, stage.as_deref_mut())?;
+        let index = core
+            .admit_scalars_in(ordinal, stack, weight, &scalars, stage.as_deref_mut())
+            .map_err(|error| self.fonts.admission_error(error, Some(stack)))?;
         core.prepare_source_units(ordinal, source, stage.as_deref_mut())?;
         let mut retained = String::new();
         if let Some(stage) = stage.as_deref_mut() {
@@ -1435,6 +1444,7 @@ impl PreparedFontEnvironment {
             .write()
             .map_err(|_| FontError::Synchronization)?
             .prepare_pairs_with_stage(requests, prepared_stage)
+            .map_err(|error| self.fonts.admission_error(error, None))
     }
 
     #[cfg(test)]
@@ -1831,9 +1841,12 @@ impl CanonicalFontCore {
             preparation.candidate_count =
                 count_unique_candidate_survivors(&self.fonts.faces, &preparation.resolved_names)?;
             if preparation.candidate_count == 0 {
-                return Err(FontError::MissingFamily {
-                    pair_ordinal: preparation.request.pair_ordinal,
-                });
+                return Err(self.fonts.admission_error(
+                    FontError::MissingFamily {
+                        pair_ordinal: preparation.request.pair_ordinal,
+                    },
+                    Some(preparation.request.stack),
+                ));
             }
             let (scalar_count, rendering_scalar_count) = scalar_selection_capacities(
                 preparation.request.required_scalars,
@@ -2145,57 +2158,17 @@ impl CanonicalFontCore {
         let operation = preparation.operation.clone();
         let mut database = Database::new();
 
-        let face_capacity = files.iter().try_fold(0_usize, |total, file| {
-            let count = ttf_parser::fonts_in_collection(&file.bytes).unwrap_or(1);
-            let count =
-                usize::try_from(count).map_err(|_| FontError::Arithmetic("font face count"))?;
-            total
-                .checked_add(count)
-                .ok_or(FontError::Arithmetic("font face count"))
-        })?;
-
         let mut faces = Vec::new();
-        reserve_prepared_or_local(
-            &mut faces,
-            face_capacity,
-            "font face metadata",
-            prepared_stage.as_deref_mut(),
-        )?;
-
+        let mut issues = Vec::new();
         for (file_ordinal, file) in files.iter().enumerate() {
-            let ids = database.load_font_source(Source::Binary(Arc::new(BinarySource(
-                Arc::clone(&file.bytes),
-            ))));
-            for database_id in ids {
-                let info = database
-                    .face(database_id)
-                    .ok_or_else(|| FontError::DatabaseLoad(file.canonical_path.clone()))?;
-                let index = info.index;
-                let parsed = ttf_parser::Face::parse(&file.bytes, index).map_err(|error| {
-                    FontError::ParseFace {
-                        path: file.canonical_path.clone(),
-                        index,
-                        reason: error.to_string(),
-                    }
-                })?;
-
-                let names = decode_family_names(&parsed, prepared_stage.as_deref_mut())?;
-                let identity = FaceIdentity {
-                    sha256: file.sha256,
-                    face_index: index,
-                };
-                let metrics = design_metrics(&parsed);
-                faces.push(FaceMetadata {
-                    identity,
-                    file_ordinal,
-                    database_id,
-                    names,
-                    style: info.style,
-                    stretch: info.stretch,
-                    weight: info.weight.0,
-                    metrics,
-                });
-            }
+            admission::admit_file(
+                file,
+                file_ordinal,
+                &mut database,
+                &mut faces,
+                &mut issues,
+                prepared_stage.as_deref_mut(),
+            )?;
         }
         apply_host_generics(&mut database, generics, &faces);
 
@@ -2205,7 +2178,11 @@ impl CanonicalFontCore {
 
         Ok(Self {
             database,
-            fonts: Arc::new(FrozenFontRegistry { files, faces }),
+            fonts: Arc::new(FrozenFontRegistry {
+                files,
+                faces,
+                issues,
+            }),
             scalar_presence,
             prepared_pairs: Vec::new(),
             prepared_pairs_sealed: false,
@@ -2216,6 +2193,48 @@ impl CanonicalFontCore {
 }
 
 impl FrozenFontRegistry {
+    #[expect(
+        clippy::unnecessary_debug_formatting,
+        reason = "diagnostics preserve escaped lossless native paths"
+    )]
+    fn admission_error(&self, error: FontError, stack: Option<&FontStack>) -> FontError {
+        if !matches!(
+            error,
+            FontError::MissingFamily { .. } | FontError::MissingGlyph { .. }
+        ) {
+            return error;
+        }
+        let context = (|| {
+            let mut context =
+                admission::format_diagnostic(format_args!("requested stack {stack:?}"))?;
+            for issue in &self.issues {
+                let file = self
+                    .files
+                    .get(issue.file_ordinal)
+                    .ok_or(FontError::Arithmetic("font diagnostic file identity"))?;
+                let entry = admission::format_diagnostic(format_args!(
+                    "; scan {:?} sha256={:02x?} index={:?}: {:?}",
+                    file.canonical_path, file.sha256, issue.face_index, issue.reason,
+                ))?;
+                reserve_string_prepared_or_local(
+                    &mut context,
+                    entry.len(),
+                    "font failure diagnostics",
+                    None,
+                )?;
+                context.push_str(&entry);
+            }
+            Ok::<_, FontError>(context)
+        })();
+        match context {
+            Ok(context) => FontError::Admission {
+                context,
+                source: Box::new(error),
+            },
+            Err(error) => error,
+        }
+    }
+
     pub(crate) fn outline_glyph(
         &self,
         identity: FaceIdentity,
@@ -2275,7 +2294,10 @@ fn decode_family_names(
     let names = face.names();
 
     let mut occurrence_count = 0;
-    for record in names {
+    for ordinal in 0..names.len() {
+        let Some(record) = names.get(ordinal) else {
+            continue;
+        };
         if matches!(
             record.name_id,
             ttf_parser::name_id::TYPOGRAPHIC_FAMILY | ttf_parser::name_id::FAMILY
@@ -2292,21 +2314,23 @@ fn decode_family_names(
         prepared_stage,
     )?;
 
-    for (record_ordinal, record) in names.into_iter().enumerate() {
+    for record_ordinal in 0..names.len() {
+        let Some(record) = names.get(record_ordinal) else {
+            continue;
+        };
         let rank = match record.name_id {
             ttf_parser::name_id::TYPOGRAPHIC_FAMILY => NameRank::TypographicFamily,
             ttf_parser::name_id::FAMILY => NameRank::LegacyFamily,
             _ => continue,
         };
-        let Some(value) = record.to_string() else {
+        let Some(value) = admission::decode_name(&record)? else {
             continue;
         };
         occurrences.push(NameOccurrence {
             folded: fold_family_name(&value)?,
             value,
             rank,
-            record_ordinal: u16::try_from(record_ordinal)
-                .map_err(|_| FontError::Arithmetic("name record ordinal"))?,
+            record_ordinal,
         });
     }
     if occurrences.len() != occurrence_count {
@@ -4157,6 +4181,8 @@ fn ordinal_roots(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod admission;
 
     struct Outline(usize);
     impl ttf_parser::OutlineBuilder for Outline {

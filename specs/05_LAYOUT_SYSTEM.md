@@ -495,8 +495,13 @@ Null, preserved/outlined SVG, PNG and Output replay consume frozen glyphs and by
 
 ### Canonical Candidate Selection
 
-Explicitly load discovered files into locked fontdb0.23.0; do not delegate an
-unbounded load_system_fonts. Family occurrences are every ID16 typographic and
+Admit each discovered stable file once using locked ttf-parser0.25.1 before
+canonical matching; do not delegate an unbounded load_system_fonts. Isolate
+stable content/parser failures per original face index, retaining their file,
+SHA, bytes and typed diagnostics. Validate TTC offset-array length before
+count-derived allocation; a bad sibling never renumbers the other faces.
+Mirror admitted rows into fontdb0.23.0 without using its PostScript-name gate.
+ID6 is optional, not a family/identity requirement. Family occurrences are every ID16 typographic and
 ID1 legacy record decoded by ttf-parser 0.25.1. Match named families with Unicode 16
 NFKC-casefold. Generics use the resulting database's host family_name without
 project global remap; unmatched generic contributes none.
@@ -535,6 +540,15 @@ prefixes. Open one admitted regular file at a time, verify actual handle length,
 reserve/read/hash/decode that content and close before next file. Short/changed
 read, discovered-file I/O, capacity/length failure and invalid selected face are
 fatal. No decoded face means no candidate, not a post-selection silent discard.
+Missing/malformed required tables, unaddressable families and explicitly
+image-only faces contribute no candidate. A missing head is not evidence of a
+bitmap font; record table observations and the original parser rejection.
+Read name records by ordinal so one bad record cannot hide later family keys.
+Optional metadata uses Normal/400/normal-width defaults, not new rejection
+conditions; no outline tables alone can describe legitimate all-empty glyphs.
+This admission boundary is not a sanitizer of all tables or glyphs. Diagnostics
+and metadata use fallible project storage; I/O, changed bytes, work-resource,
+arithmetic and synchronization/invariant errors still fail the operation.
 
 Fontconfig includes use iterative canonical-file deduplication and sorted directory
 entries. Verify config length before parsing; reject internal XML entity declarations,
