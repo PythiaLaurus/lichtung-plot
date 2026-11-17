@@ -149,13 +149,162 @@ fn double_zero_nominal_metrics_can_render_from_actual_ink() {
         }
         check_output(&environment, &measured);
     }
-    for source in ["", " ", "\n", "\u{200d}"] {
+    for source in ["", " ", "\u{200d}"] {
         assert!(
             matches!(
                 plan(&environment, source, &["Zero"]),
                 Err(TextPlanError::NoTextHeight { .. })
             ),
             "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn pure_blank_lines_use_leading_for_total_height_and_frozen_output() {
+    for (source, count, height) in [("\n", 2, 12 * 1024), ("\n\n", 3, 24 * 1024)] {
+        let environment = PreparedFontEnvironment::synthetic_shaping_fonts(vec![font(
+            "Zero",
+            &[' '],
+            Some((0, 0)),
+            (0, 0),
+        )]);
+        let stack = canonical::named_stack(&["Zero"]);
+        let mut input = super::tests::input(source, i64::MAX, PhysicalTextAlignment::Start);
+        input.stack = &stack;
+        let measured = environment.plan_text(input.clone()).unwrap();
+        assert_eq!(measured.lines.len(), count);
+        assert_eq!(measured.height_quanta, height);
+        assert_eq!(measured.line_pitch_quanta, 12 * 1024);
+        assert_eq!(measured.first_baseline_quanta, Some(0));
+        assert_eq!(measured.last_baseline_quanta, Some(height));
+        for (index, line) in measured.lines.iter().enumerate() {
+            assert_eq!(
+                line.translation_y_quanta,
+                i64::try_from(index).unwrap() * 12 * 1024
+            );
+            assert!(line.runs.is_empty() && line.ink_quanta.is_none());
+        }
+        let direct = environment
+            .text_intrinsic_requirements(input.clone(), 1)
+            .unwrap();
+        let cached = measured.intrinsic_from_analysis(1).unwrap();
+        assert_eq!(
+            (
+                direct.hard_width_quanta,
+                direct.natural_width_quanta,
+                direct.preferred_width_quanta
+            ),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            (
+                cached.hard_width_quanta,
+                cached.natural_width_quanta,
+                cached.preferred_width_quanta
+            ),
+            (0, 0, 0)
+        );
+        input.maximum_width_quanta = 0;
+        let reflowed = measured.reflow(input.clone()).unwrap();
+        assert_eq!(reflowed.height_quanta, height);
+        input.line_height = TextLineHeight::Multiplier(2.4);
+        let taller = measured.reflow(input).unwrap();
+        assert_eq!(taller.height_quanta, 2 * height);
+        assert_eq!(taller.first_baseline_quanta, Some(0));
+        assert_eq!(taller.last_baseline_quanta, Some(2 * height));
+        let region = crate::layout::PixelRect::new(0.0, 160.0, 0.0, 120.0);
+        let placement = super::placement::resolve(
+            PlannedTextPlacement::baseline(Point2D::new(20.0, 50.0), TextAnchor::Start, 0.0),
+            &measured,
+            Some(region),
+        )
+        .unwrap();
+        super::placement::contain(
+            measured.clone(),
+            placement,
+            region,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
+        for plan in [&measured, &reflowed, &taller] {
+            check_output(&environment, plan);
+        }
+        let frozen = scene(&environment, &measured);
+        let outlined = frozen.svg_with_text_as_paths().unwrap();
+        assert!(!outlined.windows(5).any(|bytes| bytes == b"<path"));
+        let png = frozen
+            .png_bytes(&crate::PngOptions {
+                sizing: crate::PngSizing::Source,
+                ..crate::PngOptions::default()
+            })
+            .unwrap();
+        let pixels = resvg::tiny_skia::Pixmap::decode_png(&png).unwrap();
+        assert!(pixels.pixels().iter().all(|pixel| pixel.alpha() == 0));
+    }
+}
+
+#[test]
+fn blank_line_ellipsis_and_fit_reuse_the_same_total_height_rule() {
+    use crate::layout::fit::{FitOutcome, FitScope};
+    use crate::text::{TextAppearance, TextRequestContext, TextService};
+    for (source, height) in [("\n", 12 * 1024), ("\n\n", 24 * 1024)] {
+        let environment = PreparedFontEnvironment::synthetic_shaping_fonts(vec![font(
+            "Zero",
+            &[' '],
+            Some((0, 0)),
+            (0, 0),
+        )]);
+        let appearance = crate::Theme::publication().resolve().unwrap();
+        let text = TextService::default();
+        text.fonts.set(Ok(environment.clone())).unwrap();
+        let context = TextRequestContext::new(&appearance, &text);
+        let stack = canonical::named_stack(&["Zero"]);
+        let style = context
+            .typography
+            .root
+            .caption
+            .clone()
+            .stack(stack.clone())
+            .unwrap()
+            .font_size(10.0)
+            .unwrap()
+            .line_height(1.2)
+            .unwrap();
+        let layout = crate::TextLayout::default().overflow(crate::TextOverflow::ellipsis(
+            crate::TextEllipsis::new(crate::TextElision::End).max_lines(None),
+            crate::TextFailure::Error,
+        ));
+        for request in [
+            layout.clone(),
+            layout.fit(crate::TextFit::shrink_to(10.0).unwrap()),
+        ] {
+            let FitOutcome::Measured(measured) = super::request::measure_quanta(
+                &context,
+                source,
+                TextAppearance::from(&style).layout(Some(&request)),
+                0,
+                PhysicalTextAlignment::Start,
+                "blank line reuse",
+                &FitScope::root(),
+            )
+            .unwrap() else {
+                panic!("complete blank-line content fits at zero width")
+            };
+            assert_eq!(measured.source, source);
+            assert_eq!(measured.height_quanta, height);
+            assert_eq!(measured.first_baseline_quanta, Some(0));
+            assert_eq!(measured.last_baseline_quanta, Some(height));
+            check_output(&environment, &measured);
+        }
+        let pair = environment
+            .prepared_pair(&stack, RequestedWeight::Normal)
+            .unwrap()
+            .unwrap();
+        assert!(
+            pair.selection_for_unit("\u{2026}", '\u{2026}').is_err(),
+            "an unused marker is not needed to measure blank-line height"
         );
     }
 }
@@ -368,7 +517,7 @@ fn only_actual_fallback_and_blank_lines_require_their_own_metrics() {
         assert!(measured.height_quanta > 0);
         check_output(&environment, &measured);
     }
-    for source in ["", " ", "\n"] {
+    for source in ["", " "] {
         assert!(
             matches!(
                 plan(&environment, source, &["Empty nominal", "Fallback"]),

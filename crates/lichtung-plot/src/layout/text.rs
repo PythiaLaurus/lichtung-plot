@@ -1003,7 +1003,7 @@ pub(crate) enum TextPlanError {
     InvalidMaximumWidth,
     #[error("line height must be finite and positive")]
     InvalidLineHeight,
-    #[error("text block {span:?} has neither usable nominal metrics nor positive vertical ink; selected faces {faces:?}")]
+    #[error("text block {span:?} has zero checked layout height; selected faces {faces:?}")]
     NoTextHeight {
         span: TextSourceSpan,
         faces: Vec<FaceIdentity>,
@@ -2321,11 +2321,10 @@ fn scaled_metrics<'a>(
 
 fn require_block_height(
     span: TextSourceSpan,
-    ascent: i64,
-    descent: i64,
+    height: i64,
     identities: impl Iterator<Item = FaceIdentity>,
 ) -> Result<(), TextPlanError> {
-    if ascent == 0 && descent == 0 {
+    if height == 0 {
         let mut faces = Vec::new();
         for identity in identities {
             super::unicode16::reserve(&mut faces, 1)?;
@@ -2360,27 +2359,6 @@ fn finalize_plan(
     let metric_height = ascent
         .checked_add(descent)
         .ok_or(TextPlanError::Arithmetic("text metric height"))?;
-    // Existing consumers use one common A/D for the entire block. Ink on
-    // another line can therefore bound blank lines too; do not require a new
-    // per-face or per-empty-line strut that the geometry does not need.
-    if !built_lines.is_empty() {
-        require_block_height(
-            TextSourceSpan::new(0, input.source.len())?,
-            ascent,
-            descent,
-            built_lines
-                .iter()
-                .flat_map(|line| &line.plan.runs)
-                .map(|run| run.face)
-                .chain(
-                    pair_provenance
-                        .candidates
-                        .first()
-                        .copied()
-                        .filter(|_| built_lines.iter().any(|line| line.plan.runs.is_empty())),
-                ),
-        )?;
-    }
     let line_pitch_quanta = metric_height.max(line_height_quanta);
 
     let width_quanta = built_lines.iter().try_fold(0_i64, |width, line| {
@@ -2431,6 +2409,25 @@ fn finalize_plan(
             .and_then(|pitch| metric_height.checked_add(pitch))
             .ok_or(TextPlanError::Arithmetic("text height"))?
     };
+    // Require the final block height, not a positive first-line strut.
+    // Multiple blank lines can have A=D=0 and positive inter-baseline leading.
+    if line_count > 0 {
+        require_block_height(
+            TextSourceSpan::new(0, input.source.len())?,
+            height_quanta,
+            built_lines
+                .iter()
+                .flat_map(|line| &line.plan.runs)
+                .map(|run| run.face)
+                .chain(
+                    pair_provenance
+                        .candidates
+                        .first()
+                        .copied()
+                        .filter(|_| built_lines.iter().any(|line| line.plan.runs.is_empty())),
+                ),
+        )?;
+    }
     let first_baseline_quanta = (line_count > 0).then_some(ascent);
     let last_baseline_quanta = if line_count == 0 {
         None

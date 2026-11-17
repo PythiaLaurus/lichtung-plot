@@ -398,10 +398,12 @@ arithmetic and legal unitsPerEm (16..16384). A/D contain those nonnegative
 nominal extents and actual selected ink above/below baseline across fallback
 faces. Query primary metrics only for actual empty paragraphs, not every
 measurement. A block's common A/D may come entirely from ink, and may also bound
-its blank lines. A block with logical lines but neither nominal height nor
-positive vertical ink fails explicitly; positive role leading alone does not
-invent its baseline/first-line height. Do not try another font or silently
-omit the block. With upward role leading (no extra font-table line gap),
+its blank lines. Compute checked total height before rejecting a zero-height
+block with logical lines; do not require a positive first-line strut.
+With A=D=0, multiple blank lines can still use positive role leading and a
+first baseline of zero. A single empty/no-ink line with zero nominal height
+still fails. Do not try another font or silently omit the block.
+With upward role leading (no extra font-table line gap),
 `pitch=max(A+D,line_height)`, `height=A+D+(line_count-1)*pitch`, baseline i=A+i*pitch.
 First baseline is sequence baseline; retain last for ink checks.
 
