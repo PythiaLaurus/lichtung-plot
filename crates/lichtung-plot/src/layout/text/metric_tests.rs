@@ -3,6 +3,8 @@ use crate::render::backend::{Backend, PlannedTextPlacement, Point2D, TextAnchor}
 use crate::render::svg_backend::SvgBackend;
 use canonical::MetricSource;
 
+mod glyph_paint;
+
 /// Change only generated fonts, through the existing retained-font test entry.
 pub(crate) fn font(
     family: &str,

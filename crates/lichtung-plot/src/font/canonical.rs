@@ -201,6 +201,12 @@ pub(crate) enum FontError {
         glyph_id: u16,
         reason: &'static str,
     },
+    #[error("selected glyph {glyph_id} from face {identity:?} requires unsupported {paint:?} paint without a usable outline")]
+    UnsupportedGlyphPaint {
+        identity: FaceIdentity,
+        glyph_id: u16,
+        paint: GlyphPaint,
+    },
     #[error("canonical font environment synchronization was poisoned")]
     Synchronization,
 }
@@ -915,6 +921,12 @@ impl From<ShapingDirection> for rustybuzz::Direction {
             ShapingDirection::RightToLeft => Self::RightToLeft,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GlyphPaint {
+    RasterImage,
+    SvgImage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2285,8 +2297,38 @@ impl FrozenFontRegistry {
                 x_max: bounds.x_max,
                 y_max: bounds.y_max,
             });
+        validate_selected_glyph_paint(&face, identity, glyph_id, ink.is_some())?;
         Ok((metrics, ink))
     }
+}
+
+/// Only inspect paint for an actually used glyph with no outline result.
+/// Parser image APIs expose encoded data, not an all-table/glyph validity proof.
+fn validate_selected_glyph_paint(
+    face: &ttf_parser::Face<'_>,
+    identity: FaceIdentity,
+    glyph_id: u16,
+    has_outline: bool,
+) -> Result<(), FontError> {
+    if has_outline {
+        return Ok(());
+    }
+    let glyph = ttf_parser::GlyphId(glyph_id);
+    let paint = if face.glyph_raster_image(glyph, u16::MAX).is_some() {
+        Some(GlyphPaint::RasterImage)
+    } else if face.glyph_svg_image(glyph).is_some() {
+        Some(GlyphPaint::SvgImage)
+    } else {
+        None
+    };
+    if let Some(paint) = paint {
+        return Err(FontError::UnsupportedGlyphPaint {
+            identity,
+            glyph_id,
+            paint,
+        });
+    }
+    Ok(())
 }
 
 fn design_metrics(face: &ttf_parser::Face<'_>) -> DesignMetrics {
@@ -2976,6 +3018,7 @@ fn shape_retained_run(
                 x_max: rect.x_max,
                 y_max: rect.y_max,
             });
+        validate_selected_glyph_paint(&face, metadata.identity, glyph_id, ink.is_some())?;
         glyphs.push(ShapedGlyph {
             glyph_id,
             cluster: info.cluster,
