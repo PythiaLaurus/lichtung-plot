@@ -459,15 +459,14 @@ fn admission_order_is_not_candidate_order_and_failures_retain_context() {
 #[test]
 fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
     const CHILD: &str = "LICHTUNG_FONT_ADMISSION_CHILD";
+    const FAMILY: &str = "Generated Canvas Sans";
+    const TITLE: &str = "Font admission";
+    const BODY: &str = "Actual Canvas text";
     if let Some(output) = std::env::var_os(CHILD) {
         let output = PathBuf::from(output);
         let canvas = crate::Canvas::grid(1, 1)
             .unwrap()
-            .text_panel(
-                0,
-                0,
-                crate::TextPanel::new("Font admission", "Actual Canvas text").unwrap(),
-            )
+            .text_panel(0, 0, crate::TextPanel::new(TITLE, BODY).unwrap())
             .unwrap()
             .size(640, 320);
         let frozen = canvas.svg(output.join("first.svg")).unwrap();
@@ -482,20 +481,26 @@ fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
             fs::read(output.join("first.svg")).unwrap(),
             fs::read(output.join("replay.svg")).unwrap()
         );
+        let svg = fs::read_to_string(output.join("first.svg")).unwrap();
+        assert!(
+            svg.contains("<path") && !svg.contains("<text"),
+            "actual generated glyphs paint paths"
+        );
         assert!(fs::metadata(output.join("scene.png")).unwrap().len() > 100);
         return;
     }
+    let mut coverage: Vec<_> = TITLE.chars().chain(BODY.chars()).chain(['0']).collect();
+    coverage.sort_unstable();
+    coverage.dedup();
+    // The extra '0' is the actual TextPanel intrinsic ch-width probe.
+    let normal = build_test_font_with_coverage(FAMILY, &coverage);
     let directory = tempfile::tempdir().unwrap();
     for mixed in [false, true] {
         let output = directory
             .path()
             .join(if mixed { "mixed" } else { "normal" });
         fs::create_dir_all(output.join("fonts")).unwrap();
-        fs::copy(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            output.join("fonts/normal.ttf"),
-        )
-        .unwrap();
+        fs::write(output.join("fonts/normal.ttf"), &normal).unwrap();
         if mixed {
             let name = tables(&build_test_font())
                 .into_iter()
@@ -504,7 +509,7 @@ fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
             fs::write(output.join("fonts/unrelated.ttf"), build_sfnt(name)).unwrap();
         }
         let config = output.join("fonts.conf");
-        fs::write(&config, format!("<fontconfig><dir>{}</dir><alias><family>sans-serif</family><prefer><family>DejaVu Sans</family></prefer></alias><alias><family>serif</family><prefer><family>DejaVu Sans</family></prefer></alias><alias><family>monospace</family><prefer><family>DejaVu Sans</family></prefer></alias></fontconfig>", output.join("fonts").display())).unwrap();
+        fs::write(&config, format!("<fontconfig><dir>{}</dir><alias><family>sans-serif</family><prefer><family>{FAMILY}</family></prefer></alias><alias><family>serif</family><prefer><family>{FAMILY}</family></prefer></alias><alias><family>monospace</family><prefer><family>{FAMILY}</family></prefer></alias></fontconfig>", output.join("fonts").display())).unwrap();
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "font::canonical::tests::admission::linux_public_api_ignores_unrelated_name_only_and_freezes_output", "--nocapture"])
             .env(CHILD, &output).env("FONTCONFIG_FILE", config).status().unwrap();
