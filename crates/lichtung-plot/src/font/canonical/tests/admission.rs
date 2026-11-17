@@ -199,6 +199,23 @@ fn admission_does_not_absorb_work_resource_or_internal_failures() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_discovered_font_target_io_error_is_not_a_smaller_admitted_catalog() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("good.ttf"), build_test_font()).unwrap();
+    std::os::unix::fs::symlink(
+        directory.path().join("gone.ttf"),
+        directory.path().join("broken.ttf"),
+    )
+    .unwrap();
+    let roots = ordinal_roots(vec![directory.path().to_path_buf()], None).unwrap();
+    assert!(matches!(
+        discover_retained_files(&roots, None),
+        Err(FontError::Io { .. })
+    ));
+}
+
 #[test]
 fn image_only_declarations_and_optional_defaults_do_not_become_an_outline_sanitizer() {
     let mut image = tables(&build_test_font());
