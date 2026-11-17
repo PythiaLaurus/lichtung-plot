@@ -280,7 +280,9 @@ impl<'v, 'env, 'a, 'b> TextPlanningBackend<'v, 'env, 'a, 'b> {
         let svg = crate::render::svg_backend::SvgStorage::prepare(
             width,
             height,
-            self.verifier.retain_fonts(),
+            self.verifier
+                .retain_fonts()
+                .map_err(|error| Error::Render(error.to_string()))?,
             crate::render::svg_backend::SvgStorageRequirements { scopes },
             self.final_stage,
             |serializer| {

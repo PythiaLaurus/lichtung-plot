@@ -1,18 +1,9 @@
 use super::super::admission::{ScanReason, TableState};
 use super::*;
 
-fn retained(bytes: Vec<u8>) -> RetainedFontFile {
-    RetainedFontFile {
-        root_ordinal: 0,
-        canonical_path: PathBuf::from("generated-admission.ttf"),
-        sha256: Sha256::digest(&bytes).into(),
-        bytes: Arc::new(bytes),
-    }
-}
-
 fn core(fonts: Vec<Vec<u8>>) -> CanonicalFontCore {
-    CanonicalFontCore::from_retained(
-        fonts.into_iter().map(retained).collect(),
+    CanonicalFontCore::from_generated(
+        fonts,
         &HostGenericNames::default(),
         FontPreparation::new(),
         scalar_presence_map(),
@@ -20,7 +11,7 @@ fn core(fonts: Vec<Vec<u8>>) -> CanonicalFontCore {
     .unwrap()
 }
 
-fn tables(bytes: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+pub(super) fn tables(bytes: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
     let raw = ttf_parser::RawFace::parse(bytes, 0).unwrap();
     raw.table_records
         .into_iter()
@@ -236,8 +227,8 @@ fn admission_does_not_absorb_work_resource_or_internal_failures() {
         Err(FontError::Allocation(_))
     ));
     assert!(matches!(
-        CanonicalFontCore::from_retained(
-            vec![retained(vec![0; 16])],
+        CanonicalFontCore::from_generated(
+            vec![vec![0; 16]],
             &HostGenericNames::default(),
             FontPreparation::new(),
             Vec::new(),
@@ -258,7 +249,7 @@ fn a_discovered_font_target_io_error_is_not_a_smaller_admitted_catalog() {
     .unwrap();
     let roots = ordinal_roots(vec![directory.path().to_path_buf()], None).unwrap();
     assert!(matches!(
-        discover_retained_files(&roots, None),
+        discover_indexed_files(&roots, None),
         Err(FontError::Io { .. })
     ));
 }
@@ -442,7 +433,7 @@ fn admission_order_is_not_candidate_order_and_failures_retain_context() {
         let message = error.to_string();
         for expected in [
             "Not installed",
-            "generated-admission.ttf",
+            "generated-font.ttf",
             "sha256",
             "NoHeadTable",
             "index=Some(0)",
@@ -457,6 +448,10 @@ fn admission_order_is_not_candidate_order_and_failures_retain_context() {
 // configuration in the parallel test harness. Only Linux has this fontconfig path.
 #[cfg(target_os = "linux")]
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one child-process witness keeps discovery, two operations and post-deletion replay together"
+)]
 fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
     const CHILD: &str = "LICHTUNG_FONT_ADMISSION_CHILD";
     const FAMILY: &str = "Generated Canvas Sans";
@@ -464,14 +459,53 @@ fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
     const BODY: &str = "Actual Canvas text";
     if let Some(output) = std::env::var_os(CHILD) {
         let output = PathBuf::from(output);
-        let canvas = crate::Canvas::grid(1, 1)
-            .unwrap()
-            .text_panel(0, 0, crate::TextPanel::new(TITLE, BODY).unwrap())
-            .unwrap()
-            .size(640, 320);
-        let frozen = canvas.svg(output.join("first.svg")).unwrap();
-        // No reread/reselection during SVG/PNG replay after original files vanish.
+        let canvas = || {
+            crate::Canvas::grid(1, 1)
+                .unwrap()
+                .text_panel(0, 0, crate::TextPanel::new(TITLE, BODY).unwrap())
+                .unwrap()
+                .size(640, 320)
+        };
+        let normal_bytes =
+            usize::try_from(fs::metadata(output.join("fonts/normal.ttf")).unwrap().len()).unwrap();
+        let matched_bytes = fs::metadata(output.join("fonts/matched.ttf"))
+            .map_or(0, |metadata| usize::try_from(metadata.len()).unwrap());
+        super::loading::reset_observations();
+        let first = canvas().svg(output.join("first.svg")).unwrap();
+        let once = super::loading::observations();
+        assert_eq!(once.full_bytes, normal_bytes + matched_bytes);
+        assert_eq!(once.hash_bytes, once.full_bytes);
+        assert_eq!(once.materialized.len(), 1 + usize::from(matched_bytes > 0));
+        assert_eq!(once.face_checks.len(), once.materialized.len());
+        assert_eq!(once.frozen_files, once.materialized);
+        assert!(once.materialized.iter().all(|(path, _)| {
+            matches!(
+                path.file_name().unwrap().to_str(),
+                Some("normal.ttf" | "matched.ttf")
+            )
+        }));
+        if output.join("fonts/unrelated.ttf").exists() {
+            let unrelated = fs::canonicalize(output.join("fonts/unrelated.ttf")).unwrap();
+            assert!(once.metadata_bytes[&unrelated] < 1024);
+        }
+        // A second new Canvas operation in this SAME process must index and
+        // materialize again. This is not Output replay or a process-global cache.
+        let frozen = canvas()
+            .svg_preserve_text(output.join("preserved.svg"))
+            .unwrap();
+        let twice = super::loading::observations();
+        super::loading::assert_two_operations(&once, &twice);
+        super::loading::print_observations(output.file_name().unwrap().to_str().unwrap(), &once);
+        // This Output has not outlined yet. Its first outlining and PNG must
+        // still work after source deletion; cached SVG paths cannot mask a reread.
         fs::remove_file(output.join("fonts/normal.ttf")).unwrap();
+        if matched_bytes > 0 {
+            fs::write(
+                output.join("fonts/matched.ttf"),
+                b"changed after materialization",
+            )
+            .unwrap();
+        }
         frozen
             .svg(output.join("replay.svg"))
             .unwrap()
@@ -481,6 +515,8 @@ fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
             fs::read(output.join("first.svg")).unwrap(),
             fs::read(output.join("replay.svg")).unwrap()
         );
+        first.svg(output.join("again.svg")).unwrap();
+        assert_eq!(super::loading::observations(), twice);
         let svg = fs::read_to_string(output.join("first.svg")).unwrap();
         assert!(
             svg.contains("<path") && !svg.contains("<text"),
@@ -495,28 +531,38 @@ fn linux_public_api_ignores_unrelated_name_only_and_freezes_output() {
     // The extra '0' is the actual TextPanel intrinsic ch-width probe.
     let normal = build_test_font_with_coverage(FAMILY, &coverage);
     let directory = tempfile::tempdir().unwrap();
-    for mixed in [false, true] {
-        let output = directory
-            .path()
-            .join(if mixed { "mixed" } else { "normal" });
+    for mode in ["normal", "mixed", "matched"] {
+        let output = directory.path().join(mode);
         fs::create_dir_all(output.join("fonts")).unwrap();
         fs::write(output.join("fonts/normal.ttf"), &normal).unwrap();
-        if mixed {
-            let name = tables(&build_test_font())
-                .into_iter()
-                .filter(|(tag, _)| tag == b"name")
-                .collect();
-            fs::write(output.join("fonts/unrelated.ttf"), build_sfnt(name)).unwrap();
+        if mode == "mixed" {
+            let unrelated = super::loading::name_only("Unused", 2 * 1024 * 1024);
+            assert!(matches!(
+                ttf_parser::Face::parse(&unrelated, 0),
+                Err(ttf_parser::FaceParsingError::NoHeadTable)
+            ));
+            fs::write(output.join("fonts/unrelated.ttf"), unrelated).unwrap();
+            fs::write(output.join("fonts/unaddressable.ttf"), [0; 16]).unwrap();
+        } else if mode == "matched" {
+            fs::write(
+                output.join("fonts/matched.ttf"),
+                super::loading::name_only(FAMILY, 0),
+            )
+            .unwrap();
         }
         let config = output.join("fonts.conf");
         fs::write(&config, format!("<fontconfig><dir>{}</dir><alias><family>sans-serif</family><prefer><family>{FAMILY}</family></prefer></alias><alias><family>serif</family><prefer><family>{FAMILY}</family></prefer></alias><alias><family>monospace</family><prefer><family>{FAMILY}</family></prefer></alias></fontconfig>", output.join("fonts").display())).unwrap();
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "font::canonical::tests::admission::linux_public_api_ignores_unrelated_name_only_and_freezes_output", "--nocapture"])
             .env(CHILD, &output).env("FONTCONFIG_FILE", config).status().unwrap();
-        assert!(status.success(), "mixed={mixed}");
+        assert!(status.success(), "mode={mode}");
     }
     assert_eq!(
         fs::read(directory.path().join("normal/first.svg")).unwrap(),
         fs::read(directory.path().join("mixed/first.svg")).unwrap()
+    );
+    assert_eq!(
+        fs::read(directory.path().join("normal/first.svg")).unwrap(),
+        fs::read(directory.path().join("matched/first.svg")).unwrap()
     );
 }

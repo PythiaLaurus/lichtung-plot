@@ -423,7 +423,9 @@ continues drawing its retained requests without a new whole-owner validation pas
 Frozen roots retain only their request, accepted size and final commands, not the
 preparation owner. Selected text shares its immutable content and pure fit metadata
 without retaining text analysis. SVG storage and publication share the complete
-original retained font file/face registry, not a font service or operation. Glyph
+materialized candidate font file/face registry, not the discovery index, open
+source locators, a font service or operation. Unmatched files have no retained
+full-file snapshot. Glyph
 identity, metrics and outline checks remain at outlining; freezing does not add an
 earlier check or filter the registry to used faces. Final storage reservation stays
 after sealing and before finalization, and preparation is released before final
@@ -451,6 +453,12 @@ Operation-local canonical discovery/matching, same immutable bytes, used-role
 census, Unicode16 text behavior and base-plus-mark fallback are specified by
 layout. Missing visible coverage, invalid selected metrics or selected-face
 shaping failure is fatal; layout cannot select a different font to fit.
+Each operation fixes its family metadata index once. Before a new font pair is
+published, all files contributing matching candidates acquire complete immutable
+bytes and SHA identities and undergo face capability admission. Observable source
+or consumed-metadata changes between indexing and that first complete snapshot
+are fatal, not permission to update the index or recover with another path.
+This does not promise an operation-start snapshot of unconsumed glyph payloads.
 
 Identical validated inputs/options/dependency versions and generation-font
 environment give deterministic scene decisions. Do not promise bytes across

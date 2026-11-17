@@ -510,16 +510,24 @@ Null, preserved/outlined SVG, PNG and Output replay consume frozen glyphs and by
 
 ### Canonical Candidate Selection
 
-Admit each discovered stable file once using locked ttf-parser0.25.1 before
-canonical matching; do not delegate an unbounded load_system_fonts. Isolate
-stable content/parser failures per original face index, retaining their file,
-SHA, bytes and typed diagnostics. Validate TTC offset-array length before
-count-derived allocation; a bad sibling never renumbers the other faces.
+Discover a fixed operation-local family metadata index, not a complete snapshot
+of the installed library. Before publishing each new (stack,weight) pair, resolve
+its fixed family names, find all matching indexed occurrences, and materialize
+their complete file union. Hash and retain each such file once; admit its faces
+using locked ttf-parser0.25.1 before candidate counting, reservation, tuple sorting
+or coverage selection. A TTC matching one face still needs its entire file SHA.
+Isolate stable content/parser failures per original face index, retaining
+materialized bytes, SHA and typed diagnostics. No published pair ever loses or
+reorders candidates. Validate TTC offset-array length before count-derived work;
+a bad sibling never renumbers the other faces.
 Mirror admitted rows into fontdb0.23.0 without using its PostScript-name gate.
 ID6 is optional, not a family/identity requirement. Family occurrences are every ID16 typographic and
 ID1 legacy record decoded by ttf-parser 0.25.1. Match named families with Unicode 16
 NFKC-casefold. Generics use the resulting database's host family_name without
-project global remap; unmatched generic contributes none.
+project global remap; these names are fixed before materialization and do not
+depend on admitted faces. An unmatched generic contributes none. Source extension
+of an existing pair does not materialize files; a later new pair uses the same
+index and can append materialized files without changing earlier selections.
 
 Identity is `(SHA256(complete_file_bytes),face_index_u32)`, excluding path, mtime,
 database ID and discovery order. Generate occurrence tuples and sort by
@@ -554,7 +562,8 @@ use zero, without early marker admission. Zero is a conservative pruning bound,
 not an acceptable zero-height final result; actual trial geometry remains strict.
 
 Retain canonical ordered lists, pair ordinals, unit spans, selected identities and
-same immutable font bytes through geometry/path conversion. Discovery/hash/metadata/
+same immutable font bytes through geometry/path conversion. Matching metadata is
+verified against the first complete materialized bytes; hash, admitted metadata,
 coverage/shaping/outlining consume those bytes. No reread selected path, next-path
 recovery, bundled font, network or project cache is allowed. Fresh operations
 discover fresh installed state; Output reuse retains its original environment.
@@ -564,10 +573,28 @@ discover fresh installed state; Output reuse retains its original environment.
 Project-owned source walking retains platform roots, extension/regular-file rules
 and canonical deduplication with lossless native path order, source-location first.
 Directory symlinks are not followed. Grow traversal storage fallibly from actual
-prefixes. Open one admitted regular file at a time, verify actual handle length,
-reserve/read/hash/decode that content and close before next file. Short/changed
-read, discovered-file I/O, capacity/length failure and invalid selected face are
-fatal. No decoded face means no candidate, not a post-selection silent discard.
+prefixes. Open one regular file at a time. Index only SFNT/TTC directories, name
+headers/records and consumed Unicode ID16/ID1 string ranges, using the locked
+parser's table/name interpretation and ordinal decoder. Style/weight/stretch do
+not filter membership, so their optional tables are needed only after a matching
+file is materialized. Do not read copyright, other name payloads or glyph data
+for indexing. Unaddressable index metadata is local and has no invented full-file
+SHA; it does not prevent another file's use. Index diagnostics retain path/index
+and observed reason, not a claimed face capability result.
+
+Retain consumed range witnesses and handle-derived source observations (length,
+available modification/creation times, and native file identity on Unix/Windows).
+Before and after complete materialization verify those observations, then compare
+all observed ranges against the retained bytes. Any observed change fails the
+operation; never replace metadata, rescan or silently discard the changed candidate.
+The first full-file snapshot is established only at materialization. Timestamps
+and lengths are not cryptographic proof of unobserved past glyph bytes; metadata
+witnesses certify only consumed ranges. No atomic whole-library snapshot or
+adversarial mutation detection is promised. After materialization path changes
+are irrelevant because all later queries use retained immutable bytes.
+Close each handle before opening the next. Short/changed reads, actual I/O,
+capacity/length failure and invalid selected face are fatal. No decoded face
+means no candidate, not a post-selection silent discard.
 Missing/malformed required tables, unaddressable families and explicitly
 image-only faces contribute no candidate. A missing head is not evidence of a
 bitmap font; record table observations and the original parser rejection.

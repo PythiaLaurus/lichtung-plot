@@ -127,6 +127,12 @@ pub(super) fn admit_file(
         );
     };
     for index in 0..count {
+        #[cfg(test)]
+        LOAD_OBSERVATIONS.with_borrow_mut(|observed| {
+            observed
+                .face_checks
+                .push((file.canonical_path.clone(), index));
+        });
         let raw = ttf_parser::RawFace::parse(&file.bytes, index);
         let parsed = match ttf_parser::Face::parse(&file.bytes, index) {
             Ok(face) => face,
@@ -175,7 +181,7 @@ pub(super) fn admit_file(
         }
         // Decode only actual family keys, then the optional ID6 mirror below.
         // Unknown/unreadable and unrelated name records are not scan issues.
-        let names = decode_family_names(&parsed, stage.as_deref_mut())?;
+        let names = decode_family_names(parsed.names(), stage.as_deref_mut())?;
         if names.is_empty() {
             issue(
                 issues,

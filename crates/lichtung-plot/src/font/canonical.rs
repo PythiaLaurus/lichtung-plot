@@ -18,6 +18,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::text::{is_nonpainting_control, is_nonrendering_mandatory_break};
 
 mod admission;
+mod index;
 use admission::FontScanIssue;
 
 #[cfg(test)]
@@ -31,6 +32,18 @@ thread_local! {
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
     pub(crate) static FONT_METRIC_QUERIES: std::cell::RefCell<Vec<FaceIdentity>> = const { std::cell::RefCell::new(Vec::new()) };
+    static LOAD_OBSERVATIONS: std::cell::RefCell<LoadObservations> = std::cell::RefCell::new(LoadObservations::default());
+}
+
+#[cfg(test)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct LoadObservations {
+    metadata_bytes: std::collections::BTreeMap<PathBuf, usize>,
+    full_bytes: usize,
+    hash_bytes: usize,
+    materialized: Vec<(PathBuf, usize)>,
+    face_checks: Vec<(PathBuf, u32)>,
+    frozen_files: Vec<(PathBuf, usize)>,
 }
 
 #[cfg(test)]
@@ -154,7 +167,7 @@ pub(crate) enum FontError {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[error("font file changed while being read: '{0}'")]
+    #[error("font source changed during indexing or materialization: '{0}'")]
     ChangedFile(PathBuf),
     #[error("cannot parse fontconfig file '{path}': {reason}")]
     ParseFontConfig { path: PathBuf, reason: String },
@@ -170,8 +183,6 @@ pub(crate) enum FontError {
         #[source]
         source: Box<Self>,
     },
-    #[error("no canonical system fonts were found")]
-    NoSystemFonts,
     #[error("font candidate list is empty for pair {pair_ordinal}")]
     MissingFamily { pair_ordinal: u32 },
     #[error("font candidates for pair {pair_ordinal} do not contain U+{scalar:04X}")]
@@ -1003,8 +1014,8 @@ struct DiscoveryFontHandle {
 
 #[cfg(test)]
 thread_local! {
-    // Live handles, peak handles, opens, reads, retained files.
-    static DISCOVERY_HANDLES: std::cell::Cell<[usize; 5]> = const { std::cell::Cell::new([0; 5]) };
+    // Live handles, peak handles, opens (metadata and materialization).
+    static DISCOVERY_HANDLES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
     static DISCOVERY_AFTER_ADMISSION: std::cell::Cell<Option<fn(&Path)>> = const { std::cell::Cell::new(None) };
 }
 
@@ -1022,6 +1033,8 @@ impl Drop for DiscoveryFontHandle {
 #[derive(Debug)]
 pub(crate) struct CanonicalFontCore {
     database: Database,
+    index: Vec<index::IndexedFontFile>,
+    // Unique while admission is open; shared read-only only after sealing.
     fonts: Arc<FrozenFontRegistry>,
     scalar_presence: Vec<u64>,
     prepared_pairs: Vec<PreparedPair>,
@@ -1122,10 +1135,10 @@ impl<'a> PairPreparation<'a> {
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedFontEnvironment {
     core: Arc<RwLock<CanonicalFontCore>>,
-    fonts: Arc<FrozenFontRegistry>,
 }
 
-/// The original complete retained file/face collection, without operation state.
+/// The materialized candidate file/face collection. Uniquely owned while open,
+/// shared with Output only after sealing, without index/source/operation state.
 #[derive(Debug)]
 pub(crate) struct FrozenFontRegistry {
     files: Vec<RetainedFontFile>,
@@ -1155,8 +1168,25 @@ impl SealedTextVerifier<'_> {
         )
     }
 
-    pub(crate) fn retain_fonts(&self) -> Arc<FrozenFontRegistry> {
-        Arc::clone(&self.environment.fonts)
+    pub(crate) fn retain_fonts(&self) -> Result<Arc<FrozenFontRegistry>, FontError> {
+        let core = self
+            .environment
+            .core
+            .read()
+            .map_err(|_| FontError::Synchronization)?;
+        if !core.prepared_pairs_sealed {
+            return Err(FontError::Arithmetic("font registry shared before sealing"));
+        }
+        #[cfg(test)]
+        LOAD_OBSERVATIONS.with_borrow_mut(|observed| {
+            observed.frozen_files = core
+                .fonts
+                .files
+                .iter()
+                .map(|file| (file.canonical_path.clone(), file.bytes.len()))
+                .collect();
+        });
+        Ok(Arc::clone(&core.fonts))
     }
 }
 
@@ -1236,6 +1266,20 @@ impl OperationContext {
 }
 
 impl PreparedFontEnvironment {
+    /// Geometry fixtures can serialize an already measured plan while continuing
+    /// to measure other sources. Fork only the materialized immutable sources;
+    /// unlike production capture this does not share the open registry or seal
+    /// its operation, and cannot discover or load another font.
+    #[cfg(test)]
+    pub(crate) fn materialized_snapshot_for_test(&self) -> Arc<FrozenFontRegistry> {
+        let core = self.core.read().unwrap();
+        Arc::new(FrozenFontRegistry {
+            files: core.fonts.files.clone(),
+            faces: core.fonts.faces.clone(),
+            issues: Vec::new(),
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn liveness_probe(&self) -> impl Fn() -> bool + use<> {
         let core = Arc::downgrade(&self.core);
@@ -1335,7 +1379,7 @@ impl PreparedFontEnvironment {
         }
         let index = core
             .admit_scalars_in(ordinal, stack, weight, &scalars, stage.as_deref_mut())
-            .map_err(|error| self.fonts.admission_error(error, Some(stack)))?;
+            .map_err(|error| core.admission_error(error, Some(stack)))?;
         core.prepare_source_units(ordinal, source, stage.as_deref_mut())?;
         let mut retained = String::new();
         if let Some(stage) = stage.as_deref_mut() {
@@ -1357,7 +1401,6 @@ impl PreparedFontEnvironment {
 
     fn for_core(core: CanonicalFontCore) -> Result<Self, FontError> {
         let operation = core.operation.clone();
-        let retained = Arc::clone(&core.fonts);
         let core = Arc::new(RwLock::new(core));
         let mut fonts = operation
             .fonts
@@ -1371,10 +1414,7 @@ impl PreparedFontEnvironment {
             .try_reserve(1)
             .map_err(|_| FontError::Allocation("operation font environments"))?;
         fonts.environments.push(Arc::downgrade(&core));
-        Ok(Self {
-            core,
-            fonts: retained,
-        })
+        Ok(Self { core })
     }
 
     #[cfg(test)]
@@ -1467,11 +1507,9 @@ impl PreparedFontEnvironment {
         requests: impl ExactSizeIterator<Item = FontPairPreparationRequest<'a>>,
         prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), FontError> {
-        self.core
-            .write()
-            .map_err(|_| FontError::Synchronization)?
-            .prepare_pairs_with_stage(requests, prepared_stage)
-            .map_err(|error| self.fonts.admission_error(error, None))
+        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
+        core.prepare_pairs_with_stage(requests, prepared_stage)
+            .map_err(|error| core.admission_error(error, None))
     }
 
     #[cfg(test)]
@@ -1655,7 +1693,11 @@ impl PreparedFontEnvironment {
         glyph_id: u16,
         builder: &mut dyn ttf_parser::OutlineBuilder,
     ) -> Result<(DesignMetrics, Option<GlyphInk>), FontError> {
-        self.fonts.outline_glyph(identity, glyph_id, builder)
+        self.core
+            .read()
+            .map_err(|_| FontError::Synchronization)?
+            .fonts
+            .outline_glyph(identity, glyph_id, builder)
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
@@ -1667,6 +1709,7 @@ impl PreparedFontEnvironment {
 
     /// Replays the retained binary sources and generic-family state exactly; it
     /// never consults the host filesystem again.
+    #[cfg(test)]
     pub(crate) fn populate_database(&self, database: &mut Database) -> Result<(), FontError> {
         *database = self
             .core
@@ -1685,21 +1728,9 @@ impl PreparedFontEnvironment {
     /// Retain generated OpenType layout tables for shaping conformance tests.
     #[cfg(test)]
     pub(crate) fn synthetic_shaping_fonts(fonts: Vec<Vec<u8>>) -> Self {
-        let files = fonts
-            .into_iter()
-            .map(|bytes| {
-                let bytes = Arc::new(bytes);
-                RetainedFontFile {
-                    root_ordinal: 0,
-                    canonical_path: PathBuf::from("generated-shaping.ttf"),
-                    sha256: Sha256::digest(bytes.as_slice()).into(),
-                    bytes,
-                }
-            })
-            .collect();
         Self::for_core(
-            CanonicalFontCore::from_retained(
-                files,
+            CanonicalFontCore::from_generated(
+                fonts,
                 &HostGenericNames::default(),
                 FontPreparation::new(),
                 scalar_presence_map().unwrap(),
@@ -1718,17 +1749,11 @@ impl PreparedFontEnvironment {
                 let mut coverage = coverage.to_vec();
                 coverage.sort_unstable();
                 coverage.dedup();
-                let bytes = Arc::new(tests::build_test_font_with_coverage(family, &coverage));
-                RetainedFontFile {
-                    root_ordinal: 0,
-                    canonical_path: PathBuf::from("retained-synthetic.ttf"),
-                    sha256: Sha256::digest(bytes.as_slice()).into(),
-                    bytes,
-                }
+                tests::build_test_font_with_coverage(family, &coverage)
             })
             .collect();
         Self::for_core(
-            CanonicalFontCore::from_retained(
+            CanonicalFontCore::from_generated(
                 files,
                 &HostGenericNames::default(),
                 FontPreparation::new(),
@@ -1742,31 +1767,14 @@ impl PreparedFontEnvironment {
 
 #[allow(dead_code)]
 impl CanonicalFontCore {
-    pub(crate) fn discover_system() -> Result<Self, FontError> {
-        Self::discover_prepared(FontPreparation::new(), scalar_presence_map()?, None)
-    }
-
     fn discover_prepared(
         preparation: FontPreparation,
         scalar_presence: Vec<u64>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
         let sources = platform_sources(prepared_stage.as_deref_mut())?;
-        let files = discover_retained_files(&sources.roots, prepared_stage.as_deref_mut())?;
-        Self::from_retained_with_stage(
-            files,
-            &sources.generics,
-            preparation,
-            scalar_presence,
-            prepared_stage,
-        )
-    }
-
-    pub(crate) fn into_database(self) -> Result<Database, FontError> {
-        if self.database.is_empty() {
-            return Err(FontError::NoSystemFonts);
-        }
-        Ok(self.database)
+        let files = discover_indexed_files(&sources.roots, prepared_stage)?;
+        Self::from_index(files, &sources.generics, preparation, scalar_presence)
     }
 
     pub(crate) fn files(&self) -> &[RetainedFontFile] {
@@ -1863,12 +1871,20 @@ impl CanonicalFontCore {
                 &mut self.preparation,
                 prepared_stage.as_deref_mut(),
             )?;
+        }
+        // Every relevant file is snapshotted and admitted before any published
+        // pair is counted, ranked or selected. Later pairs can only append files;
+        // this fixed index cannot introduce a new candidate into an old pair.
+        for preparation in &preparations {
+            self.materialize_matching(&preparation.resolved_names, prepared_stage.as_deref_mut())?;
+        }
+        for preparation in &mut preparations {
             preparation.raw_candidate_count =
                 count_candidate_occurrences(&self.fonts.faces, &preparation.resolved_names)?;
             preparation.candidate_count =
                 count_unique_candidate_survivors(&self.fonts.faces, &preparation.resolved_names)?;
             if preparation.candidate_count == 0 {
-                return Err(self.fonts.admission_error(
+                return Err(self.admission_error(
                     FontError::MissingFamily {
                         pair_ordinal: preparation.request.pair_ordinal,
                     },
@@ -2168,38 +2184,36 @@ impl CanonicalFontCore {
         self.fonts.outline_glyph(identity, glyph_id, builder)
     }
 
-    fn from_retained(
-        files: Vec<RetainedFontFile>,
+    #[cfg(test)]
+    fn from_generated(
+        files: Vec<Vec<u8>>,
         generics: &HostGenericNames,
         preparation: FontPreparation,
         scalar_presence: Vec<u64>,
     ) -> Result<Self, FontError> {
-        Self::from_retained_with_stage(files, generics, preparation, scalar_presence, None)
+        let index = files
+            .into_iter()
+            .map(index::generated)
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut core = Self::from_index(index, generics, preparation, scalar_presence)?;
+        // Parser/geometry fixtures explicitly request the complete generated
+        // collection, through the same index/materialization/admission path.
+        for ordinal in 0..core.index.len() {
+            core.materialize_file(ordinal, None)?;
+        }
+        Ok(core)
     }
 
-    fn from_retained_with_stage(
-        files: Vec<RetainedFontFile>,
+    fn from_index(
+        index: Vec<index::IndexedFontFile>,
         generics: &HostGenericNames,
         preparation: FontPreparation,
         scalar_presence: Vec<u64>,
-        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
         let operation = preparation.operation.clone();
         let mut database = Database::new();
 
-        let mut faces = Vec::new();
-        let mut issues = Vec::new();
-        for (file_ordinal, file) in files.iter().enumerate() {
-            admission::admit_file(
-                file,
-                file_ordinal,
-                &mut database,
-                &mut faces,
-                &mut issues,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
-        apply_host_generics(&mut database, generics, &faces);
+        apply_host_generics(&mut database, generics);
 
         if scalar_presence.len() != SCALAR_MAP_WORDS {
             return Err(FontError::Arithmetic("Unicode scalar presence map"));
@@ -2207,10 +2221,11 @@ impl CanonicalFontCore {
 
         Ok(Self {
             database,
+            index,
             fonts: Arc::new(FrozenFontRegistry {
-                files,
-                faces,
-                issues,
+                files: Vec::new(),
+                faces: Vec::new(),
+                issues: Vec::new(),
             }),
             scalar_presence,
             prepared_pairs: Vec::new(),
@@ -2218,6 +2233,111 @@ impl CanonicalFontCore {
             operation,
             preparation,
         })
+    }
+
+    fn materialize_matching(
+        &mut self,
+        names: &[(String, bool)],
+        mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), FontError> {
+        if self.prepared_pairs_sealed {
+            return Err(FontError::OperationSealed);
+        }
+        for ordinal in 0..self.index.len() {
+            if !self.index[ordinal].is_materialized() && self.index[ordinal].matches(names) {
+                self.materialize_file(ordinal, stage.as_deref_mut())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn materialize_file(
+        &mut self,
+        ordinal: usize,
+        mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), FontError> {
+        if self.prepared_pairs_sealed {
+            return Err(FontError::OperationSealed);
+        }
+        let indexed = self
+            .index
+            .get_mut(ordinal)
+            .ok_or(FontError::Arithmetic("indexed font ordinal"))?;
+        if indexed.is_materialized() {
+            return Ok(());
+        }
+        let file = indexed.materialize(stage.as_deref_mut())?;
+        let fonts = Arc::get_mut(&mut self.fonts)
+            .ok_or(FontError::Arithmetic("font registry shared before sealing"))?;
+        let face_start = fonts.faces.len();
+        let file_ordinal = fonts.files.len();
+        reserve_prepared_or_local(
+            &mut fonts.files,
+            1,
+            "materialized font files",
+            stage.as_deref_mut(),
+        )?;
+        admission::admit_file(
+            &file,
+            file_ordinal,
+            &mut self.database,
+            &mut fonts.faces,
+            &mut fonts.issues,
+            stage,
+        )?;
+        for face in &fonts.faces[face_start..] {
+            if !indexed
+                .faces
+                .iter()
+                .any(|entry| entry.index == face.identity.face_index && entry.names == face.names)
+            {
+                return Err(FontError::Arithmetic(
+                    "font index/admission family mismatch",
+                ));
+            }
+        }
+        fonts.files.push(file);
+        indexed.finish_materialization();
+        // Read witnesses have served their purpose; the first complete snapshot
+        // now owns every subsequent query. No reopening this path is permitted.
+        Ok(())
+    }
+
+    #[expect(
+        clippy::unnecessary_debug_formatting,
+        reason = "diagnostics preserve escaped lossless native paths"
+    )]
+    fn admission_error(&self, error: FontError, stack: Option<&FontStack>) -> FontError {
+        if !matches!(
+            error,
+            FontError::MissingFamily { .. } | FontError::MissingGlyph { .. }
+        ) {
+            return error;
+        }
+        let mut error = self.fonts.admission_error(error, stack);
+        if let FontError::Admission { context, .. } = &mut error {
+            for indexed in self.index.iter().filter(|file| !file.is_materialized()) {
+                for (index, reason) in &indexed.issues {
+                    let entry = match admission::format_diagnostic(format_args!(
+                        "; index {:?} index={index:?}: {reason} (not materialized; no full-file SHA)",
+                        indexed.path,
+                    )) {
+                        Ok(entry) => entry,
+                        Err(error) => return error,
+                    };
+                    if let Err(error) = reserve_string_prepared_or_local(
+                        context,
+                        entry.len(),
+                        "font index diagnostics",
+                        None,
+                    ) {
+                        return error;
+                    }
+                    context.push_str(&entry);
+                }
+            }
+        }
+        error
     }
 }
 
@@ -2357,12 +2477,10 @@ fn design_metrics(face: &ttf_parser::Face<'_>) -> DesignMetrics {
 }
 
 fn decode_family_names(
-    face: &ttf_parser::Face<'_>,
+    names: ttf_parser::name::Names<'_>,
 
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<NameOccurrence>, FontError> {
-    let names = face.names();
-
     let mut occurrence_count = 0;
     for ordinal in 0..names.len() {
         let Some(record) = names.get(ordinal) else {
@@ -3045,10 +3163,10 @@ fn shape_retained_run(
     clippy::too_many_lines,
     reason = "discovery keeps traversal, retention, and mutation checks in one auditable path"
 )]
-fn discover_retained_files(
+fn discover_indexed_files(
     roots: &[SourceRoot],
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<Vec<RetainedFontFile>, FontError> {
+) -> Result<Vec<index::IndexedFontFile>, FontError> {
     let mut discovered = Vec::new();
     for root in roots {
         match fs::symlink_metadata(&root.path) {
@@ -3168,85 +3286,15 @@ fn discover_retained_files(
     reserve_prepared_or_local(
         &mut retained,
         discovered.len(),
-        "retained font files",
+        "indexed font files",
         prepared_stage.as_deref_mut(),
     )?;
     for record in discovered {
-        let canonical_path = record.path;
-        let file = File::open(&canonical_path).map_err(|source| FontError::Io {
-            operation: "open font file",
-            path: canonical_path.clone(),
-            source,
-        })?;
-        let mut handle = DiscoveryFontHandle { file };
-        #[cfg(test)]
-        DISCOVERY_HANDLES.with(|state| {
-            let mut counts = state.get();
-            counts[0] += 1;
-            counts[1] = counts[1].max(counts[0]);
-            counts[2] += 1;
-            state.set(counts);
-        });
-        let metadata_before = handle.file.metadata().map_err(|source| FontError::Io {
-            operation: "inspect font file",
-            path: canonical_path.clone(),
-            source,
-        })?;
-        if !metadata_before.is_file() {
-            return Err(FontError::ChangedFile(canonical_path));
-        }
-        let length = metadata_before.len();
-        let modified_before = metadata_before.modified().ok();
-        let length =
-            usize::try_from(length).map_err(|_| FontError::Arithmetic("font file length"))?;
-        let mut bytes = Vec::new();
-        reserve_prepared_or_local(
-            &mut bytes,
-            length,
-            "retained font bytes",
+        retained.push(index::index_file(
+            record.root_ordinal,
+            record.path,
             prepared_stage.as_deref_mut(),
-        )?;
-        #[cfg(test)]
-        DISCOVERY_AFTER_ADMISSION.with(|hook| {
-            if let Some(hook) = hook.take() {
-                hook(&canonical_path);
-            }
-        });
-        #[cfg(test)]
-        DISCOVERY_HANDLES.with(|state| {
-            let mut counts = state.get();
-            counts[3] += 1;
-            state.set(counts);
-        });
-        let sha256 = read_exact_font_bytes(&mut handle.file, &canonical_path, length, &mut bytes)?;
-        let metadata_after = handle.file.metadata().map_err(|source| FontError::Io {
-            operation: "reinspect font file",
-            path: canonical_path.clone(),
-            source,
-        })?;
-        if metadata_after.len()
-            != u64::try_from(length).map_err(|_| FontError::Arithmetic("font file length"))?
-            || modified_before.is_some_and(|modified| {
-                metadata_after
-                    .modified()
-                    .map_or(true, |current| current != modified)
-            })
-        {
-            return Err(FontError::ChangedFile(canonical_path));
-        }
-        retained.push(RetainedFontFile {
-            root_ordinal: record.root_ordinal,
-            canonical_path,
-            bytes: Arc::new(bytes),
-            sha256,
-        });
-        #[cfg(test)]
-        DISCOVERY_HANDLES.with(|state| {
-            let mut counts = state.get();
-            counts[4] += 1;
-            state.set(counts);
-        });
-        drop(handle);
+        )?);
     }
     Ok(retained)
 }
@@ -3301,6 +3349,11 @@ fn read_exact_font_bytes(
             return Err(FontError::ChangedFile(path.to_path_buf()));
         }
         hasher.update(&scratch[..read]);
+        #[cfg(test)]
+        LOAD_OBSERVATIONS.with_borrow_mut(|observed| {
+            observed.full_bytes += read;
+            observed.hash_bytes += read;
+        });
         bytes.extend_from_slice(&scratch[..read]);
     }
     Ok(hasher.finalize().into())
@@ -3451,11 +3504,7 @@ fn scalar_presence_map() -> Result<Vec<u64>, FontError> {
     Ok(presence)
 }
 
-fn apply_host_generics(
-    database: &mut Database,
-    generics: &HostGenericNames,
-    _faces: &[FaceMetadata],
-) {
+fn apply_host_generics(database: &mut Database, generics: &HostGenericNames) {
     if let Some(name) = &generics.serif {
         database.set_serif_family(name);
     }
@@ -4250,6 +4299,7 @@ mod tests {
     use super::*;
 
     mod admission;
+    mod loading;
 
     struct Outline(usize);
     impl ttf_parser::OutlineBuilder for Outline {
@@ -4274,7 +4324,7 @@ mod tests {
     fn poisoned_environment_returns_synchronization_without_discarding_fonts() {
         let environment = PreparedFontEnvironment::synthetic();
         let operation = environment.operation().unwrap();
-        let fonts = Arc::clone(&environment.fonts);
+        let file_bytes = Arc::clone(&environment.core.read().unwrap().fonts.files[0].bytes);
         let poisoned = environment.clone();
         let panic = std::thread::spawn(move || {
             let _guard = poisoned.core.write().unwrap();
@@ -4294,7 +4344,9 @@ mod tests {
             operation.seal_fonts(),
             Err(FontError::Synchronization)
         ));
-        assert!(Arc::ptr_eq(&fonts, &environment.fonts));
+        let core = environment.core.read().unwrap_err().into_inner();
+        let fonts = &core.fonts;
+        assert!(Arc::ptr_eq(&file_bytes, &fonts.files[0].bytes));
         assert_eq!(fonts.faces.len(), 1);
         assert!(fonts
             .issues
@@ -4316,7 +4368,7 @@ mod tests {
                     face_index: 0,
                 }
             } else {
-                environment.fonts.faces[target].identity
+                environment.core.read().unwrap().fonts.faces[target].identity
             };
             for route in 0..3 {
                 let mut outline = Outline(0);
@@ -4367,17 +4419,8 @@ mod tests {
             .unwrap();
         // A zero descent is meaningful, not a request for hhea/win replacement.
         set_i16(&mut invalid, usize::try_from(os2.offset).unwrap() + 70, 0);
-        let files = [valid, invalid]
-            .into_iter()
-            .map(|bytes| RetainedFontFile {
-                root_ordinal: 0,
-                canonical_path: PathBuf::from("generated-metrics.ttf"),
-                sha256: Sha256::digest(&bytes).into(),
-                bytes: Arc::new(bytes),
-            })
-            .collect();
-        let core = CanonicalFontCore::from_retained(
-            files,
+        let core = CanonicalFontCore::from_generated(
+            vec![valid, invalid],
             &HostGenericNames::default(),
             FontPreparation::new(),
             scalar_presence_map(),
@@ -4590,11 +4633,11 @@ mod tests {
             (|path: &Path| fs::write(path, b"longer than admitted").unwrap()) as fn(&Path),
         ] {
             fs::write(&path, b"original").unwrap();
-            DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
+            DISCOVERY_HANDLES.with(|state| state.set([0; 3]));
             DISCOVERY_AFTER_ADMISSION.with(|state| state.set(Some(hook)));
-            assert!(matches!(discover_retained_files(&roots, None),
+            assert!(matches!(discover_indexed_files(&roots, None),
                 Err(FontError::ChangedFile(changed)) if changed == fs::canonicalize(&path).unwrap()));
-            DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 1, 1, 0]));
+            DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 1]));
         }
     }
 
@@ -4749,15 +4792,8 @@ mod tests {
     }
 
     pub(super) fn generated_core() -> CanonicalFontCore {
-        let bytes = Arc::new(build_test_font());
-        let sha256: [u8; 32] = Sha256::digest(bytes.as_slice()).into();
-        CanonicalFontCore::from_retained(
-            vec![RetainedFontFile {
-                root_ordinal: 0,
-                canonical_path: PathBuf::from("generated-test.ttf"),
-                bytes,
-                sha256,
-            }],
+        CanonicalFontCore::from_generated(
+            vec![build_test_font()],
             &HostGenericNames::default(),
             FontPreparation::new(),
             scalar_presence_map(),
@@ -4773,18 +4809,10 @@ mod tests {
             ("Mark", vec!['\u{0301}']),
         ]
         .into_iter()
-        .map(|(family, coverage)| {
-            let bytes = Arc::new(build_test_font_with_coverage(family, &coverage));
-            RetainedFontFile {
-                root_ordinal: 0,
-                canonical_path: PathBuf::from("never-on-disk.ttf"),
-                sha256: Sha256::digest(bytes.as_slice()).into(),
-                bytes,
-            }
-        })
+        .map(|(family, coverage)| build_test_font_with_coverage(family, &coverage))
         .collect();
         let environment = PreparedFontEnvironment::for_core(
-            CanonicalFontCore::from_retained(
+            CanonicalFontCore::from_generated(
                 files,
                 &HostGenericNames::default(),
                 FontPreparation::new(),
@@ -4869,28 +4897,23 @@ mod tests {
     }
 
     #[test]
-    fn decoder_may_admit_zero_faces_from_a_retained_file() {
-        let mut files = Arc::try_unwrap(generated_core().fonts).unwrap().files;
-        files.push(RetainedFontFile {
-            root_ordinal: 0,
-            canonical_path: PathBuf::from("unsupported.ttf"),
-            bytes: Arc::new(vec![0; 16]),
-            sha256: [0; 32],
-        });
-        let file_storage = files.as_ptr();
-        let core = CanonicalFontCore::from_retained(
-            files,
+    fn materialized_collection_can_include_rejected_faces_without_retaining_the_operation() {
+        let core = CanonicalFontCore::from_generated(
+            vec![build_test_font(), vec![0; 16]],
             &HostGenericNames::default(),
             FontPreparation::new(),
             scalar_presence_map(),
         )
         .unwrap();
         assert_eq!(core.fonts.faces.len(), 1);
-        assert_eq!(core.fonts.files.as_ptr(), file_storage);
+        let file_storage = core.fonts.files.as_ptr();
         let environment = PreparedFontEnvironment::for_core(core).unwrap();
         let alive = environment.liveness_probe();
         let operation = environment.operation().unwrap().liveness_probe();
-        let registry = SealedTextVerifier::new(&environment).retain_fonts();
+        environment.operation().unwrap().seal_fonts().unwrap();
+        let registry = SealedTextVerifier::new(&environment)
+            .retain_fonts()
+            .unwrap();
         assert!(Arc::ptr_eq(
             &registry,
             &environment.core.read().unwrap().fonts

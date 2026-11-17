@@ -122,7 +122,7 @@ impl SvgBackend {
         font_environment: &PreparedFontEnvironment,
     ) -> Self {
         let mut backend = Self::in_memory(width, height);
-        backend.fonts = Some(SealedTextVerifier::new(font_environment).retain_fonts());
+        backend.fonts = Some(font_environment.materialized_snapshot_for_test());
         backend
     }
 
