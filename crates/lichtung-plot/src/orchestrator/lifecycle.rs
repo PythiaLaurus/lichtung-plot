@@ -489,7 +489,7 @@ fn accepted_scene_holds_no_operation_fonts_or_analysis_during_publication() {
         |prepared, replay| {
             let environment = prepared.text.prepared_font_environment().unwrap();
             let core = environment.liveness_probe();
-            let operation = environment.operation().liveness_probe();
+            let operation = environment.operation().unwrap().liveness_probe();
             let caches = prepared.caches.borrow();
             let (_, title) = caches
                 .frames

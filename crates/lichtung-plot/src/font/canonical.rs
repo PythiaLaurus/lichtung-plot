@@ -1425,8 +1425,13 @@ impl PreparedFontEnvironment {
         Ok(())
     }
 
-    pub(crate) fn operation(&self) -> OperationContext {
-        self.core.read().unwrap().operation.clone()
+    pub(crate) fn operation(&self) -> Result<OperationContext, FontError> {
+        Ok(self
+            .core
+            .read()
+            .map_err(|_| FontError::Synchronization)?
+            .operation
+            .clone())
     }
 
     #[cfg(test)]
@@ -4224,6 +4229,38 @@ mod tests {
     }
 
     #[test]
+    fn poisoned_environment_returns_synchronization_without_discarding_fonts() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let operation = environment.operation().unwrap();
+        let fonts = Arc::clone(&environment.fonts);
+        let poisoned = environment.clone();
+        let panic = std::thread::spawn(move || {
+            let _guard = poisoned.core.write().unwrap();
+            panic!("intentional writer panic to test a subsequent call's boundary");
+        })
+        .join();
+        assert!(panic.is_err());
+        assert!(matches!(
+            environment.operation(),
+            Err(FontError::Synchronization)
+        ));
+        assert!(matches!(
+            environment.admit_text(test_sans_stack(), RequestedWeight::Normal, "A", None),
+            Err(FontError::Synchronization)
+        ));
+        assert!(matches!(
+            operation.seal_fonts(),
+            Err(FontError::Synchronization)
+        ));
+        assert!(Arc::ptr_eq(&fonts, &environment.fonts));
+        assert_eq!(fonts.faces.len(), 1);
+        assert!(fonts
+            .issues
+            .iter()
+            .all(|issue| !matches!(issue.reason, super::admission::ScanReason::Parser { .. })));
+    }
+
+    #[test]
     fn retained_face_lookups_require_the_exact_identity() {
         let environment = PreparedFontEnvironment::synthetic_faces(&[
             ("First", &['A']),
@@ -4443,7 +4480,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        environment.operation().seal_fonts().unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
         {
             let pair = environment
                 .clone()
@@ -4596,7 +4633,7 @@ mod tests {
         environment
             .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
             .unwrap();
-        environment.operation().seal_fonts().unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
 
         assert!(matches!(
             environment.resolve_pair(1, &stack, RequestedWeight::Normal, &['A']),
@@ -4618,7 +4655,7 @@ mod tests {
             Err(FontError::PreparedPairAfterSeal { pair_ordinal: 1 })
         ));
         assert!(matches!(
-            environment.operation().seal_fonts(),
+            environment.operation().unwrap().seal_fonts(),
             Err(FontError::OperationSealed)
         ));
         assert_eq!(planning_counts(), counts);
@@ -4741,7 +4778,7 @@ mod tests {
                 .prepare_source_units(ordinal, "A A\u{0301}", None)
                 .unwrap();
         }
-        environment.operation().seal_fonts().unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
         let pair = environment
             .prepared_pair(&complete, RequestedWeight::Normal)
             .unwrap()
@@ -4810,7 +4847,7 @@ mod tests {
         assert_eq!(core.fonts.files.as_ptr(), file_storage);
         let environment = PreparedFontEnvironment::for_core(core).unwrap();
         let alive = environment.liveness_probe();
-        let operation = environment.operation().liveness_probe();
+        let operation = environment.operation().unwrap().liveness_probe();
         let registry = SealedTextVerifier::new(&environment).retain_fonts();
         assert!(Arc::ptr_eq(
             &registry,

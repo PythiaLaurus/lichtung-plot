@@ -146,7 +146,7 @@ mod geometry_tests {
                             &registered.appearance,
                             &root_b.text,
                         );
-                        let resources_b = request_b.text.prepared_font_environment()?.operation();
+                        let resources_b = request_b.text.prepared_font_environment()?.operation().unwrap();
                         assert!(root_b.operation.same_operation(&resources_b));
                         assert!(!root_a.operation.same_operation(&resources_b));
                         assert!(registered.data(&root_a.operation).is_ok());
@@ -415,7 +415,11 @@ pub(crate) fn natural_body_height(
     width: f64,
     selected_ranges: Option<[(f64, f64); 2]>,
 ) -> Result<f64, Error> {
-    let resources = theme.text.prepared_font_environment()?.operation();
+    let resources = theme
+        .text
+        .prepared_font_environment()?
+        .operation()
+        .map_err(|error| Error::Render(error.to_string()))?;
     if registered.is_none() {
         return Err(Error::Render("natural Waterfall rows missing".into()));
     }

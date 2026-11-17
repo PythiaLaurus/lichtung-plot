@@ -506,7 +506,7 @@ mod tests {
         assert!(plan.title.height() > 0.0 && plan.body.height() > 0.0);
         assert!(plan.title.height() + plan.body.height() <= 20.0);
         assert!(plan.body.plan().style.font_size < 10.0);
-        environment.operation().seal_fonts().unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
         let mut backend =
             crate::render::svg_backend::SvgBackend::in_memory_with_fonts(160, 120, &environment);
         backend.begin(160, 120).unwrap();

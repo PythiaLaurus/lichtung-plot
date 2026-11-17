@@ -138,7 +138,7 @@ fn source_units_select_complete_faces_without_reassigning_standalone_bases() {
     }
     // Reacquisition must retain the units prepared by the unsealed query.
     assert_eq!(pair.selected_units.len(), 2);
-    environment.operation().seal_fonts().unwrap();
+    environment.operation().unwrap().seal_fonts().unwrap();
     canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
     assert_eq!(environment.plan_text(request.clone()).unwrap(), planned);
     request.source = "AA\u{301}\u{301}";

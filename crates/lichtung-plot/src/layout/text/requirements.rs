@@ -1812,7 +1812,7 @@ mod tests {
             .unwrap();
         crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
 
-        environment.operation().seal_fonts().unwrap();
+        environment.operation().unwrap().seal_fonts().unwrap();
         let missing = environment
             .plan_text(crate::layout::TextPlanInput {
                 size_trace: None,

@@ -1477,7 +1477,7 @@ mod tests {
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let environment = root.text.prepared_font_environment().unwrap();
-        let resources = environment.operation();
+        let resources = environment.operation().unwrap();
         environment.validate_operation(&resources).unwrap();
         let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
@@ -1675,6 +1675,7 @@ mod tests {
             .prepared_font_environment()
             .unwrap()
             .operation()
+            .unwrap()
             .seal_fonts()
             .unwrap();
         let counts = crate::font::canonical::planning_counts();

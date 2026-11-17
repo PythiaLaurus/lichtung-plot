@@ -1031,6 +1031,9 @@ fn matrix_ticks<'a>(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<&'a layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let environment = theme.text.prepared_font_environment()?;
+    let operation = environment
+        .operation()
+        .map_err(|error| Error::Render(error.to_string()))?;
 
     let range_bits = [range.0.to_bits(), range.1.to_bits()];
     let panel = projection.panel_box();
@@ -1039,7 +1042,7 @@ fn matrix_ticks<'a>(
         layout::AxisSide::Left => [panel.y0.to_bits(), panel.y1.to_bits()],
     };
     let matches = if let Some(cached) = cached.as_ref() {
-        cached.operation.same_operation(&environment.operation())
+        cached.operation.same_operation(&operation)
             && cached.range == range_bits
             && cached.span == span
             && cached.side == side
@@ -1066,7 +1069,7 @@ fn matrix_ticks<'a>(
             range: range_bits,
             span,
             side,
-            operation: environment.operation(),
+            operation,
         });
     }
     cached

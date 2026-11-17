@@ -2122,6 +2122,7 @@ mod tests {
                 assert!(text
                     .prepared_font_environment()?
                     .operation()
+                    .unwrap()
                     .same_operation(&stage.operation()));
                 Ok(text)
             },
@@ -2144,7 +2145,7 @@ mod tests {
                 let environment = text.prepared_font_environment()?;
                 assert!(environment.prepared_pairs_are_sealed().unwrap());
                 let core = environment.liveness_probe();
-                let operation = environment.operation().liveness_probe();
+                let operation = environment.operation().unwrap().liveness_probe();
                 let analysis = measured.analysis_liveness_probe();
                 assert!(core() && operation() && analysis());
                 probes = Some((core, operation, analysis));
