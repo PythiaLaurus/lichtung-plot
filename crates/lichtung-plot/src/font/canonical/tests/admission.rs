@@ -394,6 +394,61 @@ fn uninspectable_directories_and_rejected_lookups_are_not_absent_or_out_of_bound
 }
 
 #[test]
+fn family_aliases_preserve_variant_matching_and_coverage_fallback() {
+    let mut regular = tables(&build_test_font_with_coverage("Family", &['A']));
+    let (_, names) = regular.iter_mut().find(|(tag, _)| tag == b"name").unwrap();
+    // Regular advertises only the legacy (ID1) family, as in Arial Regular.
+    set_u16(
+        names,
+        6 + 12 + 6,
+        ttf_parser::name_id::TYPOGRAPHIC_SUBFAMILY,
+    );
+    let regular = build_sfnt(regular);
+    let mut heavy = tables(&build_test_font_with_coverage("Family", &['A', 'B']));
+    let (_, names) = heavy.iter_mut().find(|(tag, _)| tag == b"name").unwrap();
+    // The first string belongs to ID1; ID16 still advertises the shared family.
+    names[42..54].copy_from_slice(&utf16_be("Strong"));
+    let (_, os2) = heavy.iter_mut().find(|(tag, _)| tag == b"OS/2").unwrap();
+    set_u16(os2, 4, 900);
+    let heavy = build_sfnt(heavy);
+    let regular_id = FaceIdentity {
+        sha256: Sha256::digest(&regular).into(),
+        face_index: 0,
+    };
+    let heavy_id = FaceIdentity {
+        sha256: Sha256::digest(&heavy).into(),
+        face_index: 0,
+    };
+    let environment = PreparedFontEnvironment::for_core(core(vec![heavy, regular])).unwrap();
+
+    let stack = named_stack(&["Family", "Strong", "Family"]);
+    let pair = environment
+        .resolve_pair(0, &stack, RequestedWeight::Normal, &['A', 'B'])
+        .unwrap();
+    assert_eq!(pair.primary, regular_id, "the ID1 match has exact weight");
+    assert_eq!(pair.provenance.candidates, [regular_id, heavy_id]);
+    assert_eq!(
+        pair.selection_for_unit("A", 'A').unwrap(),
+        ScalarFaceSelection::Face(regular_id)
+    );
+    assert_eq!(
+        pair.selection_for_unit("B", 'B').unwrap(),
+        ScalarFaceSelection::Face(heavy_id),
+        "the ID16 match remains available for missing coverage"
+    );
+
+    let explicit = named_stack(&["Strong", "Family"]);
+    let pair = environment
+        .resolve_pair(1, &explicit, RequestedWeight::Normal, &['A'])
+        .unwrap();
+    assert_eq!(
+        pair.primary, heavy_id,
+        "an earlier named stack entry still wins"
+    );
+    assert_eq!(pair.provenance.candidates, [heavy_id, regular_id]);
+}
+
+#[test]
 fn admission_order_is_not_candidate_order_and_failures_retain_context() {
     let one = build_test_font_with_coverage("Same", &['A']);
     let two = build_test_font_with_coverage("Same", &['A', 'B']);

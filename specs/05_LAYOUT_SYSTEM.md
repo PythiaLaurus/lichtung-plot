@@ -530,13 +530,14 @@ of an existing pair does not materialize files; a later new pair uses the same
 index and can append materialized files without changing earlier selections.
 
 Identity is `(SHA256(complete_file_bytes),face_index_u32)`, excluding path, mtime,
-database ID and discovery order. Generate occurrence tuples and sort by
-`(stack_entry_index,family_match_rank,style_distance,stretch_distance,
-weight_distance,sha256_bytes,face_index)`. Ranks are named ID16=0, ID1=1,
-generic=2. Style Normal/Oblique/Italic distances0/1/2; stretch distance abs(width
-class-5) for classes1..9; weight distance abs(face weight-request400/600/700).
-For duplicate identities retain least complete tuple then sort. First is primary;
-fallback scans the same canonical list.
+database ID and discovery order. A face is eligible at its first matching stack
+entry. ID16 and ID1 are equally valid matches for named and resolved generic
+entries; neither the record kind nor redundant aliases rank variants. Sort by
+`(stack_entry_index,style_distance,stretch_distance,weight_distance,
+sha256_bytes,face_index)`. Style Normal/Oblique/Italic distances0/1/2; stretch
+distance abs(width class-5) for classes1..9; weight distance abs(face
+weight-request400/600/700). For duplicate identities retain least complete
+tuple then sort. First is primary; fallback scans the same canonical list.
 
 Within one EGC, a narrow selection unit is one visible non-Mark base plus its
 General_Category Mn/Mc/Me marks. Prefer first candidate covering the complete unit;

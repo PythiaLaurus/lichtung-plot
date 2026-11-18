@@ -496,12 +496,10 @@ impl IndexedFontFile {
         self.ranges.clear();
     }
 
-    pub(super) fn matches(&self, names: &[(String, bool)]) -> bool {
-        self.faces.iter().any(|face| {
-            face.names
-                .iter()
-                .any(|name| names.iter().any(|(resolved, _)| name.folded == *resolved))
-        })
+    pub(super) fn matches(&self, names: &[String]) -> bool {
+        self.faces
+            .iter()
+            .any(|face| first_matching_stack_entry(&face.names, names).is_some())
     }
 
     pub(super) fn materialize(

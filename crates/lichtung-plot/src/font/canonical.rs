@@ -231,7 +231,7 @@ struct FontPreparation {
 #[derive(Debug)]
 struct NormalizedStack {
     source: FontStack,
-    names: Vec<(String, bool)>,
+    names: Vec<String>,
 }
 
 impl FontPreparation {
@@ -264,17 +264,10 @@ pub(crate) struct RetainedFontFile {
     pub(crate) sha256: [u8; 32],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum NameRank {
-    TypographicFamily = 0,
-    LegacyFamily = 1,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NameOccurrence {
     pub(crate) value: String,
     pub(crate) folded: String,
-    pub(crate) rank: NameRank,
     pub(crate) record_ordinal: u16,
 }
 
@@ -317,7 +310,6 @@ pub(crate) struct FaceMetadata {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CandidateOccurrence {
     pub(crate) stack_entry_index: u32,
-    pub(crate) family_match_rank: u8,
     pub(crate) style_distance: u8,
     pub(crate) stretch_distance: u8,
     pub(crate) weight_distance: u16,
@@ -328,7 +320,6 @@ impl CandidateOccurrence {
     fn canonical_cmp(&self, other: &Self) -> Ordering {
         (
             self.stack_entry_index,
-            self.family_match_rank,
             self.style_distance,
             self.stretch_distance,
             self.weight_distance,
@@ -336,7 +327,6 @@ impl CandidateOccurrence {
         )
             .cmp(&(
                 other.stack_entry_index,
-                other.family_match_rank,
                 other.style_distance,
                 other.stretch_distance,
                 other.weight_distance,
@@ -1078,7 +1068,7 @@ impl<'a> FontPairPreparationRequest<'a> {
 
 struct PairPreparation<'a> {
     request: FontPairPreparationRequest<'a>,
-    resolved_names: Vec<(String, bool)>,
+    resolved_names: Vec<String>,
     raw_candidate_count: usize,
     candidate_count: usize,
     scalar_count: usize,
@@ -1880,7 +1870,7 @@ impl CanonicalFontCore {
         }
         for preparation in &mut preparations {
             preparation.raw_candidate_count =
-                count_candidate_occurrences(&self.fonts.faces, &preparation.resolved_names)?;
+                count_candidate_occurrences(&self.fonts.faces, &preparation.resolved_names);
             preparation.candidate_count =
                 count_unique_candidate_survivors(&self.fonts.faces, &preparation.resolved_names)?;
             if preparation.candidate_count == 0 {
@@ -2237,7 +2227,7 @@ impl CanonicalFontCore {
 
     fn materialize_matching(
         &mut self,
-        names: &[(String, bool)],
+        names: &[String],
         mut stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), FontError> {
         if self.prepared_pairs_sealed {
@@ -2506,18 +2496,18 @@ fn decode_family_names(
         let Some(record) = names.get(record_ordinal) else {
             continue;
         };
-        let rank = match record.name_id {
-            ttf_parser::name_id::TYPOGRAPHIC_FAMILY => NameRank::TypographicFamily,
-            ttf_parser::name_id::FAMILY => NameRank::LegacyFamily,
-            _ => continue,
-        };
+        if !matches!(
+            record.name_id,
+            ttf_parser::name_id::TYPOGRAPHIC_FAMILY | ttf_parser::name_id::FAMILY
+        ) {
+            continue;
+        }
         let Some(value) = admission::decode_name(&record)? else {
             continue;
         };
         occurrences.push(NameOccurrence {
             folded: fold_family_name(&value)?,
             value,
-            rank,
             record_ordinal,
         });
     }
@@ -2546,90 +2536,35 @@ fn decodes_like_ttf_parser(record: &ttf_parser::name::Name<'_>) -> bool {
     true
 }
 
-fn canonical_candidates(
-    database: &Database,
-    faces: &[FaceMetadata],
-    stack: &FontStack,
-    requested_weight: RequestedWeight,
-    preparation: &mut FontPreparation,
-) -> Result<Vec<CandidateFace>, FontError> {
-    canonical_candidates_with_stage(database, faces, stack, requested_weight, preparation, None)
-}
-
-fn canonical_candidates_with_stage(
-    database: &Database,
-    faces: &[FaceMetadata],
-    stack: &FontStack,
-    requested_weight: RequestedWeight,
-    preparation: &mut FontPreparation,
-    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<Vec<CandidateFace>, FontError> {
-    let mut resolved_names = Vec::new();
-    reserve_prepared_or_local(
-        &mut resolved_names,
-        stack.len(),
-        "resolved font stack",
-        prepared_stage.as_deref_mut(),
-    )?;
-    resolve_stack_names_into(
-        database,
-        stack,
-        &mut resolved_names,
-        preparation,
-        prepared_stage.as_deref_mut(),
-    )?;
-
-    let count = count_candidate_occurrences(faces, &resolved_names)?;
-    let mut candidates = Vec::new();
-
-    reserve_prepared_or_local(
-        &mut candidates,
-        count,
-        "font candidate occurrences",
-        prepared_stage,
-    )?;
-    materialize_candidate_occurrences(faces, &resolved_names, requested_weight, &mut candidates)?;
-    if candidates.len() != count {
-        return Err(FontError::Arithmetic(
-            "font candidate count/materialization mismatch",
-        ));
-    }
-    canonicalize_candidate_occurrences(&mut candidates);
-    Ok(candidates)
-}
-
 fn resolve_stack_names_into(
     database: &Database,
     stack: &FontStack,
-    resolved_names: &mut Vec<(String, bool)>,
+    resolved_names: &mut Vec<String>,
     preparation: &mut FontPreparation,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
     for cached in &preparation.normalized_stacks {
         if cached.source.same(stack) {
-            for (name, generic) in &cached.names {
-                resolved_names.push((
-                    copy_name_with_stage(name, prepared_stage.as_deref_mut())?,
-                    *generic,
-                ));
+            for name in &cached.names {
+                resolved_names.push(copy_name_with_stage(name, prepared_stage.as_deref_mut())?);
             }
             return Ok(());
         }
     }
     for family in stack {
-        let (name, generic) = match &family.kind {
-            FontFamilyKind::Named(name) => (name.as_str(), false),
+        let name = match &family.kind {
+            FontFamilyKind::Named(name) => name.as_str(),
             FontFamilyKind::Generic(GenericFontFamily::Serif) => {
-                (database.family_name(&Family::Serif), true)
+                database.family_name(&Family::Serif)
             }
             FontFamilyKind::Generic(GenericFontFamily::SansSerif) => {
-                (database.family_name(&Family::SansSerif), true)
+                database.family_name(&Family::SansSerif)
             }
             FontFamilyKind::Generic(GenericFontFamily::Monospace) => {
-                (database.family_name(&Family::Monospace), true)
+                database.family_name(&Family::Monospace)
             }
         };
-        resolved_names.push((fold_family_name(name)?, generic));
+        resolved_names.push(fold_family_name(name)?);
     }
     if resolved_names.len() != stack.len() {
         return Err(FontError::Arithmetic(
@@ -2643,11 +2578,8 @@ fn resolve_stack_names_into(
         resolved_names.len(),
         prepared_stage.as_deref_mut(),
     )?;
-    for (name, generic) in resolved_names.iter() {
-        names.push((
-            copy_name_with_stage(name, prepared_stage.as_deref_mut())?,
-            *generic,
-        ));
+    for name in resolved_names.iter() {
+        names.push(copy_name_with_stage(name, prepared_stage.as_deref_mut())?);
     }
 
     reserve_cached_with_stage(&mut preparation.normalized_stacks, 1, prepared_stage)?;
@@ -2732,70 +2664,54 @@ fn copy_stack_with_stage(
 
 fn materialize_candidate_occurrences(
     faces: &[FaceMetadata],
-    resolved_names: &[(String, bool)],
+    resolved_names: &[String],
     requested_weight: RequestedWeight,
 
     candidates: &mut Vec<CandidateFace>,
 ) -> Result<(), FontError> {
-    for (stack_entry_index, (resolved_name, generic)) in resolved_names.iter().enumerate() {
+    for (face_ordinal, face) in faces.iter().enumerate() {
+        let Some(stack_entry_index) = first_matching_stack_entry(&face.names, resolved_names)
+        else {
+            continue;
+        };
         let stack_entry_index = u32::try_from(stack_entry_index)
             .map_err(|_| FontError::Arithmetic("font stack entry index"))?;
-        for (face_ordinal, face) in faces.iter().enumerate() {
-            for name in &face.names {
-                if name.folded != *resolved_name {
-                    continue;
-                }
-                let stretch_distance = u8::try_from(face.stretch.to_number().abs_diff(5))
-                    .map_err(|_| FontError::Arithmetic("font stretch distance"))?;
-                candidates.push(CandidateFace {
-                    occurrence: CandidateOccurrence {
-                        stack_entry_index,
-                        family_match_rank: if *generic { 2 } else { name.rank as u8 },
-                        style_distance: style_distance(face.style),
-                        stretch_distance,
-                        weight_distance: face.weight.abs_diff(requested_weight.value()),
-                        identity: face.identity,
-                    },
-                    face_ordinal,
-                });
-            }
-        }
+        let stretch_distance = u8::try_from(face.stretch.to_number().abs_diff(5))
+            .map_err(|_| FontError::Arithmetic("font stretch distance"))?;
+        candidates.push(CandidateFace {
+            occurrence: CandidateOccurrence {
+                stack_entry_index,
+                style_distance: style_distance(face.style),
+                stretch_distance,
+                weight_distance: face.weight.abs_diff(requested_weight.value()),
+                identity: face.identity,
+            },
+            face_ordinal,
+        });
     }
     Ok(())
 }
 
-fn count_candidate_occurrences(
-    faces: &[FaceMetadata],
-    resolved_names: &[(String, bool)],
-) -> Result<usize, FontError> {
-    let mut count = 0_usize;
-    for (resolved_name, _) in resolved_names {
-        for face in faces {
-            for name in &face.names {
-                if name.folded == *resolved_name {
-                    count = count
-                        .checked_add(1)
-                        .ok_or(FontError::Arithmetic("font candidate occurrences"))?;
-                }
-            }
-        }
-    }
-    Ok(count)
+fn count_candidate_occurrences(faces: &[FaceMetadata], resolved_names: &[String]) -> usize {
+    faces
+        .iter()
+        .filter(|face| first_matching_stack_entry(&face.names, resolved_names).is_some())
+        .count()
 }
 
 fn count_unique_candidate_survivors(
     faces: &[FaceMetadata],
-    resolved_names: &[(String, bool)],
+    resolved_names: &[String],
 ) -> Result<usize, FontError> {
     let mut count = 0_usize;
     for (face_index, face) in faces.iter().enumerate() {
-        if !face_matches_resolved_names(face, resolved_names) {
+        if first_matching_stack_entry(&face.names, resolved_names).is_none() {
             continue;
         }
         let mut duplicate = false;
         for earlier in &faces[..face_index] {
             if earlier.identity == face.identity
-                && face_matches_resolved_names(earlier, resolved_names)
+                && first_matching_stack_entry(&earlier.names, resolved_names).is_some()
             {
                 duplicate = true;
                 break;
@@ -2811,15 +2727,15 @@ fn count_unique_candidate_survivors(
     Ok(count)
 }
 
-fn face_matches_resolved_names(face: &FaceMetadata, resolved_names: &[(String, bool)]) -> bool {
-    for (resolved_name, _) in resolved_names {
-        for name in &face.names {
-            if name.folded == *resolved_name {
-                return true;
-            }
-        }
-    }
-    false
+fn first_matching_stack_entry(
+    names: &[NameOccurrence],
+    resolved_names: &[String],
+) -> Option<usize> {
+    // Family records establish membership only. A face matching multiple names
+    // belongs at its first matching stack position, regardless of name ID.
+    resolved_names
+        .iter()
+        .position(|resolved| names.iter().any(|name| name.folded == *resolved))
 }
 
 fn canonicalize_candidate_occurrences(candidates: &mut Vec<CandidateFace>) {
@@ -4666,23 +4582,29 @@ mod tests {
     fn canonical_candidate_order_retains_least_occurrence_per_identity() {
         let identity_a = identity(1, 0);
         let identity_b = identity(2, 0);
+        let identity_c = identity(2, 1);
         let mut candidates = vec![
-            candidate(identity_a, 1, 0, 0),
-            candidate(identity_b, 0, 1, 0),
-            candidate(identity_a, 0, 0, 20),
-            candidate(identity_a, 0, 0, 10),
+            candidate(identity_a, 1, 0),
+            candidate(identity_c, 0, 0),
+            candidate(identity_b, 0, 0),
+            candidate(identity_a, 0, 20),
+            candidate(identity_a, 0, 10),
         ];
 
         canonicalize_candidate_occurrences(&mut candidates);
-        assert_eq!(candidates.len(), 2);
-        assert_eq!(candidates[0].occurrence.identity, identity_a);
-        assert_eq!(candidates[0].occurrence.weight_distance, 10);
-        assert_eq!(candidates[1].occurrence.identity, identity_b);
+        assert_eq!(
+            candidates,
+            [
+                candidate(identity_b, 0, 0),
+                candidate(identity_c, 0, 0),
+                candidate(identity_a, 0, 10),
+            ]
+        );
     }
 
     #[test]
     fn missing_glyph_is_explicit_and_mandatory_controls_are_not_probed() {
-        let candidates = [candidate(identity(1, 0), 0, 0, 0)];
+        let candidates = [candidate(identity(1, 0), 0, 0)];
 
         let mut presence = scalar_presence_map();
         let error = select_scalar_faces(4, &candidates, &['x'], &mut presence, |_, _| Ok(false))
@@ -4775,13 +4697,11 @@ mod tests {
     fn candidate(
         identity: FaceIdentity,
         stack_entry_index: u32,
-        family_match_rank: u8,
         weight_distance: u16,
     ) -> CandidateFace {
         CandidateFace {
             occurrence: CandidateOccurrence {
                 stack_entry_index,
-                family_match_rank,
                 style_distance: 0,
                 stretch_distance: 0,
                 weight_distance,
