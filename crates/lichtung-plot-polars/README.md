@@ -86,7 +86,8 @@ cargo run --locked --offline -p lichtung-plot-polars --example grouped_observati
 # Optional: -- path/to/output-directory
 ```
 
-This package is not yet published. See the peer
+This adapter is available on [crates.io](https://crates.io/crates/lichtung-plot-polars).
+See the peer
 [English](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/en/src/sections/polars.md) and
 [Chinese](https://github.com/PythiaLaurus/lichtung-plot/blob/main/docs/zh-CN/src/sections/polars.md) guides and the shared
 [adapter contract](https://github.com/PythiaLaurus/lichtung-plot/blob/main/specs/09_DATA_ADAPTERS.md).

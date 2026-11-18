@@ -60,10 +60,15 @@ gate; it includes structural Book checks but does not regenerate the gallery/sit
 Use the root `Justfile` for available verification recipes and `AGENTS.md` for
 repository contribution rules.
 
-## Release Preparation
+## Published Packages
 
-The coordinated Rust/Python `0.1.0` release is being prepared, not announced as
-published. `CHANGELOG.md` records the intended release scope and current limits.
-Publication requires explicit approval of the source commit, artifact set and
-platform claims. Local verification does not upload packages, push tags or deploy
-a site.
+The [Rust renderer](https://crates.io/crates/lichtung-plot) and its
+[ndarray](https://crates.io/crates/lichtung-plot-ndarray) and
+[Polars](https://crates.io/crates/lichtung-plot-polars) adapters are available
+on crates.io. The [Python package](https://pypi.org/project/lichtung-plot/)
+is available on PyPI.
+
+Use `cargo add lichtung-plot` for the Rust renderer or
+`python -m pip install lichtung-plot` for Python. See the
+[GitHub releases](https://github.com/PythiaLaurus/lichtung-plot/releases)
+for version-specific compatibility, downloads, and checksums.

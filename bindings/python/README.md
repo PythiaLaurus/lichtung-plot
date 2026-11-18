@@ -250,20 +250,29 @@ Building a wheel from an independently unpacked sdist remains a required separat
 distribution check; an in-checkout build alone does not certify source completeness
 or platform support.
 
-## Release preparation
+## Installation and distributions
 
-Version `0.1.0` is in preparation, not announced as published on PyPI. Install a
-locally verified wheel matching your platform with
+Install [lichtung-plot from PyPI](https://pypi.org/project/lichtung-plot/):
+
+```sh
+python -m pip install lichtung-plot
+```
+
+The `0.1.0` release includes wheels for Linux x86-64 (glibc 2.28 or newer),
+Windows x86-64 (tested on Windows Server 2022), and macOS arm64 (macOS 15.0
+deployment target). The wheels were tested on ordinary CPython 3.10 and 3.13.
+See the [release notes](https://github.com/PythiaLaurus/lichtung-plot/releases/tag/v0.1.0)
+for platform details and download checksums.
+
+A matching wheel does not need a Rust compiler; building from source requires
+Rust 1.96 or newer. For an offline install of a matching wheel, use
 `python -m pip install --no-index --no-deps /absolute/path/to/package.whl`.
-This needs no Rust compiler; building from source does. Optional data providers
-must already be installed when used.
+Install optional data providers separately when you use them.
 
 The product version is inherited from the workspace Cargo metadata; maturin
 supplies the Python version dynamically. The included `LICENSE-MIT` and
 `LICENSE-APACHE` are exact copies of the workspace license texts, declared through
-`project.license-files` for source and wheel distributions. Artifact/platform
-support requires independent verification; uploads require separate approval.
-The repository `CHANGELOG.md` records the intended release scope and current limits.
+`project.license-files` for source and wheel distributions.
 
 Distributions also carry `licenses/THIRD-PARTY-NOTICES.txt` and
 `licenses/RUST-LIBRARY-LICENSE.html`. These retain upstream dependency copyrights,
